@@ -1,19 +1,60 @@
 import * as vscode from "vscode";
 
+interface CodeSuggestion {
+	range: vscode.Range;
+}
+
+const decorationType = vscode.window.createTextEditorDecorationType({
+	color: new vscode.ThemeColor("editorGhostText.foreground"),
+});
+
+let activeSuggestion: CodeSuggestion;
+
+//TODO: This doesn't work.
+const handleSelectionChange = () => {
+	const activeTextEditor = vscode.window.activeTextEditor;
+
+	if (!activeTextEditor || !activeSuggestion) {
+		return;
+	}
+
+	const hasMoved =
+		activeTextEditor.selection.start.character !==
+		activeSuggestion.range.start.character;
+
+	console.log(activeSuggestion.range.start, activeTextEditor.selection.start);
+
+	if (hasMoved) {
+		console.log("REMOVING");
+		activeTextEditor.setDecorations(decorationType, []);
+
+		activeTextEditor.edit((editBuilder) => {
+			editBuilder.delete(activeSuggestion.range);
+		});
+	}
+};
+
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = "calicoColors.colorsView";
+	public static readonly viewType = "code-assistant-chat-view";
 
-	private _view?: vscode.WebviewView;
+	private _disposables: vscode.Disposable[] = [];
 
-	constructor(private readonly _extensionUri: vscode.Uri) {}
+	constructor(private readonly _extensionUri: vscode.Uri) {
+		this._disposables.push(
+			vscode.window.onDidChangeTextEditorSelection(handleSelectionChange)
+		);
+	}
+
+	dispose() {
+		this._disposables.forEach((d) => d.dispose());
+		this._disposables = [];
+	}
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken
 	) {
-		this._view = webviewView;
-
 		webviewView.webview.options = {
 			// Allow scripts in the webview
 			enableScripts: true,
@@ -33,17 +74,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					const activeTextEditor = vscode.window.activeTextEditor;
 
 					if (activeTextEditor) {
-						const fontColor = new vscode.ThemeColor(
-							"editorGhostText.foreground"
-						);
-
-						const decorationType =
-							vscode.window.createTextEditorDecorationType({
-								color: fontColor,
-							});
-
 						const snippet = new vscode.SnippetString(
-							"${1:another} ${2:placeholder}"
+							"${1://helpful code suggestions.}"
 						);
 
 						activeTextEditor.insertSnippet(
@@ -62,49 +94,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						);
 						const decoration = {
 							range: new vscode.Range(start, end),
-							hoverMessage: "This is a decoration",
+							hoverMessage: "This is a code suggestion.",
+						};
+
+						activeSuggestion = {
+							range: decoration.range,
 						};
 
 						activeTextEditor.setDecorations(decorationType, [
 							decoration,
 						]);
-
-						//This obviously won't work long term.
-						//Manage subscription to the event.
-						//Put suggestion into state so this event can act on it.
-						setTimeout(() => {
-							vscode.window.onDidChangeTextEditorSelection(
-								(_) => {
-									console.log("REMOVING");
-									activeTextEditor.setDecorations(
-										decorationType,
-										[]
-									);
-
-									activeTextEditor.edit((editBuilder) => {
-										editBuilder.delete(decoration.range);
-									});
-								}
-							);
-						}, 10);
 					}
 					break;
 				}
 			}
 		});
-	}
-
-	public addColor() {
-		if (this._view) {
-			this._view.show?.(true); // `show` is not implemented in 1.49 but is for 1.50 insiders
-			this._view.webview.postMessage({ type: "addColor" });
-		}
-	}
-
-	public clearColors() {
-		if (this._view) {
-			this._view.webview.postMessage({ type: "clearColors" });
-		}
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview) {
