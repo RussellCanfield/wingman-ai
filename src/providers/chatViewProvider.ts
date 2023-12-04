@@ -1,16 +1,28 @@
 import * as vscode from "vscode";
+import { TextDocumentChangeEvent } from "vscode";
 
 interface CodeSuggestion {
 	range: vscode.Range;
 }
 
 const decorationType = vscode.window.createTextEditorDecorationType({
+	backgroundColor: undefined,
+	opacity: "0.5",
+	borderColor: new vscode.ThemeColor("editorGhostText.border"),
 	color: new vscode.ThemeColor("editorGhostText.foreground"),
 });
 
 let activeSuggestion: CodeSuggestion | undefined;
 
-//TODO: This doesn't work.
+const handleDocumentChange = (event: TextDocumentChangeEvent) => {
+	console.log(
+		"Change: ",
+		event.reason,
+		event.contentChanges.length,
+		event.document.isDirty
+	);
+};
+
 const handleSelectionChange = () => {
 	const activeTextEditor = vscode.window.activeTextEditor;
 
@@ -19,15 +31,14 @@ const handleSelectionChange = () => {
 	}
 
 	const hasMoved =
-		activeTextEditor.selection.start.character !==
-		activeSuggestion.range.start.character;
-
-	console.log(activeSuggestion.range.start, activeTextEditor.selection.start);
+		activeTextEditor.selection.start.line !==
+		activeSuggestion.range.start.line;
 
 	if (hasMoved) {
 		console.log("REMOVING");
 		activeTextEditor.setDecorations(decorationType, []);
 
+		//this still allows undo
 		activeTextEditor.edit((editBuilder) => {
 			editBuilder.delete(activeSuggestion!.range);
 		});
@@ -43,7 +54,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	constructor(private readonly _extensionUri: vscode.Uri) {
 		this._disposables.push(
-			vscode.window.onDidChangeTextEditorSelection(handleSelectionChange)
+			vscode.window.onDidChangeTextEditorSelection(handleSelectionChange),
+			vscode.workspace.onDidChangeTextDocument(handleDocumentChange)
 		);
 	}
 
@@ -84,10 +96,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							snippet,
 							activeTextEditor.selection,
 							{
-								undoStopBefore: true,
+								undoStopBefore: false,
 								undoStopAfter: false,
 							}
 						);
+
+						// activeTextEditor.edit((editBuilder) => {
+						// 	editBuilder.insert(
+						// 		activeTextEditor.selection.start,
+						// 		"//blah blah"
+						// 	);
+						// });
 
 						const start = activeTextEditor.selection.start;
 						const end = activeTextEditor.selection.start.translate(
