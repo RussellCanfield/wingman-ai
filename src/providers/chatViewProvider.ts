@@ -8,7 +8,7 @@ const decorationType = vscode.window.createTextEditorDecorationType({
 	color: new vscode.ThemeColor("editorGhostText.foreground"),
 });
 
-let activeSuggestion: CodeSuggestion;
+let activeSuggestion: CodeSuggestion | undefined;
 
 //TODO: This doesn't work.
 const handleSelectionChange = () => {
@@ -29,8 +29,10 @@ const handleSelectionChange = () => {
 		activeTextEditor.setDecorations(decorationType, []);
 
 		activeTextEditor.edit((editBuilder) => {
-			editBuilder.delete(activeSuggestion.range);
+			editBuilder.delete(activeSuggestion!.range);
 		});
+
+		activeSuggestion = undefined;
 	}
 };
 
