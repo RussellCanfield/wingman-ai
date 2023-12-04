@@ -24,11 +24,70 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
 		webviewView.webview.onDidReceiveMessage((data) => {
-			switch (data.type) {
-				case "colorSelected": {
-					vscode.window.activeTextEditor?.insertSnippet(
-						new vscode.SnippetString(`#${data.value}`)
-					);
+			if (!data) {
+				return;
+			}
+
+			switch (data.command) {
+				case "hello": {
+					const activeTextEditor = vscode.window.activeTextEditor;
+
+					if (activeTextEditor) {
+						const fontColor = new vscode.ThemeColor(
+							"editorGhostText.foreground"
+						);
+
+						const decorationType =
+							vscode.window.createTextEditorDecorationType({
+								color: fontColor,
+							});
+
+						const snippet = new vscode.SnippetString(
+							"${1:another} ${2:placeholder}"
+						);
+
+						activeTextEditor.insertSnippet(
+							snippet,
+							activeTextEditor.selection,
+							{
+								undoStopBefore: true,
+								undoStopAfter: false,
+							}
+						);
+
+						const start = activeTextEditor.selection.start;
+						const end = activeTextEditor.selection.start.translate(
+							0,
+							snippet.value.length
+						);
+						const decoration = {
+							range: new vscode.Range(start, end),
+							hoverMessage: "This is a decoration",
+						};
+
+						activeTextEditor.setDecorations(decorationType, [
+							decoration,
+						]);
+
+						//This obviously won't work long term.
+						//Manage subscription to the event.
+						//Put suggestion into state so this event can act on it.
+						setTimeout(() => {
+							vscode.window.onDidChangeTextEditorSelection(
+								(_) => {
+									console.log("REMOVING");
+									activeTextEditor.setDecorations(
+										decorationType,
+										[]
+									);
+
+									activeTextEditor.edit((editBuilder) => {
+										editBuilder.delete(decoration.range);
+									});
+								}
+							);
+						}, 10);
+					}
 					break;
 				}
 			}

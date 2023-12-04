@@ -5,7 +5,7 @@ function App() {
 	function handleHowdyClick() {
 		vscode.postMessage({
 			command: "hello",
-			text: "Hey there partner! 🤠",
+			value: "Hey there partner! 🤠",
 		});
 	}
 

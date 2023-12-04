@@ -22,6 +22,10 @@
 			"type": "shell",
 			"command": "pnpm build:webview",
 			"problemMatcher": []
-		  }
+		},
+		{
+            "label": "run-all",
+            "dependsOn": ["watch", "build-webview"]
+        }
 	]
 }

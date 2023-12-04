@@ -13,9 +13,10 @@
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
 			"outFiles": [
-				"${workspaceFolder}/out/**/*.js"
+				"${workspaceFolder}/out/**/*.js",
+				"${workspaceFolder}/webview-ui/build/*.js"
 			],
-			"preLaunchTask": "build-webview"
+			"preLaunchTask": "run-all"
 		}
 	]
 }
