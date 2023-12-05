@@ -3,6 +3,7 @@
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider";
+import { Ollama } from "./service/llm";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -25,7 +26,15 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
 			CodeSuggestionProvider.selector,
-			new CodeSuggestionProvider()
+			new CodeSuggestionProvider(
+				new Ollama({
+					model: "zephyr",
+					temperature: 0.7,
+					p: 0.2,
+					k: 30,
+					baseUrl: "http://localhost:11434",
+				})
+			)
 		)
 	);
 
