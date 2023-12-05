@@ -1,9 +1,4 @@
 import {
-	CancellationToken,
-	CompletionItem,
-	CompletionItemKind,
-	CompletionItemProvider,
-	DocumentFilter,
 	DocumentSelector,
 	InlineCompletionContext,
 	InlineCompletionItem,
@@ -15,8 +10,10 @@ import {
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly triggerCharacters: string[] = [".", " "];
 	public static readonly selector: DocumentSelector = [
-		"typescript",
-		"javascript",
+		{ pattern: "**/*.tsx" },
+		{ pattern: "**/*.ts" },
+		{ pattern: "**/*.js" },
+		{ pattern: "**/*.jsx" },
 	];
 
 	provideInlineCompletionItems(

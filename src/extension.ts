@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
-			{ pattern: "**/*.tsx" },
+			CodeSuggestionProvider.selector,
 			new CodeSuggestionProvider()
 		)
 	);
