@@ -1,11 +1,15 @@
 import * as vscode from "vscode";
+import { BaseModel } from "../service/llm";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "code-assistant-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
+	private _model: BaseModel;
 
-	constructor(private readonly _extensionUri: vscode.Uri) {}
+	constructor(model: BaseModel, private readonly _extensionUri: vscode.Uri) {
+		this._model = model;
+	}
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -32,8 +36,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			}
 
 			switch (data.command) {
-				case "hello": {
-					console.log(data.value);
+				case "chat": {
+					const chatMessage = data.value;
+
+					this._model
+						.getResponse(chatMessage)
+						.then(({ response }) => {
+							webviewView.webview.postMessage({
+								command: "response",
+								value: response,
+							});
+						});
 					break;
 				}
 			}
@@ -54,15 +67,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		const nonce = getNonce();
 
 		return `<!DOCTYPE html>
-        <html lang="en">
+        <html lang="en" style="height: 100%">
           <head>
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-            <title>Hello World</title>
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+            <title>Code Assistant</title>
           </head>
-          <body>
-            <div id="root"></div>
+          <body style="height: 100%">
+            <div id="root" style="height: 100%"></div>
             <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
           </body>
         </html>`;

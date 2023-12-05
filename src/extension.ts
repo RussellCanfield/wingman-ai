@@ -14,7 +14,15 @@ export function activate(context: vscode.ExtensionContext) {
 		'Congratulations, your extension "code-assistant" is now active!'
 	);
 
-	const provider = new ChatViewProvider(context.extensionUri);
+	const model = new Ollama({
+		model: "zephyr",
+		temperature: 0.7,
+		p: 0.2,
+		k: 30,
+		baseUrl: "http://localhost:11434",
+	});
+
+	const provider = new ChatViewProvider(model, context.extensionUri);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -26,15 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
 			CodeSuggestionProvider.selector,
-			new CodeSuggestionProvider(
-				new Ollama({
-					model: "zephyr",
-					temperature: 0.7,
-					p: 0.2,
-					k: 30,
-					baseUrl: "http://localhost:11434",
-				})
-			)
+			new CodeSuggestionProvider(model)
 		)
 	);
 
