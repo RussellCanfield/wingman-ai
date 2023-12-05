@@ -15,12 +15,12 @@ const decorationType = vscode.window.createTextEditorDecorationType({
 let activeSuggestion: CodeSuggestion | undefined;
 
 const handleDocumentChange = (event: TextDocumentChangeEvent) => {
-	console.log(
-		"Change: ",
-		event.reason,
-		event.contentChanges.length,
-		event.document.isDirty
-	);
+	// console.log(
+	// 	"Change: ",
+	// 	event.reason,
+	// 	event.contentChanges.length,
+	// 	event.document.isDirty
+	// );
 };
 
 const handleSelectionChange = () => {
