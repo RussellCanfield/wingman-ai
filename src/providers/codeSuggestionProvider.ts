@@ -9,7 +9,7 @@ import {
 } from "vscode";
 import { BaseModel } from "../service/llm";
 
-let timeout: NodeJS.Timeout | undefined = null;
+let timeout: NodeJS.Timeout | undefined;
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
