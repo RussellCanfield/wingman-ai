@@ -1,7 +1,11 @@
+import { defineConfig } from "vite";
 import { resolve } from "path";
+import { viteStaticCopy } from "vite-plugin-static-copy";
+import wasmPack from "vite-plugin-wasm-pack";
 
 /** @type {import('vite').UserConfig} */
-export default {
+const config = defineConfig({
+	assetsInclude: ["**/*.wasm"],
 	build: {
 		lib: {
 			entry: "./src/extension.ts",
@@ -24,5 +28,7 @@ export default {
 	define: {
 		"process.env": process.env,
 	},
-	plugins: [],
-};
+	plugins: [wasmPack(["./llm_wasm"])],
+});
+
+export default config;

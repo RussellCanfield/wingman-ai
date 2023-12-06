@@ -4,6 +4,8 @@ import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { Ollama } from "./service/llm.js";
+//@ts-ignore
+import init, { greet } from "llm_wasm";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -13,6 +15,22 @@ export async function activate(context: vscode.ExtensionContext) {
 	console.log(
 		'Congratulations, your extension "code-assistant" is now active!'
 	);
+
+	try {
+		const path = vscode.Uri.joinPath(
+			context.extensionUri,
+			"out",
+			"assets",
+			"llm_wasm_bg.wasm"
+		);
+
+		const wasmFile = vscode.workspace.fs.readFile(path);
+
+		await init(wasmFile);
+		console.log(greet());
+	} catch (error) {
+		console.error(error);
+	}
 
 	const model = new Ollama({
 		model: "zephyr",
