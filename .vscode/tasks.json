@@ -4,17 +4,26 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "watch",
-			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$tsc-watch",
+			"label": "vite",
+			"type": "shell",
+			"command": "pnpm watch",
 			"isBackground": true,
-			"presentation": {
-				"reveal": "never"
-			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
+			"problemMatcher": {
+				"owner": "vite",
+				"fileLocation": "relative",
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^build started...", // Regex to match the start of the task
+					"endsPattern": "^built in \\d+ms." // Regex to match the end of the task
+				},
+				"pattern": {
+					"regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				}
 			}
 		},
 		{
@@ -25,7 +34,7 @@
 		},
 		{
             "label": "run-all",
-            "dependsOn": ["watch", "build-webview"]
+            "dependsOn": ["vite", "build-webview"]
         }
 	]
 }

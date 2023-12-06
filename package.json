@@ -43,8 +43,9 @@
 		"vscode:prepublish": "pnpm run compile",
 		"start:webview": "cd webview-ui && npm run start",
 		"build:webview": "cd webview-ui && npm run build",
-		"compile": "tsc -p ./",
-		"watch": "cd webview-ui && pnpm build && cd .. && tsc -watch -p ./",
+		"compile": "vite build",
+		"watch": "vite build --watch",
+		"package": "vite build --mode production",
 		"pretest": "pnpm run compile && pnpm run lint",
 		"lint": "eslint src --ext ts",
 		"test": "vscode-test"
@@ -53,11 +54,19 @@
 		"@types/vscode": "^1.84.0",
 		"@types/mocha": "^10.0.6",
 		"@types/node": "18.x",
+		"@types/react": "18.2.42",
+		"@types/react-dom": "18.2.17",
 		"@typescript-eslint/eslint-plugin": "^6.13.1",
 		"@typescript-eslint/parser": "^6.13.1",
+		"@types/vscode-webview": "1.57.4",
 		"eslint": "^8.54.0",
 		"typescript": "^5.3.2",
 		"@vscode/test-cli": "^0.0.4",
-		"@vscode/test-electron": "^2.3.8"
+		"@vscode/test-electron": "^2.3.8",
+		"vite": "5.0.6",
+		"@vscode/webview-ui-toolkit": "1.3.1",
+		"react": "18.2.0",
+		"react-dom": "18.2.0",
+		"styled-components": "6.1.1"
 	}
 }

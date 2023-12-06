@@ -16,7 +16,7 @@
 				"${workspaceFolder}/out/**/*.js",
 				"${workspaceFolder}/webview-ui/build/*.js"
 			],
-			"preLaunchTask": "run-all"
+			"preLaunchTask": "vite"
 		}
 	]
 }
