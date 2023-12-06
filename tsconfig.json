@@ -1,13 +1,14 @@
 {
 	"compilerOptions": {
-		"module": "NodeNext",
+		"module": "CommonJS",
 		"target": "ES2022",
 		"outDir": "out",
 		"lib": ["dom", "dom.iterable", "esnext"],
 		"sourceMap": true,
 		"strict": true,
 		"skipLibCheck": true,
-		"jsx": "react-jsx"
+		"jsx": "react-jsx",
+		"esModuleInterop": true,
 		/* Additional Checks */
 		// "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
 		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */

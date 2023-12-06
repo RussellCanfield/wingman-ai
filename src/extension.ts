@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { Ollama } from "./service/llm.js";
-import path from "path";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
