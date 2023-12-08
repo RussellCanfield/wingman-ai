@@ -14,7 +14,7 @@
 				"background": {
 					"activeOnStart": true,
 					"beginsPattern": "^build started...", // Regex to match the start of the task
-					"endsPattern": "^built in \\d+ms." // Regex to match the end of the task
+					"endsPattern": "^built in." // Regex to match the end of the task
 				},
 				"pattern": {
 					"regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
@@ -25,16 +25,6 @@
 					"message": 5
 				}
 			}
-		},
-		{
-			"label": "build-webview",
-			"type": "shell",
-			"command": "pnpm build:webview",
-			"problemMatcher": []
-		},
-		{
-            "label": "run-all",
-            "dependsOn": ["vite", "build-webview"]
-        }
+		}
 	]
 }
