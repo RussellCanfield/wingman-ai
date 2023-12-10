@@ -40,7 +40,7 @@ const config = defineConfig({
 					dest: ".",
 				},
 				{
-					src: resolve(__dirname, "./src/models"),
+					src: resolve(__dirname, "./models"),
 					dest: ".",
 				},
 			],
