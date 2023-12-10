@@ -2,6 +2,17 @@
 
 This is the README for your extension "code-assistant". After writing up a brief description, we recommend including the following sections.
 
+## Getting started
+
+Recommended models (GGUF format - not all actually work, be warned):
+[https://huggingface.co/TheBloke/deepseek-coder-5.7bmqa-base-GGUF](https://huggingface.co/TheBloke/deepseek-coder-5.7bmqa-base-GGUF)
+
+-   pnpm i
+-   If you do not see a "llamaBins" folder in the root, run "node ./downloadLlamaBins.js"
+-   Download the model of your choice, make a folder in the root called "models" put the folder there.
+-   Edit src/extension.ts, around line 23 - add your model file name.
+-   Press F5 and run in debug mode
+
 ## Features
 
 Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
@@ -24,8 +35,8 @@ For example:
 
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+-   `myExtension.enable`: Enable/disable this extension.
+-   `myExtension.thing`: Set to `blah` to do something.
 
 ## Known Issues
 
@@ -53,19 +64,19 @@ Added features X, Y, and Z.
 
 Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+-   [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
 
 ## Working with Markdown
 
 You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+-   Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
+-   Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
+-   Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
 
 ## For more information
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+-   [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
+-   [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
 
 **Enjoy!**

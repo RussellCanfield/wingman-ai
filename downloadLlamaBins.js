@@ -8,9 +8,9 @@ const path = require("path");
 const fs = require("fs");
 const fsp = require("fs/promises");
 
-const url =
-	"https://registry.npmjs.org/node-llama-cpp/-/node-llama-cpp-2.8.2.tgz";
-const filePath = path.resolve(`${process.cwd()}/node-llama-cpp-2.8.2.tgz`);
+const packageName = "node-llama-cpp-2.8.2.tgz";
+const url = `https://registry.npmjs.org/node-llama-cpp/-/${packageName}`;
+const filePath = path.resolve(`${process.cwd()}/${packageName}`);
 
 const file = fs.createWriteStream(filePath);
 
@@ -56,7 +56,10 @@ https
 							.then(() => {
 								fsp.rm(filePath);
 								fsp.rm(
-									path.resolve(`${process.cwd()}/package`)
+									path.resolve(`${process.cwd()}/package`),
+									{
+										recursive: true,
+									}
 								);
 								fsp.rm(sourcePath, {
 									recursive: true,

@@ -20,7 +20,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			context.extensionUri,
 			"out",
 			"models",
-			"deepseek-coder-1.3b-instruct.Q4_0.gguf"
+			"deepseek-coder-5.7bmqa-base.Q4_0.gguf"
 		).toString();
 
 		const binPath = vscode.Uri.joinPath(
@@ -30,7 +30,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		).toString();
 
 		const model = new LlamaModel({});
-		await model.initialize({ binPath, modelPath });
+		await model.initialize({
+			binPath,
+			modelPath,
+		});
 		const modelContext = new LlamaContext({ model });
 		const session = new LlamaChatSession({ context: modelContext });
 
