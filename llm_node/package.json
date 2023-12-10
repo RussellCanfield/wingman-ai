@@ -1,0 +1,21 @@
+{
+	"name": "llm_node",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"type": "module",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"start": "tsc && node out/index.mjs"
+	},
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"prompt-sync": "4.2.0",
+		"node-llama-cpp": "2.8.0"
+	},
+	"devDependencies": {
+		"@types/prompt-sync": "4.2.3",
+		"typescript": "5.3.3"
+	}
+}

@@ -56,7 +56,7 @@ export class Ollama implements BaseModel {
 		prompt: string,
 		stream?: boolean
 	): Promise<Response> =>
-		await fetch(new URL(`${this.baseUrl}/api/generate`), {
+		fetch(new URL(`${this.baseUrl}/api/generate`), {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -78,6 +78,12 @@ export class Ollama implements BaseModel {
 
 	getResponse = async (prompt: string): Promise<ModelResponse> =>
 		this.fetchResponse(prompt)
-			.then((res) => res.json())
+			.then((res) => {
+				return res.text().then((r) => {
+					console.log(r);
+					return r;
+				});
+			})
+			//@ts-ignore
 			.then((res) => res as ModelResponse);
 }

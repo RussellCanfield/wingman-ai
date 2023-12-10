@@ -1,14 +1,16 @@
 import { defineConfig } from "vite";
-import { resolve } from "path";
+import path, { resolve } from "path";
 import { viteStaticCopy } from "vite-plugin-static-copy";
-import topLevelAwait from "vite-plugin-top-level-await";
-import wasmPack from "vite-plugin-wasm-pack";
-import wasm from "vite-plugin-wasm";
 
 /** @type {import('vite').UserConfig} */
 const config = defineConfig({
-	assetsInclude: ["**/*.wasm"],
+	resolve: {
+		alias: {
+			"@node-llama": path.resolve(__dirname, "./node-llama-cpp/dist"),
+		},
+	},
 	build: {
+		ssr: true,
 		lib: {
 			entry: "./src/extension.ts",
 			formats: ["cjs"],
@@ -34,18 +36,15 @@ const config = defineConfig({
 		viteStaticCopy({
 			targets: [
 				{
-					src: resolve(__dirname, "src/wasm"),
+					src: resolve(__dirname, "./llamaBins"),
 					dest: ".",
 				},
 				{
-					src: resolve(__dirname, "src/js"),
+					src: resolve(__dirname, "./src/models"),
 					dest: ".",
 				},
 			],
 		}),
-		wasm(),
-		topLevelAwait(),
-		//wasmPack(["./llm_wasm"]),
 	],
 });
 

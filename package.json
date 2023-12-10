@@ -44,12 +44,13 @@
 		"vscode:prepublish": "pnpm run compile",
 		"start:webview": "cd webview-ui && npm run start",
 		"build:webview": "cd webview-ui && npm run build",
-		"compile": "vite build",
+		"compile": "cd ./node-llama-cpp && npm run build && cd .. && vite build",
 		"watch": "vite build --watch",
 		"package": "vite build --mode production",
 		"pretest": "pnpm run compile && pnpm run lint",
 		"lint": "eslint src --ext ts",
-		"test": "vscode-test"
+		"test": "vscode-test",
+		"devPreinstall": "node ./downloadLlamaBins.js"
 	},
 	"devDependencies": {
 		"@types/vscode": "^1.84.0",
@@ -72,6 +73,7 @@
 		"react-dom": "18.2.0",
 		"styled-components": "6.1.1",
 		"vite-plugin-wasm": "3.2.2",
-		"vite-plugin-top-level-await": "1.3.1"
+		"vite-plugin-top-level-await": "1.3.1",
+		"tar": "6.2.0"
 	}
 }

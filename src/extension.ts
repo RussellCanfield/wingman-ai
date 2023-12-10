@@ -4,9 +4,7 @@ import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { Ollama } from "./service/llm.js";
-
-//@ts-ignore
-import init, { greet } from "./wasm/llm_wasm.js";
+import { LlamaModel, LlamaContext, LlamaChatSession } from "@node-llama";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -18,71 +16,35 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	try {
-		const path = vscode.Uri.joinPath(
+		const modelPath = vscode.Uri.joinPath(
 			context.extensionUri,
 			"out",
-			"wasm",
-			"llm_wasm_bg.wasm"
-		);
+			"models",
+			"deepseek-coder-1.3b-instruct.Q4_0.gguf"
+		).toString();
 
-		const wasmFile = vscode.workspace.fs.readFile(path);
+		const binPath = vscode.Uri.joinPath(
+			context.extensionUri,
+			"out",
+			"llamaBins"
+		).toString();
 
-		await init(wasmFile);
-		console.log(greet(path.toString()));
+		const model = new LlamaModel({});
+		await model.initialize({ binPath, modelPath });
+		const modelContext = new LlamaContext({ model });
+		const session = new LlamaChatSession({ context: modelContext });
+
+		await session.prompt("testing", {
+			onToken(chunk: any) {
+				console.log(modelContext.decode(chunk));
+			},
+		});
 	} catch (error) {
 		console.error(error);
 	}
 
-	// try {
-	// 	const webllm = await import("@mlc-ai/web-llm");
-
-	// 	const chat = new webllm.ChatModule();
-	// 	// This callback allows us to report initialization progress
-	// 	// chat.setInitProgressCallback((report: webllm.InitProgressReport) => {
-	// 	// 	setLabel("init-label", report.text);
-	// 	// });
-	// 	// You can also try out "RedPajama-INCITE-Chat-3B-v1-q4f32_1"
-
-	// 	await chat.reload(
-	// 		"deepseek-coder-1.3b-base-q4f16_1-webgpu",
-	// 		{
-	// 			repetition_penalty: 1.01,
-	// 		},
-	// 		{
-	// 			model_list: [
-	// 				{
-	// 					model_url: "",
-	// 					local_id: "deepseek-coder-1.3b-base-q4f16_1-webgpu",
-	// 				},
-	// 			],
-	// 			model_lib_map: {
-	// 				"deepseek-coder-1.3b-base-q4f16_1-webgpu":
-	// 					"/models/deepseek-coder-1.3b-base-q4f16_1-webgpu.wasm",
-	// 			},
-	// 		}
-	// 	);
-
-	// 	const generateProgressCallback = (_step: number, message: string) => {
-	// 		console.log(_step, message);
-	// 	};
-
-	// 	const prompt0 = "What is the capital of Canada?";
-	// 	//setLabel("prompt-label", prompt0);
-	// 	const reply0 = await chat.generate(prompt0, generateProgressCallback);
-	// 	console.log(reply0);
-
-	// 	const prompt1 = "Can you write a poem about it?";
-	// 	//setLabel("prompt-label", prompt1);
-	// 	const reply1 = await chat.generate(prompt1, generateProgressCallback);
-	// 	console.log(reply1);
-
-	// 	console.log(await chat.runtimeStatsText());
-	// } catch (error) {
-	// 	console.error(error);
-	// }
-
 	const model = new Ollama({
-		model: "zephyr",
+		model: "deepseek-coder",
 		temperature: 0.7,
 		p: 0.2,
 		k: 30,
