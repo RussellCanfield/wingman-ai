@@ -9,6 +9,8 @@ models
 # C extensions
 *.so
 
+node-llama-cpp/dist/
+
 # Distribution / packaging
 .Python
 build/
