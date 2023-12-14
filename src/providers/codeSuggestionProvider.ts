@@ -6,46 +6,62 @@ import {
 	InlineCompletionItemProvider,
 	Position,
 	TextDocument,
+	Range,
 } from "vscode";
+import * as vscode from "vscode";
 import { BaseModel } from "../service/llm";
 
 let timeout: NodeJS.Timeout | undefined;
+let lastOperation: Promise<InlineCompletionItem[]> | undefined;
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
-		{ pattern: "**/*.tsx" },
-		{ pattern: "**/*.ts" },
-		{ pattern: "**/*.js" },
-		{ pattern: "**/*.jsx" },
+		{ scheme: "file", language: "typescript" },
+		{ scheme: "file", language: "javascript" },
 	];
 
-	private model: BaseModel;
+	private _model: BaseModel;
 
 	constructor(model: BaseModel) {
-		this.model = model;
+		this._model = model;
 	}
 
-	sanitizeResult = (text: string) => {
-		console.log(text);
-		const regex = /\`\`\`(\w+)([\s\S]*?)\`\`\`/gm;
-		const match = regex.exec(text);
-		console.log(match);
-		return match ? match[2] : null;
+	getSafeWindow = (lineNumber: number, windowSize: number) => {
+		lineNumber - windowSize < 0 ? 0 : lineNumber - windowSize;
 	};
 
-	provideInlineCompletionItems(
+	async provideInlineCompletionItems(
 		document: TextDocument,
 		position: Position,
 		context: InlineCompletionContext,
 		token: CancellationToken
 	) {
+		const docContext = vscode.workspace.textDocuments.reduce((acc, d) => {
+			if (d.fileName.includes(".git")) {
+				return acc;
+			}
+
+			const doc = `//${
+				d.fileName.lastIndexOf("/") > -1
+					? d.fileName.substring(d.fileName.lastIndexOf("/") + 1)
+					: d.fileName
+			}
+			${d.getText().substring(0, 512)}
+
+			`;
+			docContext;
+			acc += doc;
+
+			return acc;
+		}, "");
+
 		const linePrefix = document
 			.lineAt(position)
-			.text.substr(0, position.character);
+			.text.substring(0, position.character);
 
-		// if (!linePrefix.endsWith("code-assistant.")) {
-		// 	return undefined;
-		// }
+		const prompt = `${docContext}
+		
+		${linePrefix}`;
 
 		if (timeout) {
 			clearTimeout(timeout);
@@ -54,18 +70,15 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		try {
 			return new Promise<InlineCompletionItem[]>((resolve, reject) => {
 				timeout = setTimeout(() => {
-					this.model
-						.getResponse(linePrefix)
+					console.log("PROMPTING");
+
+					this._model
+						.getResponse(prompt)
 						.then(({ response }) => {
-							const code = this.sanitizeResult(response)?.replace(
-								/\\n/g,
-								""
-							);
-							resolve([new InlineCompletionItem(code || "")]);
+							console.log(response);
+							resolve([new InlineCompletionItem(response || "")]);
 						})
-						.catch(() => {
-							reject([]);
-						});
+						.catch((err) => reject([]));
 				}, 500);
 			});
 		} catch (error) {

@@ -37,8 +37,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-.DS_Store
-
 # Pytest
 .pytest_cache/
 
@@ -53,7 +51,6 @@ venv.bak/
 
 # IDEs
 .idea/
-.vscode/
 
 # OS generated files
 .DS_Store
