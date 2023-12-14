@@ -10,11 +10,8 @@ const config = defineConfig({
 		},
 	},
 	build: {
-		ssr: true,
 		lib: {
 			entry: "./src/extension.ts",
-			formats: ["cjs"],
-			fileName: "extension",
 		},
 		rollupOptions: {
 			external: ["vscode"],
@@ -22,9 +19,16 @@ const config = defineConfig({
 				extension: resolve(__dirname, "src/extension.ts"),
 				index: resolve(__dirname, "src/webview-ui/index.tsx"),
 			},
-			output: {
-				entryFileNames: "[name].js",
-			},
+			output: [
+				{
+					format: "cjs",
+					entryFileNames: "[name].js",
+				},
+				{
+					format: "es",
+					entryFileNames: "[name].[format].js",
+				},
+			],
 		},
 		sourcemap: true,
 		outDir: "out",
@@ -33,18 +37,18 @@ const config = defineConfig({
 		"process.env": process.env,
 	},
 	plugins: [
-		viteStaticCopy({
-			targets: [
-				{
-					src: resolve(__dirname, "./llamaBins"),
-					dest: ".",
-				},
-				{
-					src: resolve(__dirname, "./models"),
-					dest: ".",
-				},
-			],
-		}),
+		// viteStaticCopy({
+		// 	targets: [
+		// 		{
+		// 			src: resolve(__dirname, "./llamaBins"),
+		// 			dest: ".",
+		// 		},
+		// 		{
+		// 			src: resolve(__dirname, "./models"),
+		// 			dest: ".",
+		// 		},
+		// 	],
+		// }),
 	],
 });
 
