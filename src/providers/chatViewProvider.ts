@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { LlamaChatSession, Token } from "@node-llama";
 import { BaseModel } from "../service/llm";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -11,10 +12,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		this._model = model;
 	}
 
-	dispose() {
-		this._disposables.forEach((d) => d.dispose());
-		this._disposables = [];
-	}
+	// dispose() {
+	// 	this._disposables.forEach((d) => d.dispose());
+	// 	this._disposables = [];
+	// }
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
@@ -30,33 +31,33 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-		webviewView.webview.onDidReceiveMessage((data) => {
-			if (!data) {
-				return;
-			}
+		// webviewView.webview.onDidReceiveMessage((data) => {
+		// 	if (!data) {
+		// 		return;
+		// 	}
 
-			switch (data.command) {
-				case "chat": {
-					const chatMessage = data.value;
+		// 	switch (data.command) {
+		// 		case "chat": {
+		// 			const chatMessage = data.value;
 
-					this._model
-						.getResponse(chatMessage)
-						.then(({ response }) => {
-							webviewView.webview.postMessage({
-								command: "response",
-								value: response,
-							});
-						});
-					break;
-				}
-			}
-		});
+		// 			this._model.prompt(chatMessage, {
+		// 				onToken: (chunk: Uint32Array | Token[]) => {
+		// 					webviewView.webview.postMessage({
+		// 						command: "response",
+		// 						value: this._model.context.decode(chunk),
+		// 					});
+		// 				},
+		// 			});
+		// 			break;
+		// 		}
+		// 	}
+		// });
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview) {
 		// Get the local path to main script run in the webview, then convert it to a uri we can use in the webview.
 		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this._extensionUri, "out", "index.js")
+			vscode.Uri.joinPath(this._extensionUri, "out", "index.es.js")
 		);
 
 		const nonce = getNonce();

@@ -228,6 +228,7 @@ export class LlamaModel {
 				vocabOnly,
 				useMmap,
 				useMlock,
+				silentPrompt: true,
 			})
 		);
 

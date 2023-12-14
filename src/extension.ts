@@ -3,8 +3,8 @@
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
-import { Ollama } from "./service/llm.js";
 import { LlamaModel, LlamaContext, LlamaChatSession } from "@node-llama";
+import { Ollama } from "./service/llm.js";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -15,46 +15,36 @@ export async function activate(context: vscode.ExtensionContext) {
 		'Congratulations, your extension "code-assistant" is now active!'
 	);
 
-	try {
-		const modelPath = vscode.Uri.joinPath(
-			context.extensionUri,
-			"out",
-			"models",
-			"deepseek-coder-5.7bmqa-base.Q4_0.gguf"
-		).toString();
+	// const modelPath = vscode.Uri.joinPath(
+	// 	context.extensionUri,
+	// 	"out",
+	// 	"models",
+	// 	"deepseek-coder-5.7bmqa-base.Q4_0.gguf"
+	// ).toString();
 
-		const binPath = vscode.Uri.joinPath(
-			context.extensionUri,
-			"out",
-			"llamaBins"
-		).toString();
+	// const binPath = vscode.Uri.joinPath(
+	// 	context.extensionUri,
+	// 	"out",
+	// 	"llamaBins"
+	// ).toString();
 
-		const model = new LlamaModel({});
-		await model.initialize({
-			binPath,
-			modelPath,
-		});
-		const modelContext = new LlamaContext({ model });
-		const session = new LlamaChatSession({ context: modelContext });
+	// const model = new LlamaModel({});
+	// await model.initialize({
+	// 	binPath,
+	// 	modelPath,
+	// });
+	// const modelContext = new LlamaContext({ model });
+	// const session = new LlamaChatSession({ context: modelContext });
 
-		await session.prompt("testing", {
-			onToken(chunk: any) {
-				console.log(modelContext.decode(chunk));
-			},
-		});
-	} catch (error) {
-		console.error(error);
-	}
-
-	const model = new Ollama({
-		model: "deepseek-coder",
-		temperature: 0.7,
-		p: 0.2,
-		k: 30,
+	const ollamaModel = new Ollama({
+		model: "deepseek-coder:6.7b-base-q4_1",
+		temperature: 0.2,
+		p: 0.7,
+		k: 50,
 		baseUrl: "http://localhost:11434",
 	});
 
-	const provider = new ChatViewProvider(model, context.extensionUri);
+	const provider = new ChatViewProvider(ollamaModel, context.extensionUri);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -66,7 +56,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
 			CodeSuggestionProvider.selector,
-			new CodeSuggestionProvider(model)
+			new CodeSuggestionProvider(ollamaModel)
 		)
 	);
 

@@ -236,7 +236,12 @@ export class LlamaContext {
 			);
 
 			// the assistant finished answering
-			if (nextToken === this._ctx.tokenEos()) break;
+			if (
+				nextToken === this._ctx.tokenEos() ||
+				nextToken === this._ctx.encode("<｜fim▁end｜>")[0]
+			) {
+				break;
+			}
 
 			yield nextToken;
 

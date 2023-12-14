@@ -63,12 +63,14 @@ export class Ollama implements BaseModel {
 			},
 			body: JSON.stringify({
 				model: this.model,
-				prompt: this.withBasePrompt(prompt),
+				prompt,
 				stream: !!stream,
-				temperature: this.temperature,
+				raw: true,
 				options: {
+					temperature: this.temperature,
 					top_k: this.k,
 					top_p: this.p,
+					stop: ["\n", "user:", "</s>"],
 				},
 			}),
 		});
@@ -78,12 +80,6 @@ export class Ollama implements BaseModel {
 
 	getResponse = async (prompt: string): Promise<ModelResponse> =>
 		this.fetchResponse(prompt)
-			.then((res) => {
-				return res.text().then((r) => {
-					console.log(r);
-					return r;
-				});
-			})
-			//@ts-ignore
+			.then((res) => res.json())
 			.then((res) => res as ModelResponse);
 }
