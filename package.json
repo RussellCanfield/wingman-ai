@@ -42,8 +42,8 @@
 	"scripts": {
 		"vscode:prepublish": "pnpm run compile",
 		"build:nodellama": "cd ./node-llama-cpp && npm run build",
-		"compile": "npm run build:nodellama && vite build",
-		"watch": "npm run build:nodellama && vite build --watch",
+		"compile": "vite build",
+		"watch": "vite build --watch",
 		"package": "vite build --mode production",
 		"pretest": "pnpm run compile && pnpm run lint",
 		"lint": "eslint src --ext ts",

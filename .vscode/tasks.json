@@ -5,8 +5,8 @@
 	"tasks": [
 		{
 			"label": "vite",
-			"type": "shell",
-			"command": "pnpm watch",
+			"type": "npm",
+			"script": "watch",
 			"isBackground": true,
 			"problemMatcher": {
 				"owner": "vite",
