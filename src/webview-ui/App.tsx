@@ -2,6 +2,8 @@ import { vscode } from "./utilities/vscode";
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react";
 import styled from "styled-components";
 import { PropsWithChildren, useEffect, useState } from "react";
+import { ModelStream } from "../service/llm";
+import { flushSync } from "react-dom";
 
 const Main = styled.main`
 	height: 100%;
@@ -31,11 +33,19 @@ function ChatResponse({ input }: { input: string }) {
 
 interface AppMessage {
 	command: string;
-	value: string;
+	value: ModelStream;
 }
 
+interface ChatMessage {
+	from: "bot" | "user";
+	message: string;
+}
+
+let currentMessage = "";
+
 function App() {
-	const [messages, setMessages] = useState<string[]>([]);
+	const [messages, setMessages] = useState<ChatMessage[]>([]);
+	const [activeMessage, setActiveMessage] = useState<string>("");
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -45,9 +55,34 @@ function App() {
 		};
 	}, []);
 
+	console.log(activeMessage);
+
 	function handleResponse(event: MessageEvent<AppMessage>) {
 		const { data } = event;
-		setMessages((messages) => [...messages, data.value]);
+		const { command, value } = data;
+
+		if (command === "done") {
+			console.log("Saving: ", activeMessage);
+			setMessages((messages) => [
+				...messages,
+				{
+					from: "bot",
+					message: currentMessage,
+				},
+			]);
+
+			setActiveMessage("");
+			currentMessage = "";
+
+			return;
+		}
+
+		if (!value) {
+			return;
+		}
+
+		currentMessage += value;
+		setActiveMessage((message) => message + value);
 	}
 
 	function fetchAIResponse(text: string) {
@@ -73,9 +108,10 @@ function App() {
 		<Main>
 			<h2>Code Assistant</h2>
 			<ChatResponseList>
-				{messages.map((message, index) => (
+				{messages.map(({ from, message }, index) => (
 					<ChatResponse key={index} input={message} />
 				))}
+				{activeMessage && <ChatResponse input={activeMessage} />}
 			</ChatResponseList>
 			<UserInput>
 				<VSCodeTextField

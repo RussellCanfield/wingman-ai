@@ -3,7 +3,6 @@
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
-import { LlamaModel, LlamaContext, LlamaChatSession } from "@node-llama";
 import { Ollama } from "./service/llm.js";
 
 // This method is called when your extension is activated
@@ -38,9 +37,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const ollamaModel = new Ollama({
 		model: "deepseek-coder:6.7b-base-q4_1",
-		temperature: 0.2,
-		p: 0.7,
-		k: 50,
 		baseUrl: "http://localhost:11434",
 	});
 

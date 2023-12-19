@@ -12,7 +12,6 @@ import * as vscode from "vscode";
 import { BaseModel } from "../service/llm";
 
 let timeout: NodeJS.Timeout | undefined;
-let lastOperation: Promise<InlineCompletionItem[]> | undefined;
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
@@ -73,9 +72,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 					console.log("PROMPTING");
 
 					this._model
-						.getResponse(prompt)
+						.execute(prompt)
 						.then(({ response }) => {
-							console.log(response);
 							resolve([new InlineCompletionItem(response || "")]);
 						})
 						.catch((err) => reject([]));

@@ -1,7 +1,7 @@
 import { ReadableStream } from "stream/web";
 
 export interface ModelOptions {
-	temperature: number;
+	baseUrl: string;
 	model?: string;
 }
 
@@ -13,29 +13,30 @@ export type ModelStream = ReadableStream<Uint8Array> &
 	AsyncIterable<Uint8Array>;
 
 export interface BaseModel extends ModelOptions {
-	getStream: (prompt: string) => Promise<ModelStream>;
-	getResponse: (prompt: string) => Promise<ModelResponse>;
+	stream: (prompt: string, options?: OllamaModelOptions) => Promise<Response>;
+	execute: (
+		prompt: string,
+		options?: OllamaModelOptions
+	) => Promise<ModelResponse>;
 }
 
-export interface OllamaModelOptions extends ModelOptions {
-	baseUrl: string;
+export interface OllamaModelOptions {
+	stream: boolean;
+	temperature?: number;
 	k?: number;
 	p?: number;
+	additionalStopTokens?: string[];
 }
+
+const defaultStopTokens = ["user:", "</s>"];
 
 export class Ollama implements BaseModel {
-	temperature: number;
 	model?: string;
 	baseUrl: string;
-	k?: number;
-	p?: number;
 
-	constructor(options: OllamaModelOptions) {
-		this.temperature = options.temperature ?? 0;
+	constructor(options: ModelOptions) {
 		this.model = options.model ?? "llama2";
 		this.baseUrl = options.baseUrl ?? "http://localhost:11434";
-		this.k = options.k ?? 20;
-		this.p = options.p ?? 0.3;
 	}
 
 	withBasePrompt = (prompt: string) =>
@@ -54,32 +55,42 @@ export class Ollama implements BaseModel {
 
 	fetchResponse = async (
 		prompt: string,
-		stream?: boolean
+		options?: OllamaModelOptions
 	): Promise<Response> =>
 		fetch(new URL(`${this.baseUrl}/api/generate`), {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
+				"Accept-Encoding": "gzip, deflate, br",
 			},
 			body: JSON.stringify({
 				model: this.model,
 				prompt,
-				stream: !!stream,
-				raw: true,
+				stream: !!options?.stream,
 				options: {
-					temperature: this.temperature,
-					top_k: this.k,
-					top_p: this.p,
-					stop: ["\n", "user:", "</s>"],
+					temperature: options?.temperature ?? 0.8,
+					top_k: options?.k ?? 50,
+					top_p: options?.p ?? 0.2,
+					stop: options?.additionalStopTokens
+						? [
+								...options.additionalStopTokens,
+								...defaultStopTokens,
+						  ]
+						: defaultStopTokens,
 				},
 			}),
 		});
 
-	getStream = async (prompt: string): Promise<ModelStream> =>
-		this.fetchResponse(prompt, true).then((res) => res.body as ModelStream);
+	stream = async (
+		prompt: string,
+		options?: OllamaModelOptions
+	): Promise<Response> => this.fetchResponse(prompt, options);
 
-	getResponse = async (prompt: string): Promise<ModelResponse> =>
-		this.fetchResponse(prompt)
-			.then((res) => res.json())
-			.then((res) => res as ModelResponse);
+	execute = async (
+		prompt: string,
+		options?: OllamaModelOptions
+	): Promise<ModelResponse> =>
+		this.fetchResponse(prompt, options ?? { stream: false }).then(
+			(res) => res.json() as Promise<ModelResponse>
+		);
 }

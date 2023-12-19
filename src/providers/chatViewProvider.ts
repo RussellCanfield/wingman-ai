@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { LlamaChatSession, Token } from "@node-llama";
 import { BaseModel } from "../service/llm";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -12,10 +11,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		this._model = model;
 	}
 
-	// dispose() {
-	// 	this._disposables.forEach((d) => d.dispose());
-	// 	this._disposables = [];
-	// }
+	dispose() {
+		this._disposables.forEach((d) => d.dispose());
+		this._disposables = [];
+	}
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
@@ -31,27 +30,89 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-		// webviewView.webview.onDidReceiveMessage((data) => {
-		// 	if (!data) {
-		// 		return;
-		// 	}
+		this._disposables.push(
+			webviewView.webview.onDidReceiveMessage((data) => {
+				if (!data) {
+					return;
+				}
 
-		// 	switch (data.command) {
-		// 		case "chat": {
-		// 			const chatMessage = data.value;
+				const { command, value } = data;
 
-		// 			this._model.prompt(chatMessage, {
-		// 				onToken: (chunk: Uint32Array | Token[]) => {
-		// 					webviewView.webview.postMessage({
-		// 						command: "response",
-		// 						value: this._model.context.decode(chunk),
-		// 					});
-		// 				},
-		// 			});
-		// 			break;
-		// 		}
-		// 	}
-		// });
+				switch (command) {
+					case "chat": {
+						const chatMessage = value;
+
+						const fileContext = this._getCurrentFileContext();
+
+						const prompt = `${chatMessage}`;
+
+						const decoder = new TextDecoderStream();
+
+						this.streamChatResponse(prompt, webviewView);
+
+						break;
+					}
+				}
+			})
+		);
+	}
+
+	private async streamChatResponse(
+		prompt: string,
+		webviewView: vscode.WebviewView
+	) {
+		const response = await this._model.stream(prompt, {
+			stream: true,
+		});
+
+		const characterStream = response.body!.pipeThrough(
+			new TextDecoderStream()
+		) as unknown as AsyncIterable<string>;
+
+		for await (const chunks of characterStream) {
+			const chunk = chunks.trimEnd().split(/\n/gm);
+
+			for (const line of chunk) {
+				const { response } = JSON.parse(line);
+
+				//Streams don't serialize well here, just simplify it for now.
+				webviewView.webview.postMessage({
+					command: "response",
+					value: response,
+				});
+			}
+		}
+
+		webviewView.webview.postMessage({
+			command: "done",
+			value: null,
+		});
+	}
+
+	private _getCurrentFileContext() {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor) {
+			return "";
+		}
+
+		const lineWindow = 15;
+		const currentLine = editor.selection.active.line;
+
+		const beginningWindowLine = editor.document.lineAt(
+			Math.max(0, currentLine - lineWindow)
+		);
+		const endWindowLine = editor.document.lineAt(
+			Math.min(editor.document.lineCount - 1, currentLine + lineWindow)
+		);
+
+		const text = editor.document.getText(
+			new vscode.Range(
+				beginningWindowLine.range.start,
+				endWindowLine.range.end
+			)
+		);
+
+		return text;
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview) {
