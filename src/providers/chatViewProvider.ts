@@ -40,15 +40,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 				switch (command) {
 					case "chat": {
-						const chatMessage = value;
+						const { text, currentLine, language } =
+							this._getCurrentFileContext();
 
-						const fileContext = this._getCurrentFileContext();
+						this.streamChatResponse(
+							value,
+							`The user is writing code using ${language}.
 
-						const prompt = `${chatMessage}`;
-
-						const decoder = new TextDecoderStream();
-
-						this.streamChatResponse(prompt, webviewView);
+							The most relevant code: """${currentLine}"""
+							Additional code to use as context: """${text}"""
+							`,
+							webviewView
+						);
 
 						break;
 					}
@@ -59,9 +62,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	private async streamChatResponse(
 		prompt: string,
+		context: string,
 		webviewView: vscode.WebviewView
 	) {
-		const response = await this._model.stream(prompt, {
+		const response = await this._model.stream(prompt, context, {
 			stream: true,
 		});
 
@@ -92,7 +96,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	private _getCurrentFileContext() {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) {
-			return "";
+			return { text: "", language: "" };
 		}
 
 		const lineWindow = 15;
@@ -112,7 +116,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			)
 		);
 
-		return text;
+		return {
+			text,
+			currentLine: editor.document.lineAt(editor.selection.active.line)
+				.text,
+			language: editor.document.languageId,
+		};
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview) {

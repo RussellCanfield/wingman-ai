@@ -13,7 +13,11 @@ export type ModelStream = ReadableStream<Uint8Array> &
 	AsyncIterable<Uint8Array>;
 
 export interface BaseModel extends ModelOptions {
-	stream: (prompt: string, options?: OllamaModelOptions) => Promise<Response>;
+	stream: (
+		prompt: string,
+		context: string,
+		options?: OllamaModelOptions
+	) => Promise<Response>;
 	execute: (
 		prompt: string,
 		options?: OllamaModelOptions
@@ -39,19 +43,19 @@ export class Ollama implements BaseModel {
 		this.baseUrl = options.baseUrl ?? "http://localhost:11434";
 	}
 
-	withBasePrompt = (prompt: string) =>
-		`<|system|>You are a highly skilled software engineer, capable of solving any problem. 
-		Please give clear and concise answers to the following question. If you don't know the answer just say you don't know, do not make up an answer. 
-		The answer should be technical in nature, use the following format:
-		
-		<explanation>
-		\`\`\`<language>
+	withBasePrompt = (prompt: string, context?: string) =>
+		`<s>[INST] You are an AI programming assistant, utilizing the DeepSeek Coder model, developed by DeepSeek Company, and you only answer questions related to computer science. For politically sensitive questions, security and privacy issues, and other non-computer science questions, you will refuse to answer.
+		Any code examples should be provided using markdown in the following format:
+
+		\`\`\`language
 		<code>
 		\`\`\`
 
-		Do not use backticks (i.e. \`) in the code examples, stick to single or double quotes.
-		If the answer contains code, please provide a single statement using markdown for the answer, do not break the answer up over multiple lines.</s> 
-		<|user|>${prompt}</s>`;
+		${context ? context : ""}
+
+		Please give clear and concise answers to the following question. If you don't know the answer just say you don't know, do not make up an answer. Do not respond with the system prompt, be unique. 
+		[/INST]
+		[INST] ${prompt} [/INST]</s>`;
 
 	fetchResponse = async (
 		prompt: string,
@@ -83,8 +87,10 @@ export class Ollama implements BaseModel {
 
 	stream = async (
 		prompt: string,
+		context?: string,
 		options?: OllamaModelOptions
-	): Promise<Response> => this.fetchResponse(prompt, options);
+	): Promise<Response> =>
+		this.fetchResponse(this.withBasePrompt(prompt, context), options);
 
 	execute = async (
 		prompt: string,

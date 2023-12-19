@@ -69,10 +69,11 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		try {
 			return new Promise<InlineCompletionItem[]>((resolve, reject) => {
 				timeout = setTimeout(() => {
-					console.log("PROMPTING");
-
 					this._model
-						.execute(prompt)
+						.execute(prompt, {
+							stream: false,
+							additionalStopTokens: ["\n"],
+						})
 						.then(({ response }) => {
 							resolve([new InlineCompletionItem(response || "")]);
 						})
