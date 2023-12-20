@@ -1,3 +1,4 @@
+import * as vscode from "vscode";
 import {
 	CancellationToken,
 	DocumentSelector,
@@ -6,9 +7,8 @@ import {
 	InlineCompletionItemProvider,
 	Position,
 	TextDocument,
-	Range,
 } from "vscode";
-import * as vscode from "vscode";
+import { aiService } from '../service/ai.service';
 import { BaseModel } from "../service/llm";
 
 let timeout: NodeJS.Timeout | undefined;
@@ -29,22 +29,25 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		lineNumber - windowSize < 0 ? 0 : lineNumber - windowSize;
 	};
 
-	async provideInlineCompletionItems(
+	provideInlineCompletionItems(
 		document: TextDocument,
 		position: Position,
 		context: InlineCompletionContext,
 		token: CancellationToken
 	) {
+		const abort = new AbortController();
+		// token.onCancellationRequested(e => {
+		// 	abort.abort();
+		// });
 		const docContext = vscode.workspace.textDocuments.reduce((acc, d) => {
 			if (d.fileName.includes(".git")) {
 				return acc;
 			}
 
-			const doc = `//${
-				d.fileName.lastIndexOf("/") > -1
-					? d.fileName.substring(d.fileName.lastIndexOf("/") + 1)
-					: d.fileName
-			}
+			const doc = `//${d.fileName.lastIndexOf("/") > -1
+				? d.fileName.substring(d.fileName.lastIndexOf("/") + 1)
+				: d.fileName
+				}
 			${d.getText().substring(0, 512)}
 
 			`;

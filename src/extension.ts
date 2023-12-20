@@ -1,5 +1,6 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
+import { LlamaChatSession, LlamaContext, LlamaModel } from "@node-llama";
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
@@ -13,7 +14,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	console.log(
 		'Congratulations, your extension "code-assistant" is now active!'
 	);
-
 	// const modelPath = vscode.Uri.joinPath(
 	// 	context.extensionUri,
 	// 	"out",
@@ -40,14 +40,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		baseUrl: "http://localhost:11434",
 	});
 
-	const provider = new ChatViewProvider(ollamaModel, context.extensionUri);
+	// const provider = new ChatViewProvider(ollamaModel, context.extensionUri);
 
-	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(
-			ChatViewProvider.viewType,
-			provider
-		)
-	);
+	// context.subscriptions.push(
+	// 	vscode.window.registerWebviewViewProvider(
+	// 		ChatViewProvider.viewType,
+	// 		provider
+	// 	)
+	// );
 
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
@@ -74,4 +74,4 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
