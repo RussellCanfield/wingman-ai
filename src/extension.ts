@@ -1,6 +1,5 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import { LlamaChatSession, LlamaContext, LlamaModel } from "@node-llama";
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
@@ -55,6 +54,13 @@ export async function activate(context: vscode.ExtensionContext) {
 			new CodeSuggestionProvider(ollamaModel)
 		)
 	);
+
+	// context.subscriptions.push(
+	// 	vscode.languages.registerCompletionItemProvider(
+	// 		CodeSuggestionProvider.selector,
+	// 		new CodeSuggestionProvider(ollamaModel)
+	// 	)
+	// )
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand

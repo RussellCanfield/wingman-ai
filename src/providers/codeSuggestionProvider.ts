@@ -17,6 +17,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
 		{ scheme: "file", language: "typescript" },
 		{ scheme: "file", language: "javascript" },
+		{ scheme: 'file', language: 'javascriptreact' },
+		{ scheme: 'file', language: 'typescriptreact' }
 	];
 
 	private _model: BaseModel;
@@ -29,16 +31,16 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		lineNumber - windowSize < 0 ? 0 : lineNumber - windowSize;
 	};
 
-	provideInlineCompletionItems(
+	async provideInlineCompletionItems(
 		document: TextDocument,
 		position: Position,
 		context: InlineCompletionContext,
 		token: CancellationToken
 	) {
 		const abort = new AbortController();
-		// token.onCancellationRequested(e => {
-		// 	abort.abort();
-		// });
+		token.onCancellationRequested(e => {
+			abort.abort();
+		});
 		const docContext = vscode.workspace.textDocuments.reduce((acc, d) => {
 			if (d.fileName.includes(".git")) {
 				return acc;
@@ -57,32 +59,34 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			return acc;
 		}, "");
 
-		const linePrefix = document
-			.lineAt(position)
-			.text.substring(0, position.character);
-
-		const prompt = `${docContext}
-		
-		${linePrefix}`;
+		const prevLine = document
+			.lineAt(position.line - 1)
+			.text;
 
 		if (timeout) {
 			clearTimeout(timeout);
 		}
 
+		return new Promise<InlineCompletionItem[]>((res) => {
+			timeout = setTimeout(() => {
+				this.bouncedRequest(prevLine, abort.signal, docContext)
+					.then(items => {
+						res(items);
+					});
+			}, 300);
+		});
+	}
+
+	async bouncedRequest(prompt: string, signal: AbortSignal, doc: string): Promise<InlineCompletionItem[]> {
 		try {
-			return new Promise<InlineCompletionItem[]>((resolve, reject) => {
-				timeout = setTimeout(() => {
-					this._model
-						.execute(prompt, {
-							stream: false,
-							additionalStopTokens: ["\n"],
-						})
-						.then(({ response }) => {
-							resolve([new InlineCompletionItem(response || "")]);
-						})
-						.catch((err) => reject([]));
-				}, 500);
-			});
+			let response: string[] = [];
+			console.log('Making request')
+			for await (let chars of aiService.codeComplete(prompt, signal, [], doc)) {
+				response.push(chars);
+			}
+			const stringResponse = response.join('');
+			console.log(stringResponse);
+			return [new InlineCompletionItem(stringResponse)];
 		} catch (error) {
 			return [];
 		}
