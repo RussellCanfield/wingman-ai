@@ -36,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// const session = new LlamaChatSession({ context: modelContext });
 
 	const ollamaModel = new Ollama({
-		model: "deepseek-coder:6.7b-base-q4_1",
+		model: "deepseek-coder:6.7b-instruct-q4_0",
 		baseUrl: "http://localhost:11434",
 	});
 

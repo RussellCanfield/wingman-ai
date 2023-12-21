@@ -45,10 +45,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 						this.streamChatResponse(
 							value,
-							`The user is writing code using ${language}.
+							`The user is seeking coding advice using ${language}. The code below is also using ${language}.
 
-							The most relevant code: """${currentLine}"""
-							Additional code to use as context: """${text}"""
+							The most relevant context is as follows: ${currentLine}
+
+							Additional context: ${text}
 							`,
 							webviewView
 						);
@@ -67,6 +68,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	) {
 		const response = await this._model.stream(prompt, context, {
 			stream: true,
+			additionalStopTokens: ["<|EOT|>", "<｜end▁of▁sentence｜>"],
 		});
 
 		const characterStream = response.body!.pipeThrough(
