@@ -139,8 +139,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           <head>
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-            <title>Code Assistant</title>
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; font-src 'self'; style-src 'unsafe-inline';">
+			<title>Code Assistant</title>
           </head>
           <body style="height: 100%">
             <div id="root" style="height: 100%"></div>

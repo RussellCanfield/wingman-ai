@@ -1,25 +1,53 @@
 import { ReactNode, memo } from "react";
 import Markdown from "react-markdown";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { dark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { a11yDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { ChatMessage } from "./types/Message";
 
-const Entry = styled.div`
-	display: flex;
-	flex-direction: column;
+const Entry = styled.li`
 	border-bottom: 1px solid rgba(200, 200, 200, 0.5);
+	padding: 0px 2px;
 `;
 
 const Code = styled.code`
 	white-space: pre-wrap;
 `;
 
+const LoaderAnimation = keyframes`
+  	0% {
+        transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
+`;
+
+const LabelContainer = styled.span`
+	display: flex;
+	align-items: center;
+`;
+
+const Loader = styled.span`
+	width: 16px;
+	height: 16px;
+	border: 2px solid #fff;
+	border-bottom-color: transparent;
+	border-radius: 50%;
+	display: inline-block;
+	box-sizing: border-box;
+	animation: ${LoaderAnimation} 1s linear infinite;
+	margin-left: 8px;
+`;
+
 const ChatEntry = memo(
-	({ from, message, loader }: ChatMessage & { loader?: ReactNode }) => {
+	({ from, message, loading }: ChatMessage & { loading?: boolean }) => {
 		return (
 			<Entry>
-				<p>{from === "user" ? "Me" : "Open Assistant"}</p>
+				<LabelContainer>
+					<h3>{from === "user" ? "Me" : "Open Assistant"}</h3>
+					{loading && <Loader />}
+				</LabelContainer>
 				<Markdown
 					children={message}
 					components={{
@@ -38,7 +66,7 @@ const ChatEntry = memo(
 										/\n$/,
 										""
 									)}
-									style={dark}
+									style={a11yDark}
 									language={languageType[1]}
 								/>
 							) : (
@@ -49,7 +77,6 @@ const ChatEntry = memo(
 						},
 					}}
 				/>
-				{loader}
 			</Entry>
 		);
 	}
