@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { Ollama } from "./service/llm.js";
+import SettingsProvider from "./providers/settingsProvider.js";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -35,8 +36,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	// const modelContext = new LlamaContext({ model });
 	// const session = new LlamaChatSession({ context: modelContext });
 
+	await SettingsProvider.Load(context);
+
 	const ollamaModel = new Ollama({
-		model: "deepseek-coder:6.7b-instruct-q4_0",
+		model: SettingsProvider.Settings.modelName,
 		baseUrl: "http://localhost:11434",
 	});
 

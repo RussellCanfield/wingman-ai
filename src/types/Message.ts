@@ -1,4 +1,4 @@
-import { ModelStream } from "../../service/llm";
+import { ModelStream } from "../service/llm";
 
 export interface AppMessage {
 	command: string;
@@ -6,6 +6,6 @@ export interface AppMessage {
 }
 
 export interface ChatMessage {
-	from: "bot" | "user";
+	from: "assistant" | "user";
 	message: string;
 }

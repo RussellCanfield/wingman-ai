@@ -1,11 +1,13 @@
 import * as vscode from "vscode";
 import { BaseModel } from "../service/llm";
+import { ChatMessage } from "../types/Message";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "code-assistant-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
 	private _model: BaseModel;
+	private _chatHistory: ChatMessage[] = [];
 
 	constructor(model: BaseModel, private readonly _extensionUri: vscode.Uri) {
 		this._model = model;
@@ -40,12 +42,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 				switch (command) {
 					case "chat": {
+						this._chatHistory.push({
+							from: "user",
+							message: value,
+						});
+
 						const { text, currentLine, language } =
 							this._getCurrentFileContext();
 
 						this.streamChatResponse(
 							value,
-							`The user is seeking coding advice using ${language}. The code below is also using ${language}.
+							`The user is seeking coding advice using ${language}.
 
 							The most relevant context is as follows: ${currentLine}
 
@@ -75,11 +82,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			new TextDecoderStream()
 		) as unknown as AsyncIterable<string>;
 
+		let message = "";
+
 		for await (const chunks of characterStream) {
 			const chunk = chunks.trimEnd().split(/\n/gm);
 
 			for (const line of chunk) {
 				const { response } = JSON.parse(line);
+
+				message += response;
 
 				//Streams don't serialize well here, just simplify it for now.
 				webviewView.webview.postMessage({
@@ -88,6 +99,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				});
 			}
 		}
+
+		this._chatHistory.push({
+			from: "assistant",
+			message: message,
+		});
 
 		webviewView.webview.postMessage({
 			command: "done",
@@ -98,7 +114,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	private _getCurrentFileContext() {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) {
-			return { text: "", language: "" };
+			return { text: "", currentLine: "", language: "" };
 		}
 
 		const lineWindow = 15;

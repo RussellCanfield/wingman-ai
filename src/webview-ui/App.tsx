@@ -1,7 +1,7 @@
 import { vscode } from "./utilities/vscode";
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react";
 import { PropsWithChildren, useEffect, useRef, useState } from "react";
-import { AppMessage, ChatMessage } from "./types/Message";
+import { AppMessage, ChatMessage } from "../types/Message";
 import ChatEntry from "./ChatEntry";
 import styled from "styled-components";
 
@@ -9,7 +9,6 @@ const Main = styled.main`
 	height: 100%;
 	display: flex;
 	flex-direction: column;
-	font-family: "Roboto", sans-serif;
 `;
 
 const UserInput = styled.div`
@@ -69,7 +68,7 @@ function App() {
 			setMessages((messages) => [
 				...messages,
 				{
-					from: "bot",
+					from: "assistant",
 					message: currentMessage,
 				},
 			]);
@@ -128,7 +127,7 @@ function App() {
 				))}
 				{loading && (
 					<ChatEntry
-						from="bot"
+						from="assistant"
 						message={activeMessage}
 						loading={loading}
 					/>

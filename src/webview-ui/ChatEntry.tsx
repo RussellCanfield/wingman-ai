@@ -3,11 +3,11 @@ import Markdown from "react-markdown";
 import styled, { keyframes } from "styled-components";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { a11yDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { ChatMessage } from "./types/Message";
+import { ChatMessage } from "../types/Message";
 
 const Entry = styled.li`
 	border-bottom: 1px solid rgba(200, 200, 200, 0.5);
-	padding: 0px 2px;
+	padding: 0px 4px;
 `;
 
 const Code = styled.code`
