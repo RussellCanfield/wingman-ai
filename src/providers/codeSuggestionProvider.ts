@@ -6,13 +6,15 @@ import {
 	InlineCompletionItem,
 	InlineCompletionItemProvider,
 	Position,
-	TextDocument,
+	Range,
+	TextDocument
 } from "vscode";
 import { aiService } from '../service/ai.service';
 import { BaseModel } from "../service/llm";
 
 let timeout: NodeJS.Timeout | undefined;
 
+const startPosition = new Position(0, 0);
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
 		{ scheme: "file", language: "typescript" },
@@ -39,29 +41,36 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	) {
 		const abort = new AbortController();
 		token.onCancellationRequested(e => {
+			console.log(e);
 			abort.abort();
 		});
-		const docContext = vscode.workspace.textDocuments.reduce((acc, d) => {
-			if (d.fileName.includes(".git")) {
-				return acc;
-			}
+		// const docContext = vscode.workspace.textDocuments.reduce((acc, d) => {
+		// 	if (d.fileName.includes(".git")) {
+		// 		return acc;
+		// 	}
 
-			const doc = `//${d.fileName.lastIndexOf("/") > -1
-				? d.fileName.substring(d.fileName.lastIndexOf("/") + 1)
-				: d.fileName
-				}
-			${d.getText().substring(0, 512)}
+		// 	const doc = `//${d.fileName.lastIndexOf("/") > -1
+		// 		? d.fileName.substring(d.fileName.lastIndexOf("/") + 1)
+		// 		: d.fileName
+		// 		}
+		// 	${d.getText().substring(0, 512)}
 
-			`;
-			docContext;
-			acc += doc;
+		// 	`;
+		// 	docContext;
+		// 	acc += doc;
 
-			return acc;
-		}, "");
+		// 	return acc;
+		// }, "");
 
-		const prevLine = document
-			.lineAt(position.line - 1)
-			.text;
+		const rg = new Range(startPosition, position);
+		const topContent = document.getText(rg);
+		const after = new Position(position.line + 1, 0);
+		const lastPosition = document.lineAt(document.lineCount - 1).range.end;
+		let bottom = '';
+		if (lastPosition.line !== position.line) {
+			const end = new Range(after, lastPosition);
+			bottom = document.getText(end);
+		}
 
 		if (timeout) {
 			clearTimeout(timeout);
@@ -69,7 +78,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 
 		return new Promise<InlineCompletionItem[]>((res) => {
 			timeout = setTimeout(() => {
-				this.bouncedRequest(prevLine, abort.signal, docContext)
+				this.bouncedRequest(topContent, abort.signal, bottom)
 					.then(items => {
 						res(items);
 					});
@@ -79,15 +88,18 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 
 	async bouncedRequest(prompt: string, signal: AbortSignal, doc: string): Promise<InlineCompletionItem[]> {
 		try {
-			let response: string[] = [];
-			console.log('Making request')
-			for await (let chars of aiService.codeComplete(prompt, signal, [], doc)) {
-				response.push(chars);
-			}
-			const stringResponse = response.join('');
-			console.log(stringResponse);
-			return [new InlineCompletionItem(stringResponse)];
+			console.log('Making request');
+			const codeResponse = await aiService.codeComplete(prompt, signal, [], doc);
+			console.log('+++++++++++++++++++++++++++++++++++++')
+			console.log('Remoing prompt ', prompt)
+			console.log(codeResponse.trim().indexOf(prompt));
+
+			let topRemoved = codeResponse.replace(prompt, '');
+			console.log(topRemoved)
+			let cleanedCode = topRemoved.replace(doc, '');
+			return [new InlineCompletionItem(cleanedCode)];
 		} catch (error) {
+			console.warn(error);
 			return [];
 		}
 	}

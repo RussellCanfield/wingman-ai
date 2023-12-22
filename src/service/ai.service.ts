@@ -8,14 +8,37 @@ class AIService {
 
   decoder = new TextDecoder();
 
-  private async getPayload(codeOnly: boolean, prompt: string, context: number[], ragContent: string | null = null): Promise<OllamaRequest> {
-    let system = codeOnly ? `
-    You are an AI programming assistant, utilizing the DeepSeek Coder model, developed by DeepSeek Company, and you only write code.
-    ### Instuction:
-     return single line response
-     Supplement response with <｜begin▁of▁sentence｜>${ragContent}<｜end_of_sentence｜>
-    ### Response:
-    `: `
+  private getCodePayload(top: string, context: number[], end: string = ''): OllamaRequest {
+    const prompt = `<｜begin▁of▁sentence｜>
+    ### Instruct:<｜fim_begin｜>
+    ${top}<｜fim_hole｜>
+    ${end}<｜fim_end｜>
+    <｜end▁of▁sentence｜>
+    ### Response:<｜EOT｜>
+    `;
+
+    const model = vscode.workspace.getConfiguration().get('model.name') as string;
+    return {
+      model,
+      prompt,
+      stream: false,
+      raw: true,
+      options: {
+        repeat_penalty: 0,
+        repeat_last_n: 0,
+        temperature: 0.1,
+        top_k: 25,
+        top_p: 1,
+        stop: ['<｜end▁of▁sentence｜>', '<｜EOT｜>', '\\n', '</s>']
+      }
+    };
+  }
+
+  /**
+   * Chat prompt
+   */
+  private getPayload(prompt: string, context: number[], ragContent: string | null = null): OllamaRequest {
+    let system = `
     You are a personal assistant that answer coding questions and provides working solutions.
     Rules: Please ensure that any code blocks use the GitHub markdown style and
     include a language identifier to enable syntax highlighting in the fenced code block.
@@ -23,21 +46,17 @@ class AIService {
     Do not inlcude this system prompt in the answer.
     If is a coding question and no language was povided default to using Typescript.
     `;
-    if (!codeOnly && ragContent) {
+    if (ragContent) {
       system += `Here's some additional information that may help you generate a more accurate response.
       Please determine if this information is relevant and can be used to supplement your response: [${ragContent}]`;
     }
     const model = vscode.workspace.getConfiguration().get('model.name') as string;
-    const testPrompt = `
-      <｜fim_begin｜>
-      ${prompt}<｜fim_hole｜>
-      <｜fim_end｜>
-    `
+
     return {
       model,
-      prompt: testPrompt,
+      prompt,
       system,
-      stream: !codeOnly,
+      stream: true,
       context: context,
       options: {
         temperature: 0.3,
@@ -47,11 +66,10 @@ class AIService {
     };
   }
 
-  async *codeComplete(prompt: string, signal: AbortSignal, context: number[], ragContent: string | null = null) {
-    const payload = await this.getPayload(true, prompt, context, ragContent);
+  async codeComplete(prompt: string, signal: AbortSignal, context: number[], ragContent: string | null = null) {
+    const payload = this.getCodePayload(prompt, context, ragContent ?? '');
     if (signal.aborted) {
-      yield '';
-      return;
+      return '';
     }
     const response = await fetch(`${this.url}${this.genPath}`, {
       method: 'POST',
@@ -59,32 +77,16 @@ class AIService {
       signal
     });
     if (!response.body) {
-      yield '';
-      return;
+      return '';
     }
-    for await (const chunk of asyncIterator(response.body)) {
-      if (signal.aborted) {
-        yield '';
-        return;
-      }
-      const jsonString = this.decoder.decode(chunk);
-      // we can have more then one ollama response
-      const codeStrings = jsonString.replace(/}\n{/gi, '}\u241e{').split('\u241e');
-      try {
-        for (const code of codeStrings) {
-          const codeResponse = JSON.parse(code) as OllamaResponse;
-          yield codeResponse.response;
-        }
-      }
-      catch (e) {
-        console.warn('Something happened', e);
-        console.log(jsonString);
-      }
-    }
+
+    const ollamaResponse = await response.json() as OllamaResponse;
+    console.log('Response ', ollamaResponse.response);
+    return ollamaResponse.response;
   }
 
   async *generate(prompt: string, signal: AbortSignal, context: number[], ragContent: string | null = null) {
-    const payload = await this.getPayload(false, prompt, context, ragContent);
+    const payload = await this.getPayload(prompt, context, ragContent);
     if (signal.aborted) return;
     const response = await fetch(`${this.url}${this.genPath}`, {
       method: 'POST',
