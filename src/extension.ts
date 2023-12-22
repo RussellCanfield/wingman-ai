@@ -36,14 +36,14 @@ export async function activate(context: vscode.ExtensionContext) {
 	// const modelContext = new LlamaContext({ model });
 	// const session = new LlamaChatSession({ context: modelContext });
 
-	await SettingsProvider.Load(context);
+	await SettingsProvider.Load();
 
 	const ollamaModel = new Ollama({
 		model: SettingsProvider.Settings.modelName,
 		baseUrl: "http://localhost:11434",
 	});
 
-	const provider = new ChatViewProvider(ollamaModel, context.extensionUri);
+	const provider = new ChatViewProvider(ollamaModel, context);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(

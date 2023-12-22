@@ -68,7 +68,7 @@ function App() {
 			setMessages((messages) => [
 				...messages,
 				{
-					from: "assistant",
+					from: "Assistant",
 					message: currentMessage,
 				},
 			]);
@@ -107,7 +107,7 @@ function App() {
 			setMessages((messages) => [
 				...messages,
 				{
-					from: "user",
+					from: "User",
 					message: text,
 				},
 			]);
@@ -127,7 +127,7 @@ function App() {
 				))}
 				{loading && (
 					<ChatEntry
-						from="assistant"
+						from="Assistant"
 						message={activeMessage}
 						loading={loading}
 					/>

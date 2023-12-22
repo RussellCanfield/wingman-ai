@@ -4,7 +4,7 @@ import { Settings } from "../types/Settings";
 class SettingsProvider {
 	public static Settings: Settings;
 
-	public static async Load(context: vscode.ExtensionContext) {
+	public static async Load() {
 		const rootDir = vscode.workspace.workspaceFolders?.[0].uri;
 
 		if (!rootDir) {
