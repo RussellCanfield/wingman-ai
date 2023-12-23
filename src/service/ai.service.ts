@@ -9,14 +9,14 @@ class AIService {
   decoder = new TextDecoder();
 
   private getCodePayload(top: string, context: number[], end: string = ''): OllamaRequest {
+    // this prompt cannot be formatted, any tabs will cause the response to break
     const prompt = `<｜begin▁of▁sentence｜>
-    ### Instruct:<｜fim_begin｜>
-    ${top}<｜fim_hole｜>
-    ${end}<｜fim_end｜>
-    <｜end▁of▁sentence｜>
-    ### Response:<｜EOT｜>
-    `;
-
+### Instruct:<｜fim_begin｜>
+${top}<｜fim_hole｜>
+${end}<｜fim_end｜>
+<｜end▁of▁sentence｜>
+### Response:<｜EOT｜>
+`;
     const model = vscode.workspace.getConfiguration().get('model.name') as string;
     return {
       model,
@@ -27,6 +27,7 @@ class AIService {
         repeat_penalty: 0,
         repeat_last_n: 0,
         temperature: 0.1,
+        num_predict: -1,
         top_k: 25,
         top_p: 1,
         stop: ['<｜end▁of▁sentence｜>', '<｜EOT｜>', '\\n', '</s>']
@@ -81,7 +82,6 @@ class AIService {
     }
 
     const ollamaResponse = await response.json() as OllamaResponse;
-    console.log('Response ', ollamaResponse.response);
     return ollamaResponse.response;
   }
 
