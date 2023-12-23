@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { Ollama } from "./service/llm.js";
+import SettingsProvider from "./providers/settingsProvider.js";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -34,19 +35,21 @@ export async function activate(context: vscode.ExtensionContext) {
 	// const modelContext = new LlamaContext({ model });
 	// const session = new LlamaChatSession({ context: modelContext });
 
+	await SettingsProvider.Load();
+
 	const ollamaModel = new Ollama({
-		model: "deepseek-coder:6.7b-base-q4_1",
+		model: SettingsProvider.Settings.modelName,
 		baseUrl: "http://localhost:11434",
 	});
 
-	// const provider = new ChatViewProvider(ollamaModel, context.extensionUri);
+	const provider = new ChatViewProvider(ollamaModel, context);
 
-	// context.subscriptions.push(
-	// 	vscode.window.registerWebviewViewProvider(
-	// 		ChatViewProvider.viewType,
-	// 		provider
-	// 	)
-	// );
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			ChatViewProvider.viewType,
+			provider
+		)
+	);
 
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
@@ -80,4 +83,4 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate() {}

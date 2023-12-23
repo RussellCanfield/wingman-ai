@@ -4,6 +4,8 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 
 /** @type {import('vite').UserConfig} */
 const config = defineConfig({
+	assetsInclude: ["**/*.ttf"],
+	publicDir: "./src/webview-ui/public",
 	resolve: {
 		alias: {
 			"@node-llama": path.resolve(__dirname, "./node-llama-cpp/dist"),
