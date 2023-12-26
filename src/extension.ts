@@ -3,7 +3,6 @@
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
-import { Ollama } from "./service/llm.js";
 import SettingsProvider from "./providers/settingsProvider.js";
 
 // This method is called when your extension is activated
@@ -14,47 +13,23 @@ export async function activate(context: vscode.ExtensionContext) {
 	console.log(
 		'Congratulations, your extension "code-assistant" is now active!'
 	);
-	// const modelPath = vscode.Uri.joinPath(
-	// 	context.extensionUri,
-	// 	"out",
-	// 	"models",
-	// 	"deepseek-coder-5.7bmqa-base.Q4_0.gguf"
-	// ).toString();
 
-	// const binPath = vscode.Uri.joinPath(
-	// 	context.extensionUri,
-	// 	"out",
-	// 	"llamaBins"
-	// ).toString();
-
-	// const model = new LlamaModel({});
-	// await model.initialize({
-	// 	binPath,
-	// 	modelPath,
-	// });
-	// const modelContext = new LlamaContext({ model });
-	// const session = new LlamaChatSession({ context: modelContext });
-
+	// TODO: Discuss settings
+	// TODO: Discuss benefits of hosting externally instead of VSCode settings
+	// TODO: Flexible models based on "adapter" versus rigid one size fits all
 	await SettingsProvider.Load();
-
-	const ollamaModel = new Ollama({
-		model: SettingsProvider.Settings.modelName,
-		baseUrl: "http://localhost:11434",
-	});
-
-	const provider = new ChatViewProvider(ollamaModel, context);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ChatViewProvider.viewType,
-			provider
+			new ChatViewProvider(context)
 		)
 	);
 
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
 			CodeSuggestionProvider.selector,
-			new CodeSuggestionProvider(ollamaModel)
+			new CodeSuggestionProvider()
 		)
 	);
 

@@ -1,20 +1,16 @@
 import * as vscode from "vscode";
-import { BaseModel } from "../service/llm";
-import { AppMessage, ChatMessage } from "../types/Message";
+import { AppMessage } from "../types/Message";
+import { aiService } from "../service/ai.service";
 
-const ChatHistoryKey = "ChatHistory";
-const MaxChatHistoryTokens = 1200;
+let abortController = new AbortController();
+let previousResponseContext: number[] = [];
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "code-assistant-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
-	private _chatHistory: ChatMessage[] = [];
 
-	constructor(
-		private readonly _model: BaseModel,
-		private readonly _context: vscode.ExtensionContext
-	) {}
+	constructor(private readonly _context: vscode.ExtensionContext) {}
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -23,8 +19,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
-		_context: vscode.WebviewViewResolveContext,
-		_token: vscode.CancellationToken
+		context: vscode.WebviewViewResolveContext,
+		token: vscode.CancellationToken
 	) {
 		webviewView.webview.options = {
 			enableScripts: true,
@@ -33,7 +29,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
 
-		this.loadChatHistory();
+		token.onCancellationRequested((e) => {
+			console.log(e);
+			abortController.abort();
+		});
 
 		this._disposables.push(
 			webviewView.webview.onDidReceiveMessage((data: AppMessage) => {
@@ -57,23 +56,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		value,
 		webviewView,
 	}: Pick<AppMessage, "value"> & { webviewView: vscode.WebviewView }) {
-		await this.addAndSaveToChatHistory({
-			from: "User",
-			message: value,
-		});
-
 		const { text, currentLine, language } = getChatContext();
 
 		await this.streamChatResponse(
 			value,
-			`Chat History:
-			${this._chatHistory.map((c) => `${c.from}: ${c.message}\n`).join("\n")}
-			=======
-			Context: The user is seeking coding advice using ${language}.
-			
-			Additional context: """${text}"""
+			`The user is seeking coding advice using ${language}.
+			Reference the following code in order to provide a working solution.
+			"""${text}"""
 
-			The most relevant context is as follows: """${currentLine}"""
+			The most important line of code is as follows: """${currentLine}"""
 			`,
 			webviewView
 		);
@@ -84,66 +75,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		context: string,
 		webviewView: vscode.WebviewView
 	) {
-		const response = await this._model.stream(prompt, context, {
-			stream: true,
-			additionalStopTokens: ["<|EOT|>", "<｜end▁of▁sentence｜>"],
-		});
+		const response = await aiService.generate(
+			prompt,
+			abortController.signal,
+			previousResponseContext,
+			context
+		);
 
-		const characterStream = response.body!.pipeThrough(
-			new TextDecoderStream()
-		) as unknown as AsyncIterable<string>;
+		previousResponseContext = [];
 
-		let message = "";
+		for await (const chunk of response) {
+			const { response, context } = chunk;
 
-		for await (const chunks of characterStream) {
-			const chunk = chunks.trimEnd().split(/\n/gm);
+			previousResponseContext = previousResponseContext.concat(context);
 
-			for (const line of chunk) {
-				const { response } = JSON.parse(line);
-
-				message += response;
-
-				//Streams don't serialize well here, just simplify it for now.
-				webviewView.webview.postMessage({
-					command: "response",
-					value: response,
-				});
-			}
+			webviewView.webview.postMessage({
+				command: "response",
+				value: response,
+			});
 		}
-
-		this._chatHistory.push({
-			from: "Assistant",
-			message: message,
-		});
 
 		webviewView.webview.postMessage({
 			command: "done",
 			value: null,
 		});
-	}
-
-	private async addAndSaveToChatHistory(chatMessage: ChatMessage) {
-		this._chatHistory.push(chatMessage);
-
-		this._chatHistory = ensureChatHistorySizeAndTruncate(this._chatHistory);
-
-		await this._context.workspaceState.update(
-			ChatHistoryKey,
-			this._chatHistory
-		);
-	}
-
-	private async loadChatHistory() {
-		const chatHistory =
-			this._context.workspaceState.get<ChatMessage[]>(ChatHistoryKey);
-
-		if (!chatHistory) {
-			return;
-		}
-
-		this._chatHistory = chatHistory;
-
-		return chatHistory;
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
@@ -212,27 +167,4 @@ function getChatContext() {
 		currentLine: editor.document.lineAt(editor.selection.active.line).text,
 		language: editor.document.languageId,
 	};
-}
-
-function ensureChatHistorySizeAndTruncate(
-	chatHistory: ChatMessage[]
-): ChatMessage[] {
-	if (!chatHistory) {
-		return [];
-	}
-
-	let currentChatHistoryTokens = 0;
-	let truncatedChatHistory: ChatMessage[] = [];
-
-	for (const history of chatHistory) {
-		currentChatHistoryTokens += history.message.length;
-
-		if (currentChatHistoryTokens > MaxChatHistoryTokens) {
-			break;
-		}
-
-		truncatedChatHistory.push(history);
-	}
-
-	return truncatedChatHistory;
 }

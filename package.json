@@ -45,6 +45,16 @@
 					"type": "string",
 					"default": "deepseek-coder:6.7b-instruct-q8_0",
 					"description": "Your ollama model name"
+				},
+				"model.url": {
+					"type": "string",
+					"default": "http://localhost:11434",
+					"description": "Your ollama instance url"
+				},
+				"model.url.path": {
+					"type": "string",
+					"default": "/api/generate",
+					"description": "Your ollama endpoint for generating responses"
 				}
 			}
 		}

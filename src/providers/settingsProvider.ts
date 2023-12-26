@@ -2,9 +2,25 @@ import * as vscode from "vscode";
 import { Settings } from "../types/Settings";
 
 class SettingsProvider {
-	public static Settings: Settings;
+	private static settings: Settings;
+
+	public static get ModelName() {
+		return this.settings.modelName;
+	}
+
+	public static get BaseUrl() {
+		return this.settings.baseUrl;
+	}
+
+	public static get ApiPath() {
+		return this.settings.apiPath;
+	}
 
 	public static async Load() {
+		if (!vscode.workspace.workspaceFolders) {
+			return;
+		}
+
 		const rootDir = vscode.workspace.workspaceFolders?.[0].uri;
 
 		if (!rootDir) {
@@ -19,7 +35,7 @@ class SettingsProvider {
 		try {
 			const data = await vscode.workspace.fs.readFile(settingsFile);
 			const settings = JSON.parse(data.toString());
-			SettingsProvider.Settings = settings;
+			this.settings = settings;
 		} catch (error) {
 			console.error("Unable to find settings file: ", error);
 		}
