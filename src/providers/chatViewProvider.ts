@@ -47,15 +47,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						this.handleChatMessage({ value, webviewView });
 						break;
 					}
+					case "cancel": {
+						abortController.abort();
+						break;
+					}
+					case "clipboard": {
+						vscode.env.clipboard.writeText(value);
+						break;
+					}
+					case "copyToFile": {
+						this.sendContentToNewDocument(value);
+						break;
+					}
 				}
 			})
 		);
+	}
+
+	private async sendContentToNewDocument(content: string) {
+		const newFile = await vscode.workspace.openTextDocument({
+			content,
+		});
+		vscode.window.showTextDocument(newFile);
 	}
 
 	private async handleChatMessage({
 		value,
 		webviewView,
 	}: Pick<AppMessage, "value"> & { webviewView: vscode.WebviewView }) {
+		abortController = new AbortController();
+
 		const { text, currentLine, language } = getChatContext();
 
 		await this.streamChatResponse(

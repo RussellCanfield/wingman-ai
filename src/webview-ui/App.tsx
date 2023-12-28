@@ -4,6 +4,7 @@ import { PropsWithChildren, useEffect, useRef, useState } from "react";
 import { AppMessage, ChatMessage } from "../types/Message";
 import ChatEntry from "./ChatEntry";
 import styled from "styled-components";
+import { FaPlay, FaStopCircle } from "react-icons/fa";
 
 const Main = styled.main`
 	height: 100%;
@@ -14,6 +15,13 @@ const Main = styled.main`
 const UserInput = styled.div`
 	flex-basis: 50px;
 	padding: 12px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+
+	* :root {
+		--input-background: red !important;
+	}
 `;
 
 const ChatResponses = styled.ul`
@@ -45,6 +53,7 @@ let currentMessage = "";
 function App() {
 	const [loading, setLoading] = useState<boolean>(false);
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
+	const chatInputBox = useRef<any>(null);
 	const [activeMessage, setActiveMessage] = useState<string>("");
 
 	useEffect(() => {
@@ -60,23 +69,7 @@ function App() {
 		const { command, value } = data;
 
 		if (command === "done") {
-			if (!currentMessage) {
-				currentMessage =
-					"Sorry, I am having trouble generating a response.";
-			}
-
-			setMessages((messages) => [
-				...messages,
-				{
-					from: "Assistant",
-					message: currentMessage,
-				},
-			]);
-
-			setLoading(false);
-			setActiveMessage("");
-			currentMessage = "";
-
+			commitMessageToHistory();
 			return;
 		}
 
@@ -88,7 +81,29 @@ function App() {
 		setActiveMessage((message) => message + value);
 	}
 
+	function commitMessageToHistory() {
+		setMessages((messages) => [
+			...messages,
+			{
+				from: "Assistant",
+				message: currentMessage,
+			},
+		]);
+
+		setLoading(false);
+		setActiveMessage("");
+	}
+
+	function cancelAIResponse() {
+		vscode.postMessage({
+			command: "cancel",
+		});
+		commitMessageToHistory();
+	}
+
 	function fetchAIResponse(text: string) {
+		currentMessage = "";
+
 		vscode.postMessage({
 			command: "chat",
 			value: text,
@@ -97,18 +112,22 @@ function App() {
 
 	function handleUserInput(e: React.KeyboardEvent<HTMLInputElement>) {
 		if (e.key === "Enter") {
+			const element = e.target as HTMLInputElement;
+			const message = element.value;
+
+			if (!message) {
+				return;
+			}
+
 			e.preventDefault();
 
-			const element = e.target as HTMLInputElement;
-			const text = element.value;
-
-			fetchAIResponse(text);
+			fetchAIResponse(message);
 
 			setMessages((messages) => [
 				...messages,
 				{
 					from: "User",
-					message: text,
+					message: message,
 				},
 			]);
 
@@ -136,10 +155,38 @@ function App() {
 			<UserInput>
 				<VSCodeTextField
 					placeholder="Type here to chat with the extension"
-					disabled={activeMessage !== ""}
-					style={{ width: "100%" }}
+					ref={chatInputBox}
+					style={
+						{
+							width: "100%",
+							"--input-height": "36",
+						} as React.CSSProperties
+					}
 					onKeyDown={handleUserInput}
-				/>
+				>
+					{!loading && (
+						<span slot="end">
+							<FaPlay
+								size={16}
+								onClick={() =>
+									handleUserInput({
+										key: "Enter",
+										preventDefault: () => {},
+										target: chatInputBox.current,
+									} as unknown as React.KeyboardEvent<HTMLInputElement>)
+								}
+							/>
+						</span>
+					)}
+					{loading && (
+						<span slot="end">
+							<FaStopCircle
+								size={16}
+								onClick={cancelAIResponse}
+							/>
+						</span>
+					)}
+				</VSCodeTextField>
 			</UserInput>
 		</Main>
 	);

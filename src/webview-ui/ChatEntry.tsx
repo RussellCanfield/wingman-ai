@@ -1,11 +1,12 @@
-import { PropsWithChildren, memo } from "react";
+import { PropsWithChildren, forwardRef, memo, useState } from "react";
 import Markdown from "react-markdown";
 import styled, { keyframes } from "styled-components";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { a11yDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { ChatMessage } from "../types/Message";
 import { FaCopy } from "react-icons/fa6";
 import { GoFileSymlinkFile } from "react-icons/go";
+import { vscode } from "./utilities/vscode";
 
 const Entry = styled.li`
 	border-bottom: 1px solid rgba(200, 200, 200, 0.5);
@@ -44,75 +45,156 @@ const Loader = styled.span`
 
 const MarkdownBox = styled.div`
 	overflow-x: scroll;
+
+	& > code {
+		background: unset !important;
+	}
 `;
 
 const MarkdownOperationsBox = styled.div`
 	display: flex;
 	justify-content: flex-end;
+	position: relative;
+	top: 5px;
+	padding-right: 10px;
 `;
 
-const MarkdownOperationsBoxHightlight = styled.div`
-	border: 1px solid rgba(200, 200, 200, 0.5);
-	padding: 4px;
+const MarkdownOperationsBoxHightlight = styled.ul`
+	border: 1px solid rgb(65, 65, 65);
+	padding: 2px;
 	display: flex;
-	gap: 12px;
+	gap: 10px;
+	list-style: none;
+
+	& > svg {
+		padding: 2px;
+		cursor: pointer;
+		background-color: rgba(200, 200, 200, 1);
+	}
 `;
 
-const CodeContainer = ({ children }: PropsWithChildren) => {
+type MarkDownObject = {
+	props: {
+		children: [boolean, MarkDownEntry[] | string];
+	};
+};
+
+type MarkDownEntry = {
+	props: {
+		children: string[];
+	};
+};
+
+const CodeContainer = memo(({ children }: PropsWithChildren) => {
+	const [toolboxVisible, setToolboxVisible] = useState(false);
+
+	//Sort of hacky, but it works.
+	const getMarkdownFromChildren = () => {
+		const markDown = children as MarkDownObject;
+
+		return (markDown.props.children[1] as MarkDownEntry[]).reduce(
+			(acc: string, curr: string | MarkDownEntry) => {
+				if (typeof curr === "string") {
+					acc += curr;
+				} else if (curr.props) {
+					acc += curr.props.children[0];
+				}
+
+				return acc;
+			},
+			""
+		);
+	};
+
+	const sendToNewFile = () => {
+		vscode.postMessage({
+			command: "copyToFile",
+			value: getMarkdownFromChildren(),
+		});
+	};
+
+	const copyToClipboard = () => {
+		vscode.postMessage({
+			command: "clipboard",
+			value: getMarkdownFromChildren(),
+		});
+	};
+
 	return (
-		<div>
-			<MarkdownOperationsBox>
-				<div style={{ flex: "1 0 auto" }}></div>
-				<MarkdownOperationsBoxHightlight>
-					<FaCopy size={18} />
-					<GoFileSymlinkFile size={18} />
-				</MarkdownOperationsBoxHightlight>
-			</MarkdownOperationsBox>
+		<div
+			onMouseOver={() => setToolboxVisible(true)}
+			onMouseLeave={() => setToolboxVisible(false)}
+		>
+			{toolboxVisible && (
+				<MarkdownOperationsBox>
+					<div style={{ flex: "1 0 auto" }}></div>
+					<MarkdownOperationsBoxHightlight>
+						<li
+							role="presentation"
+							title="Copy code to clipboard"
+							onClick={copyToClipboard}
+						>
+							<FaCopy size={16} />
+						</li>
+						<li
+							role="presentation"
+							title="Send to new file"
+							onClick={sendToNewFile}
+						>
+							<GoFileSymlinkFile size={16} />
+						</li>
+					</MarkdownOperationsBoxHightlight>
+				</MarkdownOperationsBox>
+			)}
 			<MarkdownBox>{children}</MarkdownBox>
 		</div>
 	);
+});
+
+type ChatEntryProps = PropsWithChildren<ChatMessage> & { loading?: boolean };
+
+const ChatEntry = ({
+	from,
+	message,
+	loading,
+}: PropsWithChildren<ChatEntryProps>) => {
+	const copyToClipboard = () => {
+		console.log(message);
+	};
+
+	return (
+		<Entry>
+			<LabelContainer>
+				<h3>{from === "User" ? "Me" : "Open Assistant"}</h3>
+				{loading && <Loader />}
+			</LabelContainer>
+			<Markdown
+				children={message}
+				components={{
+					code(props) {
+						const { children, className, node, ...rest } = props;
+
+						const languageType = /language-(\w+)/.exec(
+							className || ""
+						);
+
+						return languageType ? (
+							<SyntaxHighlighter
+								PreTag={CodeContainer}
+								children={String(children).replace(/\n$/, "")}
+								style={oneDark}
+								language={languageType[1]}
+							/>
+						) : (
+							<Code {...rest} className={className}>
+								{children}
+							</Code>
+						);
+					},
+				}}
+			/>
+		</Entry>
+	);
 };
-
-const ChatEntry = memo(
-	({ from, message, loading }: ChatMessage & { loading?: boolean }) => {
-		return (
-			<Entry>
-				<LabelContainer>
-					<h3>{from === "User" ? "Me" : "Open Assistant"}</h3>
-					{loading && <Loader />}
-				</LabelContainer>
-				<Markdown
-					children={message}
-					components={{
-						code(props) {
-							const { children, className, node, ...rest } =
-								props;
-
-							const languageType = /language-(\w+)/.exec(
-								className || ""
-							);
-
-							return languageType ? (
-								<SyntaxHighlighter
-									PreTag={CodeContainer}
-									children={String(children).replace(
-										/\n$/,
-										""
-									)}
-									style={a11yDark}
-									language={languageType[1]}
-								/>
-							) : (
-								<Code {...rest} className={className}>
-									{children}
-								</Code>
-							);
-						},
-					}}
-				/>
-			</Entry>
-		);
-	}
-);
 
 export default ChatEntry;
