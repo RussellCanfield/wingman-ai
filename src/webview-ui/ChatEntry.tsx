@@ -59,17 +59,23 @@ const MarkdownOperationsBox = styled.div`
 	padding-right: 10px;
 `;
 
-const MarkdownOperationsBoxHightlight = styled.ul`
+const MarkdownOperationsBoxHighlight = styled.ul`
 	border: 1px solid rgb(65, 65, 65);
 	padding: 2px;
 	display: flex;
-	gap: 10px;
+	gap: 6px;
 	list-style: none;
 
-	& > svg {
+	& > li {
 		padding: 2px;
-		cursor: pointer;
-		background-color: rgba(200, 200, 200, 1);
+
+		&:hover {
+			background-color: rgba(200, 200, 200, 0.1);
+		}
+
+		& > svg {
+			cursor: pointer;
+		}
 	}
 `;
 
@@ -86,7 +92,7 @@ type MarkDownEntry = {
 };
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
-	const [toolboxVisible, setToolboxVisible] = useState(false);
+	const [toolboxVisible, setToolboxVisible] = useState(true);
 
 	//Sort of hacky, but it works.
 	const getMarkdownFromChildren = () => {
@@ -122,13 +128,13 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 
 	return (
 		<div
-			onMouseOver={() => setToolboxVisible(true)}
+			onMouseEnter={() => setToolboxVisible(true)}
 			onMouseLeave={() => setToolboxVisible(false)}
 		>
 			{toolboxVisible && (
 				<MarkdownOperationsBox>
 					<div style={{ flex: "1 0 auto" }}></div>
-					<MarkdownOperationsBoxHightlight>
+					<MarkdownOperationsBoxHighlight>
 						<li
 							role="presentation"
 							title="Copy code to clipboard"
@@ -143,7 +149,7 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 						>
 							<GoFileSymlinkFile size={16} />
 						</li>
-					</MarkdownOperationsBoxHightlight>
+					</MarkdownOperationsBoxHighlight>
 				</MarkdownOperationsBox>
 			)}
 			<MarkdownBox>{children}</MarkdownBox>

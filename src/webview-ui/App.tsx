@@ -5,6 +5,7 @@ import { AppMessage, ChatMessage } from "../types/Message";
 import ChatEntry from "./ChatEntry";
 import styled from "styled-components";
 import { FaPlay, FaStopCircle } from "react-icons/fa";
+import { VscClearAll } from "react-icons/vsc";
 
 const Main = styled.main`
 	height: 100%;
@@ -14,7 +15,7 @@ const Main = styled.main`
 
 const UserInput = styled.div`
 	flex-basis: 50px;
-	padding: 12px;
+	padding: 12px 0px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
@@ -31,6 +32,12 @@ const ChatResponses = styled.ul`
 	list-style-type: none;
 	margin: 0;
 	padding: 0;
+`;
+
+const ChatToolbar = styled.div`
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
 `;
 
 function ChatResponseList({ children }: PropsWithChildren) {
@@ -137,9 +144,25 @@ function App() {
 		}
 	}
 
+	function handleClearChat() {
+		setMessages([]);
+
+		vscode.postMessage({
+			command: "clear",
+		});
+	}
+
 	return (
 		<Main>
-			<h2>Code Assistant</h2>
+			<ChatToolbar>
+				<h2>Code Assistant</h2>
+				<VscClearAll
+					size={24}
+					role="presentation"
+					title="Clear chat history"
+					onClick={handleClearChat}
+				/>
+			</ChatToolbar>
 			<ChatResponseList>
 				{messages.map(({ from, message }, index) => (
 					<ChatEntry key={index} from={from} message={message} />

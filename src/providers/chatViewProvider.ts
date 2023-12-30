@@ -59,6 +59,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						this.sendContentToNewDocument(value);
 						break;
 					}
+					case "clear": {
+						previousResponseContext = [];
+						break;
+					}
 				}
 			})
 		);
