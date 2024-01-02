@@ -2,7 +2,7 @@ import { PropsWithChildren, forwardRef, memo, useState } from "react";
 import Markdown from "react-markdown";
 import styled, { keyframes } from "styled-components";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { ChatMessage } from "../types/Message";
 import { FaCopy } from "react-icons/fa6";
 import { GoFileSymlinkFile } from "react-icons/go";
@@ -191,7 +191,7 @@ const ChatEntry = ({
 							<SyntaxHighlighter
 								PreTag={CodeContainer}
 								children={String(children).replace(/\n$/, "")}
-								style={oneDark}
+								style={vscDarkPlus}
 								language={languageType[1]}
 							/>
 						) : (
