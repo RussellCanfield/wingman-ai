@@ -130,7 +130,7 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 
 	return (
 		<div
-			style={{ position: "relative", top: "16px" }}
+			style={{ position: "relative", top: "16px", paddingBottom: "12px" }}
 			onMouseEnter={() => setToolboxVisible(true)}
 			onMouseLeave={() => setToolboxVisible(false)}
 		>
