@@ -39,22 +39,28 @@
 			]
 		},
 		"configuration": {
-			"title": "CodeAI",
+			"title": "WingMan",
 			"properties": {
-				"model.name": {
-					"type": "string",
-					"default": "deepseek-coder:6.7b-instruct-q8_0",
-					"description": "Your ollama model name"
+				"Ollama": {
+					"type":"object",
+					"description": "Ollama settings",
+					"default": {
+						"modelName": "deepseek-coder:6.7b-instruct-q8_0",
+						"baseUrl": "http://localhost:11434",
+						"apiPath": "/api/generate"
+					}
 				},
-				"model.url": {
-					"type": "string",
-					"default": "http://localhost:11434",
-					"description": "Your ollama instance url"
-				},
-				"model.url.path": {
-					"type": "string",
-					"default": "/api/generate",
-					"description": "Your ollama endpoint for generating responses"
+				"OpenAI": {
+					"type":["object", "null"],
+					"default": "null",
+					"description": "OpenAiSettings",
+					"properties": {
+						"apiKey" : {
+							"type": "string",
+							"default": "",
+							"description": "Open AI Api Key"
+						}
+					}
 				}
 			}
 		}
