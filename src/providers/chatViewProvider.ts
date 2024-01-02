@@ -86,11 +86,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		await this.streamChatResponse(
 			value,
 			`The user is seeking coding advice using ${language}.
-			Reference the following code in order to provide a working solution.
-			"""${text}"""
+			Reference the following code context in order to provide a working solution.
 
-			The most important line of code is as follows: """${currentLine}"""
-			`,
+			${text}
+
+			The most important line of the code context is as follows: 
+			
+			${currentLine}
+			`.replace(/\t/g, ""),
 			webviewView
 		);
 	}

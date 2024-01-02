@@ -55,8 +55,10 @@ const MarkdownOperationsBox = styled.div`
 	display: flex;
 	justify-content: flex-end;
 	position: relative;
-	top: 5px;
+	top: -20px;
+	right: 6px;
 	padding-right: 10px;
+	position: absolute;
 `;
 
 const MarkdownOperationsBoxHighlight = styled.ul`
@@ -92,7 +94,7 @@ type MarkDownEntry = {
 };
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
-	const [toolboxVisible, setToolboxVisible] = useState(true);
+	const [toolboxVisible, setToolboxVisible] = useState(false);
 
 	//Sort of hacky, but it works.
 	const getMarkdownFromChildren = () => {
@@ -128,6 +130,7 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 
 	return (
 		<div
+			style={{ position: "relative", top: "16px" }}
 			onMouseEnter={() => setToolboxVisible(true)}
 			onMouseLeave={() => setToolboxVisible(false)}
 		>
