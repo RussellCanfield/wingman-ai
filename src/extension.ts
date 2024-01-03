@@ -3,7 +3,6 @@
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
-import SettingsProvider from "./providers/settingsProvider.js";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -13,11 +12,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	console.log(
 		'Congratulations, your extension "code-assistant" is now active!'
 	);
-
-	// TODO: Discuss settings
-	// TODO: Discuss benefits of hosting externally instead of VSCode settings
-	// TODO: Flexible models based on "adapter" versus rigid one size fits all
-	await SettingsProvider.Load();
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -58,4 +52,4 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
