@@ -25,7 +25,7 @@
 				{
 					"id": "wing-man",
 					"title": "WingMan",
-					"icon": "$(heart)"
+					"icon": "media/jet-fighter.svg"
 				}
 			]
 		},

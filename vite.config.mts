@@ -42,11 +42,7 @@ const config = defineConfig({
 		// viteStaticCopy({
 		// 	targets: [
 		// 		{
-		// 			src: resolve(__dirname, "./llamaBins"),
-		// 			dest: ".",
-		// 		},
-		// 		{
-		// 			src: resolve(__dirname, "./models"),
+		// 			src: resolve(__dirname, "./src/media"),
 		// 			dest: ".",
 		// 		},
 		// 	],
