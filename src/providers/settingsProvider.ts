@@ -1,24 +1,29 @@
 import * as vscode from "vscode";
 import { Settings } from "../types/Settings";
 
-class SettingsProvider {
-	private static settings: Settings;
+class SettingsProviderService {
+	private settings: Settings = {};
 
-	// public static get ModelName() {
-	// 	return this.settings.modelName;
-	// }
+	public get ModelName() {
+		return this.settings.ollama?.modelName || '';
+	}
 
-	// public static get BaseUrl() {
-	// 	return this.settings.baseUrl;
-	// }
+	public get BaseUrl() {
+		return this.settings.ollama?.baseUrl || '';
+	}
 
-	// public static get ApiPath() {
-	// 	return this.settings.apiPath;
-	// }
+	public get ApiPath() {
+		return this.settings.ollama?.apiPath || '';
+	}
 
-	public static async Load() {
-		console.log(vscode.workspace.getConfiguration('WingMan').get('Ollama'))
+	constructor() {
+		const config = vscode.workspace.getConfiguration('WingMan');
+		const ollamaConfig = config.get<Settings['ollama']>('Ollama');
+		if (ollamaConfig) {
+			this.settings.ollama = ollamaConfig;
+		}
 	}
 }
 
+const SettingsProvider = new SettingsProviderService();
 export default SettingsProvider;

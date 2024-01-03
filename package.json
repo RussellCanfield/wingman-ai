@@ -41,24 +41,29 @@
 		"configuration": {
 			"title": "WingMan",
 			"properties": {
-				"Ollama": {
+				"WingMan.Ollama": {
 					"type":"object",
 					"description": "Ollama settings",
 					"default": {
 						"modelName": "deepseek-coder:6.7b-instruct-q8_0",
 						"baseUrl": "http://localhost:11434",
 						"apiPath": "/api/generate"
-					}
-				},
-				"OpenAI": {
-					"type":["object", "null"],
-					"default": "null",
-					"description": "OpenAiSettings",
+					},
 					"properties": {
-						"apiKey" : {
+						"modelName": {
 							"type": "string",
-							"default": "",
-							"description": "Open AI Api Key"
+							"default": "deepseek-coder:6.7b-instruct-q8_0",
+							"description": "Ollama model name to target"
+						},
+						"baseUrl": {
+							"type": "string",
+							"default": "http://localhost:11434",
+							"description": "Base URL for the ollama instance"
+						},
+						"apiPath": {
+							"type": "string",
+							"default": "/api/generate",
+							"description": "Path for generation"
 						}
 					}
 				}

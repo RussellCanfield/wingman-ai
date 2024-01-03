@@ -1,5 +1,5 @@
 export interface Settings {
-	Ollama: {
+	ollama?: {
 		modelName: string;
 		baseUrl: string;
 		apiPath: string;
