@@ -1,4 +1,4 @@
-import { PropsWithChildren, forwardRef, memo, useState } from "react";
+import { PropsWithChildren, memo, useState } from "react";
 import Markdown from "react-markdown";
 import styled, { keyframes } from "styled-components";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";

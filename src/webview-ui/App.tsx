@@ -155,7 +155,7 @@ function App() {
 	return (
 		<Main>
 			<ChatToolbar>
-				<h2>Code Assistant</h2>
+				<h2>WingMan</h2>
 				<VscClearAll
 					size={24}
 					role="presentation"

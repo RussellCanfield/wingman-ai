@@ -9,9 +9,7 @@ import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 export async function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
-	console.log(
-		'Congratulations, your extension "code-assistant" is now active!'
-	);
+	console.log('Congratulations, your extension "wing-man" is now active!');
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -38,13 +36,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
 	let disposable = vscode.commands.registerCommand(
-		"code-assistant.helloWorld",
+		"wing-man.helloWorld",
 		() => {
 			// The code you place here will be executed every time your command is executed
 			// Display a message box to the user
-			vscode.window.showInformationMessage(
-				"Hello World from code-assistant!"
-			);
+			vscode.window.showInformationMessage("Hello World from wing-man!");
 		}
 	);
 
@@ -52,4 +48,4 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate() {}

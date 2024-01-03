@@ -6,7 +6,7 @@ let abortController = new AbortController();
 let previousResponseContext: number[] = [];
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = "code-assistant-chat-view";
+	public static readonly viewType = "wing-man-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
 
@@ -90,9 +90,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 			${text}
 
+			=======
+
 			The most important line of the code context is as follows: 
 			
 			${currentLine}
+			
+			=======
 			`.replace(/\t/g, ""),
 			webviewView
 		);

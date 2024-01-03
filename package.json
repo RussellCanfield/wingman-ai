@@ -1,7 +1,7 @@
 {
-	"name": "code-assistant",
-	"displayName": "code-assistant",
-	"description": "Write the best code, ever.",
+	"name": "wing-man",
+	"displayName": "wing-man",
+	"description": "Write your best code, we won't leave you hanging.",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.84.0"
@@ -16,24 +16,24 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "code-assistant.helloWorld",
+				"command": "wing-man.helloWorld",
 				"title": "Hello World"
 			}
 		],
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "code-assistant",
-					"title": "Code Assistant",
+					"id": "wing-man",
+					"title": "WingMan",
 					"icon": "$(heart)"
 				}
 			]
 		},
 		"views": {
-			"code-assistant": [
+			"wing-man": [
 				{
-					"id": "code-assistant-chat-view",
-					"name": "Let the code begin!",
+					"id": "wing-man-chat-view",
+					"name": "Helping you write the best code!",
 					"type": "webview"
 				}
 			]
@@ -42,10 +42,10 @@
 			"title": "WingMan",
 			"properties": {
 				"WingMan.Ollama": {
-					"type":"object",
+					"type": "object",
 					"description": "Ollama settings",
 					"default": {
-						"modelName": "deepseek-coder:6.7b-instruct-q8_0",
+						"modelName": "deepseek-coder:6.7b-base-q4_1",
 						"baseUrl": "http://localhost:11434",
 						"apiPath": "/api/generate"
 					},

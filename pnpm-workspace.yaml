@@ -1,3 +1,0 @@
-packages:
-    - "*"
-    - "!llm_node"
