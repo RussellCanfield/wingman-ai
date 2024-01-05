@@ -45,9 +45,10 @@ const Loader = styled.span`
 
 const MarkdownBox = styled.div`
 	overflow-x: scroll;
+	background-color: var(--vscode-editor-background);
 
 	& > code {
-		background: unset !important;
+		background: var(--vscode-editor-background);
 	}
 `;
 
