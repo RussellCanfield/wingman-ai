@@ -1,7 +1,8 @@
 export interface Settings {
 	ollama?: {
-		modelName: string;
+		chatModel: string;
+		codeModel: string;
 		baseUrl: string;
 		apiPath: string;
-	}
+	};
 }

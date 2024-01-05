@@ -1,37 +1,18 @@
 import { vscode } from "./utilities/vscode";
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react";
-import { PropsWithChildren, useEffect, useRef, useState } from "react";
-import { AppMessage, ChatMessage } from "../types/Message";
+import { useEffect, useRef, useState } from "react";
+import { AppMessage, ChatMessage, CodeContext } from "../types/Message";
 import ChatEntry from "./ChatEntry";
 import styled from "styled-components";
 import { FaPlay, FaStopCircle } from "react-icons/fa";
 import { VscClearAll } from "react-icons/vsc";
+import { ChatResponseList } from "./ChatList";
+import { ChatInput } from "./ChatInput";
 
 const Main = styled.main`
 	height: 100%;
 	display: flex;
 	flex-direction: column;
-`;
-
-const UserInput = styled.div`
-	flex-basis: 50px;
-	padding: 12px 0px;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-
-	* :root {
-		--input-background: red !important;
-	}
-`;
-
-const ChatResponses = styled.ul`
-	flex: 1 0;
-	overflow-x: hidden;
-	overflow-y: scroll;
-	list-style-type: none;
-	margin: 0;
-	padding: 0;
 `;
 
 const ChatToolbar = styled.div`
@@ -40,28 +21,15 @@ const ChatToolbar = styled.div`
 	align-items: center;
 `;
 
-function ChatResponseList({ children }: PropsWithChildren) {
-	const ref = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		ref.current?.scrollIntoView({ block: "nearest" });
-	});
-
-	return (
-		<ChatResponses>
-			{children}
-			<div ref={ref}></div>
-		</ChatResponses>
-	);
-}
-
 let currentMessage = "";
+let currentContext: CodeContext | undefined;
 
-function App() {
+const App = () => {
 	const [loading, setLoading] = useState<boolean>(false);
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
-	const chatInputBox = useRef<any>(null);
-	const [activeMessage, setActiveMessage] = useState<string>("");
+	const [activeMessage, setActiveMessage] = useState<
+		ChatMessage | undefined
+	>();
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -71,86 +39,114 @@ function App() {
 		};
 	}, []);
 
-	function handleResponse(event: MessageEvent<AppMessage>) {
+	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { data } = event;
 		const { command, value } = data;
 
-		if (command === "done") {
-			commitMessageToHistory();
-			return;
+		switch (command) {
+			case "response":
+				if (!value) {
+					return;
+				}
+
+				currentMessage += value as string;
+				setActiveMessage((activeMessage) => {
+					return {
+						loading: true,
+						context: undefined,
+						from: "Assistant",
+						...activeMessage,
+						message: currentMessage,
+					} satisfies ChatMessage;
+				});
+				break;
+			case "done":
+				console.log("DONE: ", activeMessage);
+				commitMessageToHistory();
+				break;
+			case "context":
+				currentContext = value as CodeContext;
+				setActiveMessage((activeMessage) => {
+					return {
+						loading: true,
+						from: "Assistant",
+						...activeMessage,
+						message: currentMessage,
+						context: currentContext,
+					} satisfies ChatMessage;
+				});
+				break;
+			default:
+				break;
 		}
+	};
 
-		if (!value) {
-			return;
-		}
-
-		currentMessage += value;
-		setActiveMessage((message) => message + value);
-	}
-
-	function commitMessageToHistory() {
+	const commitMessageToHistory = () => {
 		setMessages((messages) => [
 			...messages,
 			{
 				from: "Assistant",
 				message: currentMessage,
+				loading: false,
+				context: currentContext,
 			},
 		]);
 
 		setLoading(false);
-		setActiveMessage("");
-	}
+		setActiveMessage((message) => {
+			return {
+				from: "Assistant",
+				context: undefined,
+				message: "",
+				...message,
+				loading: false,
+			};
+		});
 
-	function cancelAIResponse() {
+		currentMessage = "";
+		currentContext = undefined;
+	};
+
+	const cancelAIResponse = () => {
 		vscode.postMessage({
 			command: "cancel",
 		});
 		commitMessageToHistory();
-	}
+	};
 
-	function fetchAIResponse(text: string) {
+	const fetchAIResponse = (text: string) => {
 		currentMessage = "";
 
 		vscode.postMessage({
 			command: "chat",
 			value: text,
 		});
-	}
+	};
 
-	function handleUserInput(e: React.KeyboardEvent<HTMLInputElement>) {
-		if (e.key === "Enter") {
-			const element = e.target as HTMLInputElement;
-			const message = element.value;
+	const handleChatSubmitted = (input: string) => {
+		fetchAIResponse(input);
 
-			if (!message) {
-				return;
-			}
+		setMessages((messages) => [
+			...messages,
+			{
+				from: "User",
+				message: input,
+				context: undefined,
+			},
+		]);
 
-			e.preventDefault();
+		setLoading(true);
+	};
 
-			fetchAIResponse(message);
-
-			setMessages((messages) => [
-				...messages,
-				{
-					from: "User",
-					message: message,
-				},
-			]);
-
-			setLoading(true);
-
-			element.value = "";
-		}
-	}
-
-	function handleClearChat() {
+	const handleClearChat = () => {
+		currentMessage = "";
+		setActiveMessage(undefined);
 		setMessages([]);
 
 		vscode.postMessage({
 			command: "clear",
 		});
-	}
+	};
 
 	return (
 		<Main>
@@ -163,56 +159,23 @@ function App() {
 					onClick={handleClearChat}
 				/>
 			</ChatToolbar>
-			<ChatResponseList>
-				{messages.map(({ from, message }, index) => (
-					<ChatEntry key={index} from={from} message={message} />
-				))}
+			<ChatResponseList messages={messages}>
 				{loading && (
 					<ChatEntry
 						from="Assistant"
-						message={activeMessage}
+						message={activeMessage?.message || ""}
+						context={activeMessage?.context}
 						loading={loading}
 					/>
 				)}
 			</ChatResponseList>
-			<UserInput>
-				<VSCodeTextField
-					placeholder="Type here to chat with the extension"
-					ref={chatInputBox}
-					style={
-						{
-							width: "100%",
-							"--input-height": "36",
-						} as React.CSSProperties
-					}
-					onKeyDown={handleUserInput}
-				>
-					{!loading && (
-						<span slot="end">
-							<FaPlay
-								size={16}
-								onClick={() =>
-									handleUserInput({
-										key: "Enter",
-										preventDefault: () => {},
-										target: chatInputBox.current,
-									} as unknown as React.KeyboardEvent<HTMLInputElement>)
-								}
-							/>
-						</span>
-					)}
-					{loading && (
-						<span slot="end">
-							<FaStopCircle
-								size={16}
-								onClick={cancelAIResponse}
-							/>
-						</span>
-					)}
-				</VSCodeTextField>
-			</UserInput>
+			<ChatInput
+				loading={loading}
+				onChatSubmitted={handleChatSubmitted}
+				onChatCancelled={cancelAIResponse}
+			/>
 		</Main>
 	);
-}
+};
 
 export default App;

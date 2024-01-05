@@ -50,10 +50,15 @@
 						"apiPath": "/api/generate"
 					},
 					"properties": {
-						"modelName": {
+						"chatModel": {
 							"type": "string",
 							"default": "deepseek-coder:6.7b-instruct-q8_0",
-							"description": "Ollama model name to target"
+							"description": "The model to use for the chat"
+						},
+						"codeModel": {
+							"type": "string",
+							"default": "deepseek-coder:6.7b-base-q4_1",
+							"description": "The model to use for the code completion"
 						},
 						"baseUrl": {
 							"type": "string",
@@ -78,8 +83,7 @@
 		"package": "vite build --mode production",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
-		"test": "vscode-test",
-		"devPreinstall": "node ./downloadLlamaBins.js"
+		"test": "vscode-test"
 	},
 	"devDependencies": {
 		"@types/vscode": "^1.84.0",

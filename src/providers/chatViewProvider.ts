@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { AppMessage } from "../types/Message";
+import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { aiService } from "../service/ai.service";
 
 let abortController = new AbortController();
@@ -52,11 +52,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						break;
 					}
 					case "clipboard": {
-						vscode.env.clipboard.writeText(value);
+						vscode.env.clipboard.writeText(value as string);
 						break;
 					}
 					case "copyToFile": {
-						this.sendContentToNewDocument(value);
+						this.sendContentToNewDocument(value as string);
 						break;
 					}
 					case "clear": {
@@ -81,37 +81,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	}: Pick<AppMessage, "value"> & { webviewView: vscode.WebviewView }) {
 		abortController = new AbortController();
 
-		const { text, currentLine, language } = getChatContext();
-
 		await this.streamChatResponse(
-			value,
-			`The user is seeking coding advice using ${language}.
-			Reference the following code context in order to provide a working solution.
-
-			${text}
-
-			=======
-
-			The most important line of the code context is as follows: 
-			
-			${currentLine}
-			
-			=======
-			`.replace(/\t/g, ""),
+			value as string,
+			getChatContext(),
 			webviewView
 		);
 	}
 
 	private async streamChatResponse(
 		prompt: string,
-		context: string,
+		context: CodeContextDetails,
 		webviewView: vscode.WebviewView
 	) {
+		const { text, currentLine, language, fileName, lineRange } = context;
+
+		const ragContext = `The user is seeking coding advice using ${language}.
+		Reference the following code context in order to provide a working solution.
+
+		${text}
+
+		=======
+
+		The most important line of the code context is as follows: 
+		
+		${currentLine}
+		
+		=======
+		`.replace(/\t/g, "");
+
+		webviewView.webview.postMessage({
+			command: "context",
+			value: {
+				fileName,
+				lineRange,
+			} satisfies CodeContext,
+		});
+
 		const response = await aiService.generate(
 			prompt,
 			abortController.signal,
 			previousResponseContext,
-			context
+			ragContext
 		);
 
 		previousResponseContext = [];
@@ -171,32 +181,51 @@ function getNonce() {
 	return text;
 }
 
-function getChatContext() {
+function getChatContext(): CodeContextDetails {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
-		return { text: "", currentLine: "", language: "" };
+		return {
+			text: "",
+			currentLine: "",
+			language: "",
+			lineRange: "",
+			fileName: "",
+		};
 	}
 
 	const lineWindow = 15;
-	const currentLine = editor.selection.active.line;
 
-	const beginningWindowLine = editor.document.lineAt(
-		Math.max(0, currentLine - lineWindow)
-	);
-	const endWindowLine = editor.document.lineAt(
-		Math.min(editor.document.lineCount - 1, currentLine + lineWindow)
-	);
+	const { document, selection } = editor;
+	let codeContextRange: vscode.Range;
 
-	const text = editor.document.getText(
-		new vscode.Range(
+	if (selection && !selection.isEmpty) {
+		codeContextRange = new vscode.Range(
+			selection.start.line,
+			selection.start.character,
+			selection.end.line,
+			selection.end.character
+		);
+	} else {
+		const currentLine = selection.active.line;
+		const beginningWindowLine = document.lineAt(
+			Math.max(0, currentLine - lineWindow)
+		);
+		const endWindowLine = document.lineAt(
+			Math.min(document.lineCount - 1, currentLine + lineWindow)
+		);
+		codeContextRange = new vscode.Range(
 			beginningWindowLine.range.start,
 			endWindowLine.range.end
-		)
-	);
+		);
+	}
+
+	const text = document.getText(codeContextRange);
 
 	return {
 		text,
-		currentLine: editor.document.lineAt(editor.selection.active.line).text,
-		language: editor.document.languageId,
+		currentLine: document.lineAt(selection.active.line).text,
+		lineRange: `${codeContextRange.start.line}-${codeContextRange.end.line}`,
+		fileName: document.fileName,
+		language: document.languageId,
 	};
 }

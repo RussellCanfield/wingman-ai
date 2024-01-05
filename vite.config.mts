@@ -32,7 +32,7 @@ const config = defineConfig({
 				},
 			],
 		},
-		sourcemap: false,
+		sourcemap: true,
 		outDir: "out",
 	},
 	define: {

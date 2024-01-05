@@ -20,7 +20,7 @@ ${end}<｜fim_end｜>
 `;
 
 		return {
-			model: SettingsProvider.ModelName,
+			model: SettingsProvider.CodeModelName,
 			prompt,
 			stream: false,
 			raw: true,
@@ -59,7 +59,7 @@ ${end}<｜fim_end｜>
 		}
 
 		return {
-			model: SettingsProvider.ModelName,
+			model: SettingsProvider.ChatModelName,
 			prompt,
 			system,
 			stream: true,

@@ -160,23 +160,25 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	);
 });
 
-type ChatEntryProps = PropsWithChildren<ChatMessage> & { loading?: boolean };
-
 const ChatEntry = ({
 	from,
 	message,
 	loading,
-}: PropsWithChildren<ChatEntryProps>) => {
-	const copyToClipboard = () => {
-		console.log(message);
-	};
-
+	context,
+}: PropsWithChildren<ChatMessage>) => {
 	return (
 		<Entry>
 			<LabelContainer>
 				<h3>{from === "User" ? "Me" : "Open Assistant"}</h3>
 				{loading && <Loader />}
 			</LabelContainer>
+			<div>
+				{context && (
+					<div>
+						{context.fileName} {context.lineRange}
+					</div>
+				)}
+			</div>
 			<Markdown
 				children={message}
 				components={{

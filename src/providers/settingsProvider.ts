@@ -4,8 +4,12 @@ import { Settings } from "../types/Settings";
 class SettingsProviderService {
 	private settings: Settings = {};
 
-	public get ModelName() {
-		return this.settings.ollama?.modelName || "";
+	public get ChatModelName() {
+		return this.settings.ollama?.chatModel || "";
+	}
+
+	public get CodeModelName() {
+		return this.settings.ollama?.codeModel || "";
 	}
 
 	public get BaseUrl() {
