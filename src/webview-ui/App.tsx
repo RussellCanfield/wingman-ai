@@ -1,10 +1,8 @@
 import { vscode } from "./utilities/vscode";
-import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AppMessage, ChatMessage, CodeContext } from "../types/Message";
 import ChatEntry from "./ChatEntry";
 import styled from "styled-components";
-import { FaPlay, FaStopCircle } from "react-icons/fa";
 import { VscClearAll } from "react-icons/vsc";
 import { ChatResponseList } from "./ChatList";
 import { ChatInput } from "./ChatInput";
@@ -61,7 +59,6 @@ const App = () => {
 				});
 				break;
 			case "done":
-				console.log("DONE: ", activeMessage);
 				commitMessageToHistory();
 				break;
 			case "context":
