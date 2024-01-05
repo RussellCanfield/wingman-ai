@@ -58,6 +58,8 @@ const ChatInput = ({
 					<span slot="end">
 						<FaPlay
 							size={16}
+							role="presentation"
+							title="Send message"
 							onClick={() =>
 								handleUserInput({
 									key: "Enter",
@@ -70,7 +72,12 @@ const ChatInput = ({
 				)}
 				{loading && (
 					<span slot="end">
-						<FaStopCircle size={16} onClick={onChatCancelled} />
+						<FaStopCircle
+							size={16}
+							role="presentation"
+							title="Cancel chat"
+							onClick={onChatCancelled}
+						/>
 					</span>
 				)}
 			</VSCodeTextField>
