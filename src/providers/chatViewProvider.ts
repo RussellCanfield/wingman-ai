@@ -71,6 +71,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						previousResponseContext = [];
 						break;
 					}
+					case "showContext": {
+						const { fileName, lineRange } = value as CodeContext;
+						const [start, end] = lineRange.split("-").map(Number);
+						const uri = vscode.Uri.file(fileName);
+						vscode.window.showTextDocument(uri).then(() => {
+							if (!vscode.window.activeTextEditor) {
+								return;
+							}
+
+							vscode.window.activeTextEditor.selection =
+								new vscode.Selection(
+									new vscode.Position(start, 0),
+									new vscode.Position(end, 0)
+								);
+						});
+						break;
+					}
 				}
 			})
 		);
@@ -98,12 +115,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	private async streamChatResponse(
 		prompt: string,
-		context: CodeContextDetails,
+		context: CodeContextDetails | undefined,
 		webviewView: vscode.WebviewView
 	) {
-		const { text, currentLine, language, fileName, lineRange } = context;
+		let ragContext = "";
 
-		const ragContext = `The user is seeking coding advice using ${language}.
+		if (context) {
+			const {
+				text,
+				currentLine,
+				language,
+				fileName,
+				lineRange,
+				workspaceName,
+			} = context;
+
+			ragContext = `The user is seeking coding advice using ${language}.
 		Reference the following code context in order to provide a working solution.
 
 		${text}
@@ -117,13 +144,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		=======
 		`.replace(/\t/g, "");
 
-		webviewView.webview.postMessage({
-			command: "context",
-			value: {
-				fileName,
-				lineRange,
-			} satisfies CodeContext,
-		});
+			webviewView.webview.postMessage({
+				command: "context",
+				value: {
+					fileName,
+					lineRange,
+					workspaceName,
+				} satisfies CodeContext,
+			});
+		}
 
 		const response = await aiService.generate(
 			prompt,
@@ -200,16 +229,10 @@ function getNonce() {
 	return text;
 }
 
-function getChatContext(): CodeContextDetails {
+function getChatContext(): CodeContextDetails | undefined {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
-		return {
-			text: "",
-			currentLine: "",
-			language: "",
-			lineRange: "",
-			fileName: "",
-		};
+		return undefined;
 	}
 
 	const lineWindow = 15;
@@ -242,29 +265,13 @@ function getChatContext(): CodeContextDetails {
 
 	const documentUri = vscode.Uri.file(document.fileName);
 	const workspaceFolder = vscode.workspace.getWorkspaceFolder(documentUri);
-	let relativeDocumentName: string = document.fileName;
-
-	if (workspaceFolder) {
-		try {
-			const [, relativeDir] = document.fileName.split(
-				workspaceFolder.name
-			);
-			const path = relativeDir.substring(0, relativeDir.lastIndexOf("/"));
-			const file = relativeDir.substring(
-				relativeDir.lastIndexOf("/") + 1,
-				relativeDir.length
-			);
-			relativeDocumentName = `${file} ${path}`;
-		} catch (error) {
-			console.log(error);
-		}
-	}
 
 	return {
 		text,
 		currentLine: document.lineAt(selection.active.line).text,
 		lineRange: `${codeContextRange.start.line}-${codeContextRange.end.line}`,
-		fileName: relativeDocumentName,
+		fileName: document.fileName,
+		workspaceName: workspaceFolder?.name ?? "",
 		language: document.languageId,
 	};
 }

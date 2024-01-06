@@ -13,10 +13,14 @@ export interface ChatMessage {
 export interface CodeContextDetails {
 	lineRange: string;
 	fileName: string;
+	workspaceName: string;
 	language: string;
 	currentLine: string;
 	text: string;
 }
 
 export interface CodeContext
-	extends Pick<CodeContextDetails, "fileName" | "lineRange"> {}
+	extends Pick<
+		CodeContextDetails,
+		"fileName" | "lineRange" | "workspaceName"
+	> {}

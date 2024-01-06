@@ -167,6 +167,44 @@ const ChatEntry = ({
 	loading,
 	context,
 }: PropsWithChildren<ChatMessage>) => {
+	const getContextDisplay = (): string => {
+		if (!context) {
+			return "";
+		}
+		const { workspaceName, lineRange, fileName } = context;
+
+		if (workspaceName) {
+			try {
+				const [, relativeDir] = fileName.split(workspaceName);
+
+				const path = relativeDir.substring(
+					0,
+					relativeDir.lastIndexOf("/")
+				);
+				const file = relativeDir.substring(
+					relativeDir.lastIndexOf("/") + 1,
+					relativeDir.length
+				);
+				return `${file} ${path} ${lineRange}`;
+			} catch (error) {
+				console.log(error);
+			}
+		}
+
+		return "";
+	};
+
+	const showSelectedContext = () => {
+		if (!context) {
+			return;
+		}
+
+		vscode.postMessage({
+			command: "showContext",
+			value: context,
+		});
+	};
+
 	return (
 		<Entry>
 			<LabelContainer>
@@ -178,6 +216,7 @@ const ChatEntry = ({
 					<>
 						<div
 							className="icon"
+							onClick={showSelectedContext}
 							style={{
 								display: "flex",
 								alignItems: "center",
@@ -187,9 +226,7 @@ const ChatEntry = ({
 							}}
 						>
 							<i className="codicon codicon-file"></i>
-							<span>
-								{context.fileName} {context.lineRange}
-							</span>
+							<span>{getContextDisplay()}</span>
 						</div>
 					</>
 				)}
