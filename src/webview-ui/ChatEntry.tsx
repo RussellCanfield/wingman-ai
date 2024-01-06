@@ -170,14 +170,28 @@ const ChatEntry = ({
 	return (
 		<Entry>
 			<LabelContainer>
-				<h3>{from === "User" ? "Me" : "Open Assistant"}</h3>
+				<h3>{from === "User" ? "Me" : "WingMan"}</h3>
 				{loading && <Loader />}
 			</LabelContainer>
 			<div>
 				{context && (
-					<div>
-						{context.fileName} {context.lineRange}
-					</div>
+					<>
+						<div
+							className="icon"
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: "4px",
+								padding: "4px",
+								border: "1px solid",
+							}}
+						>
+							<i className="codicon codicon-file"></i>
+							<span>
+								{context.fileName} {context.lineRange}
+							</span>
+						</div>
+					</>
 				)}
 			</div>
 			<Markdown

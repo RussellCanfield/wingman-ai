@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { aiService } from "../service/ai.service";
+import path from "path";
+import { ThemeIcon } from "vscode";
 
 let abortController = new AbortController();
 let previousResponseContext: number[] = [];
@@ -24,7 +26,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	) {
 		webviewView.webview.options = {
 			enableScripts: true,
-			localResourceRoots: [this._context.extensionUri],
+			localResourceRoots: [
+				this._context.extensionUri,
+				vscode.Uri.joinPath(
+					this._context.extensionUri,
+					"node_modules/vscode-codicons"
+				),
+			],
 		};
 
 		webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
@@ -153,6 +161,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			)
 		);
 
+		const codiconsUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this._context.extensionUri,
+				"node_modules",
+				"@vscode/codicons",
+				"dist",
+				"codicon.css"
+			)
+		);
+
 		const nonce = getNonce();
 
 		return `<!DOCTYPE html>
@@ -160,8 +178,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           <head>
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; font-src 'self'; style-src 'unsafe-inline';">
-			<title>Code Assistant</title>
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline';">
+			<title>WingMan</title>
+			<link rel="stylesheet" href="${codiconsUri}" nonce="${nonce}">
           </head>
           <body style="height: 100%">
             <div id="root" style="height: 100%"></div>
@@ -221,11 +240,31 @@ function getChatContext(): CodeContextDetails {
 
 	const text = document.getText(codeContextRange);
 
+	const documentUri = vscode.Uri.file(document.fileName);
+	const workspaceFolder = vscode.workspace.getWorkspaceFolder(documentUri);
+	let relativeDocumentName: string = document.fileName;
+
+	if (workspaceFolder) {
+		try {
+			const [, relativeDir] = document.fileName.split(
+				workspaceFolder.name
+			);
+			const path = relativeDir.substring(0, relativeDir.lastIndexOf("/"));
+			const file = relativeDir.substring(
+				relativeDir.lastIndexOf("/") + 1,
+				relativeDir.length
+			);
+			relativeDocumentName = `${file} ${path}`;
+		} catch (error) {
+			console.log(error);
+		}
+	}
+
 	return {
 		text,
 		currentLine: document.lineAt(selection.active.line).text,
 		lineRange: `${codeContextRange.start.line}-${codeContextRange.end.line}`,
-		fileName: document.fileName,
+		fileName: relativeDocumentName,
 		language: document.languageId,
 	};
 }

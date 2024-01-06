@@ -22,12 +22,26 @@ const ChatToolbar = styled.div`
 let currentMessage = "";
 let currentContext: CodeContext | undefined;
 
+interface AppState {
+	chatHistory: ChatMessage[];
+}
+
+let appState: AppState;
+
 const App = () => {
 	const [loading, setLoading] = useState<boolean>(false);
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [activeMessage, setActiveMessage] = useState<
 		ChatMessage | undefined
 	>();
+
+	useEffect(() => {
+		const { chatHistory } = vscode.getState() as AppState;
+
+		if (chatHistory?.length > 0) {
+			setMessages(chatHistory);
+		}
+	}, []);
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -79,15 +93,23 @@ const App = () => {
 	};
 
 	const commitMessageToHistory = () => {
-		setMessages((messages) => [
-			...messages,
-			{
-				from: "Assistant",
-				message: currentMessage,
-				loading: false,
-				context: currentContext,
-			},
-		]);
+		setMessages((messages) => {
+			const newHistory: ChatMessage[] = [
+				...messages,
+				{
+					from: "Assistant",
+					message: currentMessage,
+					loading: false,
+					context: currentContext,
+				},
+			];
+
+			vscode.setState({
+				chatHistory: newHistory,
+			} satisfies AppState);
+
+			return newHistory;
+		});
 
 		setLoading(false);
 		setActiveMessage((message) => {
@@ -139,6 +161,11 @@ const App = () => {
 		currentMessage = "";
 		setActiveMessage(undefined);
 		setMessages([]);
+
+		vscode.setState({
+			...appState,
+			chatHistory: [],
+		});
 
 		vscode.postMessage({
 			command: "clear",
