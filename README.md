@@ -1,46 +1,42 @@
-# code-assistant README
+# WingMan - AI Coding Assistant README
 
-This is the README for your extension "code-assistant". After writing up a brief description, we recommend including the following sections.
+This extension brings high quality AI assisted coding right to your computer. Since the current release of this extension relies on running the AI models locally, it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards).
+
+## Setting up Ollama
+
+Currently this extension only runs models locally using [Ollama](https://ollama.ai/). Ollama has a number of open source models available that are capable of writing high quality code.
+
+### Supported Models
+
+The extension uses a separate model for chat and code completion. This is due to the fact that different types of models have different strengths, mixing and matching offers the best result.
+
+Supported Models for _Code Completion_:
+
+-   Deepseek-base _(tested with: deepseek-coder:6.7b-base-q4_1)_
+-   Codellama-code _(tested with: codellama:7b-code-q4_K_M)_
+
+Support Models for _Chat_:
+
+-   Deepseek-Instruct _(tested with: deepseek-coder:6.7b-instruct-q8_0)_
+-   Codellama-Instruct _(tested with: codellama:7b-instruct)_
+
+### Installing and setting up Ollama
+
+-   Download and Install [Ollama](https://ollama.ai/)
+-   Find a supported model above and run **ollama pull model**
+-   Models do not need to be explicitly run, just exist inside ollama
 
 ## Getting started
 
-Recommended models (GGUF format - not all actually work, be warned):
-[https://huggingface.co/TheBloke/deepseek-coder-5.7bmqa-base-GGUF](https://huggingface.co/TheBloke/deepseek-coder-5.7bmqa-base-GGUF)
-
--   pnpm i
--   If you do not see a "llamaBins" folder in the root, run "node ./downloadLlamaBins.js"
--   Download the model of your choice, make a folder in the root called "models" put the folder there.
--   Edit src/extension.ts, around line 23 - add your model file name.
--   Press F5 and run in debug mode
+-   npm i
+-   Press F5 to run the extension.
+-   Open Settings in the new window, look for "WingMan"
+-   Configure the model names, reload the window _(CMD + R on mac)_
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
--   `myExtension.enable`: Enable/disable this extension.
--   `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
+Code completion based on the active code window.
+Interactive chat - look for the airplane icon in the side bar.
 
 ## Release Notes
 
@@ -48,35 +44,8 @@ Users appreciate release notes as you update your extension.
 
 ### 1.0.0
 
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+Initial release of WingMan!
 
 ---
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
--   [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
--   Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
--   Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
--   Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
--   [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
--   [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
 
 **Enjoy!**

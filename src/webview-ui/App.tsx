@@ -104,6 +104,7 @@ const App = () => {
 				},
 			];
 
+			//todo - move to useEffect
 			vscode.setState({
 				chatHistory: newHistory,
 			} satisfies AppState);

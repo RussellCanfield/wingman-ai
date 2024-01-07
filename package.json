@@ -3,6 +3,11 @@
 	"displayName": "wing-man",
 	"description": "Write your best code, we won't leave you hanging.",
 	"version": "0.0.1",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/RussellCanfield/wing-man"
+	},
 	"engines": {
 		"vscode": "^1.84.0"
 	},
@@ -45,7 +50,7 @@
 					"type": "object",
 					"description": "Ollama settings",
 					"default": {
-						"modelName": "deepseek-coder:6.7b-base-q4_1",
+						"modelName": "deepseek-coder:6.7b-instruct-q8_0",
 						"baseUrl": "http://localhost:11434",
 						"apiPath": "/api/generate"
 					},

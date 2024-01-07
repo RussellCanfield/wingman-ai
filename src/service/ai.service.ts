@@ -72,7 +72,7 @@ ${end}<｜fim_end｜>
 		};
 	}
 
-	private async fetchModelResponse(
+	public async fetchModelResponse(
 		payload: OllamaRequest,
 		signal: AbortSignal
 	) {
@@ -89,13 +89,7 @@ ${end}<｜fim_end｜>
 		);
 	}
 
-	async codeComplete(
-		prompt: string,
-		signal: AbortSignal,
-		context: number[] = [],
-		ragContent: string | null = null
-	) {
-		const payload = this.getCodePayload(prompt, context, ragContent ?? "");
+	async codeComplete(payload: OllamaRequest, signal: AbortSignal) {
 		const response = await this.fetchModelResponse(payload, signal);
 
 		if (!response?.body) {
@@ -107,12 +101,10 @@ ${end}<｜fim_end｜>
 	}
 
 	async *generate(
-		prompt: string,
+		payload: OllamaRequest,
 		signal: AbortSignal,
-		context: number[],
 		ragContent: string | null = null
 	) {
-		const payload = await this.getPayload(prompt, context, ragContent);
 		const response = await this.fetchModelResponse(payload, signal);
 
 		if (!response?.body) {
