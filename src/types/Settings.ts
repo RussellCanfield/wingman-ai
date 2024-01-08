@@ -4,5 +4,6 @@ export interface Settings {
 		codeModel: string;
 		baseUrl: string;
 		apiPath: string;
+		modelInfoPath: string;
 	};
 }

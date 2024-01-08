@@ -11,7 +11,6 @@ import {
 } from "vscode";
 import { aiService } from "../service/ai.service";
 import { BaseModel } from "../types/Models";
-import { ModelProvider } from "../service/models/modelProvider";
 
 let timeout: NodeJS.Timeout | undefined;
 const newLine = new RegExp(/\r?\n/);
@@ -27,8 +26,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 
 	private _model: BaseModel;
 
-	constructor() {
-		this._model = ModelProvider.createCodeModelFromSettings();
+	constructor(model: BaseModel) {
+		this._model = model;
 	}
 
 	getSafeWindow = (lineNumber: number, windowSize: number) => {

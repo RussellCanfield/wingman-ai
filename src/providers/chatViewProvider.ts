@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { aiService } from "../service/ai.service";
 import { BaseModel } from "../types/Models";
-import { ModelProvider } from "../service/models/modelProvider";
 
 let abortController = new AbortController();
 let previousResponseContext: number[] = [];
@@ -13,8 +12,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	private _disposables: vscode.Disposable[] = [];
 	private _model: BaseModel;
 
-	constructor(private readonly _context: vscode.ExtensionContext) {
-		this._model = ModelProvider.createChatModelFromSettings();
+	constructor(
+		model: BaseModel,
+		private readonly _context: vscode.ExtensionContext
+	) {
+		this._model = model;
 	}
 
 	dispose() {

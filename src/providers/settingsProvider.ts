@@ -20,6 +20,10 @@ class SettingsProviderService {
 		return this.settings.ollama?.apiPath || "";
 	}
 
+	public get InfoPath() {
+		return this.settings.ollama?.modelInfoPath || "";
+	}
+
 	constructor() {
 		const config = vscode.workspace.getConfiguration("WingMan");
 		const ollamaConfig = config.get<Settings["ollama"]>("Ollama");

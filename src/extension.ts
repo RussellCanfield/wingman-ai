@@ -1,27 +1,46 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
+import { ModelProvider } from "./service/models/modelProvider.js";
+import { aiService } from "./service/ai.service.js";
+import SettingsProvider from "./providers/settingsProvider.js";
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "wing-man" is now active!');
+	const codeModel = ModelProvider.createCodeModelFromSettings();
+
+	const codeModelValid = await aiService.validateModelExists(
+		SettingsProvider.CodeModelName
+	);
+
+	if (!codeModelValid) {
+		throw new Error(
+			`Code model: ${SettingsProvider.CodeModelName} not available for use.`
+		);
+	}
+
+	const chatModel = ModelProvider.createChatModelFromSettings();
+
+	const chatModelValid = await aiService.validateModelExists(
+		SettingsProvider.ChatModelName
+	);
+
+	if (!chatModelValid) {
+		throw new Error(
+			`Chat model: ${SettingsProvider.ChatModelName} not available for use.`
+		);
+	}
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ChatViewProvider.viewType,
-			new ChatViewProvider(context)
+			new ChatViewProvider(chatModel, context)
 		)
 	);
 
 	context.subscriptions.push(
 		vscode.languages.registerInlineCompletionItemProvider(
 			CodeSuggestionProvider.selector,
-			new CodeSuggestionProvider()
+			new CodeSuggestionProvider(codeModel)
 		)
 	);
 
@@ -31,21 +50,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	// 		new CodeSuggestionProvider(ollamaModel)
 	// 	)
 	// )
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand(
-		"wing-man.helloWorld",
-		() => {
-			// The code you place here will be executed every time your command is executed
-			// Display a message box to the user
-			vscode.window.showInformationMessage("Hello World from wing-man!");
-		}
-	);
-
-	context.subscriptions.push(disposable);
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}
