@@ -10,6 +10,8 @@ import {
 	TextDocument,
 } from "vscode";
 import { aiService } from "../service/ai.service";
+import { BaseModel } from "../types/Models";
+import { ModelProvider } from "../service/models/modelProvider";
 
 let timeout: NodeJS.Timeout | undefined;
 const newLine = new RegExp(/\r?\n/);
@@ -22,6 +24,12 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		{ scheme: "file", language: "javascriptreact" },
 		{ scheme: "file", language: "typescriptreact" },
 	];
+
+	private _model: BaseModel;
+
+	constructor() {
+		this._model = ModelProvider.createCodeModelFromSettings();
+	}
 
 	getSafeWindow = (lineNumber: number, windowSize: number) => {
 		lineNumber - windowSize < 0 ? 0 : lineNumber - windowSize;
@@ -39,27 +47,26 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			abort.abort();
 		});
 		const inline = Boolean(document.lineAt(position).text.trim());
-		const [topContent, bottom, positionFromBottom] = this.getPromptContent(
-			document,
-			position,
-			inline
-		);
+		// const [topContent, bottom, positionFromBottom] = this.getPromptContent(
+		// 	document,
+		// 	position,
+		// 	inline
+		// );
+
+		const prefix = this.getPreContent();
+		const suffix = this.getSuffixContent();
+
 		if (timeout) {
 			clearTimeout(timeout);
 		}
 
 		return new Promise<InlineCompletionItem[]>((res) => {
 			timeout = setTimeout(() => {
-				this.bouncedRequest(
-					topContent,
-					abort.signal,
-					bottom,
-					inline,
-					position,
-					positionFromBottom
-				).then((items) => {
-					res(items);
-				});
+				this.bouncedRequest(prefix, abort.signal, suffix).then(
+					(items) => {
+						res(items);
+					}
+				);
 			}, 300);
 		});
 	}
@@ -127,32 +134,80 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		return cleanedCode;
 	}
 
+	private getPreContent() {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor) {
+			return "";
+		}
+
+		const lineWindow = 15;
+
+		const { document, selection } = editor;
+
+		const currentLine = selection.active.line;
+		const beginningWindowLine = document.lineAt(
+			Math.max(0, currentLine - lineWindow)
+		);
+		const range = new vscode.Range(
+			beginningWindowLine.range.start,
+			selection.end
+		);
+		return document.getText(range);
+	}
+
+	private getSuffixContent() {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor) {
+			return "";
+		}
+
+		const lineWindow = 15;
+
+		const { document, selection } = editor;
+
+		const currentLine = selection.active.line;
+		const beginningWindowLine = document.lineAt(
+			Math.min(document.lineCount - 1, currentLine + 1)
+		);
+		const endWindowLine = document.lineAt(
+			Math.min(document.lineCount - 1, currentLine + lineWindow)
+		);
+		const range = new vscode.Range(
+			beginningWindowLine.range.start,
+			endWindowLine.range.end
+		);
+		return document.getText(range);
+	}
+
 	async bouncedRequest(
-		prompt: string,
+		prefix: string,
 		signal: AbortSignal,
-		doc: string,
-		inline: boolean,
-		topPos: Position,
-		fromBottom: Position
+		suffix: string
 	): Promise<InlineCompletionItem[]> {
 		try {
-			const codeResponse = await aiService.codeComplete(
-				prompt,
-				signal,
-				[],
-				doc
+			const payload = this._model.getCodeCompletionPayload(
+				prefix,
+				suffix
 			);
-			let cleanedCode = "";
-			if (!inline) {
-				cleanedCode = this.stripTopAndBottom(
-					codeResponse,
-					topPos,
-					fromBottom
-				);
-			} else {
-				cleanedCode = codeResponse.substring(topPos.character);
-			}
-			return [new InlineCompletionItem(cleanedCode)];
+			const codeResponse = await aiService.codeComplete(payload, signal);
+
+			// const codeResponse = await aiService.codeComplete(
+			// 	prompt,
+			// 	signal,
+			// 	[],
+			// 	doc
+			// );
+			// let cleanedCode = "";
+			// if (!inline) {
+			// 	cleanedCode = this.stripTopAndBottom(
+			// 		codeResponse,
+			// 		topPos,
+			// 		fromBottom
+			// 	);
+			// } else {
+			// 	cleanedCode = codeResponse.substring(topPos.character);
+			// }
+			return [new InlineCompletionItem(codeResponse)];
 		} catch (error) {
 			console.warn(error);
 			return [];

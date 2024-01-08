@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { aiService } from "../service/ai.service";
-import path from "path";
-import { ThemeIcon } from "vscode";
+import { BaseModel } from "../types/Models";
+import { ModelProvider } from "../service/models/modelProvider";
 
 let abortController = new AbortController();
 let previousResponseContext: number[] = [];
@@ -11,8 +11,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wing-man-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
+	private _model: BaseModel;
 
-	constructor(private readonly _context: vscode.ExtensionContext) {}
+	constructor(private readonly _context: vscode.ExtensionContext) {
+		this._model = ModelProvider.createChatModelFromSettings();
+	}
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -154,11 +157,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			});
 		}
 
-		const response = await aiService.generate(
+		const request = this._model.getChatPayload(
 			prompt,
-			abortController.signal,
-			previousResponseContext,
-			ragContext
+			ragContext,
+			previousResponseContext
+		);
+
+		const response = await aiService.generate(
+			request,
+			abortController.signal
 		);
 
 		previousResponseContext = [];
