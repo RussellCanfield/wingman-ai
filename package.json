@@ -1,8 +1,8 @@
 {
 	"name": "wing-man",
-	"displayName": "Wing Man",
-	"description": "Wing Man - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.0.2",
+	"displayName": "Wingman",
+	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
+	"version": "0.0.3",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -70,7 +70,7 @@
 			"activitybar": [
 				{
 					"id": "wing-man",
-					"title": "WingMan",
+					"title": "Wingman",
 					"icon": "media/jet-fighter.png"
 				}
 			]
@@ -85,9 +85,9 @@
 			]
 		},
 		"configuration": {
-			"title": "WingMan",
+			"title": "Wingman",
 			"properties": {
-				"WingMan.Ollama": {
+				"Wingman.Ollama": {
 					"type": "object",
 					"description": "Ollama settings",
 					"default": {

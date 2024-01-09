@@ -1,10 +1,10 @@
 # WingMan - AI Coding Assistant
 
 <p align="center" width="100%">
-    <img width="33%" src="./WingManLogo.jpeg">
+    <img width="33%" src="./logo.jpeg">
 </p>
 
-The WingMan extension brings high quality AI assisted coding right to your computer. Since the current release of this extension relies on running the AI models locally using [Ollama](https://ollama.ai/), it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards) for the best performance.
+The Wingman extension brings high quality AI assisted coding right to your computer. Since the current release of this extension relies on running the AI models locally using [Ollama](https://ollama.ai/), it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards) for the best performance.
 
 ## Why Ollama?
 
@@ -33,13 +33,6 @@ Supported Models for _Chat_:
 -   Download and Install [Ollama](https://ollama.ai/)
 -   Find a supported model above and run **ollama pull model**
 -   Models do not need to be explicitly run, just exist inside ollama
-
-## Getting started
-
--   npm i
--   Press F5 to run the extension.
--   Open Settings in the new window, look for "WingMan"
--   Configure the model names, reload the window _(CMD + R on mac)_
 
 ## Features
 

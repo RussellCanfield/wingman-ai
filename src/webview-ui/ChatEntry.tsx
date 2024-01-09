@@ -208,7 +208,7 @@ const ChatEntry = ({
 	return (
 		<Entry>
 			<LabelContainer>
-				<h3>{from === "User" ? "Me" : "WingMan"}</h3>
+				<h3>{from === "User" ? "Me" : "Wingman"}</h3>
 				{loading && <Loader />}
 			</LabelContainer>
 			<div>

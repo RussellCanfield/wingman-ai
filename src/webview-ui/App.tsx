@@ -218,7 +218,7 @@ const App = () => {
 	return (
 		<Main>
 			<ChatToolbar>
-				<h2>WingMan</h2>
+				<h2>Wingman</h2>
 				<VscClearAll
 					size={24}
 					role="presentation"

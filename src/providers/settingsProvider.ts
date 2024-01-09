@@ -25,7 +25,7 @@ class SettingsProviderService {
 	}
 
 	constructor() {
-		const config = vscode.workspace.getConfiguration("WingMan");
+		const config = vscode.workspace.getConfiguration("Wingman");
 		const ollamaConfig = config.get<Settings["ollama"]>("Ollama");
 		if (ollamaConfig) {
 			this.settings.ollama = ollamaConfig;
