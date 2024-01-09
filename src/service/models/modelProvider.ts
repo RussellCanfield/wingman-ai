@@ -14,7 +14,7 @@ export class ModelProvider {
 			return new Deepseek();
 		} else {
 			vscode.window.showInformationMessage(
-				"Invalid chat model name, currently chat supports CodeLlama and Deepseek instruct models."
+				"Invalid chat model name, currently chat supports CodeLlama-instruct and Deepseek-instruct models."
 			);
 			throw new Error("Invalid chat model name");
 		}
@@ -29,7 +29,7 @@ export class ModelProvider {
 			return new Deepseek();
 		} else {
 			vscode.window.showInformationMessage(
-				"Invalid code model name, currently chat supports CodeLlama-code and Deepseek-base models."
+				"Invalid code model name, currently code supports CodeLlama-code and Deepseek-base models."
 			);
 			throw new Error("Invalid code model name");
 		}
