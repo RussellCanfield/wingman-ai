@@ -1,9 +1,29 @@
 {
 	"name": "wing-man",
-	"displayName": "wing-man",
-	"description": "Write your best code, we won't leave you hanging.",
+	"displayName": "Wing Man",
+	"description": "Wing Man - AI powered assistant to help you write your best code, we won't leave you hanging.",
 	"version": "0.0.1",
+	"publisher": "WingMan",
 	"license": "MIT",
+	"author": {
+		"name": "Russell Canfield",
+		"email": "rcanfield86@gmail.com"
+	},
+	"icon": "media/icon.png",
+	"galleryBanner": {
+		"color": "#262626",
+		"theme": "dark"
+	},
+	"contributors": [
+		{
+			"name": "Russell Canfield",
+			"email": "rcanfield86@gmail.com"
+		},
+		{
+			"name": "Harlen Alvarez",
+			"email": "harlenalvarez@gmail.com"
+		}
+	],
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/RussellCanfield/wing-man"
@@ -12,7 +32,34 @@
 		"vscode": "^1.84.0"
 	},
 	"categories": [
-		"Other"
+		"Programming Languages",
+		"Snippets",
+		"Machine Learning",
+		"Education"
+	],
+	"pricing": "Free",
+	"keywords": [
+		"ai",
+		"autocomplete",
+		"c#",
+		"c++",
+		"code-referencing",
+		"codex",
+		"wingman",
+		"wing-man",
+		"wing man",
+		"co-pilot",
+		"documentation",
+		"go",
+		"typescript",
+		"javascript",
+		"intellisense",
+		"openai",
+		"ollama",
+		"refactor",
+		"ruby",
+		"snippets",
+		"chat"
 	],
 	"activationEvents": [
 		"onStartupFinished"
@@ -87,7 +134,8 @@
 		"package": "vite build --mode production",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
-		"test": "vscode-test"
+		"test": "vscode-test",
+		"license": "generate-license-file --input package.json --output third-party-licenses.txt --overwrite"
 	},
 	"devDependencies": {
 		"@types/vscode": "1.84.0",
@@ -113,6 +161,7 @@
 		"react-markdown": "9.0.1",
 		"react-syntax-highlighter": "15.5.0",
 		"react-icons": "4.12.0",
-		"@vscode/codicons": "0.0.35"
+		"@vscode/codicons": "0.0.35",
+		"generate-license-file": "3.0.1"
 	}
 }

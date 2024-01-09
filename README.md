@@ -1,4 +1,4 @@
-# WingMan - VSCode AI Coding Assistant
+# WingMan - AI Coding Assistant
 
 <p align="center" width="100%">
     <img width="33%" src="./WingManLogo.jpeg">
