@@ -23,10 +23,11 @@ let currentMessage = "";
 let currentContext: CodeContext | undefined;
 
 interface AppState {
-	chatHistory: ChatMessage[];
+	chatHistory: Record<string, ChatMessage[]>;
 }
 
 let appState: AppState;
+let activeWorkspace: string;
 
 const App = () => {
 	const [loading, setLoading] = useState<boolean>(false);
@@ -36,12 +37,31 @@ const App = () => {
 	>();
 
 	useEffect(() => {
-		const { chatHistory } = vscode.getState() as AppState;
-
-		if (chatHistory?.length > 0) {
-			setMessages(chatHistory);
-		}
+		vscode.postMessage({
+			command: "ready",
+		});
 	}, []);
+
+	useEffect(() => {
+		if (!appState) {
+			return;
+		}
+
+		let { chatHistory } = appState;
+
+		if (!chatHistory) {
+			chatHistory = {};
+		}
+
+		chatHistory[activeWorkspace] = [...messages];
+
+		const updatedState = {
+			...appState,
+			chatHistory: { ...chatHistory },
+		} satisfies AppState;
+
+		vscode.setState(updatedState);
+	}, [messages]);
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -87,7 +107,24 @@ const App = () => {
 					} satisfies ChatMessage;
 				});
 				break;
-			default:
+			case "init":
+				const { workspaceFolder } = value as {
+					workspaceFolder: string;
+				};
+
+				activeWorkspace = workspaceFolder;
+
+				appState = vscode.getState() as AppState;
+
+				const { chatHistory } = appState;
+
+				if (!chatHistory) {
+					return;
+				}
+
+				if (chatHistory[activeWorkspace]) {
+					setMessages(chatHistory[activeWorkspace]);
+				}
 				break;
 		}
 	};
@@ -103,11 +140,6 @@ const App = () => {
 					context: currentContext,
 				},
 			];
-
-			//todo - move to useEffect
-			vscode.setState({
-				chatHistory: newHistory,
-			} satisfies AppState);
 
 			return newHistory;
 		});
@@ -163,10 +195,20 @@ const App = () => {
 		setActiveMessage(undefined);
 		setMessages([]);
 
-		vscode.setState({
-			...appState,
-			chatHistory: [],
-		});
+		if (activeWorkspace && appState) {
+			let { chatHistory } = appState;
+
+			if (!chatHistory) {
+				chatHistory = {};
+			}
+
+			chatHistory[activeWorkspace] = [];
+
+			vscode.setState({
+				...appState,
+				chatHistory,
+			});
+		}
 
 		vscode.postMessage({
 			command: "clear",

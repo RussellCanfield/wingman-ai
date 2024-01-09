@@ -19,12 +19,6 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
-		"commands": [
-			{
-				"command": "wing-man.helloWorld",
-				"title": "Hello World"
-			}
-		],
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -88,7 +82,6 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"build:nodellama": "cd ./node-llama-cpp && npm run build",
 		"compile": "vite build",
 		"watch": "vite build --watch",
 		"package": "vite build --mode production",

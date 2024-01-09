@@ -43,13 +43,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			new CodeSuggestionProvider(codeModel)
 		)
 	);
-
-	// context.subscriptions.push(
-	// 	vscode.languages.registerCompletionItemProvider(
-	// 		CodeSuggestionProvider.selector,
-	// 		new CodeSuggestionProvider(ollamaModel)
-	// 	)
-	// )
 }
 
 export function deactivate() {}

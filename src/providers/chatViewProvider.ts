@@ -93,6 +93,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						});
 						break;
 					}
+					case "ready": {
+						webviewView.webview.postMessage({
+							command: "init",
+							value: {
+								workspaceFolder: getActiveWorkspace(),
+							},
+						});
+						break;
+					}
 				}
 			})
 		);
@@ -226,6 +235,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           </body>
         </html>`;
 	}
+}
+
+function getActiveWorkspace() {
+	const defaultWorkspace = "default";
+
+	const activeEditor = vscode.window.activeTextEditor;
+	if (activeEditor) {
+		return (
+			vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)
+				?.name ?? defaultWorkspace
+		);
+	}
+
+	return vscode.workspace.workspaceFolders?.[0].name ?? defaultWorkspace;
 }
 
 function getNonce() {
