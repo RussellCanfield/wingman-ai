@@ -23,7 +23,7 @@ Supported Models for _Code Completion_:
 -   Deepseek-base _(tested with: deepseek-coder:6.7b-base-q4_1)_
 -   Codellama-code _(tested with: codellama:7b-code-q4_K_M)_
 
-Support Models for _Chat_:
+Supported Models for _Chat_:
 
 -   Deepseek-Instruct _(tested with: deepseek-coder:6.7b-instruct-q8_0)_
 -   Codellama-Instruct _(tested with: codellama:7b-instruct)_
