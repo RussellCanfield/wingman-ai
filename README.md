@@ -8,7 +8,7 @@ The Wingman extension brings high quality AI assisted coding right to your compu
 
 ## Why Ollama?
 
-[Ollama](https://ollama.ai/) was chosen for it's simplicity, allowing users to pull a number of models in different configurations and update them at will. Ollama will pull optimized models based on your system architecture, however if you do not have a GPU accelerate machine, models will be slower.
+[Ollama](https://ollama.ai/) was chosen for it's simplicity, allowing users to pull a number of models in different configurations and update them at will. Ollama will pull optimized models based on your system architecture, however if you do not have a GPU accelerated machine, models will be slower.
 
 ## Setting up Ollama
 
