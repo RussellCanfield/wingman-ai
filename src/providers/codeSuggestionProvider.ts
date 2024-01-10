@@ -22,6 +22,20 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		{ scheme: "file", language: "javascript" },
 		{ scheme: "file", language: "javascriptreact" },
 		{ scheme: "file", language: "typescriptreact" },
+		{ scheme: "file", language: "csharp" },
+		{ scheme: "file", language: "java" },
+		{ scheme: "file", language: "python" },
+		{ scheme: "file", language: "go" },
+		{ scheme: "file", language: "php" },
+		{ scheme: "file", language: "ruby" },
+		{ scheme: "file", language: "rust" },
+		{ scheme: "file", language: "css" },
+		{ scheme: "file", language: "markdown" },
+		{ scheme: "file", language: "sql" },
+		{ scheme: "file", language: "less" },
+		{ scheme: "file", language: "scss" },
+		{ scheme: "file", language: "html" },
+		{ scheme: "file", language: "json" },
 	];
 
 	private _model: BaseModel;
