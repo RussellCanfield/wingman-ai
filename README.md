@@ -1,4 +1,4 @@
-# WingMan - AI Coding Assistant
+# Wingman - AI Coding Assistant
 
 <p align="center" width="100%">
     <img width="33%" src="./docs/logo.jpeg">
