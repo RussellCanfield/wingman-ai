@@ -63,6 +63,7 @@ However good AI performance relies on your machine specs, so if you do not have 
 During startup the extension will verify the models you have configured in the VSCode settings pane for this extension, the extension does have some defaults:
 
 **Code Model** - deepseek-coder:6.7b-base-q4_1
+
 **Chat Model** - deepseek-coder:6.7b-instruct-q8_0
 
 The models above will require enough RAM to run them correctly, you should have at least 12GB of ram on your machine if you are running these models, if you don't have enough ram then choose a smaller model will won't perform as well.
