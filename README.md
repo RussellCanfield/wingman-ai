@@ -1,10 +1,48 @@
 # WingMan - AI Coding Assistant
 
 <p align="center" width="100%">
-    <img width="33%" src="./logo.jpeg">
+    <img width="33%" src="./docs/logo.jpeg">
 </p>
 
-The Wingman extension brings high quality AI assisted coding right to your computer. Since the current release of this extension relies on running the AI models locally using [Ollama](https://ollama.ai/), it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards) for the best performance.
+The Wingman extension brings high quality AI assisted coding right to your computer, it's 100% free and data never leaves your machine - meaning it's completely private! Since the current release of this extension relies on running the AI models locally using [Ollama](https://ollama.ai/), it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards) for the best performance.
+
+## 🚀 Getting Started
+
+-   Install this extension from the VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=wingman.wingman
+-   Install [Ollama](https://ollama.ai/)
+-   Install the supported local models by running the following command(s):
+    **Example**:
+    -   _ollama pull deepseek-coder:6.7b-base-q4_1_
+    -   _ollama pull deepseek-coder:6.7b-instruct-q8_0_
+-   That's it! This extension will validate the models are configured correctly in it's VSCode settings upon launch.
+
+## Features
+
+### Code Completion
+
+The AI will look for natural pauses in typing to decide when to offer code suggestions (keep in mind the AI is limited by your machine speed).
+
+<p align="center" width="100%">
+    <video controls autoplay loop muted>
+        <source src="./docs/CodeCompletion.mp4" type="video/mp4">
+    </video>
+</p>
+
+### Interactive Chat
+
+Talk to the AI naturally! It will use open files as context to answer your question, or simply select a section of code to use as context.
+
+<p align="center" width="100%">
+    <video controls autoplay loop muted>
+        <source src="./docs/Chat_WriteTest.mp4" type="video/mp4">
+    </video>
+</p>
+
+<p align="center" width="100%">
+    <video controls autoplay loop muted>
+        <source src="./docs/Chat.mp4" type="video/mp4">
+    </video>
+</p>
 
 ## Why Ollama?
 
@@ -17,22 +55,13 @@ Currently this extension only runs models locally using [Ollama](https://ollama.
 ### Supported Models
 
 The extension uses a separate model for chat and code completion. This is due to the fact that different types of models have different strengths, mixing and matching offers the best result.
-
 Supported Models for _Code Completion_:
 
 -   Deepseek-base _(tested with: deepseek-coder:6.7b-base-q4_1)_
 -   Codellama-code _(tested with: codellama:7b-code-q4_K_M)_
-
-Supported Models for _Chat_:
-
+    Supported Models for _Chat_:
 -   Deepseek-Instruct _(tested with: deepseek-coder:6.7b-instruct-q8_0)_
 -   Codellama-Instruct _(tested with: codellama:7b-instruct)_
-
-### Installing and setting up Ollama
-
--   Download and Install [Ollama](https://ollama.ai/)
--   Find a supported model above and run **ollama pull model**
--   Models do not need to be explicitly run, just exist inside ollama
 
 ## Features
 
@@ -43,20 +72,18 @@ Interactive chat - look for the airplane icon in the side bar.
 
 This extension leverages Ollama due to it's simplicity and ability to deliver the right container optimized for your running environment.
 However good AI performance relies on your machine specs, so if you do not have the ability to GPU accelerate, responses may be slow.
-
 During startup the extension will verify the models you have configured in the VSCode settings pane for this extension, the extension does have some defaults:
 
 **Code Model** - deepseek-coder:6.7b-base-q4_1
-
 **Chat Model** - deepseek-coder:6.7b-instruct-q8_0
 
 The models above will require enough RAM to run them correctly, you should have at least 12GB of ram on your machine if you are running these models, if you don't have enough ram then choose a smaller model will won't perform as well.
 
 ## Release Notes
 
-### 1.0.0
+### 0.0.5
 
-Initial release of WingMan!
+Initial pre-release of WingMan!
 
 ---
 

@@ -1,8 +1,8 @@
 {
-	"name": "wing-man",
+	"name": "wingman-ai",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -26,7 +26,7 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/RussellCanfield/wing-man"
+		"url": "https://github.com/RussellCanfield/wingman-ai"
 	},
 	"engines": {
 		"vscode": "^1.84.0"
