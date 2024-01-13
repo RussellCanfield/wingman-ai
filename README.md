@@ -8,7 +8,7 @@ The Wingman extension brings high quality AI assisted coding right to your compu
 
 ## 🚀 Getting Started
 
--   Install this extension from the VS Code Marketplace: [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=wingman.wingman)
+-   Install this extension from the VS Code Marketplace: [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man)
 -   Install [Ollama](https://ollama.ai/)
 -   Install the supported local models by running the following command(s):
     **Example**:
