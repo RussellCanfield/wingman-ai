@@ -22,27 +22,15 @@ The Wingman extension brings high quality AI assisted coding right to your compu
 
 The AI will look for natural pauses in typing to decide when to offer code suggestions (keep in mind the AI is limited by your machine speed).
 
-<p align="center" width="100%">
-    <video controls autoplay loop muted>
-        <source src="https://youtu.be/panJL4DUGkA" type="video/mp4">
-    </video>
-</p>
+[![Wingman AI code completion example](https://img.youtube.com/vi/panJL4DUGkA/0.jpg)](https://www.youtube.com/watch?v=panJL4DUGkA)
 
 ### Interactive Chat
 
 Talk to the AI naturally! It will use open files as context to answer your question, or simply select a section of code to use as context.
 
-<p align="center" width="100%">
-    <video controls autoplay loop muted>
-        <source src="./docs/Chat_WriteTest.mp4" type="video/mp4">
-    </video>
-</p>
+[![Wingman AI chat example](https://img.youtube.com/vi/1W3h2mOdjmc/0.jpg)](https://www.youtube.com/watch?v=1W3h2mOdjmc)
 
-<p align="center" width="100%">
-    <video controls autoplay loop muted>
-        <source src="./docs/Chat.mp4" type="video/mp4">
-    </video>
-</p>
+[![Wingman AI chat example](https://img.youtube.com/vi/2sJZpyYi3Fc/0.jpg)](https://www.youtube.com/watch?v=2sJZpyYi3Fc)
 
 ## Why Ollama?
 
