@@ -8,13 +8,13 @@ The Wingman extension brings high quality AI assisted coding right to your compu
 
 ## 🚀 Getting Started
 
--   Install this extension from the VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=wingman.wingman
+-   Install this extension from the VS Code Marketplace: [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=wingman.wingman)
 -   Install [Ollama](https://ollama.ai/)
 -   Install the supported local models by running the following command(s):
     **Example**:
     -   _ollama pull deepseek-coder:6.7b-base-q4_1_
     -   _ollama pull deepseek-coder:6.7b-instruct-q8_0_
--   That's it! This extension will validate the models are configured correctly in it's VSCode settings upon launch.
+-   That's it! This extension will validate that the models are configured correctly in it's VSCode settings upon launch.
 
 ## Features
 
@@ -24,7 +24,7 @@ The AI will look for natural pauses in typing to decide when to offer code sugge
 
 <p align="center" width="100%">
     <video controls autoplay loop muted>
-        <source src="./docs/CodeCompletion.mp4" type="video/mp4">
+        <source src="https://youtu.be/panJL4DUGkA" type="video/mp4">
     </video>
 </p>
 
