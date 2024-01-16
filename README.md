@@ -64,6 +64,22 @@ Interactive chat - look for the airplane icon in the side bar.
 
 ## FAQ
 
+-   _How can I change which models are being used?_ This extension uses settings like any other VSCode extension, see the examples below. **NOTE Changing a model reloads reloading VSCode (on mac cmd+R).**
+
+<p align="center" width="100%">
+    <img width="50%" src="./docs/ExtensionSettings.png">
+</p>
+
+<p align="center" width="100%">
+    <img width="50%" src="./docs/OllamaSettings.png">
+</p>
+
+-   _The AI models feel slow, why?_ As of _pre-release 0.0.6_ we've added an indicator in the bottom status bar to show you when an AI model is actively process:
+
+<p align="center" width="100%">
+    <img width="20%" src="./docs/StatusBar.png">
+</p>
+
 -   _Why do some models have "q2" or "q4" after the name?_ [Information on model Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization)
 
 ## Troubleshooting
