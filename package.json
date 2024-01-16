@@ -91,7 +91,7 @@
 			"wing-man": [
 				{
 					"id": "wing-man-chat-view",
-					"name": "Helping you write the best code!",
+					"name": "We won't leave you hanging!",
 					"type": "webview"
 				}
 			]

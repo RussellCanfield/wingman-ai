@@ -44,6 +44,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		token.onCancellationRequested((e) => {
 			console.log(e);
 			abortController.abort();
+			eventEmitter._onQueryComplete.fire();
 		});
 
 		this._disposables.push(
@@ -273,12 +274,31 @@ function getChatContext(): CodeContextDetails | undefined {
 		);
 	} else {
 		const currentLine = selection.active.line;
-		const beginningWindowLine = document.lineAt(
-			Math.max(0, currentLine - lineWindow)
-		);
-		const endWindowLine = document.lineAt(
-			Math.min(document.lineCount - 1, currentLine + lineWindow)
-		);
+		let text = document.lineAt(currentLine).text;
+
+		let upperLine = currentLine;
+		let lowerLine = currentLine;
+
+		// Go upwards
+		while (text.length < 2045 && upperLine > 0) {
+			upperLine--;
+			text = document.lineAt(upperLine).text + "\n" + text;
+		}
+
+		// Go downwards
+		while (text.length < 2045 && lowerLine < document.lineCount - 1) {
+			lowerLine++;
+			text += "\n" + document.lineAt(lowerLine).text;
+		}
+
+		// If the text is longer than 2045 characters, trim it
+		if (text.length > 2045) {
+			text = text.substr(0, 2045);
+		}
+
+		const beginningWindowLine = document.lineAt(upperLine);
+		const endWindowLine = document.lineAt(lowerLine);
+
 		codeContextRange = new vscode.Range(
 			beginningWindowLine.range.start,
 			endWindowLine.range.end

@@ -6,15 +6,13 @@ import {
 	InlineCompletionItem,
 	InlineCompletionItemProvider,
 	Position,
-	Range,
 	TextDocument,
 } from "vscode";
 import { AIProvider } from "../service/base";
 import { eventEmitter } from "../events/eventEmitter";
 
 let timeout: NodeJS.Timeout | undefined;
-const newLine = new RegExp(/\r?\n/);
-const startPosition = new Position(0, 0);
+const context_length = 4096;
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
@@ -44,10 +42,6 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		this._aiProvider = aiProvider;
 	}
 
-	getSafeWindow = (lineNumber: number, windowSize: number) => {
-		lineNumber - windowSize < 0 ? 0 : lineNumber - windowSize;
-	};
-
 	async provideInlineCompletionItems(
 		document: TextDocument,
 		position: Position,
@@ -61,7 +55,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			eventEmitter._onQueryComplete.fire();
 		});
 
-		const prefix = this.getPreContent();
+		const prefix = this.getPrefixContent();
 		const suffix = this.getSuffixContent();
 
 		if (timeout) {
@@ -78,25 +72,30 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}, 300);
 		});
 	}
-	private getPreContent() {
+
+	private getPrefixContent() {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) {
 			return "";
 		}
 
-		const lineWindow = 15;
-
 		const { document, selection } = editor;
 
-		const currentLine = selection.active.line;
-		const beginningWindowLine = document.lineAt(
-			Math.max(0, currentLine - lineWindow)
-		);
-		const range = new vscode.Range(
-			beginningWindowLine.range.start,
-			selection.end
-		);
-		return document.getText(range);
+		let currentLine = selection.active.line;
+		let text = document.lineAt(currentLine).text;
+		const halfContext = context_length / 2;
+
+		while (text.length < halfContext && currentLine > 0) {
+			currentLine--;
+			text = document.lineAt(currentLine).text + "\n" + text;
+		}
+
+		if (text.length > halfContext) {
+			const start = text.length - halfContext;
+			text = text.substring(start, text.length);
+		}
+
+		return text;
 	}
 
 	private getSuffixContent() {
@@ -105,22 +104,25 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			return "";
 		}
 
-		const lineWindow = 15;
-
 		const { document, selection } = editor;
 
-		const currentLine = selection.active.line;
-		const beginningWindowLine = document.lineAt(
-			Math.min(document.lineCount - 1, currentLine + 1)
-		);
-		const endWindowLine = document.lineAt(
-			Math.min(document.lineCount - 1, currentLine + lineWindow)
-		);
-		const range = new vscode.Range(
-			beginningWindowLine.range.start,
-			endWindowLine.range.end
-		);
-		return document.getText(range);
+		let currentLine = selection.active.line;
+		let text = document.lineAt(currentLine).text;
+		const halfContext = context_length / 2;
+
+		while (
+			text.length < halfContext &&
+			currentLine < document.lineCount - 1
+		) {
+			currentLine++;
+			text += "\n" + document.lineAt(currentLine).text;
+		}
+
+		if (text.length > halfContext) {
+			text = text.substring(0, halfContext);
+		}
+
+		return text;
 	}
 
 	async bouncedRequest(

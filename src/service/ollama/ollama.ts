@@ -134,6 +134,8 @@ export class Ollama implements AIProvider {
 		ending: string,
 		signal: AbortSignal
 	): Promise<string> {
+		const startTime = new Date().getTime();
+
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
 			prompt: this.codeModel!.CodeCompletionPrompt.replace(
@@ -156,6 +158,11 @@ export class Ollama implements AIProvider {
 			codeRequestOptions,
 			signal
 		);
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		console.log(`Ollama Execution time: ${executionTime} seconds`);
 
 		if (!response?.body) {
 			return "";
