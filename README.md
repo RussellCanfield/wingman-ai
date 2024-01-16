@@ -74,7 +74,7 @@ Interactive chat - look for the airplane icon in the side bar.
     <img width="50%" src="./docs/OllamaSettings.png">
 </p>
 
--   _The AI models feel slow, why?_ As of _pre-release 0.0.6_ we've added an indicator in the bottom status bar to show you when an AI model is actively process:
+-   _The AI models feel slow, why?_ As of _pre-release 0.0.6_ we've added an indicator in the bottom status bar to show you when an AI model is actively processing. If you aren't using GPU accelerated hardware, you may need to look into [Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization)].
 
 <p align="center" width="100%">
     <img width="20%" src="./docs/StatusBar.png">
