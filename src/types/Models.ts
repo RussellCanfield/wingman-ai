@@ -1,16 +1,8 @@
-import { OllamaRequest } from "../domain/types";
-
-export abstract class BaseModel {
-	abstract get ModelPrefix(): string;
-
-	abstract getCodeCompletionPayload(
-		beginning: string,
-		ending: string
-	): OllamaRequest;
-
-	abstract getChatPayload(
-		prompt: string,
-		ragContent: string,
-		context: number[]
-	): OllamaRequest;
+export interface AIModel {
+	get CodeCompletionPrompt(): string;
+	get ChatPrompt(): string;
 }
+
+export interface OllamaAIModel extends AIModel {}
+
+export interface HuggingFaceAIModel extends AIModel {}

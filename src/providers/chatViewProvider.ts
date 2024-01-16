@@ -1,22 +1,22 @@
 import * as vscode from "vscode";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
-import { aiService } from "../service/ai.service";
-import { BaseModel } from "../types/Models";
+import { AIProvider } from "../service/base";
+import { eventEmitter } from "../events/eventEmitter";
 
 let abortController = new AbortController();
-let previousResponseContext: number[] = [];
+const context_length = 4096;
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wing-man-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
-	private _model: BaseModel;
+	private _aiProvider: AIProvider;
 
 	constructor(
-		model: BaseModel,
+		aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext
 	) {
-		this._model = model;
+		this._aiProvider = aiProvider;
 	}
 
 	dispose() {
@@ -45,6 +45,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		token.onCancellationRequested((e) => {
 			console.log(e);
 			abortController.abort();
+			eventEmitter._onQueryComplete.fire();
 		});
 
 		this._disposables.push(
@@ -73,7 +74,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						break;
 					}
 					case "clear": {
-						previousResponseContext = [];
+						this._aiProvider.clearChatHistory();
 						break;
 					}
 					case "showContext": {
@@ -168,29 +169,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			});
 		}
 
-		const request = this._model.getChatPayload(
+		eventEmitter._onQueryStart.fire();
+
+		const response = this._aiProvider.chat(
 			prompt,
 			ragContext,
-			previousResponseContext
-		);
-
-		const response = await aiService.generate(
-			request,
 			abortController.signal
 		);
 
-		previousResponseContext = [];
-
 		for await (const chunk of response) {
-			const { response, context } = chunk;
-
-			previousResponseContext = previousResponseContext.concat(context);
-
 			webviewView.webview.postMessage({
 				command: "response",
-				value: response,
+				value: chunk,
 			});
 		}
+
+		eventEmitter._onQueryComplete.fire();
 
 		webviewView.webview.postMessage({
 			command: "done",
@@ -281,12 +275,35 @@ function getChatContext(): CodeContextDetails | undefined {
 		);
 	} else {
 		const currentLine = selection.active.line;
-		const beginningWindowLine = document.lineAt(
-			Math.max(0, currentLine - lineWindow)
-		);
-		const endWindowLine = document.lineAt(
-			Math.min(document.lineCount - 1, currentLine + lineWindow)
-		);
+		let text = document.lineAt(currentLine).text;
+
+		let upperLine = currentLine;
+		let lowerLine = currentLine;
+
+		const halfContext = context_length / 2;
+
+		// Go upwards
+		while (text.length < halfContext && upperLine > 0) {
+			upperLine--;
+			text = document.lineAt(upperLine).text + "\n" + text;
+		}
+
+		// Go downwards
+		while (
+			text.length < halfContext &&
+			lowerLine < document.lineCount - 1
+		) {
+			lowerLine++;
+			text += "\n" + document.lineAt(lowerLine).text;
+		}
+
+		if (text.length > halfContext) {
+			text = text.substring(0, halfContext);
+		}
+
+		const beginningWindowLine = document.lineAt(upperLine);
+		const endWindowLine = document.lineAt(lowerLine);
+
 		codeContextRange = new vscode.Range(
 			beginningWindowLine.range.start,
 			endWindowLine.range.end
