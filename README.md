@@ -4,7 +4,7 @@
     <img width="33%" src="./docs/logo.jpeg">
 </p>
 
-The Wingman extension brings high quality AI assisted coding right to your computer, it's 100% free and data never leaves your machine - meaning it's completely private! Since the current release of this extension relies on running the AI models locally using [Ollama](https://ollama.ai/), it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards) for the best performance.
+The [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) extension brings high quality AI assisted coding right to your computer, it's 100% free and data never leaves your machine - meaning it's completely private! Since the current release of this extension relies on running the AI models locally using [Ollama](https://ollama.ai/), it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards) for the best performance.
 
 ## 🚀 Getting Started
 
@@ -76,7 +76,7 @@ During startup the extension will verify the models you have configured in the V
 
 **Chat Model** - deepseek-coder:6.7b-instruct-q8_0
 
-The models above will require enough RAM to run them correctly, you should have at least 12GB of ram on your machine if you are running these models, if you don't have enough ram then choose a smaller model will won't perform as well.
+The models above will require enough RAM to run them correctly, you should have at least 12GB of ram on your machine if you are running these models. If you don't have enough ram, then choose a smaller model but be aware that it won't perform as well. Also see [information on model Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization).
 
 ## Release Notes
 
