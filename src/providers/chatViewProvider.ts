@@ -4,6 +4,7 @@ import { AIProvider } from "../service/base";
 import { eventEmitter } from "../events/eventEmitter";
 
 let abortController = new AbortController();
+const context_length = 4096;
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wing-man-chat-view";
@@ -279,21 +280,25 @@ function getChatContext(): CodeContextDetails | undefined {
 		let upperLine = currentLine;
 		let lowerLine = currentLine;
 
+		const halfContext = context_length / 2;
+
 		// Go upwards
-		while (text.length < 2045 && upperLine > 0) {
+		while (text.length < halfContext && upperLine > 0) {
 			upperLine--;
 			text = document.lineAt(upperLine).text + "\n" + text;
 		}
 
 		// Go downwards
-		while (text.length < 2045 && lowerLine < document.lineCount - 1) {
+		while (
+			text.length < halfContext &&
+			lowerLine < document.lineCount - 1
+		) {
 			lowerLine++;
 			text += "\n" + document.lineAt(lowerLine).text;
 		}
 
-		// If the text is longer than 2045 characters, trim it
-		if (text.length > 2045) {
-			text = text.substr(0, 2045);
+		if (text.length > halfContext) {
+			text = text.substring(0, halfContext);
 		}
 
 		const beginningWindowLine = document.lineAt(upperLine);

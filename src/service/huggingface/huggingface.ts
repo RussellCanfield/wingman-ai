@@ -140,10 +140,10 @@ export class HuggingFace implements AIProvider {
 				beginning
 			).replace("{ending}", ending),
 			parameters: {
-				repetition_penalty: 1.1,
-				temperature: 0.6,
-				top_k: 50,
-				top_p: 0.3,
+				repetition_penalty: 1.3,
+				temperature: 0.4,
+				top_k: 30,
+				top_p: 0.2,
 				max_new_tokens: 1024,
 				return_full_text: false,
 				wait_for_model: true,
@@ -195,7 +195,7 @@ export class HuggingFace implements AIProvider {
 				.replace(/\t/, ""),
 			parameters: {
 				temperature: 0.4,
-				top_k: 50,
+				top_k: 30,
 				top_p: 0.2,
 				return_full_text: false,
 				max_new_tokens: 1024,

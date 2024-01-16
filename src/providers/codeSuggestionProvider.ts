@@ -107,7 +107,11 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		const { document, selection } = editor;
 
 		let currentLine = selection.active.line;
-		let text = document.lineAt(currentLine).text;
+		if (currentLine < document.lineCount - 1) {
+			currentLine++;
+		}
+
+		let text = document.lineAt(currentLine).text + "\n";
 		const halfContext = context_length / 2;
 
 		while (
