@@ -61,7 +61,7 @@ export class HuggingFace implements AIProvider {
 			return new Mistral();
 		} else {
 			vscode.window.showErrorMessage(
-				"Invalid code model name, currently code supports CodeLlama and Mistral models."
+				"Invalid code model name, currently code supports the CodeLlama model."
 			);
 			throw new Error("Invalid code model name");
 		}
@@ -74,7 +74,7 @@ export class HuggingFace implements AIProvider {
 			return new Mistral();
 		} else {
 			vscode.window.showErrorMessage(
-				"Invalid chat model name, currently chat supports CodeLlama and Mistral models."
+				"Invalid chat model name, currently chat supports the Mistral model."
 			);
 			throw new Error("Invalid chat model name");
 		}
