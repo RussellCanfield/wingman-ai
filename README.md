@@ -8,7 +8,7 @@ The [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.win
 
 ## 🚀 Getting Started
 
-We recommend starting with Deepseek models, [see why here](https://huggingface.co/spaces/mike-ravkine/can-ai-code-results).
+We recommend starting with Ollama with a deepseek model(s), [see why here](https://huggingface.co/spaces/mike-ravkine/can-ai-code-results).
 
 -   Install this extension from the VS Code Marketplace: [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man)
 -   Install [Ollama](https://ollama.ai/)
@@ -16,7 +16,7 @@ We recommend starting with Deepseek models, [see why here](https://huggingface.c
     **Example**:
     -   _ollama pull deepseek-coder:6.7b-base-q4_1_
     -   _ollama pull deepseek-coder:6.7b-instruct-q8_0_
--   That's it! This extension will validate that the models are configured correctly in it's VSCode settings upon launch.
+-   That's it! This extension will validate that the models are configured correctly in it's VSCode settings upon launch. If you wish to customize which models run see the [FAQ section](#faq).
 
 ## Features
 
@@ -34,15 +34,21 @@ Talk to the AI naturally! It will use open files as context to answer your quest
 
 [![Wingman AI chat example](https://img.youtube.com/vi/2sJZpyYi3Fc/0.jpg)](https://www.youtube.com/watch?v=2sJZpyYi3Fc)
 
-## Why Ollama?
+## AI Providers
+
+### Ollama
+
+[Ollama](https://ollama.ai/) is a free and open-source AI model provider, allowing users to run their own local models.
+
+#### Why Ollama?
 
 [Ollama](https://ollama.ai/) was chosen for it's simplicity, allowing users to pull a number of models in different configurations and update them at will. Ollama will pull optimized models based on your system architecture, however if you do not have a GPU accelerated machine, models will be slower.
 
-## Setting up Ollama
+#### Setting up Ollama
 
-Currently this extension only runs models locally using [Ollama](https://ollama.ai/). Ollama has a number of open source models available that are capable of writing high quality code.
+Follow the directions on the [Ollama](https://ollama.ai/) website. Ollama has a number of open source models available that are capable of writing high quality code. See [getting started](#🚀-getting-started) for how to pull and customize models.
 
-### Supported Models
+#### Supported Models
 
 The extension uses a separate model for chat and code completion. This is due to the fact that different types of models have different strengths, mixing and matching offers the best result.
 
@@ -57,10 +63,33 @@ Supported Models for _Chat_:
 -   Codellama-Instruct _(tested with: [codellama:7b-instruct](https://ollama.ai/library/codellama:7b-instruct))_
 -   Phind-CodeLlama - _(tested with: [phind-codellama:34b-v2-q2_K](https://ollama.ai/library/phind-codellama:34b-v2-q2_K))_
 
-## Features
+---
 
-Code completion based on the active code window.
-Interactive chat - look for the airplane icon in the side bar.
+### Hugging Face
+
+[Hugging Face](https://huggingface.co/) supports hosting and training models, but also supports running many models _(under 10GB)_ for free! All you have to do is [create a free account](https://huggingface.co/docs/api-inference/quicktour). **_This does mean that data leaves your machine!_** But this is an excellent option if you don't have the compute locally to run Ollama.
+
+#### Setting up Hugging Face
+
+Once you have a Hugging Face account and an API key, all you need to do is open the VSCode settings pane for this extension "Wingman" (see [FAQ](#faq)).
+
+Once it's open, select "HuggingFace" as the AI Provider and add your API key under the HuggingFace section:
+
+<p align="center" width="100%">
+    <img width="50%" src="./docs/HuggingFaceSettings.png">
+</p>
+
+#### Supported Models
+
+The extension uses a separate model for chat and code completion. This is due to the fact that different types of models have different strengths, mixing and matching offers the best result.
+
+Supported Models for _Code Completion_:
+
+-   CodeLlama _(tested with: [codellama/CodeLlama-7b-hf](https://huggingface.co/codellama/CodeLlama-7b-hf))_
+
+Supported Models for _Chat_:
+
+-   Mistral v0.2 _(tested with: [mistralai/Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2))_
 
 ## FAQ
 
@@ -96,9 +125,17 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.1.0
+
+Initial release of Wingman-AI! This includes:
+
+-   Ollama Phind-Codellama chat model support.
+-   Hugging Face support.
+-   Expanded context for chat and code completion.
+
 ### 0.0.5
 
-Initial pre-release of WingMan!
+Initial pre-release of Wingman-AI!
 
 ---
 
