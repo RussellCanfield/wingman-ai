@@ -42,6 +42,13 @@ export class HuggingFace implements AIProvider {
 		if (huggingFaceConfig) {
 			this.settings = huggingFaceConfig;
 
+			if (!this.settings.apiKey.trim()) {
+				vscode.window.showErrorMessage(
+					"Hugging Face API key is required."
+				);
+				throw new Error("Missing Hugging Face API key.");
+			}
+
 			this.chatModel = this.getChatModel(this.settings.chatModel);
 			this.codeModel = this.getCodeModel(this.settings.codeModel);
 		}
@@ -53,7 +60,7 @@ export class HuggingFace implements AIProvider {
 		} else if (codeModel.includes("mistral")) {
 			return new Mistral();
 		} else {
-			vscode.window.showInformationMessage(
+			vscode.window.showErrorMessage(
 				"Invalid code model name, currently code supports CodeLlama and Mistral models."
 			);
 			throw new Error("Invalid code model name");
@@ -66,7 +73,7 @@ export class HuggingFace implements AIProvider {
 		} else if (chatModel.includes("mistral")) {
 			return new Mistral();
 		} else {
-			vscode.window.showInformationMessage(
+			vscode.window.showErrorMessage(
 				"Invalid chat model name, currently chat supports CodeLlama and Mistral models."
 			);
 			throw new Error("Invalid chat model name");
