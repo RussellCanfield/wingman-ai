@@ -39,7 +39,7 @@ export class Ollama implements AIProvider {
 			case codeModel.startsWith("deepseek"):
 				return new Deepseek();
 			default:
-				vscode.window.showInformationMessage(
+				vscode.window.showErrorMessage(
 					"Invalid code model name, currently code supports CodeLlama and Deepseek models."
 				);
 				throw new Error("Invalid code model name");
@@ -55,7 +55,7 @@ export class Ollama implements AIProvider {
 			case chatModel.startsWith("phind"):
 				return new PhindCodeLlama();
 			default:
-				vscode.window.showInformationMessage(
+				vscode.window.showErrorMessage(
 					"Invalid chat model name, currently chat supports CodeLlama, Phind CodeLlama and Deepseek models."
 				);
 				throw new Error("Invalid chat model name");
