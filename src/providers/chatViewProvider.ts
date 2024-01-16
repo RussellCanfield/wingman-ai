@@ -1,22 +1,21 @@
 import * as vscode from "vscode";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
-import { aiService } from "../service/ai.service";
-import { BaseModel } from "../types/Models";
+import { AIProvider } from "../service/base";
+import { eventEmitter } from "../events/eventEmitter";
 
 let abortController = new AbortController();
-let previousResponseContext: number[] = [];
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wing-man-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
-	private _model: BaseModel;
+	private _aiProvider: AIProvider;
 
 	constructor(
-		model: BaseModel,
+		aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext
 	) {
-		this._model = model;
+		this._aiProvider = aiProvider;
 	}
 
 	dispose() {
@@ -73,7 +72,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						break;
 					}
 					case "clear": {
-						previousResponseContext = [];
+						this._aiProvider.clearChatHistory();
 						break;
 					}
 					case "showContext": {
@@ -168,29 +167,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			});
 		}
 
-		const request = this._model.getChatPayload(
+		eventEmitter._onQueryStart.fire();
+
+		const response = this._aiProvider.chat(
 			prompt,
 			ragContext,
-			previousResponseContext
-		);
-
-		const response = await aiService.generate(
-			request,
 			abortController.signal
 		);
 
-		previousResponseContext = [];
-
 		for await (const chunk of response) {
-			const { response, context } = chunk;
-
-			previousResponseContext = previousResponseContext.concat(context);
-
 			webviewView.webview.postMessage({
 				command: "response",
-				value: response,
+				value: chunk,
 			});
 		}
+
+		eventEmitter._onQueryComplete.fire();
 
 		webviewView.webview.postMessage({
 			command: "done",

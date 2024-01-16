@@ -8,6 +8,8 @@ The Wingman extension brings high quality AI assisted coding right to your compu
 
 ## 🚀 Getting Started
 
+We recommend starting with Deepseek models, [see why here](https://huggingface.co/spaces/mike-ravkine/can-ai-code-results).
+
 -   Install this extension from the VS Code Marketplace: [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man)
 -   Install [Ollama](https://ollama.ai/)
 -   Install the supported local models by running the following command(s):
@@ -43,18 +45,26 @@ Currently this extension only runs models locally using [Ollama](https://ollama.
 ### Supported Models
 
 The extension uses a separate model for chat and code completion. This is due to the fact that different types of models have different strengths, mixing and matching offers the best result.
+
 Supported Models for _Code Completion_:
 
--   Deepseek-base _(tested with: deepseek-coder:6.7b-base-q4_1)_
--   Codellama-code _(tested with: codellama:7b-code-q4_K_M)_
-    Supported Models for _Chat_:
--   Deepseek-Instruct _(tested with: deepseek-coder:6.7b-instruct-q8_0)_
--   Codellama-Instruct _(tested with: codellama:7b-instruct)_
+-   Deepseek-base _(tested with: [deepseek-coder:6.7b-base-q4_1](https://ollama.ai/library/deepseek-coder:6.7b-base-q4_1))_
+-   Codellama-code _(tested with: [codellama:7b-code-q4_K_M](https://ollama.ai/library/codellama:7b-code-q4_K_M))_
+
+Supported Models for _Chat_:
+
+-   Deepseek-Instruct _(tested with: [deepseek-coder:6.7b-instruct-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0))_
+-   Codellama-Instruct _(tested with: [codellama:7b-instruct](https://ollama.ai/library/codellama:7b-instruct))_
+-   Phind-CodeLlama - _(tested with: [phind-codellama:34b-v2-q2_K](https://ollama.ai/library/phind-codellama:34b-v2-q2_K))_
 
 ## Features
 
 Code completion based on the active code window.
 Interactive chat - look for the airplane icon in the side bar.
+
+## FAQ
+
+-   _Why do some models have "q2" or "q4" after the name?_ [Information on model Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization)
 
 ## Troubleshooting
 

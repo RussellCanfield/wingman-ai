@@ -1,8 +1,8 @@
 {
-	"name": "wingman-ai",
+	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.0.5",
+	"version": "0.0.6",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -59,13 +59,25 @@
 		"refactor",
 		"ruby",
 		"snippets",
-		"chat"
+		"chat",
+		"python",
+		"java",
+		"ollama"
 	],
 	"activationEvents": [
 		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
+		"icons": {
+			"wingman-logo": {
+				"description": "Wingman icon",
+				"default": {
+					"fontPath": "media/wingman.woff",
+					"fontCharacter": "\\e900"
+				}
+			}
+		},
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -87,6 +99,15 @@
 		"configuration": {
 			"title": "Wingman",
 			"properties": {
+				"Wingman.Provider": {
+					"type": "string",
+					"default": "Ollama",
+					"enum": [
+						"Ollama",
+						"HuggingFace"
+					],
+					"description": "Specifies which AI provider to use - some require configuration."
+				},
 				"Wingman.Ollama": {
 					"type": "object",
 					"description": "Ollama settings",
@@ -122,6 +143,38 @@
 							"type": "string",
 							"default": "/api/show",
 							"description": "Path for model info"
+						}
+					}
+				},
+				"Wingman.HuggingFace": {
+					"type": "object",
+					"description": "HuggingFace settings",
+					"default": {
+						"chatModel": "mistralai/Mistral-7B-Instruct-v0.2",
+						"codeModel": "codellama/CodeLlama-7b-hf",
+						"baseUrl": "https://api-inference.huggingface.co/models/",
+						"apiKey": "ADD ME"
+					},
+					"properties": {
+						"chatModel": {
+							"type": "string",
+							"default": "mistralai/Mistral-7B-Instruct-v0.2",
+							"description": "The model to use for the chat"
+						},
+						"codeModel": {
+							"type": "string",
+							"default": "codellama/CodeLlama-7b-hf",
+							"description": "The model to use for the code completion"
+						},
+						"baseUrl": {
+							"type": "string",
+							"default": "https://api-inference.huggingface.co/models/",
+							"description": "Base URL for the ollama instance"
+						},
+						"apiKey": {
+							"type": "string",
+							"default": "ADD ME",
+							"description": "The API key to use for HuggingFace"
 						}
 					}
 				}

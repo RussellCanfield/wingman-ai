@@ -9,8 +9,8 @@ import {
 	Range,
 	TextDocument,
 } from "vscode";
-import { aiService } from "../service/ai.service";
-import { BaseModel } from "../types/Models";
+import { AIProvider } from "../service/base";
+import { eventEmitter } from "../events/eventEmitter";
 
 let timeout: NodeJS.Timeout | undefined;
 const newLine = new RegExp(/\r?\n/);
@@ -38,10 +38,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		{ scheme: "file", language: "json" },
 	];
 
-	private _model: BaseModel;
+	private _aiProvider: AIProvider;
 
-	constructor(model: BaseModel) {
-		this._model = model;
+	constructor(aiProvider: AIProvider) {
+		this._aiProvider = aiProvider;
 	}
 
 	getSafeWindow = (lineNumber: number, windowSize: number) => {
@@ -58,13 +58,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		token.onCancellationRequested((e) => {
 			console.log(e);
 			abort.abort();
+			eventEmitter._onQueryComplete.fire();
 		});
-		const inline = Boolean(document.lineAt(position).text.trim());
-		// const [topContent, bottom, positionFromBottom] = this.getPromptContent(
-		// 	document,
-		// 	position,
-		// 	inline
-		// );
 
 		const prefix = this.getPreContent();
 		const suffix = this.getSuffixContent();
@@ -83,70 +78,6 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}, 300);
 		});
 	}
-
-	private getPromptContent(
-		document: TextDocument,
-		position: Position,
-		inline: boolean
-	): [string, string, Position] {
-		let topContent = "";
-		if (!inline) {
-			const rg = new Range(startPosition, position);
-			topContent = document.getText(rg);
-		} else {
-			topContent = document.lineAt(position).text;
-		}
-
-		let bottom = "";
-		let positionFromBottom = startPosition;
-		if (!inline) {
-			const after = new Position(position.line + 1, 0);
-			const lastPosition = document.lineAt(document.lineCount - 1).range
-				.end;
-			if (lastPosition.line !== position.line) {
-				const end = new Range(after, lastPosition);
-				bottom = document.getText(end);
-			}
-			positionFromBottom = new Position(
-				lastPosition.line - after.line,
-				0
-			);
-		}
-
-		return [topContent, bottom, positionFromBottom];
-	}
-
-	private stripTopAndBottom(
-		code: string,
-		topPos: Position,
-		fromBottom: Position
-	) {
-		let linePost = 0;
-		let lineCount = 0;
-		let linesCharPos = new Map<number, number>();
-		for (let i = 0; i < code.length; i++) {
-			if (newLine.test(code[i])) {
-				linesCharPos.set(lineCount, linePost);
-				lineCount++;
-				linePost = i + 1;
-			}
-		}
-		const topCharCount = linesCharPos.get(topPos.line - 1);
-		if (!topCharCount) {
-			return "";
-		}
-		let cleanedCode = code;
-		if (fromBottom.line > 0) {
-			const lineToRemove = lineCount - fromBottom.line;
-			const lineToRemoveChar = linesCharPos.get(lineToRemove);
-			if (lineToRemoveChar) {
-				cleanedCode = cleanedCode.substring(0, lineToRemoveChar);
-			}
-		}
-		cleanedCode = cleanedCode.substring(topCharCount + topPos.character);
-		return cleanedCode;
-	}
-
 	private getPreContent() {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) {
@@ -198,28 +129,13 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		suffix: string
 	): Promise<InlineCompletionItem[]> {
 		try {
-			const payload = this._model.getCodeCompletionPayload(
+			eventEmitter._onQueryStart.fire();
+			const codeResponse = await this._aiProvider.codeComplete(
 				prefix,
-				suffix
+				suffix,
+				signal
 			);
-			const codeResponse = await aiService.codeComplete(payload, signal);
-
-			// const codeResponse = await aiService.codeComplete(
-			// 	prompt,
-			// 	signal,
-			// 	[],
-			// 	doc
-			// );
-			// let cleanedCode = "";
-			// if (!inline) {
-			// 	cleanedCode = this.stripTopAndBottom(
-			// 		codeResponse,
-			// 		topPos,
-			// 		fromBottom
-			// 	);
-			// } else {
-			// 	cleanedCode = codeResponse.substring(topPos.character);
-			// }
+			eventEmitter._onQueryComplete.fire();
 			return [new InlineCompletionItem(codeResponse)];
 		} catch (error) {
 			console.warn(error);
