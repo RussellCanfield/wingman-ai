@@ -29,7 +29,17 @@ export class Ollama implements AIProvider {
 			this.codeModel = this.getCodeModel(this.settings.codeModel);
 		}
 
-		this.validateModelExists(this.settings?.chatModel ?? "unknown");
+		if (!this.validateModelExists(this.settings?.chatModel ?? "unknown")) {
+			vscode.window.showErrorMessage(
+				`Unable to verify Ollama has chat model: ${this.settings?.chatModel}, have you pulled the model or is the config wrong?`
+			);
+		}
+
+		if (!this.validateModelExists(this.settings?.codeModel ?? "unknown")) {
+			vscode.window.showErrorMessage(
+				`Unable to verify Ollama has code model: ${this.settings?.codeModel}, have you pulled the model or is the config wrong?`
+			);
+		}
 	}
 
 	private getCodeModel(codeModel: string): OllamaAIModel {

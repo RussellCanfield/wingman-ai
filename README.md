@@ -14,7 +14,7 @@ We recommend starting with Ollama with a deepseek model(s), [see why here](https
 -   Install [Ollama](https://ollama.ai/)
 -   Install the supported local models by running the following command(s):
     **Example**:
-    -   _ollama pull deepseek-coder:6.7b-base-q4_1_
+    -   _ollama pull deepseek-coder:6.7b-base-q8_0_
     -   _ollama pull deepseek-coder:6.7b-instruct-q8_0_
 -   That's it! This extension will validate that the models are configured correctly in it's VSCode settings upon launch. If you wish to customize which models run see the [FAQ section](#faq).
 
@@ -54,7 +54,7 @@ The extension uses a separate model for chat and code completion. This is due to
 
 Supported Models for _Code Completion_:
 
--   Deepseek-base _(tested with: [deepseek-coder:6.7b-base-q4_1](https://ollama.ai/library/deepseek-coder:6.7b-base-q4_1))_
+-   Deepseek-base _(tested with: [deepseek-coder:6.7b-base-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-base-q8_0))_
 -   Codellama-code _(tested with: [codellama:7b-code-q4_K_M](https://ollama.ai/library/codellama:7b-code-q4_K_M))_
 
 Supported Models for _Chat_:
@@ -117,13 +117,18 @@ This extension leverages Ollama due to it's simplicity and ability to deliver th
 However good AI performance relies on your machine specs, so if you do not have the ability to GPU accelerate, responses may be slow.
 During startup the extension will verify the models you have configured in the VSCode settings pane for this extension, the extension does have some defaults:
 
-**Code Model** - deepseek-coder:6.7b-base-q4_1
+**Code Model** - deepseek-coder:6.7b-base-q8_0
 
 **Chat Model** - deepseek-coder:6.7b-instruct-q8_0
 
 The models above will require enough RAM to run them correctly, you should have at least 12GB of ram on your machine if you are running these models. If you don't have enough ram, then choose a smaller model but be aware that it won't perform as well. Also see [information on model Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization).
 
 ## Release Notes
+
+### 0.1.1
+
+-   Fix a bug with the current line terminating too early in code completion.
+-   Default to a stronger model for code completion (now - deepseek-coder:6.7b-base-q8_0).
 
 ### 0.1.0
 

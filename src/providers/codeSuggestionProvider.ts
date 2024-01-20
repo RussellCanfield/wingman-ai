@@ -82,7 +82,9 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		const { document, selection } = editor;
 
 		let currentLine = selection.active.line;
-		let text = document.lineAt(currentLine).text;
+		let text = document
+			.lineAt(selection.active.line)
+			.text.substring(0, selection.active.character);
 		const halfContext = context_length / 2;
 
 		while (text.length < halfContext && currentLine > 0) {
@@ -107,11 +109,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		const { document, selection } = editor;
 
 		let currentLine = selection.active.line;
-		if (currentLine < document.lineCount - 1) {
-			currentLine++;
-		}
 
-		let text = document.lineAt(currentLine).text + "\n";
+		let text = document
+			.lineAt(selection.active.line)
+			.text.substring(selection.active.character);
 		const halfContext = context_length / 2;
 
 		while (

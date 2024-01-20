@@ -13,7 +13,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration("Wingman.Provider")) {
+			if (e.affectsConfiguration("Wingman")) {
 				vscode.commands.executeCommand("workbench.action.reloadWindow");
 			}
 		})
@@ -22,7 +22,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ChatViewProvider.viewType,
-			new ChatViewProvider(aiProvider, context)
+			new ChatViewProvider(aiProvider, context),
+			{
+				webviewOptions: {
+					retainContextWhenHidden: true,
+				},
+			}
 		)
 	);
 

@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -113,7 +113,7 @@
 					"description": "Ollama settings",
 					"default": {
 						"chatModel": "deepseek-coder:6.7b-instruct-q8_0",
-						"codeModel": "deepseek-coder:6.7b-base-q4_1",
+						"codeModel": "deepseek-coder:6.7b-base-q8_0",
 						"baseUrl": "http://localhost:11434",
 						"apiPath": "/api/generate",
 						"modelInfoPath": "/api/show"
@@ -126,7 +126,7 @@
 						},
 						"codeModel": {
 							"type": "string",
-							"default": "deepseek-coder:6.7b-base-q4_1",
+							"default": "deepseek-coder:6.7b-base-q8_0",
 							"description": "The model to use for the code completion"
 						},
 						"baseUrl": {

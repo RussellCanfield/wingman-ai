@@ -20,17 +20,28 @@ function ChatResponseList({
 	const ref = useRef<HTMLDivElement>(null);
 	const [userHasScrolled, setUserHasScrolled] = useState(false);
 
-	useEffect(() => {
-		if (ref.current && !userHasScrolled) {
+	const scrollToBottom = () => {
+		if (ref.current) {
 			ref.current.scrollIntoView({ block: "nearest" });
 		}
-	});
+	};
+
+	useEffect(() => {
+		if (ref.current) {
+			scrollToBottom();
+		}
+	}, [messages]);
 
 	useEffect(() => {
 		if (ref.current) {
 			const observer = new IntersectionObserver(
 				(entries) => {
-					setUserHasScrolled(!entries[0].isIntersecting);
+					if (!entries[0].isIntersecting) {
+						setUserHasScrolled(true);
+						return;
+					}
+
+					setUserHasScrolled(false);
 				},
 				{
 					root: ulRef.current,
@@ -45,7 +56,7 @@ function ChatResponseList({
 				observer.disconnect();
 			};
 		}
-	});
+	}, [ref.current]);
 
 	const chatHistory = useMemo(() => {
 		return messages.map(({ from, message, context }, index) => (
