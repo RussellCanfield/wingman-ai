@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -116,7 +116,9 @@
 						"codeModel": "deepseek-coder:6.7b-base-q8_0",
 						"baseUrl": "http://localhost:11434",
 						"apiPath": "/api/generate",
-						"modelInfoPath": "/api/show"
+						"modelInfoPath": "/api/show",
+						"codeMaxTokens": 1024,
+						"chatMaxTokens": 1024
 					},
 					"properties": {
 						"chatModel": {
@@ -143,6 +145,16 @@
 							"type": "string",
 							"default": "/api/show",
 							"description": "Path for model info"
+						},
+						"codeMaxTokens": {
+							"type": "number",
+							"default": 1024,
+							"description": "The maximum tokens generated for code completion responses"
+						},
+						"chatMaxTokens": {
+							"type": "number",
+							"default": 1024,
+							"description": "The maximum tokens generated for chat responses"
 						}
 					}
 				},
@@ -153,7 +165,9 @@
 						"chatModel": "mistralai/Mistral-7B-Instruct-v0.2",
 						"codeModel": "codellama/CodeLlama-7b-hf",
 						"baseUrl": "https://api-inference.huggingface.co/models/",
-						"apiKey": "ADD ME"
+						"apiKey": "ADD ME",
+						"codeMaxTokens": 1024,
+						"chatMaxTokens": 1024
 					},
 					"properties": {
 						"chatModel": {
@@ -175,6 +189,16 @@
 							"type": "string",
 							"default": "ADD ME",
 							"description": "The API key to use for HuggingFace"
+						},
+						"codeMaxTokens": {
+							"type": "number",
+							"default": 1024,
+							"description": "The maximum tokens generated for code completion responses"
+						},
+						"chatMaxTokens": {
+							"type": "number",
+							"default": 1024,
+							"description": "The maximum tokens generated for chat responses"
 						}
 					}
 				}

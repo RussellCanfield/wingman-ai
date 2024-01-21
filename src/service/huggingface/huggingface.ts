@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { AIProvider } from "../base";
-import { Settings } from "../../types/Settings";
+import { Settings, defaultMaxTokens } from "../../types/Settings";
 import { HuggingFaceAIModel } from "../../types/Models";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
@@ -151,7 +151,8 @@ export class HuggingFace implements AIProvider {
 				temperature: 0.4,
 				top_k: 30,
 				top_p: 0.2,
-				max_new_tokens: 1024,
+				max_new_tokens:
+					this.settings?.codeMaxTokens ?? defaultMaxTokens,
 				return_full_text: false,
 				wait_for_model: true,
 				do_sample: false,
@@ -184,14 +185,6 @@ export class HuggingFace implements AIProvider {
 		ragContent: string,
 		signal: AbortSignal
 	) {
-		//let chatPrompt = this.chatModel!.ChatPrompt;
-
-		// if (ragContent) {
-		// 	systemPrompt += `Here's some additional information that may help you generate a more accurate response.
-		//     Please determine if this information is relevant and can be used to supplement your response:
-		//     ${ragContent}`;
-		// }
-
 		const chatPayload: HuggingFaceRequest = {
 			inputs: this.chatModel!.ChatPrompt.replace(
 				"{chat_history}",
@@ -205,7 +198,8 @@ export class HuggingFace implements AIProvider {
 				top_k: 30,
 				top_p: 0.2,
 				return_full_text: false,
-				max_new_tokens: 1024,
+				max_new_tokens:
+					this.settings?.chatMaxTokens ?? defaultMaxTokens,
 			},
 		};
 

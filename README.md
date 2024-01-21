@@ -125,6 +125,15 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.1.2
+
+-   Add two new settings:
+    -   **codeMaxTokens** - the maximum number tokens to generate in a single request (default: 1024)
+    -   **chatMaxTokens** - the maximum number tokens to generate in a single request (default: 1024)
+
+These settings will help you tune how long the AI takes to generate a response, the lower the number the shorter it takes, the higher the longer it takes.
+However, if you set these too low you'll get very short responses and it may not provide the functionality you are looking for.
+
 ### 0.1.1
 
 -   Fix a bug with the current line terminating too early in code completion.

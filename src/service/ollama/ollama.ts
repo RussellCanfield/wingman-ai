@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
-import { OllamaRequest, OllamaResponse } from "../../domain/types";
+import { OllamaRequest, OllamaResponse } from "./types";
 import { asyncIterator } from "../asyncIterator";
 import { AIProvider } from "../base";
-import { Settings } from "../../types/Settings";
+import { Settings, defaultMaxTokens } from "../../types/Settings";
 import { OllamaAIModel } from "../../types/Models";
 import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
@@ -156,7 +156,7 @@ export class Ollama implements AIProvider {
 			raw: true,
 			options: {
 				temperature: 0.3,
-				num_predict: 1024,
+				num_predict: this.settings?.codeMaxTokens ?? defaultMaxTokens,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.3,
@@ -208,7 +208,7 @@ export class Ollama implements AIProvider {
 			stream: true,
 			context: this.chatHistory,
 			options: {
-				num_predict: 1024,
+				num_predict: this.settings?.chatMaxTokens ?? defaultMaxTokens,
 				temperature: 0.6,
 				top_k: 30,
 				top_p: 0.2,
