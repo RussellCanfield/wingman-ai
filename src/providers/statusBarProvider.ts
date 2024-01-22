@@ -3,6 +3,10 @@ import { eventEmitter } from "../events/eventEmitter";
 
 export class ActivityStatusBar {
 	activityStatusBarItem: vscode.StatusBarItem;
+	isInErrorState: boolean = false;
+
+	public readonly onFatalError: vscode.Event<void> =
+		eventEmitter._onFatalError.event;
 
 	public readonly onQueryStart: vscode.Event<void> =
 		eventEmitter._onQueryStart.event;
@@ -26,12 +30,23 @@ export class ActivityStatusBar {
 		this.onQueryComplete(() => {
 			this.TogglePending(false);
 		});
+
+		this.onFatalError(() => {
+			this.ToggleError();
+		});
 	}
 
 	public TogglePending(pending: boolean) {
+		if (this.isInErrorState) return;
+
 		this.activityStatusBarItem.text = `${
 			pending ? "$(sync~spin)" : "$(wingman-logo)"
 		} Wingman`;
+	}
+
+	public ToggleError() {
+		this.isInErrorState = true;
+		this.activityStatusBarItem.text = "$(testing-error-icon) Wingman";
 	}
 
 	dispose() {

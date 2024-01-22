@@ -4,6 +4,8 @@ import { Settings, defaultMaxTokens } from "../../types/Settings";
 import { HuggingFaceAIModel } from "../../types/Models";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
+import { loggingProvider } from "../../providers/loggingProvider";
+import { eventEmitter } from "../../events/eventEmitter";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -37,47 +39,57 @@ export class HuggingFace implements AIProvider {
 		const huggingFaceConfig =
 			config.get<Settings["huggingface"]>("HuggingFace");
 
-		console.log("HuggingFace settings loaded: ", huggingFaceConfig);
+		loggingProvider.logInfo(
+			`HuggingFace settings loaded: ${JSON.stringify(huggingFaceConfig)}`
+		);
 
-		if (huggingFaceConfig) {
-			this.settings = huggingFaceConfig;
-
-			if (!this.settings.apiKey.trim()) {
-				vscode.window.showErrorMessage(
-					"Hugging Face API key is required."
-				);
-				throw new Error("Missing Hugging Face API key.");
-			}
-
-			this.chatModel = this.getChatModel(this.settings.chatModel);
-			this.codeModel = this.getCodeModel(this.settings.codeModel);
+		if (!huggingFaceConfig) {
+			this.handleError("Unable to log HuggingFace configuration.");
+			return;
 		}
+
+		this.settings = huggingFaceConfig!;
+
+		if (!this.settings.apiKey.trim()) {
+			const errorMsg = "Hugging Face API key is required.";
+			vscode.window.showErrorMessage(errorMsg);
+			loggingProvider.logInfo(errorMsg);
+			throw new Error(errorMsg);
+		}
+
+		this.chatModel = this.getChatModel(this.settings.chatModel);
+		this.codeModel = this.getCodeModel(this.settings.codeModel);
 	}
 
-	private getCodeModel(codeModel: string): HuggingFaceAIModel {
+	private handleError(message: string) {
+		vscode.window.showErrorMessage(message);
+		loggingProvider.logError(message);
+		eventEmitter._onFatalError.fire();
+		throw new Error(message);
+	}
+
+	private getCodeModel(codeModel: string): HuggingFaceAIModel | undefined {
 		if (codeModel.includes("codellama")) {
 			return new CodeLlama();
 		} else if (codeModel.includes("mistral")) {
 			return new Mistral();
-		} else {
-			vscode.window.showErrorMessage(
-				"Invalid code model name, currently code supports the CodeLlama model."
-			);
-			throw new Error("Invalid code model name");
 		}
+
+		this.handleError(
+			"Invalid code model name, currently code supports the CodeLlama model."
+		);
 	}
 
-	private getChatModel(chatModel: string): HuggingFaceAIModel {
+	private getChatModel(chatModel: string): HuggingFaceAIModel | undefined {
 		if (chatModel.includes("codellama")) {
 			return new CodeLlama();
 		} else if (chatModel.includes("mistral")) {
 			return new Mistral();
-		} else {
-			vscode.window.showErrorMessage(
-				"Invalid chat model name, currently chat supports the Mistral model."
-			);
-			throw new Error("Invalid chat model name");
 		}
+
+		this.handleError(
+			"Invalid chat model name, currently chat supports the Mistral model."
+		);
 	}
 
 	private getSafeUrl() {
@@ -94,7 +106,7 @@ export class HuggingFace implements AIProvider {
 		signal: AbortSignal
 	) {
 		if (signal.aborted) {
-			return null;
+			return undefined;
 		}
 		return fetch(new URL(`${this.getSafeUrl()}${modelName}`), {
 			method: "POST",
@@ -112,10 +124,26 @@ export class HuggingFace implements AIProvider {
 		modelName: string,
 		signal: AbortSignal
 	) {
-		const response = await this.fetchModelResponse(
-			payload,
-			modelName,
-			signal
+		const startTime = new Date().getTime();
+		let response: Response | undefined;
+
+		try {
+			response = await this.fetchModelResponse(
+				payload,
+				modelName,
+				signal
+			);
+		} catch (error) {
+			loggingProvider.logError(
+				`HuggingFace - chat request with model: ${modelName} failed with the following error: ${error}`
+			);
+		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		loggingProvider.logInfo(
+			`HuggingFace - chat execution time: ${executionTime} seconds`
 		);
 
 		if (!response?.body) {
@@ -141,6 +169,8 @@ export class HuggingFace implements AIProvider {
 		ending: string,
 		signal: AbortSignal
 	): Promise<string> {
+		const startTime = new Date().getTime();
+
 		const codeRequestOptions: HuggingFaceRequest = {
 			inputs: this.codeModel!.CodeCompletionPrompt.replace(
 				"{beginning}",
@@ -159,10 +189,25 @@ export class HuggingFace implements AIProvider {
 			},
 		};
 
-		const response = await this.fetchModelResponse(
-			codeRequestOptions,
-			this.settings?.codeModel!,
-			signal
+		let response: Response | undefined;
+
+		try {
+			response = await this.fetchModelResponse(
+				codeRequestOptions,
+				this.settings?.codeModel!,
+				signal
+			);
+		} catch (error) {
+			loggingProvider.logError(
+				`HuggingFace - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
+			);
+		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		loggingProvider.logInfo(
+			`HuggingFace - Code Completion execution time: ${executionTime} seconds`
 		);
 
 		if (!response?.body) {
@@ -205,6 +250,7 @@ export class HuggingFace implements AIProvider {
 
 		this.clearChatHistory();
 
+		//left incase HF implements streaming.
 		for await (const chunk of this.generate(
 			chatPayload,
 			this.settings?.chatModel!,

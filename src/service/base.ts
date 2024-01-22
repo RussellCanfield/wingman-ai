@@ -3,6 +3,7 @@ import { Ollama } from "./ollama/ollama";
 import { Settings } from "../types/Settings";
 import { HuggingFace } from "./huggingface/huggingface";
 import { AIModel } from "../types/Models";
+import { loggingProvider } from "../providers/loggingProvider";
 
 export function GetProviderFromSettings(): AIProvider {
 	const config = vscode.workspace.getConfiguration("Wingman");
@@ -12,7 +13,7 @@ export function GetProviderFromSettings(): AIProvider {
 		?.toLocaleLowerCase()
 		.trim();
 
-	console.log(`AI Provider: ${aiProvider} found.`);
+	loggingProvider.logInfo(`AI Provider: ${aiProvider} found.`);
 
 	if (aiProvider === "huggingface") {
 		return new HuggingFace();

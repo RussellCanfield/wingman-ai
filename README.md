@@ -125,6 +125,14 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.1.3
+
+Added logging output for the extension for troubleshooting purposes. Improved error handling and user feedback for invalidated configurations.
+
+<p align="center" width="100%">
+    <img width="20%" src="./docs/LoggingOutput.png">
+</p>
+
 ### 0.1.2
 
 -   Add two new settings:

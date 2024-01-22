@@ -7,6 +7,8 @@ import { OllamaAIModel } from "../../types/Models";
 import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
 import { PhindCodeLlama } from "./models/phind-codellama";
+import { loggingProvider } from "../../providers/loggingProvider";
+import { eventEmitter } from "../../events/eventEmitter";
 
 export class Ollama implements AIProvider {
 	decoder = new TextDecoder();
@@ -20,43 +22,66 @@ export class Ollama implements AIProvider {
 
 		const ollamaConfig = config.get<Settings["ollama"]>("Ollama");
 
-		console.log("Ollama settings loaded: ", ollamaConfig);
+		loggingProvider.logInfo(
+			`Ollama settings loaded: ${JSON.stringify(ollamaConfig)}`
+		);
 
-		if (ollamaConfig) {
-			this.settings = ollamaConfig;
-
-			this.chatModel = this.getChatModel(this.settings.chatModel);
-			this.codeModel = this.getCodeModel(this.settings.codeModel);
+		if (!ollamaConfig) {
+			this.handleError("Unable to load Ollama settings.");
+			return;
 		}
 
-		if (!this.validateModelExists(this.settings?.chatModel ?? "unknown")) {
-			vscode.window.showErrorMessage(
+		this.settings = ollamaConfig;
+
+		this.chatModel = this.getChatModel(this.settings.chatModel);
+		this.codeModel = this.getCodeModel(this.settings.codeModel);
+
+		this.validateSettings();
+	}
+
+	private handleError(message: string) {
+		vscode.window.showErrorMessage(message);
+		loggingProvider.logError(message);
+		eventEmitter._onFatalError.fire();
+		throw new Error(message);
+	}
+
+	private async validateSettings() {
+		if (
+			!(await this.validateModelExists(
+				this.settings?.chatModel ?? "unknown"
+			))
+		) {
+			this.handleError(
 				`Unable to verify Ollama has chat model: ${this.settings?.chatModel}, have you pulled the model or is the config wrong?`
 			);
 		}
 
-		if (!this.validateModelExists(this.settings?.codeModel ?? "unknown")) {
-			vscode.window.showErrorMessage(
+		if (
+			!(await this.validateModelExists(
+				this.settings?.codeModel ?? "unknown"
+			))
+		) {
+			this.handleError(
 				`Unable to verify Ollama has code model: ${this.settings?.codeModel}, have you pulled the model or is the config wrong?`
 			);
 		}
 	}
 
-	private getCodeModel(codeModel: string): OllamaAIModel {
+	private getCodeModel(codeModel: string): OllamaAIModel | undefined {
 		switch (true) {
 			case codeModel.startsWith("codellama"):
 				return new CodeLlama();
 			case codeModel.startsWith("deepseek"):
 				return new Deepseek();
 			default:
-				vscode.window.showErrorMessage(
+				this.handleError(
 					"Invalid code model name, currently code supports CodeLlama and Deepseek models."
 				);
-				throw new Error("Invalid code model name");
 		}
 	}
 
-	private getChatModel(chatModel: string): OllamaAIModel {
+	private getChatModel(chatModel: string): OllamaAIModel | undefined {
 		switch (true) {
 			case chatModel.startsWith("codellama"):
 				return new CodeLlama();
@@ -65,10 +90,9 @@ export class Ollama implements AIProvider {
 			case chatModel.startsWith("phind"):
 				return new PhindCodeLlama();
 			default:
-				vscode.window.showErrorMessage(
+				this.handleError(
 					"Invalid chat model name, currently chat supports CodeLlama, Phind CodeLlama and Deepseek models."
 				);
-				throw new Error("Invalid chat model name");
 		}
 	}
 
@@ -90,7 +114,7 @@ export class Ollama implements AIProvider {
 				return true;
 			}
 		} catch (error) {
-			console.warn(error);
+			loggingProvider.logInfo(JSON.stringify(error));
 		}
 
 		return false;
@@ -101,7 +125,7 @@ export class Ollama implements AIProvider {
 		signal: AbortSignal
 	) {
 		if (signal.aborted) {
-			return null;
+			return undefined;
 		}
 		return fetch(
 			new URL(`${this.settings?.baseUrl}${this.settings?.apiPath}`),
@@ -114,11 +138,27 @@ export class Ollama implements AIProvider {
 	}
 
 	async *generate(payload: OllamaRequest, signal: AbortSignal) {
-		const response = await this.fetchModelResponse(payload, signal);
+		const startTime = new Date().getTime();
+		let response: Response | undefined;
+
+		try {
+			response = await this.fetchModelResponse(payload, signal);
+		} catch (error) {
+			loggingProvider.logError(
+				`Ollama chat request with model: ${payload.model} failed with the following error: ${error}`
+			);
+		}
 
 		if (!response?.body) {
 			return "";
 		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		loggingProvider.logInfo(
+			`Ollama - Chat Time To First Token execution time: ${executionTime} seconds`
+		);
 
 		for await (const chunk of asyncIterator(response.body)) {
 			if (signal.aborted) return;
@@ -164,15 +204,25 @@ export class Ollama implements AIProvider {
 			},
 		};
 
-		const response = await this.fetchModelResponse(
-			codeRequestOptions,
-			signal
-		);
+		let response: Response | undefined;
+
+		try {
+			response = await this.fetchModelResponse(
+				codeRequestOptions,
+				signal
+			);
+		} catch (error) {
+			loggingProvider.logError(
+				`Ollama - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
+			);
+		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(`Ollama Execution time: ${executionTime} seconds`);
+		loggingProvider.logInfo(
+			`Ollama - Code Completion execution time: ${executionTime} seconds`
+		);
 
 		if (!response?.body) {
 			return "";
