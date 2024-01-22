@@ -1,9 +1,28 @@
 import * as vscode from "vscode";
 import { Ollama } from "./ollama/ollama";
-import { Settings } from "../types/Settings";
+import { InteractionSettings, Settings } from "../types/Settings";
 import { HuggingFace } from "./huggingface/huggingface";
 import { AIModel } from "../types/Models";
 import { loggingProvider } from "../providers/loggingProvider";
+
+export function GetInteractionSettings(): InteractionSettings {
+	const config = vscode.workspace.getConfiguration("Wingman");
+
+	const interactionSettings = config.get<Settings["interactionSettings"]>(
+		"InteractionSettings"
+	)!;
+
+	if (interactionSettings) {
+		return interactionSettings;
+	}
+
+	return {
+		codeContextWindow: 256,
+		codeMaxTokens: -1,
+		chatContextWindow: 4096,
+		chatMaxTokens: 4096,
+	};
+}
 
 export function GetProviderFromSettings(): AIProvider {
 	const config = vscode.workspace.getConfiguration("Wingman");

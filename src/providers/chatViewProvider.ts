@@ -2,22 +2,20 @@ import * as vscode from "vscode";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { AIProvider } from "../service/base";
 import { eventEmitter } from "../events/eventEmitter";
+import { InteractionSettings } from "../types/Settings";
 
 let abortController = new AbortController();
-const context_length = 4096;
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wing-man-chat-view";
 
 	private _disposables: vscode.Disposable[] = [];
-	private _aiProvider: AIProvider;
 
 	constructor(
-		aiProvider: AIProvider,
-		private readonly _context: vscode.ExtensionContext
-	) {
-		this._aiProvider = aiProvider;
-	}
+		private readonly _aiProvider: AIProvider,
+		private readonly _context: vscode.ExtensionContext,
+		private readonly _interactionSettings: InteractionSettings
+	) {}
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -123,7 +121,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 		await this.streamChatResponse(
 			value as string,
-			getChatContext(),
+			getChatContext(this._interactionSettings.chatContextWindow),
 			webviewView
 		);
 	}
@@ -255,7 +253,7 @@ function getNonce() {
 	return text;
 }
 
-function getChatContext(): CodeContextDetails | undefined {
+function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		return undefined;
@@ -280,7 +278,7 @@ function getChatContext(): CodeContextDetails | undefined {
 		let upperLine = currentLine;
 		let lowerLine = currentLine;
 
-		const halfContext = context_length / 2;
+		const halfContext = contextWindow / 2;
 
 		// Go upwards
 		while (text.length < halfContext && upperLine > 0) {

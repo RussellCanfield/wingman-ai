@@ -1,8 +1,12 @@
 import * as vscode from "vscode";
 import { OllamaRequest, OllamaResponse } from "./types";
 import { asyncIterator } from "../asyncIterator";
-import { AIProvider } from "../base";
-import { Settings, defaultMaxTokens } from "../../types/Settings";
+import { AIProvider, GetInteractionSettings } from "../base";
+import {
+	InteractionSettings,
+	Settings,
+	defaultMaxTokens,
+} from "../../types/Settings";
 import { OllamaAIModel } from "../../types/Models";
 import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
@@ -16,6 +20,7 @@ export class Ollama implements AIProvider {
 	chatHistory: number[] = [];
 	chatModel: OllamaAIModel | undefined;
 	codeModel: OllamaAIModel | undefined;
+	interactionSettings: InteractionSettings | undefined;
 
 	constructor() {
 		const config = vscode.workspace.getConfiguration("Wingman");
@@ -35,6 +40,8 @@ export class Ollama implements AIProvider {
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
+
+		this.interactionSettings = GetInteractionSettings();
 
 		this.validateSettings();
 	}
@@ -195,14 +202,20 @@ export class Ollama implements AIProvider {
 			stream: false,
 			raw: true,
 			options: {
-				temperature: 0.3,
-				num_predict: this.settings?.codeMaxTokens ?? defaultMaxTokens,
+				temperature: 0.6,
+				num_predict: this.interactionSettings?.codeMaxTokens ?? -1,
 				top_k: 30,
 				top_p: 0.2,
-				repeat_penalty: 1.3,
+				repeat_penalty: 1.1,
 				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
 			},
 		};
+
+		loggingProvider.logInfo(
+			`Ollama - Code Completion submitting request with body: ${JSON.stringify(
+				codeRequestOptions
+			)}`
+		);
 
 		let response: Response | undefined;
 
@@ -258,12 +271,20 @@ export class Ollama implements AIProvider {
 			stream: true,
 			context: this.chatHistory,
 			options: {
-				num_predict: this.settings?.chatMaxTokens ?? defaultMaxTokens,
-				temperature: 0.6,
+				num_predict: this.interactionSettings?.chatMaxTokens ?? -1,
+				temperature: 0.4,
 				top_k: 30,
 				top_p: 0.2,
+				repeat_penalty: 1.1,
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
 			},
 		};
+
+		loggingProvider.logInfo(
+			`Ollama - Chat submitting request with body: ${JSON.stringify(
+				chatPayload
+			)}`
+		);
 
 		this.clearChatHistory();
 

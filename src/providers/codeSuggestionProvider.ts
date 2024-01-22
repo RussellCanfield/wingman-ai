@@ -10,9 +10,9 @@ import {
 } from "vscode";
 import { AIProvider } from "../service/base";
 import { eventEmitter } from "../events/eventEmitter";
+import { InteractionSettings } from "../types/Settings";
 
 let timeout: NodeJS.Timeout | undefined;
-const context_length = 4096;
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
@@ -36,11 +36,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		{ scheme: "file", language: "json" },
 	];
 
-	private _aiProvider: AIProvider;
-
-	constructor(aiProvider: AIProvider) {
-		this._aiProvider = aiProvider;
-	}
+	constructor(
+		private readonly _aiProvider: AIProvider,
+		private readonly _interactionSettings: InteractionSettings
+	) {}
 
 	async provideInlineCompletionItems(
 		document: TextDocument,
@@ -85,7 +84,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		let text = document
 			.lineAt(selection.active.line)
 			.text.substring(0, selection.active.character);
-		const halfContext = context_length / 2;
+		const halfContext = this._interactionSettings.codeContextWindow / 2;
 
 		while (text.length < halfContext && currentLine > 0) {
 			currentLine--;
@@ -113,7 +112,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		let text = document
 			.lineAt(selection.active.line)
 			.text.substring(selection.active.character);
-		const halfContext = context_length / 2;
+		const halfContext = this._interactionSettings.codeContextWindow / 2;
 
 		while (
 			text.length < halfContext &&
@@ -146,6 +145,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			return [new InlineCompletionItem(codeResponse)];
 		} catch (error) {
 			console.warn(error);
+			eventEmitter._onQueryComplete.fire();
 			return [];
 		}
 	}

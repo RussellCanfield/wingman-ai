@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -108,6 +108,38 @@
 					],
 					"description": "Specifies which AI provider to use - some require configuration."
 				},
+				"Wingman.InteractionSettings": {
+					"type": "object",
+					"description": "Interaction settings help configure how parts of the extension interact with the LLM(s).",
+					"default": {
+						"codeContextWindow": 256,
+						"codeMaxTokens": -1,
+						"chatContextWindow": 4096,
+						"chatMaxTokens": 4096
+					},
+					"properties": {
+						"codeContextWindow": {
+							"type": "number",
+							"default": 256,
+							"description": "The default context window size for code completion. Larger is higher quality with less performance."
+						},
+						"codeMaxTokens": {
+							"type": "number",
+							"default": -1,
+							"description": "The amount of tokens allowed in the LLM response for code completion (num_predict in Ollama), -1 is infinite."
+						},
+						"chatContextWindow": {
+							"type": "number",
+							"default": 4096,
+							"description": "The default context window size for chat. Can be increased for running larger models."
+						},
+						"chatMaxTokens": {
+							"type": "number",
+							"default": 4096,
+							"description": "The amount of tokens allowed in the LLM response for chat (num_predict in Ollama), -1 is infinite."
+						}
+					}
+				},
 				"Wingman.Ollama": {
 					"type": "object",
 					"description": "Ollama settings",
@@ -116,9 +148,7 @@
 						"codeModel": "deepseek-coder:6.7b-base-q8_0",
 						"baseUrl": "http://localhost:11434",
 						"apiPath": "/api/generate",
-						"modelInfoPath": "/api/show",
-						"codeMaxTokens": 1024,
-						"chatMaxTokens": 1024
+						"modelInfoPath": "/api/show"
 					},
 					"properties": {
 						"chatModel": {
@@ -145,16 +175,6 @@
 							"type": "string",
 							"default": "/api/show",
 							"description": "Path for model info"
-						},
-						"codeMaxTokens": {
-							"type": "number",
-							"default": 1024,
-							"description": "The maximum tokens generated for code completion responses"
-						},
-						"chatMaxTokens": {
-							"type": "number",
-							"default": 1024,
-							"description": "The maximum tokens generated for chat responses"
 						}
 					}
 				},
@@ -165,9 +185,7 @@
 						"chatModel": "mistralai/Mistral-7B-Instruct-v0.2",
 						"codeModel": "codellama/CodeLlama-7b-hf",
 						"baseUrl": "https://api-inference.huggingface.co/models/",
-						"apiKey": "ADD ME",
-						"codeMaxTokens": 1024,
-						"chatMaxTokens": 1024
+						"apiKey": "ADD ME"
 					},
 					"properties": {
 						"chatModel": {
@@ -189,16 +207,6 @@
 							"type": "string",
 							"default": "ADD ME",
 							"description": "The API key to use for HuggingFace"
-						},
-						"codeMaxTokens": {
-							"type": "number",
-							"default": 1024,
-							"description": "The maximum tokens generated for code completion responses"
-						},
-						"chatMaxTokens": {
-							"type": "number",
-							"default": 1024,
-							"description": "The maximum tokens generated for chat responses"
 						}
 					}
 				}

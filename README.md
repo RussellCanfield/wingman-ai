@@ -125,6 +125,16 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.1.4
+
+Reworked generic LLM settings to a common "Interaction Settings" section.
+Included the ability to customize the context token to include performance at the cost of quality.
+For code completion this can sacrifice contextual awareness of the LLM for performance. Experiment with what feels good for your machine and code base. Below are the defaults, the previous defaults for context window(s) were **4096**.
+
+<p align="center" width="100%">
+    <img width="20%" src="./docs/InteractionSettings.png">
+</p>
+
 ### 0.1.3
 
 Added logging output for the extension for troubleshooting purposes. Improved error handling and user feedback for invalidated configurations.

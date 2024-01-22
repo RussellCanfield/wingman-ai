@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
-import { AIProvider } from "../base";
-import { Settings, defaultMaxTokens } from "../../types/Settings";
+import { AIProvider, GetInteractionSettings } from "../base";
+import {
+	InteractionSettings,
+	Settings,
+	defaultMaxTokens,
+} from "../../types/Settings";
 import { HuggingFaceAIModel } from "../../types/Models";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
@@ -9,7 +13,7 @@ import { eventEmitter } from "../../events/eventEmitter";
 
 type HuggingFaceRequest = {
 	inputs: string;
-	parameters?: {
+	parameters: {
 		top_k?: number;
 		top_p?: number;
 		temperature?: number;
@@ -32,6 +36,7 @@ export class HuggingFace implements AIProvider {
 	chatHistory: string = "";
 	chatModel: HuggingFaceAIModel | undefined;
 	codeModel: HuggingFaceAIModel | undefined;
+	interactionSettings: InteractionSettings | undefined;
 
 	constructor() {
 		const config = vscode.workspace.getConfiguration("Wingman");
@@ -56,6 +61,8 @@ export class HuggingFace implements AIProvider {
 			loggingProvider.logInfo(errorMsg);
 			throw new Error(errorMsg);
 		}
+
+		this.interactionSettings = GetInteractionSettings();
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
@@ -177,17 +184,26 @@ export class HuggingFace implements AIProvider {
 				beginning
 			).replace("{ending}", ending),
 			parameters: {
-				repetition_penalty: 1.3,
+				repetition_penalty: 1.1,
 				temperature: 0.4,
 				top_k: 30,
 				top_p: 0.2,
-				max_new_tokens:
-					this.settings?.codeMaxTokens ?? defaultMaxTokens,
+				max_new_tokens: this.interactionSettings?.codeMaxTokens,
 				return_full_text: false,
 				wait_for_model: true,
 				do_sample: false,
 			},
 		};
+
+		if (this.interactionSettings?.codeMaxTokens === -1) {
+			delete codeRequestOptions.parameters.max_new_tokens;
+		}
+
+		loggingProvider.logInfo(
+			`HuggingFace - Code Completion submitting request with body: ${JSON.stringify(
+				codeRequestOptions
+			)}`
+		);
 
 		let response: Response | undefined;
 
@@ -239,14 +255,24 @@ export class HuggingFace implements AIProvider {
 				.replace("{question}", prompt ?? "")
 				.replace(/\t/, ""),
 			parameters: {
+				repetition_penalty: 1.1,
 				temperature: 0.4,
 				top_k: 30,
 				top_p: 0.2,
 				return_full_text: false,
-				max_new_tokens:
-					this.settings?.chatMaxTokens ?? defaultMaxTokens,
+				max_new_tokens: this.interactionSettings?.chatMaxTokens,
 			},
 		};
+
+		if (this.interactionSettings?.chatMaxTokens === -1) {
+			delete chatPayload.parameters.max_new_tokens;
+		}
+
+		loggingProvider.logInfo(
+			`HuggingFace - Chat submitting request with body: ${JSON.stringify(
+				chatPayload
+			)}`
+		);
 
 		this.clearChatHistory();
 
