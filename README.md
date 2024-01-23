@@ -132,8 +132,19 @@ Included the ability to customize the context token to include performance at th
 For code completion this can sacrifice contextual awareness of the LLM for performance. Experiment with what feels good for your machine and code base. Below are the defaults, the previous defaults for context window(s) were **4096**.
 
 <p align="center" width="100%">
-    <img width="20%" src="./docs/InteractionSettings.png">
+    <img width="50%" src="./docs/InteractionSettings.png">
 </p>
+
+We've decided to take a conservative approach with code completion for now, here are the default values:
+
+```json
+{
+	"codeContextWindow": 256,
+	"codeMaxTokens": -1,
+	"chatContextWindow": 4096,
+	"chatMaxTokens": 4096
+}
+```
 
 ### 0.1.3
 
