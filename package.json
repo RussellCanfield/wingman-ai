@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -182,7 +182,7 @@
 					"type": "object",
 					"description": "HuggingFace settings",
 					"default": {
-						"chatModel": "mistralai/Mistral-7B-Instruct-v0.2",
+						"chatModel": "mistralai/Mixtral-8x7B-Instruct-v0.1",
 						"codeModel": "codellama/CodeLlama-7b-hf",
 						"baseUrl": "https://api-inference.huggingface.co/models/",
 						"apiKey": "ADD ME"
@@ -190,7 +190,7 @@
 					"properties": {
 						"chatModel": {
 							"type": "string",
-							"default": "mistralai/Mistral-7B-Instruct-v0.2",
+							"default": "mistralai/Mixtral-8x7B-Instruct-v0.1",
 							"description": "The model to use for the chat"
 						},
 						"codeModel": {

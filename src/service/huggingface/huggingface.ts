@@ -1,15 +1,12 @@
 import * as vscode from "vscode";
 import { AIProvider, GetInteractionSettings } from "../base";
-import {
-	InteractionSettings,
-	Settings,
-	defaultMaxTokens,
-} from "../../types/Settings";
+import { InteractionSettings, Settings } from "../../types/Settings";
 import { HuggingFaceAIModel } from "../../types/Models";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
 import { loggingProvider } from "../../providers/loggingProvider";
 import { eventEmitter } from "../../events/eventEmitter";
+import { Mixtral } from "./models/mixtral";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -20,8 +17,10 @@ type HuggingFaceRequest = {
 		max_new_tokens?: number;
 		repetition_penalty?: number;
 		return_full_text?: boolean;
-		wait_for_model?: boolean;
 		do_sample?: boolean;
+	};
+	options: {
+		wait_for_model?: boolean;
 	};
 };
 
@@ -76,10 +75,8 @@ export class HuggingFace implements AIProvider {
 	}
 
 	private getCodeModel(codeModel: string): HuggingFaceAIModel | undefined {
-		if (codeModel.includes("codellama")) {
+		if (codeModel.startsWith("codellama")) {
 			return new CodeLlama();
-		} else if (codeModel.includes("mistral")) {
-			return new Mistral();
 		}
 
 		this.handleError(
@@ -88,14 +85,14 @@ export class HuggingFace implements AIProvider {
 	}
 
 	private getChatModel(chatModel: string): HuggingFaceAIModel | undefined {
-		if (chatModel.includes("codellama")) {
-			return new CodeLlama();
-		} else if (chatModel.includes("mistral")) {
+		if (chatModel.startsWith("mistralai/Mistral")) {
 			return new Mistral();
+		} else if (chatModel.startsWith("mistralai/Mixtral")) {
+			return new Mixtral();
 		}
 
 		this.handleError(
-			"Invalid chat model name, currently chat supports the Mistral model."
+			"Invalid chat model name, currently chat supports the Mistral and Mixtral model(s)."
 		);
 	}
 
@@ -190,8 +187,10 @@ export class HuggingFace implements AIProvider {
 				top_p: 0.2,
 				max_new_tokens: this.interactionSettings?.codeMaxTokens,
 				return_full_text: false,
-				wait_for_model: true,
 				do_sample: false,
+			},
+			options: {
+				wait_for_model: true,
 			},
 		};
 
@@ -261,6 +260,9 @@ export class HuggingFace implements AIProvider {
 				top_p: 0.2,
 				return_full_text: false,
 				max_new_tokens: this.interactionSettings?.chatMaxTokens,
+			},
+			options: {
+				wait_for_model: true,
 			},
 		};
 

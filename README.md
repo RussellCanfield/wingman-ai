@@ -89,6 +89,7 @@ Supported Models for _Code Completion_:
 
 Supported Models for _Chat_:
 
+-   Mixtral v0.1 _(tested with [mistralai/Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1))_
 -   Mistral v0.2 _(tested with: [mistralai/Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2))_
 
 ## FAQ
@@ -124,6 +125,10 @@ During startup the extension will verify the models you have configured in the V
 The models above will require enough RAM to run them correctly, you should have at least 12GB of ram on your machine if you are running these models. If you don't have enough ram, then choose a smaller model but be aware that it won't perform as well. Also see [information on model Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization).
 
 ## Release Notes
+
+### 0.1.5
+
+The HuggingFace chat provider now supports Mixtral! This is a high performing AI that rivals GPT. If you are using our HuggingFace provider, try it out by setting the **"chatModel"** to **"mistralai/Mixtral-8x7B-Instruct-v0.1"**. This is now the default for HuggingFace.
 
 ### 0.1.4
 
