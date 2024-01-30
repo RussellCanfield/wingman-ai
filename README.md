@@ -126,6 +126,10 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.1.6
+
+Remove extraneous stop token from HuggingFace code completion.
+
 ### 0.1.5
 
 The HuggingFace chat provider now supports Mixtral! This is a high performing AI that rivals GPT. If you are using our HuggingFace provider, try it out by setting the **"chatModel"** to **"mistralai/Mixtral-8x7B-Instruct-v0.1"**. This is now the default for HuggingFace.

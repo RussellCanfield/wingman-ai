@@ -232,7 +232,8 @@ export class HuggingFace implements AIProvider {
 		const huggingFaceResponse =
 			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
-			? huggingFaceResponse[0].generated_text
+			? //temporary fix. Not sure why HF doesn't specify stop tokens
+			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
