@@ -23,4 +23,7 @@ export interface Settings {
 	huggingface?: BaseServiceSettings & {
 		apiKey: string;
 	};
+	openai?: BaseServiceSettings & {
+		apiKey: string;
+	};
 }

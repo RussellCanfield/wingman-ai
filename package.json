@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.1.6",
+	"version": "0.1.7",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"author": {
@@ -62,7 +62,9 @@
 		"chat",
 		"python",
 		"java",
-		"ollama"
+		"ollama",
+		"huggingface",
+		"openai"
 	],
 	"activationEvents": [
 		"onStartupFinished"
@@ -104,7 +106,8 @@
 					"default": "Ollama",
 					"enum": [
 						"Ollama",
-						"HuggingFace"
+						"HuggingFace",
+						"OpenAI"
 					],
 					"description": "Specifies which AI provider to use - some require configuration."
 				},
@@ -201,12 +204,44 @@
 						"baseUrl": {
 							"type": "string",
 							"default": "https://api-inference.huggingface.co/models/",
-							"description": "Base URL for the ollama instance"
+							"description": "Base URL for the HuggingFace inference endpoint"
 						},
 						"apiKey": {
 							"type": "string",
 							"default": "ADD ME",
 							"description": "The API key to use for HuggingFace"
+						}
+					}
+				},
+				"Wingman.OpenAI": {
+					"type": "object",
+					"description": "OpenAI settings",
+					"default": {
+						"chatModel": "gpt-4-0125-preview",
+						"codeModel": "gpt-4-0125-preview",
+						"baseUrl": "https://api.openai.com/v1/chat/completions",
+						"apiKey": "ADD ME"
+					},
+					"properties": {
+						"chatModel": {
+							"type": "string",
+							"default": "gpt-4-0125-preview",
+							"description": "The model to use for the chat"
+						},
+						"codeModel": {
+							"type": "string",
+							"default": "gpt-4-0125-preview",
+							"description": "The model to use for the code completion"
+						},
+						"baseUrl": {
+							"type": "string",
+							"default": "https://api.openai.com/v1/chat/completions",
+							"description": "Base URL for the OpenAI API"
+						},
+						"apiKey": {
+							"type": "string",
+							"default": "ADD ME",
+							"description": "The API key to use for OpenAI"
 						}
 					}
 				}

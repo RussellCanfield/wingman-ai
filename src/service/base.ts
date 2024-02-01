@@ -4,6 +4,7 @@ import { InteractionSettings, Settings } from "../types/Settings";
 import { HuggingFace } from "./huggingface/huggingface";
 import { AIModel } from "../types/Models";
 import { loggingProvider } from "../providers/loggingProvider";
+import { OpenAI } from "./openai/openai";
 
 export function GetInteractionSettings(): InteractionSettings {
 	const config = vscode.workspace.getConfiguration("Wingman");
@@ -36,6 +37,8 @@ export function GetProviderFromSettings(): AIProvider {
 
 	if (aiProvider === "huggingface") {
 		return new HuggingFace();
+	} else if (aiProvider === "openai") {
+		return new OpenAI();
 	}
 
 	return new Ollama();

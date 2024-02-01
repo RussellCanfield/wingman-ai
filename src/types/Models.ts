@@ -6,3 +6,5 @@ export interface AIModel {
 export interface OllamaAIModel extends AIModel {}
 
 export interface HuggingFaceAIModel extends AIModel {}
+
+export interface OpenAIModel extends AIModel {}

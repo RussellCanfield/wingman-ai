@@ -126,6 +126,14 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.1.7
+
+**OpenAI support is here!** If you have OpenAI credits or pay for the subscription you can now use it in Wingman. Simply select your 'AI Provider' in the VSCode settings for this extension (Wingman), then add your API key in the OpenAI settings - identical to how HuggingFace works.
+
+With copilot still using GPT-3.5, you now have a faster and more powerful model at your fingertips!
+
+We currently only support GPT-4 but recommend GPT-4 turbo **(ex: "gpt-4-0125-preview")**
+
 ### 0.1.6
 
 Remove extraneous stop token from HuggingFace code completion.
