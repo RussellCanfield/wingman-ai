@@ -259,8 +259,6 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		return undefined;
 	}
 
-	const lineWindow = 15;
-
 	const { document, selection } = editor;
 	let codeContextRange: vscode.Range;
 
@@ -273,30 +271,34 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		);
 	} else {
 		const currentLine = selection.active.line;
-		let text = document.lineAt(currentLine).text;
+		let text = document.lineAt(currentLine).text + "\n";
 
-		let upperLine = currentLine;
-		let lowerLine = currentLine;
+		let upperLine = 0;
+		let lowerLine = currentLine + 1;
 
 		const halfContext = contextWindow / 2;
 
+		let upperText = document.lineAt(upperLine).text;
 		// Go upwards
-		while (text.length < halfContext && upperLine > 0) {
-			upperLine--;
-			text = document.lineAt(upperLine).text + "\n" + text;
+		while (upperText.length < halfContext && upperLine < currentLine - 1) {
+			upperLine++;
+			upperText += "\n" + document.lineAt(upperLine).text;
 		}
 
+		let lowerText = document.lineAt(lowerLine).text;
 		// Go downwards
 		while (
-			text.length < halfContext &&
+			lowerText.length < halfContext &&
 			lowerLine < document.lineCount - 1
 		) {
 			lowerLine++;
-			text += "\n" + document.lineAt(lowerLine).text;
+			lowerText += "\n" + document.lineAt(lowerLine).text;
 		}
 
-		if (text.length > halfContext) {
-			text = text.substring(0, halfContext);
+		text = `${upperText}\n${text}${lowerText}`;
+
+		if (text.length > contextWindow) {
+			text = text.substring(0, contextWindow);
 		}
 
 		const beginningWindowLine = document.lineAt(upperLine);
