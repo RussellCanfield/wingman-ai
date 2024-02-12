@@ -271,17 +271,16 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		);
 	} else {
 		const currentLine = selection.active.line;
-		let text = document.lineAt(currentLine).text + "\n";
 
-		let upperLine = 0;
-		let lowerLine = currentLine + 1;
+		let upperLine = currentLine;
+		let lowerLine = currentLine;
 
 		const halfContext = contextWindow / 2;
 
-		let upperText = document.lineAt(upperLine).text;
+		let upperText = document.lineAt(upperLine - 1).text;
 		// Go upwards
-		while (upperText.length < halfContext && upperLine < currentLine - 1) {
-			upperLine++;
+		while (upperText.length < halfContext && upperLine > 0) {
+			upperLine--;
 			upperText += "\n" + document.lineAt(upperLine).text;
 		}
 
@@ -295,12 +294,6 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 			lowerText += "\n" + document.lineAt(lowerLine).text;
 		}
 
-		text = `${upperText}\n${text}${lowerText}`;
-
-		if (text.length > contextWindow) {
-			text = text.substring(0, contextWindow);
-		}
-
 		const beginningWindowLine = document.lineAt(upperLine);
 		const endWindowLine = document.lineAt(lowerLine);
 
@@ -310,7 +303,13 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		);
 	}
 
-	const text = document.getText(codeContextRange);
+	let text = document.getText(codeContextRange);
+
+	if (text.length > contextWindow) {
+		text = text.substring(0, contextWindow);
+	}
+
+	console.log(text);
 
 	const documentUri = vscode.Uri.file(document.fileName);
 	const workspaceFolder = vscode.workspace.getWorkspaceFolder(documentUri);
