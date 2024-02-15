@@ -70,5 +70,5 @@ export interface AIStreamProvicer extends AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal
-	): AsyncGenerator<string>;
+	): Promise<string>;
 }

@@ -12,9 +12,6 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvicer } from "../service/base";
 import { InteractionSettings } from "../types/Settings";
 
-let timeout: NodeJS.Timeout | undefined;
-let exceed: NodeJS.Timeout | undefined;
-
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
 		{ scheme: "file", language: "typescript" },
@@ -42,41 +39,32 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		private readonly _interactionSettings: InteractionSettings
 	) { }
 
+
+
 	async provideInlineCompletionItems(
 		document: TextDocument,
 		position: Position,
 		context: InlineCompletionContext,
 		token: CancellationToken
 	) {
+		let timeout: NodeJS.Timeout | undefined;
+
 		const abort = new AbortController();
-		token.onCancellationRequested((e) => {
-			console.log(e);
-			abort.abort('token cancelled');
-		});
-
-		abort.signal.onabort = () => {
-			eventEmitter._onQueryComplete.fire();
-		};
-
 		const prefix = this.getPrefixContent();
 		const suffix = this.getSuffixContent();
-
-		if (timeout) {
-			clearTimeout(timeout);
-		}
-
-		if (exceed) {
-			clearTimeout(exceed);
-		}
-
-		if (this._interactionSettings.codeStreaming) {
-			setTimeout(() => {
-				if (!abort.signal.aborted) {
-					abort.abort('Took too long');
+		token.onCancellationRequested(() => {
+			try {
+				if (timeout) {
+					clearTimeout(timeout);
 				}
-			}, 1000);
-		}
-		const delay = this._interactionSettings.codeStreaming ? 200 : 300;
+				abort.abort();
+			}
+			finally {
+				eventEmitter._onQueryComplete.fire();
+			}
+		});
+
+		const delay = this._interactionSettings.codeStreaming ? 150 : 300;
 		return new Promise<InlineCompletionItem[]>((res) => {
 			timeout = setTimeout(() => {
 				this.bouncedRequest(prefix, abort.signal, suffix, this._interactionSettings.codeStreaming).then(
@@ -154,9 +142,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		try {
 			eventEmitter._onQueryStart.fire();
 			if ('codeCompleteStream' in this._aiProvider && streaming) {
-				const codeStream = this._aiProvider.codeCompleteStream(prefix, suffix, signal);
-				const firstLine = await codeStream.next();
-				return [new InlineCompletionItem(firstLine.value)];
+				const codeStream = await this._aiProvider.codeCompleteStream(prefix, suffix, signal);
+				return [new InlineCompletionItem(codeStream)];
 			}
 			else {
 				const codeResponse = await this._aiProvider.codeComplete(
@@ -164,13 +151,13 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 					suffix,
 					signal
 				);
-				eventEmitter._onQueryComplete.fire();
 				return [new InlineCompletionItem(codeResponse)];
 			}
 		} catch (error) {
-			console.warn(error);
-			eventEmitter._onQueryComplete.fire();
 			return [];
+		}
+		finally {
+			eventEmitter._onQueryComplete.fire();
 		}
 	}
 }

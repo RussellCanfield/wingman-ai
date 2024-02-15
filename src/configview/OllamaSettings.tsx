@@ -63,7 +63,7 @@ export const OllamaSettings = ({ codeModel, chatModel, ollamaModels }: OllamaSec
         </VSCodeDropdown>
       </DropDownContainer>
       <DropDownContainer>
-        <label htmlFor="chat-model">Code model:</label>
+        <label htmlFor="chat-model">Chat model:</label>
         <VSCodeDropdown id="chat-model" value={currentChatModel} style={{ minWidth: '200px' }} onChange={handleChatChange}>
           <VSCodeOption>Not loaded</VSCodeOption>
           {ollamaModels.map(ab => <VSCodeOption key={ab}>{ab}</VSCodeOption>)}

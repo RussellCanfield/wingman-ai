@@ -185,6 +185,51 @@ export class Ollama implements AIStreamProvicer {
 		}
 	}
 
+	private async *generateCode(payload: OllamaRequest, signal: AbortSignal) {
+		const startTime = new Date().getTime();
+		let response: Response | undefined;
+
+		try {
+			response = await this.fetchModelResponse(payload, signal);
+		} catch (error) {
+			loggingProvider.logError(
+				`Ollama chat request with model: ${payload.model} failed with the following error: ${error}`
+			);
+			eventEmitter._onQueryComplete.fire();
+		}
+
+		if (!response?.body) {
+			return "";
+		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		loggingProvider.logInfo(
+			`Ollama - Chat Time To First Token execution time: ${executionTime} seconds`
+		);
+
+		for await (const chunk of asyncIterator(response.body)) {
+			if (signal.aborted) return;
+			const jsonString = this.decoder.decode(chunk);
+			// we can have more then one ollama response
+			const jsonStrings = jsonString
+				.replace(/}\n{/gi, "}\u241e{")
+				.split("\u241e");
+			try {
+				let codeLines: string[] = [];
+				for (const json of jsonStrings) {
+					const result = JSON.parse(json) as OllamaResponse;
+					codeLines.push(result.response);
+				}
+				yield codeLines.join('');
+			} catch (e) {
+				loggingProvider.logError(`Error occured on ollama code generation ${e}`);
+				eventEmitter._onQueryComplete.fire();
+			}
+		}
+	}
+
 	public async codeComplete(
 		beginning: string,
 		ending: string,
@@ -244,7 +289,29 @@ export class Ollama implements AIStreamProvicer {
 		return ollamaResponse.response;
 	}
 
-	public async *codeCompleteStream(beginning: string, ending: string, signal: AbortSignal): AsyncGenerator<string, any, unknown> {
+	private codeCompleteRequest = async (sentences: string[], codeRequestOptions: OllamaRequest, signal: AbortSignal) => {
+		let words: string[] = [];
+		for await (const characters of this.generateCode(codeRequestOptions, signal)) {
+			if (!characters) {
+				continue;
+			}
+			if (characters.indexOf('\n') > -1) {
+				const splitOnLine = characters.split('\n');
+				let x = 0;
+				for (; x < splitOnLine.length - 1; x++) {
+					words.push(splitOnLine[x]);
+					sentences.push(words.join(''));
+					words = [];
+				}
+				words.push(splitOnLine[x]);
+			}
+			else {
+				words.push(characters);
+			}
+		}
+	};
+
+	public async codeCompleteStream(beginning: string, ending: string, signal: AbortSignal): Promise<string> {
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
 			beginning
@@ -260,19 +327,19 @@ export class Ollama implements AIStreamProvicer {
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>"],
 			},
 		};
-		let words = [];
-		for await (const line of this.generate(codeRequestOptions, signal)) {
-			words.push(line.response);
-			if (line.response === '\n') {
-				yield words.join('').trim();
-				words = [];
-			}
-		}
-		yield words.join('').trim();
+
+		let sentences: string[] = [];
+		this.codeCompleteRequest(sentences, codeRequestOptions, signal);
+		return new Promise((res) => {
+			setTimeout(() => {
+				res(sentences.join('\n'));
+			}, 600);
+		});
 	}
+
 	public clearChatHistory(): void {
 		this.chatHistory = [];
 	}
