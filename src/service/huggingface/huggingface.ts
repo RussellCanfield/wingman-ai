@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
-import { AIProvider, GetInteractionSettings } from "../base";
-import { InteractionSettings, Settings } from "../../types/Settings";
+import { eventEmitter } from "../../events/eventEmitter";
+import { loggingProvider } from "../../providers/loggingProvider";
 import { HuggingFaceAIModel } from "../../types/Models";
+import { InteractionSettings, Settings } from "../../types/Settings";
+import { AIProvider, GetInteractionSettings } from "../base";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
-import { loggingProvider } from "../../providers/loggingProvider";
-import { eventEmitter } from "../../events/eventEmitter";
 import { Mixtral } from "./models/mixtral";
 
 type HuggingFaceRequest = {
@@ -233,7 +233,7 @@ export class HuggingFace implements AIProvider {
 			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 

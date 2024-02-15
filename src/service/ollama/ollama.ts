@@ -1,20 +1,19 @@
 import * as vscode from "vscode";
-import { OllamaRequest, OllamaResponse } from "./types";
-import { asyncIterator } from "../asyncIterator";
-import { AIProvider, GetInteractionSettings } from "../base";
+import { eventEmitter } from "../../events/eventEmitter";
+import { loggingProvider } from "../../providers/loggingProvider";
+import { OllamaAIModel } from "../../types/Models";
 import {
 	InteractionSettings,
-	Settings,
-	defaultMaxTokens,
+	Settings
 } from "../../types/Settings";
-import { OllamaAIModel } from "../../types/Models";
+import { asyncIterator } from "../asyncIterator";
+import { AIStreamProvicer, GetInteractionSettings } from "../base";
 import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
 import { PhindCodeLlama } from "./models/phind-codellama";
-import { loggingProvider } from "../../providers/loggingProvider";
-import { eventEmitter } from "../../events/eventEmitter";
+import { OllamaRequest, OllamaResponse } from "./types";
 
-export class Ollama implements AIProvider {
+export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
 	settings: Settings["ollama"];
 	chatHistory: number[] = [];
@@ -245,6 +244,35 @@ export class Ollama implements AIProvider {
 		return ollamaResponse.response;
 	}
 
+	public async *codeCompleteStream(beginning: string, ending: string, signal: AbortSignal): AsyncGenerator<string, any, unknown> {
+		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
+			"{beginning}",
+			beginning
+		).replace("{ending}", ending);
+		const codeRequestOptions: OllamaRequest = {
+			model: this.settings?.codeModel!,
+			prompt,
+			stream: true,
+			raw: true,
+			options: {
+				temperature: 0.3,
+				num_predict: this.interactionSettings?.codeMaxTokens ?? -1,
+				top_k: 30,
+				top_p: 0.2,
+				repeat_penalty: 1.1,
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+			},
+		};
+		let words = [];
+		for await (const line of this.generate(codeRequestOptions, signal)) {
+			words.push(line.response);
+			if (line.response === '\n') {
+				yield words.join('').trim();
+				words = [];
+			}
+		}
+		yield words.join('').trim();
+	}
 	public clearChatHistory(): void {
 		this.chatHistory = [];
 	}

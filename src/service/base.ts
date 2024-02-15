@@ -1,10 +1,14 @@
 import * as vscode from "vscode";
-import { Ollama } from "./ollama/ollama";
+import { loggingProvider } from "../providers/loggingProvider";
+import { AIModel } from "../types/Models";
 import { InteractionSettings, Settings } from "../types/Settings";
 import { HuggingFace } from "./huggingface/huggingface";
-import { AIModel } from "../types/Models";
-import { loggingProvider } from "../providers/loggingProvider";
+import { Ollama } from "./ollama/ollama";
 import { OpenAI } from "./openai/openai";
+
+export function GetAllSettings(): vscode.WorkspaceConfiguration {
+	return vscode.workspace.getConfiguration("Wingman");
+}
 
 export function GetInteractionSettings(): InteractionSettings {
 	const config = vscode.workspace.getConfiguration("Wingman");
@@ -18,6 +22,7 @@ export function GetInteractionSettings(): InteractionSettings {
 	}
 
 	return {
+		codeStreaming: false,
 		codeContextWindow: 256,
 		codeMaxTokens: -1,
 		chatContextWindow: 4096,
@@ -56,6 +61,14 @@ export interface AIProvider {
 	chat(
 		prompt: string,
 		ragContent: string,
+		signal: AbortSignal
+	): AsyncGenerator<string>;
+}
+
+export interface AIStreamProvicer extends AIProvider {
+	codeCompleteStream(
+		beginning: string,
+		ending: string,
 		signal: AbortSignal
 	): AsyncGenerator<string>;
 }

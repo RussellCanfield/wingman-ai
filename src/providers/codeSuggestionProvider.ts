@@ -8,11 +8,12 @@ import {
 	Position,
 	TextDocument,
 } from "vscode";
-import { AIProvider } from "../service/base";
 import { eventEmitter } from "../events/eventEmitter";
+import { AIProvider, AIStreamProvicer } from "../service/base";
 import { InteractionSettings } from "../types/Settings";
 
 let timeout: NodeJS.Timeout | undefined;
+let exceed: NodeJS.Timeout | undefined;
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
@@ -37,9 +38,9 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	];
 
 	constructor(
-		private readonly _aiProvider: AIProvider,
+		private readonly _aiProvider: AIProvider | AIStreamProvicer,
 		private readonly _interactionSettings: InteractionSettings
-	) {}
+	) { }
 
 	async provideInlineCompletionItems(
 		document: TextDocument,
@@ -50,9 +51,12 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		const abort = new AbortController();
 		token.onCancellationRequested((e) => {
 			console.log(e);
-			abort.abort();
-			eventEmitter._onQueryComplete.fire();
+			abort.abort('token cancelled');
 		});
+
+		abort.signal.onabort = () => {
+			eventEmitter._onQueryComplete.fire();
+		};
 
 		const prefix = this.getPrefixContent();
 		const suffix = this.getSuffixContent();
@@ -61,14 +65,26 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			clearTimeout(timeout);
 		}
 
+		if (exceed) {
+			clearTimeout(exceed);
+		}
+
+		if (this._interactionSettings.codeStreaming) {
+			setTimeout(() => {
+				if (!abort.signal.aborted) {
+					abort.abort('Took too long');
+				}
+			}, 1000);
+		}
+		const delay = this._interactionSettings.codeStreaming ? 200 : 300;
 		return new Promise<InlineCompletionItem[]>((res) => {
 			timeout = setTimeout(() => {
-				this.bouncedRequest(prefix, abort.signal, suffix).then(
+				this.bouncedRequest(prefix, abort.signal, suffix, this._interactionSettings.codeStreaming).then(
 					(items) => {
 						res(items);
 					}
-				);
-			}, 300);
+				).catch(() => res([new InlineCompletionItem('')]));
+			}, delay);
 		});
 	}
 
@@ -132,17 +148,25 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	async bouncedRequest(
 		prefix: string,
 		signal: AbortSignal,
-		suffix: string
+		suffix: string,
+		streaming: boolean
 	): Promise<InlineCompletionItem[]> {
 		try {
 			eventEmitter._onQueryStart.fire();
-			const codeResponse = await this._aiProvider.codeComplete(
-				prefix,
-				suffix,
-				signal
-			);
-			eventEmitter._onQueryComplete.fire();
-			return [new InlineCompletionItem(codeResponse)];
+			if ('codeCompleteStream' in this._aiProvider && streaming) {
+				const codeStream = this._aiProvider.codeCompleteStream(prefix, suffix, signal);
+				const firstLine = await codeStream.next();
+				return [new InlineCompletionItem(firstLine.value)];
+			}
+			else {
+				const codeResponse = await this._aiProvider.codeComplete(
+					prefix,
+					suffix,
+					signal
+				);
+				eventEmitter._onQueryComplete.fire();
+				return [new InlineCompletionItem(codeResponse)];
+			}
 		} catch (error) {
 			console.warn(error);
 			eventEmitter._onQueryComplete.fire();
