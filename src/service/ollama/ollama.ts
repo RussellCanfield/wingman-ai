@@ -13,6 +13,12 @@ import { Deepseek } from "./models/deepseek";
 import { PhindCodeLlama } from "./models/phind-codellama";
 import { OllamaRequest, OllamaResponse } from "./types";
 
+const delay = (ms: number) => new Promise<void>((res) => {
+	setTimeout(() => {
+		res();
+	}, ms);
+});
+
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
 	settings: Settings["ollama"];
@@ -133,7 +139,7 @@ export class Ollama implements AIStreamProvicer {
 		if (signal.aborted) {
 			return undefined;
 		}
-		return fetch(
+		return await fetch(
 			new URL(`${this.settings?.baseUrl}${this.settings?.apiPath}`),
 			{
 				method: "POST",
@@ -185,8 +191,8 @@ export class Ollama implements AIStreamProvicer {
 		}
 	}
 
-	private async *generateCode(payload: OllamaRequest, signal: AbortSignal) {
-		const startTime = new Date().getTime();
+	private async *generateCode(payload: OllamaRequest, signal: AbortSignal): AsyncGenerator<string> {
+		const startTime = Date.now();
 		let response: Response | undefined;
 
 		try {
@@ -196,21 +202,25 @@ export class Ollama implements AIStreamProvicer {
 				`Ollama chat request with model: ${payload.model} failed with the following error: ${error}`
 			);
 			eventEmitter._onQueryComplete.fire();
+			return '';
 		}
 
 		if (!response?.body) {
-			return "";
+			return '';
 		}
 
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
+		const endTime = Date.now();
+		const executionTime = endTime - startTime;
 
 		loggingProvider.logInfo(
-			`Ollama - Chat Time To First Token execution time: ${executionTime} seconds`
+			`Ollama - Code Time To First Token execution time: ${executionTime} ms`
 		);
 
 		for await (const chunk of asyncIterator(response.body)) {
-			if (signal.aborted) return;
+			if (signal.aborted) {
+				loggingProvider.logInfo('Aborted while reading chunks');
+				return '';
+			}
 			const jsonString = this.decoder.decode(chunk);
 			// we can have more then one ollama response
 			const jsonStrings = jsonString
@@ -226,6 +236,7 @@ export class Ollama implements AIStreamProvicer {
 			} catch (e) {
 				loggingProvider.logError(`Error occured on ollama code generation ${e}`);
 				eventEmitter._onQueryComplete.fire();
+				return '';
 			}
 		}
 	}
@@ -292,15 +303,13 @@ export class Ollama implements AIStreamProvicer {
 	private codeCompleteRequest = async (sentences: string[], codeRequestOptions: OllamaRequest, signal: AbortSignal) => {
 		let words: string[] = [];
 		for await (const characters of this.generateCode(codeRequestOptions, signal)) {
-			if (!characters) {
-				continue;
-			}
 			if (characters.indexOf('\n') > -1) {
 				const splitOnLine = characters.split('\n');
 				let x = 0;
 				for (; x < splitOnLine.length - 1; x++) {
 					words.push(splitOnLine[x]);
-					sentences.push(words.join(''));
+					const sentence = words.join('');
+					sentences.push(sentence);
 					words = [];
 				}
 				words.push(splitOnLine[x]);
@@ -308,6 +317,9 @@ export class Ollama implements AIStreamProvicer {
 			else {
 				words.push(characters);
 			}
+		}
+		if (words.length) {
+			sentences.push(words.join(''));
 		}
 	};
 
@@ -322,22 +334,24 @@ export class Ollama implements AIStreamProvicer {
 			stream: true,
 			raw: true,
 			options: {
-				temperature: 0.3,
+				temperature: 0.4,
 				num_predict: this.interactionSettings?.codeMaxTokens ?? -1,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>"],
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n"],
 			},
 		};
 
 		let sentences: string[] = [];
-		this.codeCompleteRequest(sentences, codeRequestOptions, signal);
-		return new Promise((res) => {
-			setTimeout(() => {
-				res(sentences.join('\n'));
-			}, 600);
-		});
+		try {
+			this.codeCompleteRequest(sentences, codeRequestOptions, signal);
+			await delay(1500);
+			return sentences.join('\n');
+		}
+		catch {
+			return '';
+		}
 	}
 
 	public clearChatHistory(): void {
