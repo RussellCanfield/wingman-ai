@@ -7,9 +7,11 @@ import { AIProvider, GetInteractionSettings } from "../base";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
 import { Mixtral } from "./models/mixtral";
+import { asyncIterator } from "../asyncIterator";
 
 type HuggingFaceRequest = {
 	inputs: string;
+	stream?: boolean;
 	parameters: {
 		top_k?: number;
 		top_p?: number;
@@ -30,7 +32,14 @@ type HuggingFaceResponse = [
 	}
 ];
 
+type HuggingFaceStreamResponse = {
+	token: {
+		text: string;
+	};
+};
+
 export class HuggingFace implements AIProvider {
+	decoder = new TextDecoder();
 	settings: Settings["huggingface"];
 	chatHistory: string = "";
 	chatModel: HuggingFaceAIModel | undefined;
@@ -159,13 +168,35 @@ export class HuggingFace implements AIProvider {
 			return "";
 		}
 
-		const contents = (await response.json()) as HuggingFaceResponse;
+		let currentMessage = "";
+		for await (const chunk of asyncIterator(response.body)) {
+			if (signal.aborted) {
+				return "";
+			}
 
-		if (!contents.length) {
-			return "";
+			const decodedValue = this.decoder.decode(chunk);
+
+			currentMessage += decodedValue;
+
+			// Check if we have a complete event
+			const eventEndIndex = currentMessage.indexOf("\n\n");
+			if (eventEndIndex !== -1) {
+				// Extract the event data
+				const eventData = currentMessage.substring(0, eventEndIndex);
+
+				// Remove the event data from currentMessage
+				currentMessage = currentMessage.substring(eventEndIndex + 2);
+
+				// Remove the "data: " prefix and parse the JSON
+				const jsonStr = eventData.replace(/^data:/, "");
+				const parsedData = JSON.parse(
+					jsonStr
+				) as HuggingFaceStreamResponse;
+
+				// Yield the token text
+				yield parsedData.token.text;
+			}
 		}
-
-		yield contents[0].generated_text;
 	}
 
 	public async codeComplete(
@@ -233,7 +264,7 @@ export class HuggingFace implements AIProvider {
 			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
@@ -254,6 +285,7 @@ export class HuggingFace implements AIProvider {
 				.replace("{context}", ragContent ?? "")
 				.replace("{question}", prompt ?? "")
 				.replace(/\t/, ""),
+			stream: true,
 			parameters: {
 				repetition_penalty: 1.1,
 				temperature: 0.4,

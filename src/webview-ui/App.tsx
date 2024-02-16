@@ -130,14 +130,16 @@ const App = () => {
 	};
 
 	const commitMessageToHistory = () => {
+		const tempMessage = structuredClone(currentMessage.toString());
+		const tempContext = structuredClone(currentContext);
 		setMessages((messages) => {
 			const newHistory: ChatMessage[] = [
 				...messages,
 				{
 					from: "Assistant",
-					message: currentMessage,
+					message: tempMessage,
 					loading: false,
-					context: currentContext,
+					context: tempContext,
 				},
 			];
 
@@ -160,10 +162,11 @@ const App = () => {
 	};
 
 	const cancelAIResponse = () => {
+		console.log("cancel!");
+		commitMessageToHistory();
 		vscode.postMessage({
 			command: "cancel",
 		});
-		commitMessageToHistory();
 	};
 
 	const fetchAIResponse = (text: string) => {
