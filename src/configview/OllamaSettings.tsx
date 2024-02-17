@@ -19,7 +19,7 @@ const DropDownContainer = styled.div`
   align-items: flex-start;
   justify-content: flex-start;
   width: fit-content;
-  min-width: 200px;
+  min-width: 300px;
 & label {
   display: block;
   color: var(--vscode-foreground);
@@ -57,14 +57,14 @@ export const OllamaSettings = ({ codeModel, chatModel, ollamaModels }: OllamaSec
     <Container>
       <DropDownContainer>
         <label htmlFor="code-model">Code model:</label>
-        <VSCodeDropdown id="code-model" value={currentCodeModel} onChange={handleChange} style={{ minWidth: '200px' }}>
+        <VSCodeDropdown id="code-model" value={currentCodeModel} onChange={handleChange} style={{ minWidth: '100%' }}>
           <VSCodeOption>Not loaded</VSCodeOption>
           {ollamaModels.map(ab => <VSCodeOption key={ab}>{ab}</VSCodeOption>)}
         </VSCodeDropdown>
       </DropDownContainer>
       <DropDownContainer>
         <label htmlFor="chat-model">Chat model:</label>
-        <VSCodeDropdown id="chat-model" value={currentChatModel} style={{ minWidth: '200px' }} onChange={handleChatChange}>
+        <VSCodeDropdown id="chat-model" value={currentChatModel} style={{ minWidth: '100%' }} onChange={handleChatChange}>
           <VSCodeOption>Not loaded</VSCodeOption>
           {ollamaModels.map(ab => <VSCodeOption key={ab}>{ab}</VSCodeOption>)}
         </VSCodeDropdown>

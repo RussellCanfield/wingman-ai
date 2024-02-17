@@ -1,4 +1,4 @@
-import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react";
+import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeTextField as VSCodeTextFieldUI } from "@vscode/webview-ui-toolkit/react";
 import { useState } from 'react';
 import styled from 'styled-components';
 import { Settings } from '../types/Settings';
@@ -30,7 +30,25 @@ const DropDownContainer = styled.div`
   }
 `;
 
+const ActionPanel = styled.div`
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 8px;
+  align-items: center;
+`;
+
+const VSCodeTextField = styled(VSCodeTextFieldUI)`
+  min-width: 200px;
+`;
+
 type InteractionSettings = Required<Settings>['interactionSettings'];
+const tooltipInformation = {
+  streaming: 'Enabling this setting activates code streaming, prioritizing faster code completion results over detailed suggestions by providing shorter responses.',
+  ccw: 'Adjust the context window size to determine the amount of context included in code completion. Starting with a lower value (e.g., 128) is recommended, increasing as needed for better performance on more powerful setups.',
+  cmt: 'Controls the maximum number of tokens returned by code completion. Here we recommend starting low at 128.',
+  chcw: 'Adjust the context window size to determine the amount of context included in chat request. We start this at 4096, depending on the LLM you use it can be increased.',
+  chmt: 'Controls the maximum number of tokens returned by the chat request. Here we also start at 4096.'
+}
 export const InteractionSettings = (interactions: InteractionSettings) => {
   const [currentInteractions, setInteractions] = useState(interactions);
 
@@ -62,33 +80,42 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
     });
   };
 
+  const reset = () => {
+    setInteractions({ ...interactions });
+  };
+
   return (
     <Container>
       <DropDownContainer>
         <label htmlFor="code-streaming">Code streaming:</label>
-        <VSCodeDropdown id="code-streaming" data-name='codeStreaming' onChange={handleStreamChange} value={currentInteractions.codeStreaming.toString()} style={{ minWidth: '200px' }}>
+        <VSCodeDropdown title={tooltipInformation.streaming} id="code-streaming" data-name='codeStreaming' onChange={handleStreamChange} value={currentInteractions.codeStreaming.toString()} style={{ minWidth: '200px' }}>
           <VSCodeOption>true</VSCodeOption>
           <VSCodeOption>false</VSCodeOption>
         </VSCodeDropdown>
       </DropDownContainer>
-      <VSCodeTextField data-name='codeContextWindow' value={currentInteractions.codeContextWindow.toString()} onChange={handleChange}>
+      <VSCodeTextField title={tooltipInformation.ccw} data-name='codeContextWindow' value={currentInteractions.codeContextWindow.toString()} onChange={handleChange}>
         Code Context Window
       </VSCodeTextField>
 
-      <VSCodeTextField data-name='codeMaxTokens' value={currentInteractions.codeMaxTokens.toString()} onChange={handleChange}>
+      <VSCodeTextField title={tooltipInformation.cmt} data-name='codeMaxTokens' value={currentInteractions.codeMaxTokens.toString()} onChange={handleChange}>
         Code Max Tokens
       </VSCodeTextField>
 
-      <VSCodeTextField data-name='chatContextWindow' value={currentInteractions.chatContextWindow.toString()} onChange={handleChange}>
+      <VSCodeTextField title={tooltipInformation.chcw} data-name='chatContextWindow' value={currentInteractions.chatContextWindow.toString()} onChange={handleChange}>
         Chat Context Window
       </VSCodeTextField>
 
-      <VSCodeTextField data-name='chatMaxTokens' value={currentInteractions.chatMaxTokens.toString()} onChange={handleChange}>
+      <VSCodeTextField title={tooltipInformation.chmt} data-name='chatMaxTokens' value={currentInteractions.chatMaxTokens.toString()} onChange={handleChange}>
         Chat Max Tokens
       </VSCodeTextField>
-      <VSCodeButton onClick={handleClick}>
-        Save Interactions Settings
-      </VSCodeButton>
+      <ActionPanel>
+        <VSCodeButton onClick={handleClick}>
+          Save
+        </VSCodeButton>
+        <VSCodeButton appearance='secondary' onClick={reset}>
+          Cancel
+        </VSCodeButton>
+      </ActionPanel>
     </Container>
   );
 

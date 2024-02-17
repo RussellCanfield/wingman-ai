@@ -1,14 +1,27 @@
 import {
-  VSCodeDivider,
-  VSCodeTextArea,
-  VSCodeTextField,
+  VSCodeDivider
 } from "@vscode/webview-ui-toolkit/react";
 import { useEffect, useState } from 'react';
+import styled from 'styled-components';
 import { AppMessage } from '../types/Message';
 import { Settings } from '../types/Settings';
 import { InteractionSettings } from './InteractionSettings';
 import { OllamaSettings } from './OllamaSettings';
 import { vscode } from './utilities/vscode';
+
+const Container = styled.div`
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 8px;
+  align-items: stretch;
+`;
+
+const Section = styled.section`
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid gray;
+  width: 350px;
+`;
 
 export const App = () => {
   const [loading, setLoading] = useState(true);
@@ -31,7 +44,7 @@ export const App = () => {
         setLoading(false);
         return;
     }
-  }
+  };
 
   if (loading) {
     return <h3>Loading ...</h3>;
@@ -42,11 +55,14 @@ export const App = () => {
   }
 
   return (
-    <div>
-      <h3>Provider: {settings.aiProvider}</h3>
-      {settings.ollama && 'ollamaModels' in settings && <OllamaSettings {...settings.ollama} ollamaModels={settings.ollamaModels as string[]} />}
-      <VSCodeDivider />
-      <InteractionSettings {...settings.interactionSettings} />
-    </div>
-  )
-}
+    <Container>
+      <Section>
+        <h3>Provider: {settings.aiProvider}</h3>
+        {settings.ollama && 'ollamaModels' in settings && <OllamaSettings {...settings.ollama} ollamaModels={settings.ollamaModels as string[]} />}
+      </Section>
+      <Section>
+        <InteractionSettings {...settings.interactionSettings} />
+      </Section>
+    </Container>
+  );
+};
