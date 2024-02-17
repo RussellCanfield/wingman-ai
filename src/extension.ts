@@ -57,7 +57,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// context.subscriptions.push(
 	// 	vscode.languages.registerCodeActionsProvider(
-	// 		"typescript",
+	// 		QuickFixProvider.selector,
 	// 		new QuickFixProvider(),
 	// 		{
 	// 			providedCodeActionKinds:
