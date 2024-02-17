@@ -7,6 +7,7 @@ interface BaseServiceSettings {
 }
 
 export interface InteractionSettings {
+	codeStreaming: boolean,
 	codeContextWindow: number;
 	codeMaxTokens: number;
 	chatContextWindow: number;
@@ -14,7 +15,7 @@ export interface InteractionSettings {
 }
 
 export interface Settings {
-	aiProvider: string;
+	aiProvider: "Ollama" | "HuggingFace" | "OpenAI";
 	interactionSettings: InteractionSettings;
 	ollama?: BaseServiceSettings & {
 		apiPath: string;

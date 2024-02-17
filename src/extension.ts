@@ -1,11 +1,14 @@
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
+import { ConfigViewProvider } from "./providers/configViewProvider.js";
+import { ActivityStatusBar } from "./providers/statusBarProvider.js";
 import {
+	GetAllSettings,
 	GetInteractionSettings,
 	GetProviderFromSettings,
 } from "./service/base.js";
-import { ActivityStatusBar } from "./providers/statusBarProvider.js";
+import { Settings } from "./types/Settings.js";
 
 let statusBarProvider: ActivityStatusBar;
 
@@ -14,6 +17,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	const interactionSettings = GetInteractionSettings();
 
 	statusBarProvider = new ActivityStatusBar();
+
+	const settings = GetAllSettings();
+
+	if (settings.get<Settings["aiProvider"]>("Provider") === "Ollama") {
+		context.subscriptions.push(
+			vscode.window.registerWebviewViewProvider(
+				ConfigViewProvider.viewType,
+				new ConfigViewProvider(context.extensionUri, settings)
+			)
+		);
+	}
 
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration((e) => {

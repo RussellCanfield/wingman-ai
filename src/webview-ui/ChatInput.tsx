@@ -2,7 +2,7 @@ import {
 	VSCodeTextArea,
 	VSCodeTextField,
 } from "@vscode/webview-ui-toolkit/react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { FaPlay, FaStopCircle } from "react-icons/fa";
 import styled from "styled-components";
 
@@ -26,6 +26,10 @@ const ChatInput = ({
 	onChatCancelled,
 }: ChatInputProps) => {
 	const chatInputBox = useRef<any>(null);
+
+	useEffect(() => {
+		chatInputBox.current?.focus();
+	}, [chatInputBox]);
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
 		if (e.key === "Enter") {
@@ -53,6 +57,7 @@ const ChatInput = ({
 			<VSCodeTextArea
 				placeholder="Type here to chat with the extension"
 				ref={chatInputBox}
+				tabIndex={0}
 				style={
 					{
 						width: "100%",

@@ -1,20 +1,17 @@
 import * as vscode from "vscode";
-import { OllamaRequest, OllamaResponse } from "./types";
-import { asyncIterator } from "../asyncIterator";
-import { AIProvider, GetInteractionSettings } from "../base";
-import {
-	InteractionSettings,
-	Settings,
-	defaultMaxTokens,
-} from "../../types/Settings";
+import { eventEmitter } from "../../events/eventEmitter";
+import { loggingProvider } from "../../providers/loggingProvider";
 import { OllamaAIModel } from "../../types/Models";
+import { InteractionSettings, Settings } from "../../types/Settings";
+import { asyncIterator } from "../asyncIterator";
+import { AIStreamProvicer, GetInteractionSettings } from "../base";
+import { delay } from '../delay';
 import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
 import { PhindCodeLlama } from "./models/phind-codellama";
-import { loggingProvider } from "../../providers/loggingProvider";
-import { eventEmitter } from "../../events/eventEmitter";
+import { OllamaRequest, OllamaResponse } from "./types";
 
-export class Ollama implements AIProvider {
+export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
 	settings: Settings["ollama"];
 	chatHistory: number[] = [];
@@ -134,7 +131,7 @@ export class Ollama implements AIProvider {
 		if (signal.aborted) {
 			return undefined;
 		}
-		return fetch(
+		return await fetch(
 			new URL(`${this.settings?.baseUrl}${this.settings?.apiPath}`),
 			{
 				method: "POST",
@@ -182,6 +179,61 @@ export class Ollama implements AIProvider {
 			} catch (e) {
 				console.warn(e);
 				console.log(jsonString);
+			}
+		}
+	}
+
+	private async *generateCode(
+		payload: OllamaRequest,
+		signal: AbortSignal
+	): AsyncGenerator<string> {
+		const startTime = Date.now();
+		let response: Response | undefined;
+
+		try {
+			response = await this.fetchModelResponse(payload, signal);
+		} catch (error) {
+			loggingProvider.logError(
+				`Ollama chat request with model: ${payload.model} failed with the following error: ${error}`
+			);
+			eventEmitter._onQueryComplete.fire();
+			return "";
+		}
+
+		if (!response?.body) {
+			return "";
+		}
+
+		const endTime = Date.now();
+		const executionTime = endTime - startTime;
+
+		loggingProvider.logInfo(
+			`Ollama - Code Time To First Token execution time: ${executionTime} ms`
+		);
+
+		for await (const chunk of asyncIterator(response.body)) {
+			if (signal.aborted) {
+				loggingProvider.logInfo("Aborted while reading chunks");
+				return "";
+			}
+			const jsonString = this.decoder.decode(chunk);
+			// we can have more then one ollama response
+			const jsonStrings = jsonString
+				.replace(/}\n{/gi, "}\u241e{")
+				.split("\u241e");
+			try {
+				let codeLines: string[] = [];
+				for (const json of jsonStrings) {
+					const result = JSON.parse(json) as OllamaResponse;
+					codeLines.push(result.response);
+				}
+				yield codeLines.join("");
+			} catch (e) {
+				loggingProvider.logError(
+					`Error occured on ollama code generation ${e}`
+				);
+				eventEmitter._onQueryComplete.fire();
+				return "";
 			}
 		}
 	}
@@ -243,6 +295,95 @@ export class Ollama implements AIProvider {
 
 		const ollamaResponse = (await response.json()) as OllamaResponse;
 		return ollamaResponse.response;
+	}
+
+	private codeCompleteRequest = async (
+		sentences: string[],
+		codeRequestOptions: OllamaRequest,
+		signal: AbortSignal,
+		status: { done: boolean }
+	) => {
+		const startTime = new Date().getTime();
+		let words: string[] = [];
+		for await (const characters of this.generateCode(
+			codeRequestOptions,
+			signal
+		)) {
+			if (characters.indexOf("\n") > -1) {
+				const splitOnLine = characters.split("\n");
+				let x = 0;
+				for (; x < splitOnLine.length - 1; x++) {
+					words.push(splitOnLine[x]);
+					const sentence = words.join("");
+					sentences.push(sentence);
+					words = [];
+				}
+				words.push(splitOnLine[x]);
+			} else {
+				words.push(characters);
+			}
+		}
+		if (words.length) {
+			sentences.push(words.join(""));
+		}
+		status.done = true;
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		loggingProvider.logInfo(
+			`Ollama - Chat stream finished in ${executionTime} seconds with contents: ${JSON.stringify(
+				sentences
+			)}`
+		);
+	};
+
+	public async codeCompleteStream(
+		beginning: string,
+		ending: string,
+		signal: AbortSignal
+	): Promise<string> {
+		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
+			"{beginning}",
+			beginning
+		).replace("{ending}", ending);
+		const codeRequestOptions: OllamaRequest = {
+			model: this.settings?.codeModel!,
+			prompt,
+			stream: true,
+			raw: true,
+			options: {
+				temperature: 0.4,
+				num_predict: this.interactionSettings?.codeMaxTokens ?? -1,
+				top_k: 30,
+				top_p: 0.2,
+				repeat_penalty: 1.1,
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n"],
+			},
+		};
+
+		loggingProvider.logInfo(
+			`Ollama - Chat stream submitting request with body: ${JSON.stringify(
+				codeRequestOptions
+			)}`
+		);
+
+		let sentences: string[] = [];
+		let requestStatus = { done: false };
+		try {
+			this.codeCompleteRequest(sentences, codeRequestOptions, signal, requestStatus);
+			const start = Date.now();
+			let now = Date.now();
+			// lets setup a window to allow for the fastest return time
+			while (now - start < 1500) {
+				await delay(100);
+				if (requestStatus.done) {
+					return sentences.join('\n');
+				}
+			}
+			return sentences.join('\n');
+		} catch {
+			return "";
+		}
 	}
 
 	public clearChatHistory(): void {

@@ -2,13 +2,21 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.1.9",
+	"version": "0.2.0",
 	"publisher": "WingMan",
 	"license": "MIT",
-	"author": {
-		"name": "Russell Canfield",
-		"email": "rcanfield86@gmail.com"
-	},
+	"authors": [
+		[
+			{
+				"name": "Russell Canfield",
+				"email": "rcanfield86@gmail.com"
+			},
+			{
+				"name": "Harlen Alvarez",
+				"email": "harlenalvarez@gmail.com"
+			}
+		]
+	],
 	"icon": "media/icon.png",
 	"galleryBanner": {
 		"color": "#262626",
@@ -87,6 +95,13 @@
 					"title": "Wingman",
 					"icon": "media/jet-fighter.png"
 				}
+			],
+			"panel": [
+				{
+					"id": "wing-man-config",
+					"title": "Wingman Config",
+					"icon": "media/jet-fighter.png"
+				}
 			]
 		},
 		"views": {
@@ -94,6 +109,13 @@
 				{
 					"id": "wing-man-chat-view",
 					"name": "We won't leave you hanging!",
+					"type": "webview"
+				}
+			],
+			"wing-man-config": [
+				{
+					"id": "wingman.configview",
+					"name": "Wingman Config",
 					"type": "webview"
 				}
 			]
@@ -115,12 +137,18 @@
 					"type": "object",
 					"description": "Interaction settings help configure how parts of the extension interact with the LLM(s).",
 					"default": {
+						"codeStreaming": false,
 						"codeContextWindow": 256,
 						"codeMaxTokens": -1,
 						"chatContextWindow": 4096,
 						"chatMaxTokens": 4096
 					},
 					"properties": {
+						"codeStreaming": {
+							"type": "boolean",
+							"default": false,
+							"description": "Turns on streaming for code complete in order for code completion to return faster results at the expense of shorter answers"
+						},
 						"codeContextWindow": {
 							"type": "number",
 							"default": 256,

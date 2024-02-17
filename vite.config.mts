@@ -1,6 +1,5 @@
-import { defineConfig } from "vite";
 import path, { resolve } from "path";
-import { viteStaticCopy } from "vite-plugin-static-copy";
+import { defineConfig } from "vite";
 
 /** @type {import('vite').UserConfig} */
 const config = defineConfig({
@@ -20,6 +19,7 @@ const config = defineConfig({
 			input: {
 				extension: resolve(__dirname, "src/extension.ts"),
 				index: resolve(__dirname, "src/webview-ui/index.tsx"),
+				config: resolve(__dirname, "src/configview/index.tsx")
 			},
 			output: [
 				{
