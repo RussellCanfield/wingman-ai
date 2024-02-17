@@ -58,9 +58,7 @@ Ensure that the code is idiomatic and follows best practices.
 Only return the refactored code in your response, do not include any description or additional text. Do not use markdown syntax.
 Code to refactor:
 
-\`\`\`${document.languageId}
 ${highlightedCode}
-\`\`\`
 `,
 			"",
 			abortController.signal
