@@ -55,11 +55,11 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 Do not make assumptions about what modules are available, if no imports are in the code provided, do not attempt to import additional modules.
 The user may be referencing libraries you are not familiar with, if the syntax seems unfamiliar do your best to preserve it.
 Ensure that the code is idiomatic and follows best practices.
-Only return the refactored code in your response, do not include any description or additional text. Do not use markdown syntax.
 Code to refactor:
 
+\`\`\`${document.languageId}
 ${highlightedCode}
-`,
+\`\`\``,
 			"",
 			abortController.signal
 		);
@@ -69,6 +69,8 @@ ${highlightedCode}
 			newCode += chunk;
 		}
 
+		console.log(newCode);
+
 		newCode = extractCodeBlock(newCode);
 		refactorCode.edit.replace(document.uri, codeContextRange, newCode);
 
@@ -77,7 +79,7 @@ ${highlightedCode}
 }
 
 function extractCodeBlock(text: string) {
-	const regex = /```[\w]*\n([\s\S]*?)\n```/g;
+	const regex = /```.*?\n([\s\S]*?)\n```/g;
 	const matches = [];
 	let match;
 	while ((match = regex.exec(text)) !== null) {

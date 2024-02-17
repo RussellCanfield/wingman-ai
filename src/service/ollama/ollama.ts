@@ -5,7 +5,7 @@ import { OllamaAIModel } from "../../types/Models";
 import { InteractionSettings, Settings } from "../../types/Settings";
 import { asyncIterator } from "../asyncIterator";
 import { AIStreamProvicer, GetInteractionSettings } from "../base";
-import { delay } from '../delay';
+import { delay } from "../delay";
 import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
 import { PhindCodeLlama } from "./models/phind-codellama";
@@ -370,17 +370,22 @@ export class Ollama implements AIStreamProvicer {
 		let sentences: string[] = [];
 		let requestStatus = { done: false };
 		try {
-			this.codeCompleteRequest(sentences, codeRequestOptions, signal, requestStatus);
+			this.codeCompleteRequest(
+				sentences,
+				codeRequestOptions,
+				signal,
+				requestStatus
+			);
 			const start = Date.now();
 			let now = Date.now();
 			// lets setup a window to allow for the fastest return time
 			while (now - start < 1500) {
 				await delay(100);
 				if (requestStatus.done) {
-					return sentences.join('\n');
+					return sentences.join("\n");
 				}
 			}
-			return sentences.join('\n');
+			return sentences.join("\n");
 		} catch {
 			return "";
 		}
@@ -403,7 +408,7 @@ export class Ollama implements AIStreamProvicer {
             ${ragContent}`;
 		}
 
-		systemPrompt = systemPrompt.replace(/\t/, "");
+		systemPrompt = systemPrompt.replaceAll("\t", "");
 
 		const chatPayload: OllamaRequest = {
 			model: this.settings?.chatModel!,
@@ -417,7 +422,7 @@ export class Ollama implements AIStreamProvicer {
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>"],
 			},
 		};
 
