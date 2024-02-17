@@ -20,21 +20,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const settings = GetAllSettings();
 
-	if (settings.get<Settings["aiProvider"]>("Provider") === "Ollama") {
-		context.subscriptions.push(
-			vscode.window.registerWebviewViewProvider(
-				ConfigViewProvider.viewType,
-				new ConfigViewProvider(context.extensionUri, settings)
-			)
-		);
-	}
-
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration("Wingman")) {
 				vscode.commands.executeCommand("workbench.action.reloadWindow");
 			}
 		})
+	);
+
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			ConfigViewProvider.viewType,
+			new ConfigViewProvider(context.extensionUri, settings)
+		)
 	);
 
 	context.subscriptions.push(

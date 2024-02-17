@@ -1,45 +1,10 @@
-import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeTextField as VSCodeTextFieldUI } from "@vscode/webview-ui-toolkit/react";
+import { VSCodeButton, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
 import { useState } from 'react';
-import styled from 'styled-components';
 import { Settings } from '../types/Settings';
+import { ActionPanel, Container, DropDownContainer, VSCodeTextField } from './Config.styles';
 import { vscode } from './utilities/vscode';
 
-const Container = styled.div`
-  display: flex;
-  flex-flow: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 8px;
-`;
 
-const DropDownContainer = styled.div`
-  box-sizing: border-box;
-  display: flex;
-  flex-flow: column nowrap;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: fit-content;
-  min-width: 200px;
-& label {
-  display: block;
-  color: var(--vscode-foreground);
-  cursor: pointer;
-  font-size: var(--vscode-font-size);
-  line-height: normal;
-  margin-bottom: 2px;
-  }
-`;
-
-const ActionPanel = styled.div`
-  display: flex;
-  flex-flow: row nowrap;
-  gap: 8px;
-  align-items: center;
-`;
-
-const VSCodeTextField = styled(VSCodeTextFieldUI)`
-  min-width: 200px;
-`;
 
 type InteractionSettings = Required<Settings>['interactionSettings'];
 const tooltipInformation = {
@@ -118,5 +83,4 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
       </ActionPanel>
     </Container>
   );
-
 }
