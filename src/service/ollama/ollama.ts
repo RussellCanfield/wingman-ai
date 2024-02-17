@@ -5,17 +5,11 @@ import { OllamaAIModel } from "../../types/Models";
 import { InteractionSettings, Settings } from "../../types/Settings";
 import { asyncIterator } from "../asyncIterator";
 import { AIStreamProvicer, GetInteractionSettings } from "../base";
+import { delay } from '../delay';
 import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
 import { PhindCodeLlama } from "./models/phind-codellama";
 import { OllamaRequest, OllamaResponse } from "./types";
-
-const delay = (ms: number) =>
-	new Promise<void>((res) => {
-		setTimeout(() => {
-			res();
-		}, ms);
-	});
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -306,7 +300,8 @@ export class Ollama implements AIStreamProvicer {
 	private codeCompleteRequest = async (
 		sentences: string[],
 		codeRequestOptions: OllamaRequest,
-		signal: AbortSignal
+		signal: AbortSignal,
+		status: { done: boolean }
 	) => {
 		const startTime = new Date().getTime();
 		let words: string[] = [];
@@ -331,7 +326,7 @@ export class Ollama implements AIStreamProvicer {
 		if (words.length) {
 			sentences.push(words.join(""));
 		}
-
+		status.done = true;
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
@@ -373,10 +368,19 @@ export class Ollama implements AIStreamProvicer {
 		);
 
 		let sentences: string[] = [];
+		let requestStatus = { done: false };
 		try {
-			this.codeCompleteRequest(sentences, codeRequestOptions, signal);
-			await delay(700);
-			return sentences.join("\n");
+			this.codeCompleteRequest(sentences, codeRequestOptions, signal, requestStatus);
+			const start = Date.now();
+			let now = Date.now();
+			// lets setup a window to allow for the fastest return time
+			while (now - start < 1500) {
+				await delay(100);
+				if (requestStatus.done) {
+					return sentences.join('\n');
+				}
+			}
+			return sentences.join('\n');
 		} catch {
 			return "";
 		}

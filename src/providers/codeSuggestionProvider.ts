@@ -10,6 +10,7 @@ import {
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvicer } from "../service/base";
+import { delay } from '../service/delay';
 import { InteractionSettings } from "../types/Settings";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
@@ -50,8 +51,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		let timeout: NodeJS.Timeout | undefined;
 
 		const abort = new AbortController();
-		const prefix = this.getPrefixContent();
-		const suffix = this.getSuffixContent();
+		const [prefix, suffix] = this.getContentWindow(document, position);
+
 		token.onCancellationRequested(() => {
 			try {
 				if (timeout) {
@@ -64,73 +65,52 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}
 		});
 
-		const delay = this._interactionSettings.codeStreaming ? 150 : 300;
-		return new Promise<InlineCompletionItem[]>((res) => {
-			timeout = setTimeout(() => {
-				this.bouncedRequest(prefix, abort.signal, suffix, this._interactionSettings.codeStreaming).then(
-					(items) => {
-						res(items);
-					}
-				).catch(() => res([new InlineCompletionItem('')]));
-			}, delay);
-		});
+		const delayMs = this._interactionSettings.codeStreaming ? 150 : 300;
+		try {
+			await delay(delayMs);
+			return await this.bouncedRequest(prefix, abort.signal, suffix, this._interactionSettings.codeStreaming);
+		}
+		catch {
+			return [new InlineCompletionItem('')];
+		}
 	}
 
-	private getPrefixContent() {
-		const editor = vscode.window.activeTextEditor;
-		if (!editor) {
-			return "";
+	private getContentWindow(document: TextDocument, position: Position) {
+		let prefix: string = '';
+		let suffix: string = '';
+		const length = this._interactionSettings.codeContextWindow;
+		let tokenCount = 0;
+		const text = document.getText();
+		let current = document.offsetAt(position);
+		let top = current;
+		let bottom = current;
+
+		// every 3 chars we add a new token to the token count
+		let letCurrentChatToTokenCount = 0;
+		while (tokenCount < length && (top > -1 || bottom < text.length)) {
+			if (top > -1) {
+				letCurrentChatToTokenCount++;
+				top--;
+			}
+
+			if (letCurrentChatToTokenCount === 3) {
+				tokenCount++;
+				letCurrentChatToTokenCount = 0;
+			}
+
+			if (bottom < text.length) {
+				letCurrentChatToTokenCount++;
+				bottom++;
+			}
+
+			if (letCurrentChatToTokenCount === 3) {
+				tokenCount++;
+				letCurrentChatToTokenCount = 0;
+			}
 		}
-
-		const { document, selection } = editor;
-
-		let currentLine = selection.active.line;
-		let text = document
-			.lineAt(selection.active.line)
-			.text.substring(0, selection.active.character);
-		const halfContext = this._interactionSettings.codeContextWindow / 2;
-
-		while (text.length < halfContext && currentLine > 0) {
-			currentLine--;
-			text = document.lineAt(currentLine).text + "\n" + text;
-		}
-
-		if (text.length > halfContext) {
-			const start = text.length - halfContext;
-			text = text.substring(start, text.length);
-		}
-
-		return text;
-	}
-
-	private getSuffixContent() {
-		const editor = vscode.window.activeTextEditor;
-		if (!editor) {
-			return "";
-		}
-
-		const { document, selection } = editor;
-
-		let currentLine = selection.active.line;
-
-		let text = document
-			.lineAt(selection.active.line)
-			.text.substring(selection.active.character);
-		const halfContext = this._interactionSettings.codeContextWindow / 2;
-
-		while (
-			text.length < halfContext &&
-			currentLine < document.lineCount - 1
-		) {
-			currentLine++;
-			text += "\n" + document.lineAt(currentLine).text;
-		}
-
-		if (text.length > halfContext) {
-			text = text.substring(0, halfContext);
-		}
-
-		return text;
+		prefix = text.substring(top, current);
+		suffix = text.substring(current, bottom);
+		return [prefix, suffix];
 	}
 
 	async bouncedRequest(
