@@ -12,11 +12,13 @@ export class QuickFixProvider implements vscode.CodeActionProvider {
 		token: vscode.CancellationToken
 	): vscode.ProviderResult<(vscode.Command | vscode.CodeAction)[]> {
 		const quickFix = new vscode.CodeAction(
-			"My Quick Fix",
+			"✈️ Wingman - Quick Fix",
 			vscode.CodeActionKind.QuickFix
 		);
 		quickFix.edit = new vscode.WorkspaceEdit();
-		// Add edits to quickFix.edit here
+
+		console.log(range, context);
+
 		return [quickFix];
 	}
 }

@@ -7,6 +7,7 @@ import {
 } from "./service/base.js";
 import { ActivityStatusBar } from "./providers/statusBarProvider.js";
 import { QuickFixProvider } from "./providers/quickFixProvider.js";
+import { RefactorProvider } from "./providers/refactorProvider.js";
 
 let statusBarProvider: ActivityStatusBar;
 
@@ -43,13 +44,24 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
+	// context.subscriptions.push(
+	// 	vscode.languages.registerCodeActionsProvider(
+	// 		"typescript",
+	// 		new QuickFixProvider(),
+	// 		{
+	// 			providedCodeActionKinds:
+	// 				QuickFixProvider.providedCodeActionKinds,
+	// 		}
+	// 	)
+	// );
+
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
-			"typescript",
-			new QuickFixProvider(),
+			RefactorProvider.selector,
+			new RefactorProvider(aiProvider),
 			{
 				providedCodeActionKinds:
-					QuickFixProvider.providedCodeActionKinds,
+					RefactorProvider.providedCodeActionKinds,
 			}
 		)
 	);
