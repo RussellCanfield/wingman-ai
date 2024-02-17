@@ -89,7 +89,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		if (currentProvider !== 'Ollama') {
 			this._config.update('Provider', 'Ollama');
 		}
-		this._config.update('Ollama', value, false);
+		this._config.update('Ollama', value);
 	};
 
 	private updateAndSetHF = (value: ApiSettingsType) => {
@@ -97,7 +97,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		if (currentProvider !== 'HuggingFace') {
 			this._config.update('Provider', 'HuggingFace');
 		}
-		this._config.update('HuggingFace', value, false);
+		this._config.update('HuggingFace', value);
 	};
 
 	private updateAndSetOpenAI = (value: ApiSettingsType) => {
@@ -105,7 +105,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		if (currentProvider !== 'OpenAI') {
 			this._config.update('Provider', 'OpenAI');
 		}
-		this._config.update('OpenAI', value, false);
+		this._config.update('OpenAI', value);
 	};
 
 	private changeInteractions = (value: unknown) => {
@@ -113,7 +113,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			...GetInteractionSettings(),
 			...(value as InteractionSettings),
 		};
-		this._config.update("InteractionSettings", updated, false);
+		this._config.update("InteractionSettings", updated);
 	};
 
 	private _getHtml = (webview: vscode.Webview) => {
