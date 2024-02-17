@@ -113,37 +113,62 @@ export class OpenAI implements AIProvider {
 			`OpenAI - Chat Time To First Token execution time: ${executionTime} seconds`
 		);
 
+		// let currentMessage = "";
+		// for await (const chunk of asyncIterator(response.body)) {
+		// 	if (signal.aborted) {
+		// 		return "";
+		// 	}
+
+		// 	const decodedValue = this.decoder.decode(chunk).trim();
+
+		// 	//TODO: Refactor for cleaner handling between partial chunks in streaming responses.
+		// 	if (
+		// 		decodedValue.startsWith("\ndata: ") ||
+		// 		decodedValue.startsWith("data: ")
+		// 	) {
+		// 		if (
+		// 			currentMessage.endsWith("\n") ||
+		// 			currentMessage.indexOf("\n\ndata: ") > -1
+		// 		) {
+		// 			const sanitizedChunk = currentMessage
+		// 				.replace(/^(\n)?data: /g, "")
+		// 				.replace(/\n+$/, "");
+
+		// 			const splitChunks = sanitizedChunk.split("\n\ndata: ");
+
+		// 			for (const split of splitChunks) {
+		// 				yield JSON.parse(split) as OpenAIStreamResponse;
+		// 			}
+		// 		}
+
+		// 		currentMessage = decodedValue;
+		// 	} else {
+		// 		currentMessage += decodedValue;
+		// 	}
+		// }
+
 		let currentMessage = "";
 		for await (const chunk of asyncIterator(response.body)) {
 			if (signal.aborted) {
 				return "";
 			}
 
-			const decodedValue = this.decoder.decode(chunk).trim();
+			const decodedValue = this.decoder.decode(chunk);
 
-			//TODO: Refactor for cleaner handling between partial chunks in streaming responses.
-			if (
-				decodedValue.startsWith("\ndata: ") ||
-				decodedValue.startsWith("data: ")
-			) {
-				if (
-					currentMessage.endsWith("\n") ||
-					currentMessage.indexOf("\n\ndata: ") > -1
-				) {
-					const sanitizedChunk = currentMessage
-						.replace(/^(\n)?data: /g, "")
-						.replace(/\n+$/, "");
+			currentMessage += decodedValue;
 
-					const splitChunks = sanitizedChunk.split("\n\ndata: ");
+			// Check if we have a complete event
+			const eventEndIndex = currentMessage.indexOf("\n\n");
+			if (eventEndIndex !== -1) {
+				// Extract the event data
+				const eventData = currentMessage.substring(0, eventEndIndex);
 
-					for (const split of splitChunks) {
-						yield JSON.parse(split) as OpenAIStreamResponse;
-					}
-				}
+				// Remove the event data from currentMessage
+				currentMessage = currentMessage.substring(eventEndIndex + 2);
 
-				currentMessage = decodedValue;
-			} else {
-				currentMessage += decodedValue;
+				// Remove the "data: " prefix and parse the JSON
+				const jsonStr = eventData.replace(/^data: /, "");
+				yield JSON.parse(jsonStr) as OpenAIStreamResponse;
 			}
 		}
 	}

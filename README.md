@@ -126,6 +126,17 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.2.1
+**Wingman Congfig** - small release to add the rest of the config settings to the Config Panel.
+
+### 0.2.0
+
+**Wingman Config** - a new configuration view is available in the editor, allowing you to change settings for better speed/performance without going into VSCode's settings - this is currently limited to Ollama for this release.
+
+**Streaming Code Completion** - as part of the new configuration screen, you can now set code completion to "streaming" which will allow for better code completion without having to wait for the full response to load.
+
+**Chat auto focus** - the chat input for Wingman will now auto focus on load.
+
 ### 0.1.9
 
 Chat now has a text area for easier multi-line support! Fixed an issue affecting chat context.

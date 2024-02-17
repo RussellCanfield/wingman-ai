@@ -1,7 +1,9 @@
 import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
+import { ConfigViewProvider } from "./providers/configViewProvider.js";
 import {
+	GetAllSettings,
 	GetInteractionSettings,
 	GetProviderFromSettings,
 } from "./service/base.js";
@@ -17,12 +19,21 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	statusBarProvider = new ActivityStatusBar();
 
+	const settings = GetAllSettings();
+
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration("Wingman")) {
 				vscode.commands.executeCommand("workbench.action.reloadWindow");
 			}
 		})
+	);
+
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			ConfigViewProvider.viewType,
+			new ConfigViewProvider(context.extensionUri, settings)
+		)
 	);
 
 	context.subscriptions.push(
