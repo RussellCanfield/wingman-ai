@@ -6,6 +6,7 @@ import {
 	GetProviderFromSettings,
 } from "./service/base.js";
 import { ActivityStatusBar } from "./providers/statusBarProvider.js";
+import { QuickFixProvider } from "./providers/quickFixProvider.js";
 
 let statusBarProvider: ActivityStatusBar;
 
@@ -39,6 +40,17 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.languages.registerInlineCompletionItemProvider(
 			CodeSuggestionProvider.selector,
 			new CodeSuggestionProvider(aiProvider, interactionSettings)
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.languages.registerCodeActionsProvider(
+			"typescript",
+			new QuickFixProvider(),
+			{
+				providedCodeActionKinds:
+					QuickFixProvider.providedCodeActionKinds,
+			}
 		)
 	);
 }
