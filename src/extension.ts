@@ -2,13 +2,14 @@ import * as vscode from "vscode";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { ConfigViewProvider } from "./providers/configViewProvider.js";
-import { ActivityStatusBar } from "./providers/statusBarProvider.js";
 import {
 	GetAllSettings,
 	GetInteractionSettings,
 	GetProviderFromSettings,
 } from "./service/base.js";
-import { Settings } from "./types/Settings.js";
+import { ActivityStatusBar } from "./providers/statusBarProvider.js";
+import { QuickFixProvider } from "./providers/quickFixProvider.js";
+import { RefactorProvider } from "./providers/refactorProvider.js";
 
 let statusBarProvider: ActivityStatusBar;
 
@@ -51,6 +52,28 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.languages.registerInlineCompletionItemProvider(
 			CodeSuggestionProvider.selector,
 			new CodeSuggestionProvider(aiProvider, interactionSettings)
+		)
+	);
+
+	// context.subscriptions.push(
+	// 	vscode.languages.registerCodeActionsProvider(
+	// 		"typescript",
+	// 		new QuickFixProvider(),
+	// 		{
+	// 			providedCodeActionKinds:
+	// 				QuickFixProvider.providedCodeActionKinds,
+	// 		}
+	// 	)
+	// );
+
+	context.subscriptions.push(
+		vscode.languages.registerCodeActionsProvider(
+			RefactorProvider.selector,
+			new RefactorProvider(aiProvider),
+			{
+				providedCodeActionKinds:
+					RefactorProvider.providedCodeActionKinds,
+			}
 		)
 	);
 }
