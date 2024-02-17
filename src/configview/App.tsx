@@ -1,12 +1,9 @@
-import {
-  VSCodeDivider
-} from "@vscode/webview-ui-toolkit/react";
 import { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { AppMessage } from '../types/Message';
 import { Settings } from '../types/Settings';
+import { AiProvider } from './AiProvider';
 import { InteractionSettings } from './InteractionSettings';
-import { OllamaSettings } from './OllamaSettings';
 import { vscode } from './utilities/vscode';
 
 const Container = styled.div`
@@ -22,10 +19,10 @@ const Section = styled.section`
   border: 1px solid gray;
   width: 350px;
 `;
-
+export type InitSettings = Settings & { ollamaModels: string[] };
 export const App = () => {
   const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const [settings, setSettings] = useState<InitSettings | null>(null);
   useEffect(() => {
     vscode.postMessage({
       command: 'init'
@@ -40,7 +37,7 @@ export const App = () => {
     const { command, value } = event.data;
     switch (command) {
       case 'init':
-        setSettings(JSON.parse(value as string) as Settings);
+        setSettings(JSON.parse(value as string) as InitSettings);
         setLoading(false);
         return;
     }
@@ -57,8 +54,7 @@ export const App = () => {
   return (
     <Container>
       <Section>
-        <h3>Provider: {settings.aiProvider}</h3>
-        {settings.ollama && 'ollamaModels' in settings && <OllamaSettings {...settings.ollama} ollamaModels={settings.ollamaModels as string[]} />}
+        <AiProvider {...settings} />
       </Section>
       <Section>
         <InteractionSettings {...settings.interactionSettings} />

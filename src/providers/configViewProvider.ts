@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { GetInteractionSettings } from "../service/base";
 import { AppMessage } from "../types/Message";
-import { InteractionSettings, Settings } from "../types/Settings";
+import { ApiSettingsType, InteractionSettings, OllamaSettingsType, Settings } from "../types/Settings";
 export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.configview";
 	private _view?: vscode.WebviewView;
@@ -10,7 +10,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _config: vscode.WorkspaceConfiguration
-	) {}
+	) { }
 	resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext<unknown>,
@@ -58,6 +58,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				"Ollama",
 			interactionSettings: GetInteractionSettings(),
 			ollama: this._config.get<Settings["ollama"]>("Ollama"),
+			huggingface: this._config.get<Settings['huggingface']>('HuggingFace'),
+			openai: this._config.get<Settings['openai']>('OpenAI')
 		} satisfies Settings;
 
 		if (settings.ollama) {
@@ -71,6 +73,10 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			//@ts-ignore
 			settings["ollamaModels"] = modelNames;
 		}
+		else {
+			//@ts-ignore
+			settings['ollamaModels'] = [];
+		}
 		return JSON.stringify(settings);
 	};
 
@@ -78,22 +84,28 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		console.log(value);
 	};
 
-	private ollamaChangeCode = (value: unknown) => {
-		const ollamaConfig = this._config.get<Settings["ollama"]>("Ollama");
-		if (ollamaConfig) {
-			const newConfig = { ...ollamaConfig };
-			newConfig.codeModel = value as string;
-			this._config.update("Ollama", newConfig);
+	private updateAndSetOllama = (value: OllamaSettingsType) => {
+		const currentProvider = this._config.get<Settings['aiProvider']>('Provider');
+		if (currentProvider !== 'Ollama') {
+			this._config.update('Provider', 'Ollama');
 		}
+		this._config.update('Ollama', value);
 	};
 
-	private ollamaChangeChat = (value: unknown) => {
-		const ollamaConfig = this._config.get<Settings["ollama"]>("Ollama");
-		if (ollamaConfig) {
-			const newConfig = { ...ollamaConfig };
-			newConfig.chatModel = value as string;
-			this._config.update("Ollama", newConfig);
+	private updateAndSetHF = (value: ApiSettingsType) => {
+		const currentProvider = this._config.get<Settings['aiProvider']>('Provider');
+		if (currentProvider !== 'HuggingFace') {
+			this._config.update('Provider', 'HuggingFace');
 		}
+		this._config.update('HuggingFace', value);
+	};
+
+	private updateAndSetOpenAI = (value: ApiSettingsType) => {
+		const currentProvider = this._config.get<Settings['aiProvider']>('Provider');
+		if (currentProvider !== 'OpenAI') {
+			this._config.update('Provider', 'OpenAI');
+		}
+		this._config.update('OpenAI', value);
 	};
 
 	private changeInteractions = (value: unknown) => {

@@ -126,6 +126,9 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.2.1
+**Wingman Congfig** - small release to add the rest of the config settings to the Config Panel.
+
 ### 0.2.0
 
 **Wingman Config** - a new configuration view is available in the editor, allowing you to change settings for better speed/performance without going into VSCode's settings - this is currently limited to Ollama for this release.
