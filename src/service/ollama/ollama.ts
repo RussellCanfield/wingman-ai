@@ -456,7 +456,7 @@ export class Ollama implements AIStreamProvicer {
 			system: systemPrompt,
 			stream: false,
 			options: {
-				num_predict: 1024,
+				num_predict: 512,
 				temperature: 0.4,
 				top_k: 30,
 				top_p: 0.2,
