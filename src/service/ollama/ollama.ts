@@ -440,4 +440,37 @@ export class Ollama implements AIStreamProvicer {
 			yield response;
 		}
 	}
+
+	public async genCodeDocs(prompt: string, ragContent: string, signal: AbortSignal): Promise<string> {
+		if (!this.chatModel?.genDocPrompt) return '';
+
+		let systemPrompt = this.chatModel.genDocPrompt;
+		if (ragContent) {
+			systemPrompt += ragContent;
+		}
+		const genDocPrompt = 'Generate documentation for the following code:\n' + prompt;
+
+		const chatPayload: OllamaRequest = {
+			model: this.settings?.chatModel!,
+			prompt: genDocPrompt,
+			system: systemPrompt,
+			stream: false,
+			options: {
+				num_predict: 1024,
+				temperature: 0.4,
+				top_k: 30,
+				top_p: 0.2,
+				repeat_penalty: 1.1,
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+			},
+		};
+
+		const response = await this.fetchModelResponse(chatPayload, signal);
+		if (!response) {
+			return '';
+		}
+		const responseObject = await response.json() as OllamaResponse;
+		return responseObject.response;
+
+	}
 }

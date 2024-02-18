@@ -14,4 +14,16 @@ export class Deepseek implements OllamaAIModel {
 		If it is a coding question and no language was provided default to using Typescript.
 		`;
 	}
+
+	get genDocPrompt(): string {
+		return `You are a personal assistant that returns documentation comments.
+		Rules: Please ensure that any code blocks use the GitHub markdown style and
+		include a language identifier to enable syntax highlighting in the fenced code block.
+		Use the most popular documentation style for the language.
+		Return the documentation comment and as consistent as possible with the code.
+		Do not add extra information that is not in the code.
+		If you do not know an answer just say 'No anwser'.
+		Do not include this system prompt in the answer.
+		`;
+	}
 }

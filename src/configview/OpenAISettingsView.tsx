@@ -26,7 +26,7 @@ export const OpenAISettingsView = ({ codeModel, chatModel, baseUrl, apiKey, onCh
       <VSCodeTextField onChange={handleChangeInput} value={baseUrl} data-name='baseUrl' title="OpenAI base url">
         Base url:
       </VSCodeTextField>
-      <VSCodeTextField onChange={handleChangeInput} value={apiKey} data-name='apiPath' title="OpenAI api key">
+      <VSCodeTextField onChange={handleChangeInput} value={apiKey} data-name='apiKey' title="OpenAI api key">
         Api key:
       </VSCodeTextField>
     </Container>
