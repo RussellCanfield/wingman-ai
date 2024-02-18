@@ -4,6 +4,8 @@ import { AIProvider } from "../service/base";
 let abortController = new AbortController();
 
 export class RefactorProvider implements vscode.CodeActionProvider {
+	public static readonly command = "wingmanai.refactorcode";
+
 	public static readonly selector: vscode.DocumentSelector = [
 		{ scheme: "file", language: "typescript" },
 		{ scheme: "file", language: "javascript" },
@@ -31,27 +33,61 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 
 	constructor(private readonly _aiProvider: AIProvider) {}
 
-	async provideCodeActions(
+	provideCodeActions(
 		document: vscode.TextDocument,
 		range: vscode.Range | vscode.Selection,
 		context: vscode.CodeActionContext,
 		token: vscode.CancellationToken
 	) {
-		if (context.triggerKind !== vscode.CodeActionTriggerKind.Invoke) {
-			return;
-		}
-
-		const refactorCode = new vscode.CodeAction(
-			"✈️ Wingman - Refactor",
+		const codeAction = new vscode.CodeAction(
+			"✈️ Refactor using Wingman",
 			vscode.CodeActionKind.Refactor
 		);
-		refactorCode.edit = new vscode.WorkspaceEdit();
+		codeAction.edit = new vscode.WorkspaceEdit();
+		codeAction.command = {
+			command: RefactorProvider.command,
+			title: "✈️ Refactor using Wingman",
+			arguments: [
+				document,
+				range,
+				this._aiProvider,
+				vscode.window.activeTextEditor,
+			],
+		};
+		return [codeAction];
+	}
 
-		const codeContextRange = new vscode.Range(range.start, range.end);
-		const highlightedCode = document.getText(codeContextRange);
+	static refactorCode(
+		document: vscode.TextDocument,
+		range: vscode.Range | vscode.Selection,
+		aiProvider: AIProvider,
+		editor: vscode.TextEditor
+	) {
+		return vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Window,
+				title: "Refactoring...",
+			},
+			async (process, token) => {
+				if (token.isCancellationRequested && abortController) {
+					abortController.abort();
+				}
 
-		const generator = this._aiProvider.chat(
-			`Refactor the following code to be clean, concise and performant. Always favor readability.
+				const symbols = await vscode.commands.executeCommand<
+					vscode.DocumentSymbol[]
+				>("vscode.executeDocumentSymbolProvider", document.uri);
+				if (!symbols) {
+					return;
+				}
+
+				const codeContextRange = new vscode.Range(
+					range.start,
+					range.end
+				);
+				const highlightedCode = document.getText(codeContextRange);
+
+				const generator = aiProvider.chat(
+					`Refactor the following code to be clean, concise and performant. Always favor readability.
 Do not make assumptions about what modules are available, if no imports are in the code provided, do not attempt to import additional modules.
 The user may be referencing libraries you are not familiar with, if the syntax seems unfamiliar do your best to preserve it.
 Ensure that the code is idiomatic and follows best practices.
@@ -60,21 +96,23 @@ Code to refactor:
 \`\`\`${document.languageId}
 ${highlightedCode}
 \`\`\``,
-			"",
-			abortController.signal
+					"",
+					abortController.signal
+				);
+
+				let newCode = "";
+				for await (const chunk of generator) {
+					newCode += chunk;
+				}
+
+				console.log(newCode);
+
+				newCode = extractCodeBlock(newCode);
+				editor?.edit((builder) => {
+					builder.replace(codeContextRange, newCode);
+				});
+			}
 		);
-
-		let newCode = "";
-		for await (const chunk of generator) {
-			newCode += chunk;
-		}
-
-		console.log(newCode);
-
-		newCode = extractCodeBlock(newCode);
-		refactorCode.edit.replace(document.uri, codeContextRange, newCode);
-
-		return [refactorCode];
 	}
 }
 
