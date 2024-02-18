@@ -26,10 +26,9 @@ export const HFSettingsView = ({ codeModel, chatModel, baseUrl, apiKey, onChange
       <VSCodeTextField onChange={handleChangeInput} value={baseUrl} data-name='baseUrl' title="HF base url">
         Base url:
       </VSCodeTextField>
-      <VSCodeTextField onChange={handleChangeInput} value={apiKey} data-name='apiPath' title="HF api key">
+      <VSCodeTextField onChange={handleChangeInput} value={apiKey} data-name='apiKey' title="HF api key">
         Api key:
       </VSCodeTextField>
     </Container>
   );
-
 }

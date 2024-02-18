@@ -3,11 +3,11 @@ import { eventEmitter } from "../../events/eventEmitter";
 import { loggingProvider } from "../../providers/loggingProvider";
 import { HuggingFaceAIModel } from "../../types/Models";
 import { InteractionSettings, Settings } from "../../types/Settings";
+import { asyncIterator } from "../asyncIterator";
 import { AIProvider, GetInteractionSettings } from "../base";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
 import { Mixtral } from "./models/mixtral";
-import { asyncIterator } from "../asyncIterator";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -264,7 +264,7 @@ export class HuggingFace implements AIProvider {
 			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
@@ -319,5 +319,44 @@ export class HuggingFace implements AIProvider {
 		)) {
 			yield chunk;
 		}
+	}
+
+	public async genCodeDocs(prompt: string, ragContent: string, signal: AbortSignal): Promise<string> {
+		if (!this.chatModel?.genDocPrompt) return '';
+
+		const genDocPrompt = 'Generate documentation for the following code:\n' + prompt;
+
+		const promptInput = this.chatModel!.genDocPrompt
+			.replace("{context}", ragContent ?? "")
+			.replace("{code}", genDocPrompt ?? "")
+			.replace(/\t/, "");
+
+		const chatPayload: HuggingFaceRequest = {
+			inputs: promptInput,
+			stream: false,
+			parameters: {
+				repetition_penalty: 1.1,
+				temperature: 0.4,
+				top_k: 30,
+				top_p: 0.2,
+				max_new_tokens: this.interactionSettings?.codeMaxTokens,
+				return_full_text: false,
+				do_sample: false,
+			},
+			options: {
+				wait_for_model: true
+			}
+		};
+
+		const response = await this.fetchModelResponse(chatPayload, this.settings?.chatModel!, signal);
+		if (!response) {
+			return '';
+		}
+		const huggingFaceResponse = await response.json() as HuggingFaceResponse;
+		return huggingFaceResponse.length > 0
+			? //temporary fix. Not sure why HF doesn't specify stop tokens
+			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			: "";
+
 	}
 }

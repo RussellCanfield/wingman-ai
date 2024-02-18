@@ -21,6 +21,11 @@ export class GenDocs implements vscode.CodeActionProvider {
     if (!isTsRelated(document.languageId) && document.languageId !== 'python' && document.languageId !== 'csharp') {
       return;
     }
+    const provider = GetProviderFromSettings();
+    // if provider does not have 'genCodeDocs' in provider return
+    if (!('genCodeDocs' in provider)) {
+      return;
+    }
     const codeAction = new vscode.CodeAction('Document using wingman-ai', vscode.CodeActionKind.QuickFix);
     codeAction.command = { command: GenDocs.command, title: 'Document using wingman-ai', arguments: [document, range] };
     return [codeAction];

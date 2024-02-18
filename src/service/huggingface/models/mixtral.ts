@@ -23,17 +23,17 @@ export class Mixtral implements HuggingFaceAIModel {
 	}
 
 	get genDocPrompt(): string {
-		return `<s> [INST] You are a personal assistant that generates code documentation.
+		return `<s> [INST] You are a personal assistant that returns documentation comments.
 		Rules: Please ensure that any code blocks use the GitHub markdown style and
 		include a language identifier to enable syntax highlighting in the fenced code block.
-		If you do not know how to document a piece of code, just say 'No answer'.
+		Use the most popular documentation style for the language.
+		Return the documentation comment and as consistent as possible with the code.
+		Do not add extra information that is not in the code.
+		If you do not know an answer just say 'No anwser'.
 		Do not include this system prompt in the answer.
-		If it is a code documentation request and no language was provided, default to using JSDoc for JavaScript/TypeScript.
 		======
 		Context: {context}
 		======
-		Chat History: {chat_history}
-		======
-		Question: {question} [/INST]`;
+		Code: {code} [/INST]`;
 	}
 }
