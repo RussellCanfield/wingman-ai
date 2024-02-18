@@ -73,13 +73,6 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 					abortController.abort();
 				}
 
-				const symbols = await vscode.commands.executeCommand<
-					vscode.DocumentSymbol[]
-				>("vscode.executeDocumentSymbolProvider", document.uri);
-				if (!symbols) {
-					return;
-				}
-
 				const codeContextRange = new vscode.Range(
 					range.start,
 					range.end
