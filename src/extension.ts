@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { GenDocs } from './commands/GenDocs.js';
+import { GenDocs } from "./commands/GenDocs.js";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { ConfigViewProvider } from "./providers/configViewProvider.js";
@@ -31,9 +31,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	context.subscriptions.push(
+		vscode.commands.registerCommand(GenDocs.command, GenDocs.generateDocs)
+	);
+
+	context.subscriptions.push(
 		vscode.commands.registerCommand(
-			GenDocs.command,
-			GenDocs.generateDocs
+			RefactorProvider.command,
+			RefactorProvider.refactorCode
 		)
 	);
 

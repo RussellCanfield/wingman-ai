@@ -279,6 +279,10 @@
 			{
 				"command": "wingmanai.gendocument",
 				"title": "Gen Docs"
+			},
+			{
+				"command": "wingmanai.refactorcode",
+				"title": "Refactor Code"
 			}
 		]
 	},
