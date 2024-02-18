@@ -126,7 +126,18 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.2.3
+
+**Document generation** - Wingman can now generate documents! Use the "Code Actions" menu to access.
+
+**Refactor** - Wingman can attempt to refactor a method or class inline, simplify highlight it and use the "Code Actions" menu.
+
+[More information here](https://code.visualstudio.com/docs/typescript/typescript-refactoring)
+
+**Full Changelog**: https://github.com/RussellCanfield/wingman-ai/compare/v0.2.1...v0.2.2
+
 ### 0.2.1
+
 **Wingman Congfig** - small release to add the rest of the config settings to the Config Panel.
 
 ### 0.2.0
