@@ -64,7 +64,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 		}
 		const provider = GetProviderFromSettings();
 		const position = editor.selection.active; // Get the position of the cursor
-		vscode.window.withProgress(
+		return vscode.window.withProgress(
 			{
 				location: vscode.ProgressLocation.Window,
 				title: "Generating docs...",
@@ -79,7 +79,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 
 				const abort = new AbortController();
 				if (editor) {
-					GenDocs.findMethod(
+					await GenDocs.findMethod(
 						symbols,
 						editor,
 						position,
