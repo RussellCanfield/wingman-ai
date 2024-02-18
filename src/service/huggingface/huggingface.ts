@@ -339,7 +339,7 @@ export class HuggingFace implements AIProvider {
 				temperature: 0.4,
 				top_k: 30,
 				top_p: 0.2,
-				max_new_tokens: this.interactionSettings?.codeMaxTokens,
+				max_new_tokens: 512,
 				return_full_text: false,
 				do_sample: false,
 			},
