@@ -65,9 +65,12 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}
 		});
 
-		const delayMs = this._interactionSettings.codeStreaming ? 150 : 300;
+		const delayMs = this._interactionSettings.codeStreaming ? 300 : 300;
 		try {
 			await delay(delayMs);
+			if (abort.signal.aborted) {
+				return [new InlineCompletionItem('')];
+			}
 			return await this.bouncedRequest(prefix, abort.signal, suffix, this._interactionSettings.codeStreaming);
 		}
 		catch {

@@ -1,15 +1,16 @@
 import * as vscode from "vscode";
+import { GenDocs } from './commands/GenDocs.js';
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { ConfigViewProvider } from "./providers/configViewProvider.js";
+import { QuickFixProvider } from "./providers/quickFixProvider.js";
+import { RefactorProvider } from "./providers/refactorProvider.js";
+import { ActivityStatusBar } from "./providers/statusBarProvider.js";
 import {
 	GetAllSettings,
 	GetInteractionSettings,
 	GetProviderFromSettings,
 } from "./service/base.js";
-import { ActivityStatusBar } from "./providers/statusBarProvider.js";
-import { QuickFixProvider } from "./providers/quickFixProvider.js";
-import { RefactorProvider } from "./providers/refactorProvider.js";
 
 let statusBarProvider: ActivityStatusBar;
 
@@ -27,6 +28,20 @@ export async function activate(context: vscode.ExtensionContext) {
 				vscode.commands.executeCommand("workbench.action.reloadWindow");
 			}
 		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			GenDocs.command,
+			GenDocs.generateDocs
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.languages.registerCodeActionsProvider(
+			CodeSuggestionProvider.selector,
+			new GenDocs()
+		)
 	);
 
 	context.subscriptions.push(

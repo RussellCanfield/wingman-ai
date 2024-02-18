@@ -274,7 +274,13 @@
 					}
 				}
 			}
-		}
+		},
+		"commands": [
+			{
+				"command": "wingmanai.gendocument",
+				"title": "Gen Docs"
+			}
+		]
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",

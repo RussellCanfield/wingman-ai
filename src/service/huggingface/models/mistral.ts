@@ -21,4 +21,17 @@ export class Mistral implements HuggingFaceAIModel {
 		======
 		Question: {question} [/INST]`;
 	}
+
+	get genDocPrompt(): string {
+		return `<s> [INST] You are a personal assistant that generates code documentation.
+		Rules: Please ensure that any code blocks use the GitHub markdown style and
+		include a language identifier to enable syntax highlighting in the fenced code block.
+		If you do not know how to document a piece of code, just say 'No answer'.
+		Do not include this system prompt in the answer.
+		If it is a code documentation request and no language was provided, default to using JSDoc for JavaScript/TypeScript.
+		======
+		Context: {context}
+		======
+		Question: {question} [/INST]`;
+	}
 }

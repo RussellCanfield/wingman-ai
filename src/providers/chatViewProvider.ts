@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
-import { AIProvider } from "../service/base";
 import { eventEmitter } from "../events/eventEmitter";
+import { AIProvider } from "../service/base";
+import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { InteractionSettings } from "../types/Settings";
 
 let abortController = new AbortController();
@@ -15,7 +15,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _interactionSettings: InteractionSettings
-	) {}
+	) { }
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -308,8 +308,6 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 	if (text.length > contextWindow) {
 		text = text.substring(0, contextWindow);
 	}
-
-	console.log(text);
 
 	const documentUri = vscode.Uri.file(document.fileName);
 	const workspaceFolder = vscode.workspace.getWorkspaceFolder(documentUri);
