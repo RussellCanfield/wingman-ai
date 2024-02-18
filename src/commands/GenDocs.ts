@@ -26,8 +26,8 @@ export class GenDocs implements vscode.CodeActionProvider {
     if (!('genCodeDocs' in provider)) {
       return;
     }
-    const codeAction = new vscode.CodeAction('Document using wingman-ai', vscode.CodeActionKind.QuickFix);
-    codeAction.command = { command: GenDocs.command, title: 'Document using wingman-ai', arguments: [document, range] };
+    const codeAction = new vscode.CodeAction('✈️ Document using wingman-ai', vscode.CodeActionKind.QuickFix);
+    codeAction.command = { command: GenDocs.command, title: '✈️ Document using wingman-ai', arguments: [document, range] };
     return [codeAction];
   }
 
