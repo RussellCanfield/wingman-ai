@@ -88,7 +88,6 @@ export class GenDocs implements vscode.CodeActionProvider {
             GenDocs.genCSharpDocs(editor, symbol, code);
           }
         }
-        vscode.window.showInformationMessage('The current line is the start of a method or class');
         return false;
       }
 

@@ -450,8 +450,6 @@ export class Ollama implements AIStreamProvicer {
 		}
 		const genDocPrompt = 'Generate documentation for the following code:\n' + prompt;
 
-		loggingProvider.logInfo(genDocPrompt);
-		loggingProvider.logInfo(systemPrompt);
 		const chatPayload: OllamaRequest = {
 			model: this.settings?.chatModel!,
 			prompt: genDocPrompt,
