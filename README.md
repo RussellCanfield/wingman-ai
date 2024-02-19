@@ -126,6 +126,10 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.2.5
+
+Re-enable Refactor on explicit invoke only.
+
 ### 0.2.4
 
 Fix an error message when Ollama was selected as an AI Provider but not available.
