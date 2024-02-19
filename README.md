@@ -126,6 +126,10 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.2.4
+
+Fix an error message when Ollama was selected as an AI Provider but not available.
+
 ### 0.2.3
 
 **Document generation** - Wingman can now generate documents! Use the "Code Actions" menu to access.

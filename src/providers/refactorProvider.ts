@@ -39,22 +39,26 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 		context: vscode.CodeActionContext,
 		token: vscode.CancellationToken
 	) {
-		const codeAction = new vscode.CodeAction(
-			"✈️ Refactor using Wingman",
-			vscode.CodeActionKind.Refactor
-		);
-		codeAction.edit = new vscode.WorkspaceEdit();
-		codeAction.command = {
-			command: RefactorProvider.command,
-			title: "✈️ Refactor using Wingman",
-			arguments: [
-				document,
-				range,
-				this._aiProvider,
-				vscode.window.activeTextEditor,
-			],
-		};
-		return [codeAction];
+		if (context.triggerKind !== vscode.CodeActionTriggerKind.Invoke) {
+			return [];
+		}
+
+		// const codeAction = new vscode.CodeAction(
+		// 	"✈️ Refactor using Wingman",
+		// 	vscode.CodeActionKind.Refactor
+		// );
+		// codeAction.edit = new vscode.WorkspaceEdit();
+		// codeAction.command = {
+		// 	command: RefactorProvider.command,
+		// 	title: "✈️ Refactor using Wingman",
+		// 	arguments: [
+		// 		document,
+		// 		range,
+		// 		this._aiProvider,
+		// 		vscode.window.activeTextEditor,
+		// 	],
+		// };
+		// return [codeAction];
 	}
 
 	static refactorCode(

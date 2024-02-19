@@ -3,7 +3,6 @@ import { GenDocs } from "./commands/GenDocs.js";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { ConfigViewProvider } from "./providers/configViewProvider.js";
-import { QuickFixProvider } from "./providers/quickFixProvider.js";
 import { RefactorProvider } from "./providers/refactorProvider.js";
 import { ActivityStatusBar } from "./providers/statusBarProvider.js";
 import {
@@ -44,7 +43,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
 			CodeSuggestionProvider.selector,
-			new GenDocs()
+			new GenDocs(aiProvider)
 		)
 	);
 
