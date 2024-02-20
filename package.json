@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.2.5",
+	"version": "0.2.6",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"authors": [
@@ -137,6 +137,7 @@
 					"type": "object",
 					"description": "Interaction settings help configure how parts of the extension interact with the LLM(s).",
 					"default": {
+						"codeCompletionEnabled": true,
 						"codeStreaming": false,
 						"codeContextWindow": 256,
 						"codeMaxTokens": -1,
@@ -144,6 +145,11 @@
 						"chatMaxTokens": 4096
 					},
 					"properties": {
+						"codeCompletionEnabled": {
+							"type": "boolean",
+							"default": true,
+							"description": "Turns on automated code completion. Code completion will run when you type in a file for a supported language."
+						},
 						"codeStreaming": {
 							"type": "boolean",
 							"default": false,

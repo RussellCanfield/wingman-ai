@@ -10,7 +10,7 @@ import {
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvicer } from "../service/base";
-import { delay } from '../service/delay';
+import { delay } from "../service/delay";
 import { InteractionSettings } from "../types/Settings";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
@@ -38,9 +38,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvicer,
 		private readonly _interactionSettings: InteractionSettings
-	) { }
-
-
+	) {}
 
 	async provideInlineCompletionItems(
 		document: TextDocument,
@@ -48,6 +46,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		context: InlineCompletionContext,
 		token: CancellationToken
 	) {
+		if (!this._interactionSettings.codeCompletionEnabled) {
+			return [];
+		}
+
 		let timeout: NodeJS.Timeout | undefined;
 
 		const abort = new AbortController();
@@ -59,8 +61,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 					clearTimeout(timeout);
 				}
 				abort.abort();
-			}
-			finally {
+			} finally {
 				eventEmitter._onQueryComplete.fire();
 			}
 		});
@@ -69,18 +70,22 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		try {
 			await delay(delayMs);
 			if (abort.signal.aborted) {
-				return [new InlineCompletionItem('')];
+				return [new InlineCompletionItem("")];
 			}
-			return await this.bouncedRequest(prefix, abort.signal, suffix, this._interactionSettings.codeStreaming);
-		}
-		catch {
-			return [new InlineCompletionItem('')];
+			return await this.bouncedRequest(
+				prefix,
+				abort.signal,
+				suffix,
+				this._interactionSettings.codeStreaming
+			);
+		} catch {
+			return [new InlineCompletionItem("")];
 		}
 	}
 
 	private getContentWindow(document: TextDocument, position: Position) {
-		let prefix: string = '';
-		let suffix: string = '';
+		let prefix: string = "";
+		let suffix: string = "";
 		const length = this._interactionSettings.codeContextWindow;
 		let tokenCount = 0;
 		const text = document.getText();
@@ -124,11 +129,14 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	): Promise<InlineCompletionItem[]> {
 		try {
 			eventEmitter._onQueryStart.fire();
-			if ('codeCompleteStream' in this._aiProvider && streaming) {
-				const codeStream = await this._aiProvider.codeCompleteStream(prefix, suffix, signal);
+			if ("codeCompleteStream" in this._aiProvider && streaming) {
+				const codeStream = await this._aiProvider.codeCompleteStream(
+					prefix,
+					suffix,
+					signal
+				);
 				return [new InlineCompletionItem(codeStream)];
-			}
-			else {
+			} else {
 				const codeResponse = await this._aiProvider.codeComplete(
 					prefix,
 					suffix,
@@ -138,8 +146,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}
 		} catch (error) {
 			return [];
-		}
-		finally {
+		} finally {
 			eventEmitter._onQueryComplete.fire();
 		}
 	}
