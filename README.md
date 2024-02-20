@@ -67,7 +67,9 @@ Supported Models for _Chat_:
 
 ### Hugging Face
 
-[Hugging Face](https://huggingface.co/) supports hosting and training models, but also supports running many models _(under 10GB)_ for free! All you have to do is [create a free account](https://huggingface.co/docs/api-inference/quicktour). **_This does mean that data leaves your machine!_** But this is an excellent option if you don't have the compute locally to run Ollama.
+[Hugging Face](https://huggingface.co/) supports hosting and training models, but also supports running many models _(under 10GB)_ for free! All you have to do is [create a free account](https://huggingface.co/docs/api-inference/quicktour).
+
+**NOTE** - your data is not private and will not be sanitized prior to being sent.
 
 #### Setting up Hugging Face
 
@@ -91,6 +93,16 @@ Supported Models for _Chat_:
 
 -   Mixtral v0.1 _(tested with [mistralai/Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1))_
 -   Mistral v0.2 _(tested with: [mistralai/Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2))_
+
+---
+
+### OpenAI
+
+OpenAI integration is supported for GPT4-Turbo, allowing you to run code completion, chat or other functionality to run on larger and more powerful models.
+
+**NOTE** - your data is not private and will not be sanitized prior to being sent.
+
+---
 
 ## FAQ
 
@@ -125,6 +137,10 @@ During startup the extension will verify the models you have configured in the V
 The models above will require enough RAM to run them correctly, you should have at least 12GB of ram on your machine if you are running these models. If you don't have enough ram, then choose a smaller model but be aware that it won't perform as well. Also see [information on model Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization).
 
 ## Release Notes
+
+### 0.2.6
+
+Added the ability to disable automatic code completion.
 
 ### 0.2.5
 

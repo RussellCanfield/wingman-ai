@@ -7,7 +7,8 @@ interface BaseServiceSettings {
 }
 
 export interface InteractionSettings {
-	codeStreaming: boolean,
+	codeCompletionEnabled: boolean;
+	codeStreaming: boolean;
 	codeContextWindow: number;
 	codeMaxTokens: number;
 	chatContextWindow: number;
@@ -27,29 +28,29 @@ export type ApiSettingsType = BaseServiceSettings & {
 };
 
 export const defaultOllamaSettings: OllamaSettingsType = {
-	codeModel: '',
-	chatModel: '',
-	baseUrl: 'http://localhost:11434',
-	apiPath: '/api/generate',
-	modelInfoPath: '/api/show'
+	codeModel: "",
+	chatModel: "",
+	baseUrl: "http://localhost:11434",
+	apiPath: "/api/generate",
+	modelInfoPath: "/api/show",
 };
 
 export const defaultHfSettings: ApiSettingsType = {
-	codeModel: 'codellama/CodeLlama-7b-hf',
-	chatModel: 'mistralai/Mixtral-8x7B-Instruct-v0.1',
-	baseUrl: 'https://api-inference.huggingface.co/models/',
-	apiKey: 'Add me'
+	codeModel: "codellama/CodeLlama-7b-hf",
+	chatModel: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+	baseUrl: "https://api-inference.huggingface.co/models/",
+	apiKey: "Add me",
 };
 
 export const defaultOpenAISettings: ApiSettingsType = {
 	chatModel: "gpt-4-0125-preview",
 	codeModel: "gpt-4-0125-preview",
 	baseUrl: "https://api.openai.com/v1/chat/completions",
-	apiKey: 'Add me'
+	apiKey: "Add me",
 };
 
 export interface Settings {
-	aiProvider: typeof AiProviders[number];
+	aiProvider: (typeof AiProviders)[number];
 	interactionSettings: InteractionSettings;
 	ollama?: OllamaSettingsType;
 	huggingface?: ApiSettingsType;
