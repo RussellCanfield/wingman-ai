@@ -44,12 +44,12 @@ export class GenDocs implements vscode.CodeActionProvider {
 			return;
 		}
 		const codeAction = new vscode.CodeAction(
-			"✈️ Document using wingman-ai",
+			"✈️ Document using Wingman",
 			vscode.CodeActionKind.QuickFix
 		);
 		codeAction.command = {
 			command: GenDocs.command,
-			title: "✈️ Document using wingman-ai",
+			title: "✈️ Document using Wingman",
 			arguments: [
 				document,
 				this._aiProvider,
