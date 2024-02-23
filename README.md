@@ -138,6 +138,10 @@ The models above will require enough RAM to run them correctly, you should have 
 
 ## Release Notes
 
+### 0.2.7
+
+Correct spelling mistake
+
 ### 0.2.6
 
 Added the ability to disable automatic code completion.
