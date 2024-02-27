@@ -15,7 +15,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _interactionSettings: InteractionSettings
-	) { }
+	) {}
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -261,6 +261,7 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 
 	const { document, selection } = editor;
 	let codeContextRange: vscode.Range;
+	let lastDirection = -1;
 
 	if (selection && !selection.isEmpty) {
 		codeContextRange = new vscode.Range(
@@ -271,27 +272,33 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		);
 	} else {
 		const currentLine = selection.active.line;
-
 		let upperLine = currentLine;
 		let lowerLine = currentLine;
 
-		const halfContext = contextWindow / 2;
+		const halfContext = Math.floor(contextWindow / 2);
 
-		let upperText = document.lineAt(upperLine - 1).text;
-		// Go upwards
-		while (upperText.length < halfContext && upperLine > 0) {
-			upperLine--;
-			upperText += "\n" + document.lineAt(upperLine).text;
-		}
-
+		let upperText =
+			upperLine > 0 ? document.lineAt(upperLine - 1).text : "";
 		let lowerText = document.lineAt(lowerLine).text;
-		// Go downwards
-		while (
-			lowerText.length < halfContext &&
-			lowerLine < document.lineCount - 1
-		) {
-			lowerLine++;
-			lowerText += "\n" + document.lineAt(lowerLine).text;
+
+		// Expand context in both directions
+		for (let i = 0; i < halfContext; i++) {
+			if (upperLine > 0) {
+				upperLine--;
+				upperText = document.lineAt(upperLine).text + "\n" + upperText;
+				lastDirection = 0;
+			}
+
+			if (lowerLine < document.lineCount - 1) {
+				lowerLine++;
+				lowerText += "\n" + document.lineAt(lowerLine).text;
+				lastDirection = 1;
+			}
+
+			// Stop if we've reached the context window size
+			if (upperText.length + lowerText.length >= contextWindow) {
+				break;
+			}
 		}
 
 		const beginningWindowLine = document.lineAt(upperLine);
@@ -306,7 +313,11 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 	let text = document.getText(codeContextRange);
 
 	if (text.length > contextWindow) {
-		text = text.substring(0, contextWindow);
+		if (lastDirection === 0) {
+			text = text.substring(text.length - contextWindow, text.length);
+		} else if (lastDirection === 1) {
+			text = text.substring(0, contextWindow);
+		}
 	}
 
 	const documentUri = vscode.Uri.file(document.fileName);
