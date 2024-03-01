@@ -8,6 +8,7 @@ import { AIProvider, GetInteractionSettings } from "../base";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
 import { Mixtral } from "./models/mixtral";
+import { Starcoder2 } from "./models/starcoder2";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -86,6 +87,8 @@ export class HuggingFace implements AIProvider {
 	private getCodeModel(codeModel: string): HuggingFaceAIModel | undefined {
 		if (codeModel.startsWith("codellama")) {
 			return new CodeLlama();
+		} else if (codeModel.startsWith("bigcode/starcoder2")) {
+			return new Starcoder2();
 		}
 
 		this.handleError(
@@ -264,7 +267,7 @@ export class HuggingFace implements AIProvider {
 			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
@@ -321,13 +324,20 @@ export class HuggingFace implements AIProvider {
 		}
 	}
 
-	public async genCodeDocs(prompt: string, ragContent: string, signal: AbortSignal): Promise<string> {
-		if (!this.chatModel?.genDocPrompt) return '';
+	public async genCodeDocs(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.genDocPrompt) return "";
 
-		const genDocPrompt = 'Generate documentation for the following code:\n' + prompt;
+		const genDocPrompt =
+			"Generate documentation for the following code:\n" + prompt;
 
-		const promptInput = this.chatModel!.genDocPrompt
-			.replace("{context}", ragContent ?? "")
+		const promptInput = this.chatModel!.genDocPrompt.replace(
+			"{context}",
+			ragContent ?? ""
+		)
 			.replace("{code}", genDocPrompt ?? "")
 			.replace(/\t/, "");
 
@@ -344,19 +354,23 @@ export class HuggingFace implements AIProvider {
 				do_sample: false,
 			},
 			options: {
-				wait_for_model: true
-			}
+				wait_for_model: true,
+			},
 		};
 
-		const response = await this.fetchModelResponse(chatPayload, this.settings?.chatModel!, signal);
+		const response = await this.fetchModelResponse(
+			chatPayload,
+			this.settings?.chatModel!,
+			signal
+		);
 		if (!response) {
-			return '';
+			return "";
 		}
-		const huggingFaceResponse = await response.json() as HuggingFaceResponse;
+		const huggingFaceResponse =
+			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
-
 	}
 }
