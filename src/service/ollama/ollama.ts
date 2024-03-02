@@ -47,7 +47,6 @@ export class Ollama implements AIStreamProvicer {
 		vscode.window.showErrorMessage(message);
 		loggingProvider.logError(message);
 		eventEmitter._onFatalError.fire();
-		throw new Error(message);
 	}
 
 	private async validateSettings() {
@@ -441,14 +440,19 @@ export class Ollama implements AIStreamProvicer {
 		}
 	}
 
-	public async genCodeDocs(prompt: string, ragContent: string, signal: AbortSignal): Promise<string> {
-		if (!this.chatModel?.genDocPrompt) return '';
+	public async genCodeDocs(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.genDocPrompt) return "";
 
 		let systemPrompt = this.chatModel.genDocPrompt;
 		if (ragContent) {
 			systemPrompt += ragContent;
 		}
-		const genDocPrompt = 'Generate documentation for the following code:\n' + prompt;
+		const genDocPrompt =
+			"Generate documentation for the following code:\n" + prompt;
 
 		const chatPayload: OllamaRequest = {
 			model: this.settings?.chatModel!,
@@ -467,10 +471,9 @@ export class Ollama implements AIStreamProvicer {
 
 		const response = await this.fetchModelResponse(chatPayload, signal);
 		if (!response) {
-			return '';
+			return "";
 		}
-		const responseObject = await response.json() as OllamaResponse;
+		const responseObject = (await response.json()) as OllamaResponse;
 		return responseObject.response;
-
 	}
 }

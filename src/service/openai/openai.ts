@@ -47,7 +47,6 @@ export class OpenAI implements AIProvider {
 		vscode.window.showErrorMessage(message);
 		loggingProvider.logError(message);
 		eventEmitter._onFatalError.fire();
-		throw new Error(message);
 	}
 
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {

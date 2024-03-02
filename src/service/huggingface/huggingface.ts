@@ -81,7 +81,6 @@ export class HuggingFace implements AIProvider {
 		vscode.window.showErrorMessage(message);
 		loggingProvider.logError(message);
 		eventEmitter._onFatalError.fire();
-		throw new Error(message);
 	}
 
 	private getCodeModel(codeModel: string): HuggingFaceAIModel | undefined {

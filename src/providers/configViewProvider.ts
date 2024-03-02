@@ -1,7 +1,15 @@
 import * as vscode from "vscode";
 import { GetInteractionSettings } from "../service/base";
 import { AppMessage } from "../types/Message";
-import { ApiSettingsType, InteractionSettings, OllamaSettingsType, Settings } from "../types/Settings";
+import {
+	ApiSettingsType,
+	InteractionSettings,
+	OllamaSettingsType,
+	Settings,
+} from "../types/Settings";
+import { loggingProvider } from "./loggingProvider";
+import { eventEmitter } from "../events/eventEmitter";
+
 export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.configview";
 	private _view?: vscode.WebviewView;
@@ -10,7 +18,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _config: vscode.WorkspaceConfiguration
-	) { }
+	) {}
 	resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext<unknown>,
@@ -58,54 +66,69 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				"Ollama",
 			interactionSettings: GetInteractionSettings(),
 			ollama: this._config.get<Settings["ollama"]>("Ollama"),
-			huggingface: this._config.get<Settings['huggingface']>('HuggingFace'),
-			openai: this._config.get<Settings['openai']>('OpenAI')
+			huggingface:
+				this._config.get<Settings["huggingface"]>("HuggingFace"),
+			openai: this._config.get<Settings["openai"]>("OpenAI"),
 		} satisfies Settings;
 
 		if (settings.ollama) {
-			const modelsResponse = await fetch(
-				`${settings.ollama.baseUrl}/api/tags`
-			);
-			const modelsJson = (await modelsResponse.json()) as {
-				models: { name: string }[];
-			};
-			const modelNames = modelsJson.models.map((m) => m.name);
+			try {
+				const modelsResponse = await fetch(
+					`${settings.ollama.baseUrl}/api/tags`
+				);
+				const modelsJson = (await modelsResponse.json()) as {
+					models: { name: string }[];
+				};
+				const modelNames = modelsJson.models.map((m) => m.name);
+				//@ts-ignore
+				settings["ollamaModels"] = modelNames;
+			} catch (e) {
+				this.handleError(
+					"Unable to retrieve Ollama models, is Ollama running?"
+				);
+			}
+		} else {
 			//@ts-ignore
-			settings["ollamaModels"] = modelNames;
-		}
-		else {
-			//@ts-ignore
-			settings['ollamaModels'] = [];
+			settings["ollamaModels"] = [];
 		}
 		return JSON.stringify(settings);
 	};
 
+	private handleError(message: string) {
+		vscode.window.showErrorMessage(message);
+		loggingProvider.logError(message);
+		eventEmitter._onFatalError.fire();
+	}
+
 	private log = (value: unknown) => {
-		console.log(value);
+		loggingProvider.logInfo(JSON.stringify(value ?? ""));
 	};
 
 	private updateAndSetOllama = (value: OllamaSettingsType) => {
-		const currentProvider = this._config.get<Settings['aiProvider']>('Provider');
-		if (currentProvider !== 'Ollama') {
-			this._config.update('Provider', 'Ollama');
+		const currentProvider =
+			this._config.get<Settings["aiProvider"]>("Provider");
+		if (currentProvider !== "Ollama") {
+			this._config.update("Provider", "Ollama");
 		}
-		this._config.update('Ollama', value);
+		this._config.update("Ollama", value);
 	};
 
 	private updateAndSetHF = (value: ApiSettingsType) => {
-		const currentProvider = this._config.get<Settings['aiProvider']>('Provider');
-		if (currentProvider !== 'HuggingFace') {
-			this._config.update('Provider', 'HuggingFace');
+		const currentProvider =
+			this._config.get<Settings["aiProvider"]>("Provider");
+		if (currentProvider !== "HuggingFace") {
+			this._config.update("Provider", "HuggingFace");
 		}
-		this._config.update('HuggingFace', value);
+		this._config.update("HuggingFace", value);
 	};
 
 	private updateAndSetOpenAI = (value: ApiSettingsType) => {
-		const currentProvider = this._config.get<Settings['aiProvider']>('Provider');
-		if (currentProvider !== 'OpenAI') {
-			this._config.update('Provider', 'OpenAI');
+		const currentProvider =
+			this._config.get<Settings["aiProvider"]>("Provider");
+		if (currentProvider !== "OpenAI") {
+			this._config.update("Provider", "OpenAI");
 		}
-		this._config.update('OpenAI', value);
+		this._config.update("OpenAI", value);
 	};
 
 	private changeInteractions = (value: unknown) => {

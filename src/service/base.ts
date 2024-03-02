@@ -22,6 +22,7 @@ export function GetInteractionSettings(): InteractionSettings {
 	}
 
 	return {
+		codeCompletionEnabled: true,
 		codeStreaming: false,
 		codeContextWindow: 256,
 		codeMaxTokens: -1,
@@ -63,9 +64,11 @@ export interface AIProvider {
 		ragContent: string,
 		signal: AbortSignal
 	): AsyncGenerator<string>;
-	genCodeDocs?(prompt: string,
+	genCodeDocs?(
+		prompt: string,
 		ragContent: string,
-		signal: AbortSignal): Promise<string>
+		signal: AbortSignal
+	): Promise<string>;
 }
 
 export interface AIStreamProvicer extends AIProvider {
