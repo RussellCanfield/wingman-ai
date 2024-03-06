@@ -124,7 +124,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 async function getSymbols() {
 	let openDocuments = vscode.workspace.textDocuments;
 	console.log("Open Documents: ", openDocuments);
-	let types = "";
+	const types: string[] = [];
 	await Promise.all(
 		openDocuments.map(async (d) => {
 			const symbols = (await vscode.commands.executeCommand(
@@ -133,23 +133,112 @@ async function getSymbols() {
 			)) as vscode.DocumentSymbol[];
 
 			if (symbols) {
-				for (const symbol of symbols) {
-					let hover = (await vscode.commands.executeCommand(
-						"vscode.executeHoverProvider",
-						d.uri,
-						symbol.range.start
-					)) as vscode.Hover[];
-
-					if (hover && hover.length > 0) {
-						const duhast = hover.flatMap((h) =>
-							h.contents.map((c) => {
-								return (c as vscode.MarkdownString).value ?? "";
-							})
-						);
-						console.log(duhast);
-					}
-				}
+				await findMethod(symbols, d, types);
 			}
 		})
 	);
+	console.log(types.join("\n"));
+}
+
+function isArrowFunction(
+	symbol: vscode.DocumentSymbol,
+	document: vscode.TextDocument
+) {
+	const isProperty =
+		symbol.kind === vscode.SymbolKind.Property ||
+		symbol.kind === vscode.SymbolKind.Variable;
+	if (!isProperty) {
+		return false;
+	}
+
+	const line = document.lineAt(symbol.range.start.line).text;
+	return line.includes("=>");
+}
+
+type CustomSymbol = {
+	name: string;
+	value: string;
+	properties?: string[];
+};
+
+async function findMethod(
+	symbols: vscode.DocumentSymbol[],
+	document: vscode.TextDocument,
+	types: string[],
+	currentSymbol?: CustomSymbol
+): Promise<void> {
+	for (const symbol of symbols) {
+		if (
+			symbol.kind === vscode.SymbolKind.Class ||
+			symbol.kind === vscode.SymbolKind.Interface
+		) {
+			const objName = await getHoverResultsForSymbol(symbol, document);
+			currentSymbol = {
+				name: symbol.name,
+				value: objName,
+			};
+			await findMethod(symbol.children, document, types, currentSymbol);
+			types.push(formatSymbolAsString(currentSymbol));
+			currentSymbol = undefined;
+		} else if (
+			symbol.kind === vscode.SymbolKind.Method ||
+			symbol.kind === vscode.SymbolKind.Function ||
+			symbol.kind === vscode.SymbolKind.Property ||
+			isArrowFunction(symbol, document)
+		) {
+			let hover = (await vscode.commands.executeCommand(
+				"vscode.executeHoverProvider",
+				document.uri,
+				symbol.selectionRange.start
+			)) as vscode.Hover[];
+
+			if (hover && hover.length > 0) {
+				const entry = (hover[0].contents[0] as vscode.MarkdownString)
+					.value;
+				if (currentSymbol) {
+					if (!currentSymbol.properties) {
+						currentSymbol.properties = [];
+					}
+					currentSymbol.properties.push(entry);
+				} else {
+					types.push(extractCodeBlock(entry));
+				}
+			}
+		}
+	}
+}
+
+function formatSymbolAsString(customSymbol: CustomSymbol): string {
+	let result = extractCodeBlock(customSymbol.value) + "\n";
+	for (const property of customSymbol.properties ?? []) {
+		result += extractCodeBlock(property) + "\n";
+	}
+	return result;
+}
+
+async function getHoverResultsForSymbol(
+	symbol: vscode.DocumentSymbol,
+	document: vscode.TextDocument
+) {
+	let hover = (await vscode.commands.executeCommand(
+		"vscode.executeHoverProvider",
+		document.uri,
+		symbol.selectionRange.start
+	)) as vscode.Hover[];
+
+	if (hover && hover.length > 0) {
+		return (hover[0].contents[0] as vscode.MarkdownString).value;
+	}
+
+	return "";
+}
+
+function extractCodeBlock(text: string) {
+	const regex = /```.*?\n([\s\S]*?)\n```/g;
+	const matches = [];
+	let match;
+	while ((match = regex.exec(text)) !== null) {
+		matches.push(match[1]);
+	}
+	return matches.join("\n");
 }
