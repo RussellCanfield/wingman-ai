@@ -186,22 +186,15 @@ async function findMethod(
 			symbol.kind === vscode.SymbolKind.Property ||
 			isArrowFunction(symbol, document)
 		) {
-			let hover = (await vscode.commands.executeCommand(
-				"vscode.executeHoverProvider",
-				document.uri,
-				symbol.selectionRange.start
-			)) as vscode.Hover[];
-
-			if (hover && hover.length > 0) {
-				const entry = (hover[0].contents[0] as vscode.MarkdownString)
-					.value;
+			const results = await getHoverResultsForSymbol(symbol, document);
+			if (results) {
 				if (currentSymbol) {
 					if (!currentSymbol.properties) {
 						currentSymbol.properties = [];
 					}
-					currentSymbol.properties.push(entry);
+					currentSymbol.properties.push(results);
 				} else {
-					types.push(extractCodeBlock(entry));
+					types.push(extractCodeBlock(results));
 				}
 			}
 		}
@@ -227,7 +220,10 @@ async function getHoverResultsForSymbol(
 	)) as vscode.Hover[];
 
 	if (hover && hover.length > 0) {
-		return (hover[0].contents[0] as vscode.MarkdownString).value;
+		return (hover[0].contents[0] as vscode.MarkdownString).value.replace(
+			"(loading...)",
+			""
+		);
 	}
 
 	return "";
