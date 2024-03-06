@@ -11,7 +11,7 @@ import {
 import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvicer } from "../service/base";
 import { delay } from "../service/delay";
-import { getContentWindow } from '../service/utils/contentWindow';
+import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "../types/Settings";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
@@ -39,7 +39,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvicer,
 		private readonly _interactionSettings: InteractionSettings
-	) { }
+	) {}
 
 	async provideInlineCompletionItems(
 		document: TextDocument,
@@ -54,7 +54,13 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		let timeout: NodeJS.Timeout | undefined;
 
 		const abort = new AbortController();
-		const [prefix, suffix] = getContentWindow(document, position, this._interactionSettings.codeContextWindow);
+		const [prefix, suffix] = getContentWindow(
+			document,
+			position,
+			this._interactionSettings.codeContextWindow
+		);
+
+		await getSymbols();
 
 		token.onCancellationRequested(() => {
 			try {
@@ -113,4 +119,37 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			eventEmitter._onQueryComplete.fire();
 		}
 	}
+}
+
+async function getSymbols() {
+	let openDocuments = vscode.workspace.textDocuments;
+	console.log("Open Documents: ", openDocuments);
+	let types = "";
+	await Promise.all(
+		openDocuments.map(async (d) => {
+			const symbols = (await vscode.commands.executeCommand(
+				"vscode.executeDocumentSymbolProvider",
+				d.uri
+			)) as vscode.DocumentSymbol[];
+
+			if (symbols) {
+				for (const symbol of symbols) {
+					let hover = (await vscode.commands.executeCommand(
+						"vscode.executeHoverProvider",
+						d.uri,
+						symbol.range.start
+					)) as vscode.Hover[];
+
+					if (hover && hover.length > 0) {
+						const duhast = hover.flatMap((h) =>
+							h.contents.map((c) => {
+								return (c as vscode.MarkdownString).value ?? "";
+							})
+						);
+						console.log(duhast);
+					}
+				}
+			}
+		})
+	);
 }
