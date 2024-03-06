@@ -144,7 +144,6 @@ function isArrowFunction(
 	symbol: vscode.DocumentSymbol,
 	document: vscode.TextDocument
 ) {
-	debugger;
 	const isProperty =
 		symbol.kind === vscode.SymbolKind.Property ||
 		symbol.kind === vscode.SymbolKind.Variable;
@@ -171,7 +170,6 @@ async function findMethod(
 	currentSymbol?: CustomSymbol
 ): Promise<void> {
 	for (const symbol of symbols) {
-		debugger;
 		console.log(symbol);
 		if (
 			symbol.kind === vscode.SymbolKind.Class ||
