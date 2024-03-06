@@ -60,7 +60,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			this._interactionSettings.codeContextWindow
 		);
 
-		await getSymbols();
+		const types = await getSymbols();
 
 		token.onCancellationRequested(() => {
 			try {
@@ -83,7 +83,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				prefix,
 				abort.signal,
 				suffix,
-				this._interactionSettings.codeStreaming
+				this._interactionSettings.codeStreaming,
+				types
 			);
 		} catch {
 			return [new InlineCompletionItem("")];
@@ -94,7 +95,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		prefix: string,
 		signal: AbortSignal,
 		suffix: string,
-		streaming: boolean
+		streaming: boolean,
+		additionalContext?: string
 	): Promise<InlineCompletionItem[]> {
 		try {
 			eventEmitter._onQueryStart.fire();
@@ -109,7 +111,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				const codeResponse = await this._aiProvider.codeComplete(
 					prefix,
 					suffix,
-					signal
+					signal,
+					additionalContext
 				);
 				return [new InlineCompletionItem(codeResponse)];
 			}
@@ -137,7 +140,7 @@ async function getSymbols() {
 			}
 		})
 	);
-	console.log(types.join("\n"));
+	return types.join("\n");
 }
 
 function isArrowFunction(

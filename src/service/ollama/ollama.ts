@@ -240,7 +240,8 @@ export class Ollama implements AIStreamProvicer {
 	public async codeComplete(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
@@ -251,29 +252,7 @@ export class Ollama implements AIStreamProvicer {
 			model: this.settings?.codeModel!,
 			prompt: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
 
-const createOpenApiExecutor: (openApiDocumentUrl: string, model: BaseModel) => Promise<OpenApiExecutor>
-interface ExecutorOptions
-(property) ExecutorOptions.description: string
-(property) ExecutorOptions.maxIterations?: number | undefined
-(property) ExecutorOptions.model: BaseModel
-
-class OpenApiExecutor
-(method) OpenApiExecutor.execute(question: string): Promise<ModelStream>
-(property) OpenApiExecutor.options: ExecutorOptions
-(property) OpenApiExecutor.tools: BaseTool[]
-
-const withBasePrompt: (prefix: string, suffix: string, tools: BaseTool[]) => string
-const streamToText: (stream: AsyncIterable<Uint8Array>) => Promise<string>
-const extractSteps: (input: string) => ExecutorStep[]
-const extractFinalAnswer: (input: string) => string | undefined
-function getStream(str: string): ModelStream
-class Executor
-(method) Executor.execute(question: string): Promise<ModelStream>
-(property) Executor.options: ExecutorOptions
-(method) Executor.processStep(prompt: string, tool: BaseTool, input: string): Promise<string | null>
-(property) Executor.steps: Set<string>
-(property) Executor.toolMap: Map<string, BaseTool>
-(property) Executor.tools: BaseTool[]
+${additionalContext ?? ""}
 
 -----
 

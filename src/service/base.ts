@@ -57,7 +57,8 @@ export interface AIProvider {
 	codeComplete(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string>;
 	chat(
 		prompt: string,
