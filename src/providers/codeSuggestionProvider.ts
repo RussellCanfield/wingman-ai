@@ -144,6 +144,7 @@ function isArrowFunction(
 	symbol: vscode.DocumentSymbol,
 	document: vscode.TextDocument
 ) {
+	debugger;
 	const isProperty =
 		symbol.kind === vscode.SymbolKind.Property ||
 		symbol.kind === vscode.SymbolKind.Variable;
@@ -151,7 +152,9 @@ function isArrowFunction(
 		return false;
 	}
 
-	const line = document.lineAt(symbol.range.start.line).text;
+	const line = document.getText(
+		new vscode.Range(symbol.range.start, symbol.range.end)
+	);
 	return line.includes("=>");
 }
 
@@ -168,6 +171,8 @@ async function findMethod(
 	currentSymbol?: CustomSymbol
 ): Promise<void> {
 	for (const symbol of symbols) {
+		debugger;
+		console.log(symbol);
 		if (
 			symbol.kind === vscode.SymbolKind.Class ||
 			symbol.kind === vscode.SymbolKind.Interface

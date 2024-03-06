@@ -346,7 +346,35 @@ export class Ollama implements AIStreamProvicer {
 		).replace("{ending}", ending);
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
-			prompt,
+			prompt: `The following are all the available Typescript type information available to assist you completing the code.
+
+const createOpenApiExecutor: (openApiDocumentUrl: string, model: BaseModel) => Promise<OpenApiExecutor>
+interface ExecutorOptions
+(property) ExecutorOptions.description: string
+(property) ExecutorOptions.maxIterations?: number | undefined
+(property) ExecutorOptions.model: BaseModel
+
+class OpenApiExecutor
+(method) OpenApiExecutor.execute(question: string): Promise<ModelStream>
+(property) OpenApiExecutor.options: ExecutorOptions
+(property) OpenApiExecutor.tools: BaseTool[]
+
+const withBasePrompt: (prefix: string, suffix: string, tools: BaseTool[]) => string
+const streamToText: (stream: AsyncIterable<Uint8Array>) => Promise<string>
+const extractSteps: (input: string) => ExecutorStep[]
+const extractFinalAnswer: (input: string) => string | undefined
+function getStream(str: string): ModelStream
+class Executor
+(method) Executor.execute(question: string): Promise<ModelStream>
+(property) Executor.options: ExecutorOptions
+(method) Executor.processStep(prompt: string, tool: BaseTool, input: string): Promise<string | null>
+(property) Executor.steps: Set<string>
+(property) Executor.toolMap: Map<string, BaseTool>
+(property) Executor.tools: BaseTool[]
+
+-----
+
+${prompt}`,
 			stream: true,
 			raw: true,
 			options: {
@@ -387,7 +415,7 @@ export class Ollama implements AIStreamProvicer {
 
 				if (now - start > 1000 && sentences.length > 1) {
 					abortSignal.abort();
-					return sentences.join('\n');
+					return sentences.join("\n");
 				}
 				now = Date.now();
 			}
