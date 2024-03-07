@@ -346,7 +346,8 @@ ${prompt}`,
 	public async codeCompleteStream(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string> {
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
@@ -354,7 +355,13 @@ ${prompt}`,
 		).replace("{ending}", ending);
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
-			prompt,
+			prompt: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+
+${additionalContext ?? ""}
+
+-----
+
+${prompt}`,
 			stream: true,
 			raw: true,
 			options: {

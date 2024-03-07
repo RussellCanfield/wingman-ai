@@ -105,7 +105,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				const codeStream = await this._aiProvider.codeCompleteStream(
 					prefix,
 					suffix,
-					signal
+					signal,
+					additionalContext
 				);
 				return [new InlineCompletionItem(codeStream)];
 			} else {

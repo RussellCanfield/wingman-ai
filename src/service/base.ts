@@ -81,6 +81,7 @@ export interface AIStreamProvicer extends AIProvider {
 	codeCompleteStream(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string>;
 }

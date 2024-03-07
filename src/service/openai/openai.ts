@@ -150,19 +150,28 @@ export class OpenAI implements AIProvider {
 	public async codeComplete(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
+
+		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
+			"{beginning}",
+			beginning
+		).replace("{ending}", ending);
 
 		const codeRequestOptions: OpenAIRequest = {
 			model: this.settings?.codeModel!,
 			messages: [
 				{
 					role: "user",
-					content: this.codeModel!.CodeCompletionPrompt.replace(
-						"{beginning}",
-						beginning
-					).replace("{ending}", ending),
+					content: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+
+${additionalContext ?? ""}
+
+-----
+
+${prompt}`,
 				},
 			],
 			temperature: 0.4,
