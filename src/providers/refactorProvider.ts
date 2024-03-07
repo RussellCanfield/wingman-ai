@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { AIProvider } from "../service/base";
+import { extractCodeBlock, getSymbolsFromOpenFiles } from "./utilities";
 
 let abortController = new AbortController();
 
@@ -83,42 +84,27 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 				);
 				const highlightedCode = document.getText(codeContextRange);
 
-				const generator = aiProvider.chat(
-					`Refactor the following code to be clean, concise and performant. Always favor readability.
-Do not make assumptions about what modules are available, if no imports are in the code provided, do not attempt to import additional modules.
-The user may be referencing libraries you are not familiar with, if the syntax seems unfamiliar do your best to preserve it.
-Ensure that the code is idiomatic and follows best practices.
-Code to refactor:
+				const symbols = await getSymbolsFromOpenFiles();
 
+				const result = await aiProvider.refactor(
+					`Code to refactor:
 \`\`\`${document.languageId}
 ${highlightedCode}
 \`\`\``,
-					"",
+					symbols
+						? `\nHere are the available types to use as a reference in answering questions, these may not be related to the code provided:\n${symbols}\n----------\n`
+						: "",
 					abortController.signal
 				);
 
-				let newCode = "";
-				for await (const chunk of generator) {
-					newCode += chunk;
+				const newCode = extractCodeBlock(result);
+
+				if (newCode) {
+					editor?.edit((builder) => {
+						builder.replace(codeContextRange, newCode);
+					});
 				}
-
-				console.log(newCode);
-
-				newCode = extractCodeBlock(newCode);
-				editor?.edit((builder) => {
-					builder.replace(codeContextRange, newCode);
-				});
 			}
 		);
 	}
-}
-
-function extractCodeBlock(text: string) {
-	const regex = /```.*?\n([\s\S]*?)\n```/g;
-	const matches = [];
-	let match;
-	while ((match = regex.exec(text)) !== null) {
-		matches.push(match[1]);
-	}
-	return matches.join("\n");
 }

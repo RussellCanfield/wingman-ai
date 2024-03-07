@@ -204,15 +204,22 @@ export class HuggingFace implements AIProvider {
 	public async codeComplete(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
-
+		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
+			"{beginning}",
+			beginning
+		).replace("{ending}", ending);
 		const codeRequestOptions: HuggingFaceRequest = {
-			inputs: this.codeModel!.CodeCompletionPrompt.replace(
-				"{beginning}",
-				beginning
-			).replace("{ending}", ending),
+			inputs: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+
+${additionalContext ?? ""}
+
+-----
+
+${prompt}`,
 			parameters: {
 				repetition_penalty: 1.1,
 				temperature: 0.4,
@@ -349,6 +356,53 @@ export class HuggingFace implements AIProvider {
 				top_k: 30,
 				top_p: 0.2,
 				max_new_tokens: 512,
+				return_full_text: false,
+				do_sample: false,
+			},
+			options: {
+				wait_for_model: true,
+			},
+		};
+
+		const response = await this.fetchModelResponse(
+			chatPayload,
+			this.settings?.chatModel!,
+			signal
+		);
+		if (!response) {
+			return "";
+		}
+		const huggingFaceResponse =
+			(await response.json()) as HuggingFaceResponse;
+		return huggingFaceResponse.length > 0
+			? //temporary fix. Not sure why HF doesn't specify stop tokens
+			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			: "";
+	}
+
+	public async refactor(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.refactorPrompt) return "";
+
+		const promptInput = this.chatModel!.refactorPrompt.replace(
+			"{context}",
+			ragContent ?? ""
+		)
+			.replace("{code}", prompt ?? "")
+			.replace(/\t/, "");
+
+		const chatPayload: HuggingFaceRequest = {
+			inputs: promptInput,
+			stream: false,
+			parameters: {
+				repetition_penalty: 1.1,
+				temperature: 0.6,
+				top_k: 30,
+				top_p: 0.3,
+				max_new_tokens: this.interactionSettings?.chatMaxTokens,
 				return_full_text: false,
 				do_sample: false,
 			},

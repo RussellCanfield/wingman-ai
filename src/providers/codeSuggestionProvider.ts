@@ -11,8 +11,9 @@ import {
 import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvicer } from "../service/base";
 import { delay } from "../service/delay";
-import { getContentWindow } from '../service/utils/contentWindow';
+import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "../types/Settings";
+import { getSymbolsFromOpenFiles } from "./utilities";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector: DocumentSelector = [
@@ -39,7 +40,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvicer,
 		private readonly _interactionSettings: InteractionSettings
-	) { }
+	) {}
 
 	async provideInlineCompletionItems(
 		document: TextDocument,
@@ -54,7 +55,13 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		let timeout: NodeJS.Timeout | undefined;
 
 		const abort = new AbortController();
-		const [prefix, suffix] = getContentWindow(document, position, this._interactionSettings.codeContextWindow);
+		const [prefix, suffix] = getContentWindow(
+			document,
+			position,
+			this._interactionSettings.codeContextWindow
+		);
+
+		const types = await getSymbolsFromOpenFiles();
 
 		token.onCancellationRequested(() => {
 			try {
@@ -77,7 +84,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				prefix,
 				abort.signal,
 				suffix,
-				this._interactionSettings.codeStreaming
+				this._interactionSettings.codeStreaming,
+				types
 			);
 		} catch {
 			return [new InlineCompletionItem("")];
@@ -88,7 +96,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		prefix: string,
 		signal: AbortSignal,
 		suffix: string,
-		streaming: boolean
+		streaming: boolean,
+		additionalContext?: string
 	): Promise<InlineCompletionItem[]> {
 		try {
 			eventEmitter._onQueryStart.fire();
@@ -96,14 +105,16 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				const codeStream = await this._aiProvider.codeCompleteStream(
 					prefix,
 					suffix,
-					signal
+					signal,
+					additionalContext
 				);
 				return [new InlineCompletionItem(codeStream)];
 			} else {
 				const codeResponse = await this._aiProvider.codeComplete(
 					prefix,
 					suffix,
-					signal
+					signal,
+					additionalContext
 				);
 				return [new InlineCompletionItem(codeResponse)];
 			}

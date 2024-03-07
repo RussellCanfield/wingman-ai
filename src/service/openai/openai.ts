@@ -101,6 +101,15 @@ export class OpenAI implements AIProvider {
 			);
 		}
 
+		if (!response?.ok) {
+			loggingProvider.logError(
+				`OpenAI - Chat failed with the following status code: ${response?.status}`
+			);
+			vscode.window.showErrorMessage(
+				`OpenAI - Chat failed with the following status code: ${response?.status}`
+			);
+		}
+
 		if (!response?.body) {
 			return "";
 		}
@@ -111,40 +120,6 @@ export class OpenAI implements AIProvider {
 		loggingProvider.logInfo(
 			`OpenAI - Chat Time To First Token execution time: ${executionTime} seconds`
 		);
-
-		// let currentMessage = "";
-		// for await (const chunk of asyncIterator(response.body)) {
-		// 	if (signal.aborted) {
-		// 		return "";
-		// 	}
-
-		// 	const decodedValue = this.decoder.decode(chunk).trim();
-
-		// 	//TODO: Refactor for cleaner handling between partial chunks in streaming responses.
-		// 	if (
-		// 		decodedValue.startsWith("\ndata: ") ||
-		// 		decodedValue.startsWith("data: ")
-		// 	) {
-		// 		if (
-		// 			currentMessage.endsWith("\n") ||
-		// 			currentMessage.indexOf("\n\ndata: ") > -1
-		// 		) {
-		// 			const sanitizedChunk = currentMessage
-		// 				.replace(/^(\n)?data: /g, "")
-		// 				.replace(/\n+$/, "");
-
-		// 			const splitChunks = sanitizedChunk.split("\n\ndata: ");
-
-		// 			for (const split of splitChunks) {
-		// 				yield JSON.parse(split) as OpenAIStreamResponse;
-		// 			}
-		// 		}
-
-		// 		currentMessage = decodedValue;
-		// 	} else {
-		// 		currentMessage += decodedValue;
-		// 	}
-		// }
 
 		let currentMessage = "";
 		for await (const chunk of asyncIterator(response.body)) {
@@ -175,19 +150,28 @@ export class OpenAI implements AIProvider {
 	public async codeComplete(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
+
+		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
+			"{beginning}",
+			beginning
+		).replace("{ending}", ending);
 
 		const codeRequestOptions: OpenAIRequest = {
 			model: this.settings?.codeModel!,
 			messages: [
 				{
 					role: "user",
-					content: this.codeModel!.CodeCompletionPrompt.replace(
-						"{beginning}",
-						beginning
-					).replace("{ending}", ending),
+					content: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+
+${additionalContext ?? ""}
+
+-----
+
+${prompt}`,
 				},
 			],
 			temperature: 0.4,
@@ -220,12 +204,21 @@ export class OpenAI implements AIProvider {
 			`OpenAI - Code Completion execution time: ${executionTime} seconds`
 		);
 
+		if (!response?.ok) {
+			loggingProvider.logError(
+				`OpenAI - Code Completion failed with the following status code: ${response?.status}`
+			);
+			vscode.window.showErrorMessage(
+				`OpenAI - Code Completion failed with the following status code: ${response?.status}`
+			);
+		}
+
 		if (!response?.body) {
 			return "";
 		}
 
-		const ollamaResponse = (await response.json()) as OpenAIResponse;
-		return ollamaResponse.choices[0].message.content;
+		const openAiResponse = (await response.json()) as OpenAIResponse;
+		return openAiResponse.choices[0].message.content;
 	}
 
 	public clearChatHistory(): void {
@@ -290,5 +283,132 @@ export class OpenAI implements AIProvider {
 			role: "assistant",
 			content: completeMessage,
 		});
+	}
+
+	public async genCodeDocs(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.genDocPrompt) return "";
+
+		const startTime = new Date().getTime();
+		const genDocPrompt =
+			"Generate documentation for the following code:\n" + prompt;
+
+		let systemPrompt = this.chatModel?.genDocPrompt;
+
+		if (ragContent) {
+			systemPrompt += ragContent;
+		}
+
+		systemPrompt += `\n\n${genDocPrompt}`;
+		systemPrompt = systemPrompt.replace(/\t/, "");
+
+		const genDocsPayload: OpenAIRequest = {
+			model: this.settings?.chatModel!,
+			messages: [
+				{
+					role: "user",
+					content: systemPrompt,
+				},
+			],
+			temperature: 0.4,
+			top_p: 0.3,
+		};
+
+		let response: Response | undefined;
+		try {
+			response = await this.fetchModelResponse(genDocsPayload, signal);
+		} catch (error) {
+			loggingProvider.logError(
+				`OpenAI - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`
+			);
+		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		loggingProvider.logInfo(
+			`OpenAI - Gen Docs execution time: ${executionTime} seconds`
+		);
+
+		if (!response?.ok) {
+			loggingProvider.logError(
+				`OpenAI - Gen Docs failed with the following status code: ${response?.status}`
+			);
+			vscode.window.showErrorMessage(
+				`OpenAI - Gen Docs failed with the following status code: ${response?.status}`
+			);
+		}
+
+		if (!response?.body) {
+			return "";
+		}
+
+		const openAiResponse = (await response.json()) as OpenAIResponse;
+		return openAiResponse.choices[0].message.content;
+	}
+
+	public async refactor(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.refactorPrompt) return "";
+
+		const startTime = new Date().getTime();
+
+		let systemPrompt = this.chatModel?.refactorPrompt;
+
+		if (ragContent) {
+			systemPrompt += ragContent;
+		}
+
+		systemPrompt += `\n\n${prompt}`;
+
+		const refactorPayload: OpenAIRequest = {
+			model: this.settings?.chatModel!,
+			messages: [
+				{
+					role: "user",
+					content: systemPrompt,
+				},
+			],
+			temperature: 0.4,
+			top_p: 0.3,
+		};
+
+		let response: Response | undefined;
+		try {
+			response = await this.fetchModelResponse(refactorPayload, signal);
+		} catch (error) {
+			loggingProvider.logError(
+				`OpenAI - Refactor request with model ${this.settings?.codeModel} failed with the following error: ${error}`
+			);
+		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		loggingProvider.logInfo(
+			`OpenAI - Refactor execution time: ${executionTime} seconds`
+		);
+
+		if (!response?.ok) {
+			loggingProvider.logError(
+				`OpenAI - Refactor failed with the following status code: ${response?.status}`
+			);
+			vscode.window.showErrorMessage(
+				`OpenAI - Refactor failed with the following status code: ${response?.status}`
+			);
+		}
+
+		if (!response?.body) {
+			return "";
+		}
+
+		const openAiResponse = (await response.json()) as OpenAIResponse;
+		return openAiResponse.choices[0].message.content;
 	}
 }

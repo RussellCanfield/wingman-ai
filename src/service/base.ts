@@ -57,14 +57,20 @@ export interface AIProvider {
 	codeComplete(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string>;
 	chat(
 		prompt: string,
 		ragContent: string,
 		signal: AbortSignal
 	): AsyncGenerator<string>;
-	genCodeDocs?(
+	genCodeDocs(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string>;
+	refactor(
 		prompt: string,
 		ragContent: string,
 		signal: AbortSignal
@@ -75,6 +81,7 @@ export interface AIStreamProvicer extends AIProvider {
 	codeCompleteStream(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string>;
 }

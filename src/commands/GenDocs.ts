@@ -1,28 +1,15 @@
 import vscode from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
 import { loggingProvider } from "../providers/loggingProvider";
-import { AIProvider, GetProviderFromSettings } from "../service/base";
+import { AIProvider } from "../service/base";
 import {
 	extractCsharpDocs,
-	extractFromCodeMd,
 	extractJsDocs,
 	extractStringDocs,
 } from "../service/extractFromCodeMd";
 import { generateDocPrompFactory } from "../service/generateDocPrompFactory";
 import { isTsRelated } from "../service/langCheckers";
-
-const isArrowFunction = (
-	symbol: vscode.DocumentSymbol,
-	document: vscode.TextDocument
-) => {
-	const isProperty = symbol.kind === vscode.SymbolKind.Property;
-	if (!isProperty) {
-		return false;
-	}
-
-	const line = document.lineAt(symbol.range.start.line).text;
-	return line.includes("=>");
-};
+import { isArrowFunction } from "../providers/utilities";
 
 export class GenDocs implements vscode.CodeActionProvider {
 	constructor(private readonly _aiProvider: AIProvider) {}

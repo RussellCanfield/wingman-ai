@@ -240,15 +240,23 @@ export class Ollama implements AIStreamProvicer {
 	public async codeComplete(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
+		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
+			"{beginning}",
+			beginning
+		).replace("{ending}", ending);
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
-			prompt: this.codeModel!.CodeCompletionPrompt.replace(
-				"{beginning}",
-				beginning
-			).replace("{ending}", ending),
+			prompt: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+
+${additionalContext ?? ""}
+
+-----
+
+${prompt}`,
 			stream: false,
 			raw: true,
 			options: {
@@ -338,7 +346,8 @@ export class Ollama implements AIStreamProvicer {
 	public async codeCompleteStream(
 		beginning: string,
 		ending: string,
-		signal: AbortSignal
+		signal: AbortSignal,
+		additionalContext?: string
 	): Promise<string> {
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
@@ -346,7 +355,13 @@ export class Ollama implements AIStreamProvicer {
 		).replace("{ending}", ending);
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
-			prompt,
+			prompt: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+
+${additionalContext ?? ""}
+
+-----
+
+${prompt}`,
 			stream: true,
 			raw: true,
 			options: {
@@ -387,7 +402,7 @@ export class Ollama implements AIStreamProvicer {
 
 				if (now - start > 1000 && sentences.length > 1) {
 					abortSignal.abort();
-					return sentences.join('\n');
+					return sentences.join("\n");
 				}
 				now = Date.now();
 			}
@@ -478,6 +493,47 @@ export class Ollama implements AIStreamProvicer {
 		};
 
 		const response = await this.fetchModelResponse(chatPayload, signal);
+		if (!response) {
+			return "";
+		}
+		const responseObject = (await response.json()) as OllamaResponse;
+		return responseObject.response;
+	}
+
+	public async refactor(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.refactorPrompt) return "";
+
+		let systemPrompt = this.chatModel.refactorPrompt;
+		if (ragContent) {
+			systemPrompt += ragContent;
+		}
+
+		const refactorPayload: OllamaRequest = {
+			model: this.settings?.chatModel!,
+			prompt: prompt,
+			system: systemPrompt,
+			stream: false,
+			options: {
+				num_predict: this.interactionSettings?.chatMaxTokens ?? -1,
+				temperature: 0.4,
+				top_k: 20,
+				top_p: 0.2,
+				repeat_penalty: 1.1,
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "</s>"],
+			},
+		};
+
+		loggingProvider.logInfo(
+			`Ollama - Refactor submitting request with body: ${JSON.stringify(
+				refactorPayload
+			)}`
+		);
+
+		const response = await this.fetchModelResponse(refactorPayload, signal);
 		if (!response) {
 			return "";
 		}
