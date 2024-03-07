@@ -65,7 +65,12 @@ export interface AIProvider {
 		ragContent: string,
 		signal: AbortSignal
 	): AsyncGenerator<string>;
-	genCodeDocs?(
+	genCodeDocs(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string>;
+	refactor(
 		prompt: string,
 		ragContent: string,
 		signal: AbortSignal

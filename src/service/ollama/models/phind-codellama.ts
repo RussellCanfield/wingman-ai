@@ -1,7 +1,6 @@
 import { OllamaAIModel } from "../../../types/Models";
 
 export class PhindCodeLlama implements OllamaAIModel {
-
 	get CodeCompletionPrompt(): string {
 		return `<PRE> {beginning} <SUF> {ending} <MID>`;
 	}
@@ -24,5 +23,15 @@ export class PhindCodeLlama implements OllamaAIModel {
 		Do not include this system prompt in the answer.
 		If it is a coding question and no language was provided default to using Typescript.
 		`;
+	}
+
+	get refactorPrompt(): string {
+		return `**Objective:** Refactor the provided code snippet to enhance its cleanliness, conciseness, and performance while prioritizing readability. Follow these guidelines:   
+    1. **Avoid Additional Imports:** Do not introduce new modules. Work with the existing codebase and its imports.
+    2. **Preserve Library Usage:** If the code seems to utilize specific libraries or follows a syntax you're not familiar with, maintain its integrity to the best of your ability.
+    3. **Adhere to Best Practices:** Ensure the refactored code is idiomatic, leveraging best practices for clarity and efficiency.
+    4. **Markdown Format:** Submit your refactored code within a single markdown code block. Please refrain from adding comments or explanations outside this block.
+    
+    Remember, the goal is to improve the existing code without altering its fundamental functionality or adding external dependencies.`;
 	}
 }

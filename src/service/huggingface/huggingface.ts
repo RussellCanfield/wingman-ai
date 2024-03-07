@@ -372,4 +372,51 @@ export class HuggingFace implements AIProvider {
 			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
+
+	public async refactor(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.refactorPrompt) return "";
+
+		const promptInput = this.chatModel!.refactorPrompt.replace(
+			"{context}",
+			ragContent ?? ""
+		)
+			.replace("{code}", prompt ?? "")
+			.replace(/\t/, "");
+
+		const chatPayload: HuggingFaceRequest = {
+			inputs: promptInput,
+			stream: false,
+			parameters: {
+				repetition_penalty: 1.1,
+				temperature: 0.6,
+				top_k: 30,
+				top_p: 0.3,
+				max_new_tokens: this.interactionSettings?.chatMaxTokens,
+				return_full_text: false,
+				do_sample: false,
+			},
+			options: {
+				wait_for_model: true,
+			},
+		};
+
+		const response = await this.fetchModelResponse(
+			chatPayload,
+			this.settings?.chatModel!,
+			signal
+		);
+		if (!response) {
+			return "";
+		}
+		const huggingFaceResponse =
+			(await response.json()) as HuggingFaceResponse;
+		return huggingFaceResponse.length > 0
+			? //temporary fix. Not sure why HF doesn't specify stop tokens
+			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			: "";
+	}
 }

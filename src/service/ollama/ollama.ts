@@ -492,4 +492,45 @@ ${prompt}`,
 		const responseObject = (await response.json()) as OllamaResponse;
 		return responseObject.response;
 	}
+
+	public async refactor(
+		prompt: string,
+		ragContent: string,
+		signal: AbortSignal
+	): Promise<string> {
+		if (!this.chatModel?.refactorPrompt) return "";
+
+		let systemPrompt = this.chatModel.refactorPrompt;
+		if (ragContent) {
+			systemPrompt += ragContent;
+		}
+
+		const chatPayload: OllamaRequest = {
+			model: this.settings?.chatModel!,
+			prompt: prompt,
+			system: systemPrompt,
+			stream: false,
+			options: {
+				num_predict: this.interactionSettings?.chatMaxTokens ?? -1,
+				temperature: 0.6,
+				top_k: 30,
+				top_p: 0.3,
+				repeat_penalty: 1.1,
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+			},
+		};
+
+		loggingProvider.logInfo(
+			`Ollama - Refactor submitting request with body: ${JSON.stringify(
+				chatPayload
+			)}`
+		);
+
+		const response = await this.fetchModelResponse(chatPayload, signal);
+		if (!response) {
+			return "";
+		}
+		const responseObject = (await response.json()) as OllamaResponse;
+		return responseObject.response;
+	}
 }
