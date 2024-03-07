@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 
 export async function getSymbolsFromOpenFiles() {
 	let openDocuments = vscode.workspace.textDocuments;
-	console.log("Open Documents: ", openDocuments);
 	const types: string[] = [];
 	await Promise.all(
 		openDocuments.map(async (d) => {
@@ -51,7 +50,6 @@ async function findMethod(
 	currentSymbol?: CustomSymbol
 ): Promise<void> {
 	for (const symbol of symbols) {
-		console.log(symbol);
 		if (
 			symbol.kind === vscode.SymbolKind.Class ||
 			symbol.kind === vscode.SymbolKind.Interface

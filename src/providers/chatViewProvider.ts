@@ -3,6 +3,7 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider } from "../service/base";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { InteractionSettings } from "../types/Settings";
+import { getSymbolsFromOpenFiles } from "./utilities";
 
 let abortController = new AbortController();
 
@@ -41,7 +42,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
 
 		token.onCancellationRequested((e) => {
-			console.log(e);
 			abortController.abort();
 			eventEmitter._onQueryComplete.fire();
 		});
@@ -143,19 +143,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				workspaceName,
 			} = context;
 
-			ragContext = `The user is seeking coding advice using ${language}.
-		Reference the following code context in order to provide a working solution.
+			const symbols = await getSymbolsFromOpenFiles();
 
-		${text}
+			ragContext = `The user is seeking coding advice using ${language}.  
+Here are the available types to use as a reference in answering questions, these may not be related to the code provided:
 
-		=======
+${symbols}
 
-		The most important line of the code context is as follows: 
-		
-		${currentLine}
-		
-		=======
-		`.replace(/\t/g, "");
+=======
+
+Reference the following code context in order to provide a working solution.
+
+${text}
+
+=======
+
+The most important line of the code context is as follows: 
+
+${currentLine}
+
+=======
+
+`.replace(/\t/g, "");
 
 			webviewView.webview.postMessage({
 				command: "context",

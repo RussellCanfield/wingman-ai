@@ -92,15 +92,18 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 ${highlightedCode}
 \`\`\``,
 					symbols
-						? `\nHere are local types to use as context that may aid you:\n${symbols}\n\n`
+						? `\nHere are the available types to use as a reference in answering questions, these may not be related to the code provided:\n${symbols}\n----------\n`
 						: "",
 					abortController.signal
 				);
 
 				const newCode = extractCodeBlock(result);
-				editor?.edit((builder) => {
-					builder.replace(codeContextRange, newCode);
-				});
+
+				if (newCode) {
+					editor?.edit((builder) => {
+						builder.replace(codeContextRange, newCode);
+					});
+				}
 			}
 		);
 	}

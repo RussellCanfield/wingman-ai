@@ -512,28 +512,28 @@ ${prompt}`,
 			systemPrompt += ragContent;
 		}
 
-		const chatPayload: OllamaRequest = {
+		const refactorPayload: OllamaRequest = {
 			model: this.settings?.chatModel!,
 			prompt: prompt,
 			system: systemPrompt,
 			stream: false,
 			options: {
 				num_predict: this.interactionSettings?.chatMaxTokens ?? -1,
-				temperature: 0.6,
-				top_k: 30,
-				top_p: 0.3,
+				temperature: 0.4,
+				top_k: 20,
+				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "</s>"],
 			},
 		};
 
 		loggingProvider.logInfo(
 			`Ollama - Refactor submitting request with body: ${JSON.stringify(
-				chatPayload
+				refactorPayload
 			)}`
 		);
 
-		const response = await this.fetchModelResponse(chatPayload, signal);
+		const response = await this.fetchModelResponse(refactorPayload, signal);
 		if (!response) {
 			return "";
 		}
