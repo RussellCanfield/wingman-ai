@@ -19,7 +19,7 @@ export async function getSymbolsFromOpenFiles() {
 	return types.join("\n");
 }
 
-function isArrowFunction(
+export function isArrowFunction(
 	symbol: vscode.DocumentSymbol,
 	document: vscode.TextDocument
 ) {
@@ -30,10 +30,12 @@ function isArrowFunction(
 		return false;
 	}
 
-	const line = document.getText(
-		new vscode.Range(symbol.range.start, symbol.range.end)
+	return (
+		document
+			.getText(new vscode.Range(symbol.range.start, symbol.range.end))
+			.includes("=>") ||
+		document.lineAt(symbol.range.start.line).text.includes("=>")
 	);
-	return line.includes("=>");
 }
 
 type CustomSymbol = {
