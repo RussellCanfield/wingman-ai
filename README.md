@@ -12,7 +12,7 @@ We recommend starting with Ollama with a deepseek model(s), [see why here](https
 
 -   Install this extension from the VS Code Marketplace: [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man)
 -   Install [Ollama](https://ollama.ai/)
--   Install the supported local models by running the following command(s):
+-   Install the [supported local models](#supported-models) by running the following command(s):
     **Example**:
     -   _ollama pull deepseek-coder:6.7b-base-q8_0_
     -   _ollama pull deepseek-coder:6.7b-instruct-q8_0_
@@ -30,7 +30,7 @@ The AI will look for natural pauses in typing to decide when to offer code sugge
 
 We understand that sometimes the code completion feature can be too aggressive, which may strain your system's resources during local development. To address this, we have introduced an option to disable automatic code completion. However, we also recognize the usefulness of on-demand completion. Therefore, we've implemented a hotkey that allows you to manually trigger code completion at your convenience.
 
-When you need assistance, simply press `Shift + Ctrl + Space`. This will bring up a code completion preview right in the editor and a quick action will appear.  If you're satisfied with the suggested code, you can accept it by pressing `Enter`. This provides you with the flexibility to use code completion only when you want it, without the overhead of automatic triggers.
+When you need assistance, simply press `Shift + Ctrl + Space`. This will bring up a code completion preview right in the editor and a quick action will appear. If you're satisfied with the suggested code, you can accept it by pressing `Enter`. This provides you with the flexibility to use code completion only when you want it, without the overhead of automatic triggers.
 
 ### Interactive Chat
 
@@ -62,12 +62,15 @@ Supported Models for _Code Completion_:
 
 -   Deepseek-base _(tested with: [deepseek-coder:6.7b-base-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-base-q8_0))_
 -   Codellama-code _(tested with: [codellama:7b-code-q4_K_M](https://ollama.ai/library/codellama:7b-code-q4_K_M))_
+-   Magicoder-DS _(tested with [wojtek/magicoder:6.7b-s-ds-q8_0](https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0))_
 
 Supported Models for _Chat_:
 
 -   Deepseek-Instruct _(tested with: [deepseek-coder:6.7b-instruct-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0))_
 -   Codellama-Instruct _(tested with: [codellama:7b-instruct](https://ollama.ai/library/codellama:7b-instruct))_
 -   Phind-CodeLlama - _(tested with: [phind-codellama:34b-v2-q2_K](https://ollama.ai/library/phind-codellama:34b-v2-q2_K))_
+-   Magicoder-DS _(tested with [wojtek/magicoder:6.7b-s-ds-q8_0](https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0))_
+-   Llama3-Instruct _(tested with [llama3:8b-instruct-q6_K](https://ollama.com/library/llama3:8b-instruct-q6_K))_
 
 ---
 

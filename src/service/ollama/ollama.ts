@@ -10,6 +10,8 @@ import { CodeLlama } from "./models/codellama";
 import { Deepseek } from "./models/deepseek";
 import { PhindCodeLlama } from "./models/phind-codellama";
 import { OllamaRequest, OllamaResponse } from "./types";
+import { Llama3 } from "./models/llama3";
+import { Magicoder } from "./models/magicoder";
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -73,6 +75,8 @@ export class Ollama implements AIStreamProvicer {
 
 	private getCodeModel(codeModel: string): OllamaAIModel | undefined {
 		switch (true) {
+			case codeModel.includes("magicoder"):
+				return new Magicoder();
 			case codeModel.startsWith("codellama"):
 				return new CodeLlama();
 			case codeModel.startsWith("deepseek"):
@@ -86,6 +90,10 @@ export class Ollama implements AIStreamProvicer {
 
 	private getChatModel(chatModel: string): OllamaAIModel | undefined {
 		switch (true) {
+			case chatModel.includes("magicoder"):
+				return new Magicoder();
+			case chatModel.startsWith("llama3"):
+				return new Llama3();
 			case chatModel.startsWith("codellama"):
 				return new CodeLlama();
 			case chatModel.startsWith("deepseek"):
@@ -265,7 +273,13 @@ ${prompt}`,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+				stop: [
+					"<｜end▁of▁sentence｜>",
+					"<｜EOT｜>",
+					"\\n",
+					"</s>",
+					"<|eot_id|>",
+				],
 			},
 		};
 
@@ -370,7 +384,12 @@ ${prompt}`,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n"],
+				stop: [
+					"<｜end▁of▁sentence｜>",
+					"<｜EOT｜>",
+					"\\n",
+					"<|eot_id|>",
+				],
 			},
 		};
 
@@ -444,7 +463,7 @@ ${prompt}`,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>"],
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "<|eot_id|>"],
 			},
 		};
 
@@ -488,7 +507,13 @@ ${prompt}`,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "</s>"],
+				stop: [
+					"<｜end▁of▁sentence｜>",
+					"<｜EOT｜>",
+					"\\n",
+					"</s>",
+					"<|eot_id|>",
+				],
 			},
 		};
 
@@ -523,7 +548,12 @@ ${prompt}`,
 				top_k: 20,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "</s>"],
+				stop: [
+					"<｜end▁of▁sentence｜>",
+					"<｜EOT｜>",
+					"</s>",
+					"<|eot_id|>",
+				],
 			},
 		};
 
