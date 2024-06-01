@@ -4,11 +4,13 @@
     <img width="33%" src="./docs/logo.jpeg">
 </p>
 
-The [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) extension brings high quality AI assisted coding right to your computer, it's 100% free and data never leaves your machine - meaning it's completely private! Since the current release of this extension relies on running the AI models locally using [Ollama](https://ollama.ai/), it is recommended you are on a machine with capable graphics card (Apple M series/Nvidia cards) for the best performance.
+The [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) extension brings high quality AI assisted coding right to your computer, it's 100% free and private which means data never leaves your machine!
 
-## 🚀 Getting Started
+# 🚀 Getting Started
 
-We recommend starting with Ollama with a deepseek model(s), [see why here](https://huggingface.co/spaces/mike-ravkine/can-ai-code-results).
+## Choosing an AI Provider
+
+We recommend starting with [Ollama](https://ollama.ai/) using the **Deepseek** model(s), [see why here](https://huggingface.co/spaces/mike-ravkine/can-ai-code-results) or [here](https://evalplus.github.io/leaderboard.html).
 
 -   Install this extension from the VS Code Marketplace: [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man)
 -   Install [Ollama](https://ollama.ai/)
@@ -16,13 +18,14 @@ We recommend starting with Ollama with a deepseek model(s), [see why here](https
     **Example**:
     -   _ollama pull deepseek-coder:6.7b-base-q8_0_
     -   _ollama pull deepseek-coder:6.7b-instruct-q8_0_
--   That's it! This extension will validate that the models are configured correctly in it's VSCode settings upon launch. If you wish to customize which models run see the [FAQ section](#faq).
 
-## Features
+That's it! This extension will validate that the models are configured correctly in it's VSCode settings upon launch. If you wish to customize which models run see the [FAQ section](#faq).
 
-### Code Completion
+# Features
 
-The AI will look for natural pauses in typing to decide when to offer code suggestions (keep in mind the AI is limited by your machine speed).
+## Code Completion
+
+The AI will look for natural pauses in typing to decide when to offer code suggestions (keep in mind the speed is limited by your machine). The code completion feature will also analyze comments you type and generate suggestions based on that context.
 
 [![Wingman AI code completion example](https://img.youtube.com/vi/panJL4DUGkA/0.jpg)](https://www.youtube.com/watch?v=panJL4DUGkA)
 
@@ -32,31 +35,35 @@ We understand that sometimes the code completion feature can be too aggressive, 
 
 When you need assistance, simply press `Shift + Ctrl + Space`. This will bring up a code completion preview right in the editor and a quick action will appear. If you're satisfied with the suggested code, you can accept it by pressing `Enter`. This provides you with the flexibility to use code completion only when you want it, without the overhead of automatic triggers.
 
-### Interactive Chat
+## Interactive Chat
 
-Talk to the AI naturally! It will use open files as context to answer your question, or simply select a section of code to use as context.
+Talk to the AI naturally! It will use open files as context to answer your question, or simply select a section of code to use as context. Chat will also analyze comments you type and ge
 
 [![Wingman AI chat example](https://img.youtube.com/vi/1W3h2mOdjmc/0.jpg)](https://www.youtube.com/watch?v=1W3h2mOdjmc)
 
 [![Wingman AI chat example](https://img.youtube.com/vi/2sJZpyYi3Fc/0.jpg)](https://www.youtube.com/watch?v=2sJZpyYi3Fc)
 
-## AI Providers
+# AI Providers
 
-### Ollama
+## Ollama
 
 [Ollama](https://ollama.ai/) is a free and open-source AI model provider, allowing users to run their own local models.
 
-#### Why Ollama?
+### Why Ollama?
 
 [Ollama](https://ollama.ai/) was chosen for it's simplicity, allowing users to pull a number of models in different configurations and update them at will. Ollama will pull optimized models based on your system architecture, however if you do not have a GPU accelerated machine, models will be slower.
 
-#### Setting up Ollama
+### Setting up Ollama
 
 Follow the directions on the [Ollama](https://ollama.ai/) website. Ollama has a number of open source models available that are capable of writing high quality code. See [getting started](#🚀-getting-started) for how to pull and customize models.
 
-#### Supported Models
+### Supported Models
 
 The extension uses a separate model for chat and code completion. This is due to the fact that different types of models have different strengths, mixing and matching offers the best result.
+
+**NOTE - You can use any quantization for a supported model, you are not limited.**
+
+**Example: deepseek-coder:6.7b-instruct-q4_0 or deepseek-coder:33b.**
 
 Supported Models for _Code Completion_:
 
@@ -73,13 +80,12 @@ Supported Models for _Chat_:
 -   Magicoder-DS _(tested with [wojtek/magicoder:6.7b-s-ds-q8_0](https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0))_
 -   Llama3-Instruct _(tested with [llama3:8b-instruct-q6_K](https://ollama.com/library/llama3:8b-instruct-q6_K))_
 -   CodeQwen1.5-Code _(tested with [codeqwen:7b-chat-v1.5-q8_0](https://ollama.com/library/codeqwen:7b-code-v1.5-q8_0))_
+
 ---
 
-### Hugging Face
+## Hugging Face
 
 [Hugging Face](https://huggingface.co/) supports hosting and training models, but also supports running many models _(under 10GB)_ for free! All you have to do is [create a free account](https://huggingface.co/docs/api-inference/quicktour).
-
-**NOTE** - your data is not private and will not be sanitized prior to being sent.
 
 #### Setting up Hugging Face
 
@@ -88,27 +94,34 @@ Once you have a Hugging Face account and an API key, all you need to do is open 
 Once it's open, select "HuggingFace" as the AI Provider and add your API key under the HuggingFace section:
 
 <p align="center" width="100%">
-    <img width="50%" src="./docs/HuggingFaceSettings.png">
+    <img width="50%" src="./docs/WingmanConfig.png">
 </p>
 
-#### Supported Models
+### Supported Models
 
 The extension uses a separate model for chat and code completion. This is due to the fact that different types of models have different strengths, mixing and matching offers the best result.
 
 Supported Models for _Code Completion_:
 
 -   CodeLlama _(tested with: [codellama/CodeLlama-7b-hf](https://huggingface.co/codellama/CodeLlama-7b-hf))_
+-   Starcoder2 _(tested with [bigcode/starcoder2-15b](https://huggingface.co/bigcode/starcoder2-15b))_
 
 Supported Models for _Chat_:
 
 -   Mixtral v0.1 _(tested with [mistralai/Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1))_
 -   Mistral v0.2 _(tested with: [mistralai/Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2))_
 
+**NOTE** - your data is not private and will not be sanitized prior to being sent.
+
 ---
 
-### OpenAI
+## OpenAI
 
-OpenAI integration is supported for GPT4-Turbo, allowing you to run code completion, chat or other functionality to run on larger and more powerful models.
+[OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades) is supported! You can use the following models:
+
+-   GPT4-o
+-   GPT4-Turbo
+-   GPT4
 
 **NOTE** - your data is not private and will not be sanitized prior to being sent.
 
@@ -116,14 +129,10 @@ OpenAI integration is supported for GPT4-Turbo, allowing you to run code complet
 
 ## FAQ
 
--   _How can I change which models are being used?_ This extension uses settings like any other VSCode extension, see the examples below. **NOTE Changing a model reloads reloading VSCode (on mac cmd+R).**
+-   _How can I change which models are being used?_ This extension uses settings like any other VSCode extension, see the examples below.
 
 <p align="center" width="100%">
-    <img width="50%" src="./docs/ExtensionSettings.png">
-</p>
-
-<p align="center" width="100%">
-    <img width="50%" src="./docs/OllamaSettings.png">
+    <img width="50%" src="./docs/WingmanConfig.png">
 </p>
 
 -   _The AI models feel slow, why?_ As of _pre-release 0.0.6_ we've added an indicator in the bottom status bar to show you when an AI model is actively processing. If you aren't using GPU accelerated hardware, you may need to look into [Quantization](https://huggingface.co/docs/optimum/concept_guides/quantization)].
@@ -151,5 +160,7 @@ The models above will require enough RAM to run them correctly, you should have 
 To see the latest release notes - [check out our releases page](https://github.com/RussellCanfield/wingman-ai/releases).
 
 ---
+
+If you like the extension, please leave a review! If you don't, open an issue and we'd be happy to assist!
 
 **Enjoy!**

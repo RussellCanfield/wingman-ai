@@ -55,7 +55,7 @@ export class OpenAI implements AIProvider {
 				return new GPT4Turbo();
 			default:
 				this.handleError(
-					"Invalid code model name, currently code supports the GPT-4 Turbo and GPT-4 model(s)."
+					"Invalid code model name, currently code supports the GPT-4o, GPT-4 Turbo and GPT-4 model(s)."
 				);
 		}
 	}
@@ -66,7 +66,7 @@ export class OpenAI implements AIProvider {
 				return new GPT4Turbo();
 			default:
 				this.handleError(
-					"Invalid chat model name, currently chat supports the GPT-4 Turbo and GPT-4 model(s)."
+					"Invalid chat model name, currently chat supports the GPT-4o, GPT-4 Turbo and GPT-4 model(s)."
 				);
 		}
 	}
