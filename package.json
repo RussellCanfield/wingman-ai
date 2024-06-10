@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.3.8",
+	"version": "0.3.9",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"authors": [
@@ -78,14 +78,14 @@
 				{
 					"id": "wing-man",
 					"title": "Wingman",
-					"icon": "media/jet-fighter.png"
+					"icon": "media/wingman-logo.png"
 				}
 			],
 			"panel": [
 				{
 					"id": "wing-man-config",
 					"title": "Wingman Config",
-					"icon": "media/jet-fighter.png"
+					"icon": "media/wingman-logo.png"
 				}
 			]
 		},
