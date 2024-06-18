@@ -41,7 +41,7 @@ export const OllamaView = () => {
 				</li>
 				<li>
 					<a href="https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0">
-						Magicoder DS
+						magicoder DS
 					</a>
 				</li>
 				<li>
@@ -51,8 +51,11 @@ export const OllamaView = () => {
 				</li>
 				<li>
 					<a href="https://ollama.com/library/codeqwen:7b-code-v1.5-q5_1">
-						codeqwen 1.5
+						codeqwen-1.5
 					</a>
+				</li>
+				<li>
+					<a href="https://ollama.com/library/codestral">codestral</a>
 				</li>
 			</ul>
 			<h4>Chat:</h4>
@@ -74,18 +77,21 @@ export const OllamaView = () => {
 				</li>
 				<li>
 					<a href="https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0">
-						Magicoder DS
+						magicoder DS
 					</a>
 				</li>
 				<li>
 					<a href="https://ollama.com/library/llama3:8b-instruct-q6_K">
-						LLama-3 Instruct
+						llama-3 Instruct
 					</a>
 				</li>
 				<li>
 					<a href="https://ollama.com/library/codeqwen:7b-code-v1.5-q8_0">
-						CodeQwen-1.5 Code
+						codeqwen-1.5 code
 					</a>
+				</li>
+				<li>
+					<a href="https://ollama.com/library/codestral">codestral</a>
 				</li>
 			</ul>
 		</div>
