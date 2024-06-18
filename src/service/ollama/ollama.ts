@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { eventEmitter } from "../../events/eventEmitter";
 import { loggingProvider } from "../../providers/loggingProvider";
-import { OllamaAIModel } from "../../types/Models";
+import { OllamaAIModel } from "./types";
 import { InteractionSettings, Settings } from "../../types/Settings";
 import { asyncIterator } from "../asyncIterator";
 import { AIStreamProvicer, GetInteractionSettings } from "../base";
@@ -13,12 +13,18 @@ import { Deepseek } from "./models/deepseek";
 import { Llama3 } from "./models/llama3";
 import { Magicoder } from "./models/magicoder";
 import { PhindCodeLlama } from "./models/phind-codellama";
-import { OllamaRequest, OllamaResponse } from "./types";
+import {
+	OllamaRequest,
+	OllamaResponse,
+	OllamaChatMessage,
+	OllamaChatRequest,
+	OllamaChatResponse,
+} from "./types";
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
 	settings: Settings["ollama"];
-	chatHistory: number[] = [];
+	chatHistory: OllamaChatMessage[] = [];
 	chatModel: OllamaAIModel | undefined;
 	codeModel: OllamaAIModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
@@ -158,12 +164,26 @@ export class Ollama implements AIStreamProvicer {
 		);
 	}
 
-	async *generate(payload: OllamaRequest, signal: AbortSignal) {
+	private async fetchChatResponse(
+		payload: OllamaChatRequest,
+		signal: AbortSignal
+	) {
+		if (signal.aborted) {
+			return undefined;
+		}
+		return await fetch(new URL(`${this.settings?.baseUrl}/api/chat`), {
+			method: "POST",
+			body: JSON.stringify(payload),
+			signal,
+		});
+	}
+
+	async *generate(payload: OllamaChatRequest, signal: AbortSignal) {
 		const startTime = new Date().getTime();
 		let response: Response | undefined;
 
 		try {
-			response = await this.fetchModelResponse(payload, signal);
+			response = await this.fetchChatResponse(payload, signal);
 		} catch (error) {
 			loggingProvider.logError(
 				`Ollama chat request with model: ${payload.model} failed with the following error: ${error}`
@@ -182,20 +202,19 @@ export class Ollama implements AIStreamProvicer {
 		);
 
 		for await (const chunk of asyncIterator(response.body)) {
-			if (signal.aborted) return;
-			const jsonString = this.decoder.decode(chunk);
-			// we can have more then one ollama response
-			const jsonStrings = jsonString
-				.replace(/}\n{/gi, "}\u241e{")
-				.split("\u241e");
+			if (signal.aborted) {
+				return;
+			}
+
 			try {
-				for (const json of jsonStrings) {
-					const result = JSON.parse(json) as OllamaResponse;
-					yield result;
+				const jsonString = this.decoder.decode(chunk);
+				const message = JSON.parse(jsonString) as OllamaChatResponse;
+				if (message.error) {
+					throw new Error(message.error);
 				}
+				yield message;
 			} catch (e) {
 				console.warn(e);
-				console.log(jsonString);
 			}
 		}
 	}
@@ -456,25 +475,40 @@ ${prompt}`,
 
 		if (ragContent) {
 			systemPrompt += `Here's some additional information that may help you generate a more accurate response.
-            Please determine if this information is relevant and can be used to supplement your response: 
-            ${ragContent}`;
+Please determine if this information is relevant and can be used to supplement your response: 
+${ragContent}`;
 		}
 
 		systemPrompt = systemPrompt.replaceAll("\t", "");
 
-		const chatPayload: OllamaRequest = {
+		const messages: OllamaChatMessage[] = [
+			{
+				role: "assistant",
+				content: systemPrompt,
+			},
+		];
+
+		if (this.chatHistory.length > 0) {
+			messages.push(...this.truncateChatHistory());
+		}
+
+		messages.push({
+			role: "user",
+			content: prompt,
+		});
+
+		this.chatHistory.push(messages[messages.length - 1]);
+
+		const chatPayload: OllamaChatRequest = {
 			model: this.settings?.chatModel!,
-			prompt,
-			system: systemPrompt,
 			stream: true,
-			context: this.chatHistory,
+			messages,
 			options: {
 				num_predict: this.interactionSettings?.chatMaxTokens ?? -1,
 				temperature: 0.4,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "<|eot_id|>"],
 			},
 		};
 
@@ -484,12 +518,9 @@ ${prompt}`,
 			)}`
 		);
 
-		this.clearChatHistory();
-
 		for await (const chunk of this.generate(chatPayload, signal)) {
-			const { response, context } = chunk;
-			this.chatHistory = this.chatHistory.concat(context);
-			yield response;
+			this.chatHistory.push(chunk.message);
+			yield chunk.message.content;
 		}
 	}
 
@@ -498,7 +529,9 @@ ${prompt}`,
 		ragContent: string,
 		signal: AbortSignal
 	): Promise<string> {
-		if (!this.chatModel?.genDocPrompt) return "";
+		if (!this.chatModel?.genDocPrompt) {
+			return "";
+		}
 
 		let systemPrompt = this.chatModel.genDocPrompt;
 		if (ragContent) {
@@ -536,12 +569,21 @@ ${prompt}`,
 		return responseObject.response;
 	}
 
+	private truncateChatHistory(maxRecords: number = 2) {
+		if (this.chatHistory.length > maxRecords) {
+			this.chatHistory.splice(0, this.chatHistory.length - maxRecords);
+		}
+		return this.chatHistory;
+	}
+
 	public async refactor(
 		prompt: string,
 		ragContent: string,
 		signal: AbortSignal
 	): Promise<string> {
-		if (!this.chatModel?.refactorPrompt) return "";
+		if (!this.chatModel?.refactorPrompt) {
+			return "";
+		}
 
 		let systemPrompt = this.chatModel.refactorPrompt;
 		if (ragContent) {

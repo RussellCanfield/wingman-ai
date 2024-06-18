@@ -5,6 +5,7 @@ import {
 	getSymbolsFromOpenFiles,
 	supportedLanguages,
 } from "./utilities";
+import { eventEmitter } from "../events/eventEmitter";
 
 let abortController = new AbortController();
 
@@ -63,6 +64,7 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 					abortController.abort();
 				}
 
+				eventEmitter._onQueryStart.fire();
 				const codeContextRange = new vscode.Range(
 					range.start,
 					range.end
@@ -89,6 +91,7 @@ ${highlightedCode}
 						builder.replace(codeContextRange, newCode);
 					});
 				}
+				eventEmitter._onQueryComplete.fire();
 			}
 		);
 	}

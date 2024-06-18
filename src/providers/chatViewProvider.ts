@@ -3,7 +3,7 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider } from "../service/base";
 import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
 import { InteractionSettings } from "../types/Settings";
-import { loggingProvider } from './loggingProvider';
+import { loggingProvider } from "./loggingProvider";
 import { getSymbolsFromOpenFiles } from "./utilities";
 
 let abortController = new AbortController();
@@ -17,7 +17,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _interactionSettings: InteractionSettings
-	) { }
+	) {}
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -98,7 +98,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							command: "init",
 							value: {
 								workspaceFolder: getActiveWorkspace(),
-								theme: vscode.window.activeColorTheme.kind
+								theme: vscode.window.activeColorTheme.kind,
 							},
 						});
 						break;
@@ -109,9 +109,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					}
 				}
 			}),
-			vscode.window.onDidChangeActiveColorTheme((theme: vscode.ColorTheme) => {
-				webviewView.webview.postMessage({ command: 'setTheme', value: theme.kind });
-			})
+			vscode.window.onDidChangeActiveColorTheme(
+				(theme: vscode.ColorTheme) => {
+					webviewView.webview.postMessage({
+						command: "setTheme",
+						value: theme.kind,
+					});
+				}
+			)
 		);
 	}
 
@@ -155,25 +160,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			const symbols = await getSymbolsFromOpenFiles();
 
 			ragContext = `The user is seeking coding advice using ${language}.  
-Here are the available types to use as a reference in answering questions, these may not be related to the code provided:
+Here are the available types to use as a reference when answering questions, these may not be related to the code provided:
 
 ${symbols}
 
 =======
 
-Reference the following code context in order to provide a working solution.
+Reference the following code in order to provide a working solution.
 
 ${text}
 
 =======
 
-The most important line of the code context is as follows: 
+The user is current looking at this line of code from the context above: 
 
 ${currentLine}
 
-=======
-
-`.replace(/\t/g, "");
+=======`.replace(/\t/g, "");
 
 			webviewView.webview.postMessage({
 				command: "context",
@@ -245,7 +248,6 @@ ${currentLine}
           </body>
         </html>`;
 	}
-
 
 	private log = (value: unknown) => {
 		loggingProvider.logInfo(JSON.stringify(value ?? ""));
