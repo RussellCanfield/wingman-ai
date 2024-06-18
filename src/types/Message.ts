@@ -4,7 +4,7 @@ export interface AppMessage {
 }
 
 export interface ChatMessage {
-	from: "Assistant" | "User";
+	from: "assistant" | "user";
 	message: string;
 	loading?: boolean;
 	context: CodeContext | undefined;

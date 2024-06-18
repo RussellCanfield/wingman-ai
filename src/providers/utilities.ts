@@ -23,6 +23,12 @@ export const supportedLanguages: vscode.DocumentSelector = [
 	{ scheme: "file", language: "shellscript" },
 	{ scheme: "file", language: "sh" },
 	{ scheme: "file", language: "bash" },
+	{ scheme: "file", language: "dockerfile" },
+	{ scheme: "file", language: "yaml" },
+	{ scheme: "file", language: "json" },
+	{ scheme: "file", language: "xml" },
+	{ scheme: "file", language: "markdown" },
+	{ scheme: "file", language: "powershell" },
 ];
 
 export async function getSymbolsFromOpenFiles() {

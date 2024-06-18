@@ -471,33 +471,27 @@ ${prompt}`,
 		ragContent: string,
 		signal: AbortSignal
 	) {
-		let systemPrompt = this.chatModel!.ChatPrompt;
-
-		if (ragContent) {
-			systemPrompt += `Here's some additional information that may help you generate a more accurate response.
+		const systemMessage: OllamaChatMessage = {
+			role: "assistant",
+			content: !ragContent
+				? this.chatModel?.ChatPrompt!
+				: `Here's some additional information that may help you generate a more accurate response.
 Please determine if this information is relevant and can be used to supplement your response: 
-${ragContent}`;
-		}
+${ragContent}`,
+		};
 
-		systemPrompt = systemPrompt.replaceAll("\t", "");
+		const userMessage: OllamaChatMessage = {
+			role: "user",
+			content: prompt,
+		};
 
-		const messages: OllamaChatMessage[] = [
-			{
-				role: "assistant",
-				content: systemPrompt,
-			},
-		];
+		this.chatHistory.push(systemMessage, userMessage);
+
+		const messages: OllamaChatMessage[] = [];
 
 		if (this.chatHistory.length > 0) {
 			messages.push(...this.truncateChatHistory());
 		}
-
-		messages.push({
-			role: "user",
-			content: prompt,
-		});
-
-		this.chatHistory.push(messages[messages.length - 1]);
 
 		const chatPayload: OllamaChatRequest = {
 			model: this.settings?.chatModel!,
@@ -518,9 +512,16 @@ ${ragContent}`;
 			)}`
 		);
 
+		let lastAssistantMessage = "";
 		for await (const chunk of this.generate(chatPayload, signal)) {
-			this.chatHistory.push(chunk.message);
+			lastAssistantMessage += chunk.message;
 			yield chunk.message.content;
+		}
+		if (lastAssistantMessage?.trim()) {
+			this.chatHistory.push({
+				role: "assistant",
+				content: lastAssistantMessage,
+			});
 		}
 	}
 

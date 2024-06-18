@@ -3,10 +3,13 @@ import { FaCopy } from "react-icons/fa6";
 import { GoFileSymlinkFile } from "react-icons/go";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { prism, vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import {
+	prism,
+	vscDarkPlus,
+} from "react-syntax-highlighter/dist/esm/styles/prism";
 import styled, { keyframes } from "styled-components";
 import { ChatMessage } from "../types/Message";
-import { localMemState } from './utilities/localMemState';
+import { localMemState } from "./utilities/localMemState";
 import { vscode } from "./utilities/vscode";
 
 const Entry = styled.li`
@@ -206,14 +209,17 @@ const ChatEntry = ({
 		});
 	};
 
-	const lm = useSyncExternalStore(localMemState.subscribe, localMemState.getSnapshot);
-	const theme = lm['theme'] as number;
-	const codeTheme = (theme === 1 || theme === 4) ? prism : vscDarkPlus;
+	const lm = useSyncExternalStore(
+		localMemState.subscribe,
+		localMemState.getSnapshot
+	);
+	const theme = lm["theme"] as number;
+	const codeTheme = theme === 1 || theme === 4 ? prism : vscDarkPlus;
 
 	return (
 		<Entry>
 			<LabelContainer>
-				<h3>{from === "User" ? "Me" : "Wingman"}</h3>
+				<h3>{from === "user" ? "Me" : "Wingman"}</h3>
 				{loading && <Loader />}
 			</LabelContainer>
 			<div>

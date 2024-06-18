@@ -5,7 +5,7 @@ import { AppMessage, ChatMessage, CodeContext } from "../types/Message";
 import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./ChatInput";
 import { ChatResponseList } from "./ChatList";
-import { localMemState } from './utilities/localMemState';
+import { localMemState } from "./utilities/localMemState";
 import { vscode } from "./utilities/vscode";
 
 const Main = styled.main`
@@ -87,7 +87,7 @@ const App = () => {
 					return {
 						loading: true,
 						context: undefined,
-						from: "Assistant",
+						from: "assistant",
 						...activeMessage,
 						message: currentMessage,
 					} satisfies ChatMessage;
@@ -101,7 +101,7 @@ const App = () => {
 				setActiveMessage((activeMessage) => {
 					return {
 						loading: true,
-						from: "Assistant",
+						from: "assistant",
 						...activeMessage,
 						message: currentMessage,
 						context: currentContext,
@@ -113,7 +113,7 @@ const App = () => {
 					workspaceFolder: string;
 					theme: number;
 				};
-				localMemState.setState('theme', theme);
+				localMemState.setState("theme", theme);
 
 				activeWorkspace = workspaceFolder;
 
@@ -131,7 +131,7 @@ const App = () => {
 				break;
 			case "setTheme":
 				const newTheme = value as number;
-				localMemState.setState('theme', newTheme);
+				localMemState.setState("theme", newTheme);
 		}
 	};
 
@@ -142,7 +142,7 @@ const App = () => {
 			const newHistory: ChatMessage[] = [
 				...messages,
 				{
-					from: "Assistant",
+					from: "assistant",
 					message: tempMessage,
 					loading: false,
 					context: tempContext,
@@ -152,26 +152,29 @@ const App = () => {
 			return newHistory;
 		});
 
+		clearMessage();
+	};
+
+	const cancelAIResponse = () => {
+		clearMessage();
+		vscode.postMessage({
+			command: "cancel",
+		});
+	};
+
+	const clearMessage = () => {
 		setLoading(false);
-		setActiveMessage((message) => {
+		setActiveMessage(() => {
 			return {
-				from: "Assistant",
+				from: "assistant",
 				context: undefined,
 				message: "",
-				...message,
 				loading: false,
 			};
 		});
 
 		currentMessage = "";
 		currentContext = undefined;
-	};
-
-	const cancelAIResponse = () => {
-		commitMessageToHistory();
-		vscode.postMessage({
-			command: "cancel",
-		});
 	};
 
 	const fetchAIResponse = (text: string) => {
@@ -189,7 +192,7 @@ const App = () => {
 		setMessages((messages) => [
 			...messages,
 			{
-				from: "User",
+				from: "user",
 				message: input,
 				context: undefined,
 			},
@@ -237,7 +240,7 @@ const App = () => {
 			<ChatResponseList messages={messages}>
 				{loading && (
 					<ChatEntry
-						from="Assistant"
+						from="assistant"
 						message={activeMessage?.message || ""}
 						context={activeMessage?.context}
 						loading={loading}
