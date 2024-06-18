@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.3.9",
+	"version": "0.4.0",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"authors": [
@@ -93,7 +93,7 @@
 			"wing-man": [
 				{
 					"id": "wing-man-chat-view",
-					"name": "We won't leave you hanging!",
+					"name": "We've got your back!",
 					"type": "webview"
 				}
 			],

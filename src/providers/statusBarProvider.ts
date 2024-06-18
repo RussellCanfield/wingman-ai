@@ -37,7 +37,9 @@ export class ActivityStatusBar {
 	}
 
 	public TogglePending(pending: boolean) {
-		if (this.isInErrorState) return;
+		if (this.isInErrorState) {
+			return;
+		}
 
 		this.activityStatusBarItem.text = `${
 			pending ? "$(sync~spin)" : "$(wingman-logo)"

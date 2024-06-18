@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import {
 	CancellationToken,
-	DocumentSelector,
 	InlineCompletionContext,
 	InlineCompletionItem,
 	InlineCompletionItemProvider,
@@ -13,38 +12,15 @@ import { AIProvider, AIStreamProvicer } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "../types/Settings";
-import { getSymbolsFromOpenFiles } from "./utilities";
+import { getSymbolsFromOpenFiles, supportedLanguages } from "./utilities";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
-	public static readonly selector: DocumentSelector = [
-		{ scheme: "file", language: "typescript" },
-		{ scheme: "file", language: "javascript" },
-		{ scheme: "file", language: "javascriptreact" },
-		{ scheme: "file", language: "typescriptreact" },
-		{ scheme: "file", language: "csharp" },
-		{ scheme: "file", language: "java" },
-		{ scheme: "file", language: "python" },
-		{ scheme: "file", language: "go" },
-		{ scheme: "file", language: "php" },
-		{ scheme: "file", language: "ruby" },
-		{ scheme: "file", language: "rust" },
-		{ scheme: "file", language: "css" },
-		{ scheme: "file", language: "markdown" },
-		{ scheme: "file", language: "sql" },
-		{ scheme: "file", language: "less" },
-		{ scheme: "file", language: "scss" },
-		{ scheme: "file", language: "html" },
-		{ scheme: "file", language: "json" },
-		{ scheme: "file", language: "vue" },
-		{ scheme: 'file', language: 'shellscript' },
-		{ scheme: 'file', language: 'sh' },
-		{ scheme: 'file', language: 'bash' }
-	];
+	public static readonly selector = supportedLanguages;
 
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvicer,
 		private readonly _interactionSettings: InteractionSettings
-	) { }
+	) {}
 
 	async provideInlineCompletionItems(
 		document: TextDocument,

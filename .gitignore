@@ -4,6 +4,7 @@ node_modules
 .vscode-test/
 *.vsix
 webview-ui/build
+.vscode/settings.json
 
 # C extensions
 *.so

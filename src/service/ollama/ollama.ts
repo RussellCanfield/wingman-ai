@@ -7,8 +7,8 @@ import { asyncIterator } from "../asyncIterator";
 import { AIStreamProvicer, GetInteractionSettings } from "../base";
 import { delay } from "../delay";
 import { CodeLlama } from "./models/codellama";
-import { CodeQwen } from './models/codeqwen';
-import { Codestral } from './models/codestral';
+import { CodeQwen } from "./models/codeqwen";
+import { Codestral } from "./models/codestral";
 import { Deepseek } from "./models/deepseek";
 import { Llama3 } from "./models/llama3";
 import { Magicoder } from "./models/magicoder";
@@ -50,7 +50,7 @@ export class Ollama implements AIStreamProvicer {
 	private handleError(message: string) {
 		vscode.window.showErrorMessage(message);
 		loggingProvider.logError(message);
-		eventEmitter._onFatalError.fire();
+		//eventEmitter._onFatalError.fire();
 	}
 
 	private async validateSettings() {
@@ -83,9 +83,9 @@ export class Ollama implements AIStreamProvicer {
 				return new CodeLlama();
 			case codeModel.startsWith("deepseek"):
 				return new Deepseek();
-			case codeModel.startsWith('codeqwen'):
+			case codeModel.startsWith("codeqwen"):
 				return new CodeQwen();
-			case codeModel.startsWith('codestral'):
+			case codeModel.startsWith("codestral"):
 				return new Codestral();
 			default:
 				this.handleError(
@@ -106,9 +106,9 @@ export class Ollama implements AIStreamProvicer {
 				return new Deepseek();
 			case chatModel.startsWith("phind"):
 				return new PhindCodeLlama();
-			case chatModel.startsWith('codeqwen'):
+			case chatModel.startsWith("codeqwen"):
 				return new CodeQwen();
-			case chatModel.startsWith('codestral'):
+			case chatModel.startsWith("codestral"):
 				return new Codestral();
 			default:
 				this.handleError(
@@ -262,6 +262,7 @@ export class Ollama implements AIStreamProvicer {
 		additionalContext?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
+
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
 			beginning
