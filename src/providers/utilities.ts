@@ -32,7 +32,9 @@ export const supportedLanguages: vscode.DocumentSelector = [
 ];
 
 export async function getSymbolsFromOpenFiles() {
-	let openDocuments = vscode.workspace.textDocuments;
+	const openDocuments = vscode.workspace.textDocuments.filter(
+		(d) => d.uri.scheme === "file"
+	);
 	const types: string[] = [];
 	await Promise.all(
 		openDocuments.map(async (d) => {
