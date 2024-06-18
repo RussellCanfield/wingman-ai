@@ -86,9 +86,11 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				this.handleError(
 					"Unable to retrieve Ollama models, is Ollama running?"
 				);
+				//@ts-expect-error
+				settings["ollamaModels"] = ["Failed to load."];
 			}
 		} else {
-			//@ts-ignore
+			//@ts-expect-error
 			settings["ollamaModels"] = [];
 		}
 		return JSON.stringify(settings);

@@ -1,32 +1,17 @@
 import * as vscode from "vscode";
 import { AIProvider } from "../service/base";
-import { extractCodeBlock, getSymbolsFromOpenFiles } from "./utilities";
+import {
+	extractCodeBlock,
+	getSymbolsFromOpenFiles,
+	supportedLanguages,
+} from "./utilities";
 
 let abortController = new AbortController();
 
 export class RefactorProvider implements vscode.CodeActionProvider {
 	public static readonly command = "wingmanai.refactorcode";
 
-	public static readonly selector: vscode.DocumentSelector = [
-		{ scheme: "file", language: "typescript" },
-		{ scheme: "file", language: "javascript" },
-		{ scheme: "file", language: "javascriptreact" },
-		{ scheme: "file", language: "typescriptreact" },
-		{ scheme: "file", language: "csharp" },
-		{ scheme: "file", language: "java" },
-		{ scheme: "file", language: "python" },
-		{ scheme: "file", language: "go" },
-		{ scheme: "file", language: "php" },
-		{ scheme: "file", language: "ruby" },
-		{ scheme: "file", language: "rust" },
-		{ scheme: "file", language: "css" },
-		{ scheme: "file", language: "markdown" },
-		{ scheme: "file", language: "sql" },
-		{ scheme: "file", language: "less" },
-		{ scheme: "file", language: "scss" },
-		{ scheme: "file", language: "html" },
-		{ scheme: "file", language: "json" },
-	];
+	public static readonly selector = supportedLanguages;
 
 	public static readonly providedCodeActionKinds = [
 		vscode.CodeActionKind.Refactor,

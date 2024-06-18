@@ -1,0 +1,93 @@
+import { InitSettings } from "./App";
+import { Container } from "./Config.styles";
+
+export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
+	return (
+		<Container>
+			<h3>{aiProvider}</h3>
+			<label>
+				In order for models to make it to Wingman, we thoroughly test
+				them and verify their capabilities. We are unable to load
+				unsupported models.
+			</label>
+			<label>We support the following models:</label>
+			{aiProvider === "Ollama" && <OllamaView />}
+			{aiProvider === "OpenAI" && <OpenAIView />}
+		</Container>
+	);
+};
+
+export const OpenAIView = () => {
+	return (
+		<div>
+			<ul>
+				<li>gpt-4o</li>
+				<li>gpt-4-turbo</li>
+				<li>gpt-4</li>
+			</ul>
+		</div>
+	);
+};
+
+export const OllamaView = () => {
+	return (
+		<div>
+			<h4>Code:</h4>
+			<ul>
+				<li>
+					<a href="https://ollama.ai/library/deepseek-coder:6.7b-base-q8_0">
+						deepseek-coder
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0">
+						Magicoder DS
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.ai/library/codellama:7b-code-q4_K_M">
+						codellama-code
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.com/library/codeqwen:7b-code-v1.5-q5_1">
+						codeqwen 1.5
+					</a>
+				</li>
+			</ul>
+			<h4>Chat:</h4>
+			<ul>
+				<li>
+					<a href="https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0">
+						deepseek-instruct
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.ai/library/codellama:7b-instruct">
+						codellama-instruct
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.ai/library/phind-codellama:34b-v2-q2_K">
+						phind-codellama
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0">
+						Magicoder DS
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.com/library/llama3:8b-instruct-q6_K">
+						LLama-3 Instruct
+					</a>
+				</li>
+				<li>
+					<a href="https://ollama.com/library/codeqwen:7b-code-v1.5-q8_0">
+						CodeQwen-1.5 Code
+					</a>
+				</li>
+			</ul>
+		</div>
+	);
+};
