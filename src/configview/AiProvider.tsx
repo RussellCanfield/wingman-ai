@@ -7,6 +7,7 @@ import {
 import { useState } from "react";
 import {
 	AiProvidersList,
+	defaultAnthropicSettings,
 	defaultHfSettings,
 	defaultOllamaSettings,
 	defaultOpenAISettings,
@@ -17,12 +18,14 @@ import { HFSettingsView } from "./HFSettingsView";
 import { OllamaSettingsView } from "./OllamaSettingsView";
 import { OpenAISettingsView } from "./OpenAISettingsView";
 import { vscode } from "./utilities/vscode";
+import { AnthropicSettingsView } from "./AnthropicSettingsView";
 
 export const AiProvider = ({
 	aiProvider,
 	ollama,
 	huggingface,
 	openai,
+	anthropic,
 	ollamaModels,
 }: InitSettings) => {
 	const [currentAiProvider, setAiProvider] = useState(aiProvider);
@@ -34,6 +37,9 @@ export const AiProvider = ({
 	);
 	const [openAISettings, setOpenAISettings] = useState(
 		openai ?? defaultOpenAISettings
+	);
+	const [anthropicSettings, setAnthropicSettings] = useState(
+		anthropic ?? defaultAnthropicSettings
 	);
 	const handleProviderChange = (e: any) => {
 		setAiProvider(e.target.value);
@@ -50,6 +56,10 @@ export const AiProvider = ({
 				break;
 			case "OpenAI":
 				setOpenAISettings(openai ?? defaultOpenAISettings);
+				break;
+			case "Anthropic":
+				setAnthropicSettings(anthropic ?? defaultAnthropicSettings);
+				break;
 		}
 	};
 
@@ -63,6 +73,10 @@ export const AiProvider = ({
 				break;
 			case "OpenAI":
 				setOpenAISettings(defaultOpenAISettings);
+				break;
+			case "Anthropic":
+				setAnthropicSettings(defaultAnthropicSettings);
+				break;
 		}
 	};
 
@@ -87,6 +101,14 @@ export const AiProvider = ({
 			vscode.postMessage({
 				command: "updateAndSetOpenAI",
 				value: openAISettings,
+			});
+			return;
+		}
+
+		if (currentAiProvider === "Anthropic") {
+			vscode.postMessage({
+				command: "updateAndSetAnthropic",
+				value: anthropicSettings,
 			});
 			return;
 		}
@@ -122,6 +144,12 @@ export const AiProvider = ({
 				<OpenAISettingsView
 					{...openAISettings}
 					onChange={setOpenAISettings}
+				/>
+			)}
+			{currentAiProvider === "Anthropic" && (
+				<AnthropicSettingsView
+					{...anthropicSettings}
+					onChange={setAnthropicSettings}
 				/>
 			)}
 			<ActionPanel>

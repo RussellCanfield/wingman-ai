@@ -63,10 +63,11 @@ The extension uses a separate model for chat and code completion. This is due to
 
 **NOTE - You can use any quantization for a supported model, you are not limited.**
 
-**Example: deepseek-coder:6.7b-instruct-q4_0 or deepseek-coder:33b.**
+**Example: deepseek-coder:6.7b-instruct-q4_0**
 
 Supported Models for _Code Completion_:
 
+-   Deepseek Coder v2-base _(tested with: [deepseek-coder-v2:16b-lite-base-q4_0](https://ollama.com/library/deepseek-coder-v2:16b-lite-base-q4_0))_
 -   Deepseek-base _(tested with: [deepseek-coder:6.7b-base-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-base-q8_0))_
 -   Codellama-code _(tested with: [codellama:7b-code-q4_K_M](https://ollama.ai/library/codellama:7b-code-q4_K_M))_
 -   Magicoder-DS _(tested with [wojtek/magicoder:6.7b-s-ds-q8_0](https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0))_
@@ -75,6 +76,7 @@ Supported Models for _Code Completion_:
 
 Supported Models for _Chat_:
 
+-   Deepseek Coder v2-instruct _(tested with: [deepseek-coder-v2:16b-lite-instruct-q4_0](https://ollama.com/library/deepseek-coder-v2:16b-lite-instruct-q4_0))_
 -   Deepseek-Instruct _(tested with: [deepseek-coder:6.7b-instruct-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0))_
 -   Codellama-Instruct _(tested with: [codellama:7b-instruct](https://ollama.ai/library/codellama:7b-instruct))_
 -   Phind-CodeLlama - _(tested with: [phind-codellama:34b-v2-q2_K](https://ollama.ai/library/phind-codellama:34b-v2-q2_K))_

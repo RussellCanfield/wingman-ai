@@ -15,7 +15,7 @@ export interface InteractionSettings {
 	chatMaxTokens: number;
 }
 
-const AiProviders = ["Ollama", "HuggingFace", "OpenAI"] as const;
+const AiProviders = ["Ollama", "HuggingFace", "OpenAI", "Anthropic"] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
 export type OllamaSettingsType = BaseServiceSettings & {
@@ -28,8 +28,8 @@ export type ApiSettingsType = BaseServiceSettings & {
 };
 
 export const defaultOllamaSettings: OllamaSettingsType = {
-	codeModel: "",
-	chatModel: "",
+	codeModel: "deepseek-coder-v2:16b-lite-base-q4_0",
+	chatModel: "deepseek-coder-v2:16b-lite-instruct-q4_0",
 	baseUrl: "http://localhost:11434",
 	apiPath: "/api/generate",
 	modelInfoPath: "/api/show",
@@ -43,9 +43,16 @@ export const defaultHfSettings: ApiSettingsType = {
 };
 
 export const defaultOpenAISettings: ApiSettingsType = {
-	chatModel: "gpt-4-0125-preview",
-	codeModel: "gpt-4-0125-preview",
+	chatModel: "gpt-4-turbo",
+	codeModel: "gpt-4-turbo",
 	baseUrl: "https://api.openai.com/v1/chat/completions",
+	apiKey: "Add me",
+};
+
+export const defaultAnthropicSettings: ApiSettingsType = {
+	chatModel: "claude-3-5-sonnet-20240620",
+	codeModel: "claude-3-5-sonnet-20240620",
+	baseUrl: "https://api.anthropic.com/v1",
 	apiKey: "Add me",
 };
 
@@ -55,4 +62,5 @@ export interface Settings {
 	ollama?: OllamaSettingsType;
 	huggingface?: ApiSettingsType;
 	openai?: ApiSettingsType;
+	anthropic?: ApiSettingsType;
 }

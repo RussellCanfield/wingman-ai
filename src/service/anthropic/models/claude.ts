@@ -1,11 +1,11 @@
-import { OpenAIModel } from "../../../types/Models";
+import { AnthropicModel } from "../../../types/Models";
 import {
 	commonChatPrompt,
 	commonDocPrompt,
 	commonRefactorPrompt,
 } from "../../common";
 
-export class GPT4Turbo implements OpenAIModel {
+export class ClaudeModel implements AnthropicModel {
 	get CodeCompletionPrompt(): string {
 		return `Fill in the following text.
 		Do not include the original text in your response, just the middle portion.

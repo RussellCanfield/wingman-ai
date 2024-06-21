@@ -32,6 +32,12 @@ export class Ollama implements AIStreamProvicer {
 	constructor() {
 		const config = vscode.workspace.getConfiguration("Wingman");
 
+		const activeProvider = config.get<Settings["aiProvider"]>("Provider");
+
+		if (activeProvider !== "Ollama") {
+			return;
+		}
+
 		const ollamaConfig = config.get<Settings["ollama"]>("Ollama");
 
 		loggingProvider.logInfo(

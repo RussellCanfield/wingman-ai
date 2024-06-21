@@ -3,7 +3,7 @@ import {
 	commonChatPrompt,
 	commonDocPrompt,
 	commonRefactorPrompt,
-} from "../models/common";
+} from "../../common";
 
 export abstract class OllamaAIModel implements AIModel {
 	get CodeCompletionPrompt(): string {

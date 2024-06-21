@@ -2,16 +2,16 @@ import { ApiSettingsType } from "../types/Settings";
 import { InitSettings } from "./App";
 import { Container, VSCodeTextField } from "./Config.styles";
 
-type OpenAiSection = InitSettings["openai"] & {
-	onChange: (ollamaSettings: ApiSettingsType) => void;
+type AnthropicSection = InitSettings["anthropic"] & {
+	onChange: (anthropicSettings: ApiSettingsType) => void;
 };
-export const OpenAISettingsView = ({
+export const AnthropicSettingsView = ({
 	codeModel,
 	chatModel,
 	baseUrl,
 	apiKey,
 	onChange,
-}: OpenAiSection) => {
+}: AnthropicSection) => {
 	const paths = { codeModel, chatModel, baseUrl, apiKey };
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
@@ -27,7 +27,7 @@ export const OpenAISettingsView = ({
 				onChange={handleChangeInput}
 				value={codeModel}
 				data-name="codeModel"
-				title="OpenAI Code Model"
+				title="Anthropic Code Model"
 			>
 				Code Model:
 			</VSCodeTextField>
@@ -35,7 +35,7 @@ export const OpenAISettingsView = ({
 				onChange={handleChangeInput}
 				value={chatModel}
 				data-name="chatModel"
-				title="OpenAI Chat Model"
+				title="Anthropic Chat Model"
 			>
 				Chat Model:
 			</VSCodeTextField>
@@ -43,7 +43,7 @@ export const OpenAISettingsView = ({
 				onChange={handleChangeInput}
 				value={baseUrl}
 				data-name="baseUrl"
-				title="OpenAI base url"
+				title="Anthropic base url"
 			>
 				Base url:
 			</VSCodeTextField>
@@ -51,7 +51,7 @@ export const OpenAISettingsView = ({
 				onChange={handleChangeInput}
 				value={apiKey}
 				data-name="apiKey"
-				title="OpenAI api key"
+				title="Anthropic api key"
 			>
 				Api key:
 			</VSCodeTextField>
