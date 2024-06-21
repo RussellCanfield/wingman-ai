@@ -185,6 +185,7 @@ ${prompt}`,
 		);
 
 		let response: Response | undefined;
+		let failedDueToAbort = false;
 
 		try {
 			response = await this.fetchModelResponse(
@@ -192,6 +193,9 @@ ${prompt}`,
 				signal
 			);
 		} catch (error) {
+			if ((error as Error).name === "AbortError") {
+				failedDueToAbort = true;
+			}
 			loggingProvider.logError(
 				`OpenAI - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
 			);
@@ -204,7 +208,7 @@ ${prompt}`,
 			`OpenAI - Code Completion execution time: ${executionTime} seconds`
 		);
 
-		if (!response?.ok) {
+		if (!response?.ok && !failedDueToAbort) {
 			loggingProvider.logError(
 				`OpenAI - Code Completion failed with the following status code: ${response?.status}`
 			);

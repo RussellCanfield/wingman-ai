@@ -142,27 +142,35 @@ export class Anthropic implements AIProvider {
 				currentMessage = currentMessage.substring(eventEndIndex + 2);
 
 				// Remove the "data: " prefix and parse the JSON
-				const jsonStr = eventData.replace(/^data: /, "");
-				const parsedData = JSON.parse(
-					jsonStr
-				) as AnthropicStreamResponse;
+				const blocks = eventData.split("data: ");
+				console.log(blocks);
 
-				switch (parsedData.type) {
-					case "content_block_start":
-						const blockStart =
-							parsedData as unknown as AnthropicResponseStreamContent;
+				for (const block of blocks) {
+					if (!block || !block.startsWith("{")) {
+						continue;
+					}
 
-						break;
-					case "content_block_delta":
-						const blockDelta =
-							parsedData as unknown as AnthropicResponseStreamDelta;
-						break;
-					default:
-						// Handle unknown event type
-						break;
+					const jsonStr = block.replace(/\n/g, "");
+					const parsedData = JSON.parse(
+						jsonStr
+					) as AnthropicStreamResponse;
+
+					switch (parsedData.type) {
+						case "content_block_start":
+							const blockStart =
+								parsedData as unknown as AnthropicResponseStreamContent;
+							yield blockStart.content_block.text;
+							break;
+						case "content_block_delta":
+							const blockDelta =
+								parsedData as unknown as AnthropicResponseStreamDelta;
+							yield blockDelta.delta.text;
+							break;
+						default:
+							// Handle unknown event type
+							break;
+					}
 				}
-
-				yield parsedData;
 			}
 		}
 	}
@@ -207,6 +215,7 @@ ${prompt}`,
 		);
 
 		let response: Response | undefined;
+		let failedDueToAbort = false;
 
 		try {
 			response = await this.fetchModelResponse(
@@ -214,6 +223,9 @@ ${prompt}`,
 				signal
 			);
 		} catch (error) {
+			if ((error as Error).name === "AbortError") {
+				failedDueToAbort = true;
+			}
 			loggingProvider.logError(
 				`Anthropic - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
 			);
@@ -226,7 +238,7 @@ ${prompt}`,
 			`Anthropic - Code Completion execution time: ${executionTime} seconds`
 		);
 
-		if (!response?.ok) {
+		if (!response?.ok && !failedDueToAbort) {
 			loggingProvider.logError(
 				`Anthropic - Code Completion failed with the following status code: ${response?.status}`
 			);
@@ -293,17 +305,7 @@ ${ragContent}
 
 		let completeMessage = "";
 		for await (const chunk of this.generate(chatPayload, signal)) {
-			// if (!chunk?.choices) {
-			// 	continue;
-			// }
-
-			// const { content } = chunk.choices[0].delta;
-			// if (!content) {
-			// 	continue;
-			// }
-
-			// completeMessage += content;
-			yield "";
+			yield chunk;
 		}
 
 		this.chatHistory = this.chatHistory.concat({
