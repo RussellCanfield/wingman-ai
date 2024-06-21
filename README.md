@@ -115,7 +115,7 @@ Supported Models for _Chat_:
 -   Mixtral v0.1 _(tested with [mistralai/Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1))_
 -   Mistral v0.2 _(tested with: [mistralai/Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2))_
 
-**NOTE** - your data is not private and will not be sanitized prior to being sent.
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
 ---
 
@@ -127,7 +127,19 @@ Supported Models for _Chat_:
 -   GPT4-Turbo
 -   GPT4
 
-**NOTE** - your data is not private and will not be sanitized prior to being sent.
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
+
+---
+
+## Anthropic
+
+[Anthropic](https://docs.anthropic.com/en/docs/welcome) is supported! You can use the following models:
+
+-   Claude 3.5 Sonnet
+-   Claude 3 Opus
+-   Claude 3 Haiku
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
 ---
 
