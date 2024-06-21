@@ -85,7 +85,24 @@ Supported Models for _Chat_:
 -   CodeQwen1.5-Code _(tested with [codeqwen:7b-chat-v1.5-q8_0](https://ollama.com/library/codeqwen:7b-code-v1.5-q8_0))_
 -   Codestral _(tested with [codestral:22b-v0.1-q5_K_M](https://ollama.com/library/codestral:22b-v0.1-q5_K_M))_
 
----
+## OpenAI
+
+[OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades) is supported! You can use the following models:
+
+-   GPT4-o
+-   GPT4-Turbo
+-   GPT4
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
+
+## Anthropic
+
+[Anthropic](https://docs.anthropic.com/en/docs/welcome) is supported! You can use the following models:
+
+-   Claude 3.5 Sonnet
+-   Claude 3 Opus
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
 ## Hugging Face
 
@@ -114,30 +131,6 @@ Supported Models for _Chat_:
 
 -   Mixtral v0.1 _(tested with [mistralai/Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1))_
 -   Mistral v0.2 _(tested with: [mistralai/Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2))_
-
-**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
-
----
-
-## OpenAI
-
-[OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades) is supported! You can use the following models:
-
--   GPT4-o
--   GPT4-Turbo
--   GPT4
-
-**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
-
----
-
-## Anthropic
-
-[Anthropic](https://docs.anthropic.com/en/docs/welcome) is supported! You can use the following models:
-
--   Claude 3.5 Sonnet
--   Claude 3 Opus
--   Claude 3 Haiku
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
