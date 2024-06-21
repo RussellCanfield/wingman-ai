@@ -54,7 +54,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}
 		});
 
-		const delayMs = this._interactionSettings.codeStreaming ? 300 : 300;
+		const delayMs = 350;
 		try {
 			await delay(delayMs);
 			if (abort.signal.aborted) {

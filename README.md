@@ -63,10 +63,11 @@ The extension uses a separate model for chat and code completion. This is due to
 
 **NOTE - You can use any quantization for a supported model, you are not limited.**
 
-**Example: deepseek-coder:6.7b-instruct-q4_0 or deepseek-coder:33b.**
+**Example: deepseek-coder:6.7b-instruct-q4_0**
 
 Supported Models for _Code Completion_:
 
+-   Deepseek Coder v2-base _(tested with: [deepseek-coder-v2:16b-lite-base-q4_0](https://ollama.com/library/deepseek-coder-v2:16b-lite-base-q4_0))_
 -   Deepseek-base _(tested with: [deepseek-coder:6.7b-base-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-base-q8_0))_
 -   Codellama-code _(tested with: [codellama:7b-code-q4_K_M](https://ollama.ai/library/codellama:7b-code-q4_K_M))_
 -   Magicoder-DS _(tested with [wojtek/magicoder:6.7b-s-ds-q8_0](https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0))_
@@ -75,6 +76,7 @@ Supported Models for _Code Completion_:
 
 Supported Models for _Chat_:
 
+-   Deepseek Coder v2-instruct _(tested with: [deepseek-coder-v2:16b-lite-instruct-q4_0](https://ollama.com/library/deepseek-coder-v2:16b-lite-instruct-q4_0))_
 -   Deepseek-Instruct _(tested with: [deepseek-coder:6.7b-instruct-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0))_
 -   Codellama-Instruct _(tested with: [codellama:7b-instruct](https://ollama.ai/library/codellama:7b-instruct))_
 -   Phind-CodeLlama - _(tested with: [phind-codellama:34b-v2-q2_K](https://ollama.ai/library/phind-codellama:34b-v2-q2_K))_
@@ -83,7 +85,24 @@ Supported Models for _Chat_:
 -   CodeQwen1.5-Code _(tested with [codeqwen:7b-chat-v1.5-q8_0](https://ollama.com/library/codeqwen:7b-code-v1.5-q8_0))_
 -   Codestral _(tested with [codestral:22b-v0.1-q5_K_M](https://ollama.com/library/codestral:22b-v0.1-q5_K_M))_
 
----
+## OpenAI
+
+[OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades) is supported! You can use the following models:
+
+-   GPT4-o
+-   GPT4-Turbo
+-   GPT4
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
+
+## Anthropic
+
+[Anthropic](https://docs.anthropic.com/en/docs/welcome) is supported! You can use the following models:
+
+-   Claude 3.5 Sonnet
+-   Claude 3 Opus
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
 ## Hugging Face
 
@@ -113,19 +132,7 @@ Supported Models for _Chat_:
 -   Mixtral v0.1 _(tested with [mistralai/Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1))_
 -   Mistral v0.2 _(tested with: [mistralai/Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2))_
 
-**NOTE** - your data is not private and will not be sanitized prior to being sent.
-
----
-
-## OpenAI
-
-[OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades) is supported! You can use the following models:
-
--   GPT4-o
--   GPT4-Turbo
--   GPT4
-
-**NOTE** - your data is not private and will not be sanitized prior to being sent.
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
 ---
 

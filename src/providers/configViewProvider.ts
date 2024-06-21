@@ -71,7 +71,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			openai: this._config.get<Settings["openai"]>("OpenAI"),
 		} satisfies Settings;
 
-		if (settings.ollama) {
+		if (settings.ollama && settings.aiProvider === "Ollama") {
 			try {
 				const modelsResponse = await fetch(
 					`${settings.ollama.baseUrl}/api/tags`
@@ -131,6 +131,15 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			this._config.update("Provider", "OpenAI");
 		}
 		this._config.update("OpenAI", value);
+	};
+
+	private updateAndSetAnthropic = (value: ApiSettingsType) => {
+		const currentProvider =
+			this._config.get<Settings["aiProvider"]>("Provider");
+		if (currentProvider !== "Anthropic") {
+			this._config.update("Provider", "Anthropic");
+		}
+		this._config.update("Anthropic", value);
 	};
 
 	private changeInteractions = (value: unknown) => {

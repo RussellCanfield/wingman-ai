@@ -13,7 +13,19 @@ export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
 			<label>We support the following models:</label>
 			{aiProvider === "Ollama" && <OllamaView />}
 			{aiProvider === "OpenAI" && <OpenAIView />}
+			{aiProvider === "Anthropic" && <AnthropicView />}
 		</Container>
+	);
+};
+
+export const AnthropicView = () => {
+	return (
+		<div>
+			<ul>
+				<li>claude-3-5-sonnet</li>
+				<li>claude-3-opus</li>
+			</ul>
+		</div>
 	);
 };
 

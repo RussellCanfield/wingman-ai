@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.4.3",
+	"version": "0.5.0",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"authors": [
@@ -261,6 +261,38 @@
 							"type": "string",
 							"default": "ADD ME",
 							"description": "The API key to use for OpenAI"
+						}
+					}
+				},
+				"Wingman.Anthropic": {
+					"type": "object",
+					"description": "Anthropic settings",
+					"default": {
+						"chatModel": "claude-3-5-sonnet-20240620",
+						"codeModel": "claude-3-5-sonnet-20240620",
+						"baseUrl": "https://api.anthropic.com/v1",
+						"apiKey": "ADD ME"
+					},
+					"properties": {
+						"chatModel": {
+							"type": "string",
+							"default": "claude-3-5-sonnet-20240620",
+							"description": "The model to use for the chat"
+						},
+						"codeModel": {
+							"type": "string",
+							"default": "claude-3-5-sonnet-20240620",
+							"description": "The model to use for the code completion"
+						},
+						"baseUrl": {
+							"type": "string",
+							"default": "https://api.anthropic.com/v1",
+							"description": "Base URL for the Anthropic API"
+						},
+						"apiKey": {
+							"type": "string",
+							"default": "ADD ME",
+							"description": "The API key to use for Anthropic"
 						}
 					}
 				}
