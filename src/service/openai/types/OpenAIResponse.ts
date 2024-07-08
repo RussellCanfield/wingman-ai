@@ -1,4 +1,4 @@
-import { OpenAIMessages } from "./OpenAIRequest";
+import { OpenAIMessage } from "./OpenAIRequest";
 
 export interface OpenAIResponse {
 	choices: OpenAIResponseChoice[];
@@ -11,13 +11,13 @@ export interface OpenAIStreamResponse {
 
 export interface OpenAIResponseChoice {
 	index: number;
-	message: OpenAIMessages;
+	message: OpenAIMessage;
 	finish_reason: string;
 }
 
 export interface OpenAIResponseStreamChoice {
 	index: number;
-	delta: OpenAIMessages;
+	delta: OpenAIMessage;
 	finish_reason: string;
 }
 

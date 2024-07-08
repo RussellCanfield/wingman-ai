@@ -13,6 +13,7 @@ import {
 	AnthropicStreamResponse,
 } from "./types/ClaudeResponse";
 import { AnthropicModel } from "../../types/Models";
+import { truncateChatHistory } from "../utils/contentWindow";
 
 export class Anthropic implements AIProvider {
 	decoder = new TextDecoder();
@@ -76,19 +77,38 @@ export class Anthropic implements AIProvider {
 		payload: AnthropicRequest,
 		signal: AbortSignal
 	) {
-		if (signal.aborted) {
+		// Create a combined signal that is aborted when either the provided signal is aborted
+		// or the timeout is reached.
+		const timeoutSignal = AbortSignal.timeout(15000); // Timeout after 5000ms
+		const controller = new AbortController();
+
+		const abortHandler = () => {
+			controller.abort();
+		};
+
+		signal.addEventListener("abort", abortHandler);
+		timeoutSignal.addEventListener("abort", abortHandler);
+
+		if (signal.aborted || timeoutSignal.aborted) {
 			return undefined;
 		}
-		return fetch(new URL(`${this.settings?.baseUrl}/messages`), {
-			method: "POST",
-			body: JSON.stringify(payload),
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": this.settings?.apiKey!,
-				"anthropic-version": "2023-06-01",
-			},
-			signal,
-		});
+
+		try {
+			return fetch(new URL(`${this.settings?.baseUrl}/messages`), {
+				method: "POST",
+				body: JSON.stringify(payload),
+				headers: {
+					"Content-Type": "application/json",
+					"x-api-key": this.settings?.apiKey!,
+					"anthropic-version": "2023-06-01",
+				},
+				signal: controller.signal,
+			});
+		} finally {
+			// Cleanup
+			signal.removeEventListener("abort", abortHandler);
+			timeoutSignal.removeEventListener("abort", abortHandler);
+		}
 	}
 
 	async *generate(payload: AnthropicRequest, signal: AbortSignal) {
@@ -105,11 +125,18 @@ export class Anthropic implements AIProvider {
 
 		if (!response?.ok) {
 			loggingProvider.logError(
-				`Anthropic - Chat failed with the following status code: ${response?.status}`
+				`Anthropic - Chat failed with the following status code: ${
+					response?.status
+				}\n\n${
+					response?.body
+						? await response.json()
+						: await response?.text()
+				}`
 			);
 			vscode.window.showErrorMessage(
 				`Anthropic - Chat failed with the following status code: ${response?.status}`
 			);
+			return "";
 		}
 
 		if (!response?.body) {
@@ -255,10 +282,6 @@ ${prompt}`,
 		return AnthropicResponse.content[0].text;
 	}
 
-	public clearChatHistory(): void {
-		this.chatHistory = [];
-	}
-
 	public async *chat(
 		prompt: string,
 		ragContent: string,
@@ -266,30 +289,48 @@ ${prompt}`,
 	) {
 		let systemPrompt = this.chatModel!.ChatPrompt;
 
-		if (ragContent) {
-			systemPrompt += `Here's some additional information that may help you generate a more accurate response.
-Please determine if this information is relevant and can be used to supplement your response: 
-${ragContent}
----------------
-`;
-		}
-
-		systemPrompt += `\n${prompt}`;
-
-		this.chatHistory.push({
-			role: "user",
-			content: systemPrompt,
-		});
-
-		const messages: AnthropicMessage[] = [];
+		const messages: AnthropicMessage[] = [
+			{
+				role: "user",
+				content: systemPrompt,
+			},
+		];
 
 		if (this.chatHistory.length > 0) {
-			messages.push(...this.truncateChatHistory());
+			//avoid the first message with the system prompt
+			messages.push(...this.chatHistory.slice(1));
+		} else {
+			messages.push({
+				role: "assistant",
+				content: "Happy to help!",
+			});
+			this.chatHistory.push(...messages);
 		}
+
+		const userMsg: AnthropicMessage = {
+			role: "user",
+			content: `${
+				ragContent
+					? `Here's some additional information that may help you generate a more accurate response.
+Please determine if this information is relevant and can be used to supplement your response: 
+
+${ragContent}`
+					: ""
+			}
+
+------
+
+Here is the user's question which may or may not be related:
+
+${prompt}`,
+		};
+
+		messages.push(userMsg);
+		this.chatHistory.push(userMsg);
 
 		const chatPayload: AnthropicRequest = {
 			model: this.settings?.chatModel!,
-			messages: this.truncateChatHistory(),
+			messages,
 			stream: true,
 			temperature: 0.8,
 			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
@@ -301,17 +342,24 @@ ${ragContent}
 			)}`
 		);
 
-		this.clearChatHistory();
+		truncateChatHistory(6, this.chatHistory);
 
 		let completeMessage = "";
 		for await (const chunk of this.generate(chatPayload, signal)) {
+			completeMessage += chunk;
 			yield chunk;
 		}
 
-		this.chatHistory = this.chatHistory.concat({
+		this.chatHistory.push({
 			role: "assistant",
-			content: completeMessage,
+			content:
+				completeMessage ||
+				"The user has decided they weren't interested in the response",
 		});
+	}
+
+	public clearChatHistory(): void {
+		this.chatHistory = [];
 	}
 
 	public async genCodeDocs(
@@ -380,9 +428,13 @@ ${ragContent}
 		return AnthropicResponse.content[0].text;
 	}
 
-	private truncateChatHistory(maxRecords: number = 2) {
-		if (this.chatHistory.length > maxRecords) {
-			this.chatHistory.splice(0, this.chatHistory.length - maxRecords);
+	private getRecentChatEntries(maxRecords: number = 6) {
+		if (this.chatHistory.length > maxRecords + 1) {
+			// Adjust condition to account for skipping the first entry
+			// Calculate the number of items to remove, considering the first entry should be skipped
+			const itemsToRemove = this.chatHistory.length - maxRecords - 1;
+			// Remove items starting from the second item in the array
+			this.chatHistory.splice(1, itemsToRemove);
 		}
 		return this.chatHistory;
 	}

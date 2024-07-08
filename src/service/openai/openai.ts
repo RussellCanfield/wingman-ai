@@ -1,22 +1,19 @@
 import * as vscode from "vscode";
 import { asyncIterator } from "../asyncIterator";
 import { AIProvider, GetInteractionSettings } from "../base";
-import {
-	InteractionSettings,
-	Settings,
-	defaultMaxTokens,
-} from "../../types/Settings";
+import { InteractionSettings, Settings } from "../../types/Settings";
 import { loggingProvider } from "../../providers/loggingProvider";
 import { eventEmitter } from "../../events/eventEmitter";
 import { GPT4Turbo } from "./models/gpt4-turbo";
-import { OpenAIMessages, OpenAIRequest } from "./types/OpenAIRequest";
+import { OpenAIMessage, OpenAIRequest } from "./types/OpenAIRequest";
 import { OpenAIResponse, OpenAIStreamResponse } from "./types/OpenAIResponse";
 import { OpenAIModel } from "../../types/Models";
+import { truncateChatHistory } from "../utils/contentWindow";
 
 export class OpenAI implements AIProvider {
 	decoder = new TextDecoder();
 	settings: Settings["openai"];
-	chatHistory: OpenAIMessages[] = [];
+	chatHistory: OpenAIMessage[] = [];
 	chatModel: OpenAIModel | undefined;
 	codeModel: OpenAIModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
@@ -127,22 +124,28 @@ export class OpenAI implements AIProvider {
 				return "";
 			}
 
-			const decodedValue = this.decoder.decode(chunk);
-
+			const decodedValue = new TextDecoder().decode(chunk);
 			currentMessage += decodedValue;
 
-			// Check if we have a complete event
-			const eventEndIndex = currentMessage.indexOf("\n\n");
-			if (eventEndIndex !== -1) {
-				// Extract the event data
+			let eventEndIndex;
+			while ((eventEndIndex = currentMessage.indexOf("\n\n")) !== -1) {
 				const eventData = currentMessage.substring(0, eventEndIndex);
-
-				// Remove the event data from currentMessage
 				currentMessage = currentMessage.substring(eventEndIndex + 2);
 
-				// Remove the "data: " prefix and parse the JSON
+				// Check for special non-JSON messages
+				if (eventData.trim() === "data: [DONE]") {
+					console.log("Received DONE signal, handling accordingly.");
+					// Handle the DONE signal as needed, possibly breaking the loop or signaling completion
+					continue; // Or break, if appropriate for your use case
+				}
+
 				const jsonStr = eventData.replace(/^data: /, "");
-				yield JSON.parse(jsonStr) as OpenAIStreamResponse;
+				try {
+					const parsedData = JSON.parse(jsonStr);
+					yield parsedData as OpenAIStreamResponse;
+				} catch (error) {
+					console.error("Failed to parse JSON", error);
+				}
 			}
 		}
 	}
@@ -238,26 +241,55 @@ ${prompt}`,
 
 		if (ragContent) {
 			systemPrompt += `Here's some additional information that may help you generate a more accurate response.
-            Please determine if this information is relevant and can be used to supplement your response: 
-            ${ragContent}
-			---------------`;
+Please determine if this information is relevant and can be used to supplement your response: 
+
+${ragContent}
+---------------`;
 		}
 
 		systemPrompt += `\n${prompt}`;
 
 		systemPrompt = systemPrompt.replace(/\t/, "");
 
+		const messages: OpenAIMessage[] = [
+			{
+				role: "assistant",
+				content: this.chatModel!.ChatPrompt,
+			},
+		];
+
+		if (this.chatHistory.length > 0) {
+			messages.push(...this.chatHistory.slice(1));
+		} else {
+			this.chatHistory.push(...messages);
+		}
+
+		const userMsg: OpenAIMessage = {
+			role: "user",
+			content: `${
+				ragContent
+					? `Here's some additional information that may help you generate a more accurate response.
+Please determine if this information is relevant and can be used to supplement your response: 
+
+${ragContent}`
+					: ""
+			}
+
+------
+
+Here is the user's question which may or may not be related:
+
+${prompt}`,
+		};
+		messages.push(userMsg);
+		this.chatHistory.push(userMsg);
+
 		const chatPayload: OpenAIRequest = {
 			model: this.settings?.chatModel!,
-			messages: [
-				...this.chatHistory,
-				{
-					role: "user",
-					content: systemPrompt,
-				},
-			],
+			messages,
 			stream: true,
 			temperature: 0.8,
+			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
 		};
 
 		loggingProvider.logInfo(
@@ -266,7 +298,7 @@ ${prompt}`,
 			)}`
 		);
 
-		this.clearChatHistory();
+		truncateChatHistory(6, this.chatHistory);
 
 		let completeMessage = "";
 		for await (const chunk of this.generate(chatPayload, signal)) {
@@ -283,9 +315,11 @@ ${prompt}`,
 			yield content;
 		}
 
-		this.chatHistory = this.chatHistory.concat({
+		this.chatHistory.push({
 			role: "assistant",
-			content: completeMessage,
+			content:
+				completeMessage ||
+				"The user has decided they weren't interested in the response",
 		});
 	}
 

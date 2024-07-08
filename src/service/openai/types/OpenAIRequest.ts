@@ -1,12 +1,13 @@
 export interface OpenAIRequest {
 	model: string;
-	messages: OpenAIMessages[];
+	messages: OpenAIMessage[];
 	temperature: number;
 	stream?: boolean;
 	top_p?: number;
+	max_tokens?: number;
 }
 
-export interface OpenAIMessages {
+export interface OpenAIMessage {
 	role: "user" | "assistant";
 	content: string;
 }

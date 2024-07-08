@@ -159,7 +159,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 			const symbols = await getSymbolsFromOpenFiles();
 
-			ragContext = `The user is seeking coding advice using ${language}.  
+			ragContext = `The user is seeking coding advice using ${language}.
+File name: ${fileName}
+
 Here are the available types to use as a reference when answering questions, these may not be related to the code provided:
 
 ${symbols}
