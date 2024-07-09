@@ -20,6 +20,7 @@ import {
 	OllamaChatRequest,
 	OllamaChatResponse,
 } from "./types";
+import { truncateChatHistory } from "../utils/contentWindow";
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -477,27 +478,40 @@ ${prompt}`,
 		ragContent: string,
 		signal: AbortSignal
 	) {
-		const systemMessage: OllamaChatMessage = {
-			role: "assistant",
-			content: !ragContent
-				? this.chatModel?.ChatPrompt!
-				: `Here's some additional information that may help you generate a more accurate response.
-Please determine if this information is relevant and can be used to supplement your response: 
-${ragContent}`,
-		};
-
-		const userMessage: OllamaChatMessage = {
-			role: "user",
-			content: prompt,
-		};
-
-		this.chatHistory.push(systemMessage, userMessage);
-
-		const messages: OllamaChatMessage[] = [];
+		const messages: OllamaChatMessage[] = [
+			{
+				role: "user",
+				content: this.chatModel!.ChatPrompt,
+			},
+		];
 
 		if (this.chatHistory.length > 0) {
-			messages.push(...this.truncateChatHistory());
+			messages.push(...this.chatHistory.slice(1));
+		} else {
+			this.chatHistory.push(...messages);
 		}
+
+		messages.push({
+			role: "assistant",
+			content: `${
+				ragContent
+					? `Here's some additional information that may help you generate a more accurate response.
+Please determine if this information is relevant and can be used to supplement your response: 
+
+${ragContent}`
+					: ""
+			}`,
+		});
+
+		messages.push({
+			role: "user",
+			content: prompt,
+		});
+
+		this.chatHistory.push(
+			messages[messages.length - 2],
+			messages[messages.length - 1]
+		);
 
 		const chatPayload: OllamaChatRequest = {
 			model: this.settings?.chatModel!,
@@ -518,17 +532,20 @@ ${ragContent}`,
 			)}`
 		);
 
-		let lastAssistantMessage = "";
+		truncateChatHistory(4, this.chatHistory);
+
+		let completeMessage = "";
 		for await (const chunk of this.generate(chatPayload, signal)) {
-			lastAssistantMessage += chunk.message;
+			completeMessage += chunk.message.content;
 			yield chunk.message.content;
 		}
-		if (lastAssistantMessage?.trim()) {
-			this.chatHistory.push({
-				role: "assistant",
-				content: lastAssistantMessage,
-			});
-		}
+
+		this.chatHistory.push({
+			role: "assistant",
+			content:
+				completeMessage ||
+				"The user has decided they weren't interested in the response",
+		});
 	}
 
 	public async genCodeDocs(

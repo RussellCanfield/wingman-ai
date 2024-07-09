@@ -237,20 +237,6 @@ ${prompt}`,
 		ragContent: string,
 		signal: AbortSignal
 	) {
-		let systemPrompt = this.chatModel!.ChatPrompt;
-
-		if (ragContent) {
-			systemPrompt += `Here's some additional information that may help you generate a more accurate response.
-Please determine if this information is relevant and can be used to supplement your response: 
-
-${ragContent}
----------------`;
-		}
-
-		systemPrompt += `\n${prompt}`;
-
-		systemPrompt = systemPrompt.replace(/\t/, "");
-
 		const messages: OpenAIMessage[] = [
 			{
 				role: "assistant",

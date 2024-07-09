@@ -156,6 +156,7 @@ const App = () => {
 	};
 
 	const cancelAIResponse = () => {
+		commitMessageToHistory();
 		clearMessage();
 		vscode.postMessage({
 			command: "cancel",
