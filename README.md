@@ -6,6 +6,8 @@
 
 The [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) extension brings high quality AI assisted coding right to your computer, it's 100% free and private which means data never leaves your machine!
 
+### **Like the extension? Check out [Squadron AI](https://www.squadron-ai.com)** our AI-assisted code reviewer.
+
 # 🚀 Getting Started
 
 ## Choosing an AI Provider
