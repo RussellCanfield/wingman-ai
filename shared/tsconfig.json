@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"lib": ["dom", "dom.iterable", "esnext"],
+		"useDefineForClassFields": true,
+		"allowJs": false,
+		"skipLibCheck": true,
+		"composite": true,
+		"esModuleInterop": false,
+		"allowSyntheticDefaultImports": true,
+		"forceConsistentCasingInFileNames": true,
+		"module": "esnext",
+		"moduleResolution": "node",
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"outDir": "../out/shared",
+		"jsx": "react-jsx"
+	},
+	"include": ["**/*.ts", "**/*.tsx"],
+	"exclude": ["node_modules", ".vscode-test"]
+}

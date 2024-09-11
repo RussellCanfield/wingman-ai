@@ -11,7 +11,7 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvicer } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
-import { InteractionSettings } from "../types/Settings";
+import { InteractionSettings } from "@shared/types/Settings";
 import { getSymbolsFromOpenFiles, supportedLanguages } from "./utilities";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {

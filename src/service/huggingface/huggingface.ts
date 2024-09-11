@@ -1,14 +1,13 @@
-import * as vscode from "vscode";
-import { eventEmitter } from "../../events/eventEmitter";
-import { loggingProvider } from "../../providers/loggingProvider";
-import { HuggingFaceAIModel } from "../../types/Models";
-import { InteractionSettings, Settings } from "../../types/Settings";
+import { HuggingFaceAIModel } from "@shared/types/Models";
+import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { asyncIterator } from "../asyncIterator";
-import { AIProvider, GetInteractionSettings } from "../base";
+import { AIProvider } from "../base";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
 import { Mixtral } from "./models/mixtral";
 import { Starcoder2 } from "./models/starcoder2";
+import { AIMessageChunk } from "@langchain/core/messages";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -47,40 +46,30 @@ export class HuggingFace implements AIProvider {
 	codeModel: HuggingFaceAIModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
 
-	constructor() {
-		const config = vscode.workspace.getConfiguration("Wingman");
-
-		const huggingFaceConfig =
-			config.get<Settings["huggingface"]>("HuggingFace");
-
-		loggingProvider.logInfo(
-			`HuggingFace settings loaded: ${JSON.stringify(huggingFaceConfig)}`
-		);
-
-		if (!huggingFaceConfig) {
-			this.handleError("Unable to log HuggingFace configuration.");
-			return;
+	constructor(
+		settings: Settings["huggingface"],
+		interactionSettings: InteractionSettings
+	) {
+		if (!settings) {
+			throw new Error("Unable to log HuggingFace configuration.");
 		}
 
-		this.settings = huggingFaceConfig!;
+		this.settings = settings!;
 
 		if (!this.settings.apiKey.trim()) {
-			const errorMsg = "Hugging Face API key is required.";
-			vscode.window.showErrorMessage(errorMsg);
-			loggingProvider.logInfo(errorMsg);
-			throw new Error(errorMsg);
+			throw new Error("Hugging Face API key is required.");
 		}
-
-		this.interactionSettings = GetInteractionSettings();
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
 	}
 
-	private handleError(message: string) {
-		vscode.window.showErrorMessage(message);
-		loggingProvider.logError(message);
-		eventEmitter._onFatalError.fire();
+	getModel(): BaseChatModel {
+		throw new Error("Method not implemented.");
+	}
+
+	invoke(prompt: string): Promise<AIMessageChunk> {
+		throw new Error("Method not implemented.");
 	}
 
 	private getCodeModel(codeModel: string): HuggingFaceAIModel | undefined {
@@ -90,7 +79,7 @@ export class HuggingFace implements AIProvider {
 			return new Starcoder2();
 		}
 
-		this.handleError(
+		throw new Error(
 			"Invalid code model name, currently code supports the CodeLlama model."
 		);
 	}
@@ -102,7 +91,7 @@ export class HuggingFace implements AIProvider {
 			return new Mixtral();
 		}
 
-		this.handleError(
+		throw new Error(
 			"Invalid chat model name, currently chat supports the Mistral and Mixtral model(s)."
 		);
 	}
@@ -149,16 +138,15 @@ export class HuggingFace implements AIProvider {
 				signal
 			);
 		} catch (error) {
-			loggingProvider.logError(
-				`HuggingFace - chat request with model: ${modelName} failed with the following error: ${error}`
-			);
+			return;
+			`HuggingFace - chat request with model: ${modelName} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`HuggingFace - chat execution time: ${executionTime} seconds`
+		console.log(
+			`Chat Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.body) {
@@ -166,7 +154,7 @@ export class HuggingFace implements AIProvider {
 		}
 
 		if (response.status >= 400) {
-			vscode.window.showErrorMessage(await response.text());
+			console.log(await response.text());
 			return "";
 		}
 
@@ -238,11 +226,9 @@ ${prompt}`,
 			delete codeRequestOptions.parameters.max_new_tokens;
 		}
 
-		loggingProvider.logInfo(
-			`HuggingFace - Code Completion submitting request with body: ${JSON.stringify(
-				codeRequestOptions
-			)}`
-		);
+		return `HuggingFace - Code Completion submitting request with body: ${JSON.stringify(
+			codeRequestOptions
+		)}`;
 
 		let response: Response | undefined;
 
@@ -253,24 +239,20 @@ ${prompt}`,
 				signal
 			);
 		} catch (error) {
-			loggingProvider.logError(
-				`HuggingFace - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			return `HuggingFace - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`HuggingFace - Code Completion execution time: ${executionTime} seconds`
-		);
+		console.log(`Code Completion execution time: ${executionTime} seconds`);
 
-		if (!response?.body) {
+		if (!response || !response?.body) {
 			return "";
 		}
 
 		const huggingFaceResponse =
-			(await response.json()) as HuggingFaceResponse;
+			(await response?.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
 			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
@@ -311,12 +293,6 @@ ${prompt}`,
 		if (this.interactionSettings?.chatMaxTokens === -1) {
 			delete chatPayload.parameters.max_new_tokens;
 		}
-
-		loggingProvider.logInfo(
-			`HuggingFace - Chat submitting request with body: ${JSON.stringify(
-				chatPayload
-			)}`
-		);
 
 		this.clearChatHistory();
 

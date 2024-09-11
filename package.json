@@ -2,9 +2,15 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.5.2",
+	"version": "0.6.0",
 	"publisher": "WingMan",
 	"license": "MIT",
+	"workspaces": [
+		"webview-ui",
+		"configview-ui",
+		"views-ui",
+		"shared"
+	],
 	"authors": [
 		[
 			{
@@ -53,6 +59,8 @@
 		"copilot",
 		"intellisense",
 		"openai",
+		"anthropic",
+		"composer",
 		"gpt",
 		"chat",
 		"ollama",
@@ -60,7 +68,8 @@
 		"code assistant"
 	],
 	"activationEvents": [
-		"onStartupFinished"
+		"onStartupFinished",
+		"onLanguage:plaintext"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -73,6 +82,19 @@
 				}
 			}
 		},
+		"languages": [
+			{
+				"id": "plaintext",
+				"aliases": [
+					"Plain Text",
+					"plaintext"
+				],
+				"extensions": [
+					".txt",
+					".text"
+				]
+			}
+		],
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -114,7 +136,8 @@
 					"enum": [
 						"Ollama",
 						"HuggingFace",
-						"OpenAI"
+						"OpenAI",
+						"Anthropic"
 					],
 					"description": "Specifies which AI provider to use - some require configuration."
 				},
@@ -159,6 +182,65 @@
 							"type": "number",
 							"default": 4096,
 							"description": "The amount of tokens allowed in the LLM response for chat (num_predict in Ollama), -1 is infinite."
+						}
+					}
+				},
+				"Wingman.EmbeddingProvider": {
+					"type": "string",
+					"default": "Ollama",
+					"enum": [
+						"Ollama",
+						"OpenAI"
+					],
+					"description": "Specifies which AI provider to use - some require configuration."
+				},
+				"Wingman.OllamaEmbeddingSettings": {
+					"type": "object",
+					"description": "Embedding settings configure how the extension interacts with the embedding service.",
+					"default": {
+						"embeddingModel": "mxbai-embed-large",
+						"baseUrl": "http://localhost:11434"
+					},
+					"properties": {
+						"embeddingModel": {
+							"type": "string",
+							"default": "mxbai-embed-large",
+							"description": "The model to use for embeddings"
+						},
+						"dimensions": {
+							"type": "number",
+							"default": 1024,
+							"description": "The number of dimensions for the embeddings"
+						},
+						"baseUrl": {
+							"type": "string",
+							"default": "http://localhost:11434",
+							"description": "Base URL for the ollama instance"
+						}
+					}
+				},
+				"Wingman.OpenAIEmbeddingSettings": {
+					"type": "object",
+					"description": "Embedding settings configure how the extension interacts with the embedding service.",
+					"default": {
+						"embeddingModel": "text-embedding-ada-002",
+						"apiKey": "ADD ME"
+					},
+					"properties": {
+						"embeddingModel": {
+							"type": "string",
+							"default": "text-embedding-ada-002",
+							"description": "The model to use for embeddings"
+						},
+						"apiKey": {
+							"type": "string",
+							"default": "ADD ME",
+							"description": "The API key to use for OpenAI"
+						},
+						"dimensions": {
+							"type": "number",
+							"default": 1536,
+							"description": "The number of dimensions for the embeddings"
 						}
 					}
 				},
@@ -236,20 +318,20 @@
 					"type": "object",
 					"description": "OpenAI settings",
 					"default": {
-						"chatModel": "gpt-4-0125-preview",
-						"codeModel": "gpt-4-0125-preview",
+						"chatModel": "gpt-4o-2024-08-06",
+						"codeModel": "gpt-4o-2024-08-06",
 						"baseUrl": "https://api.openai.com/v1/chat/completions",
 						"apiKey": "ADD ME"
 					},
 					"properties": {
 						"chatModel": {
 							"type": "string",
-							"default": "gpt-4-0125-preview",
+							"default": "gpt-4o-2024-08-06",
 							"description": "The model to use for the chat"
 						},
 						"codeModel": {
 							"type": "string",
-							"default": "gpt-4-0125-preview",
+							"default": "gpt-4o-2024-08-06",
 							"description": "The model to use for the code completion"
 						},
 						"baseUrl": {
@@ -320,40 +402,56 @@
 		]
 	},
 	"scripts": {
+		"install:all": "npm install && cd webview-ui && npm install",
+		"start:views": "cd webview-ui && npm run start",
+		"build": "tsc -b",
+		"build:views": "cd views-ui && npm run build",
+		"build:shared": "cd shared && npm run build",
 		"vscode:prepublish": "npm run compile",
-		"compile": "vite build",
-		"watch": "vite build --watch",
-		"package": "vite build --mode production",
+		"compile": "npm run clean && npm run build:shared && npm run build:views && tsc -b",
+		"watch": "tsc -b --watch",
+		"watch:views": "npm run build && cd views-ui && npm run dev",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
-		"test": "vscode-test",
-		"license": "generate-license-file --input package.json --output third-party-licenses.txt --overwrite"
+		"clean": "rimraf out"
 	},
-	"devDependencies": {
-		"@types/mocha": "10.0.6",
-		"@types/node": "18.x",
-		"@types/react": "18.2.42",
-		"@types/react-dom": "18.2.17",
-		"@types/react-syntax-highlighter": "15.5.11",
-		"@types/vscode": "1.87.0",
-		"@types/vscode-webview": "1.57.5",
-		"@typescript-eslint/eslint-plugin": "6.13.1",
-		"@typescript-eslint/parser": "6.13.1",
-		"@vscode/codicons": "0.0.35",
-		"@vscode/test-cli": "0.0.4",
-		"@vscode/test-electron": "2.3.8",
-		"@vscode/webview-ui-toolkit": "1.3.1",
-		"eslint": "^8.54.0",
-		"generate-license-file": "3.0.1",
-		"react": "18.2.0",
-		"react-dom": "18.2.0",
+	"dependencies": {
+		"@langchain/langgraph": "0.2.2",
+		"@langchain/community": "0.2.32",
+		"@langchain/openai": "0.2.10",
+		"@langchain/anthropic": "0.2.17",
+		"@langchain/ollama": "0.0.4",
+		"vscode-languageclient": "9.0.1",
+		"vscode-languageserver": "9.0.1",
+		"vscode-languageserver-textdocument": "1.0.12",
+		"react": "18.3.1",
+		"react-dom": "18.3.1",
 		"react-icons": "4.12.0",
 		"react-markdown": "9.0.1",
 		"react-syntax-highlighter": "15.5.0",
-		"styled-components": "6.1.1",
-		"tar": "6.2.0",
-		"typescript": "5.3.2",
-		"vite": "5.3.1",
-		"vite-plugin-static-copy": "1.0.5"
+		"vscode-uri": "3.0.8",
+		"@ast-grep/napi": "0.26.3",
+		"langchain": "0.2.18",
+		"vectra": "0.9.0"
+	},
+	"devDependencies": {
+		"@types/mocha": "10.0.6",
+		"@types/node": "22.5.4",
+		"@types/react": "^18.3.5",
+		"@types/react-dom": "^18.3.0",
+		"@types/react-syntax-highlighter": "15.5.11",
+		"@types/vscode": "1.93.0",
+		"@types/vscode-webview": "1.57.5",
+		"@vscode/codicons": "0.0.36",
+		"@vscode/test-cli": "0.0.10",
+		"@vscode/test-electron": "2.4.1",
+		"generate-license-file": "3.0.1",
+		"@vscode/webview-ui-toolkit": "1.3.1",
+		"hnswlib-node": "3.0.0",
+		"rimraf": "^6.0.1",
+		"ts-node": "10.9.2",
+		"tsconfig-paths": "4.2.0",
+		"typescript": "^5.5.2",
+		"tailwindcss": "3.4.10"
 	}
 }

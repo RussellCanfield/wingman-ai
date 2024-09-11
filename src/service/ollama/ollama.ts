@@ -1,10 +1,7 @@
-import * as vscode from "vscode";
-import { eventEmitter } from "../../events/eventEmitter";
-import { loggingProvider } from "../../providers/loggingProvider";
 import { OllamaAIModel } from "./types";
-import { InteractionSettings, Settings } from "../../types/Settings";
+import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { asyncIterator } from "../asyncIterator";
-import { AIStreamProvicer, GetInteractionSettings } from "../base";
+import { AIStreamProvicer } from "../base";
 import { delay } from "../delay";
 import { CodeLlama } from "./models/codellama";
 import { CodeQwen } from "./models/codeqwen";
@@ -21,49 +18,46 @@ import {
 	OllamaChatResponse,
 } from "./types";
 import { truncateChatHistory } from "../utils/contentWindow";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatOllama } from "@langchain/ollama";
+import { OllamaEmbeddings } from "@langchain/ollama";
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
-	settings: Settings["ollama"];
 	chatHistory: OllamaChatMessage[] = [];
 	chatModel: OllamaAIModel | undefined;
 	codeModel: OllamaAIModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
+	baseModel: BaseChatModel | undefined;
 
-	constructor() {
-		const config = vscode.workspace.getConfiguration("Wingman");
-
-		const activeProvider = config.get<Settings["aiProvider"]>("Provider");
-
-		if (activeProvider !== "Ollama") {
-			return;
+	constructor(
+		private readonly settings: Settings["ollama"],
+		interactionSettings: InteractionSettings
+	) {
+		if (!settings) {
+			throw new Error("Unable to load Ollama settings.");
 		}
 
-		const ollamaConfig = config.get<Settings["ollama"]>("Ollama");
-
-		loggingProvider.logInfo(
-			`Ollama settings loaded: ${JSON.stringify(ollamaConfig)}`
-		);
-
-		if (!ollamaConfig) {
-			this.handleError("Unable to load Ollama settings.");
-			return;
-		}
-
-		this.settings = ollamaConfig;
+		this.settings = settings;
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
 
-		this.interactionSettings = GetInteractionSettings();
-
 		this.validateSettings();
+
+		this.baseModel = new ChatOllama({
+			baseUrl: this.settings.baseUrl,
+			model: this.settings.chatModel,
+			temperature: 0.2,
+		});
 	}
 
-	private handleError(message: string) {
-		vscode.window.showErrorMessage(message);
-		loggingProvider.logError(message);
-		//eventEmitter._onFatalError.fire();
+	getModel(): BaseChatModel {
+		return this.baseModel!;
+	}
+
+	invoke(prompt: string) {
+		return this.baseModel!.invoke(prompt);
 	}
 
 	private async validateSettings() {
@@ -72,7 +66,7 @@ export class Ollama implements AIStreamProvicer {
 				this.settings?.chatModel ?? "unknown"
 			))
 		) {
-			this.handleError(
+			throw new Error(
 				`Unable to verify Ollama has chat model: ${this.settings?.chatModel}, have you pulled the model or is the config wrong?`
 			);
 		}
@@ -82,7 +76,7 @@ export class Ollama implements AIStreamProvicer {
 				this.settings?.codeModel ?? "unknown"
 			))
 		) {
-			this.handleError(
+			throw new Error(
 				`Unable to verify Ollama has code model: ${this.settings?.codeModel}, have you pulled the model or is the config wrong?`
 			);
 		}
@@ -101,7 +95,7 @@ export class Ollama implements AIStreamProvicer {
 			case codeModel.startsWith("codestral"):
 				return new Codestral();
 			default:
-				this.handleError(
+				throw new Error(
 					"Invalid code model name, currently code supports CodeLlama and Deepseek models."
 				);
 		}
@@ -124,7 +118,7 @@ export class Ollama implements AIStreamProvicer {
 			case chatModel.startsWith("codestral"):
 				return new Codestral();
 			default:
-				this.handleError(
+				throw new Error(
 					"Invalid chat model name, currently chat supports CodeLlama, Phind CodeLlama and Deepseek models."
 				);
 		}
@@ -148,7 +142,7 @@ export class Ollama implements AIStreamProvicer {
 				return true;
 			}
 		} catch (error) {
-			loggingProvider.logInfo(JSON.stringify(error));
+			console.error(error);
 		}
 
 		return false;
@@ -192,9 +186,7 @@ export class Ollama implements AIStreamProvicer {
 		try {
 			response = await this.fetchChatResponse(payload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`Ollama chat request with model: ${payload.model} failed with the following error: ${error}`
-			);
+			return `Ollama chat request with model: ${payload.model} failed with the following error: ${error}`;
 		}
 
 		if (!response?.body) {
@@ -203,10 +195,6 @@ export class Ollama implements AIStreamProvicer {
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
-
-		loggingProvider.logInfo(
-			`Ollama - Chat Time To First Token execution time: ${executionTime} seconds`
-		);
 
 		for await (const chunk of asyncIterator(response.body)) {
 			if (signal.aborted) {
@@ -236,10 +224,7 @@ export class Ollama implements AIStreamProvicer {
 		try {
 			response = await this.fetchModelResponse(payload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`Ollama chat request with model: ${payload.model} failed with the following error: ${error}`
-			);
-			eventEmitter._onQueryComplete.fire();
+			console.log(error);
 			return "";
 		}
 
@@ -250,13 +235,12 @@ export class Ollama implements AIStreamProvicer {
 		const endTime = Date.now();
 		const executionTime = endTime - startTime;
 
-		loggingProvider.logInfo(
-			`Ollama - Code Time To First Token execution time: ${executionTime} ms`
+		console.log(
+			`Code Time To First Token execution time: ${executionTime} ms`
 		);
 
 		for await (const chunk of asyncIterator(response.body)) {
 			if (signal.aborted) {
-				loggingProvider.logInfo("Aborted while reading chunks");
 				return "";
 			}
 			const jsonString = this.decoder.decode(chunk);
@@ -272,10 +256,7 @@ export class Ollama implements AIStreamProvicer {
 				}
 				yield codeLines.join("");
 			} catch (e) {
-				loggingProvider.logError(
-					`Error occured on ollama code generation ${e}`
-				);
-				eventEmitter._onQueryComplete.fire();
+				console.error(e);
 				return "";
 			}
 		}
@@ -320,12 +301,6 @@ ${prompt}`,
 			},
 		};
 
-		loggingProvider.logInfo(
-			`Ollama - Code Completion submitting request with body: ${JSON.stringify(
-				codeRequestOptions
-			)}`
-		);
-
 		let response: Response | undefined;
 
 		try {
@@ -334,17 +309,13 @@ ${prompt}`,
 				signal
 			);
 		} catch (error) {
-			loggingProvider.logError(
-				`Ollama - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			console.error(error);
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`Ollama - Code Completion execution time: ${executionTime} seconds`
-		);
+		console.log(`Code Completion execution time: ${executionTime} seconds`);
 
 		if (!response?.body) {
 			return "";
@@ -387,7 +358,7 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
+		console.log(
 			`Ollama - Code stream finished in ${executionTime} seconds with contents: ${JSON.stringify(
 				sentences
 			)}`
@@ -429,12 +400,6 @@ ${prompt}`,
 				],
 			},
 		};
-
-		loggingProvider.logInfo(
-			`Ollama - Chat stream submitting request with body: ${JSON.stringify(
-				codeRequestOptions
-			)}`
-		);
 
 		let sentences: string[] = [];
 		let requestStatus = { done: false };
@@ -525,12 +490,6 @@ ${ragContent}`
 				repeat_penalty: 1.1,
 			},
 		};
-
-		loggingProvider.logInfo(
-			`Ollama - Chat submitting request with body: ${JSON.stringify(
-				chatPayload
-			)}`
-		);
 
 		truncateChatHistory(4, this.chatHistory);
 
@@ -633,12 +592,6 @@ ${ragContent}`
 				],
 			},
 		};
-
-		loggingProvider.logInfo(
-			`Ollama - Refactor submitting request with body: ${JSON.stringify(
-				refactorPayload
-			)}`
-		);
 
 		const response = await this.fetchModelResponse(refactorPayload, signal);
 		if (!response) {

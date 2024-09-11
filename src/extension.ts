@@ -1,22 +1,55 @@
+/* --------------------------------------------------------------------------------------------
+ * Copyright (c) Microsoft Corporation. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ * ------------------------------------------------------------------------------------------ */
 import * as vscode from "vscode";
 import { GenDocs } from "./commands/GenDocs.js";
 import { ChatViewProvider } from "./providers/chatViewProvider.js";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
 import { ConfigViewProvider } from "./providers/configViewProvider.js";
-import { HotKeyCodeSuggestionProvider } from './providers/hotkeyCodeSuggestionProvider.js';
+import { HotKeyCodeSuggestionProvider } from "./providers/hotkeyCodeSuggestionProvider.js";
 import { RefactorProvider } from "./providers/refactorProvider.js";
 import { ActivityStatusBar } from "./providers/statusBarProvider.js";
-import {
-	GetAllSettings,
-	GetInteractionSettings,
-	GetProviderFromSettings,
-} from "./service/base.js";
+import lspClient from "./client/index.js";
+import { CreateAIProvider } from "./service/utils/models.js";
+import { loggingProvider } from "./providers/loggingProvider.js";
+import { eventEmitter } from "./events/eventEmitter.js";
+import { GetAllSettings, GetSettings } from "./service/settings.js";
 
 let statusBarProvider: ActivityStatusBar;
 
 export async function activate(context: vscode.ExtensionContext) {
-	const aiProvider = GetProviderFromSettings();
-	const interactionSettings = GetInteractionSettings();
+	const {
+		aiProvider,
+		embeddingProvider,
+		embeddingSettings,
+		config,
+		interactionSettings,
+	} = GetSettings();
+
+	await lspClient.activate(
+		context,
+		config,
+		aiProvider,
+		embeddingProvider,
+		embeddingSettings,
+		interactionSettings!
+	);
+
+	let modelProvider;
+	try {
+		modelProvider = CreateAIProvider(
+			aiProvider,
+			config,
+			interactionSettings!
+		);
+	} catch (error) {
+		if (error instanceof Error) {
+			vscode.window.showErrorMessage(error.message);
+			loggingProvider.logInfo(error.message);
+			eventEmitter._onFatalError.fire();
+		}
+	}
 
 	statusBarProvider = new ActivityStatusBar();
 
@@ -51,14 +84,19 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
 			CodeSuggestionProvider.selector,
-			new GenDocs(aiProvider)
+			new GenDocs(modelProvider!)
 		)
 	);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ChatViewProvider.viewType,
-			new ChatViewProvider(aiProvider, context, interactionSettings),
+			new ChatViewProvider(
+				lspClient,
+				modelProvider!,
+				context,
+				interactionSettings!
+			),
 			{
 				webviewOptions: {
 					retainContextWhenHidden: true,
@@ -67,30 +105,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	if (interactionSettings.codeCompletionEnabled) {
+	if (interactionSettings!.codeCompletionEnabled) {
 		context.subscriptions.push(
 			vscode.languages.registerInlineCompletionItemProvider(
 				CodeSuggestionProvider.selector,
-				new CodeSuggestionProvider(aiProvider, interactionSettings)
+				new CodeSuggestionProvider(modelProvider!, interactionSettings!)
 			)
 		);
 	}
 
-	// context.subscriptions.push(
-	// 	vscode.languages.registerCodeActionsProvider(
-	// 		QuickFixProvider.selector,
-	// 		new QuickFixProvider(),
-	// 		{
-	// 			providedCodeActionKinds:
-	// 				QuickFixProvider.providedCodeActionKinds,
-	// 		}
-	// 	)
-	// );
-
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
 			RefactorProvider.selector,
-			new RefactorProvider(aiProvider),
+			new RefactorProvider(modelProvider!),
 			{
 				providedCodeActionKinds:
 					RefactorProvider.providedCodeActionKinds,
@@ -98,9 +125,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(aiProvider, interactionSettings);
+	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
+		modelProvider!,
+		interactionSettings!
+	);
 	context.subscriptions.push(
-		vscode.commands.registerCommand(HotKeyCodeSuggestionProvider.command, HotKeyCodeSuggestionProvider.showSuggestion)
+		vscode.commands.registerCommand(
+			HotKeyCodeSuggestionProvider.command,
+			HotKeyCodeSuggestionProvider.showSuggestion
+		)
 	);
 }
 
@@ -108,4 +141,6 @@ export function deactivate() {
 	if (statusBarProvider) {
 		statusBarProvider.dispose();
 	}
+
+	lspClient?.deactivate();
 }

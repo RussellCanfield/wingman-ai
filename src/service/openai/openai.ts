@@ -1,14 +1,13 @@
-import * as vscode from "vscode";
 import { asyncIterator } from "../asyncIterator";
-import { AIProvider, GetInteractionSettings } from "../base";
-import { InteractionSettings, Settings } from "../../types/Settings";
-import { loggingProvider } from "../../providers/loggingProvider";
-import { eventEmitter } from "../../events/eventEmitter";
+import { AIProvider } from "../base";
+import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { GPT4Turbo } from "./models/gpt4-turbo";
 import { OpenAIMessage, OpenAIRequest } from "./types/OpenAIRequest";
 import { OpenAIResponse, OpenAIStreamResponse } from "./types/OpenAIResponse";
-import { OpenAIModel } from "../../types/Models";
+import { OpenAIModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatOpenAI } from "@langchain/openai";
 
 export class OpenAI implements AIProvider {
 	decoder = new TextDecoder();
@@ -17,33 +16,36 @@ export class OpenAI implements AIProvider {
 	chatModel: OpenAIModel | undefined;
 	codeModel: OpenAIModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
+	baseModel: BaseChatModel | undefined;
 
-	constructor() {
-		const config = vscode.workspace.getConfiguration("Wingman");
-
-		const openaiConfig = config.get<Settings["openai"]>("OpenAI");
-
-		loggingProvider.logInfo(
-			`OpenAI settings loaded: ${JSON.stringify(openaiConfig)}`
-		);
-
-		if (!openaiConfig) {
-			this.handleError("Unable to load OpenAI settings.");
-			return;
+	constructor(
+		settings: Settings["openai"],
+		interactionSettings: InteractionSettings
+	) {
+		if (!settings) {
+			throw new Error("Unable to load OpenAI settings.");
 		}
 
-		this.settings = openaiConfig;
+		this.settings = settings;
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
 
-		this.interactionSettings = GetInteractionSettings();
+		this.baseModel = new ChatOpenAI({
+			apiKey: this.settings.apiKey,
+			model: this.settings.chatModel,
+			openAIApiKey: this.settings.apiKey,
+			temperature: 0.2,
+			maxTokens: interactionSettings.chatMaxTokens,
+		});
 	}
 
-	private handleError(message: string) {
-		vscode.window.showErrorMessage(message);
-		loggingProvider.logError(message);
-		eventEmitter._onFatalError.fire();
+	getModel(): BaseChatModel {
+		return this.baseModel!;
+	}
+
+	invoke(prompt: string) {
+		return this.baseModel!.invoke(prompt);
 	}
 
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
@@ -51,7 +53,7 @@ export class OpenAI implements AIProvider {
 			case codeModel.startsWith("gpt-4"):
 				return new GPT4Turbo();
 			default:
-				this.handleError(
+				throw new Error(
 					"Invalid code model name, currently code supports the GPT-4o, GPT-4 Turbo and GPT-4 model(s)."
 				);
 		}
@@ -62,7 +64,7 @@ export class OpenAI implements AIProvider {
 			case chatModel.startsWith("gpt-4"):
 				return new GPT4Turbo();
 			default:
-				this.handleError(
+				throw new Error(
 					"Invalid chat model name, currently chat supports the GPT-4o, GPT-4 Turbo and GPT-4 model(s)."
 				);
 		}
@@ -93,18 +95,11 @@ export class OpenAI implements AIProvider {
 		try {
 			response = await this.fetchModelResponse(payload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`OpenAI chat request with model: ${payload.model} failed with the following error: ${error}`
-			);
+			return `OpenAI chat request with model: ${payload.model} failed with the following error: ${error}`;
 		}
 
 		if (!response?.ok) {
-			loggingProvider.logError(
-				`OpenAI - Chat failed with the following status code: ${response?.status}`
-			);
-			vscode.window.showErrorMessage(
-				`OpenAI - Chat failed with the following status code: ${response?.status}`
-			);
+			return `OpenAI - Chat failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {
@@ -114,8 +109,8 @@ export class OpenAI implements AIProvider {
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`OpenAI - Chat Time To First Token execution time: ${executionTime} seconds`
+		console.log(
+			`Chat Time To First Token execution time: ${executionTime} ms`
 		);
 
 		let currentMessage = "";
@@ -181,12 +176,6 @@ ${prompt}`,
 			top_p: 0.3,
 		};
 
-		loggingProvider.logInfo(
-			`OpenAI - Code Completion submitting request with body: ${JSON.stringify(
-				codeRequestOptions
-			)}`
-		);
-
 		let response: Response | undefined;
 		let failedDueToAbort = false;
 
@@ -199,25 +188,18 @@ ${prompt}`,
 			if ((error as Error).name === "AbortError") {
 				failedDueToAbort = true;
 			}
-			loggingProvider.logError(
-				`OpenAI - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			return `OpenAI - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`OpenAI - Code Completion execution time: ${executionTime} seconds`
+		console.log(
+			`Code Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.ok && !failedDueToAbort) {
-			loggingProvider.logError(
-				`OpenAI - Code Completion failed with the following status code: ${response?.status}`
-			);
-			vscode.window.showErrorMessage(
-				`OpenAI - Code Completion failed with the following status code: ${response?.status}`
-			);
+			return `OpenAI - Code Completion failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {
@@ -255,6 +237,7 @@ ${prompt}`,
 			content: `${
 				ragContent
 					? `Here's some additional information that may help you generate a more accurate response.
+Do not repeat this information in your response to the user, but use it to help generate a more accurate response.
 Please determine if this information is relevant and can be used to supplement your response: 
 
 ${ragContent}`
@@ -277,12 +260,6 @@ ${prompt}`,
 			temperature: 0.8,
 			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
 		};
-
-		loggingProvider.logInfo(
-			`OpenAI - Chat submitting request with body: ${JSON.stringify(
-				chatPayload
-			)}`
-		);
 
 		truncateChatHistory(6, this.chatHistory);
 
@@ -314,7 +291,9 @@ ${prompt}`,
 		ragContent: string,
 		signal: AbortSignal
 	): Promise<string> {
-		if (!this.chatModel?.genDocPrompt) return "";
+		if (!this.chatModel?.genDocPrompt) {
+			return "";
+		}
 
 		const startTime = new Date().getTime();
 		const genDocPrompt =
@@ -345,25 +324,18 @@ ${prompt}`,
 		try {
 			response = await this.fetchModelResponse(genDocsPayload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`OpenAI - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			return `OpenAI - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`OpenAI - Gen Docs execution time: ${executionTime} seconds`
+		console.log(
+			`CodeDocs Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.ok) {
-			loggingProvider.logError(
-				`OpenAI - Gen Docs failed with the following status code: ${response?.status}`
-			);
-			vscode.window.showErrorMessage(
-				`OpenAI - Gen Docs failed with the following status code: ${response?.status}`
-			);
+			return `OpenAI - Gen Docs failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {
@@ -407,25 +379,18 @@ ${prompt}`,
 		try {
 			response = await this.fetchModelResponse(refactorPayload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`OpenAI - Refactor request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			return `OpenAI - Refactor request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`OpenAI - Refactor execution time: ${executionTime} seconds`
+		console.log(
+			`Refactor Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.ok) {
-			loggingProvider.logError(
-				`OpenAI - Refactor failed with the following status code: ${response?.status}`
-			);
-			vscode.window.showErrorMessage(
-				`OpenAI - Refactor failed with the following status code: ${response?.status}`
-			);
+			return `OpenAI - Refactor failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {

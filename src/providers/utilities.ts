@@ -153,3 +153,23 @@ export function extractCodeBlock(text: string) {
 	}
 	return matches.join("\n");
 }
+
+export function addNoneAttributeToLink(htmlString: string, noneValue: string) {
+	// Regular expression to match the link tag
+	const linkRegex =
+		/<link\s+(?:[^>]*?\s+)?href=["']https:\/\/file%2B\.vscode-resource\.vscode-cdn\.net\/[^"']*\.css["'][^>]*>/i;
+
+	// Function to add the none attribute
+	const addNoneAttribute = (match: string) => {
+		if (match.includes("nonce=")) {
+			// If none attribute already exists, return the original match
+			return match;
+		} else {
+			// Add none attribute before the closing angle bracket
+			return match.replace(/>$/, ` nonce="${noneValue}">`);
+		}
+	};
+
+	// Replace the matched link tag with the modified version
+	return htmlString.replace(linkRegex, addNoneAttribute);
+}

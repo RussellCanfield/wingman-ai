@@ -1,4 +1,4 @@
-import { Position, TextDocument } from "vscode";
+import { TextDocument, Position } from "vscode";
 
 export const getContentWindow = (
 	document: TextDocument,

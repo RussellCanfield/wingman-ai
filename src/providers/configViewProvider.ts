@@ -1,14 +1,16 @@
 import * as vscode from "vscode";
-import { GetInteractionSettings } from "../service/base";
-import { AppMessage } from "../types/Message";
+import fs from "node:fs";
+import { AppMessage } from "@shared/types/Message";
 import {
 	ApiSettingsType,
 	InteractionSettings,
 	OllamaSettingsType,
 	Settings,
-} from "../types/Settings";
+} from "@shared/types/Settings";
 import { loggingProvider } from "./loggingProvider";
 import { eventEmitter } from "../events/eventEmitter";
+import { GetInteractionSettings } from "../service/settings";
+import { addNoneAttributeToLink } from "./utilities";
 
 export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.configview";
@@ -65,34 +67,42 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				this._config.get<Settings["aiProvider"]>("Provider") ??
 				"Ollama",
 			interactionSettings: GetInteractionSettings(),
+			embeddingProvider:
+				this._config.get<Settings["embeddingProvider"]>(
+					"EmbeddingProvider"
+				) ?? "Ollama",
+			ollamaEmeddingSettings: this._config.get<
+				Settings["ollamaEmeddingSettings"]
+			>("OllamaEmbeddingSettings"),
+			openaiEmbeddingSettings: this._config.get<
+				Settings["openaiEmbeddingSettings"]
+			>("OpenAIEmbeddingSettings"),
 			ollama: this._config.get<Settings["ollama"]>("Ollama"),
 			huggingface:
 				this._config.get<Settings["huggingface"]>("HuggingFace"),
 			openai: this._config.get<Settings["openai"]>("OpenAI"),
+			anthropic: this._config.get<Settings["anthropic"]>("Anthropic"),
 		} satisfies Settings;
 
-		if (settings.ollama && settings.aiProvider === "Ollama") {
-			try {
-				const modelsResponse = await fetch(
-					`${settings.ollama.baseUrl}/api/tags`
-				);
-				const modelsJson = (await modelsResponse.json()) as {
-					models: { name: string }[];
-				};
-				const modelNames = modelsJson.models.map((m) => m.name);
-				//@ts-ignore
-				settings["ollamaModels"] = modelNames;
-			} catch (e) {
-				this.handleError(
-					"Unable to retrieve Ollama models, is Ollama running?"
-				);
-				//@ts-expect-error
-				settings["ollamaModels"] = ["Failed to load."];
-			}
-		} else {
+		//if (settings.ollama && settings.aiProvider === "Ollama") {
+		try {
+			const modelsResponse = await fetch(
+				`${settings.ollama?.baseUrl}/api/tags`
+			);
+			const modelsJson = (await modelsResponse.json()) as {
+				models: { name: string }[];
+			};
+			const modelNames = modelsJson.models.map((m) => m.name);
+			//@ts-ignore
+			settings["ollamaModels"] = modelNames;
+		} catch (e) {
 			//@ts-expect-error
-			settings["ollamaModels"] = [];
+			settings["ollamaModels"] = ["Failed to load."];
 		}
+		// } else {
+		// 	//@ts-expect-error
+		// 	settings["ollamaModels"] = [];
+		// }
 		return JSON.stringify(settings);
 	};
 
@@ -115,6 +125,17 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		this._config.update("Ollama", value);
 	};
 
+	private updateAndSetOllamaEmbeddings = (value: OllamaSettingsType) => {
+		const currentProvider =
+			this._config.get<Settings["embeddingProvider"]>(
+				"EmbeddingProvider"
+			);
+		if (currentProvider !== "Ollama") {
+			this._config.update("EmbeddingProvider", "Ollama");
+		}
+		this._config.update("OllamaEmbeddingSettings", value);
+	};
+
 	private updateAndSetHF = (value: ApiSettingsType) => {
 		const currentProvider =
 			this._config.get<Settings["aiProvider"]>("Provider");
@@ -131,6 +152,17 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			this._config.update("Provider", "OpenAI");
 		}
 		this._config.update("OpenAI", value);
+	};
+
+	private updateAndSetOpenAIEmbeddings = (value: ApiSettingsType) => {
+		const currentProvider =
+			this._config.get<Settings["embeddingProvider"]>(
+				"EmbeddingProvider"
+			);
+		if (currentProvider !== "OpenAI") {
+			this._config.update("EmbeddingProvider", "OpenAI");
+		}
+		this._config.update("OpenAIEmbeddingSettings", value);
 	};
 
 	private updateAndSetAnthropic = (value: ApiSettingsType) => {
@@ -151,9 +183,6 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	};
 
 	private _getHtml = (webview: vscode.Webview) => {
-		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this._extensionUri, "out", "config.es.js")
-		);
 		const codiconsUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(
 				this._extensionUri,
@@ -164,22 +193,43 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			)
 		);
 
+		const htmlUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this._extensionUri,
+				"out",
+				"views",
+				"config.html"
+			)
+		);
+
 		const nonce = this.getNonce();
 
-		return `<!DOCTYPE html>
-        <html lang="en" style="height: 100%">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline';">
-			<title>Wingman</title>
-			<link rel="stylesheet" href="${codiconsUri}" nonce="${nonce}">
-          </head>
-          <body style="height: 100%">
-            <div id="root" style="height: 100%"></div>
-            <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-          </body>
-        </html>`;
+		const htmlContent = fs.readFileSync(htmlUri.path, "utf8");
+
+		// Replace placeholders in the HTML content
+		const finalHtmlContent = htmlContent.replace(
+			/CSP_NONCE_PLACEHOLDER/g,
+			nonce
+		);
+
+		const prefix = webview.asWebviewUri(
+			vscode.Uri.joinPath(this._extensionUri, "out", "views")
+		);
+		const srcHrefRegex = /(src|href)="([^"]+)"/g;
+
+		// Replace the matched filename with the prefixed filename
+		const updatedHtmlContent = finalHtmlContent.replace(
+			srcHrefRegex,
+			(match, attribute, filename) => {
+				const prefixedFilename = `${prefix}${filename}`;
+				return `${attribute}="${prefixedFilename}"`;
+			}
+		);
+
+		return addNoneAttributeToLink(updatedHtmlContent, nonce).replace(
+			/uri="CODICONS_URI"/g,
+			`href="${codiconsUri.toString()}"`
+		);
 	};
 
 	private getNonce = () => {

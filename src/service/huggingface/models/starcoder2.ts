@@ -1,4 +1,4 @@
-import { HuggingFaceAIModel } from "../../../types/Models";
+import { HuggingFaceAIModel } from "@shared/types/Models";
 
 export class Starcoder2 implements HuggingFaceAIModel {
 	get CodeCompletionPrompt(): string {
