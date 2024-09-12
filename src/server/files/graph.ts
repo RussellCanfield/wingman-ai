@@ -14,7 +14,8 @@ export type CodeGraphNodeMap = Map<string, CodeGraphNode>;
 export type CodeGraphEdgeMap = Map<string, Set<string>>;
 
 export class CodeGraph {
-	private skeletonNodes: Map<string, SkeletonizedCodeGraphNode> = new Map();
+	// The symbol table helps manage file relationships to symbols, which can be used to manage the edges
+	private symbolTable: Map<string, Set<string>> = new Map();
 	private nodes: CodeGraphNodeMap = new Map();
 	private edgesExport: CodeGraphEdgeMap = new Map();
 	private edgesImport: CodeGraphEdgeMap = new Map();
@@ -22,7 +23,8 @@ export class CodeGraph {
 	constructor(
 		nodes?: CodeGraphNodeMap,
 		edgesExport?: CodeGraphEdgeMap,
-		edgesImport?: CodeGraphEdgeMap
+		edgesImport?: CodeGraphEdgeMap,
+		symbolTable?: Map<string, Set<string>>
 	) {
 		if (nodes) {
 			this.nodes = nodes;
@@ -35,18 +37,73 @@ export class CodeGraph {
 		if (edgesImport) {
 			this.edgesImport = edgesImport;
 		}
+
+		if (symbolTable) {
+			this.symbolTable = symbolTable;
+		}
 	}
 
-	public addSkeletonNode(node: SkeletonizedCodeGraphNode) {
-		this.skeletonNodes.set(node.id, node);
+	public addOrUpdateFileInSymbolTable(file: string, nodeIds: Set<string>) {
+		// Get the existing node IDs for this file, if any
+		const existingNodeIds = this.symbolTable.get(file) || new Set<string>();
+
+		// Find nodes that are no longer present in the file
+		const removedNodeIds = new Set(
+			[...existingNodeIds].filter((x) => !nodeIds.has(x))
+		);
+
+		// Remove import and export edges for the removed nodes
+		for (const removedNodeId of removedNodeIds) {
+			// Remove import edges
+			this.edgesImport.delete(removedNodeId);
+			for (const [, importSet] of this.edgesImport) {
+				importSet.delete(removedNodeId);
+			}
+
+			// Remove export edges
+			this.edgesExport.delete(removedNodeId);
+			for (const [, exportSet] of this.edgesExport) {
+				exportSet.delete(removedNodeId);
+			}
+
+			// Remove the node from the nodes map
+			this.nodes.delete(removedNodeId);
+		}
+
+		// Update the symbol table with the new set of node IDs
+		this.symbolTable.set(file, nodeIds);
 	}
 
-	public getSkeletonNode(id: string) {
-		return this.skeletonNodes.get(id);
+	public getSymbolTable() {
+		return this.symbolTable;
 	}
 
 	public addNode(node: CodeGraphNode) {
 		this.nodes.set(node.id, node);
+	}
+
+	public mergeImportEdges(importEdges: CodeGraphEdgeMap) {
+		for (const [nodeId, edges] of importEdges) {
+			if (this.edgesImport.has(nodeId)) {
+				for (const edge of edges) {
+					this.edgesImport.get(nodeId)?.add(edge);
+				}
+			} else {
+				this.edgesImport.set(nodeId, edges);
+			}
+		}
+	}
+
+	public mergeExportEdges(exportEdges: CodeGraphEdgeMap) {
+		for (const [nodeId, edges] of exportEdges) {
+			if (this.edgesExport.has(nodeId)) {
+				for (const edge of edges) {
+					this.edgesExport.get(nodeId)?.add(edge);
+				}
+			} else {
+				this.edgesExport.set(nodeId, edges);
+			}
+		}
 	}
 
 	public addImportEdge(nodeId: string, edge: string) {
@@ -91,10 +148,6 @@ export class CodeGraph {
 
 	public getNodes() {
 		return Array.from(this.nodes.values());
-	}
-
-	public getSkeletonNodes() {
-		return Array.from(this.skeletonNodes.values());
 	}
 }
 

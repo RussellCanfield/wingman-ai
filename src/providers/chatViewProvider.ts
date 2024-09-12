@@ -79,7 +79,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							// Use value to spawn new terminal with command
 							const terminalCommand = value as string;
 							const terminal = vscode.window.createTerminal({
-								name: "New Terminal",
+								name: "Wingman Command",
 							});
 							terminal.show();
 							terminal.sendText(terminalCommand);

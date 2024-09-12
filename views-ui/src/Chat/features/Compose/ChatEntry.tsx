@@ -125,19 +125,21 @@ const ChatArtifact = ({
 			<div className="bg-stone-800 text-white flex flex-row">
 				<h4 className="m-0 flex-1 p-2">File: {file.file}</h4>
 				<div className="flex sp bg-stone-800 text-white rounded z-10 pl-2 pr-2 hover:bg-stone-500 hover:cursor-pointer">
-					<button type="button" title="Copy code to clipboard">
-						<FaCopy
-							onClick={() => copyToClipboard(file.code!)}
-							size={16}
-						/>
+					<button
+						type="button"
+						title="Copy code to clipboard"
+						onClick={() => copyToClipboard(file.code!)}
+					>
+						<FaCopy size={16} />
 					</button>
 				</div>
 				<div className="flex sp ml-2 bg-stone-800 text-white rounded z-10 pl-2 pr-2 hover:bg-stone-500 hover:cursor-pointer">
-					<button type="button" title="Merge into file">
-						<GoFileSymlinkFile
-							onClick={() => mergeIntoFile()}
-							size={16}
-						/>
+					<button
+						type="button"
+						title="Merge into file"
+						onClick={() => mergeIntoFile()}
+					>
+						<GoFileSymlinkFile size={16} />
 					</button>
 				</div>
 			</div>

@@ -7,7 +7,13 @@ import {
 } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { type SgNode, js } from "@ast-grep/napi";
-import { type CodeGraph, type CodeGraphNode, createCodeNode } from "./graph";
+import {
+	type CodeGraph,
+	CodeGraphEdgeMap,
+	type CodeGraphNode,
+	createCodeNode,
+	SkeletonizedCodeGraphNode,
+} from "./graph";
 import { filterSystemLibraries, getTextDocumentFromUri } from "./utils";
 import { SymbolRetriever } from "../retriever";
 import { pathToFileURL } from "url";
@@ -35,7 +41,6 @@ export class CodeParser {
 		const extractedCodeNodes = await this.extractExternalCodeNodes(
 			textDocument,
 			symbol.selectionRange,
-			symbol.range,
 			referencedSymbols
 		);
 
@@ -48,7 +53,9 @@ export class CodeParser {
 	async processChildSymbols(
 		textDocument: TextDocument,
 		parentCodeNode: CodeGraphNode,
-		parentSymbol: DocumentSymbol
+		parentSymbol: DocumentSymbol,
+		importEdges: CodeGraphEdgeMap,
+		exportEdges: CodeGraphEdgeMap
 	) {
 		if (!parentSymbol.children) {
 			return;
@@ -64,15 +71,35 @@ export class CodeParser {
 
 			childNode.parentNodeId = parentCodeNode.id;
 			this.codeGraph.addNode(childNode);
-			this.codeGraph.addImportEdge(parentCodeNode.id, childNode.id);
-			this.codeGraph.addExportEdge(childNode.id, parentCodeNode.id);
 
 			for (const extractedCodeNode of extractedCodeNodes) {
 				this.codeGraph.addNode(extractedCodeNode);
-				this.codeGraph.addImportEdge(
-					childNode.id,
-					extractedCodeNode.id
-				);
+
+				if (childNode.id !== extractedCodeNode.id) {
+					if (importEdges.has(childNode.id)) {
+						importEdges
+							.get(childNode.id)
+							?.add(extractedCodeNode.id);
+					} else {
+						importEdges.set(
+							childNode.id,
+							new Set<string>().add(extractedCodeNode.id)
+						);
+					}
+				}
+
+				if (extractedCodeNode.id !== childNode.id) {
+					if (exportEdges.has(extractedCodeNode.id)) {
+						exportEdges
+							.get(extractedCodeNode.id)
+							?.add(childNode.id);
+					} else {
+						exportEdges.set(
+							extractedCodeNode.id,
+							new Set<string>().add(childNode.id)
+						);
+					}
+				}
 			}
 		}
 	}
@@ -81,11 +108,12 @@ export class CodeParser {
 	mergeCodeNodeSummariesIntoParent(
 		parentNodeLocation: Location,
 		parentCodeBlock: string,
-		relatedNodeEdgeIds: string[]
+		relatedNodeEdgeIds: string[],
+		skeletonNodes: SkeletonizedCodeGraphNode[]
 	) {
 		let codeBlock = parentCodeBlock;
 		for (const childNodeId of relatedNodeEdgeIds) {
-			const childNode = this.codeGraph.getSkeletonNode(childNodeId);
+			const childNode = skeletonNodes.find((n) => n.id === childNodeId);
 
 			if (!childNode) {
 				continue;
@@ -122,7 +150,6 @@ export class CodeParser {
 	private async extractExternalCodeNodes(
 		textDocument: TextDocument,
 		symbolDefRange: Range,
-		symbolRange: Range,
 		referencedSymbols: SgNode[]
 	): Promise<CodeGraphNode[]> {
 		const matchedSymbols: Map<string, CodeGraphNode> = new Map();

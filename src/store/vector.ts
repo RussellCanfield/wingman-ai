@@ -69,6 +69,7 @@ export class Store {
 			) as {
 				importEdges: SerializeMap;
 				exportEdges: SerializeMap;
+				symbolTable: [string, string[]][];
 			};
 
 			const nodes: CodeGraphNodeMap = new Map();
@@ -117,9 +118,21 @@ export class Store {
 				])
 			);
 
+			const symbolTable = new Map(
+				edgeDetails.symbolTable.map(([key, value]) => [
+					key,
+					new Set(value),
+				])
+			);
+
 			return {
 				store: this.index,
-				codeGraph: new CodeGraph(nodes, exportEdges, importEdges),
+				codeGraph: new CodeGraph(
+					nodes,
+					exportEdges,
+					importEdges,
+					symbolTable
+				),
 			};
 		} catch (e) {
 			console.error("Error loading edges", e);
@@ -176,10 +189,15 @@ export class Store {
 	save = async (
 		documents: Document[],
 		importEdges: SerializeMap,
-		exportEdges: SerializeMap
+		exportEdges: SerializeMap,
+		symbolTable: Map<string, Set<string>>
 	) => {
-		const filePaths = documents.map((doc) => doc.metadata.filePath);
-		const relatedDocs = await this.findDocumentsByPath(filePaths);
+		const filePaths = new Set<string>(
+			documents.map((doc) => doc.metadata.filePath)
+		);
+		const relatedDocs = await this.findDocumentsByPath(
+			Array.from(filePaths.values())
+		);
 		await this.deleteDocuments(relatedDocs.map((doc) => doc.id!));
 
 		for (const doc of documents) {
@@ -198,6 +216,10 @@ export class Store {
 			{
 				importEdges,
 				exportEdges,
+				symbolTable: Array.from(symbolTable.entries()).map((e) => [
+					e[0],
+					Array.from(e[1]),
+				]),
 			},
 			null,
 			2

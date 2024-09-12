@@ -2,6 +2,7 @@ import { fileURLToPath } from "url";
 import type { Document } from "@langchain/core/documents";
 import type {
 	CodeGraph,
+	CodeGraphEdgeMap,
 	CodeGraphNode,
 	SkeletonizedCodeGraphNode,
 } from "./graph";
@@ -19,8 +20,10 @@ import {
 	Range,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { SerializeMap } from "../../store/vector";
+import { SerializeMap, Store } from "../../store/vector";
 import { createCodeNode } from "./graph";
+import path from "node:path";
+import { SymbolRetriever } from "../retriever";
 
 export type IndexerResult = {
 	codeDocs: Document[];
@@ -30,20 +33,107 @@ export type IndexerResult = {
 
 export class Indexer {
 	constructor(
-		private readonly directory: string,
+		private readonly workspace: string,
 		private readonly codeParser: CodeParser,
 		private readonly codeGraph: CodeGraph,
-		private readonly generator: Generator
+		private readonly generator: Generator,
+		private readonly symbolRetriever: SymbolRetriever,
+		private readonly vectorStore: Store
 	) {}
 
-	addDocumentToCodeGraph = async (
+	processDocumentQueue = async (documentUri: string) => {
+		try {
+			if (!this.workspace || !documentUri) {
+				return;
+			}
+
+			console.log("Adding document to graph: " + documentUri);
+
+			const symbols = await this.symbolRetriever?.getSymbols(documentUri);
+
+			const { importEdges, exportEdges, nodes } =
+				(await this.createNodesFromDocument(
+					documentUri,
+					symbols || []
+				)) || {
+					importEdges: new Map() as CodeGraphEdgeMap,
+					exportEdges: new Map() as CodeGraphEdgeMap,
+					nodes: new Map() as Map<string, CodeGraphNode>,
+				};
+
+			if (nodes.size === 0) {
+				return;
+			}
+
+			const fileToNodeIdsMap = Array.from(nodes.entries()).reduce(
+				(acc, [id, node]) => {
+					const relativePath = path.relative(
+						this.workspace,
+						fileURLToPath(node.location.uri)
+					);
+
+					if (!acc.has(relativePath)) {
+						acc.set(relativePath, new Set<string>());
+					}
+
+					acc.get(relativePath)!.add(
+						path.relative(this.workspace, fileURLToPath(node.id))
+					);
+
+					return acc;
+				},
+				new Map<string, Set<string>>()
+			);
+
+			for (const [file, nodeIds] of fileToNodeIdsMap) {
+				this.codeGraph?.addOrUpdateFileInSymbolTable(file, nodeIds);
+			}
+
+			this.codeGraph?.mergeImportEdges(importEdges);
+			this.codeGraph?.mergeExportEdges(exportEdges);
+
+			const skeletonNodes = await this.skeletonizeCodeNodes(
+				Array.from(nodes.values())
+			);
+
+			if (skeletonNodes?.length) {
+				const indexerResult = await this.embedCodeGraph(skeletonNodes);
+
+				if (!indexerResult) {
+					return;
+				}
+
+				const { codeDocs, relativeImports, relativeExports } =
+					indexerResult;
+				await this.vectorStore?.save(
+					codeDocs,
+					relativeImports,
+					relativeExports,
+					this.codeGraph?.getSymbolTable() || new Map()
+				);
+
+				console.log("Graph saved: " + codeDocs.length);
+			}
+		} catch (error) {
+			if (error instanceof Error) {
+				console.error(
+					`Error processing document queue for ${documentUri}: ${error.message}`
+				);
+			}
+		}
+	};
+
+	createNodesFromDocument = async (
 		fileUri: string,
 		symbols: DocumentSymbol[]
-	): Promise<string[]> => {
-		let nodeIds: string[] = [];
+	) => {
+		const importEdges: CodeGraphEdgeMap = new Map();
+		const exportEdges: CodeGraphEdgeMap = new Map();
+		const nodes: Map<string, CodeGraphNode> = new Map();
+
 		const textDocument = await getTextDocumentFromUri(fileUri);
 		if (!textDocument) {
-			return nodeIds;
+			return { nodes, importEdges, exportEdges };
 		}
 
 		if (symbols.length === 0) {
@@ -63,17 +153,15 @@ export class Indexer {
 				)
 			);
 
-			this.codeGraph.addNode(node);
-			nodeIds.push(node.id);
-			return nodeIds;
+			nodes.set(node.id, node);
+			return { nodes, importEdges, exportEdges };
 		}
 
 		for (const symbol of symbols) {
 			const { node, extractedCodeNodes } =
 				await this.codeParser.processSymbol(textDocument, symbol);
 
-			this.codeGraph.addNode(node);
-			nodeIds.push(node.id);
+			nodes.set(node.id, node);
 
 			for (const extractedCodeNode of extractedCodeNodes) {
 				const externalFileUri = convertIdToFileUri(
@@ -83,28 +171,41 @@ export class Indexer {
 				);
 
 				if (externalFileUri !== fileUri) {
-					await this.addDocumentToCodeGraph(
+					await this.createNodesFromDocument(
 						externalFileUri,
 						await this.codeParser.getDocumentSymbols(
 							externalFileUri
 						)
 					);
 				}
-				this.codeGraph.addNode(extractedCodeNode);
-				this.codeGraph.addImportEdge(
-					fileURLToPath(node.id).replace(this.directory, ""),
-					extractedCodeNode.id
-				);
+
+				nodes.set(extractedCodeNode.id, extractedCodeNode);
+				if (node.id !== extractedCodeNode.id) {
+					if (importEdges.has(node.id)) {
+						importEdges.get(node.id)?.add(extractedCodeNode.id);
+					} else {
+						importEdges.set(
+							node.id,
+							new Set<string>().add(extractedCodeNode.id)
+						);
+					}
+				}
 			}
 
 			await this.codeParser.processChildSymbols(
 				textDocument,
 				node,
-				symbol
+				symbol,
+				importEdges,
+				exportEdges
 			);
 		}
 
-		return nodeIds;
+		return {
+			nodes,
+			importEdges,
+			exportEdges,
+		};
 	};
 
 	async skeletonizeCodeNodes(nodes: CodeGraphNode[]) {
@@ -135,7 +236,8 @@ export class Indexer {
 			const skeletonNode = await this.skeletonizeNode(
 				node,
 				childNodes,
-				textDocumentCache
+				textDocumentCache,
+				skeletonNodes
 			);
 			if (skeletonNode) {
 				skeletonNodes.push(skeletonNode);
@@ -152,7 +254,8 @@ export class Indexer {
 	private async skeletonizeNode(
 		node: CodeGraphNode,
 		childNodes: CodeGraphNode[] = [],
-		textDocumentCache: Map<string, TextDocument>
+		textDocumentCache: Map<string, TextDocument>,
+		skeletonNodes: SkeletonizedCodeGraphNode[] = []
 	) {
 		const relatedNodeEdges =
 			this.codeGraph.getImportEdge(node.id) || new Set<string>();
@@ -178,7 +281,8 @@ export class Indexer {
 			nodeCodeBlock = this.codeParser.mergeCodeNodeSummariesIntoParent(
 				node.location,
 				nodeCodeBlock,
-				childNodes.map((n) => n.id)
+				childNodes.map((n) => n.id),
+				skeletonNodes
 			);
 		}
 
@@ -193,8 +297,6 @@ export class Indexer {
 			textDocumentCache,
 			relatedNodes
 		);
-
-		this.codeGraph.addSkeletonNode(skeletonNode);
 
 		return skeletonNode;
 	}
@@ -212,7 +314,7 @@ export class Indexer {
 				skeletonNode.id,
 				skeletonNode.location.range.start.line.toString(),
 				skeletonNode.location.range.start.character.toString(),
-				this.directory
+				this.workspace
 			);
 			const startRange = `${skeletonNode.location.range.start.line}-${skeletonNode.location.range.start.character}`;
 			const document: Document = {
@@ -226,7 +328,7 @@ export class Indexer {
 					startRange,
 					endRange: `${skeletonNode.location.range.end.line}-${skeletonNode.location.range.end.character}`,
 					relatedNodes: relatedNodes.map((nodeId) =>
-						fileURLToPath(nodeId).replace(this.directory, "")
+						path.relative(this.workspace, fileURLToPath(nodeId))
 					),
 					parentNodeId: skeletonNode.parentNodeId,
 				},
@@ -236,7 +338,7 @@ export class Indexer {
 
 		const convertNodeId = (id: string) => {
 			if (id.startsWith("file://")) {
-				return fileURLToPath(id).replace(this.directory, "");
+				return path.relative(this.workspace, fileURLToPath(id));
 			}
 			return id;
 		};

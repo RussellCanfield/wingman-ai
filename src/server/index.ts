@@ -18,7 +18,7 @@ import {
 import { URI } from "vscode-uri";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { Store } from "../store/vector";
-import { CodeGraph, CodeGraphNode } from "./files/graph";
+import { CodeGraph } from "./files/graph";
 import { CodeParser } from "./files/parser";
 import { Indexer } from "./files/indexer";
 import { Generator } from "./files/generator";
@@ -97,73 +97,10 @@ export class LSPServer {
 		// Create a connection for the server, using Node's IPC as a transport.
 		// Also include all preview / proposed LSP features.
 		this.connection = createConnection(ProposedFeatures.all);
-		this.queue = new DocumentQueue(this.processDocumentQueue);
 		this.symbolRetriever = createSymbolRetriever(this.connection);
 
 		this.initialize();
 	}
-
-	processDocumentQueue = async (documentUri: string) => {
-		try {
-			if (this.workspaceFolders.length === 0 || !documentUri) {
-				return;
-			}
-
-			let nodeIds: string[] = [];
-
-			this.connection?.console.log(
-				"Adding document to graph: " + documentUri
-			);
-
-			const symbols = await this.symbolRetriever?.getSymbols(documentUri);
-			if (symbols) {
-				const indexedNodeIds =
-					await this.indexer?.addDocumentToCodeGraph(
-						documentUri,
-						symbols
-					);
-				nodeIds = nodeIds.concat(indexedNodeIds || []);
-			}
-
-			if (nodeIds.length > 0) {
-				const newOrUpdatedNodes: CodeGraphNode[] = nodeIds
-					.map((nodeId) => this.codeGraph?.getNode(nodeId))
-					.filter((node): node is CodeGraphNode => !!node);
-
-				const skeletonNodes = await this.indexer?.skeletonizeCodeNodes(
-					newOrUpdatedNodes
-				);
-
-				if (skeletonNodes?.length) {
-					const indexerResult = await this.indexer?.embedCodeGraph(
-						skeletonNodes
-					);
-
-					if (!indexerResult) {
-						return;
-					}
-
-					const { codeDocs, relativeImports, relativeExports } =
-						indexerResult;
-					await this.vectorStore?.save(
-						codeDocs,
-						relativeImports,
-						relativeExports
-					);
-
-					this.connection?.console.log(
-						"Graph saved: " + codeDocs.length
-					);
-				}
-			}
-		} catch (error) {
-			if (error instanceof Error) {
-				this.connection?.console.error(
-					`Error processing document queue for ${documentUri}: ${error.message}`
-				);
-			}
-		}
-	};
 
 	private postInitialize = async () => {
 		modelProvider = CreateAIProvider(
@@ -193,8 +130,12 @@ export class LSPServer {
 			workspaceFolder,
 			this.codeParser!,
 			this.codeGraph!,
-			codeGenerator
+			codeGenerator,
+			this.symbolRetriever!,
+			this.vectorStore!
 		);
+
+		this.queue = new DocumentQueue(this.indexer?.processDocumentQueue);
 
 		this.projectDetails = new ProjectDetailsHandler(
 			this.workspaceFolders[0],
