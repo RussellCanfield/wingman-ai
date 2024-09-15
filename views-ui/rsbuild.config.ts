@@ -10,6 +10,7 @@ export default defineConfig({
 			views: "./src/index.tsx",
 			chat: "./src/Chat/index.tsx",
 			config: "./src/Config/index.tsx",
+			diff: "./src/Diff/index.tsx",
 		},
 	},
 	performance: {

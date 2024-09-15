@@ -1,5 +1,5 @@
 import { AppMessage, ChatMessage, CodeContext } from "@shared/types/Message";
-import { ComposerResponse } from "@shared/types/Composer";
+import { ComposerMessage, ComposerResponse } from "@shared/types/Composer";
 import { useEffect, useState } from "react";
 import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
@@ -14,7 +14,7 @@ type PhaseLabel = {
 	[key: string]: string;
 };
 const phaseDisplayLabel: PhaseLabel = {
-	"code-writer": "Writing Code",
+	"code-writer": "Reviewing",
 	replan: "Preparing Results",
 };
 
@@ -55,6 +55,10 @@ export default function Compose() {
 									message: `There were issues with the code changes, we are correcting them! Here was my review:
                   
 ${values.review.comments.join("\n")}`,
+									plan: {
+										files: [],
+										steps: [],
+									},
 								},
 							];
 						});
@@ -73,6 +77,10 @@ ${values.review.comments.join("\n")}`,
 									from: "assistant",
 									message:
 										"Sorry something went wrong and I was not able to generate any changes.",
+									plan: {
+										files: [],
+										steps: [],
+									},
 								},
 							];
 						});
@@ -100,13 +108,16 @@ ${values.review.comments.join("\n")}`,
 		const tempMessage = structuredClone(currentMessage.toString());
 		const tempContext = structuredClone(currentContext);
 		setComposerMessages((messages) => {
-			const newHistory: ChatMessage[] = [
+			const newHistory: ComposerMessage[] = [
 				...messages,
 				{
 					from: "assistant",
 					message: tempMessage,
 					loading: false,
-					context: tempContext,
+					plan: {
+						files: [],
+						steps: [],
+					},
 				},
 			];
 
@@ -147,6 +158,10 @@ ${values.review.comments.join("\n")}`,
 			{
 				from: "user",
 				message: input,
+				plan: {
+					files: [],
+					steps: [],
+				},
 			},
 		]);
 
@@ -160,7 +175,9 @@ ${values.review.comments.join("\n")}`,
 				{loading && (
 					<ChatEntry
 						from="assistant"
-						message={phaseDisplayLabel[currentPhase] || "Analyzing"}
+						message={
+							phaseDisplayLabel[currentPhase] || "Writing Code"
+						}
 						loading={loading}
 						plan={{
 							steps: [],

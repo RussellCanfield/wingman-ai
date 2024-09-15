@@ -51,7 +51,9 @@ Evaluation Criteria:
 
 Response Guidelines:
 - If the objective is met satisfactorily:
-  Use the 'response' function to inform the user of successful completion.
+  Use the 'response' function to inform the user of successful completion. 
+  Provide a short and concise summary of what was done.
+  Do not detail whats been done to every file, just provide a brief overview.
 
 - If improvements or corrections are needed:
   Provide a concise list of steps that still need to be completed. Focus only on essential tasks directly related to meeting the objective.

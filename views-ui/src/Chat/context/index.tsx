@@ -1,8 +1,4 @@
-import {
-	AppMessage,
-	ChatMessage,
-	ComposerMessage,
-} from "@shared/types/Message";
+import { AppMessage, ChatMessage } from "@shared/types/Message";
 import React, {
 	createContext,
 	PropsWithChildren,
@@ -13,6 +9,7 @@ import React, {
 } from "react";
 import { localMemState } from "../utilities/localMemState";
 import { vscode } from "../utilities/vscode";
+import { ComposerMessage } from "@shared/types/Composer";
 
 interface AppContextType {
 	messages: ChatMessage[];
@@ -94,6 +91,8 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 		const setMessages = (messages: ChatMessage[]) => {
 			const chatMessages =
 				messages.length === 0 ? [] : messages.concat(messages);
+
+			//@ts-expect-error
 			currentAppState[activeWorkspace] = chatMessages;
 			vscode.setState(currentAppState);
 		};

@@ -15,8 +15,10 @@ import { CreateAIProvider } from "./service/utils/models.js";
 import { loggingProvider } from "./providers/loggingProvider.js";
 import { eventEmitter } from "./events/eventEmitter.js";
 import { GetAllSettings, GetSettings } from "./service/settings.js";
+import { DiffViewProvider } from "./providers/diffViewProvider.js";
 
 let statusBarProvider: ActivityStatusBar;
+let diffViewProvider: DiffViewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
 	const {
@@ -35,6 +37,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		embeddingSettings,
 		interactionSettings!
 	);
+
+	diffViewProvider = new DiffViewProvider(context);
 
 	let modelProvider;
 	try {
@@ -95,7 +99,8 @@ export async function activate(context: vscode.ExtensionContext) {
 				lspClient,
 				modelProvider!,
 				context,
-				interactionSettings!
+				interactionSettings!,
+				diffViewProvider
 			),
 			{
 				webviewOptions: {
@@ -143,4 +148,5 @@ export function deactivate() {
 	}
 
 	lspClient?.deactivate();
+	diffViewProvider?.dispose();
 }

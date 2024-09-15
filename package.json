@@ -383,15 +383,15 @@
 		"commands": [
 			{
 				"command": "wingmanai.gendocument",
-				"title": "Gen Docs"
+				"title": "Wingman: Gen Docs"
 			},
 			{
 				"command": "wingmanai.refactorcode",
-				"title": "Refactor Code"
+				"title": "Wingman: Refactor Code"
 			},
 			{
 				"command": "wingmanai.triggercodecomplete",
-				"title": "Code Complete"
+				"title": "Wingman: Code Complete"
 			}
 		],
 		"keybindings": [
@@ -403,7 +403,7 @@
 	},
 	"scripts": {
 		"install:all": "npm install && cd webview-ui && npm install",
-		"start:views": "cd webview-ui && npm run start",
+		"start:views": "cd views-ui && npm run dev",
 		"build": "tsc -b",
 		"build:views": "cd views-ui && npm run build",
 		"build:shared": "cd shared && npm run build",

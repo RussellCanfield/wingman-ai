@@ -35,7 +35,10 @@ export default function Toolbar({ activeView, onSetActiveView }: ToolbarProps) {
 
 	return (
 		<div className="flex justify-between items-center gap-4">
-			<h2 className="text-lg font-bold flex-auto">
+			<h2
+				className="text-lg font-bold flex-auto"
+				onClick={() => vscode.postMessage({ command: "diff-view" })}
+			>
 				Wingman - {viewName[activeView]}
 			</h2>
 			<button

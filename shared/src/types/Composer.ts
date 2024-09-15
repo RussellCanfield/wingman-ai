@@ -1,5 +1,12 @@
 import { FileMetadata } from "./Message";
 
+export type DiffViewCommand = {
+	file: string;
+	diff: string;
+	theme?: Number;
+	original?: string;
+};
+
 export type PlanStep = {
 	description: string;
 	command?: string;

@@ -13,6 +13,8 @@ import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
 import { Loader } from "../../Loader";
 import { ComposerMessage } from "@shared/types/Composer";
+import { MdOutlineDifference } from "react-icons/md";
+import { LuFileCheck } from "react-icons/lu";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -113,6 +115,18 @@ const ChatArtifact = ({
 		}
 	};
 
+	const showDiffview = () => {
+		if (file) {
+			vscode.postMessage({
+				command: "diff-view",
+				value: {
+					file: file.file,
+					diff: file.code,
+				},
+			});
+		}
+	};
+
 	const copyToClipboard = (code: string) => {
 		vscode.postMessage({
 			command: "clipboard",
@@ -120,27 +134,45 @@ const ChatArtifact = ({
 		});
 	};
 
+	const truncatePath = (path: string, maxLength: number = 50) => {
+		if (path.length <= maxLength) return path;
+		return "..." + path.slice(-maxLength);
+	};
+
 	return (
 		<div className="border border-stone-800 rounded-lg overflow-hidden shadow-lg mb-4 mt-4">
-			<div className="bg-stone-800 text-white flex flex-row">
-				<h4 className="m-0 flex-1 p-2">File: {file.file}</h4>
-				<div className="flex sp bg-stone-800 text-white rounded z-10 pl-2 pr-2 hover:bg-stone-500 hover:cursor-pointer">
-					<button
-						type="button"
-						title="Copy code to clipboard"
-						onClick={() => copyToClipboard(file.code!)}
-					>
-						<FaCopy size={16} />
-					</button>
-				</div>
-				<div className="flex sp ml-2 bg-stone-800 text-white rounded z-10 pl-2 pr-2 hover:bg-stone-500 hover:cursor-pointer">
-					<button
-						type="button"
-						title="Merge into file"
-						onClick={() => mergeIntoFile()}
-					>
-						<GoFileSymlinkFile size={16} />
-					</button>
+			<div className="bg-stone-800 text-white flex flex-wrap items-center">
+				<h4 className="m-0 flex-grow p-2 text-wrap break-all">
+					{truncatePath(file.file)}
+				</h4>
+				<div className="flex">
+					<div className="flex items-center bg-stone-800 text-white rounded z-10 p-2 hover:bg-stone-500 hover:cursor-pointer">
+						<button
+							type="button"
+							title="Copy code to clipboard"
+							onClick={() => copyToClipboard(file.code!)}
+						>
+							<FaCopy size={16} />
+						</button>
+					</div>
+					<div className="flex items-center bg-stone-800 text-white rounded z-10 p-2 hover:bg-stone-500 hover:cursor-pointer">
+						<button
+							type="button"
+							title="Show diff"
+							onClick={() => showDiffview()}
+						>
+							<MdOutlineDifference size={16} />
+						</button>
+					</div>
+					<div className="flex items-center bg-stone-800 text-white rounded z-10 p-2 hover:bg-stone-500 hover:cursor-pointer">
+						<button
+							type="button"
+							title="Accept into file"
+							onClick={() => mergeIntoFile()}
+						>
+							<LuFileCheck size={16} />
+						</button>
+					</div>
 				</div>
 			</div>
 			<div className="p-2 bg-editor-bg">
@@ -156,7 +188,6 @@ const ChatArtifact = ({
 						</ul>
 					</div>
 				)}
-				<div>{renderMarkdown(file?.code || "", theme, file)}</div>
 			</div>
 		</div>
 	);
@@ -202,11 +233,14 @@ const ChatEntry = ({
 			</span>
 			{message !== "" && renderMarkdown(message, codeTheme)}
 			{plan?.steps.length > 0 && (
-				<div className="p-2">
+				<div>
 					<div className="flex flex-col bg-editor-bg mt-4 rounded-lg">
 						<h3 className="m-0 text-lg">Steps:</h3>
 						{plan.steps?.map((step, index) => (
-							<div className="border border-stone-800 rounded-lg overflow-hidden shadow-lg mb-4 mt-4">
+							<div
+								className="border border-stone-800 rounded-lg overflow-hidden shadow-lg mb-4 mt-4"
+								key={index}
+							>
 								<div className="bg-stone-800 text-white flex flex-row">
 									<p className="flex-1 p-2">
 										{step.description}

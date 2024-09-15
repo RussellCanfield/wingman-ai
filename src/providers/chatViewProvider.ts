@@ -13,9 +13,18 @@ import {
 	InteractionSettings,
 } from "../../shared/src/types/Settings";
 import { loggingProvider } from "./loggingProvider";
-import { extractCodeBlock, getSymbolsFromOpenFiles } from "./utilities";
+import {
+	extractCodeBlock,
+	getNonce,
+	getSymbolsFromOpenFiles,
+} from "./utilities";
 import { LSPClient } from "../client";
-import { ComposerRequest, FileSearchResult } from "@shared/types/Composer";
+import {
+	ComposerRequest,
+	DiffViewCommand,
+	FileSearchResult,
+} from "@shared/types/Composer";
+import { DiffViewProvider } from "./diffViewProvider";
 
 let abortController = new AbortController();
 
@@ -28,7 +37,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _lspClient: LSPClient,
 		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
-		private readonly _interactionSettings: InteractionSettings
+		private readonly _interactionSettings: InteractionSettings,
+		private readonly _diffViewProvider: DiffViewProvider
 	) {}
 
 	dispose() {
@@ -71,6 +81,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					const { command, value } = data;
 
 					switch (command) {
+						case "diff-view":
+							const { file, diff } = value as DiffViewCommand;
+							this._diffViewProvider.createDiffView({
+								file,
+								diff: extractCodeBlock(diff),
+							});
+							break;
 						case "clear-chat-history":
 							this._aiProvider.clearChatHistory();
 							await this._lspClient.clearChatHistory();
@@ -85,9 +102,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							terminal.sendText(terminalCommand);
 							break;
 						case "mergeIntoFile":
-							const artifact = value as FileMetadata;
+							const { file: artifactFile, code: markdown } =
+								value as FileMetadata;
+							let code = markdown?.startsWith("```")
+								? extractCodeBlock(markdown)
+								: markdown;
 							const relativeFilePath =
-								vscode.workspace.asRelativePath(artifact.file);
+								vscode.workspace.asRelativePath(artifactFile);
 
 							// Get the workspace folder URI
 							const workspaceFolder =
@@ -124,7 +145,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								// Replace text in the document
 								await this.replaceTextInDocument(
 									document,
-									extractCodeBlock(artifact.code!)
+									extractCodeBlock(code!)
 								);
 							} catch (error) {
 								if (
@@ -142,7 +163,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 										);
 									await this.replaceTextInDocument(
 										document,
-										extractCodeBlock(artifact.code!)
+										extractCodeBlock(code!)
 									);
 								} else {
 									throw error;
@@ -449,16 +470,6 @@ ${codeDocs.join("\n----\n")}
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
-		const codiconsUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(
-				this._context.extensionUri,
-				"node_modules",
-				"@vscode/codicons",
-				"dist",
-				"codicon.css"
-			)
-		);
-
 		const htmlUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(
 				this._context.extensionUri,
@@ -492,10 +503,7 @@ ${codeDocs.join("\n----\n")}
 			}
 		);
 
-		return addNoneAttributeToLink(updatedHtmlContent, nonce).replace(
-			/uri="CODICONS_URI"/g,
-			`href="${codiconsUri.toString()}"`
-		);
+		return addNoneAttributeToLink(updatedHtmlContent, nonce);
 	}
 
 	private log = (value: unknown) => {
@@ -535,16 +543,6 @@ function getActiveWorkspace() {
 	}
 
 	return vscode.workspace.workspaceFolders?.[0].name ?? defaultWorkspace;
-}
-
-function getNonce() {
-	let text = "";
-	const possible =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
 }
 
 function getChatContext(contextWindow: number): CodeContextDetails | undefined {
