@@ -89,46 +89,64 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							const relativeFilePath =
 								vscode.workspace.asRelativePath(artifact.file);
 
-							// Check if the text document exists
-							const files = await vscode.workspace.findFiles(
+							// Get the workspace folder URI
+							const workspaceFolder =
+								vscode.workspace.workspaceFolders?.[0].uri;
+							if (!workspaceFolder) {
+								throw new Error("No workspace folder found");
+							}
+
+							// Construct the full URI of the file
+							const fileUri = vscode.Uri.joinPath(
+								workspaceFolder,
 								relativeFilePath
 							);
-							if (files.length > 0) {
-								// Open the text document if it exists
-								const document =
-									await vscode.workspace.openTextDocument(
-										files[0]
+
+							try {
+								// Check if the file exists
+								await vscode.workspace.fs.stat(fileUri);
+
+								// Check if the document is already open
+								let document =
+									vscode.workspace.textDocuments.find(
+										(doc) =>
+											doc.uri.toString() ===
+											fileUri.toString()
 									);
-								await this.replaceTextInDocument(
-									document,
-									extractCodeBlock(artifact.code!)
-								);
-							} else {
-								const workspaceFolder =
-									vscode.workspace.workspaceFolders?.[0].uri;
-								if (!workspaceFolder) {
-									throw new Error(
-										"No workspace folder found"
-									);
+								if (!document) {
+									// Open the text document if it is not already open
+									document =
+										await vscode.workspace.openTextDocument(
+											fileUri
+										);
 								}
 
-								// Create the text document if it does not exist
-								const uri = vscode.Uri.joinPath(
-									workspaceFolder,
-									relativeFilePath
-								);
-								await vscode.workspace.fs.writeFile(
-									uri,
-									new Uint8Array()
-								);
-								const document =
-									await vscode.workspace.openTextDocument(
-										uri
-									);
+								// Replace text in the document
 								await this.replaceTextInDocument(
 									document,
 									extractCodeBlock(artifact.code!)
 								);
+							} catch (error) {
+								if (
+									(error as vscode.FileSystemError).code ===
+									"FileNotFound"
+								) {
+									// Create the text document if it does not exist
+									await vscode.workspace.fs.writeFile(
+										fileUri,
+										new Uint8Array()
+									);
+									const document =
+										await vscode.workspace.openTextDocument(
+											fileUri
+										);
+									await this.replaceTextInDocument(
+										document,
+										extractCodeBlock(artifact.code!)
+									);
+								} else {
+									throw error;
+								}
 							}
 							break;
 						case "get-files":

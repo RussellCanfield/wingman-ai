@@ -13,6 +13,9 @@ export interface Plan {
 export interface PlanExecuteState {
 	plan?: Plan;
 	response?: string;
+	review: {
+		comments: string[];
+	};
 }
 
 export type ComposerResponse = {

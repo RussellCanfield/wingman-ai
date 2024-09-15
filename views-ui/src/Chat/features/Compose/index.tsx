@@ -46,6 +46,22 @@ export default function Compose() {
 				setCurrentPhase(node);
 
 				if (node === "replan") {
+					if (values.review?.comments.length > 0) {
+						setComposerMessages((currentMessages) => {
+							return [
+								...currentMessages,
+								{
+									from: "assistant",
+									message: `There were issues with the code changes, we are correcting them! Here was my review:
+                  
+${values.review.comments.join("\n")}`,
+								},
+							];
+						});
+
+						return;
+					}
+
 					if (
 						values.plan?.files?.length === 0 &&
 						values.plan?.steps?.length === 0

@@ -7,7 +7,7 @@ import { CodeWriter } from "./tools/code-writer.js";
 import { Replanner } from "./tools/replan.js";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../store/vector.js";
-import { Plan, PlanExecuteState } from "./types/index.js";
+import { Plan, PlanExecuteState, Review } from "./types/index.js";
 import { getTextDocumentFromPath } from "../server/files/utils.js";
 import { FileMetadata } from "@shared/types/Message.js";
 import { CodePlanner } from "./tools/planner.js";
@@ -95,6 +95,17 @@ export async function* generateCommand(
 		plan: {
 			value: (x?: Plan, y?: Plan) => y ?? x ?? undefined,
 		},
+		review: {
+			value: (x?: Review, y?: Review) => {
+				if (x && y) {
+					return {
+						comments: [...x.comments, ...y.comments],
+					};
+				}
+				return y ?? x ?? undefined;
+			},
+			default: () => undefined,
+		},
 		response: {
 			value: (x?: string, y?: string) => y ?? x,
 			default: () => undefined,
@@ -102,7 +113,9 @@ export async function* generateCommand(
 	};
 
 	function shouldEnd(state: PlanExecuteState) {
-		return state.response ? "true" : "false";
+		return !state.review || state.review.comments.length === 0
+			? "true"
+			: "false";
 	}
 
 	let workflow = new StateGraph({
@@ -142,7 +155,14 @@ export async function* generateCommand(
 
 		inputs.plan = {
 			steps: [],
-			files,
+			files: [
+				...files,
+				...((
+					checkpoint?.channel_values["plan"] as
+						| PlanExecuteState["plan"]
+						| undefined
+				)?.files ?? []),
+			],
 		};
 	} else {
 		//@ts-expect-error

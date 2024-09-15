@@ -11,10 +11,15 @@ export interface Plan {
 	files?: FileMetadata[];
 }
 
+export interface Review {
+	comments: string[];
+}
+
 export interface PlanExecuteState {
 	messages: ChatMessage[];
 	followUpInstructions: ChatMessage[];
 	plannerQuestions?: string[];
 	plan?: Plan;
+	review?: Review;
 	response?: string;
 }

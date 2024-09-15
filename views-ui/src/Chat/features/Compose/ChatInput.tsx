@@ -71,6 +71,11 @@ const ChatInput = ({
 		chatInputBox.current?.focus();
 	}, []);
 
+	const chipMap = new Set(chips.map((chip) => chip.path));
+	const filteredDropDownItems = allDropdownItems.filter(
+		(d) => !chipMap.has(d.path)
+	);
+
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		const value = e.target.value;
 		setInputValue(value);
@@ -85,6 +90,7 @@ const ChatInput = ({
 	};
 
 	const handleDropdownSelect = (item: FileSearchResult) => {
+		console.log(item, focusedDropdownIndex);
 		if (!chips.some((chip) => chip.path === item.path)) {
 			const newChips = [...chips, item];
 			setChips(newChips);
@@ -96,6 +102,7 @@ const ChatInput = ({
 		}
 
 		setShowDropdown(false);
+		setFocusedDropdownIndex(0);
 		chatInputBox.current?.focus();
 	};
 
@@ -106,8 +113,10 @@ const ChatInput = ({
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
-			if (showDropdown && allDropdownItems.length > 0) {
-				handleDropdownSelect(allDropdownItems[focusedDropdownIndex]);
+			if (showDropdown && filteredDropDownItems.length > 0) {
+				handleDropdownSelect(
+					filteredDropDownItems[focusedDropdownIndex]
+				);
 			} else {
 				const message =
 					chips.map((chip) => `@${chip.file}`).join(" ") +
@@ -146,8 +155,6 @@ const ChatInput = ({
 		});
 	};
 
-	const chipMap = new Set(chips.map((chip) => chip.path));
-
 	return (
 		<div className={`flex-basis-50 py-3 flex flex-col items-stretch`}>
 			<div className="relative flex flex-row items-center">
@@ -160,6 +167,7 @@ const ChatInput = ({
 								<span
 									key={index}
 									className={`${chipClasses} rounded-sm px-2 py-1 m-1 inline-flex items-center hover:bg-stone-500`}
+									title={chip.path}
 								>
 									{chip.file}
 									<button

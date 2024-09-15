@@ -35,7 +35,7 @@ export class OpenAI implements AIProvider {
 			apiKey: this.settings.apiKey,
 			model: this.settings.chatModel,
 			openAIApiKey: this.settings.apiKey,
-			temperature: 0.1,
+			temperature: 0,
 			maxTokens: interactionSettings.chatMaxTokens,
 		});
 	}
