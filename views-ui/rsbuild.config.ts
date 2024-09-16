@@ -37,16 +37,6 @@ export default defineConfig({
 	},
 	html: {
 		template: "./index.html",
-		tags: [
-			{
-				tag: "link",
-				attrs: {
-					rel: "stylesheet",
-					uri: "CODICONS_URI",
-					none: "CSP_NONCE_PLACEHOLDER",
-				},
-			},
-		],
 	},
 	plugins: [pluginReact()],
 });

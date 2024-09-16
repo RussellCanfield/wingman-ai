@@ -38,6 +38,7 @@ export default function DiffView() {
 
 		switch (command) {
 			case "diff-file":
+				console.log("diff", value);
 				setDiff(value as DiffViewCommand);
 				break;
 		}
@@ -75,9 +76,8 @@ export default function DiffView() {
 	};
 
 	const acceptDiff = () => {
-		console.log("accepted");
 		vscode.postMessage({
-			command: "mergeIntoFile",
+			command: "accept-file-changes",
 			value: {
 				file: diff?.file,
 				code: diff?.diff,
@@ -86,7 +86,7 @@ export default function DiffView() {
 	};
 
 	if (!diff) {
-		return null;
+		return <SkeletonLoader />;
 	}
 
 	return (
@@ -95,6 +95,7 @@ export default function DiffView() {
 				<p className="text-white font-semibold truncate">{diff.file}</p>
 				<button
 					className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
+					title="Accept changes"
 					onClick={() => acceptDiff()}
 				>
 					<FaCheckCircle className="mr-2" />
@@ -116,3 +117,21 @@ export default function DiffView() {
 		</div>
 	);
 }
+
+const SkeletonLoader = () => {
+	return (
+		<div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg animate-pulse">
+			<div className="bg-gray-800 p-4 flex justify-between items-center">
+				<div className="h-6 bg-gray-700 rounded w-3/4"></div>
+				<div className="h-10 bg-gray-700 rounded w-20"></div>
+			</div>
+			<div className="p-4">
+				<div className="h-4 bg-gray-700 rounded mb-2"></div>
+				<div className="h-4 bg-gray-700 rounded mb-2"></div>
+				<div className="h-4 bg-gray-700 rounded mb-2"></div>
+				<div className="h-4 bg-gray-700 rounded mb-2"></div>
+				<div className="h-4 bg-gray-700 rounded mb-2"></div>
+			</div>
+		</div>
+	);
+};

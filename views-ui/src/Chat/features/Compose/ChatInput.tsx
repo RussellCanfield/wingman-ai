@@ -90,7 +90,6 @@ const ChatInput = ({
 	};
 
 	const handleDropdownSelect = (item: FileSearchResult) => {
-		console.log(item, focusedDropdownIndex);
 		if (!chips.some((chip) => chip.path === item.path)) {
 			const newChips = [...chips, item];
 			setChips(newChips);

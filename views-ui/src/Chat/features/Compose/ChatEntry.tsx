@@ -146,28 +146,31 @@ const ChatArtifact = ({
 					{truncatePath(file.file)}
 				</h4>
 				<div className="flex">
-					<div className="flex items-center bg-stone-800 text-white rounded z-10 p-2 hover:bg-stone-500 hover:cursor-pointer">
+					<div className="flex items-center bg-stone-800 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
 						<button
 							type="button"
 							title="Copy code to clipboard"
+							className="p-4"
 							onClick={() => copyToClipboard(file.code!)}
 						>
 							<FaCopy size={16} />
 						</button>
 					</div>
-					<div className="flex items-center bg-stone-800 text-white rounded z-10 p-2 hover:bg-stone-500 hover:cursor-pointer">
+					<div className="flex items-center bg-stone-800 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
 						<button
 							type="button"
 							title="Show diff"
+							className="p-4"
 							onClick={() => showDiffview()}
 						>
 							<MdOutlineDifference size={16} />
 						</button>
 					</div>
-					<div className="flex items-center bg-stone-800 text-white rounded z-10 p-2 hover:bg-stone-500 hover:cursor-pointer">
+					<div className="flex items-center bg-stone-800 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
 						<button
 							type="button"
-							title="Accept into file"
+							title="Accept changes"
+							className="p-4"
 							onClick={() => mergeIntoFile()}
 						>
 							<LuFileCheck size={16} />
@@ -229,9 +232,13 @@ const ChatEntry = ({
 				<h3 className="text-xl">
 					{from === "user" ? "Me" : "Wingman"}
 				</h3>
-				{loading && <Loader />}
 			</span>
 			{message !== "" && renderMarkdown(message, codeTheme)}
+			{loading && (
+				<div>
+					<SkeletonLoader />
+				</div>
+			)}
 			{plan?.steps.length > 0 && (
 				<div>
 					<div className="flex flex-col bg-editor-bg mt-4 rounded-lg">
@@ -278,6 +285,14 @@ const ChatEntry = ({
 			{plan?.files?.map((file, index) => (
 				<ChatArtifact key={index} file={file} theme={codeTheme} />
 			))}
+		</li>
+	);
+};
+
+const SkeletonLoader = () => {
+	return (
+		<li className="pt-2 pb-2 tracking-wide leading-relaxed text-base animate-pulse">
+			<div className="h-10 bg-gray-700 rounded w-full"></div>
 		</li>
 	);
 };

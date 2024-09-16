@@ -183,3 +183,38 @@ export function getNonce() {
 	}
 	return text;
 }
+
+export async function replaceTextInDocument(
+	document: vscode.TextDocument,
+	newText: string
+) {
+	// Show the document in an editor
+	const editor = await vscode.window.showTextDocument(document);
+
+	// Create a range for the entire document
+	const startPosition = new vscode.Position(0, 0);
+	const endPosition = new vscode.Position(
+		document.lineCount - 1,
+		document.lineAt(document.lineCount - 1).text.length
+	);
+	const range = new vscode.Range(startPosition, endPosition);
+
+	// Apply the edit to replace the entire content
+	await editor.edit((editBuilder) => {
+		editBuilder.replace(range, newText);
+	});
+}
+
+export function getActiveWorkspace() {
+	const defaultWorkspace = "default";
+
+	const activeEditor = vscode.window.activeTextEditor;
+	if (activeEditor) {
+		return (
+			vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)
+				?.name ?? defaultWorkspace
+		);
+	}
+
+	return vscode.workspace.workspaceFolders?.[0].name ?? defaultWorkspace;
+}

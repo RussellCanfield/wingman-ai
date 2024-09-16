@@ -61,7 +61,7 @@ const writerPrompt = ChatPromptTemplate.fromTemplate(
 	`You are an expert software engineer tasked with implementing project enhancements based on a user's objective. Your role is to provide a comprehensive solution that includes both manual steps and code changes. Approach this task methodically, following these guidelines:
 
 Output Structure:
-1. Steps: A clear, concise guide for manual actions the user must take.
+1. Steps: A clear, concise guide for manual actions the user must take, not covered by modifications done to files.
 2. Files: Modified or created code files necessary to achieve the objective.
 
 General Instructions:

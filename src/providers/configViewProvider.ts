@@ -183,16 +183,6 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	};
 
 	private _getHtml = (webview: vscode.Webview) => {
-		const codiconsUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(
-				this._extensionUri,
-				"node_modules",
-				"@vscode/codicons",
-				"dist",
-				"codicon.css"
-			)
-		);
-
 		const htmlUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(
 				this._extensionUri,
@@ -226,10 +216,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			}
 		);
 
-		return addNoneAttributeToLink(updatedHtmlContent, nonce).replace(
-			/uri="CODICONS_URI"/g,
-			`href="${codiconsUri.toString()}"`
-		);
+		return addNoneAttributeToLink(updatedHtmlContent, nonce);
 	};
 
 	private getNonce = () => {

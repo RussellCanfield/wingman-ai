@@ -14,9 +14,12 @@ import {
 } from "../../shared/src/types/Settings";
 import { loggingProvider } from "./loggingProvider";
 import {
+	addNoneAttributeToLink,
 	extractCodeBlock,
+	getActiveWorkspace,
 	getNonce,
 	getSymbolsFromOpenFiles,
+	replaceTextInDocument,
 } from "./utilities";
 import { LSPClient } from "../client";
 import {
@@ -53,13 +56,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	) {
 		webviewView.webview.options = {
 			enableScripts: true,
-			localResourceRoots: [
-				this._context.extensionUri,
-				vscode.Uri.joinPath(
-					this._context.extensionUri,
-					"node_modules/vscode-codicons"
-				),
-			],
 		};
 
 		webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
@@ -143,10 +139,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								}
 
 								// Replace text in the document
-								await this.replaceTextInDocument(
-									document,
-									extractCodeBlock(code!)
-								);
+								await replaceTextInDocument(document, code!);
 							} catch (error) {
 								if (
 									(error as vscode.FileSystemError).code ===
@@ -161,9 +154,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 										await vscode.workspace.openTextDocument(
 											fileUri
 										);
-									await this.replaceTextInDocument(
+									await replaceTextInDocument(
 										document,
-										extractCodeBlock(code!)
+										code!
 									);
 								} else {
 									throw error;
@@ -306,27 +299,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				}
 			)
 		);
-	}
-
-	async replaceTextInDocument(
-		document: vscode.TextDocument,
-		newText: string
-	) {
-		// Show the document in an editor
-		const editor = await vscode.window.showTextDocument(document);
-
-		// Create a range for the entire document
-		const startPosition = new vscode.Position(0, 0);
-		const endPosition = new vscode.Position(
-			document.lineCount - 1,
-			document.lineAt(document.lineCount - 1).text.length
-		);
-		const range = new vscode.Range(startPosition, endPosition);
-
-		// Apply the edit to replace the entire content
-		await editor.edit((editBuilder) => {
-			editBuilder.replace(range, newText);
-		});
 	}
 
 	private async sendContentToNewDocument(content: string) {
@@ -509,40 +481,6 @@ ${codeDocs.join("\n----\n")}
 	private log = (value: unknown) => {
 		loggingProvider.logInfo(JSON.stringify(value ?? ""));
 	};
-}
-
-function addNoneAttributeToLink(htmlString: string, noneValue: string) {
-	// Regular expression to match the link tag
-	const linkRegex =
-		/<link\s+(?:[^>]*?\s+)?href=["']https:\/\/file%2B\.vscode-resource\.vscode-cdn\.net\/[^"']*\.css["'][^>]*>/i;
-
-	// Function to add the none attribute
-	const addNoneAttribute = (match: string) => {
-		if (match.includes("nonce=")) {
-			// If none attribute already exists, return the original match
-			return match;
-		} else {
-			// Add none attribute before the closing angle bracket
-			return match.replace(/>$/, ` nonce="${noneValue}">`);
-		}
-	};
-
-	// Replace the matched link tag with the modified version
-	return htmlString.replace(linkRegex, addNoneAttribute);
-}
-
-function getActiveWorkspace() {
-	const defaultWorkspace = "default";
-
-	const activeEditor = vscode.window.activeTextEditor;
-	if (activeEditor) {
-		return (
-			vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)
-				?.name ?? defaultWorkspace
-		);
-	}
-
-	return vscode.workspace.workspaceFolders?.[0].name ?? defaultWorkspace;
 }
 
 function getChatContext(contextWindow: number): CodeContextDetails | undefined {

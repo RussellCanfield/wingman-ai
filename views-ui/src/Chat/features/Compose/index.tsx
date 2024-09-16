@@ -178,7 +178,7 @@ ${values.review.comments.join("\n")}`,
 						message={
 							phaseDisplayLabel[currentPhase] || "Writing Code"
 						}
-						loading={loading}
+						loading={true}
 						plan={{
 							steps: [],
 							files: [],
