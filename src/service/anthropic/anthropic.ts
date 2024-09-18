@@ -22,6 +22,7 @@ export class Anthropic implements AIProvider {
 	codeModel: AnthropicModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
 	baseModel: BaseChatModel | undefined;
+	rerankModel: BaseChatModel | undefined;
 
 	constructor(
 		settings: Settings["anthropic"],
@@ -43,10 +44,22 @@ export class Anthropic implements AIProvider {
 			temperature: 0, //Required for tool calling.
 			maxTokens: interactionSettings.chatMaxTokens,
 		});
+
+		this.rerankModel = new ChatAnthropic({
+			apiKey: this.settings.apiKey,
+			anthropicApiKey: this.settings.apiKey,
+			model: "claude-3-haiku-20240307",
+			temperature: 0, //Required for tool calling.
+			maxTokens: 4096,
+		});
 	}
 
 	getModel(): BaseChatModel {
 		return this.baseModel!;
+	}
+
+	getRerankModel(): BaseChatModel {
+		return this.rerankModel!;
 	}
 
 	invoke(prompt: string) {

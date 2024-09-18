@@ -90,7 +90,7 @@ export default function DiffView() {
 	}
 
 	return (
-		<div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg">
+		<div className="bg-gray-900 rounded-lg shadow-lg">
 			<div className="bg-gray-800 p-4 flex justify-between items-center">
 				<p className="text-white font-semibold truncate">{diff.file}</p>
 				<button

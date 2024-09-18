@@ -24,6 +24,7 @@ import { SerializeMap, Store } from "../../store/vector";
 import { createCodeNode } from "./graph";
 import path from "node:path";
 import { SymbolRetriever } from "../retriever";
+import { createHash } from "node:crypto";
 
 export type IndexerResult = {
 	codeDocs: Document[];
@@ -31,7 +32,28 @@ export type IndexerResult = {
 	relativeExports: SerializeMap;
 };
 
+async function getFileFromSymbolTable(
+	currentDocument: string,
+	workspace: string,
+	codeGraph: CodeGraph
+) {
+	const textDocument = await getTextDocumentFromUri(currentDocument);
+	const documentText = textDocument!.getText();
+	const documentHash = createHash("sha256")
+		.update(documentText)
+		.digest("hex");
+	const relativeFilePath = path.relative(
+		workspace,
+		fileURLToPath(currentDocument)
+	);
+	const exisitngFile = codeGraph.getFileFromSymbolTable(relativeFilePath);
+
+	return { file: exisitngFile, relativeFilePath, sha: documentHash };
+}
+
 export class Indexer {
+	private syncing: boolean = false;
+
 	constructor(
 		private readonly workspace: string,
 		private readonly codeParser: CodeParser,
@@ -41,84 +63,141 @@ export class Indexer {
 		private readonly vectorStore: Store
 	) {}
 
-	processDocumentQueue = async (documentUri: string) => {
-		try {
-			if (!this.workspace || !documentUri) {
-				return;
-			}
+	isSyncing = () => this.syncing;
 
-			console.log("Adding document to graph: " + documentUri);
+	processDocuments = async (documentUris: string[], fullBuild = false) => {
+		if (!this.workspace || !documentUris || documentUris.length === 0) {
+			return;
+		}
+		this.syncing = true;
+		const fileHashMap: Map<string, string> = new Map();
+		const alreadyVisited = new Set<string>();
 
-			const symbols = await this.symbolRetriever?.getSymbols(documentUri);
-
-			const { importEdges, exportEdges, nodes } =
-				(await this.createNodesFromDocument(
-					documentUri,
-					symbols || []
-				)) || {
-					importEdges: new Map() as CodeGraphEdgeMap,
-					exportEdges: new Map() as CodeGraphEdgeMap,
-					nodes: new Map() as Map<string, CodeGraphNode>,
-				};
-
-			if (nodes.size === 0) {
-				return;
-			}
-
-			const fileToNodeIdsMap = Array.from(nodes.entries()).reduce(
-				(acc, [id, node]) => {
-					const relativePath = path.relative(
-						this.workspace,
-						fileURLToPath(node.location.uri)
-					);
-
-					if (!acc.has(relativePath)) {
-						acc.set(relativePath, new Set<string>());
-					}
-
-					acc.get(relativePath)!.add(
-						path.relative(this.workspace, fileURLToPath(node.id))
-					);
-
-					return acc;
-				},
-				new Map<string, Set<string>>()
-			);
-
-			for (const [file, nodeIds] of fileToNodeIdsMap) {
-				this.codeGraph?.addOrUpdateFileInSymbolTable(file, nodeIds);
-			}
-
-			this.codeGraph?.mergeImportEdges(importEdges);
-			this.codeGraph?.mergeExportEdges(exportEdges);
-
-			const skeletonNodes = await this.skeletonizeCodeNodes(
-				Array.from(nodes.values())
-			);
-
-			if (skeletonNodes?.length) {
-				const indexerResult = await this.embedCodeGraph(skeletonNodes);
-
-				if (!indexerResult) {
-					return;
+		for (const documentUri of documentUris) {
+			try {
+				if (alreadyVisited.has(documentUri)) {
+					continue;
 				}
 
-				const { codeDocs, relativeImports, relativeExports } =
-					indexerResult;
-				await this.vectorStore?.save(
-					codeDocs,
-					relativeImports,
-					relativeExports,
-					this.codeGraph?.getSymbolTable() || new Map()
+				console.log("Adding document to graph: " + documentUri);
+				const relatedNodes: Set<string> = new Set([documentUri]);
+				const nodesToProcess: Map<string, CodeGraphNode> = new Map();
+
+				for (const currentDocument of relatedNodes.values()) {
+					if (alreadyVisited.has(currentDocument)) {
+						continue;
+					}
+					alreadyVisited.add(currentDocument);
+
+					const { file, relativeFilePath, sha } =
+						await getFileFromSymbolTable(
+							currentDocument,
+							this.workspace,
+							this.codeGraph
+						);
+
+					// Since file invalidation has a blast radius of associated files, we need to check if the file has already been indexed
+					// Or if the file is being indexed in this current job
+					if (
+						file &&
+						(file.sha === sha ||
+							fileHashMap.get(relativeFilePath) === sha)
+					) {
+						console.log("File already indexed: " + currentDocument);
+						continue;
+					}
+
+					const symbols = await this.symbolRetriever?.getSymbols(
+						currentDocument
+					);
+
+					const { importEdges, exportEdges, nodes } =
+						(await this.createNodesFromDocument(
+							currentDocument,
+							symbols || []
+						)) || {
+							importEdges: new Map() as CodeGraphEdgeMap,
+							exportEdges: new Map() as CodeGraphEdgeMap,
+							nodes: new Map() as Map<string, CodeGraphNode>,
+						};
+
+					if (nodes.size === 0) {
+						return;
+					}
+
+					const nodeIdsForFile = new Set<string>();
+					for (const node of nodes.values()) {
+						if (node.location.uri !== currentDocument) {
+							const { file, relativeFilePath, sha } =
+								await getFileFromSymbolTable(
+									node.location.uri,
+									this.workspace,
+									this.codeGraph
+								);
+
+							if (
+								file &&
+								(file.sha === sha ||
+									fileHashMap.get(relativeFilePath) === sha)
+							) {
+								console.log(
+									"File already indexed: " + node.location.uri
+								);
+								continue;
+							}
+
+							relatedNodes.add(node.location.uri);
+						} else {
+							nodesToProcess.set(node.id, node);
+						}
+					}
+
+					fileHashMap.set(relativeFilePath, sha);
+					this.codeGraph?.addOrUpdateFileInSymbolTable(
+						relativeFilePath,
+						{
+							nodeIds: nodeIdsForFile,
+							sha: sha,
+						}
+					);
+
+					this.codeGraph?.mergeImportEdges(importEdges);
+					this.codeGraph?.mergeExportEdges(exportEdges);
+				}
+
+				const skeletonNodes = await this.skeletonizeCodeNodes(
+					Array.from(nodesToProcess.values())
 				);
 
-				console.log("Graph saved: " + codeDocs.length);
-			}
-		} catch (error) {
-			if (error instanceof Error) {
-				console.error(
-					`Error processing document queue for ${documentUri}: ${error.message}`
-				);
+				if (skeletonNodes?.length) {
+					const indexerResult = await this.embedCodeGraph(
+						skeletonNodes
+					);
+
+					if (!indexerResult) {
+						return;
+					}
+
+					const { codeDocs, relativeImports, relativeExports } =
+						indexerResult;
+					await this.vectorStore?.save(
+						codeDocs,
+						relativeImports,
+						relativeExports,
+						this.codeGraph?.getSymbolTable() || new Map(),
+						!fullBuild
+					);
+
+					console.log("Graph saved: " + codeDocs.length);
+				}
+			} catch (error) {
+				if (error instanceof Error) {
+					console.error(
+						`Error processing document queue for ${documentUri}: ${error.message}`
+					);
+				}
+			} finally {
+				this.syncing = false;
 			}
 		}
 	};
@@ -135,13 +214,12 @@ export class Indexer {
 		if (!textDocument) {
 			return { nodes, importEdges, exportEdges };
 		}
+		const documentText = textDocument.getText();
 
 		if (symbols.length === 0) {
-			const symbolText = textDocument.getText();
-
 			// calculate the last line and last character of the document
 			const lastLine = textDocument.lineCount - 1;
-			const lastCharacter = symbolText.split("\n")?.pop()?.length || 0;
+			const lastCharacter = documentText.split("\n")?.pop()?.length || 0;
 
 			const node = createCodeNode(
 				Location.create(
@@ -164,21 +242,6 @@ export class Indexer {
 			nodes.set(node.id, node);
 
 			for (const extractedCodeNode of extractedCodeNodes) {
-				const externalFileUri = convertIdToFileUri(
-					extractedCodeNode.id,
-					extractedCodeNode.location.range.start.line.toString(),
-					extractedCodeNode.location.range.start.character.toString()
-				);
-
-				if (externalFileUri !== fileUri) {
-					await this.createNodesFromDocument(
-						externalFileUri,
-						await this.codeParser.getDocumentSymbols(
-							externalFileUri
-						)
-					);
-				}
-
 				nodes.set(extractedCodeNode.id, extractedCodeNode);
 				if (node.id !== extractedCodeNode.id) {
 					if (importEdges.has(node.id)) {

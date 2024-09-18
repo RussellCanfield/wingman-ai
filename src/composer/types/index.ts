@@ -12,14 +12,15 @@ export interface Plan {
 }
 
 export interface Review {
-	comments: string[];
+	comments?: string[];
 }
 
 export interface PlanExecuteState {
 	messages: ChatMessage[];
 	followUpInstructions: ChatMessage[];
-	plannerQuestions?: string[];
+	steps?: string[];
 	plan?: Plan;
 	review?: Review;
 	response?: string;
+	retryCount?: number;
 }

@@ -14,6 +14,8 @@ type PhaseLabel = {
 	[key: string]: string;
 };
 const phaseDisplayLabel: PhaseLabel = {
+	new: "Planning",
+	planner: "Writing Code",
 	"code-writer": "Reviewing",
 	replan: "Preparing Results",
 };
@@ -21,7 +23,7 @@ const phaseDisplayLabel: PhaseLabel = {
 export default function Compose() {
 	const { composerMessages, setComposerMessages } = useAppContext();
 	const [loading, setLoading] = useState<boolean>(false);
-	const [currentPhase, setCurrentPhase] = useState<string>("planner");
+	const [currentPhase, setCurrentPhase] = useState<string>("new");
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -172,6 +174,20 @@ ${values.review.comments.join("\n")}`,
 	return (
 		<main className="h-full flex flex-col overflow-auto">
 			<ChatResponseList messages={composerMessages}>
+				{composerMessages.length !== 0 ? null : (
+					<ChatEntry
+						from="assistant"
+						message={
+							"Welcome! The composer feature allows you to generate code changes. You can ask for help with code, or ask for code to be written for you. By default, composer will intelligently chosen files in your project based on your input. You can also target specific files using '@filename'. Lets go! 🚀"
+						}
+						loading={false}
+						plan={{
+							steps: [],
+							files: [],
+						}}
+						index={0}
+					/>
+				)}
 				{loading && (
 					<ChatEntry
 						from="assistant"

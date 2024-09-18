@@ -2,7 +2,7 @@ export const defaultMaxTokens = -1;
 
 export type IndexFilter = {
 	filter: string;
-	exclusionFilter: string;
+	exclusionFilter?: string;
 };
 
 interface BaseServiceSettings {

@@ -1,7 +1,3 @@
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ------------------------------------------------------------------------------------------ */
 import {
 	createConnection,
 	TextDocuments,
@@ -135,7 +131,7 @@ export class LSPServer {
 			this.vectorStore!
 		);
 
-		this.queue = new DocumentQueue(this.indexer?.processDocumentQueue);
+		this.queue = new DocumentQueue(this.indexer);
 
 		this.projectDetails = new ProjectDetailsHandler(
 			this.workspaceFolders[0],
@@ -347,7 +343,10 @@ export class LSPServer {
 		);
 
 		this.connection?.onRequest("wingman/getIndex", async () => {
-			return await this.vectorStore?.indexExists();
+			return {
+				exists: await this.vectorStore?.indexExists(),
+				processing: this.indexer?.isSyncing(),
+			};
 		});
 
 		this.connection?.onRequest(
@@ -356,17 +355,18 @@ export class LSPServer {
 				this.connection?.console.log("Starting full index build");
 
 				await this.vectorStore?.createIndex();
-
-				const fileUris = request.files.map((file) =>
-					filePathToUri(file.path)
+				await this.indexer?.processDocuments(
+					request.files.map((file) => filePathToUri(file.path)),
+					true
 				);
-				await this.queue?.enqueue(fileUris);
 			}
 		);
 
 		this.connection?.onRequest("wingman/deleteIndex", async () => {
 			this.connection?.console.log("Received request to delete index");
 			this.vectorStore?.deleteIndex();
+			this.queue?.dispose();
+			await this.postInitialize();
 		});
 
 		this.connection?.onRequest("wingman/clearChatHistory", () => {
@@ -381,6 +381,7 @@ export class LSPServer {
 					this.workspaceFolders[0],
 					request.input,
 					modelProvider.getModel(),
+					modelProvider.getRerankModel(),
 					this.codeGraph!,
 					this.vectorStore!,
 					config,

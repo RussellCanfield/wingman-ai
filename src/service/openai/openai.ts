@@ -17,6 +17,7 @@ export class OpenAI implements AIProvider {
 	codeModel: OpenAIModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
 	baseModel: BaseChatModel | undefined;
+	rerankModel: BaseChatModel | undefined;
 
 	constructor(
 		settings: Settings["openai"],
@@ -38,9 +39,21 @@ export class OpenAI implements AIProvider {
 			temperature: 0,
 			maxTokens: interactionSettings.chatMaxTokens,
 		});
+
+		this.rerankModel = new ChatOpenAI({
+			apiKey: this.settings.apiKey,
+			model: "gpt-4o-mini",
+			openAIApiKey: this.settings.apiKey,
+			temperature: 0,
+			maxTokens: interactionSettings.chatMaxTokens,
+		});
 	}
 
 	getModel(): BaseChatModel {
+		return this.baseModel!;
+	}
+
+	getRerankModel(): BaseChatModel {
 		return this.baseModel!;
 	}
 
@@ -50,7 +63,7 @@ export class OpenAI implements AIProvider {
 
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
 		switch (true) {
-			case codeModel.startsWith("gpt-4"):
+			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o1"):
 				return new GPT4Turbo();
 			default:
 				throw new Error(
@@ -61,7 +74,7 @@ export class OpenAI implements AIProvider {
 
 	private getChatModel(chatModel: string): OpenAIModel | undefined {
 		switch (true) {
-			case chatModel.startsWith("gpt-4"):
+			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o1"):
 				return new GPT4Turbo();
 			default:
 				throw new Error(

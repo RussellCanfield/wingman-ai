@@ -148,15 +148,12 @@ const ChatEntry = ({
 
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
-	console.log(message);
-
 	return (
 		<li className="border-b border-gray-300 border-opacity-50 pb-4">
 			<span className="flex items-center mb-2 mt-2">
 				<h3 className="text-lg">
 					{from === "user" ? "Me" : "Wingman"}
 				</h3>
-				{loading && <Loader />}
 			</span>
 			<div className="mb-4 mt-4">
 				{context && (
@@ -169,6 +166,11 @@ const ChatEntry = ({
 					</div>
 				)}
 			</div>
+			{loading && message == "" ? (
+				<div>
+					<SkeletonLoader />
+				</div>
+			) : null}
 			<Markdown
 				children={message}
 				components={{
@@ -197,6 +199,14 @@ const ChatEntry = ({
 					},
 				}}
 			/>
+		</li>
+	);
+};
+
+const SkeletonLoader = () => {
+	return (
+		<li className="pt-2 pb-2 tracking-wide leading-relaxed text-base animate-pulse">
+			<div className="h-10 bg-gray-700 rounded w-full"></div>
 		</li>
 	);
 };

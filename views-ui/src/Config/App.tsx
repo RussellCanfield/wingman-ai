@@ -26,7 +26,7 @@ export const App = () => {
 
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { command, value } = event.data;
-		console.log(command, value);
+
 		switch (command) {
 			case "init":
 				setSettings(JSON.parse(value as string) as InitSettings);

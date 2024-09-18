@@ -29,6 +29,7 @@ export class Ollama implements AIStreamProvicer {
 	codeModel: OllamaAIModel | undefined;
 	interactionSettings: InteractionSettings | undefined;
 	baseModel: BaseChatModel | undefined;
+	rerankModel: BaseChatModel | undefined;
 
 	constructor(
 		private readonly settings: Settings["ollama"],
@@ -50,10 +51,20 @@ export class Ollama implements AIStreamProvicer {
 			model: this.settings.chatModel,
 			temperature: 0.2,
 		});
+
+		this.rerankModel = new ChatOllama({
+			baseUrl: this.settings.baseUrl,
+			model: this.settings.chatModel,
+			temperature: 0.2,
+		});
 	}
 
 	getModel(): BaseChatModel {
 		return this.baseModel!;
+	}
+
+	getRerankModel(): BaseChatModel {
+		return this.rerankModel!;
 	}
 
 	invoke(prompt: string) {

@@ -8,7 +8,7 @@ import { ProjectDetailsHandler } from "../../server/project-details";
 import { VectorQuery } from "../../server/query";
 import { CodeGraph } from "../../server/files/graph";
 import { Store } from "../../store/vector";
-import { TextDocument } from "vscode-languageserver-textdocument";
+import { NoFilesChangedError } from "../errors";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -40,7 +40,8 @@ export const codeWriterSchema = z.object({
 				.boolean()
 				.describe(
 					"Whether or not the file has been changed. If false, the file will be skipped"
-				),
+				)
+				.optional(),
 		})
 	),
 });
@@ -177,6 +178,8 @@ Objective:
 
 ------
 
+{steps}
+
 {recentChanges}
 
 {review}
@@ -236,45 +239,13 @@ ${formatMessages(state.followUpInstructions)}`;
 		const details = await projectDetails.retrieveProjectDetails();
 		const files: CodeWriterSchema["files"] = [];
 
-		const context =
-			state.followUpInstructions.length > 0
-				? formatMessages(state.followUpInstructions)
-				: formatMessages(state.messages);
-
-		let starterDocs = new Map();
-
-		if (!state.plan?.files || state.plan.files.length === 0) {
-			starterDocs =
-				await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
-					`${context}\n\n${state.plannerQuestions?.join("\n") || ""}`,
-					this.codeGraph,
-					this.store,
-					this.workspace,
-					15
-				);
-		}
-
-		state.plan?.files?.forEach((file) => {
-			if (!starterDocs.has(file.file)) {
-				starterDocs.set(
-					file.file,
-					TextDocument.create(
-						file.file,
-						"plaintext",
-						0,
-						file.code || ""
-					)
-				);
-			}
-		});
-
-		const prompt = Array.from(starterDocs.entries())
+		const prompt = Array.from(state.plan!.files!.entries())
 			.map(([file, doc]) => {
 				return `File:
 ${file}
 
 Code:
-${doc.getText()}`;
+${doc.code}`;
 			})
 			.join("\n\n---FILE---\n");
 
@@ -289,6 +260,13 @@ Changes made:
 		const plan = (await this.codeWriter.invoke({
 			details: details?.description || "Not available.",
 			objective: this.buildObjective(state),
+			steps: state.plan?.steps
+				? `Here are a list of steps that may help you reach your objective:
+      
+${state.plan.steps.join("\n")}
+
+------`
+				: "",
 			recentChanges: `Use these recent changes, along with the objective to determine what you need to do next.
 Do not repeat changes already made in the recent changes section.
 
@@ -296,18 +274,25 @@ ${recentChanges}
 
 ------`,
 			review:
-				state.review?.comments.length === 0
+				state.review?.comments?.length === 0
 					? ""
 					: `Here are comments from a review of your code changes.
 Use these comments to refine your code and meet the objective.
 
-${state.review?.comments.join("\n")}
+${state.review?.comments?.join("\n")}
 
 ------`,
 			files: `---FILE---\n${prompt}`,
 		})) as CodeWriterSchema;
 
 		const filesChanged = plan.files?.filter((f) => f.hasChanged) || [];
+
+		if (filesChanged.length === 0) {
+			throw new NoFilesChangedError(
+				'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
+			);
+		}
+
 		files.push(...filesChanged);
 
 		return {

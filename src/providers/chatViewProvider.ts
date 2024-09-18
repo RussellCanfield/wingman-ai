@@ -76,11 +76,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 					const { command, value } = data;
 
+					const workspaceFolder =
+						vscode.workspace.workspaceFolders?.[0].uri;
+					if (!workspaceFolder) {
+						throw new Error("No workspace folder found");
+					}
+
 					switch (command) {
 						case "diff-view":
 							const { file, diff } = value as DiffViewCommand;
+
 							this._diffViewProvider.createDiffView({
-								file,
+								file: vscode.Uri.joinPath(
+									workspaceFolder,
+									vscode.workspace.asRelativePath(file)
+								).fsPath,
 								diff: extractCodeBlock(diff),
 							});
 							break;
@@ -100,20 +110,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						case "mergeIntoFile":
 							const { file: artifactFile, code: markdown } =
 								value as FileMetadata;
+
 							let code = markdown?.startsWith("```")
 								? extractCodeBlock(markdown)
 								: markdown;
 							const relativeFilePath =
 								vscode.workspace.asRelativePath(artifactFile);
 
-							// Get the workspace folder URI
-							const workspaceFolder =
-								vscode.workspace.workspaceFolders?.[0].uri;
-							if (!workspaceFolder) {
-								throw new Error("No workspace folder found");
-							}
-
-							// Construct the full URI of the file
 							const fileUri = vscode.Uri.joinPath(
 								workspaceFolder,
 								relativeFilePath
@@ -275,6 +278,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								indexFilter:
 									this._context.workspaceState.get(
 										"index-filter"
+									),
+								exclusionFilter:
+									this._context.workspaceState.get(
+										"exclusion-filter"
 									),
 							};
 							webviewView.webview.postMessage({

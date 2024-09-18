@@ -169,10 +169,6 @@ class MyAmazingClass {
 
 ----
 
-File: 
-${filePath}
-
-Code:
 ${fileContents}
 `;
 

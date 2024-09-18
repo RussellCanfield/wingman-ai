@@ -1,11 +1,13 @@
-export type QueueProcessingCallback = (textDocumentUri: string) => void;
+import { Indexer } from "./files/indexer";
+
+export type QueueProcessingCallback = (documents: string[]) => Promise<void>;
 
 export class DocumentQueue {
-	private isProcessing = false;
 	private queue: string[] = [];
 	private queueSet: Set<string> = new Set();
+	private intervalId: NodeJS.Timeout | null = null;
 
-	constructor(private readonly callback: QueueProcessingCallback) {
+	constructor(private readonly indexer: Indexer) {
 		this.startProcessing();
 	}
 
@@ -18,35 +20,24 @@ export class DocumentQueue {
 		}
 	};
 
-	*dequeueGenerator() {
-		while (this.queue.length > 0) {
-			const document = this.queue.shift();
-			if (document) {
-				this.queueSet.delete(document);
-				yield document;
-			}
-		}
-	}
-
 	private startProcessing = () => {
-		setInterval(() => {
-			if (this.isProcessing) {
+		this.intervalId = setInterval(async () => {
+			if (this.indexer.isSyncing()) {
 				return;
 			}
 
-			this.isProcessing = true;
-
-			try {
-				const generator = this.dequeueGenerator();
-				for (let document of generator) {
-					if (document) {
-						this.callback(document);
-					}
-				}
-			} finally {
-				this.isProcessing = false;
-			}
+			const queueItems = Array.from(this.queueSet);
+			this.queueSet.clear();
+			await this.indexer.processDocuments(queueItems);
 		}, 10000).unref();
+	};
+
+	dispose = () => {
+		this.queueSet.clear();
+		if (this.intervalId) {
+			clearInterval(this.intervalId);
+			this.intervalId = null;
+		}
 	};
 
 	getQueue = () => {

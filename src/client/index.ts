@@ -14,6 +14,8 @@ import { TypeRequestEvent } from "../server/retriever";
 import { EmbeddingsResponse } from "../server";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { ComposerRequest, ComposerResponse } from "@shared/types/Composer";
+import path from "node:path";
+import ignore from "ignore";
 
 let client: LanguageClient;
 
@@ -214,11 +216,8 @@ export class LSPClient {
 		await client.sendRequest("wingman/clearChatHistory");
 	};
 
-	buildFullIndex = async (filter: string, exclusionFilter: string) => {
-		const files = await vscode.workspace.findFiles(
-			filter,
-			!exclusionFilter ? undefined : exclusionFilter
-		);
+	buildFullIndex = async (filter: string, exclusionFilter?: string) => {
+		const files = await findFiles(filter, exclusionFilter);
 		return client.sendRequest("wingman/fullIndexBuild", {
 			files,
 		});
@@ -244,6 +243,65 @@ export class LSPClient {
 		}
 		return client.stop();
 	};
+}
+
+let cachedGitignorePatterns: string[] | null = null;
+
+async function getGitignorePatterns(): Promise<string[]> {
+	if (cachedGitignorePatterns) {
+		return cachedGitignorePatterns;
+	}
+
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (!workspaceFolders) {
+		return [];
+	}
+
+	const gitignorePath = vscode.Uri.file(
+		path.join(workspaceFolders[0].uri.fsPath, ".gitignore")
+	);
+
+	try {
+		const gitignoreContent = await vscode.workspace.fs.readFile(
+			gitignorePath
+		);
+		const gitignoreLines = gitignoreContent.toString().split("\n");
+		const ig = ignore().add(gitignoreLines);
+
+		// Convert .gitignore patterns to glob patterns
+		cachedGitignorePatterns = gitignoreLines
+			.filter((line) => line && !line.startsWith("#"))
+			.map((pattern) => {
+				if (pattern.startsWith("!")) {
+					return `!**/${pattern.slice(1)}`;
+				}
+				return `**/${pattern}`;
+			});
+
+		return cachedGitignorePatterns;
+	} catch (err) {
+		console.error("Error reading .gitignore file:", err);
+		return [];
+	}
+}
+
+async function findFiles(filter: string, exclusionFilter?: string) {
+	const gitignorePatterns = await getGitignorePatterns();
+
+	let combinedExclusionFilter: string | undefined;
+	if (exclusionFilter) {
+		combinedExclusionFilter = `{${exclusionFilter},${gitignorePatterns.join(
+			","
+		)}}`;
+	} else if (gitignorePatterns.length > 0) {
+		combinedExclusionFilter = `{${gitignorePatterns.join(",")}}`;
+	}
+
+	const files = await vscode.workspace.findFiles(
+		filter,
+		combinedExclusionFilter
+	);
+	return files;
 }
 
 const lspClient = new LSPClient();

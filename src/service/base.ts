@@ -29,6 +29,7 @@ export interface AIProvider {
 	): Promise<string>;
 	invoke(prompt: string): Promise<AIMessageChunk>;
 	getModel(): BaseChatModel;
+	getRerankModel(): BaseChatModel;
 }
 
 export interface AIStreamProvicer extends AIProvider {

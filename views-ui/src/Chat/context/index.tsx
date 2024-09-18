@@ -20,12 +20,14 @@ interface AppContextType {
 	>;
 	isLightTheme: boolean;
 	indexFilter: string;
+	exclusionFilter?: string;
 }
 
 interface AppState {
 	chatHistory: Record<string, ChatMessage[]>;
 	isLightTheme: boolean;
 	indexFilter: string;
+	exclusionFilter?: string;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -116,6 +118,7 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 				setComposerMessages,
 				isLightTheme,
 				indexFilter: currentAppState?.indexFilter || "",
+				exclusionFilter: currentAppState?.exclusionFilter || "",
 			}}
 		>
 			{children}

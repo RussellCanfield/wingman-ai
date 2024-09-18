@@ -12,10 +12,16 @@ export type SkeletonizedCodeGraphNode = {
 
 export type CodeGraphNodeMap = Map<string, CodeGraphNode>;
 export type CodeGraphEdgeMap = Map<string, Set<string>>;
+export type SymbolTable = Map<string, FileDetails>;
+
+export type FileDetails = {
+	nodeIds: Set<string>;
+	sha: string;
+};
 
 export class CodeGraph {
 	// The symbol table helps manage file relationships to symbols, which can be used to manage the edges
-	private symbolTable: Map<string, Set<string>> = new Map();
+	private symbolTable: SymbolTable = new Map();
 	private nodes: CodeGraphNodeMap = new Map();
 	private edgesExport: CodeGraphEdgeMap = new Map();
 	private edgesImport: CodeGraphEdgeMap = new Map();
@@ -24,7 +30,7 @@ export class CodeGraph {
 		nodes?: CodeGraphNodeMap,
 		edgesExport?: CodeGraphEdgeMap,
 		edgesImport?: CodeGraphEdgeMap,
-		symbolTable?: Map<string, Set<string>>
+		symbolTable?: SymbolTable
 	) {
 		if (nodes) {
 			this.nodes = nodes;
@@ -43,13 +49,22 @@ export class CodeGraph {
 		}
 	}
 
-	public addOrUpdateFileInSymbolTable(file: string, nodeIds: Set<string>) {
+	public addOrUpdateFileInSymbolTable(
+		file: string,
+		fileDetails: FileDetails
+	) {
 		// Get the existing node IDs for this file, if any
-		const existingNodeIds = this.symbolTable.get(file) || new Set<string>();
+		const existingNodeIds = (
+			this.symbolTable.get(file) ||
+			({
+				nodeIds: new Set(),
+				sha: "",
+			} satisfies FileDetails)
+		).nodeIds;
 
 		// Find nodes that are no longer present in the file
 		const removedNodeIds = new Set(
-			[...existingNodeIds].filter((x) => !nodeIds.has(x))
+			[...existingNodeIds].filter((x) => !fileDetails.nodeIds.has(x))
 		);
 
 		// Remove import and export edges for the removed nodes
@@ -71,11 +86,15 @@ export class CodeGraph {
 		}
 
 		// Update the symbol table with the new set of node IDs
-		this.symbolTable.set(file, nodeIds);
+		this.symbolTable.set(file, fileDetails);
 	}
 
 	public getSymbolTable() {
 		return this.symbolTable;
+	}
+
+	public getFileFromSymbolTable(file: string) {
+		return this.symbolTable.get(file);
 	}
 
 	public addNode(node: CodeGraphNode) {

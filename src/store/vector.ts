@@ -7,6 +7,7 @@ import {
 	CodeGraphNodeMap,
 	createCodeNode,
 	generateCodeNodeId,
+	SymbolTable,
 } from "../server/files/graph";
 import { Location, Range } from "vscode-languageserver";
 import { convertIdToFileUri } from "../server/files/utils";
@@ -14,6 +15,7 @@ import { LocalIndex } from "vectra";
 import { EmbeddingsInterface } from "../service/embeddings/base";
 
 export type SerializeMap = [string, string[]][];
+export type SerializeTable = [string, { nodeIds: string[]; sha: string }][];
 
 export type DocumentMetadata = {
 	fileName: string;
@@ -61,16 +63,33 @@ export class Store {
 		try {
 			const stats = await this.index?.getIndexStats();
 			console.log("Loaded store from disk", this.directory, stats?.items);
-			const edgeDetails = JSON.parse(
-				await fs.promises.readFile(
-					path.join(this.directory, "edges.json"),
-					"utf-8"
-				)
-			) as {
+
+			let edgeDetails: {
 				importEdges: SerializeMap;
 				exportEdges: SerializeMap;
-				symbolTable: [string, string[]][];
+				symbolTable: SerializeTable;
+			} = {
+				importEdges: [],
+				exportEdges: [],
+				symbolTable: [],
 			};
+
+			try {
+				edgeDetails = JSON.parse(
+					await fs.promises.readFile(
+						path.join(this.directory, "edges.json"),
+						"utf-8"
+					)
+				);
+			} catch (err) {
+				console.error(
+					"edges.json file not found or corrupt, proceeding with empty edges."
+				);
+				return {
+					store: this.index,
+					codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
+				};
+			}
 
 			const nodes: CodeGraphNodeMap = new Map();
 			const items = await this.index?.listItems();
@@ -121,7 +140,10 @@ export class Store {
 			const symbolTable = new Map(
 				edgeDetails.symbolTable.map(([key, value]) => [
 					key,
-					new Set(value),
+					{
+						nodeIds: new Set(value.nodeIds),
+						sha: value.sha,
+					},
 				])
 			);
 
@@ -146,6 +168,11 @@ export class Store {
 
 	deleteIndex = async () => {
 		await this.index?.deleteIndex();
+		try {
+			await fs.promises.rm(path.join(this.directory, "edges.json"));
+		} catch (error) {
+			console.error("Error deleting edge file", error);
+		}
 	};
 
 	indexExists = async () => {
@@ -190,15 +217,22 @@ export class Store {
 		documents: Document[],
 		importEdges: SerializeMap,
 		exportEdges: SerializeMap,
-		symbolTable: Map<string, Set<string>>
+		symbolTable: SymbolTable,
+		shouldPurgeStaleDocuments = false
 	) => {
-		const filePaths = new Set<string>(
-			documents.map((doc) => doc.metadata.filePath)
-		);
-		const relatedDocs = await this.findDocumentsByPath(
-			Array.from(filePaths.values())
-		);
-		await this.deleteDocuments(relatedDocs.map((doc) => doc.id!));
+		if (shouldPurgeStaleDocuments) {
+			const filePaths = new Set<string>(
+				documents.map((doc) => doc.metadata.filePath)
+			);
+			const relatedDocs = await this.findDocumentsByPath(
+				Array.from(filePaths.values())
+			);
+			console.log(
+				"Storing documents",
+				documents.map((d) => d.id)
+			);
+			await this.deleteDocuments(relatedDocs.map((doc) => doc.id!));
+		}
 
 		for (const doc of documents) {
 			const embeddings = await this.embedder.embedQuery(doc.pageContent);
@@ -216,10 +250,15 @@ export class Store {
 			{
 				importEdges,
 				exportEdges,
-				symbolTable: Array.from(symbolTable.entries()).map((e) => [
-					e[0],
-					Array.from(e[1]),
-				]),
+				symbolTable: Array.from(symbolTable.entries()).map(
+					([key, value]) => [
+						key,
+						{
+							nodeIds: Array.from(value.nodeIds),
+							sha: value.sha,
+						},
+					]
+				),
 			},
 			null,
 			2
@@ -233,6 +272,8 @@ export class Store {
 			}
 		);
 
-		console.log("Saved store to disk", this.directory);
+		if (documents.length > 0) {
+			console.log("Stored document", documents[0].metadata.filePath);
+		}
 	};
 }

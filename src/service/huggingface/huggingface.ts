@@ -68,6 +68,10 @@ export class HuggingFace implements AIProvider {
 		throw new Error("Method not implemented.");
 	}
 
+	getRerankModel(): BaseChatModel {
+		throw new Error("Method not implemented.");
+	}
+
 	invoke(prompt: string): Promise<AIMessageChunk> {
 		throw new Error("Method not implemented.");
 	}

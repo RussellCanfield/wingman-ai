@@ -154,8 +154,13 @@ const ChatInput = ({
 		});
 	};
 
+	const handleAutoGrow = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+		e.target.style.height = "auto";
+		e.target.style.height = `${e.target.scrollHeight}px`;
+	};
+
 	return (
-		<div className={`flex-basis-50 py-3 flex flex-col items-stretch`}>
+		<div className="flex-basis-50 py-3 flex flex-col items-stretch">
 			<div className="relative flex flex-row items-center">
 				<div className={`w-full ${inputClasses} relative`}>
 					{chips.length === 0 ? (
@@ -187,11 +192,16 @@ const ChatInput = ({
 									: ""
 							}
 							value={inputValue}
-							onChange={handleInputChange}
+							onChange={(e) => {
+								handleInputChange(e);
+								handleAutoGrow(e);
+							}}
+							onInput={handleAutoGrow}
 							ref={chatInputBox}
 							tabIndex={0}
+							rows={1}
 							autoFocus
-							className={`flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600`}
+							className={`flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600 overflow-hidden h-auto`}
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>

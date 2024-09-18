@@ -11,6 +11,7 @@ import { Plan, PlanExecuteState, Review } from "./types/index.js";
 import { getTextDocumentFromPath } from "../server/files/utils.js";
 import { FileMetadata } from "@shared/types/Message.js";
 import { CodePlanner } from "./tools/planner.js";
+import { NoFilesChangedError } from "./errors.js";
 
 export interface Thread {
 	configurable: {
@@ -22,39 +23,22 @@ export async function* generateCommand(
 	workspace: string,
 	description: string,
 	model: BaseChatModel,
+	rerankModel: BaseChatModel,
 	codeGraph: CodeGraph,
 	store: Store,
 	config?: RunnableConfig,
 	checkpointer?: BaseCheckpointSaver,
 	contextFiles?: string[]
 ) {
-	const planner = new CodePlanner(model, workspace, codeGraph, store);
+	const planner = new CodePlanner(
+		model,
+		rerankModel,
+		workspace,
+		codeGraph,
+		store
+	);
 	const codeWriter = new CodeWriter(model, workspace, codeGraph, store);
 	const replanner = new Replanner(model, workspace);
-
-	function mergeMaps<K, V>(map1?: Map<K, V>, map2?: Map<K, V>): Map<K, V> {
-		const mergedMap = new Map<K, V>();
-
-		if (!map1) {
-			return map2 || new Map();
-		}
-
-		if (!map2) {
-			return map1;
-		}
-
-		// Add entries from the first map
-		for (const [key, value] of map1) {
-			mergedMap.set(key, value);
-		}
-
-		// Add entries from the second map, overwriting duplicates
-		for (const [key, value] of map2) {
-			mergedMap.set(key, value);
-		}
-
-		return mergedMap;
-	}
 
 	const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
 		messages: {
@@ -89,7 +73,7 @@ export async function* generateCommand(
 			},
 			default: () => [],
 		},
-		plannerQuestions: {
+		steps: {
 			value: (x?: string[], y?: string[]) => y ?? x,
 		},
 		plan: {
@@ -99,7 +83,10 @@ export async function* generateCommand(
 			value: (x?: Review, y?: Review) => {
 				if (x && y) {
 					return {
-						comments: [...x.comments, ...y.comments],
+						comments: [
+							...(x.comments || []),
+							...(y.comments || []),
+						],
 					};
 				}
 				return y ?? x ?? undefined;
@@ -110,21 +97,41 @@ export async function* generateCommand(
 			value: (x?: string, y?: string) => y ?? x,
 			default: () => undefined,
 		},
+		retryCount: {
+			value: (x?: number, y?: number) => y ?? x,
+			default: () => 0,
+		},
 	};
 
 	function shouldEnd(state: PlanExecuteState) {
-		return !state.review || state.review.comments.length === 0
+		return !state.review ||
+			!state.review?.comments ||
+			state.review?.comments?.length === 0 ||
+			state.retryCount === 2
 			? "true"
 			: "false";
 	}
 
 	let workflow = new StateGraph({
 		channels: planExecuteState,
-	});
+	})
+		.addNode("planner", planner.codePlannerStep)
+		.addNode("code-writer", codeWriter.codeWriterStep)
+		.addNode("replan", replanner.replanStep)
+		.addEdge(START, "planner")
+		.addEdge("planner", "code-writer")
+		.addEdge("code-writer", "replan")
+		.addConditionalEdges("replan", shouldEnd, {
+			true: END,
+			false: "planner",
+		});
 
 	const checkpoint = await checkpointer?.get(config!);
 
-	let inputs: Partial<PlanExecuteState> = {};
+	let inputs: Partial<PlanExecuteState> = {
+		retryCount: undefined,
+		review: undefined,
+	};
 	if (checkpoint?.channel_values["response"]) {
 		inputs.followUpInstructions = [new ChatMessage(description, "user")];
 	} else {
@@ -132,17 +139,6 @@ export async function* generateCommand(
 	}
 
 	if (contextFiles?.length) {
-		//@ts-expect-error
-		workflow = workflow
-			.addNode("code-writer", codeWriter.codeWriterStep)
-			.addNode("replan", replanner.replanStep)
-			.addEdge(START, "code-writer")
-			.addEdge("code-writer", "replan")
-			.addConditionalEdges("replan", shouldEnd, {
-				true: END,
-				false: "code-writer",
-			});
-
 		const files: FileMetadata[] = [];
 
 		for (const file of contextFiles) {
@@ -164,19 +160,6 @@ export async function* generateCommand(
 				)?.files ?? []),
 			],
 		};
-	} else {
-		//@ts-expect-error
-		workflow = workflow
-			.addNode("planner", planner.codePlannerStep)
-			.addNode("code-writer", codeWriter.codeWriterStep)
-			.addNode("replan", replanner.replanStep)
-			.addEdge(START, "planner")
-			.addEdge("planner", "code-writer")
-			.addEdge("code-writer", "replan")
-			.addConditionalEdges("replan", shouldEnd, {
-				true: END,
-				false: "planner",
-			});
 	}
 
 	const graph = workflow.compile({ checkpointer });
@@ -191,6 +174,17 @@ export async function* generateCommand(
 			}
 		}
 	} catch (e) {
+		if (e instanceof NoFilesChangedError) {
+			yield {
+				node: "replan",
+				values: {
+					response:
+						"I was not able to generate any changes. Please try again with a different question or try explicitly referencing files.",
+				},
+			};
+			return;
+		}
+
 		console.error(e);
 		yield {
 			node: "replan",

@@ -12,13 +12,15 @@ import { Loader } from "../../Loader";
 let interval: NodeJS.Timeout;
 
 export default function Indexer() {
-	const { indexFilter } = useAppContext();
+	const { indexFilter, exclusionFilter: savedExclusionFilter } =
+		useAppContext();
 	const [indexProcessing, setIndexProcessing] = useState<boolean>(false);
 	const [indexExists, setIndexExists] = useState<boolean>(false);
 	const [filter, setFilter] = useState(
 		() => indexFilter || "apps/**/*.{js,jsx,ts,tsx}"
 	);
-	const [exclusionFilter, setExclusionFilter] = useState("");
+	const [exclusionFilter, setExclusionFilter] =
+		useState(savedExclusionFilter);
 
 	useEffect(() => {
 		vscode.postMessage({
@@ -49,7 +51,12 @@ export default function Indexer() {
 
 		switch (command) {
 			case "index-status":
-				setIndexExists(Boolean(data.value));
+				const { exists, processing } = data.value as {
+					exists: boolean;
+					processing: boolean;
+				};
+				setIndexExists(exists);
+				setIndexProcessing(processing);
 		}
 	};
 
@@ -72,11 +79,20 @@ export default function Indexer() {
 
 	return (
 		<div className="space-y-4 mt-4">
-			<p>Status: {indexExists ? "Ready" : "Not Found"}</p>
-			<p>
+			<p className="text-lg">
+				Status:{" "}
+				{indexExists
+					? indexProcessing
+						? "Processing"
+						: "Ready"
+					: "Not Found"}
+			</p>
+			<p className="text-lg">
 				The indexer will breakdown your codebase to use as context in
 				chat, or interactively with the code composer. It will scan your
-				workspace for any filters meeting the filter criteria below.
+				workspace for any filters meeting the filter criteria below. By
+				default, Wingman will include your '.gitignore' file in your
+				exclusion filter.
 			</p>
 			{!indexExists && !indexProcessing && (
 				<section className="flex flex-col gap-4">
@@ -106,8 +122,12 @@ export default function Indexer() {
 					<Loader /> <span className="ml-2">Building Index...</span>
 				</p>
 			)}
-			{indexExists && (
-				<VSCodeButton type="button" onClick={() => deleteIndex()}>
+			{indexExists && !indexProcessing && (
+				<VSCodeButton
+					type="button"
+					onClick={() => deleteIndex()}
+					className="bg-red-600"
+				>
 					Delete Index
 				</VSCodeButton>
 			)}
