@@ -186,12 +186,9 @@ export function getNonce() {
 
 export async function replaceTextInDocument(
 	document: vscode.TextDocument,
-	newText: string,
+	newContent: string,
 	shouldSave = false
 ) {
-	// Show the document in an editor
-	const editor = await vscode.window.showTextDocument(document);
-
 	// Create a range for the entire document
 	const startPosition = new vscode.Position(0, 0);
 	const endPosition = new vscode.Position(
@@ -200,12 +197,12 @@ export async function replaceTextInDocument(
 	);
 	const range = new vscode.Range(startPosition, endPosition);
 
+	const edit = new vscode.WorkspaceEdit();
+	edit.replace(document.uri, range, newContent);
 	// Apply the edit to replace the entire content
-	const success = await editor.edit((editBuilder) => {
-		editBuilder.replace(range, newText);
-	});
+	const success = await vscode.workspace.applyEdit(edit);
 
-	if (success) {
+	if (success && shouldSave) {
 		await document.save();
 	}
 }

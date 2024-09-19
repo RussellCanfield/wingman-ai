@@ -234,6 +234,8 @@ export class Store {
 			await this.deleteDocuments(relatedDocs.map((doc) => doc.id!));
 		}
 
+		await this.index?.beginUpdate();
+
 		for (const doc of documents) {
 			const embeddings = await this.embedder.embedQuery(doc.pageContent);
 			await this.index?.insertItem({
@@ -245,6 +247,8 @@ export class Store {
 				},
 			});
 		}
+
+		await this.index?.endUpdate();
 
 		const jsonString = JSON.stringify(
 			{

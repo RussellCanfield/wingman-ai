@@ -236,8 +236,12 @@ export class LSPServer {
 				);
 			}
 
-			await this.postInitialize();
-			await this.addEvents();
+			try {
+				await this.postInitialize();
+				await this.addEvents();
+			} catch (e) {
+				console.error(e);
+			}
 		});
 
 		if (this.connection) {
