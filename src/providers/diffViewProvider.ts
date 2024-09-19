@@ -46,8 +46,35 @@ export class DiffViewProvider {
 								file,
 								diff,
 								original: await vscode.workspace.fs
-									.readFile(vscode.Uri.file(file))
-									.then((buffer) => buffer.toString()),
+									.stat(vscode.Uri.file(file))
+									.then(
+										async () =>
+											await vscode.workspace.fs
+												.readFile(vscode.Uri.file(file))
+												.then((buffer) =>
+													buffer.toString()
+												),
+										() => "" // Return an empty string if the file does not exist
+									),
+							} satisfies DiffViewCommand,
+						});
+						currentPanel.webview.postMessage({
+							command: "diff-file",
+							value: {
+								theme: vscode.window.activeColorTheme.kind,
+								file,
+								diff,
+								original: await vscode.workspace.fs
+									.stat(vscode.Uri.file(file))
+									.then(
+										async () =>
+											await vscode.workspace.fs
+												.readFile(vscode.Uri.file(file))
+												.then((buffer) =>
+													buffer.toString()
+												),
+										() => "" // Return an empty string if the file does not exist
+									),
 							} satisfies DiffViewCommand,
 						});
 						break;
@@ -91,7 +118,7 @@ export class DiffViewProvider {
 							}
 
 							// Replace text in the document
-							await replaceTextInDocument(document, code!);
+							await replaceTextInDocument(document, code!, true);
 
 							currentPanel.dispose();
 						} catch (error) {
@@ -108,7 +135,11 @@ export class DiffViewProvider {
 									await vscode.workspace.openTextDocument(
 										fileUri
 									);
-								await replaceTextInDocument(document, code!);
+								await replaceTextInDocument(
+									document,
+									code!,
+									true
+								);
 							} else {
 								throw error;
 							}

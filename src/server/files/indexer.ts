@@ -255,13 +255,17 @@ export class Indexer {
 				}
 			}
 
-			await this.codeParser.processChildSymbols(
+			const childNodes = await this.codeParser.processChildSymbols(
 				textDocument,
 				node,
 				symbol,
 				importEdges,
 				exportEdges
 			);
+
+			for (const childNode of childNodes) {
+				nodes.set(childNode.id, childNode);
+			}
 		}
 
 		return {

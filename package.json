@@ -5,10 +5,6 @@
 	"version": "0.7.0",
 	"publisher": "WingMan",
 	"license": "MIT",
-	"workspaces": [
-		"views-ui",
-		"shared"
-	],
 	"authors": [
 		[
 			{
@@ -400,11 +396,11 @@
 		]
 	},
 	"scripts": {
-		"install:all": "npm install && cd webview-ui && npm install",
 		"start:views": "cd views-ui && npm run dev",
 		"build": "tsc -b",
 		"build:views": "cd views-ui && npm run build",
 		"build:shared": "cd shared && npm run build",
+		"build:docs": "cd docs-site && npm run build",
 		"vscode:prepublish": "npm run compile",
 		"compile": "npm run clean && npm run build:shared && npm run build:views && tsc -b",
 		"watch": "tsc -b --watch",
@@ -414,20 +410,22 @@
 		"clean": "rimraf out"
 	},
 	"dependencies": {
-		"@langchain/langgraph": "0.2.2",
-		"@langchain/community": "0.2.33",
-		"@langchain/openai": "0.2.10",
-		"@langchain/anthropic": "0.2.18",
-		"@langchain/ollama": "0.0.4",
+		"@langchain/langgraph": "0.2.8",
+		"@langchain/community": "0.3.1",
+		"@langchain/openai": "0.3.0",
+		"@langchain/anthropic": "0.3.1",
+		"@langchain/ollama": "0.1.0",
+		"@langchain/core": "0.3.2",
 		"vscode-languageclient": "9.0.1",
 		"vscode-languageserver": "9.0.1",
 		"vscode-languageserver-textdocument": "1.0.12",
 		"vscode-uri": "3.0.8",
 		"@ast-grep/napi": "0.27.1",
-		"langchain": "0.2.18",
+		"langchain": "0.3.2",
 		"vectra": "0.9.0",
 		"zod-to-json-schema": "3.23.3",
-		"ignore": "5.3.2"
+		"ignore": "6.0.2",
+		"zod": "3.23.8"
 	},
 	"devDependencies": {
 		"@types/mocha": "10.0.6",

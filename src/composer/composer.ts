@@ -37,7 +37,7 @@ export async function* generateCommand(
 		codeGraph,
 		store
 	);
-	const codeWriter = new CodeWriter(model, workspace, codeGraph, store);
+	const codeWriter = new CodeWriter(model, workspace);
 	const replanner = new Replanner(model, workspace);
 
 	const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
@@ -93,6 +93,9 @@ export async function* generateCommand(
 			},
 			default: () => undefined,
 		},
+		projectDetails: {
+			value: (x?: string, y?: string) => y ?? x,
+		},
 		response: {
 			value: (x?: string, y?: string) => y ?? x,
 			default: () => undefined,
@@ -140,25 +143,35 @@ export async function* generateCommand(
 
 	if (contextFiles?.length) {
 		const files: FileMetadata[] = [];
+		const uniqueFilePaths = new Set<string>();
 
 		for (const file of contextFiles) {
 			const txtDoc = await getTextDocumentFromPath(file);
-			files.push({
-				file,
-				code: txtDoc?.getText() || "",
-			});
+			if (!uniqueFilePaths.has(file)) {
+				uniqueFilePaths.add(file);
+				files.push({
+					file,
+					code: txtDoc?.getText() || "",
+				});
+			}
+		}
+
+		const existingFiles =
+			(
+				checkpoint?.channel_values["plan"] as
+					| PlanExecuteState["plan"]
+					| undefined
+			)?.files ?? [];
+		for (const existingFile of existingFiles) {
+			if (!uniqueFilePaths.has(existingFile.file)) {
+				uniqueFilePaths.add(existingFile.file);
+				files.push(existingFile);
+			}
 		}
 
 		inputs.plan = {
 			steps: [],
-			files: [
-				...files,
-				...((
-					checkpoint?.channel_values["plan"] as
-						| PlanExecuteState["plan"]
-						| undefined
-				)?.files ?? []),
-			],
+			files,
 		};
 	}
 

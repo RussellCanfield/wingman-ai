@@ -17,6 +17,7 @@ export interface Review {
 
 export interface PlanExecuteState {
 	messages: ChatMessage[];
+	projectDetails?: string;
 	followUpInstructions: ChatMessage[];
 	steps?: string[];
 	plan?: Plan;

@@ -191,9 +191,7 @@ ${values.review.comments.join("\n")}`,
 				{loading && (
 					<ChatEntry
 						from="assistant"
-						message={
-							phaseDisplayLabel[currentPhase] || "Writing Code"
-						}
+						message={phaseDisplayLabel[currentPhase] || "Planning"}
 						loading={true}
 						plan={{
 							steps: [],

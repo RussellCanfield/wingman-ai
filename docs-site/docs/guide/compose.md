@@ -1,0 +1,40 @@
+# Compose
+
+Composer is a new feature for Wingman, think of it as an advanced chat view that is capable of thinking through tasks. Composer currently works in two ways:
+
+-   Running with automatic context
+-   Running with specific context
+
+### Automatic Context
+
+Automatic context means that Wingman will leverage similar logic to how chat functions. In this mode it means you did not provide any specific files to composer, in which case it will use your input to find files to work with. This currently uses vector search along with a reranker operation in which it limits itself to the best 5 files.
+
+### Specific Context
+
+Specific context means you provide files to composer directly using **@filename** in the chat input, this will allow you to search files across your workspace and target a group of files for specific changes. This can be very helpful when you know the general area you want to work in. Wingman will figure out which of those files apply to what you are asking it to do.
+
+### How it works
+
+Composer will iterate over 3 unique phases for code generation:
+
+-   **Planning**
+
+    In this phase Wingman will develop a plan of action based on your project details, input and code files it discovers or you provide. This plan of action provides unique perspectives on what you are asking. Think of it was refining your question.
+
+-   **Writing**
+
+    In this phase Wingman will modify existing files or create new ones. Using the plan created in the previous step, it will focus solely on creating the best code it possibly can.
+
+-   **Reviewing**
+
+    In the last phase Wingman will review the changes the code writer has made. It will decide if the changes met the objective or if there are any issues with the changes that need to be corrected. If there are issues, it will restart in the planning phase and use the existing code changes, and code review as context.
+
+Both the **Planning** and **Review** phases are a work in progress. The goal is to expand these in the future so that Wingman performs similar to how you would when you approach a problem.
+
+## Indexing
+
+Wingman includes a vector database built in that allows you to configure inclusion and exclusion filters for files to be embedded using the embedding provider of your choice. Once you configure your embeddings provider, you can choose to run a **full index** of your codebase from the Indexer view, or Wingman will index your files as your save them.
+
+Wingman is the only code assistant that not only embeds files, but creates a comprehensive graph of your entire codebase. Allowing Wingman to leverage file to file relationships.
+
+**Embeddings are stored locally.**

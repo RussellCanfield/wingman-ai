@@ -91,7 +91,7 @@ export default function DiffView() {
 
 	return (
 		<div className="bg-gray-900 rounded-lg shadow-lg">
-			<div className="bg-gray-800 p-4 flex justify-between items-center">
+			<div className="bg-gray-800 p-4 flex justify-between items-center sticky top-0 z-10">
 				<p className="text-white font-semibold truncate">{diff.file}</p>
 				<button
 					className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
@@ -102,12 +102,12 @@ export default function DiffView() {
 					<span>Accept</span>
 				</button>
 			</div>
-			<div>
+			<div className="overflow-y-auto max-h-[calc(100vh-8rem)]">
 				<ReactDiffViewer
 					oldValue={diff.original}
 					newValue={diff.diff}
 					styles={newStyles}
-					compareMethod={DiffMethod.TRIMMED_LINES}
+					compareMethod={DiffMethod.CHARS}
 					splitView={false}
 					useDarkTheme={isDarkTheme}
 					showDiffOnly={false}

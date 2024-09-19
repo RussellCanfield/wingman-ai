@@ -108,12 +108,6 @@ ${formatMessages(state.followUpInstructions)}`;
 	replanStep = async (
 		state: PlanExecuteState
 	): Promise<Partial<PlanExecuteState>> => {
-		const projectDetails = new ProjectDetailsHandler(
-			this.workspace,
-			undefined
-		);
-		const details = await projectDetails.retrieveProjectDetails();
-
 		const codeFiles = state.plan?.files
 			?.map((f) => {
 				return `File:
@@ -128,7 +122,7 @@ ${f.code}`;
 			.join("\n\n---FILE--\n\n");
 
 		const output = (await this.replanner.invoke({
-			details: details?.description || "Not available.",
+			details: state.projectDetails || "Not available.",
 			objective: this.buildObjective(state),
 			files: `${
 				codeFiles

@@ -3,47 +3,52 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types";
-import { formatMessages } from "../utils";
+import { buildObjective, formatMessages } from "../utils";
 import { ProjectDetailsHandler } from "../../server/project-details";
 import { VectorQuery } from "../../server/query";
-import { CodeGraph } from "../../server/files/graph";
-import { Store } from "../../store/vector";
 import { NoFilesChangedError } from "../errors";
+import { OutputFixingParser } from "langchain/output_parsers";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
 export const codeWriterSchema = z.object({
-	steps: z.array(
-		z.object({
-			description: z.string().describe("The step to take"),
-			command: z
-				.string()
-				.optional()
-				.describe(
-					"If the step is a command, this is the command to run"
-				),
-		})
-	),
-	files: z.array(
-		z.object({
-			file: z.string(),
-			markdown: z
-				.string()
-				.describe(
-					"A markdown formatted code block with the code you've written or modified"
-				),
-			changes: z
-				.array(z.string())
-				.describe("A list of changes made to the file")
-				.optional(),
-			hasChanged: z
-				.boolean()
-				.describe(
-					"Whether or not the file has been changed. If false, the file will be skipped"
-				)
-				.optional(),
-		})
-	),
+	steps: z
+		.array(
+			z.object({
+				description: z.string().describe("The step to take"),
+				command: z
+					.string()
+					.optional()
+					.describe(
+						"If the step is a command, this is the command to run"
+					),
+			})
+		)
+		.describe("A list of manual steps to follow to complete the task"),
+	files: z
+		.array(
+			z
+				.object({
+					file: z.string().describe("The file path"),
+					markdown: z
+						.string()
+						.describe(
+							"A markdown formatted code block with the code you've written or modified. Ensure this is always markdown formatted with the proper language set."
+						),
+					changes: z
+						.array(z.string())
+						.describe("A list of changes made to the file")
+						.optional(),
+					hasChanged: z
+						.boolean()
+						.describe(
+							"Whether or not the file has been changed. If false, the file will be skipped"
+						)
+						.optional(),
+				})
+				.describe("A file you've modified or created")
+		)
+		.describe("A list of files you've modified or created"),
 });
 
 const planSchema = zodToJsonSchema(codeWriterSchema);
@@ -58,8 +63,8 @@ export const codeWriterTool = {
 	function: codeWriterFunction,
 };
 
-const writerPrompt = ChatPromptTemplate.fromTemplate(
-	`You are an expert software engineer tasked with implementing project enhancements based on a user's objective. Your role is to provide a comprehensive solution that includes both manual steps and code changes. Approach this task methodically, following these guidelines:
+const writerPrompt =
+	ChatPromptTemplate.fromTemplate(`You are an expert software engineer tasked with implementing project enhancements based on a user's objective. Your role is to provide a comprehensive solution that includes both manual steps and code changes. Approach this task methodically, following these guidelines:
 
 Output Structure:
 1. Steps: A clear, concise guide for manual actions the user must take, not covered by modifications done to files.
@@ -71,6 +76,7 @@ General Instructions:
 - Ensure 'hasChanged' property is included for every file, without exception.
 - When creating new files, use consistent and project-related file paths.
 - List all changes made to modified or created files.
+- Ensure you output using the correct JSON schema provided, this is critial.
 
 Step Writing Guidelines:
 
@@ -166,6 +172,63 @@ File Handling:
   - Output markdown using the 'markdown' field, ensuring GitHub-flavored markdown format with the correct language for the code block.
   - YOU MUST PRODUCE CODE WRAPPED IN GITHUB-FLAVORED MARKDOWN!
 
+Example Output Structures:
+
+Example 1:
+(
+  "steps": [
+    (
+      "description": "Create a new file called 'hello.js'"
+    ),
+    (
+      "description": "Run the JavaScript file",
+      "command": "node hello.js"
+    )
+  ],
+  "files": [
+    (
+      "file": "hello.js",
+      "markdown": "\`\`\`javascript\\nconsole.log('Hello, World!');\\n\`\`\`",
+      "changes": ["Added console.log statement"],
+      "hasChanged": true
+    )
+  ]
+)
+
+Example 2:
+(
+  "steps": [
+    (
+      "description": "Update the existing 'index.html' file"
+    ),
+    (
+      "description": "Create a new CSS file 'styles.css'"
+    ),
+    (
+      "description": "Open the HTML file in a browser",
+      "command": "open index.html"
+    )
+  ],
+  "files": [
+    (
+      "file": "index.html",
+      "markdown": "\`\`\`html\\n<!DOCTYPE html>\\n<html lang=\\"en\\">\\n<head>\\n  <meta charset=\\"UTF-8\\">\\n  <title>Updated Page</title>\\n  <link rel=\\"stylesheet\\" href=\\"styles.css\\">\\n</head>\\n<body>\\n  <h1>Hello, Updated World!</h1>\\n</body>\\n</html>\\n\`\`\`",
+      "changes": ["Updated title", "Added link to styles.css"],
+      "hasChanged": true
+    ),
+    (
+      "file": "styles.css",
+      "markdown": "\`\`\`css\\nbody (\\n  font-family: Arial, sans-serif;\\n  background-color: #f0f0f0;\\n)\\n\\nh1 (\\n  color: #333;\\n)\\n\`\`\`",
+      "changes": ["Created new CSS file"],
+      "hasChanged": true
+    )
+  ]
+)
+
+Note: In the examples above, parentheses () are used instead of curly braces. When you create your output, replace () with curly braces to form valid JSON.
+
+Use these examples as a reference for the structure and format of your output.
+
 ------
 
 Project Details:
@@ -180,8 +243,6 @@ Objective:
 
 {steps}
 
-{recentChanges}
-
 {review}
 
 ------
@@ -194,8 +255,7 @@ Files:
 
 Proceed with implementing the required changes to meet the given objective. 
 Remember, using GitHub-flavored markdown for code output is mandatory and crucial for the task's success.
-YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`
-);
+YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`);
 
 export class CodeWriter {
 	model: ReturnType<typeof BaseChatModel.prototype.withStructuredOutput>;
@@ -204,9 +264,7 @@ export class CodeWriter {
 
 	constructor(
 		private readonly chatModel: BaseChatModel,
-		private readonly workspace: string,
-		private readonly codeGraph: CodeGraph,
-		private readonly store: Store
+		private readonly workspace: string
 	) {
 		//@ts-expect-error
 		this.model = this.chatModel.withStructuredOutput(codeWriterSchema, {
@@ -215,64 +273,31 @@ export class CodeWriter {
 		this.codeWriter = writerPrompt.pipe(this.model);
 	}
 
-	private buildObjective(state: PlanExecuteState) {
-		let objective = `Objective:
-
-${formatMessages(state.messages)}`;
-
-		if (state.followUpInstructions.length > 0) {
-			objective = `The user has provided the following instructions to refine the code you've already written or modified:
-    
-${formatMessages(state.followUpInstructions)}`;
-		}
-
-		return objective;
-	}
-
 	codeWriterStep = async (
 		state: PlanExecuteState
 	): Promise<Partial<PlanExecuteState>> => {
-		const projectDetails = new ProjectDetailsHandler(
-			this.workspace,
-			undefined
-		);
-		const details = await projectDetails.retrieveProjectDetails();
 		const files: CodeWriterSchema["files"] = [];
 
-		const prompt = Array.from(state.plan!.files!.entries())
-			.map(([file, doc]) => {
+		const prompt = state
+			.plan!.files!.map((f) => {
 				return `File:
-${file}
+${f.file}
 
 Code:
-${doc.code}`;
+${f.code}`;
 			})
 			.join("\n\n---FILE---\n");
 
-		const recentChanges = state.plan?.files?.map((f) => {
-			return `File:
-${f.file}
-
-Changes made:
-- ${f.changes?.join("\n- ")}`;
-		});
-
 		const plan = (await this.codeWriter.invoke({
-			details: details?.description || "Not available.",
-			objective: this.buildObjective(state),
-			steps: state.plan?.steps
+			details: state.projectDetails || "Not available.",
+			objective: buildObjective(state),
+			steps: state.steps
 				? `Here are a list of steps that may help you reach your objective:
       
-${state.plan.steps.join("\n")}
+${state.steps.join("\n")}
 
 ------`
 				: "",
-			recentChanges: `Use these recent changes, along with the objective to determine what you need to do next.
-Do not repeat changes already made in the recent changes section.
-
-${recentChanges}
-
-------`,
 			review:
 				state.review?.comments?.length === 0
 					? ""

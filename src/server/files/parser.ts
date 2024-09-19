@@ -8,7 +8,6 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { type SgNode, js } from "@ast-grep/napi";
 import {
-	type CodeGraph,
 	CodeGraphEdgeMap,
 	type CodeGraphNode,
 	createCodeNode,
@@ -19,10 +18,7 @@ import { SymbolRetriever } from "../retriever";
 import { pathToFileURL } from "url";
 
 export class CodeParser {
-	constructor(
-		private readonly codeGraph: CodeGraph,
-		private readonly symbolRetriever: SymbolRetriever
-	) {}
+	constructor(private readonly symbolRetriever: SymbolRetriever) {}
 
 	async getDocumentSymbols(
 		textDocumentUri: string
@@ -56,9 +52,10 @@ export class CodeParser {
 		parentSymbol: DocumentSymbol,
 		importEdges: CodeGraphEdgeMap,
 		exportEdges: CodeGraphEdgeMap
-	) {
+	): Promise<CodeGraphNode[]> {
+		const nodes: CodeGraphNode[] = [];
 		if (!parentSymbol.children) {
-			return;
+			return nodes;
 		}
 
 		for await (const child of parentSymbol.children) {
@@ -70,10 +67,10 @@ export class CodeParser {
 				await this.processSymbol(textDocument, child);
 
 			childNode.parentNodeId = parentCodeNode.id;
-			this.codeGraph.addNode(childNode);
+			nodes.push(childNode);
 
 			for (const extractedCodeNode of extractedCodeNodes) {
-				this.codeGraph.addNode(extractedCodeNode);
+				nodes.push(extractedCodeNode);
 
 				if (childNode.id !== extractedCodeNode.id) {
 					if (importEdges.has(childNode.id)) {
@@ -102,6 +99,8 @@ export class CodeParser {
 				}
 			}
 		}
+
+		return nodes;
 	}
 
 	// This is not perfect, but it's a good start

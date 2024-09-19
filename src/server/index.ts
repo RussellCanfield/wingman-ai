@@ -117,10 +117,7 @@ export class LSPServer {
 		);
 		const { codeGraph } = await this.vectorStore?.initialize();
 		this.codeGraph = codeGraph;
-		this.codeParser = new CodeParser(
-			this.codeGraph!,
-			this.symbolRetriever!
-		);
+		this.codeParser = new CodeParser(this.symbolRetriever!);
 		const codeGenerator = new Generator(this.codeParser!, modelProvider);
 		this.indexer = new Indexer(
 			workspaceFolder,
