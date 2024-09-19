@@ -3,11 +3,8 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types";
-import { buildObjective, formatMessages } from "../utils";
-import { ProjectDetailsHandler } from "../../server/project-details";
-import { VectorQuery } from "../../server/query";
+import { buildObjective, loadWingmanRules } from "../utils";
 import { NoFilesChangedError } from "../errors";
-import { OutputFixingParser } from "langchain/output_parsers";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -63,8 +60,7 @@ export const codeWriterTool = {
 	function: codeWriterFunction,
 };
 
-const writerPrompt =
-	ChatPromptTemplate.fromTemplate(`You are an expert software engineer tasked with implementing project enhancements based on a user's objective. Your role is to provide a comprehensive solution that includes both manual steps and code changes. Approach this task methodically, following these guidelines:
+const baseWriterPrompt = `You are an expert software engineer tasked with implementing project enhancements based on a user's objective. Your role is to provide a comprehensive solution that includes both manual steps and code changes. Approach this task methodically, following these guidelines:
 
 Output Structure:
 1. Steps: A clear, concise guide for manual actions the user must take, not covered by modifications done to files.
@@ -164,6 +160,8 @@ Code Writing Guidelines:
     - Update or create documentation for new or modified functionality.
     - Include clear, concise comments explaining the purpose and behavior of complex code sections.
 
+{RULE_PACK}
+
 File Handling:
 - For each file:
   - If relevant to the objective: Modify as needed and set 'hasChanged' to true.
@@ -255,27 +253,34 @@ Files:
 
 Proceed with implementing the required changes to meet the given objective. 
 Remember, using GitHub-flavored markdown for code output is mandatory and crucial for the task's success.
-YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`);
+YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`;
+
+const buildPrompt = (rulePack?: string) => {
+	const rulePromptAddition = !rulePack
+		? ""
+		: `Use the following rules to guide your code writing:
+  
+${rulePack}`;
+	return ChatPromptTemplate.fromTemplate(
+		baseWriterPrompt.replace("{RULE_PACK}", rulePromptAddition)
+	);
+};
 
 export class CodeWriter {
-	model: ReturnType<typeof BaseChatModel.prototype.withStructuredOutput>;
-	codeWriter: ReturnType<typeof writerPrompt.pipe>;
-	vectorQuery = new VectorQuery();
-
 	constructor(
 		private readonly chatModel: BaseChatModel,
 		private readonly workspace: string
-	) {
-		//@ts-expect-error
-		this.model = this.chatModel.withStructuredOutput(codeWriterSchema, {
-			name: "code-writer",
-		});
-		this.codeWriter = writerPrompt.pipe(this.model);
-	}
+	) {}
 
 	codeWriterStep = async (
 		state: PlanExecuteState
 	): Promise<Partial<PlanExecuteState>> => {
+		const rulePack = loadWingmanRules(this.workspace);
+		const model = this.chatModel.withStructuredOutput(codeWriterSchema, {
+			name: "code-writer",
+		});
+		const codeWriter = buildPrompt(rulePack).pipe(model);
+
 		const files: CodeWriterSchema["files"] = [];
 
 		const prompt = state
@@ -288,7 +293,7 @@ ${f.code}`;
 			})
 			.join("\n\n---FILE---\n");
 
-		const plan = (await this.codeWriter.invoke({
+		const plan = (await codeWriter.invoke({
 			details: state.projectDetails || "Not available.",
 			objective: buildObjective(state),
 			steps: state.steps
