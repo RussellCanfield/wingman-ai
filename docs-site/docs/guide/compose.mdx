@@ -1,3 +1,5 @@
+import { SourceCode } from '@theme';
+
 # Compose
 
 Composer is a new feature for Wingman, think of it as an advanced chat view that is capable of thinking through tasks. Composer currently works in two ways:
@@ -31,10 +33,12 @@ Composer will iterate over 3 unique phases for code generation:
 
 Both the **Planning** and **Review** phases are a work in progress. The goal is to expand these in the future so that Wingman performs similar to how you would when you approach a problem.
 
-## Indexing
+## Extending
 
-Wingman includes a vector database built in that allows you to configure inclusion and exclusion filters for files to be embedded using the embedding provider of your choice. Once you configure your embeddings provider, you can choose to run a **full index** of your codebase from the Indexer view, or Wingman will index your files as your save them.
+You are not limited to out of the box functionality when it comes to code writing. Simply add **.wingmanrules** to the root of your project:
 
-Wingman is the only code assistant that not only embeds files, but creates a comprehensive graph of your entire codebase. Allowing Wingman to leverage file to file relationships.
+```text title=".wingmanrules"
+Prefix all react components with "AWESOME_"
+```
 
-**Embeddings are stored locally.**
+You can add any additional instructions you want Wingman to follow. This can be helpful when you have specific coding standards or practices you want to enforce.

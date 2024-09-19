@@ -29,6 +29,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		interactionSettings,
 	} = GetSettings();
 
+	if (
+		!vscode.workspace.workspaceFolders ||
+		vscode.workspace.workspaceFolders.length === 0
+	) {
+		vscode.window.showErrorMessage(
+			"Wingman requires an open workspace to function."
+		);
+		return;
+	}
+
 	await lspClient.activate(
 		context,
 		config,
