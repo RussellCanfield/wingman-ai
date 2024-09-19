@@ -386,7 +386,7 @@ ${context?.text}
 		if (projectDetails) {
 			ragContext = ragContext.replace(
 				"{PROJECT_TEMPLATE}",
-				`Here are the project details for reference:
+				`Here are details about the current project:
 ${projectDetails}
 
 =======`
@@ -405,7 +405,8 @@ ${symbols}
 		} else {
 			ragContext = ragContext.replace(
 				"{CONTEXT_TEMPLATE}",
-				`Here are the available types to use as a reference when answering questions, these may not be related to the code provided:
+				`Use these code snippets from the current project as a reference when answering questions.
+These code snippets serve as additional context for the user's question:
 
 ${codeDocs.join("\n----\n")}
 
