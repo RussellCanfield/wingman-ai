@@ -145,7 +145,7 @@ async function getWebViewHtml(
 		vscode.Uri.joinPath(context.extensionUri, "out", "views", "diff.html")
 	);
 	const htmlContent = (
-		await vscode.workspace.fs.readFile(vscode.Uri.file(htmlUri.path))
+		await vscode.workspace.fs.readFile(vscode.Uri.file(htmlUri.fsPath))
 	).toString();
 
 	// Replace placeholders in the HTML content

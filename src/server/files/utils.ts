@@ -19,7 +19,9 @@ export const getWorkspaceFolderForDocument = (
 };
 
 export function filePathToUri(filePath: string): string {
-	const resolvedPath = path.resolve(filePath);
+	const resolvedPath = path.isAbsolute(filePath)
+		? filePath
+		: path.resolve(filePath);
 	return pathToFileURL(resolvedPath).href;
 }
 

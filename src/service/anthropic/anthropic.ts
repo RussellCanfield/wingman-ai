@@ -54,6 +54,14 @@ export class Anthropic implements AIProvider {
 		});
 	}
 
+	async validateSettings(): Promise<boolean> {
+		const isChatModelValid =
+			this.settings?.chatModel?.startsWith("claude") || false;
+		const isCodeModelValid =
+			this.settings?.codeModel?.startsWith("claude") || false;
+		return isChatModelValid && isCodeModelValid;
+	}
+
 	getModel(): BaseChatModel {
 		return this.baseModel!;
 	}

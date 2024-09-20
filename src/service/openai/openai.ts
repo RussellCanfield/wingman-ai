@@ -61,14 +61,22 @@ export class OpenAI implements AIProvider {
 		return this.baseModel!.invoke(prompt);
 	}
 
+	async validateSettings(): Promise<boolean> {
+		const isChatModelValid =
+			this.settings?.chatModel?.startsWith("gpt-4") ||
+			this.settings?.chatModel?.startsWith("o1") ||
+			false;
+		const isCodeModelValid =
+			this.settings?.codeModel?.startsWith("gpt-4") ||
+			this.settings?.codeModel?.startsWith("o1") ||
+			false;
+		return isChatModelValid && isCodeModelValid;
+	}
+
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
 		switch (true) {
 			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o1"):
 				return new GPT4Turbo();
-			default:
-				throw new Error(
-					"Invalid code model name, currently code supports the GPT-4o, GPT-4 Turbo and GPT-4 model(s)."
-				);
 		}
 	}
 
@@ -76,10 +84,6 @@ export class OpenAI implements AIProvider {
 		switch (true) {
 			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o1"):
 				return new GPT4Turbo();
-			default:
-				throw new Error(
-					"Invalid chat model name, currently chat supports the GPT-4o, GPT-4 Turbo and GPT-4 model(s)."
-				);
 		}
 	}
 

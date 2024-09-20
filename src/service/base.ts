@@ -5,6 +5,7 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 export interface AIProvider {
 	chatModel: AIModel | undefined;
 	codeModel: AIModel | undefined;
+	validateSettings(): Promise<boolean>;
 	clearChatHistory(): void;
 	codeComplete(
 		beginning: string,

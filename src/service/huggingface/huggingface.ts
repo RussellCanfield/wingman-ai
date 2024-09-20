@@ -64,6 +64,18 @@ export class HuggingFace implements AIProvider {
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
 	}
 
+	async validateSettings(): Promise<boolean> {
+		const isChatModelValid =
+			this.settings?.chatModel?.startsWith("mistralai/Mistral") ||
+			this.settings?.chatModel?.startsWith("mistralai/Mixtral") ||
+			false;
+		const isCodeModelValid =
+			this.settings?.codeModel?.startsWith("codellama") ||
+			this.settings?.codeModel?.startsWith("bigcode/starcoder2") ||
+			false;
+		return isChatModelValid && isCodeModelValid;
+	}
+
 	getModel(): BaseChatModel {
 		throw new Error("Method not implemented.");
 	}
@@ -82,10 +94,6 @@ export class HuggingFace implements AIProvider {
 		} else if (codeModel.startsWith("bigcode/starcoder2")) {
 			return new Starcoder2();
 		}
-
-		throw new Error(
-			"Invalid code model name, currently code supports the CodeLlama model."
-		);
 	}
 
 	private getChatModel(chatModel: string): HuggingFaceAIModel | undefined {
@@ -94,10 +102,6 @@ export class HuggingFace implements AIProvider {
 		} else if (chatModel.startsWith("mistralai/Mixtral")) {
 			return new Mixtral();
 		}
-
-		throw new Error(
-			"Invalid chat model name, currently chat supports the Mistral and Mixtral model(s)."
-		);
 	}
 
 	private getSafeUrl() {

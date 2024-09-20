@@ -12,7 +12,6 @@ import { loggingProvider } from "./providers/loggingProvider";
 import { eventEmitter } from "./events/eventEmitter";
 import { GetAllSettings, GetSettings } from "./service/settings";
 import { DiffViewProvider } from "./providers/diffViewProvider";
-import { run } from "./build";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -25,11 +24,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		config,
 		interactionSettings,
 	} = GetSettings();
-
-	const extensionPath = context.extensionPath;
-
-	await run(__dirname);
-
 	if (
 		!vscode.workspace.workspaceFolders ||
 		vscode.workspace.workspaceFolders.length === 0
@@ -58,6 +52,12 @@ export async function activate(context: vscode.ExtensionContext) {
 			config,
 			interactionSettings!
 		);
+
+		if (!(await modelProvider.validateSettings())) {
+			throw new Error(
+				`AI Provider ${aiProvider} is not configured correctly.`
+			);
+		}
 	} catch (error) {
 		if (error instanceof Error) {
 			vscode.window.showErrorMessage(error.message);

@@ -32,7 +32,7 @@ import { DiffViewProvider } from "./diffViewProvider";
 let abortController = new AbortController();
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = "wing-man-chat-view";
+	public static readonly viewType = "wingman.chatview";
 
 	private _disposables: vscode.Disposable[] = [];
 
@@ -180,7 +180,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							// Filter files based on the file name
 							const filteredFiles = allFiles.filter((file) => {
 								const fileName =
-									vscode.workspace.asRelativePath(file.path);
+									vscode.workspace.asRelativePath(
+										file.fsPath
+									);
 								return (
 									fileName &&
 									fileName.toLowerCase().includes(searchTerm)
@@ -461,7 +463,7 @@ ${codeDocs.join("\n----\n")}
 
 		const nonce = getNonce();
 
-		const htmlContent = fs.readFileSync(htmlUri.path, "utf8");
+		const htmlContent = fs.readFileSync(htmlUri.fsPath, "utf8");
 
 		// Replace placeholders in the HTML content
 		const finalHtmlContent = htmlContent.replace(

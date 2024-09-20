@@ -20,7 +20,6 @@ import {
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOllama } from "@langchain/ollama";
-import { OllamaEmbeddings } from "@langchain/ollama";
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -71,15 +70,13 @@ export class Ollama implements AIStreamProvicer {
 		return this.baseModel!.invoke(prompt);
 	}
 
-	private async validateSettings() {
+	async validateSettings(): Promise<boolean> {
 		if (
 			!(await this.validateModelExists(
 				this.settings?.chatModel ?? "unknown"
 			))
 		) {
-			throw new Error(
-				`Unable to verify Ollama has chat model: ${this.settings?.chatModel}, have you pulled the model or is the config wrong?`
-			);
+			return false;
 		}
 
 		if (
@@ -87,10 +84,10 @@ export class Ollama implements AIStreamProvicer {
 				this.settings?.codeModel ?? "unknown"
 			))
 		) {
-			throw new Error(
-				`Unable to verify Ollama has code model: ${this.settings?.codeModel}, have you pulled the model or is the config wrong?`
-			);
+			return false;
 		}
+
+		return true;
 	}
 
 	private getCodeModel(codeModel: string): OllamaAIModel | undefined {
@@ -105,10 +102,6 @@ export class Ollama implements AIStreamProvicer {
 				return new CodeQwen();
 			case codeModel.startsWith("codestral"):
 				return new Codestral();
-			default:
-				throw new Error(
-					"Invalid code model name, currently code supports CodeLlama and Deepseek models."
-				);
 		}
 	}
 
@@ -128,10 +121,6 @@ export class Ollama implements AIStreamProvicer {
 				return new CodeQwen();
 			case chatModel.startsWith("codestral"):
 				return new Codestral();
-			default:
-				throw new Error(
-					"Invalid chat model name, currently chat supports CodeLlama, Phind CodeLlama and Deepseek models."
-				);
 		}
 	}
 

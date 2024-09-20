@@ -194,7 +194,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 		const nonce = this.getNonce();
 
-		const htmlContent = fs.readFileSync(htmlUri.path, "utf8");
+		const htmlContent = fs.readFileSync(htmlUri.fsPath, "utf8");
 
 		// Replace placeholders in the HTML content
 		const finalHtmlContent = htmlContent.replace(

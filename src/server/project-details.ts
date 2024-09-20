@@ -45,51 +45,56 @@ export class ProjectDetailsHandler {
 	};
 
 	generateProjectDetails = async () => {
-		const projectDetailsPath = this.getProjectDetailsFileLocation();
+		try {
+			const projectDetailsPath = this.getProjectDetailsFileLocation();
 
-		let packageJsonHash = "";
-		if (fs.existsSync(path.join(this.workspace, "package.json"))) {
-			const packageJson = fs.readFileSync(
-				path.join(this.workspace, "package.json"),
-				"utf8"
-			);
-			packageJsonHash = crypto
-				.createHash("sha256")
-				.update(packageJson)
-				.digest("hex");
+			let packageJsonHash = "";
+			if (fs.existsSync(path.join(this.workspace, "package.json"))) {
+				const packageJson = fs.readFileSync(
+					path.join(this.workspace, "package.json"),
+					"utf8"
+				);
+				packageJsonHash = crypto
+					.createHash("sha256")
+					.update(packageJson)
+					.digest("hex");
 
-			const currentProjectDetails = await this.retrieveProjectDetails();
+				const currentProjectDetails =
+					await this.retrieveProjectDetails();
 
-			if (currentProjectDetails?.version === packageJsonHash) {
-				return;
-			}
+				if (currentProjectDetails?.version === packageJsonHash) {
+					return;
+				}
 
-			const locateLockFile = await this.locateLockFile();
+				const locateLockFile = await this.locateLockFile();
 
-			const projectDetails =
-				await this.generator?.generatorProjectSummary(
-					packageJson,
-					locateLockFile
+				const projectDetails =
+					await this.generator?.generatorProjectSummary(
+						packageJson,
+						locateLockFile
+					);
+
+				// Ensure the directory exists
+				await fs.promises.mkdir(path.dirname(projectDetailsPath), {
+					recursive: true,
+				});
+
+				await fs.promises.writeFile(
+					projectDetailsPath,
+					JSON.stringify(
+						{
+							description: projectDetails,
+							version: packageJsonHash,
+						},
+						null,
+						2
+					)
 				);
 
-			// Ensure the directory exists
-			await fs.promises.mkdir(path.dirname(projectDetailsPath), {
-				recursive: true,
-			});
-
-			await fs.promises.writeFile(
-				projectDetailsPath,
-				JSON.stringify(
-					{
-						description: projectDetails,
-						version: packageJsonHash,
-					},
-					null,
-					2
-				)
-			);
-
-			console.log("Project details generated:", projectDetailsPath);
+				console.log("Project details generated:", projectDetailsPath);
+			}
+		} catch (e) {
+			console.error("Unable to generate project details", e);
 		}
 	};
 

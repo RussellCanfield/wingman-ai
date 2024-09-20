@@ -352,12 +352,12 @@ export class LSPServer {
 
 		this.connection?.onRequest(
 			"wingman/fullIndexBuild",
-			async (request: { files: { path: string }[] }) => {
+			async (request: { files: { fsPath: string }[] }) => {
 				this.connection?.console.log("Starting full index build");
 
 				await this.vectorStore?.createIndex();
 				await this.indexer?.processDocuments(
-					request.files.map((file) => filePathToUri(file.path)),
+					request.files.map((file) => filePathToUri(file.fsPath)),
 					true
 				);
 			}
