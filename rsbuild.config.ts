@@ -10,10 +10,6 @@ export default ({ env, command, envMode }) => {
 				server: "./src/server/index.ts",
 				client: "./src/client/index.ts",
 			},
-			define: {
-				PLATFORM: "win32",
-				ARCH: "x64",
-			},
 		},
 		dev: {
 			writeToDisk: true,
