@@ -21,7 +21,7 @@ import {
 	getSymbolsFromOpenFiles,
 	replaceTextInDocument,
 } from "./utilities";
-import { LSPClient } from "../client";
+import { LSPClient } from "../client/index";
 import {
 	ComposerRequest,
 	DiffViewCommand,

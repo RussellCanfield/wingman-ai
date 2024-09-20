@@ -95,8 +95,7 @@ export class LSPClient {
 		const serverModule = vscode.Uri.joinPath(
 			context.extensionUri,
 			"out",
-			"server",
-			"index.js"
+			"server.js"
 		).fsPath;
 
 		const debugOptions = { execArgv: ["--nolazy", "--inspect=6009"] };

@@ -2,9 +2,8 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { PlanExecuteState } from "../types/index.js";
-import { formatMessages } from "../utils.js";
-import { ProjectDetailsHandler } from "../../server/project-details.js";
+import { PlanExecuteState } from "../types/index";
+import { formatMessages } from "../utils";
 
 export type ReplanSchema = z.infer<typeof plan>;
 

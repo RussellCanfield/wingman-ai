@@ -1,21 +1,18 @@
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ------------------------------------------------------------------------------------------ */
 import * as vscode from "vscode";
-import { GenDocs } from "./commands/GenDocs.js";
-import { ChatViewProvider } from "./providers/chatViewProvider.js";
-import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
-import { ConfigViewProvider } from "./providers/configViewProvider.js";
-import { HotKeyCodeSuggestionProvider } from "./providers/hotkeyCodeSuggestionProvider.js";
-import { RefactorProvider } from "./providers/refactorProvider.js";
-import { ActivityStatusBar } from "./providers/statusBarProvider.js";
-import lspClient from "./client/index.js";
-import { CreateAIProvider } from "./service/utils/models.js";
-import { loggingProvider } from "./providers/loggingProvider.js";
-import { eventEmitter } from "./events/eventEmitter.js";
-import { GetAllSettings, GetSettings } from "./service/settings.js";
-import { DiffViewProvider } from "./providers/diffViewProvider.js";
+import { GenDocs } from "./commands/GenDocs";
+import { ChatViewProvider } from "./providers/chatViewProvider";
+import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider";
+import { ConfigViewProvider } from "./providers/configViewProvider";
+import { HotKeyCodeSuggestionProvider } from "./providers/hotkeyCodeSuggestionProvider";
+import { RefactorProvider } from "./providers/refactorProvider";
+import { ActivityStatusBar } from "./providers/statusBarProvider";
+import lspClient from "./client/index";
+import { CreateAIProvider } from "./service/utils/models";
+import { loggingProvider } from "./providers/loggingProvider";
+import { eventEmitter } from "./events/eventEmitter";
+import { GetAllSettings, GetSettings } from "./service/settings";
+import { DiffViewProvider } from "./providers/diffViewProvider";
+import { run } from "./build";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -28,6 +25,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		config,
 		interactionSettings,
 	} = GetSettings();
+
+	const extensionPath = context.extensionPath;
+
+	await run(__dirname);
 
 	if (
 		!vscode.workspace.workspaceFolders ||

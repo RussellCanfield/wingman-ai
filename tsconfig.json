@@ -2,8 +2,8 @@
 	"compilerOptions": {
 		"target": "es2020",
 		"lib": ["es2020"],
-		"module": "commonjs",
-		"moduleResolution": "node",
+		"module": "Node16",
+		"moduleResolution": "Node16",
 		"outDir": "out",
 		"sourceMap": true,
 		"rootDir": "src",
@@ -15,12 +15,6 @@
 		}
 	},
 	"include": ["src"],
-	"exclude": [
-		"node_modules",
-		".vscode-test",
-		"webview-ui",
-		"configview-ui",
-		"shared"
-	],
+	"exclude": ["node_modules", ".vscode-test"],
 	"references": [{ "path": "./shared" }]
 }

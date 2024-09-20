@@ -13,10 +13,7 @@
 				"--extensionDevelopmentPath=${workspaceFolder}",
 				"--exitcrash"
 			],
-			"outFiles": [
-				"${workspaceFolder}/out/**/*.js",
-				"${workspaceFolder}/out/webview-ui/assets/index.js"
-			],
+			"outFiles": ["${workspaceFolder}/out/**/*.js"],
 			"sourceMaps": true,
 			"smartStep": true,
 			"preLaunchTask": "rsbuild"

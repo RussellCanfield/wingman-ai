@@ -1,17 +1,17 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { BaseCheckpointSaver, StateGraphArgs } from "@langchain/langgraph";
 import { ChatMessage } from "@langchain/core/messages";
-import { CodeGraph } from "../server/files/graph.js";
+import { CodeGraph } from "../server/files/graph";
 import { RunnableConfig } from "@langchain/core/runnables";
-import { CodeWriter } from "./tools/code-writer.js";
-import { Replanner } from "./tools/replan.js";
+import { CodeWriter } from "./tools/code-writer";
+import { Replanner } from "./tools/replan";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../store/vector.js";
-import { Plan, PlanExecuteState, Review } from "./types/index.js";
-import { getTextDocumentFromPath } from "../server/files/utils.js";
-import { FileMetadata } from "@shared/types/Message.js";
-import { CodePlanner } from "./tools/planner.js";
-import { NoFilesChangedError } from "./errors.js";
+import { Plan, PlanExecuteState, Review } from "./types/index";
+import { getTextDocumentFromPath } from "../server/files/utils";
+import { FileMetadata } from "@shared/types/Message";
+import { CodePlanner } from "./tools/planner";
+import { NoFilesChangedError } from "./errors";
 
 export interface Thread {
 	configurable: {
