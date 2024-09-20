@@ -409,7 +409,7 @@
 		"vscode:prepublish": "npm run compile",
 		"compile": "npm run clean && node ./scripts/build.js && npm run build && npm run build:shared && npm run build:views",
 		"watch": "tsc -b --watch",
-		"watch:views": "npm run build && cd views-ui && npm run dev",
+		"watch:views": "NODE_ENV=development npm run build && cd views-ui && npm run dev",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
 		"clean": "rimraf out"

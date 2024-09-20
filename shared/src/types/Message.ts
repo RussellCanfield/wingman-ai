@@ -26,6 +26,7 @@ export interface CodeContextDetails {
 	language: string;
 	currentLine: string;
 	text: string;
+	fromSelection?: boolean;
 }
 
 export interface CodeContext

@@ -367,33 +367,32 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				: `The user is currently working on the file: ${context?.fileName}`
 		);
 
-		ragContext = ragContext.replace(
-			"{SYMBOLS_TEMPLATE}",
-			!context?.text
-				? ""
-				: `The following code snippet is provided for context:
-
-${context?.text}
-
-=======`
-		);
+		ragContext =
+			ragContext.replace(
+				"{CONTEXT_TEMPLATE}",
+				!context?.text
+					? ""
+					: context.fromSelection
+					? `The user has selected the following code and wishes you to focus around this functionality:\n\n${context.text}`
+					: "The user is currently working on the following text:"
+			) + "\n\n=======";
 
 		ragContext = ragContext.replace(
 			"{CURRENT_LINE_TEMPLATE}",
-			!context?.currentLine
+			!context?.currentLine || context?.fromSelection
 				? ""
 				: `The user is currently working on the following line: ${context?.currentLine}`
 		);
 
-		if (projectDetails) {
-			ragContext = ragContext.replace(
-				"{PROJECT_TEMPLATE}",
-				`Here are details about the current project:
+		ragContext = ragContext.replace(
+			"{PROJECT_TEMPLATE}",
+			!projectDetails
+				? ""
+				: `Here are details about the current project:
 ${projectDetails}
 
 =======`
-			);
-		}
+		);
 
 		if (codeDocs.length === 0) {
 			ragContext = ragContext.replace(
@@ -410,7 +409,7 @@ ${symbols}
 				`Use these code snippets from the current project as a reference when answering questions.
 These code snippets serve as additional context for the user's question:
 
-${codeDocs.join("\n----\n")}
+${codeDocs.join("\n\n----\n")}
 
 =======`
 			);
@@ -570,5 +569,6 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		fileName: document.fileName,
 		workspaceName: workspaceFolder?.name ?? "",
 		language: document.languageId,
+		fromSelection: !selection.isEmpty,
 	};
 }

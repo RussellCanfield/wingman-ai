@@ -201,7 +201,7 @@ const ChatInput = ({
 							tabIndex={0}
 							rows={1}
 							autoFocus
-							className={`flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600 overflow-hidden h-auto`}
+							className={`flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600 overflow-hidden h-auto p-1`}
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>

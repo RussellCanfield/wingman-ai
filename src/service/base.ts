@@ -11,7 +11,8 @@ export interface AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string>;
 	chat(
 		prompt: string,
@@ -38,6 +39,7 @@ export interface AIStreamProvicer extends AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string>;
 }

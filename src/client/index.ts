@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { workspace, ExtensionContext } from "vscode";
+import { ExtensionContext } from "vscode";
 import {
 	DocumentSymbol,
 	LanguageClient,

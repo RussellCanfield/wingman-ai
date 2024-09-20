@@ -1,5 +1,4 @@
 import { asyncIterator } from "../asyncIterator";
-import { AIProvider } from "../base";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { GPT4Turbo } from "./models/gpt4-turbo";
 import { OpenAIMessage, OpenAIRequest } from "./types/OpenAIRequest";
@@ -8,8 +7,9 @@ import { OpenAIModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
+import { AIStreamProvicer } from "../base";
 
-export class OpenAI implements AIProvider {
+export class OpenAI implements AIStreamProvicer {
 	decoder = new TextDecoder();
 	settings: Settings["openai"];
 	chatHistory: OpenAIMessage[] = [];
@@ -166,7 +166,8 @@ export class OpenAI implements AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
@@ -180,16 +181,27 @@ export class OpenAI implements AIProvider {
 			messages: [
 				{
 					role: "user",
-					content: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+					content: `You are an senior software engineer, assit the user with completing their code.
+When generating code focus on existing code style, syntax, and structure and follow use this as a guide.
 
-${additionalContext ?? ""}
+The following are some of the types available in their file. 
+Use these types while considering how to complete the code provided. 
+Do not repeat or use these types in your answer.
+
+${additionalContext || ""}
+
+-----
+
+The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+
+${recentClipboard || ""}
 
 -----
 
 ${prompt}`,
 				},
 			],
-			temperature: 0.4,
+			temperature: 0.2,
 			top_p: 0.3,
 		};
 
@@ -225,6 +237,22 @@ ${prompt}`,
 
 		const openAiResponse = (await response.json()) as OpenAIResponse;
 		return openAiResponse.choices[0].message.content;
+	}
+
+	public async codeCompleteStream(
+		beginning: string,
+		ending: string,
+		signal: AbortSignal,
+		additionalContext?: string,
+		recentClipboard?: string
+	): Promise<string> {
+		return this.codeComplete(
+			beginning,
+			ending,
+			signal,
+			additionalContext,
+			recentClipboard
+		);
 	}
 
 	public clearChatHistory(): void {

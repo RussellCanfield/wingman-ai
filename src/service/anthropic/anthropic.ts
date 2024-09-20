@@ -1,5 +1,5 @@
 import { asyncIterator } from "../asyncIterator";
-import { AIProvider } from "../base";
+import { AIStreamProvicer } from "../base";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { ClaudeModel } from "./models/claude";
 import { AnthropicMessage, AnthropicRequest } from "./types/ClaudeRequest";
@@ -14,7 +14,7 @@ import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatAnthropic } from "@langchain/anthropic";
 
-export class Anthropic implements AIProvider {
+export class Anthropic implements AIStreamProvicer {
 	decoder = new TextDecoder();
 	settings: Settings["anthropic"];
 	chatHistory: AnthropicMessage[] = [];
@@ -216,7 +216,8 @@ export class Anthropic implements AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
@@ -230,16 +231,27 @@ export class Anthropic implements AIProvider {
 			messages: [
 				{
 					role: "user",
-					content: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+					content: `You are an senior software engineer, assit the user with completing their code.
+When generating code focus on existing code style, syntax, and structure and follow use this as a guide.
 
-${additionalContext ?? ""}
+The following are some of the types available in their file. 
+Use these types while considering how to complete the code provided. 
+Do not repeat or use these types in your answer.
+
+${additionalContext || ""}
+
+-----
+
+The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+
+${recentClipboard || ""}
 
 -----
 
 ${prompt}`,
 				},
 			],
-			temperature: 0.4,
+			temperature: 0.2,
 			top_p: 0.3,
 			top_k: 40,
 			max_tokens: this.interactionSettings?.codeMaxTokens || 4096,
@@ -412,15 +424,20 @@ ${prompt}`,
 		return AnthropicResponse.content[0].text;
 	}
 
-	private getRecentChatEntries(maxRecords: number = 6) {
-		if (this.chatHistory.length > maxRecords + 1) {
-			// Adjust condition to account for skipping the first entry
-			// Calculate the number of items to remove, considering the first entry should be skipped
-			const itemsToRemove = this.chatHistory.length - maxRecords - 1;
-			// Remove items starting from the second item in the array
-			this.chatHistory.splice(1, itemsToRemove);
-		}
-		return this.chatHistory;
+	public async codeCompleteStream(
+		beginning: string,
+		ending: string,
+		signal: AbortSignal,
+		additionalContext?: string,
+		recentClipboard?: string
+	): Promise<string> {
+		return this.codeComplete(
+			beginning,
+			ending,
+			signal,
+			additionalContext,
+			recentClipboard
+		);
 	}
 
 	public async refactor(

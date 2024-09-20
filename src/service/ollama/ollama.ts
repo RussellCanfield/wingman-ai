@@ -552,13 +552,6 @@ ${ragContent}`
 		return responseObject.response;
 	}
 
-	private truncateChatHistory(maxRecords: number = 2) {
-		if (this.chatHistory.length > maxRecords) {
-			this.chatHistory.splice(0, this.chatHistory.length - maxRecords);
-		}
-		return this.chatHistory;
-	}
-
 	public async refactor(
 		prompt: string,
 		ragContent: string,

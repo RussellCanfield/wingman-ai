@@ -12,6 +12,7 @@ import { loggingProvider } from "./providers/loggingProvider";
 import { eventEmitter } from "./events/eventEmitter";
 import { GetAllSettings, GetSettings } from "./service/settings";
 import { DiffViewProvider } from "./providers/diffViewProvider";
+import { startClipboardTracking } from "./providers/clipboardTracker";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -151,6 +152,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			HotKeyCodeSuggestionProvider.showSuggestion
 		)
 	);
+
+	startClipboardTracking();
 }
 
 export function deactivate() {
