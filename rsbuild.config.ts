@@ -20,8 +20,7 @@ export default defineConfig({
 			{ from: "./node_modules/gpt-3-encoder/encoder.json" },
 			{ from: "./node_modules/gpt-3-encoder/vocab.bpe" },
 		],
-		cleanDistPath: false,
-		minify: false,
+		cleanDistPath: true,
 		sourceMap: {
 			js: "source-map",
 		},

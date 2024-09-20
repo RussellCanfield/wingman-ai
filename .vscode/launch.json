@@ -22,7 +22,11 @@
 			"name": "Attach to Process",
 			"type": "node",
 			"request": "attach",
-			"port": 6009
+			"port": 6009,
+			"restart": true,
+			"sourceMaps": true,
+			"smartStep": true,
+			"outFiles": ["${workspaceFolder}/out/**/*.js"]
 		}
 	]
 }

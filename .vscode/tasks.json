@@ -4,13 +4,6 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "tsc",
-			"type": "npm",
-			"script": "watch:views",
-			"isBackground": true,
-			"problemMatcher": "$tsc-watch"
-		},
-		{
 			"label": "rsbuild",
 			"type": "npm",
 			"script": "watch:views",
@@ -24,7 +17,7 @@
 					"endsPattern": "^ready\\s+Compiled in" // Regex to match the end of the task
 				},
 				"pattern": {
-					"regexp": "^(warn|error)\\s+(.*)$",
+					"regexp": "^(error)\\s+(.*)$",
 					"severity": 1,
 					"message": 2
 				}

@@ -26,9 +26,11 @@ export class DocumentQueue {
 				return;
 			}
 
-			const queueItems = Array.from(this.queueSet);
-			this.queueSet.clear();
-			await this.indexer.processDocuments(queueItems);
+			if (this.queueSet.size > 0) {
+				const queueItems = Array.from(this.queueSet);
+				this.queueSet.clear();
+				await this.indexer.processDocuments(queueItems);
+			}
 		}, 10000).unref();
 	};
 

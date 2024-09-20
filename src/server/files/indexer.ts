@@ -67,11 +67,19 @@ export class Indexer {
 
 	processDocuments = async (documentUris: string[], fullBuild = false) => {
 		if (!this.workspace || !documentUris || documentUris.length === 0) {
+			console.log(
+				"Skipping indexing",
+				this.workspace,
+				documentUris?.length
+			);
+			this.syncing = false;
 			return;
 		}
 		this.syncing = true;
 		const fileHashMap: Map<string, string> = new Map();
 		const alreadyVisited = new Set<string>();
+
+		console.log(`Processing ${documentUris.length} documents`);
 
 		for (const documentUri of documentUris) {
 			try {
@@ -193,13 +201,14 @@ export class Indexer {
 			} catch (error) {
 				if (error instanceof Error) {
 					console.error(
-						`Error processing document queue for ${documentUri}: ${error.message}`
+						`Error processing document queue for ${documentUri}: ${error.message}`,
+						error
 					);
 				}
-			} finally {
-				this.syncing = false;
 			}
 		}
+
+		this.syncing = false;
 	};
 
 	createNodesFromDocument = async (

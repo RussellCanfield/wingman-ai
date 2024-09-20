@@ -216,9 +216,9 @@ export class LSPClient {
 	};
 
 	buildFullIndex = async (filter: string, exclusionFilter?: string) => {
-		const files = await findFiles(filter, exclusionFilter);
+		const foundFiles = await findFiles(filter, exclusionFilter);
 		return client.sendRequest("wingman/fullIndexBuild", {
-			files,
+			files: foundFiles.map((f) => f.fsPath),
 		});
 	};
 
@@ -295,6 +295,12 @@ async function findFiles(filter: string, exclusionFilter?: string) {
 	} else if (gitignorePatterns.length > 0) {
 		combinedExclusionFilter = `{${gitignorePatterns.join(",")}}`;
 	}
+
+	console.log(
+		"Searching files to index using: ",
+		filter,
+		combinedExclusionFilter
+	);
 
 	const files = await vscode.workspace.findFiles(
 		filter,

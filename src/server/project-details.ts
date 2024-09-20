@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { Generator } from "./files/generator";
+import os from "node:os";
 
 const projectDetailsFile = "project-details.json";
 
@@ -17,7 +18,13 @@ export class ProjectDetailsHandler {
 		private readonly workspace: string,
 		private readonly generator?: Generator
 	) {
-		this.directory = path.join(__dirname, path.basename(workspace));
+		const homeDir = os.homedir();
+		this.directory = path.join(
+			homeDir,
+			".wingman",
+			path.basename(this.workspace)
+		);
+		fs.mkdirSync(this.directory, { recursive: true });
 	}
 
 	getProjectDetailsFileLocation = () => {

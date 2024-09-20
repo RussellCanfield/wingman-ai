@@ -6,6 +6,7 @@ const packages = [
 	"@ast-grep/napi-win32-x64-msvc",
 	"@ast-grep/napi-darwin-arm64",
 	"@ast-grep/napi-win32-arm64-msvc",
+	"@ast-grep/napi-darwin-x64",
 ];
 
 const downloadAndExtract = async (pkg, outDir) => {

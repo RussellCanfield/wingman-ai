@@ -168,15 +168,14 @@ export class Store {
 
 	deleteIndex = async () => {
 		await this.index?.deleteIndex();
-		try {
-			await fs.promises.rm(path.join(this.directory, "edges.json"));
-		} catch (error) {
-			console.error("Error deleting edge file", error);
-		}
 	};
 
 	indexExists = async () => {
-		return await this.index?.isIndexCreated();
+		const exists =
+			(await this.index?.isIndexCreated()) &&
+			fs.existsSync(path.join(this.directory, "edges.json"));
+
+		return exists;
 	};
 
 	retrieveDocuments = async (query: string, k = 10): Promise<Document[]> => {

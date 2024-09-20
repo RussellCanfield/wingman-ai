@@ -105,6 +105,7 @@ export class LSPServer {
 			interactionSettings
 		);
 		const workspaceFolder = this.workspaceFolders[0];
+		console.log("Wingman LSP initialized for workspace:", workspaceFolder);
 		this.vectorStore = new Store(
 			workspaceFolder,
 			embeddingProvider === "ollama"
@@ -135,6 +136,7 @@ export class LSPServer {
 			codeGenerator
 		);
 		await this.projectDetails.generateProjectDetails();
+		await this.vectorStore.createIndex();
 	};
 
 	private initialize = () => {
@@ -352,14 +354,22 @@ export class LSPServer {
 
 		this.connection?.onRequest(
 			"wingman/fullIndexBuild",
-			async (request: { files: { fsPath: string }[] }) => {
-				this.connection?.console.log("Starting full index build");
+			async (request: { files: string[] }) => {
+				try {
+					const filePaths = request.files.map((file) =>
+						filePathToUri(file)
+					);
+					this.connection?.console.log(
+						`Starting full index build, with ${
+							filePaths || 0
+						} files`
+					);
 
-				await this.vectorStore?.createIndex();
-				await this.indexer?.processDocuments(
-					request.files.map((file) => filePathToUri(file.fsPath)),
-					true
-				);
+					await this.vectorStore?.createIndex();
+					await this.indexer?.processDocuments(filePaths, true);
+				} catch (e) {
+					console.error("Full index failed:", e);
+				}
 			}
 		);
 
