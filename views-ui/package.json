@@ -7,6 +7,10 @@
 		"build": "rsbuild build",
 		"preview": "rsbuild preview"
 	},
+	"browserslist": [
+		"defaults and fully supports es6-module",
+		"maintained node versions"
+	],
 	"dependencies": {
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
