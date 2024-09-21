@@ -165,6 +165,7 @@ export async function* generateCommand(
 		for (const existingFile of existingFiles) {
 			if (!uniqueFilePaths.has(existingFile.file)) {
 				uniqueFilePaths.add(existingFile.file);
+				delete existingFile.hasChanged;
 				files.push(existingFile);
 			}
 		}

@@ -98,6 +98,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	private updateAndSetOllama = async (value: OllamaSettingsType) => {
 		this._settings.providerSettings.Ollama = value;
+		this._settings.aiProvider = "Ollama";
 		await SaveSettings(this._settings);
 	};
 
@@ -105,16 +106,19 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		value: OllamaEmbeddingSettingsType
 	) => {
 		this._settings.embeddingSettings.Ollama = value;
+		this._settings.embeddingProvider = "Ollama";
 		await SaveSettings(this._settings);
 	};
 
 	private updateAndSetHF = async (value: ApiSettingsType) => {
 		this._settings.providerSettings.HuggingFace = value;
+		this._settings.aiProvider = "HuggingFace";
 		await SaveSettings(this._settings);
 	};
 
 	private updateAndSetOpenAI = async (value: ApiSettingsType) => {
 		this._settings.providerSettings.OpenAI = value;
+		this._settings.aiProvider = "OpenAI";
 		await SaveSettings(this._settings);
 	};
 
@@ -122,11 +126,13 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		value: OpenAIEmbeddingSettingsType
 	) => {
 		this._settings.embeddingSettings.OpenAI = value;
+		this._settings.embeddingProvider = "OpenAI";
 		await SaveSettings(this._settings);
 	};
 
 	private updateAndSetAnthropic = async (value: ApiSettingsType) => {
 		this._settings.providerSettings.Anthropic = value;
+		this._settings.aiProvider = "Anthropic";
 		await SaveSettings(this._settings);
 	};
 

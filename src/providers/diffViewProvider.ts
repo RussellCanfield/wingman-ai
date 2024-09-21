@@ -8,11 +8,15 @@ import { DiffViewCommand } from "@shared/types/Composer";
 import { AppMessage, FileMetadata } from "@shared/types/Message";
 
 export class DiffViewProvider {
-	panels: vscode.WebviewPanel[] = [];
+	panels: Map<string, vscode.WebviewPanel> = new Map();
 
 	constructor(private readonly context: vscode.ExtensionContext) {}
 
 	async createDiffView({ file, diff }: DiffViewCommand) {
+		if (this.panels.has(file)) {
+			return;
+		}
+
 		const currentPanel = vscode.window.createWebviewPanel(
 			"diffWebView",
 			`${file} - Diff View`,
@@ -22,13 +26,15 @@ export class DiffViewProvider {
 			}
 		);
 
+		this.panels.set(file, currentPanel);
+
 		currentPanel.webview.html = await getWebViewHtml(
 			this.context,
 			currentPanel.webview
 		);
 
 		currentPanel.onDidDispose(() => {
-			this.panels = this.panels.filter((panel) => panel !== currentPanel);
+			this.panels.delete(file);
 		});
 
 		currentPanel.webview.onDidReceiveMessage(
@@ -100,8 +106,6 @@ export class DiffViewProvider {
 
 							// Replace text in the document
 							await replaceTextInDocument(document, code!, true);
-
-							currentPanel.dispose();
 						} catch (error) {
 							if (
 								(error as vscode.FileSystemError).code ===
@@ -123,6 +127,11 @@ export class DiffViewProvider {
 								);
 							} else {
 								throw error;
+							}
+						} finally {
+							if (currentPanel) {
+								currentPanel.dispose();
+								this.panels.delete(file);
 							}
 						}
 						break;

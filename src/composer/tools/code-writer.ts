@@ -60,7 +60,8 @@ export const codeWriterTool = {
 	function: codeWriterFunction,
 };
 
-const baseWriterPrompt = `You are an expert software engineer tasked with implementing project enhancements based on a user's objective. Your role is to provide a comprehensive solution that includes both manual steps and code changes. Approach this task methodically, following these guidelines:
+const baseWriterPrompt = `Analyze this text and output JSON.
+You are an expert software engineer tasked with implementing project enhancements based on a user's objective. Your role is to provide a comprehensive solution that includes both manual steps and code changes. Approach this task methodically, following these guidelines:
 
 Output Structure:
 1. Steps: A clear, concise guide for manual actions the user must take, not covered by modifications done to files.
@@ -72,6 +73,7 @@ General Instructions:
 - Ensure 'hasChanged' property is included for every file, without exception.
 - When creating new files, use consistent and project-related file paths.
 - List all changes made to modified or created files.
+- Considering a file 'hasChanged' only if you physically modify or create the file. Do not consider verifying or ensuring as changes.
 - Ensure you output using the correct JSON schema provided, this is critial.
 
 Step Writing Guidelines:
@@ -113,6 +115,7 @@ Code Writing Guidelines:
    - Maintain consistent indentation, naming conventions, and code organization.
    - Use meaningful variable and function names that clearly convey their purpose.
    - Add comments for complex logic or non-obvious implementations.
+   - Observe existing patterns and libraries being used and leverage those where possible.
 
 3. Project Consistency:
    - Adhere strictly to the existing project structure and architecture.
@@ -159,6 +162,10 @@ Code Writing Guidelines:
 12. Documentation:
     - Update or create documentation for new or modified functionality.
     - Include clear, concise comments explaining the purpose and behavior of complex code sections.
+
+13. Integration:
+    - When reviewing multiple files, consider how they may be connected and integrated together.
+    - Ensure new code integrates seamlessly with existing components and systems.
 
 {RULE_PACK}
 
@@ -253,7 +260,7 @@ Files:
 
 Proceed with implementing the required changes to meet the given objective. 
 Remember, using GitHub-flavored markdown for code output is mandatory and crucial for the task's success.
-YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`;
+Use the provided JSON schema to structure your output. YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`;
 
 const buildPrompt = (rulePack?: string) => {
 	const rulePromptAddition = !rulePack
@@ -312,7 +319,9 @@ Use these comments to refine your code and meet the objective.
 ${state.review?.comments?.join("\n")}
 
 ------`,
-			files: `---FILE---\n${prompt}`,
+			files: !prompt
+				? `The user does not currently have any related files, assume this may be a new project and this is your base directory: ${this.workspace}`
+				: `---FILE---\n${prompt}`,
 		})) as CodeWriterSchema;
 
 		const filesChanged = plan.files?.filter((f) => f.hasChanged) || [];
