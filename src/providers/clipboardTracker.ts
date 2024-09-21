@@ -3,9 +3,10 @@ import * as vscode from "vscode";
 let clipboardHistory: string[] = [];
 const clipboardHistoryLimit = 3;
 let lastClipboardContent: string | undefined;
+let interval: NodeJS.Timeout | undefined;
 
 export function startClipboardTracking() {
-	setInterval(async () => {
+	interval = setInterval(async () => {
 		const clipboardContent = await vscode.env.clipboard.readText();
 		if (clipboardContent && clipboardContent !== lastClipboardContent) {
 			lastClipboardContent = clipboardContent;
@@ -15,6 +16,12 @@ export function startClipboardTracking() {
 			}
 		}
 	}, 1000).unref();
+}
+
+export function stopClipboardTracking() {
+	if (interval) {
+		clearInterval(interval);
+	}
 }
 
 export function getClipboardHistory() {

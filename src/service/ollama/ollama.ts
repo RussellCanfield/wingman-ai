@@ -31,29 +31,25 @@ export class Ollama implements AIStreamProvicer {
 	rerankModel: BaseChatModel | undefined;
 
 	constructor(
-		private readonly settings: Settings["ollama"],
+		private readonly settings: Settings["providerSettings"]["Ollama"],
 		interactionSettings: InteractionSettings
 	) {
 		if (!settings) {
 			throw new Error("Unable to load Ollama settings.");
 		}
 
-		this.settings = settings;
-
-		this.chatModel = this.getChatModel(this.settings.chatModel);
-		this.codeModel = this.getCodeModel(this.settings.codeModel);
-
-		this.validateSettings();
+		this.chatModel = this.getChatModel(this.settings!.chatModel);
+		this.codeModel = this.getCodeModel(this.settings!.codeModel);
 
 		this.baseModel = new ChatOllama({
-			baseUrl: this.settings.baseUrl,
-			model: this.settings.chatModel,
+			baseUrl: this.settings!.baseUrl,
+			model: this.settings!.chatModel,
 			temperature: 0.2,
 		});
 
 		this.rerankModel = new ChatOllama({
-			baseUrl: this.settings.baseUrl,
-			model: this.settings.chatModel,
+			baseUrl: this.settings!.baseUrl,
+			model: this.settings!.chatModel,
 			temperature: 0.2,
 		});
 	}

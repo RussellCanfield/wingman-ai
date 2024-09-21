@@ -3,14 +3,17 @@ import fs from "node:fs";
 import { AppMessage } from "@shared/types/Message";
 import {
 	ApiSettingsType,
+	defaultInteractionSettings,
 	InteractionSettings,
+	OllamaEmbeddingSettingsType,
 	OllamaSettingsType,
+	OpenAIEmbeddingSettingsType,
 	Settings,
 } from "@shared/types/Settings";
 import { loggingProvider } from "./loggingProvider";
 import { eventEmitter } from "../events/eventEmitter";
-import { GetInteractionSettings } from "../service/settings";
 import { addNoneAttributeToLink } from "./utilities";
+import { SaveSettings } from "../service/settings";
 
 export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.configview";
@@ -19,8 +22,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
-		private readonly _config: vscode.WorkspaceConfiguration
+		private readonly _settings: Settings
 	) {}
+
 	resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext<unknown>,
@@ -62,47 +66,23 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private init = async (value: unknown): Promise<string> => {
-		const settings = {
-			aiProvider:
-				this._config.get<Settings["aiProvider"]>("Provider") ??
-				"Ollama",
-			interactionSettings: GetInteractionSettings(),
-			embeddingProvider:
-				this._config.get<Settings["embeddingProvider"]>(
-					"EmbeddingProvider"
-				) ?? "Ollama",
-			ollamaEmeddingSettings: this._config.get<
-				Settings["ollamaEmeddingSettings"]
-			>("OllamaEmbeddingSettings"),
-			openaiEmbeddingSettings: this._config.get<
-				Settings["openaiEmbeddingSettings"]
-			>("OpenAIEmbeddingSettings"),
-			ollama: this._config.get<Settings["ollama"]>("Ollama"),
-			huggingface:
-				this._config.get<Settings["huggingface"]>("HuggingFace"),
-			openai: this._config.get<Settings["openai"]>("OpenAI"),
-			anthropic: this._config.get<Settings["anthropic"]>("Anthropic"),
-		} satisfies Settings;
+		const settings = structuredClone(this._settings);
 
-		//if (settings.ollama && settings.aiProvider === "Ollama") {
 		try {
 			const modelsResponse = await fetch(
-				`${settings.ollama?.baseUrl}/api/tags`
+				`${settings.providerSettings.Ollama?.baseUrl}/api/tags`
 			);
 			const modelsJson = (await modelsResponse.json()) as {
 				models: { name: string }[];
 			};
 			const modelNames = modelsJson.models.map((m) => m.name);
-			//@ts-ignore
+			//@ts-expect-error
 			settings["ollamaModels"] = modelNames;
 		} catch (e) {
 			//@ts-expect-error
 			settings["ollamaModels"] = ["Failed to load."];
 		}
-		// } else {
-		// 	//@ts-expect-error
-		// 	settings["ollamaModels"] = [];
-		// }
+
 		return JSON.stringify(settings);
 	};
 
@@ -116,70 +96,47 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		loggingProvider.logInfo(JSON.stringify(value ?? ""));
 	};
 
-	private updateAndSetOllama = (value: OllamaSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "Ollama") {
-			this._config.update("Provider", "Ollama");
-		}
-		this._config.update("Ollama", value);
+	private updateAndSetOllama = async (value: OllamaSettingsType) => {
+		this._settings.providerSettings.Ollama = value;
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetOllamaEmbeddings = (value: OllamaSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["embeddingProvider"]>(
-				"EmbeddingProvider"
-			);
-		if (currentProvider !== "Ollama") {
-			this._config.update("EmbeddingProvider", "Ollama");
-		}
-		this._config.update("OllamaEmbeddingSettings", value);
+	private updateAndSetOllamaEmbeddings = async (
+		value: OllamaEmbeddingSettingsType
+	) => {
+		this._settings.embeddingSettings.Ollama = value;
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetHF = (value: ApiSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "HuggingFace") {
-			this._config.update("Provider", "HuggingFace");
-		}
-		this._config.update("HuggingFace", value);
+	private updateAndSetHF = async (value: ApiSettingsType) => {
+		this._settings.providerSettings.HuggingFace = value;
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetOpenAI = (value: ApiSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "OpenAI") {
-			this._config.update("Provider", "OpenAI");
-		}
-		this._config.update("OpenAI", value);
+	private updateAndSetOpenAI = async (value: ApiSettingsType) => {
+		this._settings.providerSettings.OpenAI = value;
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetOpenAIEmbeddings = (value: ApiSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["embeddingProvider"]>(
-				"EmbeddingProvider"
-			);
-		if (currentProvider !== "OpenAI") {
-			this._config.update("EmbeddingProvider", "OpenAI");
-		}
-		this._config.update("OpenAIEmbeddingSettings", value);
+	private updateAndSetOpenAIEmbeddings = async (
+		value: OpenAIEmbeddingSettingsType
+	) => {
+		this._settings.embeddingSettings.OpenAI = value;
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetAnthropic = (value: ApiSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "Anthropic") {
-			this._config.update("Provider", "Anthropic");
-		}
-		this._config.update("Anthropic", value);
+	private updateAndSetAnthropic = async (value: ApiSettingsType) => {
+		this._settings.providerSettings.Anthropic = value;
+		await SaveSettings(this._settings);
 	};
 
-	private changeInteractions = (value: unknown) => {
+	private changeInteractions = async (value: unknown) => {
 		const updated = {
-			...GetInteractionSettings(),
+			...defaultInteractionSettings,
 			...(value as InteractionSettings),
 		};
-		this._config.update("InteractionSettings", updated);
+		this._settings.interactionSettings = updated;
+		await SaveSettings(this._settings);
 	};
 
 	private _getHtml = (webview: vscode.Webview) => {

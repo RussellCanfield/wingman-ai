@@ -16,23 +16,23 @@ import { ChatAnthropic } from "@langchain/anthropic";
 
 export class Anthropic implements AIStreamProvicer {
 	decoder = new TextDecoder();
-	settings: Settings["anthropic"];
 	chatHistory: AnthropicMessage[] = [];
 	chatModel: AnthropicModel | undefined;
 	codeModel: AnthropicModel | undefined;
-	interactionSettings: InteractionSettings | undefined;
 	baseModel: BaseChatModel | undefined;
 	rerankModel: BaseChatModel | undefined;
 
 	constructor(
-		settings: Settings["anthropic"],
-		interactionSettings: InteractionSettings
+		private readonly settings: Settings["providerSettings"]["Anthropic"],
+		private readonly interactionSettings: InteractionSettings
 	) {
 		if (!settings) {
 			throw new Error("Unable to load Anthropic settings.");
 		}
 
-		this.settings = settings;
+		if (!this.settings?.apiKey.trim()) {
+			throw new Error("Anthropic API key is required.");
+		}
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);

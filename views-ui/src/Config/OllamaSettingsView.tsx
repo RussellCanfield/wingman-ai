@@ -1,9 +1,9 @@
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
 import { OllamaSettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, DropDownContainer, VSCodeTextField } from "./Config.styles";
+import { Container, DropDownContainer, VSCodeTextField } from "./Config";
 
-type OllamaSection = InitSettings["ollama"] & {
+type OllamaSection = InitSettings["providerSettings"]["Ollama"] & {
 	ollamaModels: string[];
 	onChange: (ollamaSettings: OllamaSettingsType) => void;
 };

@@ -99,11 +99,7 @@ export class LSPServer {
 	}
 
 	private postInitialize = async () => {
-		modelProvider = CreateAIProvider(
-			aiProvider,
-			settings,
-			interactionSettings
-		);
+		modelProvider = CreateAIProvider(settings);
 		const workspaceFolder = this.workspaceFolders[0];
 		console.log("Wingman LSP initialized for workspace:", workspaceFolder);
 		this.vectorStore = new Store(
@@ -153,11 +149,19 @@ export class LSPServer {
 			const initializationOptions = params.initializationOptions;
 
 			if (initializationOptions) {
-				aiProvider = initializationOptions.aiProvider;
-				settings = initializationOptions.settings;
-				interactionSettings = initializationOptions.interactionSettings;
-				embeddingProvider = initializationOptions.embeddingProvider;
-				embeddingSettings = initializationOptions.embeddingSettings;
+				settings = initializationOptions.settings as Settings;
+
+				if (!settings) {
+					throw new Error("Settings not found");
+				}
+
+				aiProvider = settings.aiProvider;
+				interactionSettings = settings.interactionSettings;
+				embeddingProvider = settings.embeddingProvider;
+				embeddingSettings =
+					settings.embeddingProvider === "Ollama"
+						? settings.embeddingSettings?.Ollama!
+						: settings.embeddingSettings?.OpenAI!;
 			}
 
 			this.connection?.console.log(

@@ -1,8 +1,8 @@
 import { ApiSettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, VSCodeTextField } from "./Config.styles";
+import { Container, VSCodeTextField } from "./Config";
 
-type OpenAiSection = InitSettings["openai"] & {
+type OpenAiSection = InitSettings["providerSettings"]["OpenAI"] & {
 	onChange: (ollamaSettings: ApiSettingsType) => void;
 };
 export const OpenAISettingsView = ({

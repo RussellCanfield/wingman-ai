@@ -207,14 +207,19 @@
 							"description": "The model to use for embeddings"
 						},
 						"dimensions": {
-							"type": "number",
-							"default": 1024,
+							"type": "string",
+							"default": "1024",
 							"description": "The number of dimensions for the embeddings"
 						},
 						"baseUrl": {
 							"type": "string",
 							"default": "http://localhost:11434",
 							"description": "Base URL for the ollama instance"
+						},
+						"enabled": {
+							"type": "boolean",
+							"default": false,
+							"description": "Enable embeddings"
 						}
 					}
 				},
@@ -237,9 +242,14 @@
 							"description": "The API key to use for OpenAI"
 						},
 						"dimensions": {
-							"type": "number",
-							"default": 1536,
+							"type": "string",
+							"default": "1536",
 							"description": "The number of dimensions for the embeddings"
+						},
+						"enabled": {
+							"type": "boolean",
+							"default": false,
+							"description": "Enable embeddings"
 						}
 					}
 				},

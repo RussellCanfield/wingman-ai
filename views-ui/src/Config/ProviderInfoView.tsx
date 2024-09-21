@@ -1,5 +1,5 @@
 import { InitSettings } from "./App";
-import { Container } from "./Config.styles";
+import { Container } from "./Config";
 
 export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
 	return (
@@ -37,6 +37,7 @@ export const OpenAIView = () => {
 				<li>gpt-4o</li>
 				<li>gpt-4-turbo</li>
 				<li>gpt-4</li>
+				<li>o1</li>
 			</ul>
 		</div>
 	);

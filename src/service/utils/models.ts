@@ -2,21 +2,29 @@ import { HuggingFace } from "../huggingface/huggingface";
 import { Anthropic } from "../anthropic/anthropic";
 import { OpenAI } from "../openai/openai";
 import { Ollama } from "../ollama/ollama";
-import { InteractionSettings } from "@shared/types/Settings";
+import { Settings } from "@shared/types/Settings";
 import { AIProvider } from "../base";
 
-export function CreateAIProvider(
-	aiProvider: string | undefined,
-	config: any,
-	interactionSettings: InteractionSettings
-): AIProvider {
-	if (aiProvider === "huggingface") {
-		return new HuggingFace(config, interactionSettings);
-	} else if (aiProvider === "openai") {
-		return new OpenAI(config, interactionSettings);
-	} else if (aiProvider === "anthropic") {
-		return new Anthropic(config, interactionSettings);
+export function CreateAIProvider(settings: Settings): AIProvider {
+	if (settings.aiProvider === "HuggingFace") {
+		return new HuggingFace(
+			settings.providerSettings.HuggingFace,
+			settings.interactionSettings
+		);
+	} else if (settings.aiProvider === "OpenAI") {
+		return new OpenAI(
+			settings.providerSettings.OpenAI,
+			settings.interactionSettings
+		);
+	} else if (settings.aiProvider === "Anthropic") {
+		return new Anthropic(
+			settings.providerSettings.Anthropic,
+			settings.interactionSettings
+		);
 	}
 
-	return new Ollama(config, interactionSettings);
+	return new Ollama(
+		settings.providerSettings.Ollama,
+		settings.interactionSettings
+	);
 }

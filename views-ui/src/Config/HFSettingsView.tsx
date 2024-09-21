@@ -1,8 +1,8 @@
 import { ApiSettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, VSCodeTextField } from "./Config.styles";
+import { Container, VSCodeTextField } from "./Config";
 
-type HFSection = InitSettings["huggingface"] & {
+type HFSection = InitSettings["providerSettings"]["HuggingFace"] & {
 	onChange: (ollamaSettings: ApiSettingsType) => void;
 };
 export const HFSettingsView = ({

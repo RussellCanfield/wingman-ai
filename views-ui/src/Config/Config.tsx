@@ -14,7 +14,7 @@ export const DropDownContainer = ({ children }: PropsWithChildren) => (
 );
 
 export const DropDownLabel = ({ children }: PropsWithChildren) => (
-	<label className="block text-[var(--vscode-foreground)] cursor-pointer text-[var(--vscode-font-size)] leading-normal mb-0.5">
+	<label className="block cursor-pointer text-[var(--vscode-font-size)] leading-normal mb-0.5">
 		{children}
 	</label>
 );

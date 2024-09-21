@@ -1,83 +1,92 @@
 import * as vscode from "vscode";
-import { loggingProvider } from "../providers/loggingProvider";
 import {
-	AiProviders,
-	InteractionSettings,
+	defaultAnthropicSettings,
+	defaultHfSettings,
+	defaultInteractionSettings,
+	defaultOllamaEmbeddingSettings,
+	defaultOllamaSettings,
+	defaultOpenAIEmbeddingSettings,
+	defaultOpenAISettings,
 	Settings,
 } from "@shared/types/Settings";
+import { homedir } from "node:os";
 
-export function GetAllSettings(): vscode.WorkspaceConfiguration {
-	return vscode.workspace.getConfiguration("Wingman");
-}
-
-type AiProvider = (typeof AiProviders)[number];
-
-// Create a map using the lowercase versions of the AiProviders values as keys
-export const providerToSettingMap: Record<Lowercase<AiProvider>, AiProvider> = {
-	ollama: "Ollama",
-	huggingface: "HuggingFace",
-	openai: "OpenAI",
-	anthropic: "Anthropic",
+const defaultSettings: Settings = {
+	aiProvider: "OpenAI",
+	embeddingProvider: "OpenAI",
+	interactionSettings: defaultInteractionSettings,
+	embeddingSettings: {
+		Ollama: defaultOllamaEmbeddingSettings,
+		OpenAI: defaultOpenAIEmbeddingSettings,
+	},
+	providerSettings: {
+		Ollama: defaultOllamaSettings,
+		HuggingFace: defaultHfSettings,
+		Anthropic: defaultAnthropicSettings,
+		OpenAI: defaultOpenAISettings,
+	},
 };
 
-export function GetInteractionSettings(): InteractionSettings {
-	const config = vscode.workspace.getConfiguration("Wingman");
-
-	const interactionSettings = config.get<Settings["interactionSettings"]>(
-		"InteractionSettings"
-	)!;
-
-	if (interactionSettings) {
-		return interactionSettings;
-	}
-
+function mergeSettings(
+	defaults: Settings,
+	loaded: Partial<Settings>
+): Settings {
 	return {
-		codeCompletionEnabled: true,
-		codeStreaming: false,
-		codeContextWindow: 256,
-		codeMaxTokens: -1,
-		chatContextWindow: 4096,
-		chatMaxTokens: 4096,
+		...defaults,
+		...loaded,
+		interactionSettings: {
+			...defaults.interactionSettings,
+			...loaded.interactionSettings,
+		},
+		embeddingSettings: {
+			...defaults.embeddingSettings,
+			...loaded.embeddingSettings,
+		},
+		providerSettings: {
+			...defaults.providerSettings,
+			...loaded.providerSettings,
+		},
 	};
 }
 
-export function GetSettings() {
-	const config = vscode.workspace.getConfiguration("Wingman");
+export async function SaveSettings(settings: Settings) {
+	await vscode.workspace.fs.writeFile(
+		vscode.Uri.file(homedir() + "/.wingman/settings.json"),
+		Buffer.from(JSON.stringify(settings, null, 2))
+	);
+	await vscode.commands.executeCommand("workbench.action.reloadWindow");
+}
 
-	const aiProvider = config
-		.get<Settings["aiProvider"]>("Provider")
-		?.toLocaleLowerCase()
-		.trim();
+export async function LoadSettings(): Promise<Settings> {
+	let settings: Settings;
 
-	const embeddingProvider = config
-		.get<Settings["embeddingProvider"]>("EmbeddingProvider")
-		?.toLocaleLowerCase()
-		.trim();
-
-	if (!aiProvider) {
-		loggingProvider.logError("No AI Provider found.");
-		return {
-			aiProvider: undefined,
-			config: undefined,
+	try {
+		const fileContents = await vscode.workspace.fs.readFile(
+			vscode.Uri.file(homedir() + "/.wingman/settings.json")
+		);
+		const loadedSettings = JSON.parse(fileContents.toString());
+		settings = mergeSettings(defaultSettings, loadedSettings);
+	} catch (e) {
+		console.warn(
+			"Settings file not found or corrupt, creating a new one.",
+			e
+		);
+		settings = {
+			aiProvider: "OpenAI",
+			embeddingProvider: "OpenAI",
+			interactionSettings: defaultInteractionSettings,
+			embeddingSettings: {
+				Ollama: defaultOllamaEmbeddingSettings,
+				OpenAI: defaultOpenAIEmbeddingSettings,
+			},
+			providerSettings: {
+				Ollama: defaultOllamaSettings,
+				HuggingFace: defaultHfSettings,
+				Anthropic: defaultAnthropicSettings,
+				OpenAI: defaultOpenAISettings,
+			},
 		};
 	}
 
-	loggingProvider.logInfo(`AI Provider: ${aiProvider} found.`);
-
-	const interactionSettings = config.get<Settings["interactionSettings"]>(
-		"InteractionSettings"
-	)!;
-
-	return {
-		aiProvider,
-		embeddingProvider,
-		//@ts-expect-error
-		config: config.get<Settings>(providerToSettingMap[String(aiProvider!)]),
-		embeddingSettings: config.get<Settings>(
-			embeddingProvider === "ollama"
-				? "OllamaEmbeddingSettings"
-				: "OpenAIEmbeddingSettings"
-		),
-		interactionSettings,
-	};
+	return settings;
 }

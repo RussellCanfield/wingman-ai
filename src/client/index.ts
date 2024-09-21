@@ -9,87 +9,22 @@ import {
 	ServerOptions,
 	TransportKind,
 } from "vscode-languageclient/node";
-import { Range } from "vscode-languageserver-textdocument";
 import { TypeRequestEvent } from "../server/retriever";
 import { EmbeddingsResponse } from "../server";
-import { InteractionSettings, Settings } from "@shared/types/Settings";
+import { Settings } from "@shared/types/Settings";
 import { ComposerRequest, ComposerResponse } from "@shared/types/Composer";
 import path from "node:path";
 import ignore from "ignore";
+import { mapLocation, mapSymbol } from "./utils";
 
 let client: LanguageClient;
-
-const mapLocation = (location: Location | LocationLink) => {
-	if ("targetUri" in location) {
-		// Handle LocationLink
-		return {
-			uri: location.targetUri.toString(),
-			range: {
-				start: {
-					line: location.targetRange.start.line,
-					character: location.targetRange.start.character,
-				},
-				end: {
-					line: location.targetRange.end.line,
-					character: location.targetRange.end.character,
-				},
-			},
-		};
-	} else {
-		// Handle Location
-		return {
-			uri: location.uri.toString(),
-			range: {
-				start: {
-					line: location.range.start.line,
-					character: location.range.start.character,
-				},
-				end: {
-					line: location.range.end.line,
-					character: location.range.end.character,
-				},
-			},
-		};
-	}
-};
-
-const mapSymbol = (symbol: DocumentSymbol): DocumentSymbol => ({
-	name: symbol.name,
-	kind: symbol.kind,
-	range: mapRange(symbol.range),
-	selectionRange: mapRange(symbol.selectionRange),
-	children: symbol.children
-		? symbol.children.map((child) => ({
-				name: child.name,
-				kind: child.kind,
-				range: mapRange(child.range),
-				selectionRange: mapRange(child.selectionRange),
-				children: [], // Assuming no nested children for simplicity
-		  }))
-		: [],
-});
-
-const mapRange = (range: Range): Range => ({
-	start: {
-		line: range.start.line,
-		character: range.start.character,
-	},
-	end: {
-		line: range.end.line,
-		character: range.end.character,
-	},
-});
 
 export class LSPClient {
 	composerWebView: vscode.Webview | undefined;
 
 	activate = async (
 		context: ExtensionContext,
-		settings: Settings | undefined,
-		aiProvider: string | undefined,
-		embeddingProvider: string | undefined,
-		embeddingSettings: Settings | undefined,
-		interactionSettings: InteractionSettings
+		settings: Settings | undefined
 	) => {
 		// The server is implemented in node
 		const serverModule = vscode.Uri.joinPath(
@@ -123,11 +58,7 @@ export class LSPClient {
 				"Wingman Language Server"
 			),
 			initializationOptions: {
-				aiProvider,
-				embeddingProvider,
-				embeddingSettings,
 				settings,
-				interactionSettings,
 			},
 		};
 

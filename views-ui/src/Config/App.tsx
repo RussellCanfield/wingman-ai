@@ -52,9 +52,6 @@ export const App = () => {
 				<InteractionSettings {...settings.interactionSettings} />
 			</section>
 			<section className="p-4 rounded-lg border border-gray-300 w-[350px]">
-				<ProviderInfoView {...settings} />
-			</section>
-			<section className="p-4 rounded-lg border border-gray-300 w-[350px]">
 				<EmbeddingProvider {...settings} />
 			</section>
 		</div>

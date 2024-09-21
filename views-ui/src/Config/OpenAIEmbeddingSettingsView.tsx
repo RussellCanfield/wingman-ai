@@ -1,5 +1,6 @@
 import { OpenAIEmbeddingSettingsType } from "@shared/types/Settings";
-import { Container, VSCodeTextField } from "./Config.styles";
+import { Container, VSCodeTextField } from "./Config";
+import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react";
 
 type OpenAIEmbeddingSection = OpenAIEmbeddingSettingsType & {
 	onChange: (openAISettings: OpenAIEmbeddingSettingsType) => void;
@@ -9,13 +10,14 @@ export const OpenAIEmbeddingSettingsView = ({
 	dimensions,
 	embeddingModel,
 	apiKey,
+	enabled,
 	onChange,
 }: OpenAIEmbeddingSection) => {
-	const paths = { dimensions, embeddingModel, apiKey };
+	const paths = { dimensions, embeddingModel, apiKey, enabled };
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
 		const clone = { ...paths };
-		//@ts-ignore
+		//@ts-expect-error
 		clone[field] = e.target.value;
 		onChange(clone);
 	};
@@ -46,6 +48,14 @@ export const OpenAIEmbeddingSettingsView = ({
 			>
 				Api key:
 			</VSCodeTextField>
+			<div className="flex gap-2 items-center">
+				<p>Enabled:</p>
+				<VSCodeCheckbox
+					defaultChecked={enabled}
+					data-name="enabled"
+					title="Enable OpenAI Embeddings"
+				/>
+			</div>
 		</Container>
 	);
 };

@@ -40,23 +40,19 @@ type HuggingFaceStreamResponse = {
 
 export class HuggingFace implements AIProvider {
 	decoder = new TextDecoder();
-	settings: Settings["huggingface"];
 	chatHistory: string = "";
 	chatModel: HuggingFaceAIModel | undefined;
 	codeModel: HuggingFaceAIModel | undefined;
-	interactionSettings: InteractionSettings | undefined;
 
 	constructor(
-		settings: Settings["huggingface"],
-		interactionSettings: InteractionSettings
+		private readonly settings: Settings["providerSettings"]["HuggingFace"],
+		private readonly interactionSettings: InteractionSettings
 	) {
 		if (!settings) {
 			throw new Error("Unable to log HuggingFace configuration.");
 		}
 
-		this.settings = settings!;
-
-		if (!this.settings.apiKey.trim()) {
+		if (!this.settings?.apiKey.trim()) {
 			throw new Error("Hugging Face API key is required.");
 		}
 

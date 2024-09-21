@@ -1,8 +1,8 @@
 import { ApiSettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, VSCodeTextField } from "./Config.styles";
+import { Container, VSCodeTextField } from "./Config";
 
-type AnthropicSection = InitSettings["anthropic"] & {
+type AnthropicSection = InitSettings["providerSettings"]["Anthropic"] & {
 	onChange: (anthropicSettings: ApiSettingsType) => void;
 };
 export const AnthropicSettingsView = ({

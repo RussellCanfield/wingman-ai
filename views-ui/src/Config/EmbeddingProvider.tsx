@@ -11,22 +11,25 @@ import {
 	EmbeddingProvidersList,
 } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { ActionPanel, Container, DropDownContainer } from "./Config.styles";
+import { ActionPanel, Container, DropDownContainer } from "./Config";
 import { vscode } from "./utilities/vscode";
 import { OllamaEmbeddingSettingsView } from "./OllamaEmbeddingSettingsView";
 import { OpenAIEmbeddingSettingsView } from "./OpenAIEmbeddingSettingsView";
 
 export const EmbeddingProvider = ({
 	embeddingProvider,
-	ollamaEmeddingSettings,
-	openaiEmbeddingSettings,
+	embeddingSettings,
 }: InitSettings) => {
 	const [currentAiProvider, setAiProvider] = useState(embeddingProvider);
 	const [ollamaSettings, setOllamaSettings] = useState(
-		ollamaEmeddingSettings ?? defaultOllamaEmbeddingSettings
+		embeddingProvider === "Ollama"
+			? embeddingSettings.Ollama
+			: defaultOllamaEmbeddingSettings
 	);
 	const [openAISettings, setOpenAISettings] = useState(
-		openaiEmbeddingSettings ?? defaultOpenAIEmbeddingSettings
+		embeddingProvider === "OpenAI"
+			? embeddingSettings.OpenAI
+			: defaultOpenAIEmbeddingSettings
 	);
 	const handleProviderChange = (e: any) => {
 		setAiProvider(e.target.value);
@@ -37,12 +40,12 @@ export const EmbeddingProvider = ({
 		switch (currentAiProvider) {
 			case "Ollama":
 				setOllamaSettings(
-					ollamaEmeddingSettings ?? defaultOllamaEmbeddingSettings
+					embeddingSettings.Ollama ?? defaultOllamaEmbeddingSettings
 				);
 				break;
 			case "OpenAI":
 				setOpenAISettings(
-					openaiEmbeddingSettings ?? defaultOpenAIEmbeddingSettings
+					embeddingSettings.OpenAI ?? defaultOpenAIEmbeddingSettings
 				);
 				break;
 		}
@@ -95,13 +98,13 @@ export const EmbeddingProvider = ({
 			<VSCodeDivider />
 			{currentAiProvider === "Ollama" && (
 				<OllamaEmbeddingSettingsView
-					{...ollamaSettings}
+					{...ollamaSettings!}
 					onChange={setOllamaSettings}
 				/>
 			)}
 			{currentAiProvider === "OpenAI" && (
 				<OpenAIEmbeddingSettingsView
-					{...openAISettings}
+					{...openAISettings!}
 					onChange={setOpenAISettings}
 				/>
 			)}

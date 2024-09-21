@@ -10,7 +10,7 @@ import {
 	Container,
 	DropDownContainer,
 	VSCodeTextField,
-} from "./Config.styles";
+} from "./Config";
 import { vscode } from "./utilities/vscode";
 
 type InteractionSettings = Required<Settings>["interactionSettings"];

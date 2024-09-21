@@ -11,23 +11,23 @@ import { AIStreamProvicer } from "../base";
 
 export class OpenAI implements AIStreamProvicer {
 	decoder = new TextDecoder();
-	settings: Settings["openai"];
 	chatHistory: OpenAIMessage[] = [];
 	chatModel: OpenAIModel | undefined;
 	codeModel: OpenAIModel | undefined;
-	interactionSettings: InteractionSettings | undefined;
 	baseModel: BaseChatModel | undefined;
 	rerankModel: BaseChatModel | undefined;
 
 	constructor(
-		settings: Settings["openai"],
-		interactionSettings: InteractionSettings
+		private readonly settings: Settings["providerSettings"]["OpenAI"],
+		private readonly interactionSettings: InteractionSettings
 	) {
 		if (!settings) {
 			throw new Error("Unable to load OpenAI settings.");
 		}
 
-		this.settings = settings;
+		if (!this.settings?.apiKey.trim()) {
+			throw new Error("OpenAI API key is required.");
+		}
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);

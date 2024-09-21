@@ -10,21 +10,18 @@ import lspClient from "./client/index";
 import { CreateAIProvider } from "./service/utils/models";
 import { loggingProvider } from "./providers/loggingProvider";
 import { eventEmitter } from "./events/eventEmitter";
-import { GetAllSettings, GetSettings } from "./service/settings";
+import { LoadSettings } from "./service/settings";
 import { DiffViewProvider } from "./providers/diffViewProvider";
-import { startClipboardTracking } from "./providers/clipboardTracker";
+import {
+	startClipboardTracking,
+	stopClipboardTracking,
+} from "./providers/clipboardTracker";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
-	const {
-		aiProvider,
-		embeddingProvider,
-		embeddingSettings,
-		config,
-		interactionSettings,
-	} = GetSettings();
+	const settings = await LoadSettings();
 	if (
 		!vscode.workspace.workspaceFolders ||
 		vscode.workspace.workspaceFolders.length === 0
@@ -35,28 +32,17 @@ export async function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
-	await lspClient.activate(
-		context,
-		config,
-		aiProvider,
-		embeddingProvider,
-		embeddingSettings,
-		interactionSettings!
-	);
+	await lspClient.activate(context, settings);
 
 	diffViewProvider = new DiffViewProvider(context);
 
 	let modelProvider;
 	try {
-		modelProvider = CreateAIProvider(
-			aiProvider,
-			config,
-			interactionSettings!
-		);
+		modelProvider = CreateAIProvider(settings);
 
 		if (!(await modelProvider.validateSettings())) {
 			throw new Error(
-				`AI Provider ${aiProvider} is not configured correctly.`
+				`AI Provider ${settings.aiProvider} is not configured correctly.`
 			);
 		}
 	} catch (error) {
@@ -69,21 +55,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	statusBarProvider = new ActivityStatusBar();
 
-	const settings = GetAllSettings();
-
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ConfigViewProvider.viewType,
 			new ConfigViewProvider(context.extensionUri, settings)
 		)
-	);
-
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration("Wingman")) {
-				vscode.commands.executeCommand("workbench.action.reloadWindow");
-			}
-		})
 	);
 
 	context.subscriptions.push(
@@ -111,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				lspClient,
 				modelProvider!,
 				context,
-				interactionSettings!,
+				settings?.interactionSettings,
 				diffViewProvider
 			),
 			{
@@ -122,11 +98,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	if (interactionSettings!.codeCompletionEnabled) {
+	if (settings.interactionSettings!.codeCompletionEnabled) {
 		context.subscriptions.push(
 			vscode.languages.registerInlineCompletionItemProvider(
 				CodeSuggestionProvider.selector,
-				new CodeSuggestionProvider(modelProvider!, interactionSettings!)
+				new CodeSuggestionProvider(
+					modelProvider!,
+					settings.interactionSettings!
+				)
 			)
 		);
 	}
@@ -144,7 +123,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
 		modelProvider!,
-		interactionSettings!
+		settings.interactionSettings
 	);
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
@@ -163,4 +142,5 @@ export function deactivate() {
 
 	lspClient?.deactivate();
 	diffViewProvider?.dispose();
+	stopClipboardTracking();
 }

@@ -13,7 +13,8 @@ interface BaseServiceSettings {
 
 export interface BaseEmbeddingServiceSettings {
 	embeddingModel: string;
-	dimensions: number;
+	dimensions: string;
+	enabled: boolean;
 }
 
 export interface InteractionSettings {
@@ -33,8 +34,14 @@ export const AiProviders = [
 ] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
+// Create a type for AiProviders
+export type AiProvider = (typeof AiProviders)[number];
+
 export const EmbeddingProviders = ["Ollama", "OpenAI"] as const;
 export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
+
+// Create a type for EmbeddingProviders
+export type EmbeddingProvider = (typeof EmbeddingProviders)[number];
 
 export type OllamaSettingsType = BaseServiceSettings & {
 	apiPath: string;
@@ -53,6 +60,15 @@ export type ApiSettingsType = BaseServiceSettings & {
 	apiKey: string;
 };
 
+export const defaultInteractionSettings: InteractionSettings = {
+	codeCompletionEnabled: true,
+	codeStreaming: false,
+	codeContextWindow: 256,
+	codeMaxTokens: -1,
+	chatContextWindow: 4096,
+	chatMaxTokens: 4096,
+};
+
 export const defaultOllamaSettings: OllamaSettingsType = {
 	codeModel: "deepseek-coder-v2:16b-lite-base-q4_0",
 	chatModel: "deepseek-coder-v2:16b-lite-instruct-q4_0",
@@ -64,7 +80,8 @@ export const defaultOllamaSettings: OllamaSettingsType = {
 export const defaultOllamaEmbeddingSettings: OllamaEmbeddingSettingsType = {
 	embeddingModel: "mxbai-embed-large",
 	baseUrl: "http://localhost:11434",
-	dimensions: 1024,
+	dimensions: "1024",
+	enabled: true,
 };
 
 export const defaultHfSettings: ApiSettingsType = {
@@ -83,8 +100,9 @@ export const defaultOpenAISettings: ApiSettingsType = {
 
 export const defaultOpenAIEmbeddingSettings: OpenAIEmbeddingSettingsType = {
 	embeddingModel: "text-embedding-ada-002",
-	dimensions: 1536,
+	dimensions: "1536",
 	apiKey: "Add me",
+	enabled: true,
 };
 
 export const defaultAnthropicSettings: ApiSettingsType = {
@@ -94,14 +112,18 @@ export const defaultAnthropicSettings: ApiSettingsType = {
 	apiKey: "Add me",
 };
 
-export interface Settings {
+export type Settings = {
 	aiProvider: (typeof AiProviders)[number];
 	interactionSettings: InteractionSettings;
 	embeddingProvider: (typeof EmbeddingProviders)[number];
-	ollamaEmeddingSettings?: OllamaEmbeddingSettingsType;
-	openaiEmbeddingSettings?: OpenAIEmbeddingSettingsType;
-	ollama?: OllamaSettingsType;
-	huggingface?: ApiSettingsType;
-	openai?: ApiSettingsType;
-	anthropic?: ApiSettingsType;
-}
+	embeddingSettings: {
+		Ollama?: OllamaEmbeddingSettingsType;
+		OpenAI?: OpenAIEmbeddingSettingsType;
+	};
+	providerSettings: {
+		Ollama?: OllamaSettingsType;
+		HuggingFace?: ApiSettingsType;
+		OpenAI?: ApiSettingsType;
+		Anthropic?: ApiSettingsType;
+	};
+};

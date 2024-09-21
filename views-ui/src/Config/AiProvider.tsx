@@ -13,33 +13,29 @@ import {
 	defaultOpenAISettings,
 } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { ActionPanel, Container, DropDownContainer } from "./Config.styles";
+import { ActionPanel, Container, DropDownContainer } from "./Config";
 import { HFSettingsView } from "./HFSettingsView";
 import { OllamaSettingsView } from "./OllamaSettingsView";
 import { OpenAISettingsView } from "./OpenAISettingsView";
 import { vscode } from "./utilities/vscode";
 import { AnthropicSettingsView } from "./AnthropicSettingsView";
+import { ProviderInfoView } from "./ProviderInfoView";
 
-export const AiProvider = ({
-	aiProvider,
-	ollama,
-	huggingface,
-	openai,
-	anthropic,
-	ollamaModels,
-}: InitSettings) => {
+export const AiProvider = (settings: InitSettings) => {
+	const { aiProvider, providerSettings, ollamaModels } = settings;
+	const { Ollama, HuggingFace, OpenAI, Anthropic } = providerSettings;
 	const [currentAiProvider, setAiProvider] = useState(aiProvider);
 	const [ollamaSettings, setOllamaSettings] = useState(
-		ollama ?? defaultOllamaSettings
+		Ollama ?? defaultOllamaSettings
 	);
 	const [hfSettings, setHfSettings] = useState(
-		huggingface ?? defaultHfSettings
+		HuggingFace ?? defaultHfSettings
 	);
 	const [openAISettings, setOpenAISettings] = useState(
-		openai ?? defaultOpenAISettings
+		OpenAI ?? defaultOpenAISettings
 	);
 	const [anthropicSettings, setAnthropicSettings] = useState(
-		anthropic ?? defaultAnthropicSettings
+		Anthropic ?? defaultAnthropicSettings
 	);
 	const handleProviderChange = (e: any) => {
 		setAiProvider(e.target.value);
@@ -49,16 +45,16 @@ export const AiProvider = ({
 		setAiProvider(aiProvider);
 		switch (currentAiProvider) {
 			case "Ollama":
-				setOllamaSettings(ollama ?? defaultOllamaSettings);
+				setOllamaSettings(Ollama ?? defaultOllamaSettings);
 				break;
 			case "HuggingFace":
-				setHfSettings(huggingface ?? defaultHfSettings);
+				setHfSettings(HuggingFace ?? defaultHfSettings);
 				break;
 			case "OpenAI":
-				setOpenAISettings(openai ?? defaultOpenAISettings);
+				setOpenAISettings(OpenAI ?? defaultOpenAISettings);
 				break;
 			case "Anthropic":
-				setAnthropicSettings(anthropic ?? defaultAnthropicSettings);
+				setAnthropicSettings(Anthropic ?? defaultAnthropicSettings);
 				break;
 		}
 	};
@@ -161,6 +157,7 @@ export const AiProvider = ({
 					Reset
 				</VSCodeButton>
 			</ActionPanel>
+			<ProviderInfoView {...settings} aiProvider={currentAiProvider} />
 		</Container>
 	);
 };
