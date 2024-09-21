@@ -178,7 +178,7 @@ ${values.review.comments.join("\n")}`,
 					<ChatEntry
 						from="assistant"
 						message={
-							"Welcome! The composer feature allows you to generate code changes. You can ask for help with code, or ask for code to be written for you. By default, composer will intelligently chosen files in your project based on your input. You can also target specific files using '@filename'. Lets go! 🚀"
+							"Welcome! The composer feature allows you to generate code changes. You can ask for help with code, or ask for code to be written for you. By default, composer will intelligently choose files in your project based on your input. You can also target specific files using '@filename'. Lets go! 🚀"
 						}
 						loading={false}
 						plan={{
