@@ -415,26 +415,34 @@ export class LSPServer {
 		);
 
 		this.connection?.onRequest("wingman/getEmbeddings", async (request) => {
-			this.connection?.console.log(
-				"Received request for embeddings: " + request.query
-			);
-
-			const relatedDocuments = new VectorQuery();
-			const docs =
-				await relatedDocuments.retrieveDocumentsWithRelatedCode(
-					request.query,
-					this.codeGraph!,
-					this.vectorStore!,
-					this.workspaceFolders[0]
+			try {
+				this.connection?.console.log(
+					"Received request for embeddings: " + request.query
 				);
 
-			const projectDetails =
-				await this.projectDetails?.retrieveProjectDetails();
+				const relatedDocuments = new VectorQuery();
+				const docs =
+					await relatedDocuments.retrieveDocumentsWithRelatedCode(
+						request.query,
+						this.codeGraph!,
+						this.vectorStore!,
+						this.workspaceFolders[0]
+					);
 
-			return {
-				codeDocs: docs.relatedCodeDocs,
-				projectDetails: projectDetails?.description,
-			};
+				const projectDetails =
+					await this.projectDetails?.retrieveProjectDetails();
+
+				this.connection?.console.log(
+					`Found ${docs?.relatedCodeDocs.length} related documents`
+				);
+
+				return {
+					codeDocs: docs.relatedCodeDocs,
+					projectDetails: projectDetails?.description,
+				};
+			} catch (e) {
+				console.error(e);
+			}
 		});
 
 		this.documents?.onDidSave((e) => {

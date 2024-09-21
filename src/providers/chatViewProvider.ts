@@ -396,7 +396,7 @@ ${projectDetails}
 
 		if (codeDocs.length === 0) {
 			ragContext = ragContext.replace(
-				"{CONTEXT_TEMPLATE}",
+				"{SYMBOLS_TEMPLATE}",
 				`Here are the available types reference by the code in context to use as a reference when answering questions, these may not be related to the code provided:
 
 ${symbols}
@@ -405,7 +405,7 @@ ${symbols}
 			);
 		} else {
 			ragContext = ragContext.replace(
-				"{CONTEXT_TEMPLATE}",
+				"{SYMBOLS_TEMPLATE}",
 				`Use these code snippets from the current project as a reference when answering questions.
 These code snippets serve as additional context for the user's question:
 
