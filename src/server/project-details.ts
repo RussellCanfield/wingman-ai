@@ -31,75 +31,94 @@ export class ProjectDetailsHandler {
 		return path.join(this.directory, projectDetailsFile);
 	};
 
-	locateLockFile = async () => {
-		let lockFile: string = "";
+	locateMainConfigFile = async () => {
 		const files = await fs.promises.readdir(this.workspace);
-		const lockFileNames = [
+		const configFiles = {
+			"package.json": "javascript", // npm, yarn, pnpm
+			"composer.json": "php",
+			// Add other main config files here if needed
+		};
+
+		for (const [file, language] of Object.entries(configFiles)) {
+			if (files.includes(file)) {
+				return {
+					path: path.join(this.workspace, file),
+					language,
+				};
+			}
+		}
+
+		return null;
+	};
+
+	locateDependencyFile = async () => {
+		const files = await fs.promises.readdir(this.workspace);
+		const dependencyFiles = [
 			"package-lock.json", // npm
 			"yarn.lock", // Yarn
 			"pnpm-lock.yaml", // pnpm
 			"shrinkwrap.yaml", // npm shrinkwrap
+			"composer.lock", // PHP Composer
+			// Add other dependency files here if needed
 		];
 
-		for (const file of files) {
-			if (lockFileNames.includes(file)) {
-				lockFile = path.join(this.workspace, file);
-				break; // Stop after finding the first lock file
+		for (const file of dependencyFiles) {
+			if (files.includes(file)) {
+				return file; // Return just the filename
 			}
 		}
 
-		return lockFile;
+		return null;
 	};
 
 	generateProjectDetails = async () => {
 		try {
 			const projectDetailsPath = this.getProjectDetailsFileLocation();
 
-			let packageJsonHash = "";
-			if (fs.existsSync(path.join(this.workspace, "package.json"))) {
-				const packageJson = fs.readFileSync(
-					path.join(this.workspace, "package.json"),
-					"utf8"
-				);
-				packageJsonHash = crypto
-					.createHash("sha256")
-					.update(packageJson)
-					.digest("hex");
-
-				const currentProjectDetails =
-					await this.retrieveProjectDetails();
-
-				if (currentProjectDetails?.version === packageJsonHash) {
-					return;
-				}
-
-				const locateLockFile = await this.locateLockFile();
-
-				const projectDetails =
-					await this.generator?.generatorProjectSummary(
-						packageJson,
-						locateLockFile
-					);
-
-				// Ensure the directory exists
-				await fs.promises.mkdir(path.dirname(projectDetailsPath), {
-					recursive: true,
-				});
-
-				await fs.promises.writeFile(
-					projectDetailsPath,
-					JSON.stringify(
-						{
-							description: projectDetails,
-							version: packageJsonHash,
-						},
-						null,
-						2
-					)
-				);
-
-				console.log("Project details generated:", projectDetailsPath);
+			const mainConfigFile = await this.locateMainConfigFile();
+			if (!mainConfigFile) {
+				console.log("No main configuration file found.");
+				return;
 			}
+
+			const configContent = fs.readFileSync(mainConfigFile.path, "utf8");
+			const configHash = crypto
+				.createHash("sha256")
+				.update(configContent)
+				.digest("hex");
+
+			const currentProjectDetails = await this.retrieveProjectDetails();
+
+			if (currentProjectDetails?.version === configHash) {
+				return;
+			}
+
+			const dependencyFileName = await this.locateDependencyFile();
+
+			const projectDetails =
+				await this.generator?.generatorProjectSummary(
+					configContent,
+					mainConfigFile.language,
+					dependencyFileName
+				);
+
+			await fs.promises.mkdir(path.dirname(projectDetailsPath), {
+				recursive: true,
+			});
+
+			await fs.promises.writeFile(
+				projectDetailsPath,
+				JSON.stringify(
+					{
+						description: projectDetails,
+						version: configHash,
+					},
+					null,
+					2
+				)
+			);
+
+			console.log("Project details generated:", projectDetailsPath);
 		} catch (e) {
 			console.error("Unable to generate project details", e);
 		}

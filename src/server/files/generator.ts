@@ -12,35 +12,35 @@ export class Generator {
 	) {}
 
 	public async generatorProjectSummary(
-		packageJsonContents: string,
-		lockFileName: string
+		configFileContents: string,
+		language: string,
+		dependencyFileName: string | null
 	) {
-		const prompt = `You are a senior developer working on a new project. 
-Write a brief summary of the project based on the provided package.json file.
+		const prompt = `You are a senior developer analyzing a new project. 
+Write a brief summary of the project based on the provided main configuration file.
+The project is written in ${language}.
 
 Instructions:
 1. Focus on the project's purpose and goals.
 2. Include key features and technologies used.
 3. Avoid detailed implementation specifics.
 4. Return your response in plain text, without markdown formatting.
-5. If provided, use the lock file name to enhance your response with which package manager is used.
+5. If provided, use the dependency file name to enhance your response with which package manager is used.
+6. Adapt your analysis based on the specific language and configuration file format.
+7. Keep your response short and concise.
 
 Response example:
 
-This project is a React application that leverages:
-- React
-- Typescript
-- Webpack/Rspack
-- NextJS
-- React Router
+This project appears to be a ${language} application that leverages:
+- [List key technologies or frameworks]
+- [Mention any significant libraries or tools]
+- [Note any important development or build tools]
 
-Lock file name:
+${dependencyFileName ? `Dependency file name: ${dependencyFileName}` : ""}
 
-${lockFileName}
+Main configuration file contents:
 
-Package.json:
-
-${packageJsonContents}`;
+${configFileContents}`;
 
 		const result = await this.aiProvider.invoke(prompt);
 
