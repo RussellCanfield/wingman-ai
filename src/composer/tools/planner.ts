@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { VectorQuery } from "../../server/query";
@@ -9,6 +8,7 @@ import { ProjectDetailsHandler } from "../../server/project-details";
 import { buildObjective, formatMessages } from "../utils";
 import { PlanExecuteState } from "../types";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { JsonOutputToolsParser } from "@langchain/core/output_parsers/openai_tools";
 
 export type PlannerSchema = z.infer<typeof planSchema>;
 
@@ -17,25 +17,13 @@ const planSchema = z.object({
 		.array(z.string())
 		.describe("A list of steps to follow to complete the task."),
 });
-const plan = zodToJsonSchema(planSchema);
-const planFunction = {
-	name: "plan",
-	description:
-		"This tool is used to refine the objective from a code perspective",
-	parameters: plan,
-};
-
-const planTool = {
-	type: "function",
-	function: planFunction,
-};
 
 const plannerPrompt = ChatPromptTemplate.fromTemplate(
 	`You are an expert software engineer tasked with planning a feature implementation. Your goal is to provide a concise, step-by-step plan based on the given information.
 Given:
 
-Objective: {objective}
-Project overview: {details}
+Objective: {{objective}}
+Project overview: {{details}}
 Relevant code files
 
 Instructions:
@@ -51,12 +39,25 @@ Ensure the steps are in a logical order for implementation.
 Do not mention writing unit tests unless explicitly requested.
 Do not mention having the team review, talking with the team, or any other team-related activities.
 Do not include deploying the application or checking application logs.
+Ensure you use the 'planner' tool.
 
 Output only a list of implementation steps, these must be in a JSON array. Do not include any additional explanations or commentary.
 
+Example JSON Output Structures:
+
+Example 1:
+{
+  "steps": ["Install the react-icons package", "Create a new component named 'Icon'"]
+}
+
+------
+
 Here are the relevant code files:
 
-{files}`
+{{files}}`,
+	{
+		templateFormat: "mustache",
+	}
 );
 
 export class CodePlanner {

@@ -14,7 +14,7 @@
 				"background": {
 					"activeOnStart": true,
 					"beginsPattern": "^start\\s+Compiling...", // Regex to match the start of the task
-					"endsPattern": "^ready\\s+Compiled in" // Regex to match the end of the task
+					"endsPattern": "^out/ast-grep-napi.win32-x64-msvc.node" // Regex to match the end of the task
 				},
 				"pattern": {
 					"regexp": "^(error)\\s+(.*)$",

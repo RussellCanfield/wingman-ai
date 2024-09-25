@@ -1,9 +1,8 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types/index";
-import { formatMessages } from "../utils";
+import { buildObjective, formatMessages } from "../utils";
 
 export type ReplanSchema = z.infer<typeof plan>;
 
@@ -21,25 +20,25 @@ const plan = z.object({
 		)
 		.optional(),
 });
-const response = zodToJsonSchema(plan);
-
-const responseTool = {
-	type: "function",
-	function: {
-		name: "response",
-		description: "Response to user.",
-		parameters: response,
-	},
-};
 
 const replannerPrompt = ChatPromptTemplate.fromTemplate(
 	`Analyze the code changes to determine if they meet the project objective. Focus on implementation and alignment with the goal.
 
-Objective: 
+Output:
+
+response: Brief summary of changes made.
+review: Array of comments for immediate attention if objective not met. If it was met, return a review with an empty array for comments.
+
+Criteria:
+
+GitHub-flavored markdown for code.
+Implementation completeness and accuracy.
+Correct import paths and necessary file modifications. 
+  - Example: if a new file is created, ensure it is imported correctly.
+  - Example: if a new method was imported, ensure it was created.
+Identify unrelated changes.
 
 {objective}
-
------
 
 Project Details: 
 
@@ -52,18 +51,6 @@ Modified/Created Files:
 {files}
 
 -----
-
-Output:
-
-response: Brief summary of changes made.
-review: Array of comments for immediate attention if objective not met. If it was met, return a review with an empty array for comments.
-
-Criteria:
-
-GitHub-flavored markdown for code.
-Implementation completeness and accuracy.
-Correct import paths and necessary file modifications.
-Identify unrelated changes.
 
 Guidelines:
 
@@ -90,20 +77,6 @@ export class Replanner {
 		this.replanner = replannerPrompt.pipe(this.model);
 	}
 
-	private buildObjective(state: PlanExecuteState) {
-		let objective = `Objective:
-
-${formatMessages(state.messages)}`;
-
-		if (state.followUpInstructions.length > 0) {
-			objective = `The user has provided the following instructions to refine the code you've already written or modified:
-    
-${formatMessages(state.followUpInstructions)}`;
-		}
-
-		return objective;
-	}
-
 	replanStep = async (
 		state: PlanExecuteState
 	): Promise<Partial<PlanExecuteState>> => {
@@ -122,10 +95,10 @@ ${f.code}`;
 
 		const output = (await this.replanner.invoke({
 			details: state.projectDetails || "Not available.",
-			objective: this.buildObjective(state),
+			objective: buildObjective(state),
 			files: `${
 				codeFiles
-					? "---FILE---\n" + codeFiles
+					? "---FILE---\n\n" + codeFiles
 					: "No files were modified as part of this change."
 			}`,
 		})) as ReplanSchema;

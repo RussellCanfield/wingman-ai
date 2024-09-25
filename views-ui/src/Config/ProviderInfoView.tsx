@@ -49,6 +49,11 @@ export const OllamaView = () => {
 			<h4>Code:</h4>
 			<ul>
 				<li>
+					<a href="https://ollama.com/library/qwen2.5-coder">
+						qwen2.5-coder
+					</a>
+				</li>
+				<li>
 					<a href="https://ollama.ai/library/deepseek-coder:6.7b-base-q8_0">
 						deepseek-coder
 					</a>
@@ -74,6 +79,11 @@ export const OllamaView = () => {
 			</ul>
 			<h4>Chat:</h4>
 			<ul>
+				<li>
+					<a href="https://ollama.com/library/qwen2.5-coder">
+						qwen2.5-coder
+					</a>
+				</li>
 				<li>
 					<a href="https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0">
 						deepseek-instruct

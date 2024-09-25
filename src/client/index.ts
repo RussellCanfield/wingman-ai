@@ -16,6 +16,7 @@ import { ComposerRequest, ComposerResponse } from "@shared/types/Composer";
 import path from "node:path";
 import ignore from "ignore";
 import { mapLocation, mapSymbol } from "./utils";
+import { loggingProvider } from "../providers/loggingProvider";
 
 let client: LanguageClient;
 
@@ -76,7 +77,7 @@ export class LSPClient {
 		await client.start();
 
 		client.onRequest("wingman/compose", (params: ComposerResponse) => {
-			console.log(params);
+			loggingProvider.logInfo(JSON.stringify(params));
 			this.composerWebView?.postMessage({
 				command: "compose-response",
 				value: params,
@@ -210,7 +211,11 @@ async function getGitignorePatterns(): Promise<string[]> {
 
 		return cachedGitignorePatterns;
 	} catch (err) {
-		console.error("Error reading .gitignore file:", err);
+		if (err instanceof Error) {
+			loggingProvider.logError(
+				`Error reading .gitignore file: ${err.message}`
+			);
+		}
 		return [];
 	}
 }
@@ -226,12 +231,6 @@ async function findFiles(filter: string, exclusionFilter?: string) {
 	} else if (gitignorePatterns.length > 0) {
 		combinedExclusionFilter = `{${gitignorePatterns.join(",")}}`;
 	}
-
-	console.log(
-		"Searching files to index using: ",
-		filter,
-		combinedExclusionFilter
-	);
 
 	const files = await vscode.workspace.findFiles(
 		filter,

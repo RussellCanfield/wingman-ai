@@ -20,6 +20,7 @@ import {
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOllama } from "@langchain/ollama";
+import { Qwen } from "./models/qwen";
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -44,13 +45,16 @@ export class Ollama implements AIStreamProvicer {
 		this.baseModel = new ChatOllama({
 			baseUrl: this.settings!.baseUrl,
 			model: this.settings!.chatModel,
-			temperature: 0.2,
+			temperature: 0,
+			maxRetries: 2,
+			format: "json",
 		});
 
 		this.rerankModel = new ChatOllama({
 			baseUrl: this.settings!.baseUrl,
 			model: this.settings!.chatModel,
-			temperature: 0.2,
+			temperature: 0,
+			maxRetries: 2,
 		});
 	}
 
@@ -83,11 +87,15 @@ export class Ollama implements AIStreamProvicer {
 			return false;
 		}
 
+		if (!this.chatModel || !this.codeModel) return false;
+
 		return true;
 	}
 
 	private getCodeModel(codeModel: string): OllamaAIModel | undefined {
 		switch (true) {
+			case codeModel.startsWith("qwen"):
+				return new Qwen();
 			case codeModel.includes("magicoder"):
 				return new Magicoder();
 			case codeModel.startsWith("codellama"):
@@ -98,11 +106,15 @@ export class Ollama implements AIStreamProvicer {
 				return new CodeQwen();
 			case codeModel.startsWith("codestral"):
 				return new Codestral();
+			default:
+				return undefined;
 		}
 	}
 
 	private getChatModel(chatModel: string): OllamaAIModel | undefined {
 		switch (true) {
+			case chatModel.startsWith("qwen"):
+				return new Qwen();
 			case chatModel.includes("magicoder"):
 				return new Magicoder();
 			case chatModel.startsWith("llama3"):
@@ -117,6 +129,8 @@ export class Ollama implements AIStreamProvicer {
 				return new CodeQwen();
 			case chatModel.startsWith("codestral"):
 				return new Codestral();
+			default:
+				return undefined;
 		}
 	}
 

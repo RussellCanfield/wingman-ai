@@ -282,9 +282,18 @@ const ChatEntry = ({
 					</div>
 				</div>
 			)}
-			{plan?.files?.map((file, index) => (
-				<ChatArtifact key={index} file={file} theme={codeTheme} />
-			))}
+			{plan?.files?.length > 0 && (
+				<div>
+					<h3 className="m-0 text-lg">Files:</h3>
+					{plan?.files?.map((file, index) => (
+						<ChatArtifact
+							key={index}
+							file={file}
+							theme={codeTheme}
+						/>
+					))}
+				</div>
+			)}
 		</li>
 	);
 };

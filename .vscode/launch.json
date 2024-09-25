@@ -9,13 +9,14 @@
 			"name": "Run Extension",
 			"type": "extensionHost",
 			"request": "launch",
-			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}",
-				"--exitcrash"
-			],
+			"args": ["--extensionDevelopmentPath=${workspaceFolder}"],
 			"outFiles": ["${workspaceFolder}/out/**/*.js"],
+			"sourceMapPathOverrides": {
+				"webpack:///./src/*": "${workspaceFolder}/src/*",
+				"webpack:///src/*": "${workspaceFolder}/src/*",
+				"webpack:///*": "${workspaceFolder}/*"
+			},
 			"sourceMaps": true,
-			"smartStep": true,
 			"preLaunchTask": "rsbuild"
 		},
 		{
@@ -23,10 +24,21 @@
 			"type": "node",
 			"request": "attach",
 			"port": 6009,
-			"restart": true,
 			"sourceMaps": true,
-			"smartStep": true,
+			"timeout": 20000,
+			"restart": true,
+			"sourceMapPathOverrides": {
+				"webpack:///./src/*": "${workspaceFolder}/src/*",
+				"webpack:///src/*": "${workspaceFolder}/src/*",
+				"webpack:///*": "${workspaceFolder}/*"
+			},
 			"outFiles": ["${workspaceFolder}/out/**/*.js"]
+		}
+	],
+	"compounds": [
+		{
+			"name": "Client + Server",
+			"configurations": ["Run Extension", "Attach to Process"]
 		}
 	]
 }

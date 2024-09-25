@@ -143,4 +143,5 @@ export function deactivate() {
 	lspClient?.deactivate();
 	diffViewProvider?.dispose();
 	stopClipboardTracking();
+	loggingProvider.dispose();
 }
