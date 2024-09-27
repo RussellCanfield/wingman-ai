@@ -14,6 +14,8 @@ export class DiffViewProvider {
 
 	async createDiffView({ file, diff }: DiffViewCommand) {
 		if (this.panels.has(file)) {
+			const existingPanel = this.panels.get(file);
+			existingPanel?.reveal(vscode.ViewColumn.One);
 			return;
 		}
 

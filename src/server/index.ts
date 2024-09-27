@@ -405,7 +405,7 @@ export class LSPServer {
 				);
 
 				for await (const { node, values } of generator) {
-					console.log(values);
+					console.log(node, values);
 					await this.connection?.sendRequest("wingman/compose", {
 						node,
 						values,

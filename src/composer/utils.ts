@@ -4,12 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const formatMessages = (messages: ChatMessage[]) =>
-	messages.length > 0 ? messages[messages.length - 1].content : "";
+	messages.map((m) => m.content).join("\n");
 
 export const buildObjective = (state: PlanExecuteState) => {
 	let objective = `Objective:
 
-${formatMessages(state.messages)}`;
+${formatMessages([state.messages[state.messages.length - 1]])}`;
 
 	if (state.followUpInstructions.length > 0) {
 		objective = `Objective:
