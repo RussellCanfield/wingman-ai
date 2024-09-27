@@ -10,6 +10,7 @@ import {
 	Settings,
 } from "@shared/types/Settings";
 import { homedir } from "node:os";
+import { loggingProvider } from "../providers/loggingProvider";
 
 const defaultSettings: Settings = {
 	aiProvider: "OpenAI",
@@ -67,10 +68,12 @@ export async function LoadSettings(): Promise<Settings> {
 		const loadedSettings = JSON.parse(fileContents.toString());
 		settings = mergeSettings(defaultSettings, loadedSettings);
 	} catch (e) {
-		console.warn(
-			"Settings file not found or corrupt, creating a new one.",
-			e
-		);
+		if (e instanceof Error) {
+			loggingProvider.logError(
+				`Settings file not found or corrupt, creating a new one. Error - ${e.message}`
+			);
+		}
+
 		settings = {
 			aiProvider: "OpenAI",
 			embeddingProvider: "OpenAI",
