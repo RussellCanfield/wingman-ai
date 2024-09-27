@@ -43,12 +43,10 @@ const config = { configurable: { thread_id: "conversation-num-1" } };
 
 let memory = new MemorySaver();
 let modelProvider: AIProvider;
-let aiProvider: string;
 let embeddingProvider: string;
 let embeddingSettings:
 	| OllamaEmbeddingSettingsType
 	| OpenAIEmbeddingSettingsType;
-let interactionSettings: InteractionSettings;
 let settings: Settings;
 
 export type CustomRange = {
@@ -132,7 +130,10 @@ export class LSPServer {
 			codeGenerator
 		);
 		await this.projectDetails.generateProjectDetails();
-		await this.vectorStore.createIndex();
+
+		if (embeddingSettings.enabled) {
+			await this.vectorStore.createIndex();
+		}
 	};
 
 	private initialize = () => {
@@ -155,8 +156,6 @@ export class LSPServer {
 					throw new Error("Settings not found");
 				}
 
-				aiProvider = settings.aiProvider;
-				interactionSettings = settings.interactionSettings;
 				embeddingProvider = settings.embeddingProvider;
 				embeddingSettings =
 					settings.embeddingProvider === "Ollama"

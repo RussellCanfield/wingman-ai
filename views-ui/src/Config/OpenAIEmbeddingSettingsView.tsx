@@ -22,6 +22,14 @@ export const OpenAIEmbeddingSettingsView = ({
 		onChange(clone);
 	};
 
+	const handleCheckboxChange = (e: any) => {
+		const field = e.target.getAttribute("data-name");
+		const clone = { ...paths };
+		//@ts-expect-error
+		clone[field] = e.target.checked;
+		onChange(clone);
+	};
+
 	return (
 		<Container>
 			<VSCodeTextField
@@ -51,7 +59,8 @@ export const OpenAIEmbeddingSettingsView = ({
 			<div className="flex gap-2 items-center">
 				<p>Enabled:</p>
 				<VSCodeCheckbox
-					defaultChecked={enabled}
+					checked={enabled}
+					onChange={handleCheckboxChange}
 					data-name="enabled"
 					title="Enable OpenAI Embeddings"
 				/>

@@ -48,7 +48,9 @@
 		"Programming Languages",
 		"Snippets",
 		"Machine Learning",
-		"Education"
+		"Education",
+		"AI",
+		"Chat"
 	],
 	"pricing": "Free",
 	"keywords": [
@@ -56,6 +58,8 @@
 		"codestral",
 		"chatgpt",
 		"copilot",
+		"compose",
+		"sonnet",
 		"intellisense",
 		"openai",
 		"anthropic",
