@@ -25,7 +25,7 @@ jobs:
             - name: Install Dependencies
               run: npm install
             - name: Build
-              run: npm build:docs
+              run: npm run build:docs
             - name: Publish
               uses: cloudflare/pages-action@v1
               with:
