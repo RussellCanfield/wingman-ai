@@ -34,11 +34,11 @@ Wingman has the ability to index your entire codebase and generate local LLM emb
 
 <b> [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) supports advanced features such as: </b>
 
-<h3 align="center">Code completion</h3>
+<h3>Code completion</h3>
 Real-time code suggestions as you type
-<h3 align="center">Chat</h3>
+<h3>Chat</h3>
 Ask questions about your codebase with an interactive real-time chat
-<h3 align="center">Composer</h3>
+<h3>Composer</h3>
 Generate code with deep project context using an interative thought based agent flow
 
 </center>
