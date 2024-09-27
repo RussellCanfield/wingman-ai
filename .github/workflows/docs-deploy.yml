@@ -1,0 +1,41 @@
+name: Doc Site Deploy
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - docs-site/**
+    workflow_dispatch:
+
+jobs:
+    landing:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            deployments: write
+        name: Docs Site
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v3
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+            - name: Install Dependencies
+              run: npm install
+            - name: Build
+              run: npm build:docs
+            - name: Publish
+              uses: cloudflare/pages-action@v1
+              with:
+                  apiToken: ${{ secrets.CLOUD_FLARE_API_TOKEN }}
+                  accountId: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+                  projectName: wingman-docs
+                  directory: docs-site/doc_build
+            - name: Outputs
+              run: |
+                  echo "ID: ${{ steps.publish.outputs.id }}"
+                  echo "URL: ${{ steps.publish.outputs.url }}"
+                  echo "Environment: ${{ steps.publish.outputs.environment }}"
+                  echo "Alias: ${{ steps.publish.outputs.alias }}"

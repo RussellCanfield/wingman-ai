@@ -1,22 +1,47 @@
 import * as vscode from "vscode";
+import fs from "node:fs";
 import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider } from "../service/base";
-import { AppMessage, CodeContext, CodeContextDetails } from "../types/Message";
-import { InteractionSettings } from "../types/Settings";
+import {
+	AppMessage,
+	CodeContext,
+	CodeContextDetails,
+	FileMetadata,
+} from "@shared/types/Message";
+import {
+	IndexFilter,
+	InteractionSettings,
+} from "../../shared/src/types/Settings";
 import { loggingProvider } from "./loggingProvider";
-import { getSymbolsFromOpenFiles } from "./utilities";
+import {
+	addNoneAttributeToLink,
+	extractCodeBlock,
+	getActiveWorkspace,
+	getNonce,
+	getSymbolsFromOpenFiles,
+	replaceTextInDocument,
+} from "./utilities";
+import { LSPClient } from "../client/index";
+import {
+	ComposerRequest,
+	DiffViewCommand,
+	FileSearchResult,
+} from "@shared/types/Composer";
+import { DiffViewProvider } from "./diffViewProvider";
 
 let abortController = new AbortController();
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = "wing-man-chat-view";
+	public static readonly viewType = "wingman.chatview";
 
 	private _disposables: vscode.Disposable[] = [];
 
 	constructor(
+		private readonly _lspClient: LSPClient,
 		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
-		private readonly _interactionSettings: InteractionSettings
+		private readonly _interactionSettings: InteractionSettings,
+		private readonly _diffViewProvider: DiffViewProvider
 	) {}
 
 	dispose() {
@@ -31,16 +56,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	) {
 		webviewView.webview.options = {
 			enableScripts: true,
-			localResourceRoots: [
-				this._context.extensionUri,
-				vscode.Uri.joinPath(
-					this._context.extensionUri,
-					"node_modules/vscode-codicons"
-				),
-			],
 		};
 
 		webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
+
+		this._lspClient.setComposerWebViewReference(webviewView.webview);
 
 		token.onCancellationRequested((e) => {
 			abortController.abort();
@@ -48,67 +68,237 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		});
 
 		this._disposables.push(
-			webviewView.webview.onDidReceiveMessage((data: AppMessage) => {
-				if (!data) {
-					return;
-				}
+			webviewView.webview.onDidReceiveMessage(
+				async (data: AppMessage) => {
+					if (!data) {
+						return;
+					}
 
-				const { command, value } = data;
+					const { command, value } = data;
 
-				switch (command) {
-					case "chat": {
-						this.handleChatMessage({ value, webviewView });
-						break;
+					const workspaceFolder =
+						vscode.workspace.workspaceFolders?.[0].uri;
+					if (!workspaceFolder) {
+						throw new Error("No workspace folder found");
 					}
-					case "cancel": {
-						abortController.abort();
-						break;
-					}
-					case "clipboard": {
-						vscode.env.clipboard.writeText(value as string);
-						break;
-					}
-					case "copyToFile": {
-						this.sendContentToNewDocument(value as string);
-						break;
-					}
-					case "clear": {
-						this._aiProvider.clearChatHistory();
-						break;
-					}
-					case "showContext": {
-						const { fileName, lineRange } = value as CodeContext;
-						const [start, end] = lineRange.split("-").map(Number);
-						const uri = vscode.Uri.file(fileName);
-						vscode.window.showTextDocument(uri).then(() => {
-							if (!vscode.window.activeTextEditor) {
-								return;
+
+					switch (command) {
+						case "diff-view":
+							const { file, diff } = value as DiffViewCommand;
+
+							this._diffViewProvider.createDiffView({
+								file: vscode.Uri.joinPath(
+									workspaceFolder,
+									vscode.workspace.asRelativePath(file)
+								).fsPath,
+								diff: extractCodeBlock(diff),
+							});
+							break;
+						case "clear-chat-history":
+							this._aiProvider.clearChatHistory();
+							await this._lspClient.clearChatHistory();
+							break;
+						case "terminal":
+							// Use value to spawn new terminal with command
+							const terminalCommand = value as string;
+							const terminal = vscode.window.createTerminal({
+								name: "Wingman Command",
+							});
+							terminal.show();
+							terminal.sendText(terminalCommand);
+							break;
+						case "mergeIntoFile":
+							const { file: artifactFile, code: markdown } =
+								value as FileMetadata;
+
+							let code = markdown?.startsWith("```")
+								? extractCodeBlock(markdown)
+								: markdown;
+							const relativeFilePath =
+								vscode.workspace.asRelativePath(artifactFile);
+
+							const fileUri = vscode.Uri.joinPath(
+								workspaceFolder,
+								relativeFilePath
+							);
+
+							try {
+								// Check if the file exists
+								await vscode.workspace.fs.stat(fileUri);
+
+								// Check if the document is already open
+								let document =
+									vscode.workspace.textDocuments.find(
+										(doc) =>
+											doc.uri.toString() ===
+											fileUri.toString()
+									);
+								if (!document) {
+									// Open the text document if it is not already open
+									document =
+										await vscode.workspace.openTextDocument(
+											fileUri
+										);
+								}
+
+								// Replace text in the document
+								await replaceTextInDocument(document, code!);
+							} catch (error) {
+								if (
+									(error as vscode.FileSystemError).code ===
+									"FileNotFound"
+								) {
+									// Create the text document if it does not exist
+									await vscode.workspace.fs.writeFile(
+										fileUri,
+										new Uint8Array()
+									);
+									const document =
+										await vscode.workspace.openTextDocument(
+											fileUri
+										);
+									await replaceTextInDocument(
+										document,
+										code!
+									);
+								} else {
+									throw error;
+								}
 							}
+							break;
+						case "get-files":
+							const searchTerm = value as string | undefined;
+							if (!searchTerm || searchTerm?.length === 0) {
+								return [];
+							}
+							// Find all files in the workspace, excluding node_modules
+							const allFiles = await vscode.workspace.findFiles(
+								"**/*",
+								"**/node_modules/**"
+							);
 
-							vscode.window.activeTextEditor.selection =
-								new vscode.Selection(
-									new vscode.Position(start, 0),
-									new vscode.Position(end, 0)
+							// Filter files based on the file name
+							const filteredFiles = allFiles.filter((file) => {
+								const fileName =
+									vscode.workspace.asRelativePath(
+										file.fsPath
+									);
+								return (
+									fileName &&
+									fileName.toLowerCase().includes(searchTerm)
 								);
-						});
-						break;
-					}
-					case "ready": {
-						webviewView.webview.postMessage({
-							command: "init",
-							value: {
+							});
+
+							webviewView.webview.postMessage({
+								command: "get-files-result",
+								value: filteredFiles.slice(0, 10).map(
+									(result) =>
+										({
+											file: vscode.workspace
+												.asRelativePath(result)
+												.split("/")
+												.pop()!,
+											path: result.fsPath,
+										} satisfies FileSearchResult)
+								),
+							});
+							break;
+						case "compose":
+							await this._lspClient.compose(
+								value as ComposerRequest
+							);
+							break;
+						case "delete-index":
+							await this._lspClient.deleteIndex();
+							break;
+						case "build-index":
+							const { filter, exclusionFilter } =
+								value as IndexFilter;
+							this._context.workspaceState.update(
+								"index-filter",
+								filter
+							);
+							this._context.workspaceState.update(
+								"exclusion-filter",
+								exclusionFilter
+							);
+							await this._lspClient.buildFullIndex(
+								filter,
+								exclusionFilter
+							);
+							break;
+						case "check-index":
+							webviewView.webview.postMessage({
+								command: "index-status",
+								value: await this._lspClient.indexExists(),
+							});
+							break;
+						case "chat": {
+							this.handleChatMessage({ value, webviewView });
+							break;
+						}
+						case "cancel": {
+							abortController.abort();
+							break;
+						}
+						case "clipboard": {
+							vscode.env.clipboard.writeText(value as string);
+							break;
+						}
+						case "copyToFile": {
+							this.sendContentToNewDocument(value as string);
+							break;
+						}
+						case "clear": {
+							this._aiProvider.clearChatHistory();
+							break;
+						}
+						case "showContext": {
+							const { fileName, lineRange } =
+								value as CodeContext;
+							const [start, end] = lineRange
+								.split("-")
+								.map(Number);
+							const uri = vscode.Uri.file(fileName);
+							vscode.window.showTextDocument(uri).then(() => {
+								if (!vscode.window.activeTextEditor) {
+									return;
+								}
+
+								vscode.window.activeTextEditor.selection =
+									new vscode.Selection(
+										new vscode.Position(start, 0),
+										new vscode.Position(end, 0)
+									);
+							});
+							break;
+						}
+						case "ready": {
+							const appState = {
 								workspaceFolder: getActiveWorkspace(),
 								theme: vscode.window.activeColorTheme.kind,
-							},
-						});
-						break;
-					}
-					case "log": {
-						this.log(value);
-						break;
+								indexFilter:
+									this._context.workspaceState.get(
+										"index-filter"
+									),
+								exclusionFilter:
+									this._context.workspaceState.get(
+										"exclusion-filter"
+									),
+							};
+							webviewView.webview.postMessage({
+								command: "init",
+								value: appState,
+							});
+							break;
+						}
+						case "log": {
+							this.log(value);
+							break;
+						}
 					}
 				}
-			}),
+			),
 			vscode.window.onDidChangeActiveColorTheme(
 				(theme: vscode.ColorTheme) => {
 					webviewView.webview.postMessage({
@@ -147,39 +337,86 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	) {
 		let ragContext = "";
 
-		if (context) {
-			const {
-				text,
-				currentLine,
-				language,
-				fileName,
-				lineRange,
-				workspaceName,
-			} = context;
+		const { codeDocs, projectDetails } =
+			await this._lspClient.getEmbeddings(prompt);
 
-			const symbols = await getSymbolsFromOpenFiles();
+		const symbols = await getSymbolsFromOpenFiles();
 
-			ragContext = `The user is seeking coding advice using ${language}.
-File name: ${fileName}
+		ragContext = `{LANGUAGE_TEMPLATE}
+{FILE_TEMPLATE}
 
-Here are the available types to use as a reference when answering questions, these may not be related to the code provided:
+{PROJECT_TEMPLATE}
+
+{CONTEXT_TEMPLATE}
+
+{SYMBOLS_TEMPLATE}
+
+{CURRENT_LINE_TEMPLATE}`;
+
+		ragContext = ragContext.replace(
+			"{LANGUAGE_TEMPLATE}",
+			!context?.language
+				? ""
+				: `The user is seeking coding advice using ${context?.language}.`
+		);
+
+		ragContext = ragContext.replace(
+			"{FILE_TEMPLATE}",
+			!context?.fileName
+				? ""
+				: `The user is currently working on the file: ${context?.fileName}`
+		);
+
+		ragContext =
+			ragContext.replace(
+				"{CONTEXT_TEMPLATE}",
+				!context?.text
+					? ""
+					: context.fromSelection
+					? `The user has selected the following code and wishes you to focus around this functionality:\n\n${context.text}`
+					: "The user is currently working on the following text:"
+			) + "\n\n=======";
+
+		ragContext = ragContext.replace(
+			"{CURRENT_LINE_TEMPLATE}",
+			!context?.currentLine || context?.fromSelection
+				? ""
+				: `The user is currently working on the following line: ${context?.currentLine}`
+		);
+
+		ragContext = ragContext.replace(
+			"{PROJECT_TEMPLATE}",
+			!projectDetails
+				? ""
+				: `Here are details about the current project:
+${projectDetails}
+
+=======`
+		);
+
+		if (codeDocs.length === 0) {
+			ragContext = ragContext.replace(
+				"{SYMBOLS_TEMPLATE}",
+				`Here are the available types reference by the code in context to use as a reference when answering questions, these may not be related to the code provided:
 
 ${symbols}
 
-=======
+=======`
+			);
+		} else {
+			ragContext = ragContext.replace(
+				"{SYMBOLS_TEMPLATE}",
+				`Use these code snippets from the current project as a reference when answering questions.
+These code snippets serve as additional context for the user's question:
 
-Reference the following code in order to provide a working solution.
+${codeDocs.join("\n\n----\n")}
 
-${text}
+=======`
+			);
+		}
 
-=======
-
-The user is current looking at this line of code from the context above: 
-
-${currentLine}
-
-=======`.replace(/\t/g, "");
-
+		if (context) {
+			const { fileName, lineRange, workspaceName } = context;
 			webviewView.webview.postMessage({
 				command: "context",
 				value: {
@@ -214,70 +451,45 @@ ${currentLine}
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
-		// Get the local path to main script run in the webview, then convert it to a uri we can use in the webview.
-		const scriptUri = webview.asWebviewUri(
+		const htmlUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(
 				this._context.extensionUri,
 				"out",
-				"index.es.js"
-			)
-		);
-
-		const codiconsUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(
-				this._context.extensionUri,
-				"node_modules",
-				"@vscode/codicons",
-				"dist",
-				"codicon.css"
+				"views",
+				"chat.html"
 			)
 		);
 
 		const nonce = getNonce();
 
-		return `<!DOCTYPE html>
-        <html lang="en" style="height: 100%">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline';">
-			<title>Wingman</title>
-			<link rel="stylesheet" href="${codiconsUri}" nonce="${nonce}">
-          </head>
-          <body style="height: 100%">
-            <div id="root" style="height: 100%"></div>
-            <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-          </body>
-        </html>`;
+		const htmlContent = fs.readFileSync(htmlUri.fsPath, "utf8");
+
+		// Replace placeholders in the HTML content
+		const finalHtmlContent = htmlContent.replace(
+			/CSP_NONCE_PLACEHOLDER/g,
+			nonce
+		);
+
+		const prefix = webview.asWebviewUri(
+			vscode.Uri.joinPath(this._context.extensionUri, "out", "views")
+		);
+		const srcHrefRegex = /(src|href)="([^"]+)"/g;
+
+		// Replace the matched filename with the prefixed filename
+		const updatedHtmlContent = finalHtmlContent.replace(
+			srcHrefRegex,
+			(match, attribute, filename) => {
+				const prefixedFilename = `${prefix}${filename}`;
+				return `${attribute}="${prefixedFilename}"`;
+			}
+		);
+
+		return addNoneAttributeToLink(updatedHtmlContent, nonce);
 	}
 
 	private log = (value: unknown) => {
 		loggingProvider.logInfo(JSON.stringify(value ?? ""));
 	};
-}
-
-function getActiveWorkspace() {
-	const defaultWorkspace = "default";
-
-	const activeEditor = vscode.window.activeTextEditor;
-	if (activeEditor) {
-		return (
-			vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)
-				?.name ?? defaultWorkspace
-		);
-	}
-
-	return vscode.workspace.workspaceFolders?.[0].name ?? defaultWorkspace;
-}
-
-function getNonce() {
-	let text = "";
-	const possible =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
 }
 
 function getChatContext(contextWindow: number): CodeContextDetails | undefined {
@@ -357,5 +569,6 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		fileName: document.fileName,
 		workspaceName: workspaceFolder?.name ?? "",
 		language: document.languageId,
+		fromSelection: !selection.isEmpty,
 	};
 }

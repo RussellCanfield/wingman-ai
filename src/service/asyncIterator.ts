@@ -1,3 +1,5 @@
+import { ReadableStream } from "node:stream/web";
+
 export async function* asyncIterator(body: ReadableStream<Uint8Array>) {
 	const reader = body.getReader();
 	let next = await reader.read();

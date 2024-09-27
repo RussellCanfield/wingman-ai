@@ -18,6 +18,10 @@ class LoggingProvider {
 			`${new Date().toLocaleString()} - [error] ${message}`
 		);
 	}
+
+	public dispose() {
+		this.dbgChannel.dispose();
+	}
 }
 
 const loggingProvider = new LoggingProvider();

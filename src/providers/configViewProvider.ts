@@ -1,14 +1,19 @@
 import * as vscode from "vscode";
-import { GetInteractionSettings } from "../service/base";
-import { AppMessage } from "../types/Message";
+import fs from "node:fs";
+import { AppMessage } from "@shared/types/Message";
 import {
 	ApiSettingsType,
+	defaultInteractionSettings,
 	InteractionSettings,
+	OllamaEmbeddingSettingsType,
 	OllamaSettingsType,
+	OpenAIEmbeddingSettingsType,
 	Settings,
-} from "../types/Settings";
+} from "@shared/types/Settings";
 import { loggingProvider } from "./loggingProvider";
 import { eventEmitter } from "../events/eventEmitter";
+import { addNoneAttributeToLink } from "./utilities";
+import { SaveSettings } from "../service/settings";
 
 export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.configview";
@@ -17,8 +22,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
-		private readonly _config: vscode.WorkspaceConfiguration
+		private readonly _settings: Settings
 	) {}
+
 	resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext<unknown>,
@@ -60,39 +66,23 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private init = async (value: unknown): Promise<string> => {
-		const settings = {
-			aiProvider:
-				this._config.get<Settings["aiProvider"]>("Provider") ??
-				"Ollama",
-			interactionSettings: GetInteractionSettings(),
-			ollama: this._config.get<Settings["ollama"]>("Ollama"),
-			huggingface:
-				this._config.get<Settings["huggingface"]>("HuggingFace"),
-			openai: this._config.get<Settings["openai"]>("OpenAI"),
-		} satisfies Settings;
+		const settings = structuredClone(this._settings);
 
-		if (settings.ollama && settings.aiProvider === "Ollama") {
-			try {
-				const modelsResponse = await fetch(
-					`${settings.ollama.baseUrl}/api/tags`
-				);
-				const modelsJson = (await modelsResponse.json()) as {
-					models: { name: string }[];
-				};
-				const modelNames = modelsJson.models.map((m) => m.name);
-				//@ts-ignore
-				settings["ollamaModels"] = modelNames;
-			} catch (e) {
-				this.handleError(
-					"Unable to retrieve Ollama models, is Ollama running?"
-				);
-				//@ts-expect-error
-				settings["ollamaModels"] = ["Failed to load."];
-			}
-		} else {
+		try {
+			const modelsResponse = await fetch(
+				`${settings.providerSettings.Ollama?.baseUrl}/api/tags`
+			);
+			const modelsJson = (await modelsResponse.json()) as {
+				models: { name: string }[];
+			};
+			const modelNames = modelsJson.models.map((m) => m.name);
 			//@ts-expect-error
-			settings["ollamaModels"] = [];
+			settings["ollamaModels"] = modelNames;
+		} catch (e) {
+			//@ts-expect-error
+			settings["ollamaModels"] = ["Failed to load."];
 		}
+
 		return JSON.stringify(settings);
 	};
 
@@ -106,80 +96,90 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		loggingProvider.logInfo(JSON.stringify(value ?? ""));
 	};
 
-	private updateAndSetOllama = (value: OllamaSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "Ollama") {
-			this._config.update("Provider", "Ollama");
-		}
-		this._config.update("Ollama", value);
+	private updateAndSetOllama = async (value: OllamaSettingsType) => {
+		this._settings.providerSettings.Ollama = value;
+		this._settings.aiProvider = "Ollama";
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetHF = (value: ApiSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "HuggingFace") {
-			this._config.update("Provider", "HuggingFace");
-		}
-		this._config.update("HuggingFace", value);
+	private updateAndSetOllamaEmbeddings = async (
+		value: OllamaEmbeddingSettingsType
+	) => {
+		this._settings.embeddingSettings.Ollama = value;
+		this._settings.embeddingProvider = "Ollama";
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetOpenAI = (value: ApiSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "OpenAI") {
-			this._config.update("Provider", "OpenAI");
-		}
-		this._config.update("OpenAI", value);
+	private updateAndSetHF = async (value: ApiSettingsType) => {
+		this._settings.providerSettings.HuggingFace = value;
+		this._settings.aiProvider = "HuggingFace";
+		await SaveSettings(this._settings);
 	};
 
-	private updateAndSetAnthropic = (value: ApiSettingsType) => {
-		const currentProvider =
-			this._config.get<Settings["aiProvider"]>("Provider");
-		if (currentProvider !== "Anthropic") {
-			this._config.update("Provider", "Anthropic");
-		}
-		this._config.update("Anthropic", value);
+	private updateAndSetOpenAI = async (value: ApiSettingsType) => {
+		this._settings.providerSettings.OpenAI = value;
+		this._settings.aiProvider = "OpenAI";
+		await SaveSettings(this._settings);
 	};
 
-	private changeInteractions = (value: unknown) => {
+	private updateAndSetOpenAIEmbeddings = async (
+		value: OpenAIEmbeddingSettingsType
+	) => {
+		this._settings.embeddingSettings.OpenAI = value;
+		this._settings.embeddingProvider = "OpenAI";
+		await SaveSettings(this._settings);
+	};
+
+	private updateAndSetAnthropic = async (value: ApiSettingsType) => {
+		this._settings.providerSettings.Anthropic = value;
+		this._settings.aiProvider = "Anthropic";
+		await SaveSettings(this._settings);
+	};
+
+	private changeInteractions = async (value: unknown) => {
 		const updated = {
-			...GetInteractionSettings(),
+			...defaultInteractionSettings,
 			...(value as InteractionSettings),
 		};
-		this._config.update("InteractionSettings", updated);
+		this._settings.interactionSettings = updated;
+		await SaveSettings(this._settings);
 	};
 
 	private _getHtml = (webview: vscode.Webview) => {
-		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this._extensionUri, "out", "config.es.js")
-		);
-		const codiconsUri = webview.asWebviewUri(
+		const htmlUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(
 				this._extensionUri,
-				"node_modules",
-				"@vscode/codicons",
-				"dist",
-				"codicon.css"
+				"out",
+				"views",
+				"config.html"
 			)
 		);
 
 		const nonce = this.getNonce();
 
-		return `<!DOCTYPE html>
-        <html lang="en" style="height: 100%">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline';">
-			<title>Wingman</title>
-			<link rel="stylesheet" href="${codiconsUri}" nonce="${nonce}">
-          </head>
-          <body style="height: 100%">
-            <div id="root" style="height: 100%"></div>
-            <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-          </body>
-        </html>`;
+		const htmlContent = fs.readFileSync(htmlUri.fsPath, "utf8");
+
+		// Replace placeholders in the HTML content
+		const finalHtmlContent = htmlContent.replace(
+			/CSP_NONCE_PLACEHOLDER/g,
+			nonce
+		);
+
+		const prefix = webview.asWebviewUri(
+			vscode.Uri.joinPath(this._extensionUri, "out", "views")
+		);
+		const srcHrefRegex = /(src|href)="([^"]+)"/g;
+
+		// Replace the matched filename with the prefixed filename
+		const updatedHtmlContent = finalHtmlContent.replace(
+			srcHrefRegex,
+			(match, attribute, filename) => {
+				const prefixedFilename = `${prefix}${filename}`;
+				return `${attribute}="${prefixedFilename}"`;
+			}
+		);
+
+		return addNoneAttributeToLink(updatedHtmlContent, nonce);
 	};
 
 	private getNonce = () => {

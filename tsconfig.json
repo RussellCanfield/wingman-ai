@@ -1,22 +1,24 @@
 {
 	"compilerOptions": {
-		"module": "CommonJS",
-		"target": "ESNext",
+		"target": "es2020",
+		"lib": ["es2020"],
+		"module": "commonjs",
 		"outDir": "out",
-		"lib": ["dom", "dom.iterable", "esnext"],
 		"sourceMap": true,
+		"rootDir": "src",
 		"strict": true,
 		"skipLibCheck": true,
-		"jsx": "react-jsx",
 		"esModuleInterop": true,
+		"isolatedModules": true,
 		"paths": {
-			"@node-llama": ["./node-llama-cpp/dist"]
+			"@shared/*": ["./shared/src/*"]
 		}
-		/* Additional Checks */
-		// "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
-		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
-		// "noUnusedParameters": true,  /* Report errors on unused parameters. */
 	},
-	"include": ["src"],
-	"exclude": ["node_modules", ".vscode-test"]
+	"include": [
+		"src",
+		"./node_modules/vscode/vscode.d.ts",
+		"./node_modules/vscode/lib/*"
+	],
+	"exclude": ["node_modules", ".vscode-test"],
+	"references": [{ "path": "./shared" }]
 }

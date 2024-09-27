@@ -1,0 +1,25 @@
+{
+	"name": "wingman-shared",
+	"displayName": "Wingman-AI",
+	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
+	"version": "0.5.2",
+	"publisher": "WingMan",
+	"license": "MIT",
+	"authors": [
+		[
+			{
+				"name": "Russell Canfield",
+				"email": "rcanfield86@gmail.com"
+			},
+			{
+				"name": "Harlen Alvarez",
+				"email": "harlenalvarez@gmail.com"
+			}
+		]
+	],
+	"scripts": {
+		"build": "tsc -b"
+	},
+	"dependencies": {},
+	"devDependencies": {}
+}

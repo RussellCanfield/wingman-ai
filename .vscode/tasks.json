@@ -4,25 +4,22 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "vite",
+			"label": "rsbuild",
 			"type": "npm",
-			"script": "watch",
+			"script": "watch:views",
 			"isBackground": true,
 			"problemMatcher": {
-				"owner": "vite",
+				"owner": "rsbuild",
 				"fileLocation": "relative",
 				"background": {
 					"activeOnStart": true,
-					"beginsPattern": "^build started...", // Regex to match the start of the task
-					"endsPattern": "^built in." // Regex to match the end of the task
+					"beginsPattern": "^start\\s+Compiling...", // Regex to match the start of the task
+					"endsPattern": "^out/ast-grep-napi.win32-x64-msvc.node" // Regex to match the end of the task
 				},
 				"pattern": {
-					"regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-					"file": 1,
-					"line": 2,
-					"column": 3,
-					"severity": 4,
-					"message": 5
+					"regexp": "^(error)\\s+(.*)$",
+					"severity": 1,
+					"message": 2
 				}
 			}
 		}

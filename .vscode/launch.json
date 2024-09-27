@@ -9,15 +9,40 @@
 			"name": "Run Extension",
 			"type": "extensionHost",
 			"request": "launch",
-			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}",
-				"--exitcrash"
-			],
-			"outFiles": [
-				"${workspaceFolder}/out/**/*.js",
-				"${workspaceFolder}/webview-ui/build/*.js"
-			],
-			"preLaunchTask": "vite"
+			"args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+			"outFiles": ["${workspaceFolder}/out/**/*.js"],
+			"sourceMapPathOverrides": {
+				"webpack:///./src/*": "${workspaceFolder}/src/*",
+				"webpack:///src/*": "${workspaceFolder}/src/*",
+				"webpack:///*": "${workspaceFolder}/*"
+			},
+			"sourceMaps": true,
+			"preLaunchTask": "rsbuild"
+		},
+		{
+			"name": "Attach to LSP",
+			"type": "node",
+			"request": "attach",
+			"port": 6009,
+			"sourceMaps": true,
+			"timeout": 20000,
+			"restart": true,
+			"sourceMapPathOverrides": {
+				"webpack:///./src/*": "${workspaceFolder}/src/*",
+				"webpack:///src/*": "${workspaceFolder}/src/*",
+				"webpack:///*": "${workspaceFolder}/*"
+			},
+			"outFiles": ["${workspaceFolder}/out/**/*.js"]
+		}
+	],
+	"compounds": [
+		{
+			"name": "Client + Server",
+			"configurations": [
+				"Run Extension",
+				"Attach to LSP",
+				"Attach to Views"
+			]
 		}
 	]
 }

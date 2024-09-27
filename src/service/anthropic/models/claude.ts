@@ -1,4 +1,4 @@
-import { AnthropicModel } from "../../../types/Models";
+import { AnthropicModel } from "@shared/types/Models";
 import {
 	commonChatPrompt,
 	commonDocPrompt,
@@ -8,8 +8,8 @@ import {
 export class ClaudeModel implements AnthropicModel {
 	get CodeCompletionPrompt(): string {
 		return `Fill in the following text.
-		Do not include the original text in your response, just the middle portion.
-		{beginning} <FILL_HOLE> {ending}`;
+Do not include the original text in your response, just the middle portion.
+{beginning} <FILL_HOLE> {ending}`;
 	}
 
 	get ChatPrompt(): string {

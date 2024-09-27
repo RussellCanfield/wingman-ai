@@ -2,9 +2,14 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.5.2",
+	"version": "0.7.0",
 	"publisher": "WingMan",
 	"license": "MIT",
+	"workspaces": [
+		"docs-site",
+		"shared",
+		"views-ui"
+	],
 	"authors": [
 		[
 			{
@@ -37,13 +42,15 @@
 		"url": "https://github.com/RussellCanfield/wingman-ai"
 	},
 	"engines": {
-		"vscode": "^1.87.0"
+		"vscode": "^1.93.0"
 	},
 	"categories": [
 		"Programming Languages",
 		"Snippets",
 		"Machine Learning",
-		"Education"
+		"Education",
+		"AI",
+		"Chat"
 	],
 	"pricing": "Free",
 	"keywords": [
@@ -51,8 +58,12 @@
 		"codestral",
 		"chatgpt",
 		"copilot",
+		"compose",
+		"sonnet",
 		"intellisense",
 		"openai",
+		"anthropic",
+		"composer",
 		"gpt",
 		"chat",
 		"ollama",
@@ -60,7 +71,8 @@
 		"code assistant"
 	],
 	"activationEvents": [
-		"onStartupFinished"
+		"onStartupFinished",
+		"onLanguage:plaintext"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -73,6 +85,19 @@
 				}
 			}
 		},
+		"languages": [
+			{
+				"id": "plaintext",
+				"aliases": [
+					"Plain Text",
+					"plaintext"
+				],
+				"extensions": [
+					".txt",
+					".text"
+				]
+			}
+		],
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -92,7 +117,7 @@
 		"views": {
 			"wing-man": [
 				{
-					"id": "wing-man-chat-view",
+					"id": "wingman.chatview",
 					"name": "We've got your back!",
 					"type": "webview"
 				}
@@ -114,7 +139,8 @@
 					"enum": [
 						"Ollama",
 						"HuggingFace",
-						"OpenAI"
+						"OpenAI",
+						"Anthropic"
 					],
 					"description": "Specifies which AI provider to use - some require configuration."
 				},
@@ -159,6 +185,75 @@
 							"type": "number",
 							"default": 4096,
 							"description": "The amount of tokens allowed in the LLM response for chat (num_predict in Ollama), -1 is infinite."
+						}
+					}
+				},
+				"Wingman.EmbeddingProvider": {
+					"type": "string",
+					"default": "Ollama",
+					"enum": [
+						"Ollama",
+						"OpenAI"
+					],
+					"description": "Specifies which AI provider to use - some require configuration."
+				},
+				"Wingman.OllamaEmbeddingSettings": {
+					"type": "object",
+					"description": "Embedding settings configure how the extension interacts with the embedding service.",
+					"default": {
+						"embeddingModel": "mxbai-embed-large",
+						"baseUrl": "http://localhost:11434"
+					},
+					"properties": {
+						"embeddingModel": {
+							"type": "string",
+							"default": "mxbai-embed-large",
+							"description": "The model to use for embeddings"
+						},
+						"dimensions": {
+							"type": "string",
+							"default": "1024",
+							"description": "The number of dimensions for the embeddings"
+						},
+						"baseUrl": {
+							"type": "string",
+							"default": "http://localhost:11434",
+							"description": "Base URL for the ollama instance"
+						},
+						"enabled": {
+							"type": "boolean",
+							"default": false,
+							"description": "Enable embeddings"
+						}
+					}
+				},
+				"Wingman.OpenAIEmbeddingSettings": {
+					"type": "object",
+					"description": "Embedding settings configure how the extension interacts with the embedding service.",
+					"default": {
+						"embeddingModel": "text-embedding-ada-002",
+						"apiKey": "ADD ME"
+					},
+					"properties": {
+						"embeddingModel": {
+							"type": "string",
+							"default": "text-embedding-ada-002",
+							"description": "The model to use for embeddings"
+						},
+						"apiKey": {
+							"type": "string",
+							"default": "ADD ME",
+							"description": "The API key to use for OpenAI"
+						},
+						"dimensions": {
+							"type": "string",
+							"default": "1536",
+							"description": "The number of dimensions for the embeddings"
+						},
+						"enabled": {
+							"type": "boolean",
+							"default": false,
+							"description": "Enable embeddings"
 						}
 					}
 				},
@@ -236,20 +331,20 @@
 					"type": "object",
 					"description": "OpenAI settings",
 					"default": {
-						"chatModel": "gpt-4-0125-preview",
-						"codeModel": "gpt-4-0125-preview",
+						"chatModel": "gpt-4o-2024-08-06",
+						"codeModel": "gpt-4o-2024-08-06",
 						"baseUrl": "https://api.openai.com/v1/chat/completions",
 						"apiKey": "ADD ME"
 					},
 					"properties": {
 						"chatModel": {
 							"type": "string",
-							"default": "gpt-4-0125-preview",
+							"default": "gpt-4o-2024-08-06",
 							"description": "The model to use for the chat"
 						},
 						"codeModel": {
 							"type": "string",
-							"default": "gpt-4-0125-preview",
+							"default": "gpt-4o-2024-08-06",
 							"description": "The model to use for the code completion"
 						},
 						"baseUrl": {
@@ -301,15 +396,15 @@
 		"commands": [
 			{
 				"command": "wingmanai.gendocument",
-				"title": "Gen Docs"
+				"title": "Wingman: Gen Docs"
 			},
 			{
 				"command": "wingmanai.refactorcode",
-				"title": "Refactor Code"
+				"title": "Wingman: Refactor Code"
 			},
 			{
 				"command": "wingmanai.triggercodecomplete",
-				"title": "Code Complete"
+				"title": "Wingman: Code Complete"
 			}
 		],
 		"keybindings": [
@@ -320,40 +415,54 @@
 		]
 	},
 	"scripts": {
+		"start:views": "cd views-ui && npm run dev",
+		"build": "rsbuild build",
+		"build:views": "cd views-ui && npm run build",
+		"build:shared": "cd shared && npm run build",
+		"build:docs": "cd docs-site && npm run build",
 		"vscode:prepublish": "npm run compile",
-		"compile": "vite build",
-		"watch": "vite build --watch",
-		"package": "vite build --mode production",
+		"compile": "npm run clean && node ./scripts/build.js && npm run build && npm run build:shared && npm run build:views",
+		"watch": "tsc -b --watch",
+		"watch:views": "npm run clean && NODE_ENV=development npm run build:views && NODE_ENV=development npm run build",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
-		"test": "vscode-test",
-		"license": "generate-license-file --input package.json --output third-party-licenses.txt --overwrite"
+		"clean": "rimraf out",
+		"docs": "cd docs-site && npm run dev"
+	},
+	"dependencies": {
+		"@langchain/langgraph": "0.2.8",
+		"@langchain/community": "0.3.1",
+		"@langchain/openai": "0.3.0",
+		"@langchain/anthropic": "0.3.1",
+		"@langchain/ollama": "0.1.0",
+		"@langchain/core": "0.3.3",
+		"vscode-languageclient": "9.0.1",
+		"vscode-languageserver": "9.0.1",
+		"vscode-languageserver-textdocument": "1.0.12",
+		"vscode-uri": "3.0.8",
+		"@ast-grep/napi": "0.27.1",
+		"langchain": "0.3.2",
+		"vectra": "0.9.0",
+		"zod-to-json-schema": "3.23.3",
+		"ignore": "5.2.0",
+		"zod": "3.23.8",
+		"tree-sitter": "0.21.1"
 	},
 	"devDependencies": {
-		"@types/mocha": "10.0.6",
-		"@types/node": "18.x",
-		"@types/react": "18.2.42",
-		"@types/react-dom": "18.2.17",
-		"@types/react-syntax-highlighter": "15.5.11",
-		"@types/vscode": "1.87.0",
+		"@types/mocha": "10.0.8",
+		"@types/node": "22.5.5",
+		"@types/vscode": "1.93.0",
 		"@types/vscode-webview": "1.57.5",
-		"@typescript-eslint/eslint-plugin": "6.13.1",
-		"@typescript-eslint/parser": "6.13.1",
-		"@vscode/codicons": "0.0.35",
-		"@vscode/test-cli": "0.0.4",
-		"@vscode/test-electron": "2.3.8",
-		"@vscode/webview-ui-toolkit": "1.3.1",
-		"eslint": "^8.54.0",
-		"generate-license-file": "3.0.1",
-		"react": "18.2.0",
-		"react-dom": "18.2.0",
-		"react-icons": "4.12.0",
-		"react-markdown": "9.0.1",
-		"react-syntax-highlighter": "15.5.0",
-		"styled-components": "6.1.1",
-		"tar": "6.2.0",
-		"typescript": "5.3.2",
-		"vite": "5.3.1",
-		"vite-plugin-static-copy": "1.0.5"
+		"@vscode/test-cli": "0.0.10",
+		"@vscode/test-electron": "2.4.1",
+		"generate-license-file": "3.5.1",
+		"rimraf": "^6.0.1",
+		"typescript": "^5.6.2",
+		"@rsbuild/core": "1.0.6",
+		"@rsbuild/plugin-react": "1.0.2",
+		"@ast-grep/cli": "0.27.1",
+		"node-fetch": "3.3.2",
+		"adm-zip": "0.5.16",
+		"tar": "7.4.3"
 	}
 }

@@ -1,40 +1,65 @@
 import * as vscode from "vscode";
-import { GenDocs } from "./commands/GenDocs.js";
-import { ChatViewProvider } from "./providers/chatViewProvider.js";
-import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider.js";
-import { ConfigViewProvider } from "./providers/configViewProvider.js";
-import { HotKeyCodeSuggestionProvider } from './providers/hotkeyCodeSuggestionProvider.js';
-import { RefactorProvider } from "./providers/refactorProvider.js";
-import { ActivityStatusBar } from "./providers/statusBarProvider.js";
+import { GenDocs } from "./commands/GenDocs";
+import { ChatViewProvider } from "./providers/chatViewProvider";
+import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider";
+import { ConfigViewProvider } from "./providers/configViewProvider";
+import { HotKeyCodeSuggestionProvider } from "./providers/hotkeyCodeSuggestionProvider";
+import { RefactorProvider } from "./providers/refactorProvider";
+import { ActivityStatusBar } from "./providers/statusBarProvider";
+import lspClient from "./client/index";
+import { CreateAIProvider } from "./service/utils/models";
+import { loggingProvider } from "./providers/loggingProvider";
+import { eventEmitter } from "./events/eventEmitter";
+import { LoadSettings } from "./service/settings";
+import { DiffViewProvider } from "./providers/diffViewProvider";
 import {
-	GetAllSettings,
-	GetInteractionSettings,
-	GetProviderFromSettings,
-} from "./service/base.js";
+	startClipboardTracking,
+	stopClipboardTracking,
+} from "./providers/clipboardTracker";
 
 let statusBarProvider: ActivityStatusBar;
+let diffViewProvider: DiffViewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
-	const aiProvider = GetProviderFromSettings();
-	const interactionSettings = GetInteractionSettings();
+	const settings = await LoadSettings();
+	if (
+		!vscode.workspace.workspaceFolders ||
+		vscode.workspace.workspaceFolders.length === 0
+	) {
+		vscode.window.showErrorMessage(
+			"Wingman requires an open workspace to function."
+		);
+		return;
+	}
+
+	await lspClient.activate(context, settings);
+
+	diffViewProvider = new DiffViewProvider(context);
+
+	let modelProvider;
+	try {
+		modelProvider = CreateAIProvider(settings);
+
+		if (!(await modelProvider.validateSettings())) {
+			throw new Error(
+				`AI Provider ${settings.aiProvider} is not configured correctly.`
+			);
+		}
+	} catch (error) {
+		if (error instanceof Error) {
+			vscode.window.showErrorMessage(error.message);
+			loggingProvider.logInfo(error.message);
+			eventEmitter._onFatalError.fire();
+		}
+	}
 
 	statusBarProvider = new ActivityStatusBar();
-
-	const settings = GetAllSettings();
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ConfigViewProvider.viewType,
 			new ConfigViewProvider(context.extensionUri, settings)
 		)
-	);
-
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration("Wingman")) {
-				vscode.commands.executeCommand("workbench.action.reloadWindow");
-			}
-		})
 	);
 
 	context.subscriptions.push(
@@ -51,14 +76,20 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
 			CodeSuggestionProvider.selector,
-			new GenDocs(aiProvider)
+			new GenDocs(modelProvider!)
 		)
 	);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ChatViewProvider.viewType,
-			new ChatViewProvider(aiProvider, context, interactionSettings),
+			new ChatViewProvider(
+				lspClient,
+				modelProvider!,
+				context,
+				settings?.interactionSettings,
+				diffViewProvider
+			),
 			{
 				webviewOptions: {
 					retainContextWhenHidden: true,
@@ -67,30 +98,22 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	if (interactionSettings.codeCompletionEnabled) {
+	if (settings.interactionSettings!.codeCompletionEnabled) {
 		context.subscriptions.push(
 			vscode.languages.registerInlineCompletionItemProvider(
 				CodeSuggestionProvider.selector,
-				new CodeSuggestionProvider(aiProvider, interactionSettings)
+				new CodeSuggestionProvider(
+					modelProvider!,
+					settings.interactionSettings!
+				)
 			)
 		);
 	}
 
-	// context.subscriptions.push(
-	// 	vscode.languages.registerCodeActionsProvider(
-	// 		QuickFixProvider.selector,
-	// 		new QuickFixProvider(),
-	// 		{
-	// 			providedCodeActionKinds:
-	// 				QuickFixProvider.providedCodeActionKinds,
-	// 		}
-	// 	)
-	// );
-
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
 			RefactorProvider.selector,
-			new RefactorProvider(aiProvider),
+			new RefactorProvider(modelProvider!),
 			{
 				providedCodeActionKinds:
 					RefactorProvider.providedCodeActionKinds,
@@ -98,14 +121,27 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(aiProvider, interactionSettings);
-	context.subscriptions.push(
-		vscode.commands.registerCommand(HotKeyCodeSuggestionProvider.command, HotKeyCodeSuggestionProvider.showSuggestion)
+	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
+		modelProvider!,
+		settings.interactionSettings
 	);
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			HotKeyCodeSuggestionProvider.command,
+			HotKeyCodeSuggestionProvider.showSuggestion
+		)
+	);
+
+	startClipboardTracking();
 }
 
 export function deactivate() {
 	if (statusBarProvider) {
 		statusBarProvider.dispose();
 	}
+
+	lspClient?.deactivate();
+	diffViewProvider?.dispose();
+	stopClipboardTracking();
+	loggingProvider.dispose();
 }

@@ -151,5 +151,72 @@ export function extractCodeBlock(text: string) {
 	while ((match = regex.exec(text)) !== null) {
 		matches.push(match[1]);
 	}
-	return matches.join("\n");
+	return matches.length > 0 ? matches.join("\n") : text;
+}
+
+export function addNoneAttributeToLink(htmlString: string, noneValue: string) {
+	// Regular expression to match the link tag
+	const linkRegex =
+		/<link\s+(?:[^>]*?\s+)?href=["']https:\/\/file%2B\.vscode-resource\.vscode-cdn\.net\/[^"']*\.css["'][^>]*>/i;
+
+	// Function to add the none attribute
+	const addNoneAttribute = (match: string) => {
+		if (match.includes("nonce=")) {
+			// If none attribute already exists, return the original match
+			return match;
+		} else {
+			// Add none attribute before the closing angle bracket
+			return match.replace(/>$/, ` nonce="${noneValue}">`);
+		}
+	};
+
+	// Replace the matched link tag with the modified version
+	return htmlString.replace(linkRegex, addNoneAttribute);
+}
+
+export function getNonce() {
+	let text = "";
+	const possible =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	for (let i = 0; i < 32; i++) {
+		text += possible.charAt(Math.floor(Math.random() * possible.length));
+	}
+	return text;
+}
+
+export async function replaceTextInDocument(
+	document: vscode.TextDocument,
+	newContent: string,
+	shouldSave = false
+) {
+	// Create a range for the entire document
+	const startPosition = new vscode.Position(0, 0);
+	const endPosition = new vscode.Position(
+		document.lineCount - 1,
+		document.lineAt(document.lineCount - 1).text.length
+	);
+	const range = new vscode.Range(startPosition, endPosition);
+
+	const edit = new vscode.WorkspaceEdit();
+	edit.replace(document.uri, range, newContent);
+	// Apply the edit to replace the entire content
+	const success = await vscode.workspace.applyEdit(edit);
+
+	if (success && shouldSave) {
+		await document.save();
+	}
+}
+
+export function getActiveWorkspace() {
+	const defaultWorkspace = "default";
+
+	const activeEditor = vscode.window.activeTextEditor;
+	if (activeEditor) {
+		return (
+			vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)
+				?.name ?? defaultWorkspace
+		);
+	}
+
+	return vscode.workspace.workspaceFolders?.[0].name ?? defaultWorkspace;
 }

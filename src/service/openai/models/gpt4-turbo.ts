@@ -1,4 +1,4 @@
-import { OpenAIModel } from "../../../types/Models";
+import { OpenAIModel } from "@shared/types/Models";
 import {
 	commonChatPrompt,
 	commonDocPrompt,
@@ -8,8 +8,10 @@ import {
 export class GPT4Turbo implements OpenAIModel {
 	get CodeCompletionPrompt(): string {
 		return `Fill in the following text.
-		Do not include the original text in your response, just the middle portion.
-		{beginning} <FILL_HOLE> {ending}`;
+Do not include the original text in your response, just the middle portion.
+Return your response in plain text, do not use a markdown format.
+
+{beginning} <FILL_HOLE> {ending}`;
 	}
 
 	get ChatPrompt(): string {

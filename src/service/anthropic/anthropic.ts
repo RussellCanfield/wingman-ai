@@ -1,9 +1,6 @@
-import * as vscode from "vscode";
 import { asyncIterator } from "../asyncIterator";
-import { AIProvider, GetInteractionSettings } from "../base";
-import { InteractionSettings, Settings } from "../../types/Settings";
-import { loggingProvider } from "../../providers/loggingProvider";
-import { eventEmitter } from "../../events/eventEmitter";
+import { AIStreamProvicer } from "../base";
+import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { ClaudeModel } from "./models/claude";
 import { AnthropicMessage, AnthropicRequest } from "./types/ClaudeRequest";
 import {
@@ -12,43 +9,69 @@ import {
 	AnthropicResponseStreamDelta,
 	AnthropicStreamResponse,
 } from "./types/ClaudeResponse";
-import { AnthropicModel } from "../../types/Models";
+import { AnthropicModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatAnthropic } from "@langchain/anthropic";
 
-export class Anthropic implements AIProvider {
+export class Anthropic implements AIStreamProvicer {
 	decoder = new TextDecoder();
-	settings: Settings["anthropic"];
 	chatHistory: AnthropicMessage[] = [];
 	chatModel: AnthropicModel | undefined;
 	codeModel: AnthropicModel | undefined;
-	interactionSettings: InteractionSettings | undefined;
+	baseModel: BaseChatModel | undefined;
+	rerankModel: BaseChatModel | undefined;
 
-	constructor() {
-		const config = vscode.workspace.getConfiguration("Wingman");
-
-		const anthropicConfig = config.get<Settings["anthropic"]>("Anthropic");
-
-		if (!anthropicConfig) {
-			this.handleError("Unable to load Anthropic settings.");
-			return;
+	constructor(
+		private readonly settings: Settings["providerSettings"]["Anthropic"],
+		private readonly interactionSettings: InteractionSettings
+	) {
+		if (!settings) {
+			throw new Error("Unable to load Anthropic settings.");
 		}
 
-		loggingProvider.logInfo(
-			`Anthropic settings loaded: ${JSON.stringify(anthropicConfig)}`
-		);
-
-		this.settings = anthropicConfig;
+		if (!this.settings?.apiKey.trim()) {
+			throw new Error("Anthropic API key is required.");
+		}
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
 
-		this.interactionSettings = GetInteractionSettings();
+		this.baseModel = new ChatAnthropic({
+			apiKey: this.settings.apiKey,
+			anthropicApiKey: this.settings.apiKey,
+			model: this.settings.chatModel,
+			temperature: 0, //Required for tool calling.
+			maxTokens: interactionSettings.chatMaxTokens,
+		});
+
+		this.rerankModel = new ChatAnthropic({
+			apiKey: this.settings.apiKey,
+			anthropicApiKey: this.settings.apiKey,
+			model: "claude-3-haiku-20240307",
+			temperature: 0, //Required for tool calling.
+			maxTokens: 4096,
+		});
 	}
 
-	private handleError(message: string) {
-		vscode.window.showErrorMessage(message);
-		loggingProvider.logError(message);
-		eventEmitter._onFatalError.fire();
+	async validateSettings(): Promise<boolean> {
+		const isChatModelValid =
+			this.settings?.chatModel?.startsWith("claude") || false;
+		const isCodeModelValid =
+			this.settings?.codeModel?.startsWith("claude") || false;
+		return isChatModelValid && isCodeModelValid;
+	}
+
+	getModel(): BaseChatModel {
+		return this.baseModel!;
+	}
+
+	getRerankModel(): BaseChatModel {
+		return this.rerankModel!;
+	}
+
+	invoke(prompt: string) {
+		return this.baseModel!.invoke(prompt);
 	}
 
 	private getCodeModel(codeModel: string): AnthropicModel | undefined {
@@ -56,7 +79,7 @@ export class Anthropic implements AIProvider {
 			case codeModel.startsWith("claude"):
 				return new ClaudeModel();
 			default:
-				this.handleError(
+				throw new Error(
 					"Invalid code model name, currently code supports Claude 3 model(s)."
 				);
 		}
@@ -67,7 +90,7 @@ export class Anthropic implements AIProvider {
 			case chatModel.startsWith("claude"):
 				return new ClaudeModel();
 			default:
-				this.handleError(
+				throw new Error(
 					"Invalid chat model name, currently chat supports Claude 3 model(s)."
 				);
 		}
@@ -118,25 +141,12 @@ export class Anthropic implements AIProvider {
 		try {
 			response = await this.fetchModelResponse(payload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`Anthropic chat request with model: ${payload.model} failed with the following error: ${error}`
-			);
+			return;
+			`Anthropic chat request with model: ${payload.model} failed with the following error: ${error}`;
 		}
 
 		if (!response?.ok) {
-			loggingProvider.logError(
-				`Anthropic - Chat failed with the following status code: ${
-					response?.status
-				}\n\n${
-					response?.body
-						? await response.json()
-						: await response?.text()
-				}`
-			);
-			vscode.window.showErrorMessage(
-				`Anthropic - Chat failed with the following status code: ${response?.status}`
-			);
-			return "";
+			return `Anthropic - Chat failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {
@@ -146,8 +156,8 @@ export class Anthropic implements AIProvider {
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`Anthropic - Chat Time To First Token execution time: ${executionTime} seconds`
+		console.log(
+			`Chat Time To First Token execution time: ${executionTime} ms`
 		);
 
 		let currentMessage = "";
@@ -206,7 +216,8 @@ export class Anthropic implements AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
@@ -220,26 +231,31 @@ export class Anthropic implements AIProvider {
 			messages: [
 				{
 					role: "user",
-					content: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+					content: `You are an senior software engineer, assit the user with completing their code.
+When generating code focus on existing code style, syntax, and structure and follow use this as a guide.
 
-${additionalContext ?? ""}
+The following are some of the types available in their file. 
+Use these types while considering how to complete the code provided. 
+Do not repeat or use these types in your answer.
+
+${additionalContext || ""}
+
+-----
+
+The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+
+${recentClipboard || ""}
 
 -----
 
 ${prompt}`,
 				},
 			],
-			temperature: 0.4,
+			temperature: 0.2,
 			top_p: 0.3,
 			top_k: 40,
 			max_tokens: this.interactionSettings?.codeMaxTokens || 4096,
 		};
-
-		loggingProvider.logInfo(
-			`Anthropic - Code Completion submitting request with body: ${JSON.stringify(
-				codeRequestOptions
-			)}`
-		);
 
 		let response: Response | undefined;
 		let failedDueToAbort = false;
@@ -253,25 +269,18 @@ ${prompt}`,
 			if ((error as Error).name === "AbortError") {
 				failedDueToAbort = true;
 			}
-			loggingProvider.logError(
-				`Anthropic - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			return `Anthropic - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`Anthropic - Code Completion execution time: ${executionTime} seconds`
+		console.log(
+			`Code Complete Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.ok && !failedDueToAbort) {
-			loggingProvider.logError(
-				`Anthropic - Code Completion failed with the following status code: ${response?.status}`
-			);
-			vscode.window.showErrorMessage(
-				`Anthropic - Code Completion failed with the following status code: ${response?.status}`
-			);
+			return `Anthropic - Code Completion failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {
@@ -336,12 +345,6 @@ ${prompt}`,
 			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
 		};
 
-		loggingProvider.logInfo(
-			`Anthropic - Chat submitting request with body: ${JSON.stringify(
-				chatPayload
-			)}`
-		);
-
 		truncateChatHistory(6, this.chatHistory);
 
 		let completeMessage = "";
@@ -399,25 +402,18 @@ ${prompt}`,
 		try {
 			response = await this.fetchModelResponse(genDocsPayload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`Anthropic - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			return `Anthropic - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`Anthropic - Gen Docs execution time: ${executionTime} seconds`
+		console.log(
+			`GenDocs Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.ok) {
-			loggingProvider.logError(
-				`Anthropic - Gen Docs failed with the following status code: ${response?.status}`
-			);
-			vscode.window.showErrorMessage(
-				`Anthropic - Gen Docs failed with the following status code: ${response?.status}`
-			);
+			return `Anthropic - Gen Docs failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {
@@ -428,15 +424,20 @@ ${prompt}`,
 		return AnthropicResponse.content[0].text;
 	}
 
-	private getRecentChatEntries(maxRecords: number = 6) {
-		if (this.chatHistory.length > maxRecords + 1) {
-			// Adjust condition to account for skipping the first entry
-			// Calculate the number of items to remove, considering the first entry should be skipped
-			const itemsToRemove = this.chatHistory.length - maxRecords - 1;
-			// Remove items starting from the second item in the array
-			this.chatHistory.splice(1, itemsToRemove);
-		}
-		return this.chatHistory;
+	public async codeCompleteStream(
+		beginning: string,
+		ending: string,
+		signal: AbortSignal,
+		additionalContext?: string,
+		recentClipboard?: string
+	): Promise<string> {
+		return this.codeComplete(
+			beginning,
+			ending,
+			signal,
+			additionalContext,
+			recentClipboard
+		);
 	}
 
 	public async refactor(
@@ -474,25 +475,18 @@ ${prompt}`,
 		try {
 			response = await this.fetchModelResponse(refactorPayload, signal);
 		} catch (error) {
-			loggingProvider.logError(
-				`Anthropic - Refactor request with model ${this.settings?.codeModel} failed with the following error: ${error}`
-			);
+			return `Anthropic - Refactor request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		loggingProvider.logInfo(
-			`Anthropic - Refactor execution time: ${executionTime} seconds`
+		console.log(
+			`Refactor Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.ok) {
-			loggingProvider.logError(
-				`Anthropic - Refactor failed with the following status code: ${response?.status}`
-			);
-			vscode.window.showErrorMessage(
-				`Anthropic - Refactor failed with the following status code: ${response?.status}`
-			);
+			return `Anthropic - Refactor failed with the following status code: ${response?.status}`;
 		}
 
 		if (!response?.body) {

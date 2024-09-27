@@ -1,4 +1,4 @@
-import { AIModel } from "../../../types/Models";
+import { AIModel } from "@shared/types/Models";
 import {
 	commonChatPrompt,
 	commonDocPrompt,

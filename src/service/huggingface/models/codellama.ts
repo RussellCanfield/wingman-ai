@@ -1,4 +1,4 @@
-import { HuggingFaceAIModel } from "../../../types/Models";
+import { HuggingFaceAIModel } from "@shared/types/Models";
 
 export class CodeLlama implements HuggingFaceAIModel {
 	get CodeCompletionPrompt(): string {

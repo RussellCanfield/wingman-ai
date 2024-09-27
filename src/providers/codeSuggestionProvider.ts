@@ -11,8 +11,9 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvicer } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
-import { InteractionSettings } from "../types/Settings";
+import { InteractionSettings } from "@shared/types/Settings";
 import { getSymbolsFromOpenFiles, supportedLanguages } from "./utilities";
+import { getClipboardHistory } from "./clipboardTracker";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector = supportedLanguages;
@@ -80,13 +81,15 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		additionalContext?: string
 	): Promise<InlineCompletionItem[]> {
 		try {
+			console.log("Clipboard", getClipboardHistory().join("\n\n"));
 			eventEmitter._onQueryStart.fire();
 			if ("codeCompleteStream" in this._aiProvider && streaming) {
 				const codeStream = await this._aiProvider.codeCompleteStream(
 					prefix,
 					suffix,
 					signal,
-					additionalContext
+					additionalContext,
+					getClipboardHistory().join("\n\n")
 				);
 				return [new InlineCompletionItem(codeStream)];
 			} else {
@@ -94,7 +97,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 					prefix,
 					suffix,
 					signal,
-					additionalContext
+					additionalContext,
+					getClipboardHistory().join("\n\n")
 				);
 				return [new InlineCompletionItem(codeResponse)];
 			}

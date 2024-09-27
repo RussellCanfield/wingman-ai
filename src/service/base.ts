@@ -1,67 +1,18 @@
-import * as vscode from "vscode";
-import { loggingProvider } from "../providers/loggingProvider";
-import { AIModel } from "../types/Models";
-import { InteractionSettings, Settings } from "../types/Settings";
-import { HuggingFace } from "./huggingface/huggingface";
-import { Ollama } from "./ollama/ollama";
-import { OpenAI } from "./openai/openai";
-import { Anthropic } from "./anthropic/anthropic";
-
-export function GetAllSettings(): vscode.WorkspaceConfiguration {
-	return vscode.workspace.getConfiguration("Wingman");
-}
-
-export function GetInteractionSettings(): InteractionSettings {
-	const config = vscode.workspace.getConfiguration("Wingman");
-
-	const interactionSettings = config.get<Settings["interactionSettings"]>(
-		"InteractionSettings"
-	)!;
-
-	if (interactionSettings) {
-		return interactionSettings;
-	}
-
-	return {
-		codeCompletionEnabled: true,
-		codeStreaming: false,
-		codeContextWindow: 256,
-		codeMaxTokens: -1,
-		chatContextWindow: 4096,
-		chatMaxTokens: 4096,
-	};
-}
-
-export function GetProviderFromSettings(): AIProvider {
-	const config = vscode.workspace.getConfiguration("Wingman");
-
-	const aiProvider = config
-		.get<Settings["aiProvider"]>("Provider")
-		?.toLocaleLowerCase()
-		.trim();
-
-	loggingProvider.logInfo(`AI Provider: ${aiProvider} found.`);
-
-	if (aiProvider === "huggingface") {
-		return new HuggingFace();
-	} else if (aiProvider === "openai") {
-		return new OpenAI();
-	} else if (aiProvider === "anthropic") {
-		return new Anthropic();
-	}
-
-	return new Ollama();
-}
+import { AIModel } from "@shared/types/Models";
+import type { AIMessageChunk } from "@langchain/core/messages";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 export interface AIProvider {
 	chatModel: AIModel | undefined;
 	codeModel: AIModel | undefined;
+	validateSettings(): Promise<boolean>;
 	clearChatHistory(): void;
 	codeComplete(
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string>;
 	chat(
 		prompt: string,
@@ -78,6 +29,9 @@ export interface AIProvider {
 		ragContent: string,
 		signal: AbortSignal
 	): Promise<string>;
+	invoke(prompt: string): Promise<AIMessageChunk>;
+	getModel(): BaseChatModel;
+	getRerankModel(): BaseChatModel;
 }
 
 export interface AIStreamProvicer extends AIProvider {
@@ -85,6 +39,7 @@ export interface AIStreamProvicer extends AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string>;
 }
