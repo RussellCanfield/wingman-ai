@@ -5,6 +5,16 @@ In the future this may move into a specific file that you can **gitignore** sepa
 
 ![](/Config.png)
 
+:::note
+Since Wingman leverages WASM, there is limited OS support currently due to the size of the extension. We are working to resolve this. Here are the supported operating systems and architectures:
+
+-   Windows x64
+-   Windows x64 ARM
+-   macOS x64
+-   macOS ARM
+
+:::
+
 ## Storage
 
 [Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) only stores data on your machine. In previous extension versions (prior to v0.7.0), configuration used to be stored in your repository. The new storage location contains Wingman configuration, project specific embeddings and more.

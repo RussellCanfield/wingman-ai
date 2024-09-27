@@ -4,6 +4,8 @@
 
 [Download our extension from the VSCode marketplace!](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man)
 
+[Suggestion? Problem? Open a GitHub issue](https://github.com/RussellCanfield/wingman-ai)
+
 ### **Like the extension? Check out [Squadron AI](https://www.squadron-ai.com)** our GitHub AI-powered code review application.
 
 ## Providers
