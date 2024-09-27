@@ -128,3 +128,19 @@ When using chat, chat will pull code from the current open file around the curre
 #### Chat max tokens
 
 Controls the maximum about of tokens the AI provider will return.
+
+### Embedder Settings
+
+Embedding currently supports Ollama and OpenAI. Choosing a provider mimics many of the general settings for each AI Provider for chat/code.
+
+#### Dimensions
+
+The dimenions that the embedding model outputs in.
+
+#### Enabled
+
+Defaults to true, enabled will create a vector index (if it doesn't exist) when the extension launches and begin indexing files on save.
+
+:::tip
+If enabled is false, documents will not index on save and full index builds will not complete.
+:::

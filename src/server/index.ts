@@ -359,6 +359,10 @@ export class LSPServer {
 			"wingman/fullIndexBuild",
 			async (request: { files: string[] }) => {
 				try {
+					if (!embeddingSettings?.enabled) {
+						return;
+					}
+
 					const filePaths = request.files.map((file) =>
 						filePathToUri(file)
 					);
@@ -446,6 +450,10 @@ export class LSPServer {
 
 		this.documents?.onDidSave((e) => {
 			try {
+				if (!embeddingSettings?.enabled) {
+					return;
+				}
+
 				const document = e.document;
 				const workspaceFolder = getWorkspaceFolderForDocument(
 					document.uri,
