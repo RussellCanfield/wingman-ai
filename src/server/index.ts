@@ -104,7 +104,7 @@ export class LSPServer {
 		console.log("Wingman LSP initialized for workspace:", workspaceFolder);
 		this.vectorStore = new Store(
 			workspaceFolder,
-			embeddingProvider === "ollama"
+			embeddingProvider === "Ollama"
 				? getOllamaEmbeddings(
 						embeddingSettings as OllamaEmbeddingSettingsType
 				  )

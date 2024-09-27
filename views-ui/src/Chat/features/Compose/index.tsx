@@ -48,7 +48,11 @@ export default function Compose() {
 				setCurrentPhase(node);
 
 				if (node === "replan") {
-					if (values.review?.comments.length > 0) {
+					if (
+						values.review &&
+						values.review?.comments &&
+						values.review.comments.length > 0
+					) {
 						setComposerMessages((currentMessages) => {
 							return [
 								...currentMessages,
@@ -108,7 +112,6 @@ ${values.review.comments.join("\n")}`,
 
 	const commitMessageToHistory = () => {
 		const tempMessage = structuredClone(currentMessage.toString());
-		const tempContext = structuredClone(currentContext);
 		setComposerMessages((messages) => {
 			const newHistory: ComposerMessage[] = [
 				...messages,

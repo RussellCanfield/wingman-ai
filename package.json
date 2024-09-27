@@ -422,7 +422,8 @@
 		"watch:views": "npm run clean && NODE_ENV=development npm run build:views && NODE_ENV=development npm run build",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
-		"clean": "rimraf out"
+		"clean": "rimraf out",
+		"docs": "cd docs-site && npm run dev"
 	},
 	"dependencies": {
 		"@langchain/langgraph": "0.2.8",

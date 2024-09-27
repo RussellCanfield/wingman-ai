@@ -46,8 +46,11 @@ export class Ollama implements AIStreamProvicer {
 			baseUrl: this.settings!.baseUrl,
 			model: this.settings!.chatModel,
 			temperature: 0,
+			topK: 40,
+			topP: 0.4,
 			maxRetries: 2,
 			format: "json",
+			streaming: false,
 		});
 
 		this.rerankModel = new ChatOllama({
@@ -67,7 +70,14 @@ export class Ollama implements AIStreamProvicer {
 	}
 
 	invoke(prompt: string) {
-		return this.baseModel!.invoke(prompt);
+		return new ChatOllama({
+			baseUrl: this.settings!.baseUrl,
+			model: this.settings!.chatModel,
+			temperature: 0,
+			topK: 40,
+			topP: 0.4,
+			streaming: false,
+		}).invoke(prompt);
 	}
 
 	async validateSettings(): Promise<boolean> {

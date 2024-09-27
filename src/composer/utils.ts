@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const formatMessages = (messages: ChatMessage[]) =>
-	messages.map((m) => m.content).join("\n\n");
+	messages.length > 0 ? messages[messages.length - 1].content : "";
 
 export const buildObjective = (state: PlanExecuteState) => {
 	let objective = `Objective:
@@ -12,12 +12,8 @@ export const buildObjective = (state: PlanExecuteState) => {
 ${formatMessages(state.messages)}`;
 
 	if (state.followUpInstructions.length > 0) {
-		objective = `Objective (Completed):
+		objective = `Objective:
 
-${formatMessages(state.messages)}
-
-The user given the following instructions to follow up on the objective:
-  
 ${formatMessages(state.followUpInstructions)}`;
 	}
 

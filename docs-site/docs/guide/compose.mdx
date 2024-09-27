@@ -1,4 +1,4 @@
-import { SourceCode } from '@theme';
+import { SourceCode, Badge } from 'rspress/theme';
 
 # Compose
 
@@ -6,6 +6,31 @@ Composer is a new feature for Wingman, think of it as an advanced chat view that
 
 -   Running with automatic context
 -   Running with specific context
+
+:::tip
+Composer will use the configured **Chat Model** in your settings.
+:::
+
+[![Wingman AI composer example](https://img.youtube.com/vi/htrMKuMJI5Y/0.jpg)](https://youtu.be/htrMKuMJI5Y?si=_ZtiIgeEGboBBXgV)
+
+Check out the video above for tips on using composer
+
+### Quality outputs
+
+Composer is an advanced feature with complex prompts. It is important to note that the quality of the output is dependent on the quality of the input. 
+The more specific you are with your input, the better the output will be. This is because Wingman will use your input to find the best files to work with.
+
+:::note
+Currently **Ollama** as a provider is in an experimental phase. There are a number of challenges with supporting local models:
+
+- Context windows
+- Machine performance
+- Model quality
+
+We have only tested using **[qwen2.5-coder](https://ollama.com/library/qwen2.5-coder)**
+
+Ollama quality will improve over time, but due to prompt complexity and local model size (3b, 7b, etc), it may not always be perfect.
+:::
 
 ### Automatic Context
 

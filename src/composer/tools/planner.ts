@@ -8,9 +8,12 @@ import { ProjectDetailsHandler } from "../../server/project-details";
 import { buildObjective, formatMessages } from "../utils";
 import { PlanExecuteState } from "../types";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { JsonOutputToolsParser } from "@langchain/core/output_parsers/openai_tools";
+import { ChatOllama } from "@langchain/ollama";
+import { AIMessage } from "@langchain/core/messages";
 
 export type PlannerSchema = z.infer<typeof planSchema>;
+
+const maxDocs = 5;
 
 const planSchema = z.object({
 	steps: z
@@ -19,11 +22,17 @@ const planSchema = z.object({
 });
 
 const plannerPrompt = ChatPromptTemplate.fromTemplate(
-	`You are an expert software engineer tasked with planning a feature implementation. Your goal is to provide a concise, step-by-step plan based on the given information.
+	`You are an expert software engineer tasked with planning a feature implementation. 
+Your goal is to provide a concise, step-by-step plan based on the given information.
+
 Given:
 
-Objective: {{objective}}
-Project overview: {{details}}
+{{objective}}
+
+Project overview: 
+
+{{details}}
+
 Relevant code files
 
 Instructions:
@@ -52,16 +61,16 @@ Example 1:
 
 ------
 
-Here are the relevant code files:
+Code Files:
 
-{{files}}`,
+{{files}}
+`,
 	{
 		templateFormat: "mustache",
 	}
 );
 
 export class CodePlanner {
-	model: ReturnType<typeof BaseChatModel.prototype.withStructuredOutput>;
 	codePlanner: ReturnType<typeof plannerPrompt.pipe>;
 	vectorQuery = new VectorQuery();
 
@@ -72,11 +81,14 @@ export class CodePlanner {
 		private readonly codeGraph: CodeGraph,
 		private readonly store: Store
 	) {
-		//@ts-expect-error
-		this.model = this.chatModel.withStructuredOutput(planSchema, {
+		const model = this.chatModel.withStructuredOutput(planSchema, {
 			name: "planner",
 		});
-		this.codePlanner = plannerPrompt.pipe(this.model);
+
+		this.codePlanner =
+			this.chatModel instanceof ChatOllama
+				? plannerPrompt.pipe(this.chatModel)
+				: plannerPrompt.pipe(model);
 	}
 
 	codePlannerStep = async (state: PlanExecuteState) => {
@@ -109,8 +121,9 @@ export class CodePlanner {
 
 		const rerankedDocs = new Map<string, TextDocument>();
 		try {
-			const rerankResults = await this.rerankModel.invoke(
-				`You are a reranking assistant. 
+			if (state.plan.files.length > maxDocs) {
+				const rerankResults = await this.rerankModel.invoke(
+					`You are a reranking assistant. 
 Your task is to evaluate and rank a set of search results based on their relevance to a given query. 
 Please consider factors such as topical relevance, information quality, and how well each result addresses the user's likely intent.
 
@@ -127,27 +140,35 @@ Ranked results:
 [Number from original results]
 [Number from original results]
         `
-			);
-			const rerankedResults = rerankResults.content
-				.toString()
-				.split("\n")
-				.filter(
-					(line) => line.trim() !== "" && !isNaN(Number(line.trim()))
-				)
-				.map((line) => parseInt(line.trim()));
-
-			rerankedResults.slice(0, 5).forEach((result, newIndex) => {
-				const originalFile = state.plan?.files![result - 1];
-				rerankedDocs.set(
-					originalFile!.file,
-					TextDocument.create(
-						originalFile!.file,
-						"plaintext",
-						0,
-						originalFile!.code || ""
-					)
 				);
-			});
+				const rerankedResults = rerankResults.content
+					.toString()
+					.split("\n")
+					.filter(
+						(line) =>
+							line.trim() !== "" && !isNaN(Number(line.trim()))
+					)
+					.map((line) => parseInt(line.trim()));
+
+				rerankedResults
+					.slice(0, maxDocs)
+					.forEach((result, newIndex) => {
+						if (result >= (state.plan?.files?.length || 0)) {
+							return;
+						}
+
+						const originalFile = state.plan?.files![result - 1];
+						rerankedDocs.set(
+							originalFile!.file,
+							TextDocument.create(
+								originalFile!.file,
+								"plaintext",
+								0,
+								originalFile!.code || ""
+							)
+						);
+					});
+			}
 		} catch (e) {
 			console.error("Failed to rerank", e);
 		}
@@ -171,11 +192,17 @@ Ranked results:
 			.map(([file, doc]) => `File:\n${file}\n\nCode:\n${doc.getText()}`)
 			.join("\n\n---FILE---\n");
 
-		const result = (await this.codePlanner.invoke({
+		const plan = (await this.codePlanner.invoke({
 			details: details?.description || "Not available.",
 			files: filesPrompt,
 			objective,
-		})) as PlannerSchema;
+		})) as PlannerSchema | AIMessage;
+
+		let result: PlannerSchema = plan as PlannerSchema;
+		if (this.chatModel instanceof ChatOllama) {
+			const response = (plan as AIMessage).content.toString();
+			result = JSON.parse(response) as PlannerSchema;
+		}
 
 		return {
 			steps: result.steps,

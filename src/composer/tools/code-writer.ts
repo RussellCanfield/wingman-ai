@@ -5,6 +5,7 @@ import { PlanExecuteState } from "../types";
 import { buildObjective, loadWingmanRules } from "../utils";
 import { NoFilesChangedError } from "../errors";
 import { ChatOllama } from "@langchain/ollama";
+import { AIMessage } from "@langchain/core/messages";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -58,14 +59,14 @@ Output Structure:
 1. Steps: A clear, concise guide for manual actions the user must take, not covered by modifications done to files.
 2. Files: Modified or created code files necessary to achieve the objective.
 
-General Instructions:
+Instructions:
 - Analyze the given files and project details for relevance to the objective.
-- Modify only relevant files; set 'hasChanged' to false for unrelated files.
-- Ensure 'hasChanged' property is included for every file, without exception.
-- When creating new files, use consistent and project-related file paths.
-- List all changes made to modified or created files.
-- Considering a file 'hasChanged' only if you physically modify or create the file. Do not consider verifying or ensuring as changes.
+- Modify only relevant files; if a file is not relevant, omit it from the "files" array in your response.
+- Use consistent and project-related file paths, if files are provided use those as a reference. This is critical.
+- If you modify a file's code or create a new file, generate a list of 'changes' made as a summary to the user.
+- Not all files provided need to be used, foocus on the objective.
 - Ensure you output using the correct JSON schema provided, this is critial.
+- All code files must be formatted using GitHub-flavored markdown.
 
 Step Writing Guidelines:
 
@@ -162,21 +163,17 @@ Code Writing Guidelines:
 
 File Handling:
 - For each file:
-  - If relevant to the objective: Modify as needed and set 'hasChanged' to true.
-  - If not relevant: Set 'hasChanged' to false and skip the file.
-  - ALWAYS include the 'hasChanged' property for each file.
+  - If relevant to the objective: modify as needed, if you need to create a file, create one.
+  - If not relevant, omit it from your response.
+  - Any changes made to the file should be listed in the 'changes' field in a short and concise format (array of strings).
   - Output markdown using the 'markdown' field, ensuring GitHub-flavored markdown format with the correct language for the code block.
   - YOU MUST PRODUCE CODE WRAPPED IN GITHUB-FLAVORED MARKDOWN!
 
 ------
 
 Project Details:
+
 {{details}}
-
-------
-
-Objective:
-{{objective}}
 
 ------
 
@@ -186,37 +183,26 @@ Objective:
 
 ------
 
-Files:
-
 {{files}}
 
 ------
 
-Note, when using a tool, you provide the tool name and the arguments to use
-in JSON format. For each call, you MUST ONLY use one tool AND the response
-format must ALWAYS be in the pattern:
+Output Format:
 
-Example response:
+You must ALWAYS Output in JSON format using the following template:
 {
   "steps": [
     {
-      "description": "Update the existing 'index.html' file"
-    },
-    {
-      "description": "Create a new CSS file 'styles.css'"
-    },
-    {
-      "description": "Open the HTML file in a browser",
-      "command": "open index.html"
+      "description": "string",
+      "command": "string (optional)"
     }
   ],
   "files": [
     {
-      "file": "func.ts",
-      "markdown": "\`\`\`typescript\\nfunction test() {}\\n\`\`\`",
-      "changes": ["Added new function"],
-      "hasChanged": true
-    },
+      "file": "string",
+      "markdown": "string",
+      "changes": ["string"]
+    }
   ]
 }`;
 
@@ -229,11 +215,10 @@ Output Structure:
 
 General Instructions:
 - Analyze the given files and project details for relevance to the objective.
-- Modify only relevant files; set 'hasChanged' to false for unrelated files.
-- Ensure 'hasChanged' property is included for every file, without exception.
+- Modify only relevant files; if a file is not relevant, omit it from the "files" array in your response.
 - When creating new files, use consistent and project-related file paths.
 - List all changes made to modified or created files.
-- Considering a file 'hasChanged' only if you physically modify or create the file. Do not consider verifying or ensuring as changes.
+- Not all files provided need to be used, focus on the objective.
 - Ensure you output using the correct JSON schema provided, this is critial.
 
 Step Writing Guidelines:
@@ -331,9 +316,8 @@ Code Writing Guidelines:
 
 File Handling:
 - For each file:
-  - If relevant to the objective: Modify as needed and set 'hasChanged' to true.
-  - If not relevant: Set 'hasChanged' to false and skip the file.
-  - ALWAYS include the 'hasChanged' property for each file.
+  - If relevant to the objective: modify as needed, if you need to create a file, create one.
+  - If not relevant, omit it from your response.
   - Output markdown using the 'markdown' field, ensuring GitHub-flavored markdown format with the correct language for the code block.
   - YOU MUST PRODUCE CODE WRAPPED IN GITHUB-FLAVORED MARKDOWN!
 
@@ -376,6 +360,7 @@ Use these examples as a reference for the structure and format of your output, u
 ------
 
 Project Details:
+
 {{details}}
 
 ------
@@ -414,33 +399,6 @@ ${rulePack}`;
 	);
 };
 
-const buildOllamaPrompt = (
-	objective: string,
-	basePrompt: string,
-	rulePack?: string
-) => {
-	const rulePromptAddition = !rulePack
-		? ""
-		: `Use the following rules to guide your code writing:
-  
-${rulePack}`;
-	return ChatPromptTemplate.fromMessages(
-		[
-			{
-				role: "system",
-				content: basePrompt.replace("{RULE_PACK}", rulePromptAddition),
-			},
-			{
-				role: "user",
-				content: "Fix how product cards display in the Cart.",
-			},
-		],
-		{
-			templateFormat: "mustache",
-		}
-	);
-};
-
 export class CodeWriter {
 	constructor(
 		private readonly chatModel: BaseChatModel,
@@ -453,18 +411,9 @@ export class CodeWriter {
 		const rulePack = loadWingmanRules(this.workspace);
 		const objective = buildObjective(state);
 
-		// TODO - revisit this, most small Ollama models have pretty bad performance.
 		const codeWriter =
 			this.chatModel instanceof ChatOllama
-				? buildOllamaPrompt(
-						objective,
-						ollamaWriterPrompt,
-						rulePack
-				  ).pipe(
-						this.chatModel.withStructuredOutput(codeWriterSchema, {
-							name: "code-writer",
-						})
-				  )
+				? buildPrompt(ollamaWriterPrompt, rulePack).pipe(this.chatModel)
 				: buildPrompt(baseWriterPrompt, rulePack).pipe(
 						this.chatModel.withStructuredOutput(codeWriterSchema, {
 							name: "code-writer",
@@ -481,9 +430,9 @@ ${f.file}
 Code:
 ${f.code}`;
 			})
-			.join("\n\n---FILE---\n");
+			.join("\n\n---FILE---\n\n");
 
-		const plan = (await codeWriter.invoke({
+		const output = (await codeWriter.invoke({
 			details: state.projectDetails || "Not available.",
 			objective,
 			steps: state.steps
@@ -494,7 +443,7 @@ ${state.steps.join("\n")}
 ------`
 				: "",
 			review:
-				state.review?.comments?.length === 0
+				!state.review?.comments || state.review?.comments?.length === 0
 					? ""
 					: `Here are comments from a review of your code changes.
 Use these comments to refine your code and meet the objective.
@@ -505,9 +454,17 @@ ${state.review?.comments?.join("\n")}
 			files: !prompt
 				? `The user does not currently have any related files, assume this may be a new project and this is your base directory: ${this.workspace}`
 				: `---FILE---\n\n${prompt}`,
-		})) as CodeWriterSchema;
+		})) as CodeWriterSchema | AIMessage;
 
-		const filesChanged = plan.files?.filter((f) => f.hasChanged) || [];
+		let result: CodeWriterSchema = output as CodeWriterSchema;
+		if (this.chatModel instanceof ChatOllama) {
+			const response = (output as AIMessage).content.toString();
+			result = JSON.parse(response);
+		}
+
+		const filesChanged =
+			result.files?.filter((f) => f.changes && f.changes?.length > 0) ||
+			[];
 
 		if (filesChanged.length === 0) {
 			throw new NoFilesChangedError(
@@ -519,7 +476,7 @@ ${state.review?.comments?.join("\n")}
 
 		return {
 			plan: {
-				steps: plan.steps,
+				steps: result.steps,
 				files: files.map((f) => {
 					return {
 						file: f.file,

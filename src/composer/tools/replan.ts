@@ -3,6 +3,8 @@ import { z } from "zod";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types/index";
 import { buildObjective, formatMessages } from "../utils";
+import { ChatOllama } from "@langchain/ollama";
+import { AIMessage } from "@langchain/core/messages";
 
 export type ReplanSchema = z.infer<typeof plan>;
 
@@ -22,59 +24,75 @@ const plan = z.object({
 });
 
 const replannerPrompt = ChatPromptTemplate.fromTemplate(
-	`Analyze the code changes to determine if they meet the project objective. Focus on implementation and alignment with the goal.
+	`Analyze the code changes to determine if they meet the project objective. 
+Focus on the implementation and alignment with the goal.
 
-Output:
+Example JSON Output Structures:
 
-response: Brief summary of changes made.
-review: Array of comments for immediate attention if objective not met. If it was met, return a review with an empty array for comments.
+Example 1:
+{
+  "response": "string",
+  "review": {
+    "comments": ["string"] (optional)
+  }
+}
+
+------
 
 Criteria:
 
-GitHub-flavored markdown for code.
-Implementation completeness and accuracy.
-Correct import paths and necessary file modifications. 
+1. All code file must be formatted using GitHub-flavored markdown.
+2. Implementation completeness and accuracy.
+3. Correct import paths and necessary file modifications. 
   - Example: if a new file is created, ensure it is imported correctly.
   - Example: if a new method was imported, ensure it was created.
-Identify unrelated changes.
+4. Identify unrelated changes.
 
-{objective}
+Note: Exclude suggestions for testing, monitoring, optimization, coding standards, documentation, or additional reviews unless specified in the objective.
+
+{{objective}}
 
 Project Details: 
 
-{details}
+{{details}}
 
 -----
 
 Modified/Created Files: 
 
-{files}
+{{files}}
 
 -----
 
 Guidelines:
 
 If objective met: Use 'response' for concise summary.
-If improvements needed: List essential tasks to meet objective.
+If improvements needed: Create review comments required to meet objective.
 
-Note: Exclude suggestions for testing, monitoring, optimization, coding standards, documentation, or additional reviews unless specified in the objective.
 Action:
 
 If objective reasonably met, use 'response' only.
-If objective not met, provide review comments.`
+If objective not met, provide review comments.`,
+	{
+		templateFormat: "mustache",
+	}
 );
 
 export class Replanner {
-	model: ReturnType<BaseChatModel["withStructuredOutput"]>;
 	replanner: ReturnType<typeof replannerPrompt.pipe>;
 
 	constructor(
 		private readonly chatModel: BaseChatModel,
 		private readonly workspace: string
 	) {
-		//@ts-expect-error
-		this.model = this.chatModel.withStructuredOutput(plan);
-		this.replanner = replannerPrompt.pipe(this.model);
+		const model = this.chatModel.withStructuredOutput(plan, {
+			name: "replan",
+		});
+
+		this.replanner =
+			this.chatModel instanceof ChatOllama
+				? replannerPrompt.pipe(this.chatModel)
+				: replannerPrompt.pipe(model);
 	}
 
 	replanStep = async (
@@ -101,11 +119,17 @@ ${f.code}`;
 					? "---FILE---\n\n" + codeFiles
 					: "No files were modified as part of this change."
 			}`,
-		})) as ReplanSchema;
+		})) as ReplanSchema | AIMessage;
+
+		let result: ReplanSchema = output as ReplanSchema;
+		if (this.chatModel instanceof ChatOllama) {
+			const response = (output as AIMessage).content.toString();
+			result = JSON.parse(response) as ReplanSchema;
+		}
 
 		return {
-			review: output.review,
-			response: output.response,
+			review: result.review,
+			response: result.response,
 			plan: state.plan,
 			retryCount: state.retryCount ? state.retryCount + 1 : 1,
 		};

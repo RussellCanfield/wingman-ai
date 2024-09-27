@@ -4,6 +4,7 @@ import path from "node:path";
 export default ({ env, command, envMode }) => {
 	const isProd = env === "production";
 	console.log("Production Build:", isProd, envMode);
+
 	return defineConfig({
 		mode: isProd ? "production" : "none",
 		source: {
@@ -54,9 +55,6 @@ export default ({ env, command, envMode }) => {
 			],
 			cleanDistPath: false,
 			minify: isProd,
-			// sourceMap: {
-			// 	js: "inline-source-map",
-			// },
 			target: "node",
 			externals: {
 				vscode: "commonjs vscode",

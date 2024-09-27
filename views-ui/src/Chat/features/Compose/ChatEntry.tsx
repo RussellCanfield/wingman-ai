@@ -23,14 +23,8 @@ export function extractCodeBlock(text: string) {
 	while ((match = regex.exec(text)) !== null) {
 		matches.push(match[1]);
 	}
-	return matches.join("\n");
+	return matches.length > 0 ? matches.join("\n") : text;
 }
-
-type MarkDownObject = {
-	props: {
-		children: [boolean, MarkDownEntry[] | string];
-	};
-};
 
 type MarkDownEntry = {
 	props: {
@@ -185,7 +179,9 @@ const ChatArtifact = ({
 						<ul className="mt-2 list-disc list-inside">
 							{file.changes?.map((change, index) => (
 								<li key={index} className="ml-4 !border-t-0">
-									{change}
+									{typeof change === "string"
+										? change
+										: JSON.stringify(change)}
 								</li>
 							))}
 						</ul>

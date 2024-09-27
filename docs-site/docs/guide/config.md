@@ -1,9 +1,21 @@
 # Configuration
 
-Wingman has a built-in configuration window that will persist configuration locally into the vscode settings file in your repository.
+[Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) has a built-in configuration window that will persist configuration locally into the vscode settings file in your repository.
 In the future this may move into a specific file that you can **gitignore** separately.
 
 ![](/Config.png)
+
+## Storage
+
+[Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) only stores data on your machine. In previous extension versions (prior to v0.7.0), configuration used to be stored in your repository. The new storage location contains Wingman configuration, project specific embeddings and more.
+
+**Storage Location:**
+
+/Home Directory/.wingman
+
+**Example on macOS:**
+
+/Users/username/.wingman
 
 ## Supported Models
 
@@ -37,6 +49,7 @@ You can use the following models:
 
 Supported Models for _Code Completion_:
 
+-   Qwen2.5 Coder Base [qwen2.5-coder](https://ollama.com/library/qwen2.5-coder)
 -   Deepseek Coder v2-base _(tested with: [deepseek-coder-v2:16b-lite-base-q4_0](https://ollama.com/library/deepseek-coder-v2:16b-lite-base-q4_0))_
 -   Deepseek-base _(tested with: [deepseek-coder:6.7b-base-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-base-q8_0))_
 -   Codellama-code _(tested with: [codellama:7b-code-q4_K_M](https://ollama.ai/library/codellama:7b-code-q4_K_M))_
@@ -46,6 +59,7 @@ Supported Models for _Code Completion_:
 
 Supported Models for _Chat_:
 
+-   Qwen2.5 Coder Instruct [qwen2.5-coder](https://ollama.com/library/qwen2.5-coder)
 -   Deepseek Coder v2-instruct _(tested with: [deepseek-coder-v2:16b-lite-instruct-q4_0](https://ollama.com/library/deepseek-coder-v2:16b-lite-instruct-q4_0))_
 -   Deepseek-Instruct _(tested with: [deepseek-coder:6.7b-instruct-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0))_
 -   Codellama-Instruct _(tested with: [codellama:7b-instruct](https://ollama.ai/library/codellama:7b-instruct))_

@@ -169,7 +169,13 @@ class MyAmazingClass {
 
 ----
 
+
+
 ${fileContents}
+
+----
+
+Return your response in plain text, without markdown formatting.
 `;
 
 		const result = await this.aiProvider.invoke(prompt);

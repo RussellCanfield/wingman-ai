@@ -20,7 +20,7 @@
 			"preLaunchTask": "rsbuild"
 		},
 		{
-			"name": "Attach to Process",
+			"name": "Attach to LSP",
 			"type": "node",
 			"request": "attach",
 			"port": 6009,
@@ -38,7 +38,11 @@
 	"compounds": [
 		{
 			"name": "Client + Server",
-			"configurations": ["Run Extension", "Attach to Process"]
+			"configurations": [
+				"Run Extension",
+				"Attach to LSP",
+				"Attach to Views"
+			]
 		}
 	]
 }

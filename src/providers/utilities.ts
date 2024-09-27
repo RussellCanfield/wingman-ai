@@ -151,7 +151,7 @@ export function extractCodeBlock(text: string) {
 	while ((match = regex.exec(text)) !== null) {
 		matches.push(match[1]);
 	}
-	return matches.join("\n");
+	return matches.length > 0 ? matches.join("\n") : text;
 }
 
 export function addNoneAttributeToLink(htmlString: string, noneValue: string) {

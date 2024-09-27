@@ -1,41 +1,74 @@
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
+import path from "node:path";
 
-export default defineConfig({
-	server: {
-		open: false,
-	},
-	source: {
-		entry: {
-			chat: "./src/Chat/index.tsx",
-			config: "./src/Config/index.tsx",
-			diff: "./src/Diff/index.tsx",
+export default ({ env, command, envMode }) => {
+	const isProd = env === "production";
+	console.log("Production Build:", isProd, envMode);
+
+	return defineConfig({
+		server: {
+			open: false,
 		},
-	},
-	performance: {
-		chunkSplit: {
-			strategy: "single-vendor",
+		mode: isProd ? "production" : "development",
+		source: {
+			entry: {
+				chat: "./src/Chat/index.tsx",
+				config: "./src/Config/index.tsx",
+				diff: "./src/Diff/index.tsx",
+			},
 		},
-	},
-	dev: {
-		writeToDisk: true,
-	},
-	output: {
-		distPath: {
-			root: "../out/views",
-			js: "static",
-			css: "static",
+		tools: {
+			rspack: (config) => {
+				if (config.output) {
+					config.output.devtoolModuleFilenameTemplate = (info) => {
+						const {
+							absoluteResourcePath,
+							namespace,
+							resourcePath,
+						} = info;
+
+						if (path.isAbsolute(absoluteResourcePath)) {
+							return path.relative(
+								path.join(__dirname, "out", "views"),
+								absoluteResourcePath
+							);
+						}
+
+						// Mimic Webpack's default behavior:
+						return `webpack://${namespace}/${resourcePath}`;
+					};
+				}
+
+				return config;
+			},
 		},
-		filename: {
-			js: "[name].js",
-			css: "[name].css",
+		performance: {
+			chunkSplit: {
+				strategy: "single-vendor",
+			},
 		},
-	},
-	security: {
-		nonce: "CSP_NONCE_PLACEHOLDER",
-	},
-	html: {
-		template: "./index.html",
-	},
-	plugins: [pluginReact()],
-});
+		dev: {
+			writeToDisk: true,
+		},
+		output: {
+			minify: isProd,
+			distPath: {
+				root: "../out/views",
+				js: "static",
+				css: "static",
+			},
+			filename: {
+				js: "[name].js",
+				css: "[name].css",
+			},
+		},
+		security: {
+			nonce: "CSP_NONCE_PLACEHOLDER",
+		},
+		html: {
+			template: "./index.html",
+		},
+		plugins: [pluginReact()],
+	});
+};
