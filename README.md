@@ -1,5 +1,5 @@
 <p align="center" width="100%">
-    <img width="33%" src="./docs/Logo.png">
+    <img src="./docs/Logo.png">
 </p>
 
 <h2 align="center">Wingman AI Coding Assistant</h2>
