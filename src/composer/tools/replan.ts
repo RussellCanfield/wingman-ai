@@ -131,7 +131,7 @@ ${f.code}`;
 			review: result.review,
 			response: result.response,
 			plan: state.plan,
-			retryCount: state.retryCount ? state.retryCount + 1 : 1,
+			retryCount: state.retryCount ? state.retryCount - 1 : 1,
 		};
 	};
 }

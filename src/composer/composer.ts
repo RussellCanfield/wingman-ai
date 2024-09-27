@@ -102,15 +102,15 @@ export async function* generateCommand(
 		},
 		retryCount: {
 			value: (x?: number, y?: number) => y ?? x,
-			default: () => 0,
+			default: () => 1,
 		},
 	};
 
-	function shouldEnd(state: PlanExecuteState) {
+	function shouldEnd(state: PlanExecuteState): "true" | "false" {
 		return !state.review ||
 			!state.review?.comments ||
 			state.review?.comments?.length === 0 ||
-			state.retryCount === 2
+			Number(state.retryCount ?? 0) > 0
 			? "true"
 			: "false";
 	}
