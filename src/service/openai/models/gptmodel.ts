@@ -5,7 +5,7 @@ import {
 	commonRefactorPrompt,
 } from "../../common";
 
-export class GPT4Turbo implements OpenAIModel {
+export class GPTModel implements OpenAIModel {
 	get CodeCompletionPrompt(): string {
 		return `Fill in the following text.
 Do not include the original text in your response, just the middle portion.

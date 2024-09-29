@@ -38,7 +38,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	let modelProvider;
 	try {
-		modelProvider = CreateAIProvider(settings);
+		modelProvider = CreateAIProvider(settings, loggingProvider);
 
 		if (!(await modelProvider.validateSettings())) {
 			throw new Error(

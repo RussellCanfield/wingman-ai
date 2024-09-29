@@ -13,6 +13,7 @@ import { AnthropicModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatAnthropic } from "@langchain/anthropic";
+import { ILoggingProvider } from "@shared/types/Logger";
 
 export class Anthropic implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -24,7 +25,8 @@ export class Anthropic implements AIStreamProvicer {
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["Anthropic"],
-		private readonly interactionSettings: InteractionSettings
+		private readonly interactionSettings: InteractionSettings,
+		private readonly loggingProvider: ILoggingProvider
 	) {
 		if (!settings) {
 			throw new Error("Unable to load Anthropic settings.");
@@ -156,7 +158,7 @@ export class Anthropic implements AIStreamProvicer {
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Chat Time To First Token execution time: ${executionTime} ms`
 		);
 
@@ -180,7 +182,6 @@ export class Anthropic implements AIStreamProvicer {
 
 				// Remove the "data: " prefix and parse the JSON
 				const blocks = eventData.split("data: ");
-				console.log(blocks);
 
 				for (const block of blocks) {
 					if (!block || !block.startsWith("{")) {
@@ -242,11 +243,15 @@ ${additionalContext || ""}
 
 -----
 
-The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+${
+	recentClipboard
+		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+  
+${recentClipboard}
 
-${recentClipboard || ""}
-
------
+-----`
+		: ""
+}
 
 ${prompt}`,
 				},
@@ -254,7 +259,10 @@ ${prompt}`,
 			temperature: 0.2,
 			top_p: 0.3,
 			top_k: 40,
-			max_tokens: this.interactionSettings?.codeMaxTokens || 4096,
+			max_tokens:
+				this.interactionSettings?.codeMaxTokens === -1
+					? 8192
+					: this.interactionSettings?.codeMaxTokens || 8192,
 		};
 
 		let response: Response | undefined;
@@ -275,12 +283,15 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Code Complete Time To First Token execution time: ${executionTime} ms`
 		);
 
 		if (!response?.ok && !failedDueToAbort) {
-			return `Anthropic - Code Completion failed with the following status code: ${response?.status}`;
+			const responseBody = await response?.text();
+			const msg = `Anthropic - Code Completion failed with the following status code: ${response?.status}, body: ${responseBody}`;
+			this.loggingProvider.logError(msg);
+			return msg;
 		}
 
 		if (!response?.body) {
@@ -408,7 +419,7 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`GenDocs Time To First Token execution time: ${executionTime} ms`
 		);
 
@@ -481,7 +492,7 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Refactor Time To First Token execution time: ${executionTime} ms`
 		);
 

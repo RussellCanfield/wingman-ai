@@ -210,7 +210,7 @@ const ChatInput = ({
 				{showDropdown && (
 					<div
 						ref={dropdownRef}
-						className={`absolute bottom-full mb-1 left-0 w-full ${dropdownClasses} border rounded`}
+						className={`absolute bottom-full mb-1 left-0 w-full z-20 ${dropdownClasses} border rounded`}
 					>
 						{allDropdownItems
 							.filter((d) => !chipMap.has(d.path))

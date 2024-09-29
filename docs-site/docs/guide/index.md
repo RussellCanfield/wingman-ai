@@ -8,6 +8,18 @@
 
 ### **Like the extension? Check out [Squadron AI](https://www.squadron-ai.com)** our GitHub AI-powered code review application.
 
+## How to begin
+
+Wingman must be configured before beginning, this involves choosing an AI provider, and adding the API key if applicable.
+If you are running Ollama, make sure Ollama is installed, and started before running the extension, you can always reload the window after you start Ollama.
+
+:::note
+There is a UX issue around the configuration panel, where it will be condensed down to **one save button**
+Currently **you must save every section individually**
+:::
+
+Once you select a provider and configure it, code completion and chat will work as expected. Please visit the other pages in the documentation to see details on configuration sections.
+
 ## Providers
 
 We currently support 4 AI providers.

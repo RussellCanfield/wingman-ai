@@ -27,7 +27,6 @@ import { MemorySaver } from "@langchain/langgraph";
 import { generateCommand } from "../composer/composer";
 import { AIProvider } from "../service/base";
 import {
-	InteractionSettings,
 	OllamaEmbeddingSettingsType,
 	OpenAIEmbeddingSettingsType,
 	Settings,
@@ -38,6 +37,7 @@ import { getOllamaEmbeddings } from "../service/embeddings/ollama";
 import { getOpenAIEmbeddings } from "../service/embeddings/openai";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { loggingProvider } from "./loggingProvider";
 
 const config = { configurable: { thread_id: "conversation-num-1" } };
 
@@ -97,7 +97,7 @@ export class LSPServer {
 	}
 
 	private postInitialize = async () => {
-		modelProvider = CreateAIProvider(settings);
+		modelProvider = CreateAIProvider(settings, loggingProvider);
 		const workspaceFolder = this.workspaceFolders[0];
 		console.log("Wingman LSP initialized for workspace:", workspaceFolder);
 		this.vectorStore = new Store(

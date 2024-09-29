@@ -8,6 +8,7 @@ import { Mixtral } from "./models/mixtral";
 import { Starcoder2 } from "./models/starcoder2";
 import { AIMessageChunk } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ILoggingProvider } from "@shared/types/Logger";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -46,7 +47,8 @@ export class HuggingFace implements AIProvider {
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["HuggingFace"],
-		private readonly interactionSettings: InteractionSettings
+		private readonly interactionSettings: InteractionSettings,
+		private readonly loggingProvider: ILoggingProvider
 	) {
 		if (!settings) {
 			throw new Error("Unable to log HuggingFace configuration.");
@@ -149,7 +151,7 @@ export class HuggingFace implements AIProvider {
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Chat Time To First Token execution time: ${executionTime} ms`
 		);
 
@@ -158,7 +160,7 @@ export class HuggingFace implements AIProvider {
 		}
 
 		if (response.status >= 400) {
-			console.log(await response.text());
+			this.loggingProvider.logInfo(await response.text());
 			return "";
 		}
 
@@ -249,7 +251,9 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(`Code Completion execution time: ${executionTime} seconds`);
+		this.loggingProvider.logInfo(
+			`Code Completion execution time: ${executionTime} seconds`
+		);
 
 		if (!response || !response?.body) {
 			return "";

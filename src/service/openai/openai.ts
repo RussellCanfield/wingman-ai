@@ -1,6 +1,6 @@
 import { asyncIterator } from "../asyncIterator";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
-import { GPT4Turbo } from "./models/gpt4-turbo";
+import { GPTModel } from "./models/gptmodel";
 import { OpenAIMessage, OpenAIRequest } from "./types/OpenAIRequest";
 import { OpenAIResponse, OpenAIStreamResponse } from "./types/OpenAIResponse";
 import { OpenAIModel } from "@shared/types/Models";
@@ -8,6 +8,7 @@ import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
 import { AIStreamProvicer } from "../base";
+import { ILoggingProvider } from "@shared/types/Logger";
 
 export class OpenAI implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -19,7 +20,8 @@ export class OpenAI implements AIStreamProvicer {
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["OpenAI"],
-		private readonly interactionSettings: InteractionSettings
+		private readonly interactionSettings: InteractionSettings,
+		private readonly loggingProvider: ILoggingProvider
 	) {
 		if (!settings) {
 			throw new Error("Unable to load OpenAI settings.");
@@ -76,14 +78,14 @@ export class OpenAI implements AIStreamProvicer {
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
 		switch (true) {
 			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o1"):
-				return new GPT4Turbo();
+				return new GPTModel();
 		}
 	}
 
 	private getChatModel(chatModel: string): OpenAIModel | undefined {
 		switch (true) {
 			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o1"):
-				return new GPT4Turbo();
+				return new GPTModel();
 		}
 	}
 
@@ -146,7 +148,9 @@ export class OpenAI implements AIStreamProvicer {
 
 				// Check for special non-JSON messages
 				if (eventData.trim() === "data: [DONE]") {
-					console.log("Received DONE signal, handling accordingly.");
+					this.loggingProvider.logInfo(
+						"Received DONE signal, handling accordingly."
+					);
 					// Handle the DONE signal as needed, possibly breaking the loop or signaling completion
 					continue; // Or break, if appropriate for your use case
 				}
@@ -223,7 +227,7 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Code Time To First Token execution time: ${executionTime} ms`
 		);
 
@@ -375,7 +379,7 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`CodeDocs Time To First Token execution time: ${executionTime} ms`
 		);
 
@@ -430,7 +434,7 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Refactor Time To First Token execution time: ${executionTime} ms`
 		);
 

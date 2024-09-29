@@ -1,17 +1,8 @@
 import { ILoggingProvider } from "@shared/types/Logger";
-import * as vscode from "vscode";
 
-export class VSCodeLoggingProvider implements ILoggingProvider {
-	private dbgChannel: vscode.OutputChannel;
-
-	constructor() {
-		this.dbgChannel = vscode.window.createOutputChannel("Wingman");
-	}
-
+export class ConsoleLoggingProvider implements ILoggingProvider {
 	public logInfo(message: string): void {
-		this.dbgChannel.appendLine(
-			`${new Date().toLocaleString()} - [info] ${message}`
-		);
+		console.log(`${new Date().toLocaleString()} - [info] ${message}`);
 	}
 
 	public logError(messageOrError: string | Error | unknown): void {
@@ -19,13 +10,11 @@ export class VSCodeLoggingProvider implements ILoggingProvider {
 			typeof messageOrError === "string"
 				? messageOrError
 				: getErrorMessage(messageOrError);
-		this.dbgChannel.appendLine(
-			`${new Date().toLocaleString()} - [error] ${message}`
-		);
+		console.error(`${new Date().toLocaleString()} - [error] ${message}`);
 	}
 
 	public dispose() {
-		this.dbgChannel.dispose();
+		// No need to dispose anything for console logging
 	}
 }
 
@@ -39,5 +28,5 @@ function getErrorMessage(error: Error | unknown): string {
 	}
 }
 
-const loggingProvider = new VSCodeLoggingProvider();
+const loggingProvider = new ConsoleLoggingProvider();
 export { loggingProvider };

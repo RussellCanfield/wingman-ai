@@ -4,27 +4,35 @@ import { OpenAI } from "../openai/openai";
 import { Ollama } from "../ollama/ollama";
 import { Settings } from "@shared/types/Settings";
 import { AIProvider } from "../base";
+import { ILoggingProvider } from "@shared/types/Logger";
 
-export function CreateAIProvider(settings: Settings): AIProvider {
+export function CreateAIProvider(
+	settings: Settings,
+	loggingProvider: ILoggingProvider
+): AIProvider {
 	if (settings.aiProvider === "HuggingFace") {
 		return new HuggingFace(
 			settings.providerSettings.HuggingFace,
-			settings.interactionSettings
+			settings.interactionSettings,
+			loggingProvider
 		);
 	} else if (settings.aiProvider === "OpenAI") {
 		return new OpenAI(
 			settings.providerSettings.OpenAI,
-			settings.interactionSettings
+			settings.interactionSettings,
+			loggingProvider
 		);
 	} else if (settings.aiProvider === "Anthropic") {
 		return new Anthropic(
 			settings.providerSettings.Anthropic,
-			settings.interactionSettings
+			settings.interactionSettings,
+			loggingProvider
 		);
 	}
 
 	return new Ollama(
 		settings.providerSettings.Ollama,
-		settings.interactionSettings
+		settings.interactionSettings,
+		loggingProvider
 	);
 }

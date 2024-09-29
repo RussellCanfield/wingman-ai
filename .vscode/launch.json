@@ -38,11 +38,7 @@
 	"compounds": [
 		{
 			"name": "Client + Server",
-			"configurations": [
-				"Run Extension",
-				"Attach to LSP",
-				"Attach to Views"
-			]
+			"configurations": ["Run Extension", "Attach to LSP"]
 		}
 	]
 }

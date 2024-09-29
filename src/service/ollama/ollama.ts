@@ -21,6 +21,7 @@ import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOllama } from "@langchain/ollama";
 import { Qwen } from "./models/qwen";
+import { ILoggingProvider } from "@shared/types/Logger";
 
 export class Ollama implements AIStreamProvicer {
 	decoder = new TextDecoder();
@@ -33,7 +34,8 @@ export class Ollama implements AIStreamProvicer {
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["Ollama"],
-		interactionSettings: InteractionSettings
+		interactionSettings: InteractionSettings,
+		private readonly loggingProvider: ILoggingProvider
 	) {
 		if (!settings) {
 			throw new Error("Unable to load Ollama settings.");
@@ -244,7 +246,13 @@ export class Ollama implements AIStreamProvicer {
 		try {
 			response = await this.fetchModelResponse(payload, signal);
 		} catch (error) {
-			console.log(error);
+			this.loggingProvider.logError(
+				`Unable to generate code:, ${
+					error instanceof Error
+						? error.message
+						: JSON.stringify(error)
+				}`
+			);
 			return "";
 		}
 
@@ -255,7 +263,7 @@ export class Ollama implements AIStreamProvicer {
 		const endTime = Date.now();
 		const executionTime = endTime - startTime;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Code Time To First Token execution time: ${executionTime} ms`
 		);
 
@@ -335,7 +343,9 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(`Code Completion execution time: ${executionTime} seconds`);
+		this.loggingProvider.logInfo(
+			`Code Completion execution time: ${executionTime} seconds`
+		);
 
 		if (!response?.body) {
 			return "";
@@ -378,7 +388,7 @@ ${prompt}`,
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
-		console.log(
+		this.loggingProvider.logInfo(
 			`Ollama - Code stream finished in ${executionTime} seconds with contents: ${JSON.stringify(
 				sentences
 			)}`
