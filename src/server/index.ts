@@ -352,6 +352,9 @@ export class LSPServer {
 			return {
 				exists: await this.vectorStore?.indexExists(),
 				processing: this.indexer?.isSyncing(),
+				files: Array.from(
+					this.codeGraph?.getSymbolTable().keys() ?? []
+				),
 			};
 		});
 

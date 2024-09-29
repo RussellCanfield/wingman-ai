@@ -9,13 +9,22 @@ import { IndexFilter } from "@shared/types/Settings";
 import { useEffect, useState } from "react";
 import { Loader } from "../../Loader";
 
+type IndexStats = {
+	exists: boolean;
+	processing: boolean;
+	files: string[];
+};
+
 let interval: NodeJS.Timeout;
 
 export default function Indexer() {
 	const { indexFilter, exclusionFilter: savedExclusionFilter } =
 		useAppContext();
-	const [indexProcessing, setIndexProcessing] = useState<boolean>(false);
-	const [indexExists, setIndexExists] = useState<boolean>(false);
+	const [index, setIndex] = useState<IndexStats>({
+		exists: false,
+		processing: false,
+		files: [],
+	});
 	const [filter, setFilter] = useState(
 		() => indexFilter || "apps/**/*.{js,jsx,ts,tsx}"
 	);
@@ -51,12 +60,7 @@ export default function Indexer() {
 
 		switch (command) {
 			case "index-status":
-				const { exists, processing } = data.value as {
-					exists: boolean;
-					processing: boolean;
-				};
-				setIndexExists(exists);
-				setIndexProcessing(processing);
+				setIndex(data.value as IndexStats);
 		}
 	};
 
@@ -68,7 +72,7 @@ export default function Indexer() {
 				exclusionFilter,
 			} satisfies IndexFilter,
 		});
-		setIndexProcessing(true);
+		setIndex((idx) => ({ ...idx, processing: true }));
 	};
 
 	const deleteIndex = () => {
@@ -79,10 +83,10 @@ export default function Indexer() {
 
 	return (
 		<div className="space-y-4 mt-4">
-			<p className="text-lg">
+			<p className="text-lg font-bold">
 				Status:{" "}
-				{indexExists
-					? indexProcessing
+				{index.exists
+					? index.processing
 						? "Processing"
 						: "Ready"
 					: "Not Found"}
@@ -94,7 +98,7 @@ export default function Indexer() {
 				default, Wingman will include your '.gitignore' file in your
 				exclusion filter.
 			</p>
-			{!indexExists && !indexProcessing && (
+			{!index.exists && !index.processing && (
 				<section className="flex flex-col gap-4">
 					<label>Inclusion Filter:</label>
 					<VSCodeTextField
@@ -110,26 +114,36 @@ export default function Indexer() {
 					/>
 					<VSCodeButton
 						type="button"
-						disabled={indexProcessing || !filter}
+						disabled={index.processing || !filter}
 						onClick={() => buildIndex()}
 					>
 						Build Index
 					</VSCodeButton>
 				</section>
 			)}
-			{indexProcessing && (
+			{index.processing && (
 				<p className="flex items-center">
 					<Loader /> <span className="ml-2">Building Index...</span>
 				</p>
 			)}
-			{indexExists && !indexProcessing && (
-				<VSCodeButton
-					type="button"
-					onClick={() => deleteIndex()}
-					className="bg-red-600"
-				>
-					Delete Index
-				</VSCodeButton>
+			{index.exists && !index.processing && (
+				<>
+					<VSCodeButton
+						type="button"
+						onClick={() => deleteIndex()}
+						className="bg-red-600"
+					>
+						Delete Index
+					</VSCodeButton>
+					<div className="mt-4">
+						<p className="text-lg font-bold">Indexed Files:</p>
+					</div>
+					<ul>
+						{index.files.map((f) => (
+							<li>{f}</li>
+						))}
+					</ul>
+				</>
 			)}
 		</div>
 	);

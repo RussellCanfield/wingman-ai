@@ -35,6 +35,7 @@ export const OpenAIView = () => {
 		<div>
 			<ul>
 				<li>gpt-4o</li>
+				<li>gpt-4o-mini</li>
 				<li>gpt-4-turbo</li>
 				<li>gpt-4</li>
 				<li>o1</li>
