@@ -52,6 +52,10 @@ Specific context means you provide files to composer directly using **@filename*
 
 Composer will iterate over 3 unique phases for code generation:
 
+:::note
+Wingman will automatically choose "gpt-4o-mini" or "claude haiku 3" for reranking results during planning. Ollama does not have a safe default and will use the existing chat model.
+:::
+
 -   **Planning**
 
     In this phase Wingman will develop a plan of action based on your project details, input and code files it discovers or you provide. This plan of action provides unique perspectives on what you are asking. Think of it was refining your question.
