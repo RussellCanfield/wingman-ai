@@ -31,10 +31,15 @@ import { DiffViewProvider } from "./diffViewProvider";
 
 let abortController = new AbortController();
 
+export type ChatView = "chat" | "composer" | "indexer";
+
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.chatview";
+	public static readonly showComposerCommand = "wingmanai.opencomposer";
 
 	private _disposables: vscode.Disposable[] = [];
+	private _webview: vscode.Webview | undefined;
+	private _launchView: ChatView = "chat";
 
 	constructor(
 		private readonly _lspClient: LSPClient,
@@ -49,11 +54,31 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		this._disposables = [];
 	}
 
+	public setLaunchView(view: ChatView) {
+		if (this._webview) {
+			this.showView(view);
+			return;
+		}
+
+		this._launchView = view;
+	}
+
+	showView(view: ChatView) {
+		if (!view) {
+			return;
+		}
+		this._webview?.postMessage({
+			command: "switchView",
+			value: view,
+		});
+	}
+
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext,
 		token: vscode.CancellationToken
 	) {
+		this._webview = webviewView.webview;
 		webviewView.webview.options = {
 			enableScripts: true,
 		};
@@ -290,6 +315,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								command: "init",
 								value: appState,
 							});
+							this.showView(this._launchView);
 							break;
 						}
 						case "log": {

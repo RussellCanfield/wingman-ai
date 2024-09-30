@@ -1,37 +1,32 @@
-import Toolbar, { View } from "./Toolbar";
-import { AppProvider } from "./context";
+import Toolbar from "./Toolbar";
+import { useAppContext } from "./context";
 import Chat from "./features/Chat";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Indexer from "./features/Indexer";
 import Compose from "./features/Compose";
 import "./App.css";
 
 const App = () => {
-	const [activeView, setActiveView] = useState<View>("chat");
+	const { view } = useAppContext();
 
 	const activeComponent = useMemo(() => {
-		switch (activeView) {
+		switch (view) {
 			case "chat":
 				return <Chat />;
 			case "index":
 				return <Indexer />;
-			case "code":
+			case "composer":
 				return <Compose />;
 			default:
 				return null;
 		}
-	}, [activeView]);
+	}, [view]);
 
 	return (
-		<AppProvider>
-			<main className="h-full flex flex-col flex-auto">
-				<Toolbar
-					onSetActiveView={setActiveView}
-					activeView={activeView}
-				/>
-				{activeComponent}
-			</main>
-		</AppProvider>
+		<main className="h-full flex flex-col flex-auto">
+			<Toolbar />
+			{activeComponent}
+		</main>
 	);
 };
 

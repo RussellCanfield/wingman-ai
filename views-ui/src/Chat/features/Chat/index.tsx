@@ -10,7 +10,7 @@ let currentMessage = "";
 let currentContext: CodeContext | undefined;
 
 export default function Chat() {
-	const { messages, setMessages } = useAppContext();
+	const { messages, pushMessage } = useAppContext();
 	const [loading, setLoading] = useState<boolean>(false);
 	const [activeMessage, setActiveMessage] = useState<
 		ChatMessage | undefined
@@ -66,18 +66,11 @@ export default function Chat() {
 	const commitMessageToHistory = () => {
 		const tempMessage = structuredClone(currentMessage.toString());
 		const tempContext = structuredClone(currentContext);
-		setMessages((messages) => {
-			const newHistory: ChatMessage[] = [
-				...messages,
-				{
-					from: "assistant",
-					message: tempMessage,
-					loading: false,
-					context: tempContext,
-				},
-			];
-
-			return newHistory;
+		pushMessage({
+			from: "assistant",
+			message: tempMessage,
+			loading: false,
+			context: tempContext,
 		});
 
 		clearMessage();
@@ -93,45 +86,44 @@ export default function Chat() {
 
 	const clearMessage = () => {
 		setLoading(false);
-		setActiveMessage(() => {
-			return {
-				from: "assistant",
-				context: undefined,
-				message: "",
-				loading: false,
-			};
-		});
+		setActiveMessage(() => ({
+			from: "assistant",
+			context: undefined,
+			message: "",
+			loading: false,
+		}));
 
 		currentMessage = "";
 		currentContext = undefined;
 	};
 
-	const fetchAIResponse = (text: string) => {
+	const handleChatSubmitted = (input: string) => {
 		currentMessage = "";
 
 		vscode.postMessage({
 			command: "chat",
-			value: text,
+			value: input,
 		});
-	};
 
-	const handleChatSubmitted = (input: string) => {
-		fetchAIResponse(input);
-
-		setMessages((messages) => [
-			...messages,
-			{
-				from: "user",
-				message: input,
-				context: undefined,
-			},
-		]);
+		pushMessage({
+			from: "user",
+			message: input,
+			context: undefined,
+		});
 
 		setLoading(true);
 	};
 
 	return (
 		<main className="h-full flex flex-col overflow-auto">
+			{messages.length === 0 && (
+				<p>
+					The chat feature allows you to ask general or specific
+					questions about your codebase. You can also target specific
+					context by opening a file, or highlighting sections of a
+					file.
+				</p>
+			)}
 			<ChatResponseList messages={messages}>
 				{loading && (
 					<ChatEntry

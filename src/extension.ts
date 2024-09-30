@@ -19,6 +19,7 @@ import {
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
+let chatViewProvider: ChatViewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
 	const settings = await LoadSettings();
@@ -80,16 +81,17 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
+	chatViewProvider = new ChatViewProvider(
+		lspClient,
+		modelProvider!,
+		context,
+		settings?.interactionSettings,
+		diffViewProvider
+	);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ChatViewProvider.viewType,
-			new ChatViewProvider(
-				lspClient,
-				modelProvider!,
-				context,
-				settings?.interactionSettings,
-				diffViewProvider
-			),
+			chatViewProvider,
 			{
 				webviewOptions: {
 					retainContextWhenHidden: true,
@@ -129,6 +131,21 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(
 			HotKeyCodeSuggestionProvider.command,
 			HotKeyCodeSuggestionProvider.showSuggestion
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			ChatViewProvider.showComposerCommand,
+			async () => {
+				chatViewProvider.setLaunchView("composer");
+				await vscode.commands.executeCommand(
+					`${ChatViewProvider.viewType}.focus`,
+					{
+						test: true,
+					}
+				);
+			}
 		)
 	);
 

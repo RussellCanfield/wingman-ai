@@ -10,7 +10,6 @@ import {
 import { ChatMessage } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
-import { Loader } from "../../Loader";
 import React from "react";
 
 type MarkDownObject = {
@@ -205,9 +204,9 @@ const ChatEntry = ({
 
 const SkeletonLoader = () => {
 	return (
-		<li className="pt-2 pb-2 tracking-wide leading-relaxed text-base animate-pulse">
+		<div className="pt-2 pb-2 tracking-wide leading-relaxed text-base animate-pulse">
 			<div className="h-10 bg-gray-700 rounded w-full"></div>
-		</li>
+		</div>
 	);
 };
 

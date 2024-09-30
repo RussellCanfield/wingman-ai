@@ -5,25 +5,21 @@ import { HiLightningBolt } from "react-icons/hi";
 import { useAppContext } from "./context";
 import { vscode } from "./utilities/vscode";
 
-export type View = "chat" | "code" | "index";
-
-type ViewName = {
-	[keyof in View]: string;
-};
-
-const viewName: ViewName = {
+const viewName = {
 	chat: "Chat",
-	code: "Compose",
+	composer: "Compose",
 	index: "Index",
 };
 
-export interface ToolbarProps {
-	activeView: View;
-	onSetActiveView: (view: View) => void;
-}
-
-export default function Toolbar({ activeView, onSetActiveView }: ToolbarProps) {
-	const { isLightTheme, setMessages, setComposerMessages } = useAppContext();
+export default function Toolbar() {
+	const {
+		isLightTheme,
+		pushMessage: setMessages,
+		setComposerMessages,
+		view,
+		setView,
+		clearMessages,
+	} = useAppContext();
 
 	const buttonBaseClasses = "rounded transition-colors duration-300 p-2";
 	const buttonActiveClasses = isLightTheme
@@ -39,37 +35,37 @@ export default function Toolbar({ activeView, onSetActiveView }: ToolbarProps) {
 				className="text-lg font-bold flex-auto"
 				onClick={() => vscode.postMessage({ command: "diff-view" })}
 			>
-				Wingman - {viewName[activeView]}
+				Wingman - {viewName[view]}
 			</h2>
 			<button
 				className={`${buttonBaseClasses} ${
-					activeView === "chat"
+					view === "chat"
 						? buttonActiveClasses
 						: buttonInactiveClasses
 				}`}
-				onClick={() => onSetActiveView("chat")}
+				onClick={() => setView("chat")}
 				title="Chat"
 			>
 				<HiChatAlt size={24} />
 			</button>
 			<button
 				className={`${buttonBaseClasses} ${
-					activeView === "code"
+					view === "composer"
 						? buttonActiveClasses
 						: buttonInactiveClasses
 				}`}
-				onClick={() => onSetActiveView("code")}
-				title="Code"
+				onClick={() => setView("composer")}
+				title="Composer"
 			>
 				<HiLightningBolt size={24} />
 			</button>
 			<button
 				className={`${buttonBaseClasses} ${
-					activeView === "index"
+					view === "index"
 						? buttonActiveClasses
 						: buttonInactiveClasses
 				}`}
-				onClick={() => onSetActiveView("index")}
+				onClick={() => setView("index")}
 				title="Index"
 			>
 				<HiDatabase size={24} />
@@ -80,7 +76,7 @@ export default function Toolbar({ activeView, onSetActiveView }: ToolbarProps) {
 					vscode.postMessage({
 						command: "clear-chat-history",
 					});
-					setMessages([]);
+					clearMessages();
 					setComposerMessages([]);
 				}}
 				title="Clear chat history"

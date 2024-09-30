@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.7.3",
+	"version": "0.7.4",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -142,12 +142,22 @@
 			{
 				"command": "wingmanai.triggercodecomplete",
 				"title": "Wingman: Code Complete"
+			},
+			{
+				"command": "wingmanai.opencomposer",
+				"title": "Wingman: Composer"
 			}
 		],
 		"keybindings": [
 			{
 				"command": "wingmanai.triggercodecomplete",
 				"key": "ctrl+shift+space"
+			},
+			{
+				"command": "wingmanai.opencomposer",
+				"key": "ctrl+i",
+				"mac": "cmd+i",
+				"when": "editorTextFocus"
 			}
 		]
 	},

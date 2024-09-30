@@ -11,13 +11,18 @@ import { localMemState } from "../utilities/localMemState";
 import { vscode } from "../utilities/vscode";
 import { ComposerMessage } from "@shared/types/Composer";
 
+export type View = "chat" | "composer" | "index";
+
 interface AppContextType {
 	messages: ChatMessage[];
-	setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+	pushMessage: (message: ChatMessage) => void;
+	clearMessages: () => void;
 	composerMessages: ComposerMessage[];
 	setComposerMessages: React.Dispatch<
 		React.SetStateAction<ComposerMessage[]>
 	>;
+	view: View;
+	setView: React.Dispatch<React.SetStateAction<View>>;
 	isLightTheme: boolean;
 	indexFilter: string;
 	exclusionFilter?: string;
@@ -34,9 +39,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const useAppContext = () => {
 	const context = useContext(AppContext);
-	if (!context) {
+	if (!context)
 		throw new Error("useAppContext must be used within an AppProvider");
-	}
 	return context;
 };
 
@@ -50,18 +54,14 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 		[]
 	);
 	const [activeWorkspace, setWorkspaceFolder] = useState<string>("");
-	const [currentAppState, setAppState] = useState<AppState | null>(null);
+	const [appState, setAppState] = useState<AppState | null>(null);
+	const [view, setView] = useState<View>("chat");
 
 	useEffect(() => {
-		vscode.postMessage({
-			command: "ready",
-		});
-	}, []);
+		vscode.postMessage({ command: "ready" });
 
-	useEffect(() => {
 		const handleResponse = (event: MessageEvent<AppMessage>) => {
-			const { data } = event;
-			const { command, value } = data;
+			const { command, value } = event.data;
 
 			switch (command) {
 				case "init":
@@ -71,54 +71,87 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 					};
 					setWorkspaceFolder(workspaceFolder);
 					localMemState.setState("theme", theme);
-
-					const appState = vscode.getState() as AppState | null;
-
-					setAppState(appState);
-
-					if (
-						appState?.chatHistory &&
-						appState.chatHistory[workspaceFolder]
-					) {
-						setMessages(appState.chatHistory[workspaceFolder]);
+					const storedAppState = vscode.getState() as AppState | null;
+					setAppState(storedAppState);
+					if (storedAppState?.chatHistory?.[workspaceFolder]) {
+						setMessages(
+							storedAppState.chatHistory[workspaceFolder]
+						);
 					}
 					break;
+				case "switchView":
+					setView(value as View);
+					break;
 				case "setTheme":
-					const newTheme = value as number;
-					localMemState.setState("theme", newTheme);
+					localMemState.setState("theme", value as number);
 					break;
 			}
 		};
 
-		const setMessages = (messages: ChatMessage[]) => {
-			const chatMessages =
-				messages.length === 0 ? [] : messages.concat(messages);
-
-			//@ts-expect-error
-			currentAppState[activeWorkspace] = chatMessages;
-			vscode.setState(currentAppState);
-		};
-
 		window.addEventListener("message", handleResponse);
-
-		return () => {
-			window.removeEventListener("message", handleResponse);
-		};
+		return () => window.removeEventListener("message", handleResponse);
 	}, []);
 
-	const theme = lm["theme"] as number;
-	const isLightTheme = theme === 1;
+	useEffect(() => {
+		if (!appState) return;
+
+		vscode.setState(appState);
+	}, [appState]);
+
+	useEffect(() => {
+		const storedAppState = vscode.getState() as AppState | null;
+		if (storedAppState) {
+			setAppState(storedAppState);
+			if (storedAppState.chatHistory && activeWorkspace) {
+				setMessages(storedAppState.chatHistory[activeWorkspace] || []);
+			}
+		}
+	}, [activeWorkspace]);
+
+	const addMessage = (chatMessage: ChatMessage) => {
+		const newMessages = [...messages, chatMessage];
+		setMessages((msg) => [...msg, chatMessage]);
+		setAppState((prevState) => ({
+			isLightTheme: prevState?.isLightTheme || false,
+			indexFilter: prevState?.indexFilter || "",
+			exclusionFilter: prevState?.exclusionFilter || undefined,
+			chatHistory: {
+				...prevState?.chatHistory,
+				[activeWorkspace]: (
+					prevState?.chatHistory[activeWorkspace] || []
+				).concat([chatMessage]),
+			},
+		}));
+	};
+
+	const clearMessages = () => {
+		setMessages([]);
+		setAppState((prevState) => ({
+			isLightTheme: prevState?.isLightTheme || false,
+			indexFilter: prevState?.indexFilter || "",
+			exclusionFilter: prevState?.exclusionFilter || undefined,
+			chatHistory: {
+				...prevState?.chatHistory,
+				[activeWorkspace]: [],
+			},
+		}));
+	};
+
+	const isLightTheme = lm["theme"] === 1;
 
 	return (
 		<AppContext.Provider
 			value={{
 				messages,
-				setMessages,
+				pushMessage: addMessage,
 				composerMessages,
+				clearMessages,
 				setComposerMessages,
+				view,
+				setView,
 				isLightTheme,
-				indexFilter: currentAppState?.indexFilter || "",
-				exclusionFilter: currentAppState?.exclusionFilter || "",
+				indexFilter: appState?.indexFilter || "",
+				exclusionFilter: appState?.exclusionFilter,
 			}}
 		>
 			{children}

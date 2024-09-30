@@ -176,21 +176,16 @@ ${values.review.comments.join("\n")}`,
 
 	return (
 		<main className="h-full flex flex-col overflow-auto">
+			{composerMessages.length === 0 && (
+				<p>
+					The composer feature allows you to generate code changes.
+					You can ask for help with code, or ask for code to be
+					written for you. By default, composer will intelligently
+					choose files in your project based on your input. You can
+					also target specific files using '@filename'. Lets go! 🚀
+				</p>
+			)}
 			<ChatResponseList messages={composerMessages}>
-				{composerMessages.length !== 0 ? null : (
-					<ChatEntry
-						from="assistant"
-						message={
-							"Welcome! The composer feature allows you to generate code changes. You can ask for help with code, or ask for code to be written for you. By default, composer will intelligently choose files in your project based on your input. You can also target specific files using '@filename'. Lets go! 🚀"
-						}
-						loading={false}
-						plan={{
-							steps: [],
-							files: [],
-						}}
-						index={0}
-					/>
-				)}
 				{loading && (
 					<ChatEntry
 						from="assistant"

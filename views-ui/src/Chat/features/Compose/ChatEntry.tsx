@@ -1,6 +1,5 @@
-import { CSSProperties, PropsWithChildren, memo, useState } from "react";
-import { FaC, FaCopy } from "react-icons/fa6";
-import { GoFileSymlinkFile } from "react-icons/go";
+import { CSSProperties, PropsWithChildren, memo } from "react";
+import { FaCopy } from "react-icons/fa6";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FaTerminal } from "react-icons/fa";
@@ -11,7 +10,6 @@ import {
 import { FileMetadata } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
-import { Loader } from "../../Loader";
 import { ComposerMessage } from "@shared/types/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
@@ -25,12 +23,6 @@ export function extractCodeBlock(text: string) {
 	}
 	return matches.length > 0 ? matches.join("\n") : text;
 }
-
-type MarkDownEntry = {
-	props: {
-		children: string[];
-	};
-};
 
 const CodeContainer = memo(
 	({
