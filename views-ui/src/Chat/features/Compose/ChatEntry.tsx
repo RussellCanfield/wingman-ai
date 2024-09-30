@@ -13,6 +13,7 @@ import { useAppContext } from "../../context";
 import { ComposerMessage } from "@shared/types/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
+import { SkeletonLoader } from "../../SkeletonLoader";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -282,14 +283,6 @@ const ChatEntry = ({
 					))}
 				</div>
 			)}
-		</li>
-	);
-};
-
-const SkeletonLoader = () => {
-	return (
-		<li className="pt-2 pb-2 tracking-wide leading-relaxed text-base animate-pulse">
-			<div className="h-10 bg-gray-700 rounded w-full"></div>
 		</li>
 	);
 };

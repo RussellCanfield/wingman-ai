@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import {
 	CancellationToken,
 	InlineCompletionContext,
@@ -14,14 +13,23 @@ import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "@shared/types/Settings";
 import { getSymbolsFromOpenFiles, supportedLanguages } from "./utilities";
 import { getClipboardHistory } from "./clipboardTracker";
+import NodeCache from "node-cache";
+import { loggingProvider } from "./loggingProvider";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector = supportedLanguages;
+	private cache: NodeCache;
 
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvicer,
 		private readonly _interactionSettings: InteractionSettings
-	) {}
+	) {
+		this.cache = new NodeCache({
+			stdTTL: 300,
+			maxKeys: 100,
+			checkperiod: 120,
+		});
+	}
 
 	async provideInlineCompletionItems(
 		document: TextDocument,
@@ -73,6 +81,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		}
 	}
 
+	private generateCacheKey(prefix: string, suffix: string): string {
+		return `${prefix.slice(-100)}:${suffix.slice(0, 100)}`;
+	}
+
 	async bouncedRequest(
 		prefix: string,
 		signal: AbortSignal,
@@ -81,27 +93,42 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		additionalContext?: string
 	): Promise<InlineCompletionItem[]> {
 		try {
-			console.log("Clipboard", getClipboardHistory().join("\n\n"));
 			eventEmitter._onQueryStart.fire();
-			if ("codeCompleteStream" in this._aiProvider && streaming) {
-				const codeStream = await this._aiProvider.codeCompleteStream(
-					prefix,
-					suffix,
-					signal,
-					additionalContext,
-					getClipboardHistory().join("\n\n")
+			const cacheKey = this.generateCacheKey(
+				prefix.trim(),
+				suffix.trim()
+			);
+			const cachedResult = this.cache.get<string>(cacheKey);
+
+			if (cachedResult) {
+				loggingProvider.logInfo(
+					"Code complete - Serving from query cache"
 				);
-				return [new InlineCompletionItem(codeStream)];
-			} else {
-				const codeResponse = await this._aiProvider.codeComplete(
-					prefix,
-					suffix,
-					signal,
-					additionalContext,
-					getClipboardHistory().join("\n\n")
-				);
-				return [new InlineCompletionItem(codeResponse)];
+				return [new InlineCompletionItem(cachedResult)];
 			}
+
+			let result: string;
+
+			if ("codeCompleteStream" in this._aiProvider && streaming) {
+				result = await this._aiProvider.codeCompleteStream(
+					prefix,
+					suffix,
+					signal,
+					additionalContext,
+					getClipboardHistory().join("\n\n")
+				);
+			} else {
+				result = await this._aiProvider.codeComplete(
+					prefix,
+					suffix,
+					signal,
+					additionalContext,
+					getClipboardHistory().join("\n\n")
+				);
+			}
+
+			this.cache.set(cacheKey, result);
+			return [new InlineCompletionItem(result)];
 		} catch (error) {
 			return [];
 		} finally {

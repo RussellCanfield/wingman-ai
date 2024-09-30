@@ -2,7 +2,7 @@ import { FaPlay, FaStopCircle } from "react-icons/fa";
 import { useAppContext } from "../../context";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
 import { useOnScreen } from "../../hooks/useOnScreen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 interface ChatInputProps {
 	onChatSubmitted: (input: string) => void;
@@ -17,6 +17,7 @@ const ChatInput = ({
 }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useAppContext();
+	const [inputValue, setInputValue] = useState("");
 	const chatInputBox = useAutoFocus<HTMLTextAreaElement>();
 
 	useEffect(() => {
@@ -30,23 +31,13 @@ const ChatInput = ({
 		: "bg-stone-800 text-white border-stone-700";
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-		if (e.key === "Enter") {
-			if (e.shiftKey) {
-				return;
-			}
+		if (!inputValue.trim()) return;
 
-			const element = e.target as HTMLInputElement;
-			const message = element.value;
-
-			if (!message) {
-				return;
-			}
-
+		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 
-			onChatSubmitted(message);
-
-			element.value = "";
+			onChatSubmitted(inputValue);
+			chatInputBox.current!.value = "";
 		}
 	};
 
@@ -65,7 +56,7 @@ const ChatInput = ({
 					<div className="flex flex-wrap items-center p-2">
 						<textarea
 							placeholder="Type here to chat with your Wingman."
-							ref={chatInputBox}
+							onChange={(e) => setInputValue(e.target.value)}
 							onInput={handleAutoGrow}
 							tabIndex={0}
 							rows={1}
@@ -82,7 +73,11 @@ const ChatInput = ({
 							size={16}
 							role="presentation"
 							title="Send message"
-							className="cursor-pointer"
+							className={`${
+								!inputValue.trim()
+									? "text-gray-500"
+									: "text-gray-100"
+							} cursor-pointer`}
 							onClick={() =>
 								handleUserInput({
 									key: "Enter",

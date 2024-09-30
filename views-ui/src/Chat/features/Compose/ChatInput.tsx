@@ -115,6 +115,8 @@ const ChatInput = ({
 	};
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (!inputValue.trim()) return;
+
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			if (showDropdown && filteredDropDownItems.length > 0) {
@@ -133,7 +135,6 @@ const ChatInput = ({
 						chips.map((chip) => chip.path)
 					);
 					setInputValue("");
-					//setChips([]);
 				}
 			}
 		} else if (e.key === "ArrowDown") {
@@ -247,8 +248,12 @@ const ChatInput = ({
 						<FaPlay
 							size={16}
 							role="presentation"
-							title="Send message"
-							className={`cursor-pointer`}
+							title="Send"
+							className={`${
+								!inputValue.trim()
+									? "text-gray-500"
+									: "text-gray-100"
+							} cursor-pointer`}
 							onClick={() =>
 								handleUserInput({
 									key: "Enter",
@@ -263,7 +268,7 @@ const ChatInput = ({
 							size={16}
 							role="presentation"
 							title="Cancel chat"
-							className={`cursor-pointer`}
+							className="cursor-pointer"
 							onClick={onChatCancelled}
 						/>
 					)}
