@@ -3,6 +3,7 @@ import { useAppContext } from "../../context";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
 import { useOnScreen } from "../../hooks/useOnScreen";
 import { useEffect, useState } from "react";
+import { handleAutoResize } from "../../utilities/utils";
 
 interface ChatInputProps {
 	onChatSubmitted: (input: string) => void;
@@ -41,11 +42,6 @@ const ChatInput = ({
 		}
 	};
 
-	const handleAutoGrow = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-		e.target.style.height = "auto";
-		e.target.style.height = `${e.target.scrollHeight}px`;
-	};
-
 	return (
 		<div
 			className="flex-basis-50 py-3 flex flex-col items-stretch"
@@ -57,7 +53,7 @@ const ChatInput = ({
 						<textarea
 							placeholder="Type here to chat with your Wingman."
 							onChange={(e) => setInputValue(e.target.value)}
-							onInput={handleAutoGrow}
+							onInput={handleAutoResize}
 							tabIndex={0}
 							rows={1}
 							autoFocus

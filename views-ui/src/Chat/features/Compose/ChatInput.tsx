@@ -6,6 +6,7 @@ import { AppMessage } from "@shared/types/Message";
 import { FileSearchResult } from "@shared/types/Composer";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
 import { useOnScreen } from "../../hooks/useOnScreen";
+import { handleAutoResize } from "../../utilities/utils";
 
 interface ChatInputProps {
 	onChatSubmitted: (input: string, contextFiles: string[]) => void;
@@ -160,11 +161,6 @@ const ChatInput = ({
 		});
 	};
 
-	const handleAutoGrow = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-		e.target.style.height = "auto";
-		e.target.style.height = `${e.target.scrollHeight}px`;
-	};
-
 	return (
 		<div
 			className="flex-basis-50 py-3 flex flex-col items-stretch"
@@ -203,9 +199,9 @@ const ChatInput = ({
 							value={inputValue}
 							onChange={(e) => {
 								handleInputChange(e);
-								handleAutoGrow(e);
+								handleAutoResize(e);
 							}}
-							onInput={handleAutoGrow}
+							onInput={handleAutoResize}
 							ref={chatInputBox}
 							tabIndex={0}
 							rows={1}
