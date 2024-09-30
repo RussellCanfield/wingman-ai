@@ -140,10 +140,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			async () => {
 				chatViewProvider.setLaunchView("composer");
 				await vscode.commands.executeCommand(
-					`${ChatViewProvider.viewType}.focus`,
-					{
-						test: true,
-					}
+					`${ChatViewProvider.viewType}.focus`
 				);
 			}
 		)

@@ -156,8 +156,7 @@
 			{
 				"command": "wingmanai.opencomposer",
 				"key": "ctrl+i",
-				"mac": "cmd+i",
-				"when": "editorTextFocus"
+				"mac": "cmd+i"
 			}
 		]
 	},

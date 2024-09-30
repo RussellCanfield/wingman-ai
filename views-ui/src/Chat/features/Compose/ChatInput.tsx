@@ -4,6 +4,8 @@ import { useAppContext } from "../../context";
 import { vscode } from "../../utilities/vscode";
 import { AppMessage } from "@shared/types/Message";
 import { FileSearchResult } from "@shared/types/Composer";
+import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { useOnScreen } from "../../hooks/useOnScreen";
 
 interface ChatInputProps {
 	onChatSubmitted: (input: string, contextFiles: string[]) => void;
@@ -16,8 +18,9 @@ const ChatInput = ({
 	onChatSubmitted,
 	onChatCancelled,
 }: ChatInputProps) => {
+	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useAppContext();
-	const chatInputBox = useRef<HTMLTextAreaElement>(null);
+	const chatInputBox = useAutoFocus<HTMLTextAreaElement>();
 	const dropdownRef = useRef<HTMLDivElement>(null);
 	const [inputValue, setInputValue] = useState("");
 	const [chips, setChips] = useState<FileSearchResult[]>([]);
@@ -40,6 +43,12 @@ const ChatInput = ({
 		? "bg-stone-800 text-white"
 		: "bg-stone-700 text-white";
 	const captionClasses = isLightTheme ? "text-stone-500" : "text-stone-400";
+
+	useEffect(() => {
+		if (isVisible) {
+			chatInputBox.current?.focus();
+		}
+	}, [isVisible]);
 
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { data } = event;
@@ -65,10 +74,6 @@ const ChatInput = ({
 		return () => {
 			window.removeEventListener("message", handleResponse);
 		};
-	}, []);
-
-	useEffect(() => {
-		chatInputBox.current?.focus();
 	}, []);
 
 	const chipMap = new Set(chips.map((chip) => chip.path));
@@ -160,7 +165,10 @@ const ChatInput = ({
 	};
 
 	return (
-		<div className="flex-basis-50 py-3 flex flex-col items-stretch">
+		<div
+			className="flex-basis-50 py-3 flex flex-col items-stretch"
+			ref={ref}
+		>
 			<div className="relative flex flex-row items-center">
 				<div className={`w-full ${inputClasses} relative`}>
 					{chips.length === 0 ? (

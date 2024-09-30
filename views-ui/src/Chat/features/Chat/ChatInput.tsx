@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react";
 import { FaPlay, FaStopCircle } from "react-icons/fa";
 import { useAppContext } from "../../context";
+import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { useOnScreen } from "../../hooks/useOnScreen";
+import { useEffect } from "react";
 
 interface ChatInputProps {
 	onChatSubmitted: (input: string) => void;
@@ -13,16 +15,19 @@ const ChatInput = ({
 	onChatSubmitted,
 	onChatCancelled,
 }: ChatInputProps) => {
+	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useAppContext();
-	const chatInputBox = useRef<any>(null);
+	const chatInputBox = useAutoFocus<HTMLTextAreaElement>();
+
+	useEffect(() => {
+		if (isVisible) {
+			chatInputBox.current?.focus();
+		}
+	}, [isVisible]);
 
 	const inputClasses = isLightTheme
 		? "bg-white text-black border-slate-300"
 		: "bg-stone-800 text-white border-stone-700";
-
-	useEffect(() => {
-		chatInputBox.current?.focus();
-	}, [chatInputBox]);
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (e.key === "Enter") {
@@ -51,7 +56,10 @@ const ChatInput = ({
 	};
 
 	return (
-		<div className="flex-basis-50 py-3 flex flex-col items-stretch">
+		<div
+			className="flex-basis-50 py-3 flex flex-col items-stretch"
+			ref={ref}
+		>
 			<div className="relative flex flex-row items-center">
 				<div className={`w-full ${inputClasses} relative`}>
 					<div className="flex flex-wrap items-center p-2">

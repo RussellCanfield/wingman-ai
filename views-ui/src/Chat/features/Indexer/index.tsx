@@ -82,68 +82,77 @@ export default function Indexer() {
 	};
 
 	return (
-		<div className="space-y-4 mt-4">
-			<p className="text-lg font-bold">
-				Status:{" "}
-				{index.exists
-					? index.processing
-						? "Processing"
-						: "Ready"
-					: "Not Found"}
-			</p>
-			<p className="text-lg">
-				The indexer will breakdown your codebase to use as context in
-				chat, or interactively with the code composer. It will scan your
-				workspace for any filters meeting the filter criteria below. By
-				default, Wingman will include your '.gitignore' file in your
-				exclusion filter.
-			</p>
-			{!index.exists && !index.processing && (
-				<section className="flex flex-col gap-4">
-					<label>Inclusion Filter:</label>
-					<VSCodeTextField
-						value={filter}
-						//@ts-expect-error
-						onChange={(e) => setFilter(e.target?.value)}
-					/>
-					<label>Exclusion Filter: </label>
-					<VSCodeTextField
-						value={exclusionFilter}
-						//@ts-expect-error
-						onChange={(e) => setExclusionFilter(e.target?.value)}
-					/>
-					<VSCodeButton
-						type="button"
-						disabled={index.processing || !filter}
-						onClick={() => buildIndex()}
-					>
-						Build Index
-					</VSCodeButton>
-				</section>
-			)}
-			{index.processing && (
-				<p className="flex items-center">
-					<Loader /> <span className="ml-2">Building Index...</span>
+		<div className="flex flex-col h-full">
+			<div className="space-y-4 mt-4 overflow-y-auto">
+				<p className="text-lg font-bold">
+					Status:{" "}
+					{index.exists
+						? index.processing
+							? "Processing"
+							: "Ready"
+						: "Not Found"}
 				</p>
-			)}
+				<p className="text-lg">
+					The indexer will breakdown your codebase to use as context
+					in chat, or interactively with the code composer. It will
+					scan your workspace for any filters meeting the filter
+					criteria below. By default, Wingman will include your
+					'.gitignore' file in your exclusion filter.
+				</p>
+				{!index.exists && !index.processing && (
+					<section className="flex flex-col gap-4">
+						<label>Inclusion Filter:</label>
+						<VSCodeTextField
+							value={filter}
+							//@ts-expect-error
+							onChange={(e) => setFilter(e.target?.value)}
+						/>
+						<label>Exclusion Filter: </label>
+						<VSCodeTextField
+							value={exclusionFilter}
+							onChange={(e) =>
+								//@ts-expect-error
+								setExclusionFilter(e.target?.value)
+							}
+						/>
+						<VSCodeButton
+							type="button"
+							disabled={index.processing || !filter}
+							onClick={() => buildIndex()}
+						>
+							Build Index
+						</VSCodeButton>
+					</section>
+				)}
+				{index.processing && (
+					<p className="flex items-center">
+						<Loader />{" "}
+						<span className="ml-2">Building Index...</span>
+					</p>
+				)}
+				{index.exists && !index.processing && (
+					<>
+						<VSCodeButton
+							type="button"
+							onClick={() => deleteIndex()}
+							className="bg-red-600"
+						>
+							Delete Index
+						</VSCodeButton>
+						<div className="mt-4">
+							<p className="text-lg font-bold">Indexed Files:</p>
+						</div>
+					</>
+				)}
+			</div>
 			{index.exists && !index.processing && (
-				<>
-					<VSCodeButton
-						type="button"
-						onClick={() => deleteIndex()}
-						className="bg-red-600"
-					>
-						Delete Index
-					</VSCodeButton>
-					<div className="mt-4">
-						<p className="text-lg font-bold">Indexed Files:</p>
-					</div>
-					<ul>
-						{index.files.map((f) => (
-							<li>{f}</li>
+				<div className="flex-shrink-0 overflow-y-auto max-h-[50vh] mt-4">
+					<ul className="space-y-1">
+						{index.files.map((f, index) => (
+							<li key={index}>{f}</li>
 						))}
 					</ul>
-				</>
+				</div>
 			)}
 		</div>
 	);
