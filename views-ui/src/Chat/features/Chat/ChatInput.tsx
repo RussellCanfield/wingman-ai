@@ -38,7 +38,7 @@ const ChatInput = ({
 			e.preventDefault();
 
 			onChatSubmitted(inputValue);
-			chatInputBox.current!.value = "";
+			setInputValue("");
 		}
 	};
 
@@ -53,6 +53,7 @@ const ChatInput = ({
 						<textarea
 							placeholder="Type here to chat with your Wingman."
 							onChange={(e) => setInputValue(e.target.value)}
+							value={inputValue}
 							onInput={handleAutoResize}
 							tabIndex={0}
 							rows={1}
