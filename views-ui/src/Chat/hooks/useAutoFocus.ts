@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 
-export function useAutoFocus<T extends HTMLElement>(): React.RefObject<T> {
-	const elementRef = useRef<T>(null);
+export function useAutoFocus(): React.RefObject<HTMLTextAreaElement> {
+	const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
 	useEffect(() => {
-		if (elementRef.current) {
-			elementRef.current.focus();
+		if (textAreaRef.current) {
+			textAreaRef.current.focus();
 		}
 	}, []);
 
-	return elementRef;
+	return textAreaRef;
 }

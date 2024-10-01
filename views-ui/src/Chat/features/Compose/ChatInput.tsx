@@ -21,9 +21,9 @@ const ChatInput = ({
 }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useAppContext();
-	const chatInputBox = useAutoFocus<HTMLTextAreaElement>();
-	const dropdownRef = useRef<HTMLDivElement>(null);
 	const [inputValue, setInputValue] = useState("");
+	const chatInputBox = useAutoFocus();
+	const dropdownRef = useRef<HTMLDivElement>(null);
 	const [chips, setChips] = useState<FileSearchResult[]>([]);
 	const [showDropdown, setShowDropdown] = useState(false);
 	const [focusedDropdownIndex, setFocusedDropdownIndex] = useState<number>(1);
@@ -116,7 +116,7 @@ const ChatInput = ({
 	};
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-		if (!inputValue.trim()) return;
+		if (!inputValue.trim() || loading) return;
 
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
@@ -136,6 +136,7 @@ const ChatInput = ({
 						chips.map((chip) => chip.path)
 					);
 					setInputValue("");
+					handleAutoResize(e.target as HTMLTextAreaElement, true);
 				}
 			}
 		} else if (e.key === "ArrowDown") {
@@ -199,14 +200,13 @@ const ChatInput = ({
 							value={inputValue}
 							onChange={(e) => {
 								handleInputChange(e);
-								handleAutoResize(e);
+								handleAutoResize(e.target);
 							}}
-							onInput={handleAutoResize}
 							ref={chatInputBox}
 							tabIndex={0}
 							rows={1}
 							autoFocus
-							className={`flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600 overflow-hidden h-auto p-1`}
+							className="flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600 overflow-hidden h-auto p-1"
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>
@@ -243,6 +243,7 @@ const ChatInput = ({
 					{!loading && (
 						<FaPlay
 							size={16}
+							tabIndex={0}
 							role="presentation"
 							title="Send"
 							className={`${
@@ -262,8 +263,9 @@ const ChatInput = ({
 					{loading && (
 						<FaStopCircle
 							size={16}
+							tabIndex={0}
 							role="presentation"
-							title="Cancel chat"
+							title="Cancel compose"
 							className="cursor-pointer"
 							onClick={onChatCancelled}
 						/>

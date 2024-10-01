@@ -19,7 +19,7 @@ const ChatInput = ({
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useAppContext();
 	const [inputValue, setInputValue] = useState("");
-	const chatInputBox = useAutoFocus<HTMLTextAreaElement>();
+	const chatInputBox = useAutoFocus();
 
 	useEffect(() => {
 		if (isVisible) {
@@ -32,13 +32,14 @@ const ChatInput = ({
 		: "bg-stone-800 text-white border-stone-700";
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-		if (!inputValue.trim()) return;
+		if (!inputValue.trim() || loading) return;
 
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 
 			onChatSubmitted(inputValue);
 			setInputValue("");
+			handleAutoResize(e.target as HTMLTextAreaElement, true);
 		}
 	};
 
@@ -52,13 +53,15 @@ const ChatInput = ({
 					<div className="flex flex-wrap items-center p-2">
 						<textarea
 							placeholder="Type here to chat with your Wingman."
-							onChange={(e) => setInputValue(e.target.value)}
+							onChange={(e) => {
+								setInputValue(e.target.value);
+								handleAutoResize(e.target);
+							}}
 							value={inputValue}
-							onInput={handleAutoResize}
 							tabIndex={0}
 							rows={1}
 							autoFocus
-							className={`flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600 overflow-hidden h-auto p-1`}
+							className="flex-grow bg-transparent resize-none outline-none focus:ring-2 focus:ring-stone-600 overflow-y-auto min-h-[36px] p-1"
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>
@@ -68,6 +71,7 @@ const ChatInput = ({
 					{!loading && (
 						<FaPlay
 							size={16}
+							tabIndex={0}
 							role="presentation"
 							title="Send message"
 							className={`${
@@ -87,6 +91,7 @@ const ChatInput = ({
 					{loading && (
 						<FaStopCircle
 							size={16}
+							tabIndex={0}
 							role="presentation"
 							title="Cancel chat"
 							className="cursor-pointer"
