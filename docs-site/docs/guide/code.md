@@ -6,6 +6,10 @@ You can fine tune the amount of context code complete has by using the settings 
 
 [![Wingman AI code completion example](https://img.youtube.com/vi/panJL4DUGkA/0.jpg)](https://www.youtube.com/watch?v=panJL4DUGkA)
 
+:::warning
+Code completion can be very expensive with third party models such as Sonnet 3.5, consider using a lower quality model for code complete or using the hotkey and turning off code complete in the configuration.
+:::
+
 ### Code Completion Disable / HotKey
 
 We understand that sometimes the code completion feature can be too aggressive, and when using **Ollama** it may strain your system's resources during local development. To address this, we have introduced an option to disable automatic code completion. However, we also recognize the usefulness of on-demand completion. Therefore, we've implemented a hotkey that allows you to manually trigger code completion at your convenience.
