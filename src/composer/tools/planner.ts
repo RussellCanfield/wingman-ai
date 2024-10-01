@@ -10,6 +10,7 @@ import { PlanExecuteState } from "../types";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { ChatOllama } from "@langchain/ollama";
 import { AIMessage } from "@langchain/core/messages";
+import { FILE_SEPARATOR } from "./common";
 
 export type PlannerSchema = z.infer<typeof planSchema>;
 
@@ -190,11 +191,11 @@ Ranked results:
 
 		const filesPrompt = Array.from(finalDocs.entries())
 			.map(([file, doc]) => `File:\n${file}\n\nCode:\n${doc.getText()}`)
-			.join("\n\n---FILE---\n");
+			.join(`\n\n${FILE_SEPARATOR}\n\n`);
 
 		const plan = (await this.codePlanner.invoke({
 			details: details?.description || "Not available.",
-			files: filesPrompt,
+			files: `${FILE_SEPARATOR}\n\n${filesPrompt}`,
 			objective,
 		})) as PlannerSchema | AIMessage;
 

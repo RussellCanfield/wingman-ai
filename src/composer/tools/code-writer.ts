@@ -6,6 +6,7 @@ import { buildObjective, loadWingmanRules } from "../utils";
 import { NoFilesChangedError } from "../errors";
 import { ChatOllama } from "@langchain/ollama";
 import { AIMessage } from "@langchain/core/messages";
+import { FILE_SEPARATOR } from "./common";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -23,32 +24,30 @@ export const codeWriterSchema = z.object({
 			})
 		)
 		.describe(
-			"A list of manual steps to follow to complete the task, leave empty if there are no manual steps."
+			"An array of manual steps to follow to complete the task, leave empty if there are no manual steps."
 		),
 	files: z
 		.array(
-			z
-				.object({
-					file: z.string().describe("The file path"),
-					markdown: z
-						.string()
-						.describe(
-							"A markdown formatted code block with the code you've written or modified. Ensure this is always markdown formatted with the proper language set."
-						),
-					changes: z
-						.array(z.string())
-						.describe("A list of changes made to the file")
-						.optional(),
-					hasChanged: z
-						.boolean()
-						.describe(
-							"Whether or not the file has been changed. If false, the file will be skipped"
-						)
-						.optional(),
-				})
-				.describe("A file you've modified or created")
+			z.object({
+				file: z.string().describe("The file path"),
+				markdown: z
+					.string()
+					.describe(
+						"A markdown formatted code block with the code you've written or modified. Ensure this is always markdown formatted with the proper language set."
+					),
+				changes: z
+					.array(z.string())
+					.describe("A list of changes made to the file")
+					.optional(),
+				hasChanged: z
+					.boolean()
+					.describe(
+						"Whether or not the file has been changed. If false, the file will be skipped"
+					)
+					.optional(),
+			})
 		)
-		.describe("A list of files you've modified or created"),
+		.describe("An array of files you have modified or created"),
 });
 
 const ollamaWriterPrompt = `You are an expert software engineer tasked with implementing project enhancements based on a user's objective. 
@@ -322,6 +321,7 @@ File Handling:
   - If relevant to the objective: modify as needed, if you need to create a file, create one.
   - If not relevant, omit it from your response.
   - Output markdown using the 'markdown' field, ensuring GitHub-flavored markdown format with the correct language for the code block.
+  - Always output a full response. Never return partial code reponses or placeholders.
   - YOU MUST PRODUCE CODE WRAPPED IN GITHUB-FLAVORED MARKDOWN!
 
 ------
@@ -386,7 +386,9 @@ Files:
 
 Proceed with implementing the required changes to meet the given objective. 
 Remember, using GitHub-flavored markdown for code output is mandatory and crucial for the task's success.
-Use the provided JSON schema to structure your output. YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`;
+Use the provided JSON schema to structure your output. 
+Pay special attention that the "files" property is formatted as an array of objects and not a string!
+YOU MUST PRODUCE VALID JSON OR YOU WILL BE PENALIZED.`;
 
 const buildPrompt = (basePrompt: string, rulePack?: string) => {
 	const rulePromptAddition = !rulePack
@@ -433,7 +435,7 @@ ${f.file}
 Code:
 ${f.code}`;
 			})
-			.join("\n\n---FILE---\n\n");
+			.join(`\n\n${FILE_SEPARATOR}\n\n`);
 
 		const output = (await codeWriter.invoke({
 			details: state.projectDetails || "Not available.",
@@ -456,7 +458,7 @@ ${state.review?.comments?.join("\n")}
 ------`,
 			files: !prompt
 				? `The user does not currently have any related files, assume this may be a new project and this is your base directory: ${this.workspace}`
-				: `---FILE---\n\n${prompt}`,
+				: `${FILE_SEPARATOR}\n\n${prompt}`,
 		})) as CodeWriterSchema | AIMessage;
 
 		let result: CodeWriterSchema = output as CodeWriterSchema;

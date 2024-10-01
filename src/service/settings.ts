@@ -12,7 +12,7 @@ import {
 import { homedir } from "node:os";
 import { loggingProvider } from "../providers/loggingProvider";
 
-const defaultSettings: Settings = {
+export const defaultSettings: Settings = {
 	aiProvider: "OpenAI",
 	embeddingProvider: "OpenAI",
 	interactionSettings: defaultInteractionSettings,

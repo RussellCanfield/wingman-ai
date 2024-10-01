@@ -13,6 +13,7 @@ import { Location, Range } from "vscode-languageserver";
 import { convertIdToFileUri } from "../server/files/utils";
 import { LocalIndex } from "vectra";
 import { EmbeddingsInterface } from "../service/embeddings/base";
+import { loggingProvider } from "../server/loggingProvider";
 
 export type SerializeMap = [string, string[]][];
 export type SerializeTable = [string, { nodeIds: string[]; sha: string }][];
@@ -52,10 +53,13 @@ export class Store {
 		}
 	};
 
-	initialize = async () => {
+	initialize = async (): Promise<{
+		result: boolean;
+		codeGraph: CodeGraph;
+	}> => {
 		if (!(await this.index?.isIndexCreated())) {
 			return {
-				store: this.index,
+				result: false,
 				codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
 			};
 		}
@@ -86,7 +90,7 @@ export class Store {
 					"edges.json file not found or corrupt, proceeding with empty edges."
 				);
 				return {
-					store: this.index,
+					result: false,
 					codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
 				};
 			}
@@ -148,7 +152,7 @@ export class Store {
 			);
 
 			return {
-				store: this.index,
+				result: true,
 				codeGraph: new CodeGraph(
 					nodes,
 					exportEdges,
@@ -158,16 +162,24 @@ export class Store {
 			};
 		} catch (e) {
 			console.error("Error loading edges", e);
+			await this.deleteIndex();
+			await this.index?.createIndex({
+				deleteIfExists: true,
+				version: 1,
+			});
 		}
 
 		return {
-			store: this.index,
+			result: false,
 			codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
 		};
 	};
 
 	deleteIndex = async () => {
-		await this.index?.deleteIndex();
+		try {
+			await this.index?.deleteIndex();
+			await fs.promises.rm(path.join(this.directory, "edges.json"));
+		} catch {}
 	};
 
 	indexExists = async () => {
@@ -233,21 +245,30 @@ export class Store {
 			await this.deleteDocuments(relatedDocs.map((doc) => doc.id!));
 		}
 
-		await this.index?.beginUpdate();
+		try {
+			await this.index?.beginUpdate();
 
-		for (const doc of documents) {
-			const embeddings = await this.embedder.embedQuery(doc.pageContent);
-			await this.index?.insertItem({
-				id: doc.id,
-				vector: embeddings,
-				metadata: {
-					...doc.metadata,
-					text: doc.pageContent,
-				},
-			});
+			for (const doc of documents) {
+				const embeddings = await this.embedder.embedQuery(
+					doc.pageContent
+				);
+				await this.index?.insertItem({
+					id: doc.id,
+					vector: embeddings,
+					metadata: {
+						...doc.metadata,
+						text: doc.pageContent,
+					},
+				});
+			}
+
+			await this.index?.endUpdate();
+		} catch (e) {
+			if (e instanceof Error) {
+				loggingProvider.logError(`Unable to save index: ${e.message}`);
+			}
+			await this.index?.cancelUpdate();
 		}
-
-		await this.index?.endUpdate();
 
 		const jsonString = JSON.stringify(
 			{

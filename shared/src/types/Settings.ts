@@ -35,13 +35,13 @@ export const AiProviders = [
 export const AiProvidersList: string[] = [...AiProviders];
 
 // Create a type for AiProviders
-export type AiProvider = (typeof AiProviders)[number];
+export type AiProviders = (typeof AiProviders)[number];
 
 export const EmbeddingProviders = ["Ollama", "OpenAI"] as const;
 export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
 
 // Create a type for EmbeddingProviders
-export type EmbeddingProvider = (typeof EmbeddingProviders)[number];
+export type EmbeddingProviders = (typeof EmbeddingProviders)[number];
 
 export type OllamaSettingsType = BaseServiceSettings & {
 	apiPath: string;
@@ -64,7 +64,7 @@ export const defaultInteractionSettings: InteractionSettings = {
 	codeCompletionEnabled: true,
 	codeStreaming: false,
 	codeContextWindow: 256,
-	codeMaxTokens: -1,
+	codeMaxTokens: 128,
 	chatContextWindow: 4096,
 	chatMaxTokens: 4096,
 };

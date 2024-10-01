@@ -1,17 +1,6 @@
-import {
-	VSCodeButton,
-	VSCodeDropdown,
-	VSCodeOption,
-} from "@vscode/webview-ui-toolkit/react";
-import { useState } from "react";
+import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
 import { Settings } from "@shared/types/Settings";
-import {
-	ActionPanel,
-	Container,
-	DropDownContainer,
-	VSCodeTextField,
-} from "./Config";
-import { vscode } from "./utilities/vscode";
+import { Container, DropDownContainer, VSCodeTextField } from "./Config";
 
 type InteractionSettings = Required<Settings>["interactionSettings"];
 const tooltipInformation = {
@@ -24,52 +13,49 @@ const tooltipInformation = {
 	chcw: "Adjust the context window size to determine the amount of context included in chat request. We start this at 4096, depending on the LLM you use it can be increased.",
 	chmt: "Controls the maximum number of tokens returned by the chat request. Here we also start at 4096.",
 };
-export const InteractionSettings = (interactions: InteractionSettings) => {
-	const [currentInteractions, setInteractions] = useState(interactions);
 
+export type InteractionSettingsConfigProps = {
+	interactions: InteractionSettings;
+	onChange: (settings: InteractionSettings) => void;
+};
+
+export const InteractionSettingsConfig = ({
+	interactions,
+	onChange,
+}: InteractionSettingsConfigProps) => {
 	const handleCompletionChange = (e: any) => {
-		const clone = { ...currentInteractions };
+		const clone = { ...interactions };
 		if (e.target.value === "true") {
 			clone.codeCompletionEnabled = true;
 		} else if (e.target.value === "false") {
 			clone.codeCompletionEnabled = false;
 		}
-		setInteractions(clone);
+		onChange(clone);
 	};
 
 	const handleStreamChange = (e: any) => {
-		const clone = { ...currentInteractions };
+		const clone = { ...interactions };
 		if (e.target.value === "true") {
 			clone.codeStreaming = true;
 		} else if (e.target.value === "false") {
 			clone.codeStreaming = false;
 		}
-		setInteractions(clone);
+		onChange(clone);
 	};
 
 	const handleChange = (e: any) => {
 		const number = Number(e.target.value);
 		if (!number) return;
 		const field = e.target.getAttribute("data-name");
-		const clone = { ...currentInteractions };
+		const clone = { ...interactions };
 		//@ts-ignore
 		clone[field] = number;
-		setInteractions(clone);
-	};
-
-	const handleClick = () => {
-		vscode.postMessage({
-			command: "changeInteractions",
-			value: currentInteractions,
-		});
-	};
-
-	const reset = () => {
-		setInteractions({ ...interactions });
+		onChange(clone);
 	};
 
 	return (
 		<Container>
+			<p className="mb-4 text-xl">Interaction:</p>
 			<DropDownContainer>
 				<label htmlFor="code-streaming">Code Completion enabled:</label>
 				<VSCodeDropdown
@@ -77,7 +63,7 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
 					id="code-completion"
 					data-name="codeCompletionEnabled"
 					onChange={handleCompletionChange}
-					value={currentInteractions.codeCompletionEnabled.toString()}
+					value={interactions.codeCompletionEnabled.toString()}
 					style={{ minWidth: "200px" }}
 				>
 					<VSCodeOption>true</VSCodeOption>
@@ -91,7 +77,7 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
 					id="code-streaming"
 					data-name="codeStreaming"
 					onChange={handleStreamChange}
-					value={currentInteractions.codeStreaming.toString()}
+					value={interactions.codeStreaming.toString()}
 					style={{ minWidth: "200px" }}
 				>
 					<VSCodeOption>true</VSCodeOption>
@@ -101,7 +87,7 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
 			<VSCodeTextField
 				title={tooltipInformation.ccw}
 				data-name="codeContextWindow"
-				value={currentInteractions.codeContextWindow.toString()}
+				value={interactions.codeContextWindow.toString()}
 				onChange={handleChange}
 			>
 				Code Context Window
@@ -110,7 +96,7 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
 			<VSCodeTextField
 				title={tooltipInformation.cmt}
 				data-name="codeMaxTokens"
-				value={currentInteractions.codeMaxTokens.toString()}
+				value={interactions.codeMaxTokens.toString()}
 				onChange={handleChange}
 			>
 				Code Max Tokens
@@ -119,7 +105,7 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
 			<VSCodeTextField
 				title={tooltipInformation.chcw}
 				data-name="chatContextWindow"
-				value={currentInteractions.chatContextWindow.toString()}
+				value={interactions.chatContextWindow.toString()}
 				onChange={handleChange}
 			>
 				Chat Context Window
@@ -128,17 +114,11 @@ export const InteractionSettings = (interactions: InteractionSettings) => {
 			<VSCodeTextField
 				title={tooltipInformation.chmt}
 				data-name="chatMaxTokens"
-				value={currentInteractions.chatMaxTokens.toString()}
+				value={interactions.chatMaxTokens.toString()}
 				onChange={handleChange}
 			>
 				Chat Max Tokens
 			</VSCodeTextField>
-			<ActionPanel>
-				<VSCodeButton onClick={handleClick}>Save</VSCodeButton>
-				<VSCodeButton appearance="secondary" onClick={reset}>
-					Cancel
-				</VSCodeButton>
-			</ActionPanel>
 		</Container>
 	);
 };

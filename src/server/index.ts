@@ -110,7 +110,11 @@ export class LSPServer {
 						embeddingSettings as OpenAIEmbeddingSettingsType
 				  )
 		);
-		const { codeGraph } = await this.vectorStore?.initialize();
+		const { result, codeGraph } = await this.vectorStore?.initialize();
+		if (!result) {
+			await this.connection?.sendRequest("wingman/failedLoadingStore");
+		}
+
 		this.codeGraph = codeGraph;
 		this.codeParser = new CodeParser(this.symbolRetriever!);
 		const codeGenerator = new Generator(this.codeParser!, modelProvider);

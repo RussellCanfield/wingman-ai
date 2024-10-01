@@ -84,6 +84,15 @@ export class LSPClient {
 			});
 		});
 
+		client.onRequest(
+			"wingman/failedLoadingStore",
+			(params: ComposerResponse) => {
+				vscode.window.showErrorMessage(
+					"Unable to load vector index. It may be corrupt, if this continues please delete the index and re-create it."
+				);
+			}
+		);
+
 		client.onRequest("wingman/provideDocumentSymbols", async (params) => {
 			if (!params.uri) {
 				return [];

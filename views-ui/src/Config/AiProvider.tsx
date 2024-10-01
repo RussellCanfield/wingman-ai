@@ -1,122 +1,50 @@
 import {
-	VSCodeButton,
 	VSCodeDivider,
 	VSCodeDropdown,
 	VSCodeOption,
 } from "@vscode/webview-ui-toolkit/react";
-import { useState } from "react";
 import {
+	AiProviders,
 	AiProvidersList,
-	defaultAnthropicSettings,
-	defaultHfSettings,
-	defaultOllamaSettings,
-	defaultOpenAISettings,
+	ApiSettingsType,
+	OllamaSettingsType,
 } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { ActionPanel, Container, DropDownContainer } from "./Config";
+import { Container, DropDownContainer } from "./Config";
 import { HFSettingsView } from "./HFSettingsView";
 import { OllamaSettingsView } from "./OllamaSettingsView";
 import { OpenAISettingsView } from "./OpenAISettingsView";
-import { vscode } from "./utilities/vscode";
 import { AnthropicSettingsView } from "./AnthropicSettingsView";
 import { ProviderInfoView } from "./ProviderInfoView";
 
-export const AiProvider = (settings: InitSettings) => {
+export type AiProviderProps = {
+	settings: InitSettings;
+	onProviderChanged: (provider: AiProviders) => void;
+	onProviderSettingsChanged: (
+		settings: OllamaSettingsType | ApiSettingsType
+	) => void;
+};
+
+export const AiProvider = ({
+	settings,
+	onProviderChanged,
+	onProviderSettingsChanged,
+}: AiProviderProps) => {
 	const { aiProvider, providerSettings, ollamaModels } = settings;
 	const { Ollama, HuggingFace, OpenAI, Anthropic } = providerSettings;
-	const [currentAiProvider, setAiProvider] = useState(aiProvider);
-	const [ollamaSettings, setOllamaSettings] = useState(
-		Ollama ?? defaultOllamaSettings
-	);
-	const [hfSettings, setHfSettings] = useState(
-		HuggingFace ?? defaultHfSettings
-	);
-	const [openAISettings, setOpenAISettings] = useState(
-		OpenAI ?? defaultOpenAISettings
-	);
-	const [anthropicSettings, setAnthropicSettings] = useState(
-		Anthropic ?? defaultAnthropicSettings
-	);
+
 	const handleProviderChange = (e: any) => {
-		setAiProvider(e.target.value);
-	};
-
-	const cancel = () => {
-		setAiProvider(aiProvider);
-		switch (currentAiProvider) {
-			case "Ollama":
-				setOllamaSettings(Ollama ?? defaultOllamaSettings);
-				break;
-			case "HuggingFace":
-				setHfSettings(HuggingFace ?? defaultHfSettings);
-				break;
-			case "OpenAI":
-				setOpenAISettings(OpenAI ?? defaultOpenAISettings);
-				break;
-			case "Anthropic":
-				setAnthropicSettings(Anthropic ?? defaultAnthropicSettings);
-				break;
-		}
-	};
-
-	const reset = () => {
-		switch (currentAiProvider) {
-			case "Ollama":
-				setOllamaSettings(defaultOllamaSettings);
-				break;
-			case "HuggingFace":
-				setHfSettings(defaultHfSettings);
-				break;
-			case "OpenAI":
-				setOpenAISettings(defaultOpenAISettings);
-				break;
-			case "Anthropic":
-				setAnthropicSettings(defaultAnthropicSettings);
-				break;
-		}
-	};
-
-	const handleClick = () => {
-		if (currentAiProvider === "Ollama") {
-			vscode.postMessage({
-				command: "updateAndSetOllama",
-				value: ollamaSettings,
-			});
-			return;
-		}
-
-		if (currentAiProvider === "HuggingFace") {
-			vscode.postMessage({
-				command: "updateAndSetHF",
-				value: hfSettings,
-			});
-			return;
-		}
-
-		if (currentAiProvider === "OpenAI") {
-			vscode.postMessage({
-				command: "updateAndSetOpenAI",
-				value: openAISettings,
-			});
-			return;
-		}
-
-		if (currentAiProvider === "Anthropic") {
-			vscode.postMessage({
-				command: "updateAndSetAnthropic",
-				value: anthropicSettings,
-			});
-			return;
-		}
+		onProviderChanged(e.target.value);
 	};
 
 	return (
 		<Container>
+			<p className="mb-4 text-xl">AI Provider:</p>
 			<DropDownContainer>
 				<label htmlFor="ai-provider">AI Provider:</label>
 				<VSCodeDropdown
 					id="ai-provider"
-					value={currentAiProvider}
+					value={aiProvider}
 					onChange={handleProviderChange}
 					style={{ minWidth: "100%" }}
 				>
@@ -126,38 +54,36 @@ export const AiProvider = (settings: InitSettings) => {
 				</VSCodeDropdown>
 			</DropDownContainer>
 			<VSCodeDivider />
-			{currentAiProvider === "Ollama" && (
+			{aiProvider === "Ollama" && (
+				//@ts-expect-error
 				<OllamaSettingsView
-					{...ollamaSettings}
+					{...Ollama}
 					ollamaModels={ollamaModels}
-					onChange={setOllamaSettings}
+					onChange={onProviderSettingsChanged}
 				/>
 			)}
-			{currentAiProvider === "HuggingFace" && (
-				<HFSettingsView {...hfSettings} onChange={setHfSettings} />
+			{aiProvider === "HuggingFace" && (
+				//@ts-expect-error
+				<HFSettingsView
+					{...HuggingFace}
+					onChange={onProviderSettingsChanged}
+				/>
 			)}
-			{currentAiProvider === "OpenAI" && (
+			{aiProvider === "OpenAI" && (
+				//@ts-expect-error
 				<OpenAISettingsView
-					{...openAISettings}
-					onChange={setOpenAISettings}
+					{...OpenAI}
+					onChange={onProviderSettingsChanged}
 				/>
 			)}
-			{currentAiProvider === "Anthropic" && (
+			{aiProvider === "Anthropic" && (
+				//@ts-expect-error
 				<AnthropicSettingsView
-					{...anthropicSettings}
-					onChange={setAnthropicSettings}
+					{...Anthropic}
+					onChange={onProviderSettingsChanged}
 				/>
 			)}
-			<ActionPanel>
-				<VSCodeButton onClick={handleClick}>Save</VSCodeButton>
-				<VSCodeButton appearance="secondary" onClick={cancel}>
-					Cancel
-				</VSCodeButton>
-				<VSCodeButton appearance="secondary" onClick={reset}>
-					Reset
-				</VSCodeButton>
-			</ActionPanel>
-			<ProviderInfoView {...settings} aiProvider={currentAiProvider} />
+			<ProviderInfoView {...settings} aiProvider={aiProvider} />
 		</Container>
 	);
 };
