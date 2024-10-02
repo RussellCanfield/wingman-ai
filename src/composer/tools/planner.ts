@@ -120,62 +120,56 @@ export class CodePlanner {
 		).retrieveProjectDetails();
 		state.plan = state.plan || { files: [], steps: [] };
 
-		for (let attempt = 0; attempt < 2; attempt++) {
-			try {
-				const objective = buildObjective(state);
-				const searchQuery = await this.generateSearchQueries(state);
-				const didRetrieve = await this.populateInitialFiles(
-					state,
-					searchQuery
-				);
-				let finalDocs = new Map<string, TextDocument>();
-				if (didRetrieve) {
-					finalDocs = await this.rerankDocuments(state, objective);
-				} else {
-					state.plan?.files?.map((f) => {
-						finalDocs.set(
-							f.file,
-							TextDocument.create(
-								f!.file,
-								"plaintext",
-								0,
-								f!.code || ""
-							)
-						);
-					});
-				}
-				const plan = await this.generatePlan(
-					finalDocs,
-					projectDetails,
-					objective
-				);
-
-				const docs = this.filterRelevantDocs(finalDocs, plan);
-				if (docs.length === 0) {
-					throw new NoFilesChangedError(
-						'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
+		try {
+			const objective = buildObjective(state);
+			const searchQuery = await this.generateSearchQueries(state);
+			const didRetrieve = await this.populateInitialFiles(
+				state,
+				searchQuery
+			);
+			let finalDocs = new Map<string, TextDocument>();
+			if (didRetrieve) {
+				finalDocs = await this.rerankDocuments(state, objective);
+			} else {
+				state.plan?.files?.map((f) => {
+					finalDocs.set(
+						f.file,
+						TextDocument.create(
+							f!.file,
+							"plaintext",
+							0,
+							f!.code || ""
+						)
 					);
-				}
-
-				return {
-					steps: plan.plan,
-					projectDetails: projectDetails?.description,
-					plan: { files: docs, steps: [] },
-				};
-			} catch (e) {
-				if (e instanceof NoFilesChangedError && attempt === 0) {
-					loggingProvider.logInfo(
-						"Planner was unable to detect which files to modify, restarting"
-					);
-					continue;
-				}
-				throw e;
+				});
 			}
-		}
+			const plan = await this.generatePlan(
+				finalDocs,
+				projectDetails,
+				objective
+			);
 
-		throw new NoFilesChangedError(
-			"Unable to locate files related to the objective."
-		);
+			const docs = this.filterRelevantDocs(finalDocs, plan);
+			if (docs.length === 0) {
+				throw new NoFilesChangedError(
+					'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
+				);
+			}
+
+			return {
+				steps: plan.plan,
+				projectDetails: projectDetails?.description,
+				plan: { files: docs, steps: [] },
+			};
+		} catch (e) {
+			if (e instanceof NoFilesChangedError) {
+				loggingProvider.logInfo(
+					"Planner was unable to detect which files to modify, restarting"
+				);
+			}
+
+			throw e;
+		}
 	};
 
 	private async generateSearchQueries(
