@@ -124,6 +124,7 @@ const ChatInput = ({
 				handleDropdownSelect(
 					filteredDropDownItems[focusedDropdownIndex]
 				);
+				chatInputBox.current?.focus();
 			} else {
 				const message =
 					chips.map((chip) => `@${chip.file}`).join(" ") +

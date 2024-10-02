@@ -103,13 +103,13 @@ export default function Indexer() {
 					<section className="flex flex-col gap-4">
 						<label>Inclusion Filter:</label>
 						<VSCodeTextField
-							value={filter}
+							value={filter || ""}
 							//@ts-expect-error
 							onChange={(e) => setFilter(e.target?.value)}
 						/>
 						<label>Exclusion Filter: </label>
 						<VSCodeTextField
-							value={exclusionFilter}
+							value={exclusionFilter || ""}
 							onChange={(e) =>
 								//@ts-expect-error
 								setExclusionFilter(e.target?.value)
@@ -139,6 +139,15 @@ export default function Indexer() {
 						>
 							Delete Index
 						</VSCodeButton>
+						<div>
+							<VSCodeButton
+								type="button"
+								disabled={index.processing || !filter}
+								onClick={() => buildIndex()}
+							>
+								Build Index
+							</VSCodeButton>
+						</div>
 						<div className="mt-4">
 							<p className="text-lg font-bold">Indexed Files:</p>
 						</div>

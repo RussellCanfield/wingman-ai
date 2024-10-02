@@ -5,50 +5,67 @@ import { VectorQuery } from "../../server/query";
 import { CodeGraph } from "../../server/files/graph";
 import { Store } from "../../store/vector";
 import { ProjectDetailsHandler } from "../../server/project-details";
-import { buildObjective, formatMessages } from "../utils";
+import { buildObjective } from "../utils";
 import { PlanExecuteState } from "../types";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { ChatOllama } from "@langchain/ollama";
-import { AIMessage } from "@langchain/core/messages";
+import { AIMessage, ChatMessage } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
+import { NoFilesChangedError } from "../errors";
+import { loggingProvider } from "../../server/loggingProvider";
+import path from "node:path";
 
 export type PlannerSchema = z.infer<typeof planSchema>;
 
-const maxDocs = 5;
-
 const planSchema = z.object({
-	steps: z
-		.array(z.string())
-		.describe("A list of steps to follow to complete the task."),
+	plan: z.array(
+		z.object({
+			file: z.string().describe("The file to create or modify"),
+			steps: z
+				.array(z.string())
+				.describe("A list of steps to follow specific to the file."),
+		})
+	),
 });
 
 const plannerPrompt = ChatPromptTemplate.fromTemplate(
 	`You are an expert software engineer tasked with planning a feature implementation. 
-Your goal is to provide a concise, step-by-step plan based on the given information.
-
-Given:
+Your goal is to provide a concise, step-by-step plan based on the given information and any files provided.
 
 {{objective}}
+
+------
 
 Project overview: 
 
 {{details}}
 
-Relevant code files
+------
 
 Instructions:
+1. Analyze the project objective and provided code files.
+2. Determine the relevance of each file to the objective.
+3. Assess the technologies, approaches, and architecture used in relevant files.
+4. Develop a clear, numbered list of implementation steps that:
+   - Are concise yet informative
+   - Focus on practical actions
+   - Include necessary setup or preparation
+   - Address potential challenges or optimizations
+   - Follow a logical order
+   - Use consistent and project-related file paths
+   - Files provided may not always be relevant, dig deep on the implementation details and determine if they are even related or need to integrate.
+   - Pertain only to relevant files
+   - Omit files that are not relevant
 
-Analyze the objective and project details.
-Review the provided code files, determine how they fit in with the objective.
-Develop a clear, numbered list of implementation steps.
-Each step should be concise yet informative.
-Focus on practical actions required to implement the feature.
-Include any necessary setup or preparation steps.
-Address potential challenges or optimizations within the steps.
-Ensure the steps are in a logical order for implementation.
-Do not mention writing unit tests unless explicitly requested.
-Do not mention having the team review, talking with the team, or any other team-related activities.
-Do not include deploying the application or checking application logs.
+File Handling:
+- For each file:
+  - If relevant to the objective: modify as needed, if you need to create a file, create one.
+  - If not relevant, omit it from your response.
+  
+Important notes:
+- Omit steps for writing unit tests, team activities, deployment, or log checking unless explicitly requested.
+- Not all provided files may require modification; focus on those relevant to the objective.
+
 Ensure you use the 'planner' tool.
 
 Output only a list of implementation steps, these must be in a JSON array. Do not include any additional explanations or commentary.
@@ -57,7 +74,10 @@ Example JSON Output Structures:
 
 Example 1:
 {
-  "steps": ["Install the react-icons package", "Create a new component named 'Icon'"]
+  "plan": [{
+    "file": "src/index.ts,
+    "steps": ["Import react", "Create root"]
+  }]
 }
 
 ------
@@ -92,46 +112,138 @@ export class CodePlanner {
 				: plannerPrompt.pipe(model);
 	}
 
-	codePlannerStep = async (state: PlanExecuteState) => {
-		const projectDetails = new ProjectDetailsHandler(
-			this.workspace,
-			undefined
-		);
-		const details = await projectDetails.retrieveProjectDetails();
-
-		const objective = buildObjective(state);
-
+	codePlannerStep = async (
+		state: PlanExecuteState
+	): Promise<Partial<PlanExecuteState>> => {
+		const projectDetails = await new ProjectDetailsHandler(
+			this.workspace
+		).retrieveProjectDetails();
 		state.plan = state.plan || { files: [], steps: [] };
 
-		if (!state.plan.files || state.plan.files.length === 0) {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				const objective = buildObjective(state);
+				const searchQuery = await this.generateSearchQueries(state);
+				const didRetrieve = await this.populateInitialFiles(
+					state,
+					searchQuery
+				);
+				let finalDocs = new Map<string, TextDocument>();
+				if (didRetrieve) {
+					finalDocs = await this.rerankDocuments(state, objective);
+				} else {
+					state.plan?.files?.map((f) => {
+						finalDocs.set(
+							f.file,
+							TextDocument.create(
+								f!.file,
+								"plaintext",
+								0,
+								f!.code || ""
+							)
+						);
+					});
+				}
+				const plan = await this.generatePlan(
+					finalDocs,
+					projectDetails,
+					objective
+				);
+
+				const docs = this.filterRelevantDocs(finalDocs, plan);
+				if (docs.length === 0) {
+					throw new NoFilesChangedError(
+						'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
+					);
+				}
+
+				return {
+					steps: plan.plan,
+					projectDetails: projectDetails?.description,
+					plan: { files: docs, steps: [] },
+				};
+			} catch (e) {
+				if (e instanceof NoFilesChangedError && attempt === 0) {
+					loggingProvider.logInfo(
+						"Planner was unable to detect which files to modify, restarting"
+					);
+					continue;
+				}
+				throw e;
+			}
+		}
+
+		throw new NoFilesChangedError(
+			"Unable to locate files related to the objective."
+		);
+	};
+
+	private async generateSearchQueries(
+		state: PlanExecuteState
+	): Promise<string> {
+		const lastUserAsk =
+			state.followUpInstructions[state.followUpInstructions.length - 1] ||
+			state.messages[state.messages.length - 1];
+		const result = await this.rerankModel
+			.invoke(`You are an AI language model assistant. 
+Your task is to generate multiple search queries based on the given question to find relevant information. 
+Generate 5 different search queries related to the following question:
+
+Question: ${lastUserAsk.content.toString()}
+
+Search queries:`);
+
+		return result.content.toString();
+	}
+
+	private async populateInitialFiles(
+		state: PlanExecuteState,
+		query: string
+	): Promise<boolean> {
+		if (!state.plan?.files || state.plan.files.length === 0) {
 			const starterDocs =
 				await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
-					objective,
+					query,
 					this.codeGraph,
 					this.store,
 					this.workspace,
 					15
 				);
+
+			if (!state.plan) {
+				state.plan = {
+					files: [],
+					steps: [],
+				};
+			}
+
 			state.plan.files = Array.from(starterDocs.entries()).map(
 				([file, doc]) => ({
 					file,
 					code: doc.getText(),
 				})
 			);
+
+			return true;
 		}
 
-		const rerankedDocs = new Map<string, TextDocument>();
+		return false;
+	}
+
+	private async rerankDocuments(
+		state: PlanExecuteState,
+		objective: string
+	): Promise<Map<string, TextDocument>> {
 		try {
-			if (state.plan.files.length > maxDocs) {
-				const rerankResults = await this.rerankModel.invoke(
-					`You are a reranking assistant. 
+			const rerankResults = await this.rerankModel.invoke(
+				`You are a reranking assistant. 
 Your task is to evaluate and rank a set of search results based on their relevance to a given query. 
 Please consider factors such as topical relevance, information quality, and how well each result addresses the user's likely intent.
 
 Query: ${objective}
 
 Results to rank:
-${state.plan.files.map((f, index) => {
+${state.plan?.files?.map((f, index) => {
 	return `${index + 1}. ${f.file}\n${f.code}\n\n-----FILE-----\n\n`;
 })}
 
@@ -141,80 +253,94 @@ Ranked results:
 [Number from original results]
 [Number from original results]
         `
-				);
-				const rerankedResults = rerankResults.content
-					.toString()
-					.split("\n")
-					.filter(
-						(line) =>
-							line.trim() !== "" && !isNaN(Number(line.trim()))
-					)
-					.map((line) => parseInt(line.trim()));
-
-				rerankedResults
-					.slice(0, maxDocs)
-					.forEach((result, newIndex) => {
-						if (result >= (state.plan?.files?.length || 0)) {
-							return;
-						}
-
-						const originalFile = state.plan?.files![result - 1];
-						rerankedDocs.set(
-							originalFile!.file,
-							TextDocument.create(
-								originalFile!.file,
-								"plaintext",
-								0,
-								originalFile!.code || ""
-							)
-						);
-					});
-			}
+			);
+			return this.parseRerankResults(
+				rerankResults.content.toString(),
+				state
+			);
 		} catch (e) {
 			console.error("Failed to rerank", e);
+			return new Map(
+				state.plan?.files?.map((file) => [
+					file.file,
+					TextDocument.create(
+						file.file,
+						"plaintext",
+						0,
+						file.code || ""
+					),
+				])
+			);
 		}
+	}
 
-		const finalDocs =
-			rerankedDocs.size > 0
-				? rerankedDocs
-				: new Map(
-						state.plan.files.map((file) => [
-							file.file,
-							TextDocument.create(
-								file.file,
-								"plaintext",
-								0,
-								file.code || ""
-							),
-						])
-				  );
+	private parseRerankResults(
+		rerankResults: string,
+		state: Partial<PlanExecuteState>,
+		maxDocs = 5
+	) {
+		const rerankedResults = rerankResults
+			.split("\n")
+			.filter((line) => line.trim() !== "" && !isNaN(Number(line.trim())))
+			.map((line) => parseInt(line.trim()));
 
-		const filesPrompt = Array.from(finalDocs.entries())
+		const rerankedDocs = new Map<string, TextDocument>();
+
+		rerankedResults.slice(0, maxDocs).forEach((result, newIndex) => {
+			if (result - 1 >= (state.plan?.files?.length || 0)) {
+				return;
+			}
+
+			const originalFile = state.plan?.files![result - 1];
+			rerankedDocs.set(
+				originalFile!.file,
+				TextDocument.create(
+					originalFile!.file,
+					"plaintext",
+					0,
+					originalFile!.code || ""
+				)
+			);
+		});
+
+		return rerankedDocs;
+	}
+
+	private buildFilesPrompt(files: Map<string, TextDocument>) {
+		return Array.from(files.entries())
 			.map(([file, doc]) => `File:\n${file}\n\nCode:\n${doc.getText()}`)
 			.join(`\n\n${FILE_SEPARATOR}\n\n`);
+	}
 
-		const plan = (await this.codePlanner.invoke({
-			details: details?.description || "Not available.",
+	private async generatePlan(
+		finalDocs: Map<string, TextDocument>,
+		projectDetails: any,
+		objective: string
+	): Promise<PlannerSchema> {
+		const filesPrompt = this.buildFilesPrompt(finalDocs);
+		const plan = await this.codePlanner.invoke({
+			details: projectDetails?.description || "Not available.",
 			files: `${FILE_SEPARATOR}\n\n${filesPrompt}`,
 			objective,
-		})) as PlannerSchema | AIMessage;
+		});
 
-		let result: PlannerSchema = plan as PlannerSchema;
-		if (this.chatModel instanceof ChatOllama) {
-			const response = (plan as AIMessage).content.toString();
-			result = JSON.parse(response) as PlannerSchema;
-		}
+		return this.chatModel instanceof ChatOllama
+			? JSON.parse((plan as AIMessage).content.toString())
+			: (plan as PlannerSchema);
+	}
 
-		return {
-			steps: result.steps,
-			projectDetails: details?.description,
-			plan: {
-				files: Array.from(finalDocs.values()).map((doc) => ({
-					file: doc.uri,
-					code: doc.getText(),
-				})),
-				steps: [],
-			},
-		} satisfies Partial<PlanExecuteState>;
-	};
+	private filterRelevantDocs(
+		finalDocs: Map<string, TextDocument>,
+		plan: PlannerSchema
+	): { file: string; code: string }[] {
+		return Array.from(finalDocs.entries())
+			.filter(([file]) => {
+				const relativePath = path.relative(this.workspace, file);
+				return plan.plan.some((r) => r.file.endsWith(relativePath));
+			})
+			.map(([file, doc]) => ({
+				file: doc.uri,
+				code: doc.getText(),
+			}));
+	}
 }

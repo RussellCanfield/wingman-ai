@@ -6,20 +6,25 @@ export type PlanStep = {
 	command?: string;
 };
 
-export interface Plan {
+export type Plan = {
 	steps: PlanStep[];
 	files?: FileMetadata[];
-}
+};
 
-export interface Review {
+export type Review = {
 	comments?: string[];
-}
+};
+
+export type PlanningSteps = {
+	file: string;
+	steps: string[];
+};
 
 export interface PlanExecuteState {
 	messages: ChatMessage[];
 	projectDetails?: string;
 	followUpInstructions: ChatMessage[];
-	steps?: string[];
+	steps?: PlanningSteps[];
 	plan?: Plan;
 	review?: Review;
 	response?: string;

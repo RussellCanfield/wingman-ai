@@ -62,6 +62,7 @@ Instructions:
 - Analyze the project details to get a sense of the technology being used.
 - Analyze the given files for relevance to the objective.
 - Modify only relevant files; if a file is not relevant, omit it from the "files" array in your response.
+- If no manual steps are required for the file you are working with, just return an empty array for "steps".
 - Use consistent and project-related file paths, if files are provided use those as a reference. This is critical.
 - If you modify a file's code or create a new file, generate a list of 'changes' made as a summary to the user.
 - Not all files provided need to be modified, foocus on the objective and the relevant files.
@@ -183,6 +184,8 @@ Project Details:
 
 ------
 
+{{modified}}
+
 {{files}}
 
 ------
@@ -216,7 +219,9 @@ Output Structure:
 General Instructions:
 - Analyze the project details to get a sense of the technology being used.
 - Analyze the given files for relevance to the objective.
+- Leverage the 'Implementation Steps' in order to guide your code changes, you will be processing one file at a time.
 - Modify only relevant files; if a file is not relevant, omit it from the "files" array in your response.
+- If no manual steps are required for the file you are working with, just return an empty array for "steps".
 - Use consistent and project-related file paths, if files are provided use those as a reference. This is critical.
 - If you modify a file's code or create a new file, generate a list of 'changes' made as a summary to the user.
 - Not all files provided need to be modified, foocus on the objective and the relevant files.
@@ -370,15 +375,17 @@ Project Details:
 
 {{objective}}
 
-------
-
 {{steps}}
+
+------
 
 {{review}}
 
 ------
 
-Files:
+{{modified}}
+
+Focus your attention on the following file based on the instructions and criteria above:
 
 {{files}}
 
@@ -416,6 +423,23 @@ export class CodeWriter {
 		const rulePack = loadWingmanRules(this.workspace);
 		const objective = buildObjective(state);
 
+		const planningSteps = state.steps
+			? `Here are a list of steps that may help you reach your objective
+
+Implementation steps:
+- ${state.steps.join("\n- ")}`
+			: "";
+
+		const reviewComments =
+			!state.review?.comments || state.review?.comments?.length === 0
+				? ""
+				: `Here are comments from a review of your code changes.
+Use these comments to refine your code and meet the objective.
+
+${state.review?.comments?.join("\n")}
+
+------`;
+
 		const codeWriter =
 			this.chatModel instanceof ChatOllama
 				? buildPrompt(ollamaWriterPrompt, rulePack).pipe(this.chatModel)
@@ -426,62 +450,58 @@ export class CodeWriter {
 				  );
 
 		const files: CodeWriterSchema["files"] = [];
+		const steps: CodeWriterSchema["steps"] = [];
+		for (const { file, code } of state.plan?.files || [
+			{
+				file: "BLANK",
+				changes: [],
+				code: "",
+			},
+		]) {
+			const output = (await codeWriter.invoke({
+				details: state.projectDetails || "Not available.",
+				objective,
+				steps: planningSteps,
+				review: reviewComments,
+				modified:
+					files.length === 0
+						? ""
+						: `Here are a list of files you've already modified or created in previous iterations, along with high level changes you already made to them.
+Do not attempt to create or modify any file on this list, the work is already done.
 
-		const prompt = state
-			.plan!.files!.map((f) => {
-				return `File:
-${f.file}
-
-Code:
-${f.code}`;
-			})
-			.join(`\n\n${FILE_SEPARATOR}\n\n`);
-
-		const output = (await codeWriter.invoke({
-			details: state.projectDetails || "Not available.",
-			objective,
-			steps: state.steps
-				? `Here are a list of steps that may help you reach your objective:
-      
-${state.steps.join("\n")}
-
-------`
-				: "",
-			review:
-				!state.review?.comments || state.review?.comments?.length === 0
-					? ""
-					: `Here are comments from a review of your code changes.
-Use these comments to refine your code and meet the objective.
-
-${state.review?.comments?.join("\n")}
+${files.map((f) => `File:\n${f.file}\n\nChanges:\n${f.changes?.join("\n")}`)}
 
 ------`,
-			files: !prompt
-				? `The user does not currently have any related files, assume this may be a new project and this is your base directory: ${this.workspace}`
-				: `${FILE_SEPARATOR}\n\n${prompt}`,
-		})) as CodeWriterSchema | AIMessage;
+				files:
+					file === "BLANK"
+						? `The user does not currently have any related files, assume this may be a new project and this is your base directory: ${this.workspace}`
+						: `File:\n${file}\n\nCode:\n${code}`,
+			})) as CodeWriterSchema | AIMessage;
 
-		let result: CodeWriterSchema = output as CodeWriterSchema;
-		if (this.chatModel instanceof ChatOllama) {
-			const response = (output as AIMessage).content.toString();
-			result = JSON.parse(response);
+			let result: CodeWriterSchema = output as CodeWriterSchema;
+			if (this.chatModel instanceof ChatOllama) {
+				const response = (output as AIMessage).content.toString();
+				result = JSON.parse(response);
+			}
+
+			const filesChanged =
+				result.files?.filter(
+					(f) => f.changes && f.changes?.length > 0
+				) || [];
+
+			if (filesChanged.length === 0) {
+				throw new NoFilesChangedError(
+					'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
+				);
+			}
+
+			files.push(...filesChanged);
+			steps.push(...result.steps);
 		}
-
-		const filesChanged =
-			result.files?.filter((f) => f.changes && f.changes?.length > 0) ||
-			[];
-
-		if (filesChanged.length === 0) {
-			throw new NoFilesChangedError(
-				'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
-			);
-		}
-
-		files.push(...filesChanged);
 
 		return {
 			plan: {
-				steps: result.steps,
+				steps: steps,
 				files: files.map((f) => {
 					return {
 						file: f.file,

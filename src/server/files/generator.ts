@@ -57,7 +57,8 @@ ${configFileContents}`;
 			filePath
 		);
 
-		const fileText = `File: ${filePath}
+		const fileText = `File: 
+${filePath}
 
 ${
 	fileImports?.length === 0
@@ -134,48 +135,47 @@ ${nodeFileImports.join("\n")}`;
 			externalCodeNodes
 		);
 
-		const prompt = `You are an expert code reviewer. Analyze the given code snippet and any referenced external code to describe its purpose concisely.
+		const prompt = `You are an expert code analyzer. Describe the purpose of the given code snippet concisely.
 
 Instructions:
-1. Focus on the code's purpose, not implementation details.
-2. Ignore import statements; use them only for context.
-3. Preserve symbol declarations, but replace definitions with compreshensive functional descriptions.
-4. Utilize external code references to enhance understanding when available.
-5. Provide concise, direct descriptions without introductions.
-6. Highlight patterns that may be relevant to the code's purpose or functionality.
-7. Return the symbol with its description in plain text, without markdown formatting.
-8. Try to develop a short and concise description the code may have in the context of the project.
-9. If the file appears to be utility related, provide a brief description of the utility's purpose (ex: Configuration, Build Tools, Testing, etc.).
+1. Focus on code purpose, not implementation.
+2. Ignore imports; use for context only.
+3. Preserve symbol declarations or the "shell" of the code; replace definitions with brief functional descriptions.
+4. Use external references to enhance understanding when relevant.
+5. Provide direct descriptions without introductions.
+6. Highlight key patterns related to functionality.
+7. Return symbol with description in plain text.
+8. Develop a concise description of the code's role in the project context.
+9. For utility files, briefly describe their purpose (e.g., Configuration, Build Tools, Testing).
+10. Use file paths and names as additional context when generating the description.
 
-Format your response as follows:
+Format:
 [Symbol name]
-// [Brief description of purpose]
+// [Brief purpose description]
 
-Example:
+Examples:
 export default App
 // Main application component
 
 const myVar = {
-  // Configuration object for application settings
+  // Application settings configuration
 }
 
 MyAmazingFunction = (param: string) => {
-  // Processes input string and returns formatted result
+  // Processes and formats input string
 }
 
 class MyAmazingClass {
-  // Manages user authentication and session handling
+  // Manages user authentication and sessions
 }
 
 ----
-
-
 
 ${fileContents}
 
 ----
 
-Return your response in plain text, without markdown formatting.
+Respond in plain text, without markdown.
 `;
 
 		const result = await this.aiProvider.invoke(prompt);

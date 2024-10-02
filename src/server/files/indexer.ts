@@ -130,6 +130,7 @@ export class Indexer {
 						};
 
 					if (nodes.size === 0) {
+						this.syncing = false;
 						return;
 					}
 
@@ -173,6 +174,11 @@ export class Indexer {
 					this.codeGraph?.mergeExportEdges(exportEdges);
 				}
 
+				if (nodesToProcess.size === 0) {
+					this.syncing = false;
+					return;
+				}
+
 				const skeletonNodes = await this.skeletonizeCodeNodes(
 					Array.from(nodesToProcess.values())
 				);
@@ -183,6 +189,7 @@ export class Indexer {
 					);
 
 					if (!indexerResult) {
+						this.syncing = false;
 						return;
 					}
 

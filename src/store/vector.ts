@@ -58,98 +58,19 @@ export class Store {
 		codeGraph: CodeGraph;
 	}> => {
 		if (!(await this.index?.isIndexCreated())) {
-			return {
-				result: false,
-				codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
-			};
+			return this.createEmptyCodeGraph(true);
 		}
 
 		try {
 			const stats = await this.index?.getIndexStats();
 			console.log("Loaded store from disk", this.directory, stats?.items);
 
-			let edgeDetails: {
-				importEdges: SerializeMap;
-				exportEdges: SerializeMap;
-				symbolTable: SerializeTable;
-			} = {
-				importEdges: [],
-				exportEdges: [],
-				symbolTable: [],
-			};
+			const edgeDetails = await this.loadEdgeDetails();
+			if (!edgeDetails) return this.createEmptyCodeGraph(true);
 
-			try {
-				edgeDetails = JSON.parse(
-					await fs.promises.readFile(
-						path.join(this.directory, "edges.json"),
-						"utf-8"
-					)
-				);
-			} catch (err) {
-				console.error(
-					"edges.json file not found or corrupt, proceeding with empty edges."
-				);
-				return {
-					result: false,
-					codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
-				};
-			}
-
-			const nodes: CodeGraphNodeMap = new Map();
-			const items = await this.index?.listItems();
-			for (const doc of items || []) {
-				const { startRange, endRange } = doc.metadata;
-
-				const [startLine, startCharacter] =
-					String(startRange).split("-");
-				const [endLine, endCharacter] = String(endRange).split("-");
-
-				const location = Location.create(
-					convertIdToFileUri(
-						String(doc.id),
-						startLine,
-						startCharacter
-					),
-					Range.create(
-						{
-							line: Number(startLine),
-							character: Number(startCharacter),
-						},
-						{
-							line: Number(endLine),
-							character: Number(endCharacter),
-						}
-					)
-				);
-				nodes.set(
-					generateCodeNodeId(location),
-					createCodeNode(location)
-				);
-			}
-
-			const importEdges = new Map(
-				edgeDetails.importEdges.map(([key, value]) => [
-					key,
-					new Set(value),
-				])
-			);
-
-			const exportEdges = new Map(
-				edgeDetails.exportEdges.map(([key, value]) => [
-					key,
-					new Set(value),
-				])
-			);
-
-			const symbolTable = new Map(
-				edgeDetails.symbolTable.map(([key, value]) => [
-					key,
-					{
-						nodeIds: new Set(value.nodeIds),
-						sha: value.sha,
-					},
-				])
-			);
+			const nodes = await this.buildNodeMap();
+			const { importEdges, exportEdges, symbolTable } =
+				this.buildEdgeMaps(edgeDetails);
 
 			return {
 				result: true,
@@ -162,17 +83,86 @@ export class Store {
 			};
 		} catch (e) {
 			console.error("Error loading edges", e);
-			await this.deleteIndex();
-			await this.index?.createIndex({
-				deleteIfExists: true,
-				version: 1,
-			});
+			await this.resetIndex();
+			return this.createEmptyCodeGraph(false);
 		}
+	};
 
-		return {
-			result: false,
-			codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
-		};
+	private createEmptyCodeGraph = (
+		result: boolean
+	): { result: boolean; codeGraph: CodeGraph } => ({
+		result,
+		codeGraph: new CodeGraph(new Map(), new Map(), new Map()),
+	});
+
+	private loadEdgeDetails = async (): Promise<{
+		importEdges: SerializeMap;
+		exportEdges: SerializeMap;
+		symbolTable: SerializeTable;
+	} | null> => {
+		const edgeFilePath = path.join(this.directory, "edges.json");
+		if (!fs.existsSync(edgeFilePath)) return null;
+
+		try {
+			return JSON.parse(
+				await fs.promises.readFile(edgeFilePath, "utf-8")
+			);
+		} catch (err) {
+			console.error(
+				"edges.json file corrupt, proceeding with empty edges."
+			);
+			return null;
+		}
+	};
+
+	private buildNodeMap = async (): Promise<CodeGraphNodeMap> => {
+		const nodes: CodeGraphNodeMap = new Map();
+		const items = await this.index?.listItems();
+		for (const doc of items || []) {
+			const location = this.createLocationFromDoc(doc);
+			nodes.set(generateCodeNodeId(location), createCodeNode(location));
+		}
+		return nodes;
+	};
+
+	private createLocationFromDoc = (doc: any): Location => {
+		const { startRange, endRange } = doc.metadata;
+		const [startLine, startCharacter] = String(startRange).split("-");
+		const [endLine, endCharacter] = String(endRange).split("-");
+
+		return Location.create(
+			convertIdToFileUri(String(doc.id), startLine, startCharacter),
+			Range.create(
+				{ line: Number(startLine), character: Number(startCharacter) },
+				{ line: Number(endLine), character: Number(endCharacter) }
+			)
+		);
+	};
+
+	private buildEdgeMaps = (edgeDetails: {
+		importEdges: SerializeMap;
+		exportEdges: SerializeMap;
+		symbolTable: SerializeTable;
+	}) => {
+		const importEdges = new Map(
+			edgeDetails.importEdges.map(([key, value]) => [key, new Set(value)])
+		);
+		const exportEdges = new Map(
+			edgeDetails.exportEdges.map(([key, value]) => [key, new Set(value)])
+		);
+		const symbolTable = new Map(
+			edgeDetails.symbolTable.map(([key, value]) => [
+				key,
+				{ nodeIds: new Set(value.nodeIds), sha: value.sha },
+			])
+		);
+
+		return { importEdges, exportEdges, symbolTable };
+	};
+
+	private resetIndex = async (): Promise<void> => {
+		await this.deleteIndex();
+		await this.index?.createIndex({ deleteIfExists: true, version: 1 });
 	};
 
 	deleteIndex = async () => {

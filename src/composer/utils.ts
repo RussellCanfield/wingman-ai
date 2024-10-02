@@ -6,18 +6,34 @@ import path from "node:path";
 export const formatMessages = (messages: ChatMessage[]) =>
 	messages.map((m) => m.content).join("\n");
 
-export const buildObjective = (state: PlanExecuteState) => {
-	let objective = `Objective:
+export const buildObjective = (state: PlanExecuteState): string => {
+	const messages = state.messages;
+	const followUpInstructions = state.followUpInstructions;
+	let objectiveItems: string[] = [];
 
-${formatMessages([state.messages[state.messages.length - 1]])}`;
-
-	if (state.followUpInstructions.length > 0) {
-		objective = `Objective:
-
-${formatMessages(state.followUpInstructions)}`;
+	// Add the last message as completed if there are follow-up instructions
+	if (followUpInstructions.length > 0 && messages.length > 0) {
+		objectiveItems.push(
+			`(Completed) - ${formatMessages([messages[messages.length - 1]])}`
+		);
+	} else if (messages.length > 0) {
+		objectiveItems.push(formatMessages([messages[messages.length - 1]]));
 	}
 
-	return objective;
+	// Add follow-up instructions, marking all but the last as completed
+	followUpInstructions.forEach((instruction, index) => {
+		const isLast = index === followUpInstructions.length - 1;
+		objectiveItems.push(
+			isLast
+				? formatMessages([instruction])
+				: `(Completed) - ${formatMessages([instruction])}`
+		);
+	});
+
+	return `Objective:
+Note - consider but do not act on "Completed" objective steps.
+
+${objectiveItems.join("\n\n")}`;
 };
 
 export const loadWingmanRules = (workspace: string) => {

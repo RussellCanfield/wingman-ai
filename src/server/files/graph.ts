@@ -174,6 +174,14 @@ export function generateCodeNodeId(location: Location): string {
 	return `${location.uri}-${location.range.start.line}-${location.range.start.character}`;
 }
 
+export function generateCodeNodeIdFromRelativePath(
+	path: string,
+	line: string,
+	character: string
+) {
+	return `${path}-${line}-${character}`;
+}
+
 export function generateCodeNodeIdFromParts(
 	uri: string,
 	line: string,

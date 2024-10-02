@@ -3,6 +3,7 @@ import {
 	CodeGraph,
 	CodeGraphNode,
 	generateCodeNodeIdFromParts,
+	generateCodeNodeIdFromRelativePath,
 } from "./files/graph";
 import type { Document } from "@langchain/core/documents";
 import path from "node:path";
@@ -226,16 +227,14 @@ ${codeBlock}`;
 			const {
 				filePath: relativePath,
 				startRange,
-				endRange,
 				relatedNodes: relatedNodeIdsString,
 			} = metadata;
 
 			const [startLine, startCharacter] = startRange.split("-");
-			const [endLine, endCharacter] = endRange.split("-");
 
 			const filePath = path.join(workspacePath, relativePath);
-			const rangeKey = `${filePath}:${startLine}-${startCharacter}`;
-			if (!processedRanges.has(rangeKey)) {
+			const rangeKey = `${startLine}-${startCharacter}`;
+			if (!processedRanges.has(`${filePath}:${rangeKey}`)) {
 				let textDocument: TextDocument | undefined;
 				if (textDocumentCache.has(filePath)) {
 					textDocument = textDocumentCache.get(filePath);
@@ -248,15 +247,15 @@ ${codeBlock}`;
 				}
 			}
 
-			const docId = filePathToUri(path.join(workspacePath, filePath));
+			const nodeId = generateCodeNodeIdFromRelativePath(
+				relativePath,
+				startLine,
+				startCharacter
+			);
 			const upstreamNodeIds =
-				codeGraph.getExportEdge(
-					generateCodeNodeIdFromParts(
-						docId,
-						startLine,
-						startCharacter
-					)
-				) || new Set<string>();
+				codeGraph.getExportEdge(nodeId) || new Set<string>();
+			const downstreamNodeIds =
+				codeGraph.getImportEdge(nodeId) || new Set<string>();
 
 			// This is not exhaustive, its only pulling one layer deep.
 			// You could recursively pull in more related nodes if needed.
@@ -266,12 +265,14 @@ ${codeBlock}`;
 			);
 
 			const relatedNodes = await Promise.all(
-				[...relatedNodeIds, ...Array.from(upstreamNodeIds || [])].map(
-					async (id) => {
-						const node = codeGraph.getNode(id);
-						return node ? node : null;
-					}
-				)
+				[
+					...relatedNodeIds,
+					...Array.from(upstreamNodeIds || []),
+					...Array.from(downstreamNodeIds || []),
+				].map(async (id) => {
+					const node = codeGraph.getNode(id);
+					return node ? node : null;
+				})
 			);
 
 			const relatedCodeBlocks = await Promise.all(
