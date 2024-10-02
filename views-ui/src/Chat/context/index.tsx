@@ -95,8 +95,14 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 	useEffect(() => {
 		if (!appState) return;
 
-		vscode.setState(appState);
-	}, [appState]);
+		vscode.setState({
+			...appState,
+			chatHistory: {
+				...appState.chatHistory,
+				[activeWorkspace]: messages,
+			},
+		});
+	}, [appState, messages]);
 
 	useEffect(() => {
 		const storedAppState = vscode.getState() as AppState | null;
@@ -109,32 +115,11 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 	}, [activeWorkspace]);
 
 	const addMessage = (chatMessage: ChatMessage) => {
-		const newMessages = [...messages, chatMessage];
-		setMessages((msg) => [...msg, chatMessage]);
-		setAppState((prevState) => ({
-			isLightTheme: prevState?.isLightTheme || false,
-			indexFilter: prevState?.indexFilter || "",
-			exclusionFilter: prevState?.exclusionFilter || undefined,
-			chatHistory: {
-				...prevState?.chatHistory,
-				[activeWorkspace]: (
-					prevState?.chatHistory[activeWorkspace] || []
-				).concat([chatMessage]),
-			},
-		}));
+		setMessages((msg) => msg.concat(chatMessage));
 	};
 
 	const clearMessages = () => {
 		setMessages([]);
-		setAppState((prevState) => ({
-			isLightTheme: prevState?.isLightTheme || false,
-			indexFilter: prevState?.indexFilter || "",
-			exclusionFilter: prevState?.exclusionFilter || undefined,
-			chatHistory: {
-				...prevState?.chatHistory,
-				[activeWorkspace]: [],
-			},
-		}));
 	};
 
 	const isLightTheme = lm["theme"] === 1;

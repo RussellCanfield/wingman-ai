@@ -128,7 +128,7 @@ export const App = () => {
 
 	return (
 		<div className="flex flex-col">
-			<div className="mt-4 mb-4 flex justify-end p-4">
+			<div className="mt-4 mb-4 flex justify-end p-2">
 				<button
 					type="button"
 					onClick={saveSettings}
