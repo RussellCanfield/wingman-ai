@@ -9,11 +9,13 @@ import { buildObjective } from "../utils";
 import { PlanExecuteState } from "../types";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { ChatOllama } from "@langchain/ollama";
-import { AIMessage, ChatMessage } from "@langchain/core/messages";
+import { AIMessage } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
 import { NoFilesChangedError } from "../errors";
 import { loggingProvider } from "../../server/loggingProvider";
 import path from "node:path";
+import fs from "node:fs";
+import { filePathToUri } from "../../server/files/utils";
 
 export type PlannerSchema = z.infer<typeof planSchema>;
 
@@ -29,58 +31,48 @@ const planSchema = z.object({
 });
 
 const plannerPrompt = ChatPromptTemplate.fromTemplate(
-	`You are an expert software engineer tasked with planning a feature implementation. 
-Your goal is to provide a concise, step-by-step plan based on the given information and any files provided.
+	`You are an expert software engineer tasked with planning a feature implementation. Provide a concise, step-by-step plan based on the given information and files.
 
 {{objective}}
 
-------
-
 Project overview: 
-
 {{details}}
 
-------
+Working directory: 
+{{workspace}}
 
 Instructions:
-1. Analyze the project objective and provided code files.
-2. Determine the relevance of each file to the objective.
-3. Assess the technologies, approaches, and architecture used in relevant files.
-4. Develop a clear, numbered list of implementation steps that:
-   - Are concise yet informative
-   - Focus on practical actions
-   - Include necessary setup or preparation
-   - Address potential challenges or optimizations
-   - Follow a logical order
-   - Use consistent and project-related file paths
-   - Files provided may not always be relevant, dig deep on the implementation details and determine if they are even related or need to integrate.
-   - Pertain only to relevant files
-   - Omit files that are not relevant
+1. Analyze the project objective and code files.
+2. Determine file relevance (dependencies, modifications needed, or new files required).
+3. Assess technologies, approaches, and architecture.
+4. Develop a clear, concise implementation plan with:
+   - Practical, focused actions
+   - Necessary setup or preparation
+   - Potential challenges or optimizations
+   - Logical order
+   - Consistent project-related file paths
+5. Consider all provided files in the plan.
+6. Create new files if required, following project structure.
 
 File Handling:
-- For each file:
-  - If relevant to the objective: modify as needed, if you need to create a file, create one.
-  - If not relevant, omit it from your response.
-  
-Important notes:
-- Omit steps for writing unit tests, team activities, deployment, or log checking unless explicitly requested.
-- Not all provided files may require modification; focus on those relevant to the objective.
+- Include relevant files in output.
+- Ensure correct file paths and import statements.
+- Verify namespaces and code integration.
+- Consider default and named exports.
 
-Ensure you use the 'planner' tool.
+Notes:
+- Omit steps for testing, team activities, deployment, or logging unless requested.
+- Focus on files relevant to the objective.
 
-Output only a list of implementation steps, these must be in a JSON array. Do not include any additional explanations or commentary.
+Use the 'planner' tool to output a JSON array of implementation steps only. No additional explanations.
 
-Example JSON Output Structures:
-
-Example 1:
+Example output:
 {
   "plan": [{
-    "file": "src/index.ts,
+    "file": "src/index.ts",
     "steps": ["Import react", "Create root"]
   }]
 }
-
-------
 
 Code Files:
 
@@ -143,13 +135,13 @@ export class CodePlanner {
 					);
 				});
 			}
-			const plan = await this.generatePlan(
+			const { plan } = await this.generatePlan(
 				finalDocs,
 				projectDetails,
 				objective
 			);
 
-			const docs = this.filterRelevantDocs(finalDocs, plan);
+			const docs = await this.filterRelevantDocs(finalDocs, plan);
 			if (docs.length === 0) {
 				throw new NoFilesChangedError(
 					'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
@@ -157,7 +149,7 @@ export class CodePlanner {
 			}
 
 			return {
-				steps: plan.plan,
+				steps: plan,
 				projectDetails: projectDetails?.description,
 				plan: { files: docs, steps: [] },
 			};
@@ -316,6 +308,7 @@ Ranked results:
 			details: projectDetails?.description || "Not available.",
 			files: `${FILE_SEPARATOR}\n\n${filesPrompt}`,
 			objective,
+			workspace: this.workspace,
 		});
 
 		return this.chatModel instanceof ChatOllama
@@ -323,18 +316,35 @@ Ranked results:
 			: (plan as PlannerSchema);
 	}
 
-	private filterRelevantDocs(
+	private async filterRelevantDocs(
 		finalDocs: Map<string, TextDocument>,
-		plan: PlannerSchema
-	): { file: string; code: string }[] {
-		return Array.from(finalDocs.entries())
-			.filter(([file]) => {
-				const relativePath = path.relative(this.workspace, file);
-				return plan.plan.some((r) => r.file.endsWith(relativePath));
-			})
-			.map(([file, doc]) => ({
-				file: doc.uri,
-				code: doc.getText(),
-			}));
+		plan: PlannerSchema["plan"]
+	): Promise<{ file: string; code: string }[]> {
+		const result: { file: string; code: string; steps?: string[] }[] = [];
+
+		for (const f of plan) {
+			const filePath = path.resolve(this.workspace, f.file);
+			const fileUri = filePathToUri(filePath);
+
+			let doc = finalDocs.get(filePath);
+			try {
+				if (!doc && fs.existsSync(filePath)) {
+					doc = TextDocument.create(
+						fileUri,
+						"plaintext",
+						0,
+						await fs.promises.readFile(filePath, "utf8")
+					);
+				}
+			} catch (e) {}
+
+			result.push({
+				file: f.file,
+				code: doc?.getText() || "//This is a new file, fill in.",
+				steps: f.steps,
+			});
+		}
+
+		return result;
 	}
 }

@@ -26,7 +26,7 @@ export default function Indexer() {
 		files: [],
 	});
 	const [filter, setFilter] = useState(
-		() => indexFilter || "apps/**/*.{js,jsx,ts,tsx}"
+		indexFilter || "apps/**/*.{js,jsx,ts,tsx}"
 	);
 	const [exclusionFilter, setExclusionFilter] =
 		useState(savedExclusionFilter);
@@ -60,7 +60,14 @@ export default function Indexer() {
 
 		switch (command) {
 			case "index-status":
-				setIndex(data.value as IndexStats);
+				const indexStats = data.value as IndexStats;
+				if (
+					indexStats.exists !== index.exists ||
+					indexStats.processing !== index.processing ||
+					indexStats.files.length !== index.files.length
+				) {
+					setIndex(indexStats);
+				}
 		}
 	};
 

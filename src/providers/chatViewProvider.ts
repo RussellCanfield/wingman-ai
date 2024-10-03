@@ -420,7 +420,7 @@ ${projectDetails}
 =======`
 		);
 
-		if (codeDocs.length === 0) {
+		if (codeDocs?.length === 0) {
 			ragContext = ragContext.replace(
 				"{SYMBOLS_TEMPLATE}",
 				`Here are the available types reference by the code in context to use as a reference when answering questions, these may not be related to the code provided:

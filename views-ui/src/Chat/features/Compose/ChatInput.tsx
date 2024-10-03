@@ -118,6 +118,8 @@ const ChatInput = ({
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (!inputValue.trim() || loading) return;
 
+		console.log(inputValue);
+
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			if (showDropdown && filteredDropDownItems.length > 0) {
