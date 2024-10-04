@@ -28,8 +28,10 @@ import {
 	FileSearchResult,
 } from "@shared/types/Composer";
 import { DiffViewProvider } from "./diffViewProvider";
+import { WingmanTerminal } from "./terminalProvider";
 
 let abortController = new AbortController();
+let wingmanTerminal: WingmanTerminal | undefined;
 
 export type ChatView = "chat" | "composer" | "indexer";
 
@@ -92,6 +94,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			eventEmitter._onQueryComplete.fire();
 		});
 
+		wingmanTerminal = new WingmanTerminal(
+			vscode.workspace.workspaceFolders?.[0].uri.fsPath || ""
+		);
+		wingmanTerminal.subscribe((data, code) => {
+			this._webview?.postMessage({
+				command: "validation-result",
+				value: {
+					output: data,
+					exitCode: code,
+				},
+			});
+		});
+
 		this._disposables.push(
 			webviewView.webview.onDidReceiveMessage(
 				async (data: AppMessage) => {
@@ -118,6 +133,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								).fsPath,
 								diff: extractCodeBlock(diff),
 							});
+							break;
+						case "validate":
+							wingmanTerminal?.spawn();
+							wingmanTerminal?.sendCommand("npm run build");
 							break;
 						case "clear-chat-history":
 							this._aiProvider.clearChatHistory();

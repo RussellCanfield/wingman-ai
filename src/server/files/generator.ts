@@ -178,7 +178,7 @@ ${fileContents}
 Respond in plain text, without markdown.
 `;
 
-		const result = await this.aiProvider.invoke(prompt);
+		const result = await this.aiProvider.getRerankModel().invoke(prompt);
 
 		return {
 			id: codeNode.id,

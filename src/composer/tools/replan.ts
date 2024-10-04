@@ -67,7 +67,7 @@ Modified/Created Files:
 Guidelines:
 
 If objective met: Use 'response' for concise summary.
-If improvements needed: Create review comments required to meet objective.
+If improvements needed: Create review comments required to meet objective, do not include any manual steps the user may need to take. Only include comments when the changes fail to meet the objective.
 
 Action:
 

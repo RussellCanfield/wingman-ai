@@ -5,7 +5,7 @@ export type QueueProcessingCallback = (documents: string[]) => Promise<void>;
 export class DocumentQueue {
 	private queue: string[] = [];
 	private queueSet: Set<string> = new Set();
-	private intervalId: NodeJS.Timeout | null = null;
+	private timeoutId: NodeJS.Timeout | null = null;
 
 	constructor(private readonly indexer: Indexer) {
 		this.startProcessing();
@@ -18,10 +18,15 @@ export class DocumentQueue {
 				this.queueSet.add(uri);
 			}
 		}
+
+		if (this.timeoutId) {
+			clearTimeout(this.timeoutId);
+			this.startProcessing();
+		}
 	};
 
 	private startProcessing = () => {
-		this.intervalId = setInterval(async () => {
+		this.timeoutId = setTimeout(async () => {
 			if (this.indexer.isSyncing()) {
 				return;
 			}
@@ -36,9 +41,9 @@ export class DocumentQueue {
 
 	dispose = () => {
 		this.queueSet.clear();
-		if (this.intervalId) {
-			clearInterval(this.intervalId);
-			this.intervalId = null;
+		if (this.timeoutId) {
+			clearTimeout(this.timeoutId);
+			this.timeoutId = null;
 		}
 	};
 

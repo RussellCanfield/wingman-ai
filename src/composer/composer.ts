@@ -7,7 +7,7 @@ import { CodeWriter } from "./tools/code-writer";
 import { Replanner } from "./tools/replan";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../store/vector.js";
-import { Plan, PlanExecuteState, Review } from "./types/index";
+import { Plan, PlanExecuteState, PlanningSteps, Review } from "./types/index";
 import { getTextDocumentFromPath } from "../server/files/utils";
 import { FileMetadata } from "@shared/types/Message";
 import { CodePlanner } from "./tools/planner";
@@ -74,7 +74,8 @@ export async function* generateCommand(
 			default: () => [],
 		},
 		steps: {
-			value: (x?: string[], y?: string[]) => y ?? x,
+			value: (x?: PlanningSteps[], y?: PlanningSteps[]) =>
+				y ?? x ?? undefined,
 		},
 		plan: {
 			value: (x?: Plan, y?: Plan) => y ?? x ?? undefined,

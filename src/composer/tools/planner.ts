@@ -52,7 +52,8 @@ Instructions:
    - Logical order
    - Consistent project-related file paths
 5. Consider all provided files in the plan.
-6. Create new files if required, following project structure.
+6. Do not perform any code changes outside of the objective. Focus on what the core ask is.
+7. Create new files if required, following project structure.
 
 File Handling:
 - Include relevant files in output.
@@ -107,6 +108,10 @@ export class CodePlanner {
 	codePlannerStep = async (
 		state: PlanExecuteState
 	): Promise<Partial<PlanExecuteState>> => {
+		if (state.retryCount === 0) {
+			throw new Error("Retry attempts exhausted.");
+		}
+
 		const projectDetails = await new ProjectDetailsHandler(
 			this.workspace
 		).retrieveProjectDetails();

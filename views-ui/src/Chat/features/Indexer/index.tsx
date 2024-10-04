@@ -162,7 +162,7 @@ export default function Indexer() {
 				)}
 			</div>
 			{index.exists && !index.processing && (
-				<div className="flex-shrink-0 overflow-y-auto max-h-[50vh] mt-4">
+				<div className="flex-shrink-0 overflow-y-auto max-h-[60vh] mt-4">
 					<ul className="space-y-1">
 						{index.files.map((f, index) => (
 							<li key={index}>{f}</li>

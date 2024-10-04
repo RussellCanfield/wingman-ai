@@ -1,5 +1,5 @@
 import { CSSProperties, PropsWithChildren, memo } from "react";
-import { FaCopy } from "react-icons/fa6";
+import { FaCopy, FaCheck } from "react-icons/fa6";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FaTerminal } from "react-icons/fa";
@@ -204,6 +204,12 @@ const ChatEntry = ({
 		}
 	};
 
+	const validate = () => {
+		vscode.postMessage({
+			command: "validate",
+		});
+	};
+
 	return (
 		<li
 			className="pt-2 pb-2 tracking-wide leading-relaxed text-base"
@@ -242,10 +248,11 @@ const ChatEntry = ({
 										{step.description}
 									</p>
 									{step.command && (
-										<div className="flex space-x-2 p-2 bg-stone-800 text-white rounded hover:bg-stone-500 hover:cursor-pointer z-10">
+										<div className="flex space-x-2 bg-stone-800 text-white rounded hover:bg-stone-500 hover:cursor-pointer z-10">
 											<button
 												type="button"
 												title="Run in terminal"
+												className="p-2"
 												onClick={() =>
 													sendTerminalCommand(
 														step.command!
@@ -281,6 +288,29 @@ const ChatEntry = ({
 							theme={codeTheme}
 						/>
 					))}
+				</div>
+			)}
+			{false && (
+				<div>
+					<div className="flex flex-col bg-editor-bg mt-4 rounded-lg">
+						<div
+							className="border border-stone-800 rounded-lg overflow-hidden shadow-lg mb-4 mt-4"
+							key={index}
+						>
+							<div className="bg-stone-800 text-white flex flex-row">
+								<p className="flex-1 p-2">Validate</p>
+								<div className="flex space-x-2 p-2 bg-stone-800 text-white rounded hover:bg-stone-500 hover:cursor-pointer z-10">
+									<button
+										type="button"
+										title="Run in terminal"
+										onClick={() => validate()}
+									>
+										<FaCheck size={16} />
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 			)}
 		</li>

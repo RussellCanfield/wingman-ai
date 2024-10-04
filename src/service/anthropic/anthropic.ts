@@ -2,7 +2,7 @@ import { asyncIterator } from "../asyncIterator";
 import { AIStreamProvicer } from "../base";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { ClaudeModel } from "./models/claude";
-import { AnthropicMessage, AnthropicRequest } from "./types/ClaudeRequest";
+import { AnthropicRequest } from "./types/ClaudeRequest";
 import {
 	AnthropicResponse,
 	AnthropicResponseStreamContent,
@@ -14,10 +14,11 @@ import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ILoggingProvider } from "@shared/types/Logger";
+import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 
 export class Anthropic implements AIStreamProvicer {
 	decoder = new TextDecoder();
-	chatHistory: AnthropicMessage[] = [];
+	chatHistory: BaseMessage[] = [];
 	chatModel: AnthropicModel | undefined;
 	codeModel: AnthropicModel | undefined;
 	baseModel: BaseChatModel | undefined;
@@ -309,67 +310,51 @@ ${prompt}`,
 	) {
 		let systemPrompt = this.chatModel!.ChatPrompt;
 
-		const messages: AnthropicMessage[] = [
-			{
-				role: "user",
-				content: systemPrompt,
-			},
-		];
+		const messages: BaseMessage[] = [new HumanMessage(systemPrompt)];
 
 		if (this.chatHistory.length > 0) {
 			//avoid the first message with the system prompt
 			messages.push(...this.chatHistory.slice(1));
 		} else {
-			messages.push({
-				role: "assistant",
-				content: "Happy to help!",
-			});
+			messages.push(new AIMessage("Happy to help!"));
 			this.chatHistory.push(...messages);
 		}
 
-		const userMsg: AnthropicMessage = {
-			role: "user",
-			content: `${
-				ragContent
-					? `Here's some additional information that may help you generate a more accurate response.
+		const userMsg = new HumanMessage(`${
+			ragContent
+				? `Here's some additional information that may help you generate a more accurate response.
 Please determine if this information is relevant and can be used to supplement your response: 
 
 ${ragContent}`
-					: ""
-			}
+				: ""
+		}
 
 ------
 
 Here is the user's question which may or may not be related:
 
-${prompt}`,
-		};
+${prompt}`);
 
 		messages.push(userMsg);
 		this.chatHistory.push(userMsg);
 
-		const chatPayload: AnthropicRequest = {
-			model: this.settings?.chatModel!,
-			messages,
-			stream: true,
-			temperature: 0.8,
-			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
-		};
-
 		truncateChatHistory(6, this.chatHistory);
 
+		const stream = await this.baseModel?.stream(messages)!;
+
 		let completeMessage = "";
-		for await (const chunk of this.generate(chatPayload, signal)) {
-			completeMessage += chunk;
-			yield chunk;
+		for await (const chunk of stream) {
+			const result = chunk.content.toString();
+			completeMessage += result;
+			yield result;
 		}
 
-		this.chatHistory.push({
-			role: "assistant",
-			content:
+		this.chatHistory.push(
+			new AIMessage(
 				completeMessage ||
-				"The user has decided they weren't interested in the response",
-		});
+					"The user has decided they weren't interested in the response"
+			)
+		);
 	}
 
 	public clearChatHistory(): void {
