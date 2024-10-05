@@ -31,9 +31,6 @@ const ChatInput = ({
 		[]
 	);
 
-	const inputClasses = isLightTheme
-		? "bg-white text-black border-slate-300"
-		: "bg-stone-800 text-white border-stone-700";
 	const dropdownClasses = isLightTheme
 		? "bg-white border-slate-300"
 		: "bg-slate-700 border-slate-600";
@@ -118,8 +115,6 @@ const ChatInput = ({
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (!inputValue.trim() || loading) return;
 
-		console.log(inputValue);
-
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			if (showDropdown && filteredDropDownItems.length > 0) {
@@ -171,7 +166,7 @@ const ChatInput = ({
 			ref={ref}
 		>
 			<div className="relative flex flex-row items-center">
-				<div className={`w-full ${inputClasses} relative`}>
+				<div className="w-full relative">
 					{chips.length === 0 ? (
 						<></>
 					) : (
@@ -209,10 +204,42 @@ const ChatInput = ({
 							tabIndex={0}
 							rows={1}
 							autoFocus
-							className="flex-grow bg-transparent outline-none resize-none focus:ring-2 focus:ring-stone-600 overflow-hidden h-auto p-1"
+							className="flex-grow resize-none text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] overflow-y-auto min-h-[36px] p-2"
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>
+						<span className="p-4">
+							{!loading && (
+								<FaPlay
+									size={16}
+									tabIndex={0}
+									role="presentation"
+									title="Send"
+									className={`${
+										!inputValue.trim()
+											? "text-gray-500"
+											: "text-gray-100"
+									} cursor-pointer`}
+									onClick={() =>
+										handleUserInput({
+											key: "Enter",
+											preventDefault: () => {},
+											shiftKey: false,
+										} as React.KeyboardEvent<HTMLTextAreaElement>)
+									}
+								/>
+							)}
+							{loading && (
+								<FaStopCircle
+									size={16}
+									tabIndex={0}
+									role="presentation"
+									title="Cancel compose"
+									className="cursor-pointer"
+									onClick={onChatCancelled}
+								/>
+							)}
+						</span>
 					</div>
 				</div>
 				{showDropdown && (
@@ -242,38 +269,6 @@ const ChatInput = ({
 							))}
 					</div>
 				)}
-				<span className="p-4">
-					{!loading && (
-						<FaPlay
-							size={16}
-							tabIndex={0}
-							role="presentation"
-							title="Send"
-							className={`${
-								!inputValue.trim()
-									? "text-gray-500"
-									: "text-gray-100"
-							} cursor-pointer`}
-							onClick={() =>
-								handleUserInput({
-									key: "Enter",
-									preventDefault: () => {},
-									shiftKey: false,
-								} as React.KeyboardEvent<HTMLTextAreaElement>)
-							}
-						/>
-					)}
-					{loading && (
-						<FaStopCircle
-							size={16}
-							tabIndex={0}
-							role="presentation"
-							title="Cancel compose"
-							className="cursor-pointer"
-							onClick={onChatCancelled}
-						/>
-					)}
-				</span>
 			</div>
 		</div>
 	);

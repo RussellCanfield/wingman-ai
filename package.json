@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.7.12",
+	"version": "0.7.13",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -109,7 +109,7 @@
 			"panel": [
 				{
 					"id": "wing-man-config",
-					"title": "Wingman Config",
+					"title": "Wingman",
 					"icon": "media/wingman-logo.png"
 				}
 			]
@@ -125,7 +125,7 @@
 			"wing-man-config": [
 				{
 					"id": "wingman.configview",
-					"name": "Wingman Config",
+					"name": "Wingman",
 					"type": "webview"
 				}
 			]
@@ -146,6 +146,10 @@
 			{
 				"command": "wingmanai.opencomposer",
 				"title": "Wingman: Composer"
+			},
+			{
+				"command": "wingmanai.openconfig",
+				"title": "Wingman: Settings"
 			}
 		],
 		"keybindings": [

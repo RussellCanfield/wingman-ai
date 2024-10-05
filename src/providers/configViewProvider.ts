@@ -1,22 +1,15 @@
 import * as vscode from "vscode";
 import fs from "node:fs";
 import { AppMessage } from "@shared/types/Message";
-import {
-	ApiSettingsType,
-	defaultInteractionSettings,
-	InteractionSettings,
-	OllamaEmbeddingSettingsType,
-	OllamaSettingsType,
-	OpenAIEmbeddingSettingsType,
-	Settings,
-} from "@shared/types/Settings";
-import { loggingProvider } from "./loggingProvider";
-import { eventEmitter } from "../events/eventEmitter";
+import { Settings } from "@shared/types/Settings";
 import { addNoneAttributeToLink } from "./utilities";
 import { SaveSettings } from "../service/settings";
 
+let panel: vscode.WebviewPanel | undefined;
+
 export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.configview";
+	public static readonly showConfigCommand = "wingmanai.openconfig";
 	private _view?: vscode.WebviewView;
 	private _disposables: vscode.Disposable[] = [];
 
@@ -24,6 +17,58 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _settings: Settings
 	) {}
+
+	private createPanel(): vscode.WebviewPanel {
+		panel = vscode.window.createWebviewPanel(
+			"wingmanConfig",
+			"Wingman Configuration",
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				localResourceRoots: [this._extensionUri],
+			}
+		);
+
+		panel.webview.html = this._getHtml(panel.webview);
+		return panel;
+	}
+
+	public openInPanel() {
+		if (panel) {
+			panel.reveal();
+			return;
+		}
+
+		const settingsPanel = this.createPanel();
+		settingsPanel.onDidDispose(() => {
+			panel = undefined;
+			if (this._view) {
+				this._view.webview.postMessage({ command: "panelClosed" });
+			}
+		});
+
+		// Handle messages from the panel
+		settingsPanel.webview.onDidReceiveMessage(async (data: AppMessage) => {
+			if (!data) {
+				return;
+			}
+
+			const { command, value } = data;
+
+			switch (command) {
+				case "init":
+					const settings = await this.init(value);
+					settingsPanel.webview.postMessage({
+						command,
+						value: settings,
+					});
+					break;
+				case "saveSettings":
+					SaveSettings(value as Settings);
+					break;
+			}
+		});
+	}
 
 	resolveWebviewView(
 		webviewView: vscode.WebviewView,
@@ -35,7 +80,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			enableScripts: true,
 			localResourceRoots: [this._extensionUri],
 		};
-		webviewView.webview.html = this._getHtml(webviewView.webview);
+		webviewView.webview.html = this._getSimpleViewHtml(webviewView.webview);
 
 		this._disposables.push(
 			webviewView.webview.onDidReceiveMessage(
@@ -47,15 +92,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					const { command, value } = data;
 
 					switch (command) {
-						case "init":
-							const settings = await this.init(value);
-							webviewView.webview.postMessage({
-								command,
-								value: settings,
-							});
-							break;
-						case "saveSettings":
-							SaveSettings(value as Settings);
+						case "openSettings":
+							this.openInPanel();
 							break;
 					}
 				}
@@ -84,14 +122,41 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		return JSON.stringify(settings);
 	};
 
-	private handleError(message: string) {
-		vscode.window.showErrorMessage(message);
-		loggingProvider.logError(message);
-		eventEmitter._onFatalError.fire();
-	}
+	private _getSimpleViewHtml = (webview: vscode.Webview): string => {
+		const nonce = this.getNonce();
+		const toolkitUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this._extensionUri,
+				"node_modules",
+				"@vscode",
+				"webview-ui-toolkit",
+				"dist",
+				"toolkit.js"
+			)
+		);
 
-	private log = (value: unknown) => {
-		loggingProvider.logInfo(JSON.stringify(value ?? ""));
+		return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+        <script type="module" nonce="${nonce}" src="${toolkitUri}"></script>
+        <title>Config View</title>
+    </head>
+    <body>
+      <div>
+        <h3>Wingman</h3>
+        <vscode-button id="open">Open Settings</vscode-button>
+      </div>
+        <script nonce="${nonce}">
+            const vscode = acquireVsCodeApi();
+            document.getElementById('open').addEventListener('click', () => {
+                vscode.postMessage({ command: 'openSettings' });
+            });
+        </script>
+    </body>
+    </html>`;
 	};
 
 	private _getHtml = (webview: vscode.Webview) => {

@@ -1,16 +1,10 @@
 import {
-	VSCodeDivider,
-	VSCodeDropdown,
-	VSCodeOption,
-} from "@vscode/webview-ui-toolkit/react";
-import {
 	EmbeddingProviders,
 	EmbeddingProvidersList,
 	OllamaEmbeddingSettingsType,
 	OpenAIEmbeddingSettingsType,
 } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, DropDownContainer } from "./Config";
 import { OllamaEmbeddingSettingsView } from "./OllamaEmbeddingSettingsView";
 import { OpenAIEmbeddingSettingsView } from "./OpenAIEmbeddingSettingsView";
 
@@ -34,22 +28,25 @@ export const EmbeddingProvider = ({
 	};
 
 	return (
-		<Container>
-			<p className="mb-4 text-xl">Embedding:</p>
-			<DropDownContainer>
-				<label htmlFor="embedding-provider">Embedding Provider:</label>
-				<VSCodeDropdown
+		<div className="container mx-auto p-4">
+			<div className="mb-4">
+				<label htmlFor="embedding-provider" className="block mb-2">
+					Embedding Provider:
+				</label>
+				<select
 					id="embedding-provider"
-					value={embeddingProvider}
+					className="w-full min-w-[200px] p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)]"
+					title="Embedding Provider"
+					data-name="codeCompletionEnabled"
 					onChange={handleProviderChange}
-					style={{ minWidth: "100%" }}
+					value={embeddingProvider}
 				>
 					{EmbeddingProvidersList.map((ab) => (
-						<VSCodeOption key={ab}>{ab}</VSCodeOption>
+						<option key={ab}>{ab}</option>
 					))}
-				</VSCodeDropdown>
-			</DropDownContainer>
-			<VSCodeDivider />
+				</select>
+			</div>
+			<hr className="my-4 border-t border-[var(--vscode-editor-foreground)]" />
 			{embeddingProvider === "Ollama" && (
 				<OllamaEmbeddingSettingsView
 					{...embeddingSettings.Ollama!}
@@ -62,6 +59,6 @@ export const EmbeddingProvider = ({
 					onChange={onEmbeddingSettingsChange}
 				/>
 			)}
-		</Container>
+		</div>
 	);
 };

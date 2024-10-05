@@ -1,10 +1,9 @@
 import { InitSettings } from "./App";
-import { Container } from "./Config";
 
 export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
 	return (
-		<Container>
-			<h3>Supported Models:</h3>
+		<div className="mt-4">
+			<h3 className="text-md font-bold">Supported Models:</h3>
 			<label>
 				In order for models to make it to Wingman, we thoroughly test
 				them and verify their capabilities. We are unable to load
@@ -15,13 +14,13 @@ export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
 			{aiProvider === "Ollama" && <OllamaView />}
 			{aiProvider === "OpenAI" && <OpenAIView />}
 			{aiProvider === "Anthropic" && <AnthropicView />}
-		</Container>
+		</div>
 	);
 };
 
 export const AnthropicView = () => {
 	return (
-		<div>
+		<div className="mt-4">
 			<ul>
 				<li>claude-3-5-sonnet</li>
 				<li>claude-3-opus</li>
@@ -32,7 +31,7 @@ export const AnthropicView = () => {
 
 export const OpenAIView = () => {
 	return (
-		<div>
+		<div className="mt-4">
 			<ul>
 				<li>gpt-4o</li>
 				<li>gpt-4o-mini</li>
@@ -46,8 +45,8 @@ export const OpenAIView = () => {
 
 export const OllamaView = () => {
 	return (
-		<div>
-			<h4>Code:</h4>
+		<div className="mt-4">
+			<h4 className="font-bold text-md">Code:</h4>
 			<ul>
 				<li>
 					<a href="https://ollama.com/library/qwen2.5-coder">
@@ -78,7 +77,7 @@ export const OllamaView = () => {
 					<a href="https://ollama.com/library/codestral">codestral</a>
 				</li>
 			</ul>
-			<h4>Chat:</h4>
+			<h4 className="mt-4 font-bold text-md">Chat:</h4>
 			<ul>
 				<li>
 					<a href="https://ollama.com/library/qwen2.5-coder">

@@ -1,6 +1,4 @@
-import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
 import { Settings } from "@shared/types/Settings";
-import { Container, DropDownContainer, VSCodeTextField } from "./Config";
 
 type InteractionSettings = Required<Settings>["interactionSettings"];
 const tooltipInformation = {
@@ -54,71 +52,70 @@ export const InteractionSettingsConfig = ({
 	};
 
 	return (
-		<Container>
-			<p className="mb-4 text-xl">Interaction:</p>
-			<DropDownContainer>
-				<label htmlFor="code-streaming">Code Completion enabled:</label>
-				<VSCodeDropdown
-					title={tooltipInformation.completion}
+		<div className="container mx-auto p-4">
+			<div className="mb-4">
+				<label htmlFor="code-completion" className="block mb-2">
+					Code Completion enabled:
+				</label>
+				<select
 					id="code-completion"
+					className="w-full min-w-[200px] p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)]"
+					title={tooltipInformation.completion}
 					data-name="codeCompletionEnabled"
 					onChange={handleCompletionChange}
 					value={interactions.codeCompletionEnabled.toString()}
-					style={{ minWidth: "200px" }}
 				>
-					<VSCodeOption>true</VSCodeOption>
-					<VSCodeOption>false</VSCodeOption>
-				</VSCodeDropdown>
-			</DropDownContainer>
-			<DropDownContainer>
-				<label htmlFor="code-streaming">Code streaming:</label>
-				<VSCodeDropdown
-					title={tooltipInformation.streaming}
+					<option>true</option>
+					<option>false</option>
+				</select>
+			</div>
+
+			<div className="mb-4">
+				<label htmlFor="code-streaming" className="block mb-2">
+					Code streaming:
+				</label>
+				<select
 					id="code-streaming"
+					className="w-full min-w-[200px] p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)]"
+					title={tooltipInformation.streaming}
 					data-name="codeStreaming"
 					onChange={handleStreamChange}
 					value={interactions.codeStreaming.toString()}
-					style={{ minWidth: "200px" }}
 				>
-					<VSCodeOption>true</VSCodeOption>
-					<VSCodeOption>false</VSCodeOption>
-				</VSCodeDropdown>
-			</DropDownContainer>
-			<VSCodeTextField
-				title={tooltipInformation.ccw}
-				data-name="codeContextWindow"
-				value={interactions.codeContextWindow.toString()}
-				onChange={handleChange}
-			>
-				Code Context Window
-			</VSCodeTextField>
+					<option>true</option>
+					<option>false</option>
+				</select>
+			</div>
 
-			<VSCodeTextField
-				title={tooltipInformation.cmt}
-				data-name="codeMaxTokens"
-				value={interactions.codeMaxTokens.toString()}
-				onChange={handleChange}
-			>
-				Code Max Tokens
-			</VSCodeTextField>
-
-			<VSCodeTextField
-				title={tooltipInformation.chcw}
-				data-name="chatContextWindow"
-				value={interactions.chatContextWindow.toString()}
-				onChange={handleChange}
-			>
-				Chat Context Window
-			</VSCodeTextField>
-
-			<VSCodeTextField
-				title={tooltipInformation.chmt}
-				data-name="chatMaxTokens"
-				value={interactions.chatMaxTokens.toString()}
-				onChange={handleChange}
-			>
-				Chat Max Tokens
-			</VSCodeTextField>
-		</Container>
+			{[
+				"codeContextWindow",
+				"codeMaxTokens",
+				"chatContextWindow",
+				"chatMaxTokens",
+			].map((field) => (
+				<div key={field} className="mb-4">
+					<label htmlFor={field} className="block mb-2">
+						{`${field
+							.replace(/([A-Z])/g, " $1")
+							.replace(/^./, (str) => str.toUpperCase())}:`}
+					</label>
+					<input
+						type="text"
+						id={field}
+						className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] bg-[var(--vscode-input-background)] text-[var(--vscode-editor-foreground)]"
+						title={
+							//@ts-expect-error
+							tooltipInformation[
+								field.replace(/([A-Z])/g, "_$1").toLowerCase()
+							]
+						}
+						data-name={field}
+						//@ts-expect-error
+						value={interactions[field].toString()}
+						onChange={handleChange}
+					/>
+				</div>
+			))}
+		</div>
 	);
 };

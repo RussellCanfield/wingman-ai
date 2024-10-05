@@ -340,7 +340,7 @@ ${prompt}`);
 
 		truncateChatHistory(6, this.chatHistory);
 
-		const stream = await this.baseModel?.stream(messages)!;
+		const stream = await this.baseModel?.stream(messages, { signal })!;
 
 		let completeMessage = "";
 		for await (const chunk of stream) {

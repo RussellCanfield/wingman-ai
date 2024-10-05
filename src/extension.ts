@@ -20,6 +20,7 @@ import {
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
 let chatViewProvider: ChatViewProvider;
+let configViewProvider: ConfigViewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
 	const settings = await LoadSettings();
@@ -48,7 +49,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	} catch (error) {
 		if (error instanceof Error) {
-			vscode.window.showErrorMessage(error.message);
+			const result = await vscode.window.showErrorMessage(
+				error.message,
+				"Open Settings"
+			);
+
+			if (result === "Open Settings") {
+				vscode.commands.executeCommand(
+					ConfigViewProvider.showConfigCommand
+				);
+			}
 			loggingProvider.logInfo(error.message);
 			eventEmitter._onFatalError.fire();
 		}
@@ -56,10 +66,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	statusBarProvider = new ActivityStatusBar();
 
+	configViewProvider = new ConfigViewProvider(context.extensionUri, settings);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ConfigViewProvider.viewType,
-			new ConfigViewProvider(context.extensionUri, settings)
+			configViewProvider
 		)
 	);
 
@@ -86,7 +97,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		modelProvider!,
 		context,
 		settings?.interactionSettings,
-		diffViewProvider
+		diffViewProvider,
+		settings?.validationSettings
 	);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -142,6 +154,15 @@ export async function activate(context: vscode.ExtensionContext) {
 				await vscode.commands.executeCommand(
 					`${ChatViewProvider.viewType}.focus`
 				);
+			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			ConfigViewProvider.showConfigCommand,
+			async () => {
+				configViewProvider.openInPanel();
 			}
 		)
 	);

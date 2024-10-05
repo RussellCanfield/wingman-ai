@@ -1,16 +1,10 @@
 import {
-	VSCodeDivider,
-	VSCodeDropdown,
-	VSCodeOption,
-} from "@vscode/webview-ui-toolkit/react";
-import {
 	AiProviders,
 	AiProvidersList,
 	ApiSettingsType,
 	OllamaSettingsType,
 } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, DropDownContainer } from "./Config";
 import { HFSettingsView } from "./HFSettingsView";
 import { OllamaSettingsView } from "./OllamaSettingsView";
 import { OpenAISettingsView } from "./OpenAISettingsView";
@@ -38,22 +32,28 @@ export const AiProvider = ({
 	};
 
 	return (
-		<Container>
-			<p className="mb-4 text-xl">AI Provider:</p>
-			<DropDownContainer>
-				<label htmlFor="ai-provider">AI Provider:</label>
-				<VSCodeDropdown
+		<div className="container mx-auto p-4">
+			<div className="mb-4">
+				<label
+					htmlFor="ai-provider"
+					className="block mb-2 text-sm font-medium"
+				>
+					AI Provider:
+				</label>
+				<select
 					id="ai-provider"
 					value={aiProvider}
 					onChange={handleProviderChange}
-					style={{ minWidth: "100%" }}
+					className="w-full p-2 border bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
 				>
 					{AiProvidersList.map((ab) => (
-						<VSCodeOption key={ab}>{ab}</VSCodeOption>
+						<option key={ab} value={ab}>
+							{ab}
+						</option>
 					))}
-				</VSCodeDropdown>
-			</DropDownContainer>
-			<VSCodeDivider />
+				</select>
+			</div>
+			<hr className="my-4 border-t border-[var(--vscode-editor-foreground)]" />
 			{aiProvider === "Ollama" && (
 				//@ts-expect-error
 				<OllamaSettingsView
@@ -84,6 +84,6 @@ export const AiProvider = ({
 				/>
 			)}
 			<ProviderInfoView {...settings} aiProvider={aiProvider} />
-		</Container>
+		</div>
 	);
 };

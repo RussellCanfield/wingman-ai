@@ -54,6 +54,7 @@ Instructions:
 5. Consider all provided files in the plan.
 6. Do not perform any code changes outside of the objective. Focus on what the core ask is.
 7. Create new files if required, following project structure.
+8. Ignore any completed objectives, only focus on new asks.
 
 File Handling:
 - Include relevant files in output.

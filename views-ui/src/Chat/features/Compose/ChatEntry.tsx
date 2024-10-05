@@ -1,5 +1,5 @@
 import { CSSProperties, PropsWithChildren, memo } from "react";
-import { FaCopy, FaCheck } from "react-icons/fa6";
+import { FaCopy } from "react-icons/fa6";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FaTerminal } from "react-icons/fa";
@@ -66,6 +66,7 @@ const renderMarkdown = (
 								style={theme}
 								language={languageType[1]}
 								wrapLines={true}
+								wrapLongLines={true}
 								file={file}
 								step={step}
 							/>
@@ -127,47 +128,47 @@ const ChatArtifact = ({
 	};
 
 	return (
-		<div className="border border-stone-800 rounded-lg overflow-hidden shadow-lg mb-4 mt-4">
-			<div className="bg-stone-800 text-white flex flex-wrap items-center">
+		<div className="border border-stone-700 rounded-lg overflow-hidden shadow-lg mb-4 mt-4">
+			<div className="bg-stone-700 text-white flex flex-wrap items-center">
 				<h4 className="m-0 flex-grow p-2 text-wrap break-all">
 					{truncatePath(file.file)}
 				</h4>
 				<div className="flex">
-					<div className="flex items-center bg-stone-800 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+					<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
 						<button
 							type="button"
 							title="Copy code to clipboard"
 							className="p-4"
 							onClick={() => copyToClipboard(file.code!)}
 						>
-							<FaCopy size={16} />
+							<FaCopy size={18} />
 						</button>
 					</div>
-					<div className="flex items-center bg-stone-800 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+					<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
 						<button
 							type="button"
 							title="Show diff"
 							className="p-4"
 							onClick={() => showDiffview()}
 						>
-							<MdOutlineDifference size={16} />
+							<MdOutlineDifference size={18} />
 						</button>
 					</div>
-					<div className="flex items-center bg-stone-800 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+					<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
 						<button
 							type="button"
 							title="Accept changes"
 							className="p-4"
 							onClick={() => mergeIntoFile()}
 						>
-							<LuFileCheck size={16} />
+							<LuFileCheck size={18} />
 						</button>
 					</div>
 				</div>
 			</div>
 			<div className="p-2 bg-editor-bg">
 				{file.changes?.length && file.changes?.length > 0 && (
-					<div className="mb-4 border border-stone-800 rounded-lg p-2">
+					<div className="mb-4 p-2">
 						<h4 className="m-0 text-md font-semibold">Changes:</h4>
 						<ul className="mt-2 list-disc list-inside">
 							{file.changes?.map((change, index) => (
@@ -204,12 +205,6 @@ const ChatEntry = ({
 		}
 	};
 
-	const validate = () => {
-		vscode.postMessage({
-			command: "validate",
-		});
-	};
-
 	return (
 		<li
 			className="pt-2 pb-2 tracking-wide leading-relaxed text-base"
@@ -240,26 +235,26 @@ const ChatEntry = ({
 						<h3 className="m-0 text-lg">Steps:</h3>
 						{plan.steps?.map((step, index) => (
 							<div
-								className="border border-stone-800 rounded-lg overflow-hidden shadow-lg mb-4 mt-4"
+								className="border border-stone-700 rounded-lg overflow-hidden shadow-lg mb-4 mt-4"
 								key={index}
 							>
-								<div className="bg-stone-800 text-white flex flex-row">
+								<div className="bg-stone-700 text-white flex flex-row">
 									<p className="flex-1 p-2">
 										{step.description}
 									</p>
 									{step.command && (
-										<div className="flex space-x-2 bg-stone-800 text-white rounded hover:bg-stone-500 hover:cursor-pointer z-10">
+										<div className="flex space-x-2 bg-stone-700 text-white rounded hover:bg-stone-500 hover:cursor-pointer z-10">
 											<button
 												type="button"
 												title="Run in terminal"
-												className="p-2"
+												className="p-4"
 												onClick={() =>
 													sendTerminalCommand(
 														step.command!
 													)
 												}
 											>
-												<FaTerminal size={16} />
+												<FaTerminal size={18} />
 											</button>
 										</div>
 									)}
@@ -288,29 +283,6 @@ const ChatEntry = ({
 							theme={codeTheme}
 						/>
 					))}
-				</div>
-			)}
-			{false && (
-				<div>
-					<div className="flex flex-col bg-editor-bg mt-4 rounded-lg">
-						<div
-							className="border border-stone-800 rounded-lg overflow-hidden shadow-lg mb-4 mt-4"
-							key={index}
-						>
-							<div className="bg-stone-800 text-white flex flex-row">
-								<p className="flex-1 p-2">Validate</p>
-								<div className="flex space-x-2 p-2 bg-stone-800 text-white rounded hover:bg-stone-500 hover:cursor-pointer z-10">
-									<button
-										type="button"
-										title="Run in terminal"
-										onClick={() => validate()}
-									>
-										<FaCheck size={16} />
-									</button>
-								</div>
-							</div>
-						</div>
-					</div>
 				</div>
 			)}
 		</li>

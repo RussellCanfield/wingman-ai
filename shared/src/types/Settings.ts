@@ -17,6 +17,10 @@ export interface BaseEmbeddingServiceSettings {
 	enabled: boolean;
 }
 
+export interface ValidationSettings {
+	validationCommand?: string;
+}
+
 export interface InteractionSettings {
 	codeCompletionEnabled: boolean;
 	codeStreaming: boolean;
@@ -67,6 +71,10 @@ export const defaultInteractionSettings: InteractionSettings = {
 	codeMaxTokens: 128,
 	chatContextWindow: 4096,
 	chatMaxTokens: 4096,
+};
+
+export const defaultValidationSettings: ValidationSettings = {
+	validationCommand: "",
 };
 
 export const defaultOllamaSettings: OllamaSettingsType = {
@@ -125,5 +133,8 @@ export type Settings = {
 		HuggingFace?: ApiSettingsType;
 		OpenAI?: ApiSettingsType;
 		Anthropic?: ApiSettingsType;
+	};
+	validationSettings: {
+		validationCommand?: string;
 	};
 };

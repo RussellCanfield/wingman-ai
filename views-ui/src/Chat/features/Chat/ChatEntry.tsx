@@ -27,6 +27,7 @@ type MarkDownEntry = {
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	const [toolboxVisible, setToolboxVisible] = useState(false);
+	const { isLightTheme } = useAppContext();
 
 	const getMarkdownFromChildren = () => {
 		const markDown = children as MarkDownObject;
@@ -68,18 +69,18 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 			{toolboxVisible && (
 				<div className="flex justify-end absolute -top-5 right-1.5 pr-2.5">
 					<div className="flex-1"></div>
-					<ul className="flex gap-1.5 list-none border border-gray-700 p-0.5">
+					<ul className="flex gap-1.5 list-none p-1 bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded-md">
 						<li
-							className="p-0.5 hover:bg-gray-800 cursor-pointer"
-							role="presentation"
+							className="p-1 rounded transition-colors duration-200 cursor-pointer text-[var(--vscode-input-foreground)] hover:text-white hover:bg-[var(--vscode-input-foreground)]"
+							role="button"
 							title="Copy code to clipboard"
 							onClick={copyToClipboard}
 						>
 							<FaCopy size={16} />
 						</li>
 						<li
-							className="p-0.5 hover:bg-gray-800 cursor-pointer"
-							role="presentation"
+							className="p-1 rounded transition-colors duration-200 cursor-pointer text-[var(--vscode-input-foreground)] hover:text-white hover:bg-[var(--vscode-input-foreground)]"
+							role="button"
 							title="Send to new file"
 							onClick={sendToNewFile}
 						>
@@ -88,7 +89,11 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 					</ul>
 				</div>
 			)}
-			<div className="overflow-x-auto bg-transparent p-2 border-2 border-stone-800 mb-4">
+			<div
+				className={`overflow-x-auto bg-transparent p-2 mb-4 border-2 ${
+					isLightTheme ? "border-stone-300" : "border-stone-600"
+				}`}
+			>
 				{React.isValidElement(children)
 					? React.cloneElement(children, {
 							//@ts-expect-error
@@ -187,6 +192,8 @@ const ChatEntry = ({
 								children={String(children).replace(/\n$/, "")}
 								style={codeTheme}
 								language={languageType[1]}
+								wrapLines={true}
+								wrapLongLines={true}
 							/>
 						) : (
 							<code

@@ -1,7 +1,3 @@
-import {
-	VSCodeButton,
-	VSCodeTextField,
-} from "@vscode/webview-ui-toolkit/react";
 import { useAppContext } from "../../context";
 import { vscode } from "../../utilities/vscode";
 import { AppMessage } from "@shared/types/Message";
@@ -109,26 +105,26 @@ export default function Indexer() {
 				{!index.exists && !index.processing && (
 					<section className="flex flex-col gap-4">
 						<label>Inclusion Filter:</label>
-						<VSCodeTextField
+						<input
+							type="text"
+							className="border border-gray-300 rounded px-2 py-1"
 							value={filter || ""}
-							//@ts-expect-error
-							onChange={(e) => setFilter(e.target?.value)}
+							onChange={(e) => setFilter(e.target.value)}
 						/>
 						<label>Exclusion Filter: </label>
-						<VSCodeTextField
+						<input
+							type="text"
+							className="border border-gray-300 rounded px-2 py-1"
 							value={exclusionFilter || ""}
-							onChange={(e) =>
-								//@ts-expect-error
-								setExclusionFilter(e.target?.value)
-							}
+							onChange={(e) => setExclusionFilter(e.target.value)}
 						/>
-						<VSCodeButton
-							type="button"
+						<button
+							className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
 							disabled={index.processing || !filter}
 							onClick={() => buildIndex()}
 						>
 							Build Index
-						</VSCodeButton>
+						</button>
 					</section>
 				)}
 				{index.processing && (
@@ -139,21 +135,20 @@ export default function Indexer() {
 				)}
 				{index.exists && !index.processing && (
 					<>
-						<VSCodeButton
-							type="button"
+						<button
+							className="bg-red-600 text-white px-4 py-2 rounded"
 							onClick={() => deleteIndex()}
-							className="bg-red-600"
 						>
 							Delete Index
-						</VSCodeButton>
+						</button>
 						<div>
-							<VSCodeButton
-								type="button"
+							<button
+								className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
 								disabled={index.processing || !filter}
 								onClick={() => buildIndex()}
 							>
 								Build Index
-							</VSCodeButton>
+							</button>
 						</div>
 						<div className="mt-4">
 							<p className="text-lg font-bold">Indexed Files:</p>

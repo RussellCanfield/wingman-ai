@@ -7,6 +7,7 @@ import {
 	defaultOllamaSettings,
 	defaultOpenAIEmbeddingSettings,
 	defaultOpenAISettings,
+	defaultValidationSettings,
 	Settings,
 } from "@shared/types/Settings";
 import { homedir } from "node:os";
@@ -26,6 +27,7 @@ export const defaultSettings: Settings = {
 		Anthropic: defaultAnthropicSettings,
 		OpenAI: defaultOpenAISettings,
 	},
+	validationSettings: defaultValidationSettings,
 };
 
 function mergeSettings(
@@ -46,6 +48,10 @@ function mergeSettings(
 		providerSettings: {
 			...defaults.providerSettings,
 			...loaded.providerSettings,
+		},
+		validationSettings: {
+			...defaults.validationSettings,
+			...loaded.validationSettings,
 		},
 	};
 }
@@ -88,6 +94,7 @@ export async function LoadSettings(): Promise<Settings> {
 				Anthropic: defaultAnthropicSettings,
 				OpenAI: defaultOpenAISettings,
 			},
+			validationSettings: defaultValidationSettings,
 		};
 	}
 

@@ -1,11 +1,12 @@
-import { AppMessage, ChatMessage, CodeContext } from "@shared/types/Message";
+import { AppMessage, CodeContext } from "@shared/types/Message";
 import { ComposerMessage, ComposerResponse } from "@shared/types/Composer";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./ChatInput";
 import { useAppContext } from "../../context";
 import ChatResponseList from "./ChatList";
+import Validation from "./Validation";
 
 let currentMessage = "";
 let currentContext: CodeContext | undefined;
@@ -38,6 +39,9 @@ export default function Compose() {
 		const { command, value } = data;
 
 		switch (command) {
+			case "validation-failed":
+				handleChatSubmitted(String(value), []);
+				break;
 			case "compose-response":
 				if (!value) {
 					return;
@@ -174,6 +178,15 @@ ${values.review.comments.join("\n")}`,
 		setLoading(true);
 	};
 
+	const canValidate = useMemo(() => {
+		if (composerMessages.length === 0) return false;
+
+		return (
+			composerMessages[composerMessages.length - 1].plan?.files?.length >
+				0 || false
+		);
+	}, [composerMessages]);
+
 	return (
 		<main className="h-full flex flex-col overflow-auto">
 			{composerMessages.length === 0 && (
@@ -198,6 +211,7 @@ ${values.review.comments.join("\n")}`,
 						index={1}
 					/>
 				)}
+				{canValidate && <Validation />}
 			</ChatResponseList>
 			<ChatInput
 				loading={loading}

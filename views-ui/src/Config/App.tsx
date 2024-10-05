@@ -9,12 +9,14 @@ import {
 	OllamaSettingsType,
 	OpenAIEmbeddingSettingsType,
 	Settings,
+	ValidationSettings,
 } from "@shared/types/Settings";
 import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
 import { vscode } from "./utilities/vscode";
 import "./App.css";
 import { EmbeddingProvider } from "./EmbeddingProvider";
+import { ValidationView } from "./ValidationView";
 
 export type InitSettings = Settings & { ollamaModels: string[] };
 
@@ -119,6 +121,13 @@ export const App = () => {
 		}));
 	};
 
+	const onValidationSettingsChanged = (settings: ValidationSettings) => {
+		setSettings((s) => ({
+			...s!,
+			validationSettings: settings,
+		}));
+	};
+
 	const saveSettings = () => {
 		vscode.postMessage({
 			command: "saveSettings",
@@ -127,35 +136,50 @@ export const App = () => {
 	};
 
 	return (
-		<div className="flex flex-col">
-			<div className="mt-4 mb-4 flex justify-end p-2">
+		<div className="flex flex-col p-4">
+			<h2 className="text-xl font-semibold mb-4">Wingman Settings</h2>
+			<div className="mb-6 flex justify-end">
 				<button
 					type="button"
 					onClick={saveSettings}
-					className="bg-blue-500 text-gray-100 p-2 rounded border-solid text-md min-w-20 font-bold"
+					className="bg-blue-600 hover:bg-blue-700 text-white  py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out text-sm font-semibold"
 				>
 					Save
 				</button>
 			</div>
-			<div className="flex flex-row flex-nowrap gap-2 items-stretch p-4">
-				<section className="p-4 rounded-lg border border-gray-500">
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md  hover:shadow-lg transition duration-300 ease-in-out p-6">
+					<h2 className="text-xl font-semibold mb-4">AI Provider</h2>
 					<AiProvider
 						settings={settings}
 						onProviderChanged={onAiProviderChanged}
 						onProviderSettingsChanged={onAiProviderSettingsChanged}
 					/>
 				</section>
-				<section className="p-4 rounded-lg border border-gray-500">
+				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md hover:shadow-lg transition duration-300 ease-in-out p-6">
+					<h2 className="text-xl font-semibold mb-4">
+						Interaction Settings
+					</h2>
 					<InteractionSettingsConfig
 						interactions={settings.interactionSettings}
 						onChange={onInteractionSettingsChanged}
 					/>
 				</section>
-				<section className="p-4 rounded-lg border border-gray-500">
+				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md hover:shadow-lg transition duration-300 ease-in-out p-6">
+					<h2 className="text-xl font-semibold mb-4">
+						Embedding Provider
+					</h2>
 					<EmbeddingProvider
 						{...settings}
 						onProviderChange={onEmbeddingProviderChanged}
 						onEmbeddingSettingsChange={onEmbeddingSettingsChanged}
+					/>
+				</section>
+				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md hover:shadow-lg transition duration-300 ease-in-out p-6">
+					<h2 className="text-xl font-semibold mb-4">Validation</h2>
+					<ValidationView
+						validationSettings={settings.validationSettings}
+						onValidationChanged={onValidationSettingsChanged}
 					/>
 				</section>
 			</div>

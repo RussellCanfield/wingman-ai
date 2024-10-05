@@ -1,7 +1,5 @@
-import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
 import { OllamaSettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, DropDownContainer, VSCodeTextField } from "./Config";
 
 type OllamaSection = InitSettings["providerSettings"]["Ollama"] & {
 	ollamaModels: string[];
@@ -40,57 +38,102 @@ export const OllamaSettingsView = ({
 	};
 
 	return (
-		<Container>
-			<DropDownContainer>
-				<label htmlFor="code-model">Code model:</label>
-				<VSCodeDropdown
+		<div className="flex flex-col space-y-4">
+			<div className="flex flex-col">
+				<label
+					htmlFor="code-model"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Code model:
+				</label>
+				<select
 					id="code-model"
 					value={codeModel}
 					onChange={handleChange}
-					style={{ minWidth: "100%" }}
+					className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 				>
-					{ollamaModels.map((ab) => (
-						<VSCodeOption key={ab}>{ab}</VSCodeOption>
+					{ollamaModels.map((model) => (
+						<option key={model} value={model}>
+							{model}
+						</option>
 					))}
-				</VSCodeDropdown>
-			</DropDownContainer>
-			<DropDownContainer>
-				<label htmlFor="chat-model">Chat model:</label>
-				<VSCodeDropdown
+				</select>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="chat-model"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Chat model:
+				</label>
+				<select
 					id="chat-model"
 					value={chatModel}
-					style={{ minWidth: "100%" }}
 					onChange={handleChatChange}
+					className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 				>
-					{ollamaModels.map((ab) => (
-						<VSCodeOption key={ab}>{ab}</VSCodeOption>
+					{ollamaModels.map((model) => (
+						<option key={model} value={model}>
+							{model}
+						</option>
 					))}
-				</VSCodeDropdown>
-			</DropDownContainer>
-			<VSCodeTextField
-				onChange={handleChangeInput}
-				value={baseUrl}
-				data-name="baseUrl"
-				title="Ollama's base path"
-			>
-				Base url:
-			</VSCodeTextField>
-			<VSCodeTextField
-				onChange={handleChangeInput}
-				value={apiPath}
-				data-name="apiPath"
-				title="Ollama's generation endpoint"
-			>
-				Api path:
-			</VSCodeTextField>
-			<VSCodeTextField
-				onChange={handleChangeInput}
-				value={modelInfoPath}
-				data-name="modelInfoPath"
-				title="Ollama's info path"
-			>
-				Model info path:
-			</VSCodeTextField>
-		</Container>
+				</select>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="base-url"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Base url:
+				</label>
+				<input
+					id="base-url"
+					type="text"
+					onChange={handleChangeInput}
+					value={baseUrl}
+					data-name="baseUrl"
+					title="Ollama's base path"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+				/>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="api-path"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Api path:
+				</label>
+				<input
+					id="api-path"
+					type="text"
+					onChange={handleChangeInput}
+					value={apiPath}
+					data-name="apiPath"
+					title="Ollama's generation endpoint"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+				/>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="model-info-path"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Model info path:
+				</label>
+				<input
+					id="model-info-path"
+					type="text"
+					onChange={handleChangeInput}
+					value={modelInfoPath}
+					data-name="modelInfoPath"
+					title="Ollama's info path"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+				/>
+			</div>
+		</div>
 	);
 };

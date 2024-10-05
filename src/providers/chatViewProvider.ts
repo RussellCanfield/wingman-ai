@@ -11,6 +11,7 @@ import {
 import {
 	IndexFilter,
 	InteractionSettings,
+	ValidationSettings,
 } from "../../shared/src/types/Settings";
 import { loggingProvider } from "./loggingProvider";
 import {
@@ -28,7 +29,7 @@ import {
 	FileSearchResult,
 } from "@shared/types/Composer";
 import { DiffViewProvider } from "./diffViewProvider";
-import { WingmanTerminal } from "./terminalProvider";
+import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
@@ -48,7 +49,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _interactionSettings: InteractionSettings,
-		private readonly _diffViewProvider: DiffViewProvider
+		private readonly _diffViewProvider: DiffViewProvider,
+		private readonly _validationSettings: ValidationSettings
 	) {}
 
 	dispose() {
@@ -97,13 +99,67 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		wingmanTerminal = new WingmanTerminal(
 			vscode.workspace.workspaceFolders?.[0].uri.fsPath || ""
 		);
-		wingmanTerminal.subscribe((data, code) => {
+		wingmanTerminal.subscribe(async (data, code) => {
+			if (!data) return;
+
+			if (code === CustomTimeoutExitCode) {
+				loggingProvider.logInfo("Validation command timeout occurred");
+				this._webview?.postMessage({
+					command: "validation-success",
+				});
+				wingmanTerminal?.cancel();
+				return;
+			}
+
+			loggingProvider.logInfo(`Validation command output:\n\n${data}`);
+			const output = await this._aiProvider.getRerankModel()
+				.invoke(`You are a senior software engineer.
+Analyze the following command output.
+
+Rules:
+- Determine if the command ran successfully or not.
+- If the command did not run successfully try to succinctly identify what the error may be.
+- Provide a concise summary of the error, if present.
+- If there was no exit code, and an error is not obvious, assume it was successful.
+- Return your response in JSON format, do not include markdown or any other text.
+
+Example JSON output format:
+{
+   "success": true|false,
+   "summary": "Command files due to xyz"
+}
+   
+-----
+
+Command executed:
+${this._validationSettings.validationCommand}
+
+Exit code: 
+${code || "Not available."}
+
+Command output:
+${data}
+`);
+
+			const result = JSON.parse(output.content.toString()) as {
+				success: boolean;
+				summary: string;
+			};
+
+			if (result.success) {
+				this._webview?.postMessage({
+					command: "validation-success",
+				});
+				wingmanTerminal?.cancel();
+				return;
+			}
+
 			this._webview?.postMessage({
-				command: "validation-result",
-				value: {
-					output: data,
-					exitCode: code,
-				},
+				command: "validation-failed",
+				value: `Fix my build errors.
+
+Here is a summary of the command output:
+${result.summary}`,
 			});
 		});
 
@@ -135,8 +191,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							});
 							break;
 						case "validate":
-							wingmanTerminal?.spawn();
-							wingmanTerminal?.sendCommand("npm run build");
+							if (this._validationSettings?.validationCommand) {
+								loggingProvider.logInfo(
+									`Validating using command: ${this._validationSettings.validationCommand}`
+								);
+								wingmanTerminal?.spawn();
+								wingmanTerminal?.sendCommand(
+									this._validationSettings.validationCommand
+								);
+							}
+							break;
+						case "cancel-validate":
+							wingmanTerminal?.cancel();
 							break;
 						case "clear-chat-history":
 							this._aiProvider.clearChatHistory();

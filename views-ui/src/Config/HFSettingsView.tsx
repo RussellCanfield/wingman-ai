@@ -1,6 +1,5 @@
 import { ApiSettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
-import { Container, VSCodeTextField } from "./Config";
 
 type HFSection = InitSettings["providerSettings"]["HuggingFace"] & {
 	onChange: (ollamaSettings: ApiSettingsType) => void;
@@ -22,39 +21,66 @@ export const HFSettingsView = ({
 	};
 
 	return (
-		<Container>
-			<VSCodeTextField
-				onChange={handleChangeInput}
-				value={codeModel}
-				data-name="codeModel"
-				title="HF Code Model"
-			>
-				Code Model:
-			</VSCodeTextField>
-			<VSCodeTextField
-				onChange={handleChangeInput}
-				value={chatModel}
-				data-name="chatModel"
-				title="HF Chat Model"
-			>
-				Chat Model:
-			</VSCodeTextField>
-			<VSCodeTextField
-				onChange={handleChangeInput}
-				value={baseUrl}
-				data-name="baseUrl"
-				title="HF base url"
-			>
-				Base url:
-			</VSCodeTextField>
-			<VSCodeTextField
-				onChange={handleChangeInput}
-				value={apiKey}
-				data-name="apiKey"
-				title="HF api key"
-			>
-				Api key:
-			</VSCodeTextField>
-		</Container>
+		<div className="flex flex-col space-y-4">
+			<div className="flex flex-col">
+				<label htmlFor="codeModel" className="mb-1 text-sm font-medium">
+					Code Model:
+				</label>
+				<input
+					id="codeModel"
+					type="text"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					onChange={handleChangeInput}
+					value={codeModel}
+					data-name="codeModel"
+					title="HF Code Model"
+				/>
+			</div>
+
+			<div className="flex flex-col">
+				<label htmlFor="chatModel" className="mb-1 text-sm font-medium">
+					Chat Model:
+				</label>
+				<input
+					id="chatModel"
+					type="text"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					onChange={handleChangeInput}
+					value={chatModel}
+					data-name="chatModel"
+					title="HF Chat Model"
+				/>
+			</div>
+
+			<div className="flex flex-col">
+				<label htmlFor="baseUrl" className="mb-1 text-sm font-medium">
+					Base url:
+				</label>
+				<input
+					id="baseUrl"
+					type="text"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					onChange={handleChangeInput}
+					value={baseUrl}
+					data-name="baseUrl"
+					title="HF base url"
+				/>
+			</div>
+
+			<div className="flex flex-col">
+				<label htmlFor="apiKey" className="mb-1 text-sm font-medium">
+					Api key:
+				</label>
+				<input
+					id="apiKey"
+					type="password"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					onChange={handleChangeInput}
+					value={apiKey}
+					data-name="apiKey"
+					title="HF api key"
+				/>
+			</div>
+		</div>
 	);
 };
