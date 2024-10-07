@@ -79,3 +79,10 @@ Prefix all react components with "AWESOME_"
 ```
 
 You can add any additional instructions you want Wingman to follow. This can be helpful when you have specific coding standards or practices you want to enforce.
+
+## Validate
+
+A new experimental feature has been added called "Validate". Validate is available and appears after a Composer run complets successfully. It allows you to configure a command to be run via a shell (command line on windows, and bash on macOS) with up to a 60s timeout.
+Wingman will monitor the command and once complete interprete the results. If its interpreted as a failure, Wingman will automatically submit the error as a new Composer message. The idea is for it to generate the fix for you as a Composer output and let you apply it.
+
+This feature is manually activated and optional in its experimental stage.
