@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.7.13",
+	"version": "0.7.14",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -187,6 +187,7 @@
 		"@langchain/langgraph": "0.2.8",
 		"@langchain/ollama": "0.1.0",
 		"@langchain/openai": "0.3.0",
+		"@vscode/extension-telemetry": "^0.9.7",
 		"ignore": "5.2.0",
 		"langchain": "0.3.2",
 		"node-cache": "^5.1.2",

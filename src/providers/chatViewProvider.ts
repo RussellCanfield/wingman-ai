@@ -30,6 +30,11 @@ import {
 } from "@shared/types/Composer";
 import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
+import {
+	EVENT_VALIDATE_FAILED,
+	EVENT_VALIDATE_SUCCEEDED,
+	telemetry,
+} from "./telemetryProvider";
 
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
@@ -147,12 +152,19 @@ ${data}
 			};
 
 			if (result.success) {
+				telemetry.sendEvent(EVENT_VALIDATE_SUCCEEDED, {
+					command: this._validationSettings.validationCommand || "",
+				});
 				this._webview?.postMessage({
 					command: "validation-success",
 				});
 				wingmanTerminal?.cancel();
 				return;
 			}
+
+			telemetry.sendEvent(EVENT_VALIDATE_FAILED, {
+				command: this._validationSettings.validationCommand || "",
+			});
 
 			this._webview?.postMessage({
 				command: "validation-failed",

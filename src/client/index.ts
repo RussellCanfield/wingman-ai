@@ -17,6 +17,13 @@ import path from "node:path";
 import ignore from "ignore";
 import { mapLocation, mapSymbol } from "./utils";
 import { loggingProvider } from "../providers/loggingProvider";
+import {
+	EVENT_COMPOSE_PHASE,
+	EVENT_COMPOSE_STARTED,
+	EVENT_FULL_INDEX_BUILD,
+	EVENT_VECTOR_STORE_LOAD_FAILED,
+	telemetry,
+} from "../providers/telemetryProvider";
 
 let client: LanguageClient;
 
@@ -78,6 +85,9 @@ export class LSPClient {
 
 		client.onRequest("wingman/compose", (params: ComposerResponse) => {
 			loggingProvider.logInfo(JSON.stringify(params));
+			telemetry.sendEvent(EVENT_COMPOSE_PHASE, {
+				phase: params.node,
+			});
 			this.composerWebView?.postMessage({
 				command: "compose-response",
 				value: params,
@@ -87,6 +97,7 @@ export class LSPClient {
 		client.onRequest(
 			"wingman/failedLoadingStore",
 			(params: ComposerResponse) => {
+				telemetry.sendEvent(EVENT_VECTOR_STORE_LOAD_FAILED);
 				vscode.window.showErrorMessage(
 					"Unable to load vector index. It may be corrupt, if this continues please delete the index and re-create it."
 				);
@@ -147,6 +158,9 @@ export class LSPClient {
 	};
 
 	compose = async (request: ComposerRequest) => {
+		telemetry.sendEvent(EVENT_COMPOSE_STARTED, {
+			numberOfFiles: request.contextFiles.length.toString(),
+		});
 		await client.sendRequest<ComposerResponse>("wingman/compose", {
 			request,
 		});
@@ -157,6 +171,7 @@ export class LSPClient {
 	};
 
 	buildFullIndex = async (filter: string, exclusionFilter?: string) => {
+		telemetry.sendEvent(EVENT_FULL_INDEX_BUILD);
 		const foundFiles = await findFiles(filter, exclusionFilter);
 		return client.sendRequest("wingman/fullIndexBuild", {
 			files: foundFiles.map((f) => f.fsPath),

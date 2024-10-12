@@ -25,19 +25,31 @@ type MarkDownEntry = {
 	};
 };
 
-const CodeContainer = memo(({ children }: PropsWithChildren) => {
+const CodeContainer = memo((props: PropsWithChildren) => {
 	const [toolboxVisible, setToolboxVisible] = useState(false);
 	const { isLightTheme } = useAppContext();
 
 	const getMarkdownFromChildren = () => {
-		const markDown = children as MarkDownObject;
+		const markDown = props.children as MarkDownObject;
 
 		return (markDown.props.children[1] as MarkDownEntry[]).reduce(
 			(acc: string, curr: string | MarkDownEntry) => {
 				if (typeof curr === "string") {
 					acc += curr;
-				} else if (curr.props) {
-					acc += curr.props.children[0];
+				} else if (curr.props.children) {
+					(curr.props.children as unknown as MarkDownEntry[]).forEach(
+						(c) => {
+							if (typeof c === "string") {
+								acc += c;
+							} else if (
+								curr.props.children &&
+								Array.isArray(curr.props.children) &&
+								curr.props.children[0] !== undefined
+							) {
+								acc += c.props.children[0];
+							}
+						}
+					);
 				}
 
 				return acc;
@@ -94,12 +106,12 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 					isLightTheme ? "border-stone-300" : "border-stone-600"
 				}`}
 			>
-				{React.isValidElement(children)
-					? React.cloneElement(children, {
+				{React.isValidElement(props.children)
+					? React.cloneElement(props.children, {
 							//@ts-expect-error
 							className: "bg-transparent",
 					  })
-					: children}
+					: props.children}
 			</div>
 		</div>
 	);

@@ -1,0 +1,54 @@
+{
+	"EXTENSION_LOADED": {
+		"description": "Sent when the extension is activated"
+	},
+	"AI_PROVIDER_VALIDATION_FAILED": {
+		"description": "Sent when configuration settings are invalid. Tracked because of Ollama flexibility."
+	},
+	"VECTOR_STORE_LOAD_FAILED": {
+		"description": "Sent when the vector store fails to load."
+	},
+	"COMPOSE_STARTED": {
+		"description": "Sent when the compose feature is used.",
+		"properties": {
+			"numberOfFiles": {
+				"classification": "SystemMetaData",
+				"purpose": "FeatureInsight",
+				"comment": "The number of files provided as context."
+			}
+		}
+	},
+	"COMPOSE_PHASE": {
+		"description": "Sent when the compose feature responds, tracks which phase has executed.",
+		"properties": {
+			"phase": {
+				"classification": "SystemMetaData",
+				"purpose": "FeatureInsight",
+				"comment": "The phase name in the response."
+			}
+		}
+	},
+	"INDEX_BUILD_STARTED": {
+		"description": "Sent when the user initiates a full index build."
+	},
+	"VALIDATE_SUCCEEDED": {
+		"description": "Sent when the validate feature succeeds.",
+		"properties": {
+			"command": {
+				"classification": "SystemMetaData",
+				"purpose": "FeatureInsight",
+				"comment": "The command executed."
+			}
+		}
+	},
+	"VALIDATE_FAILED": {
+		"description": "Sent when the validate feature fails.",
+		"properties": {
+			"command": {
+				"classification": "SystemMetaData",
+				"purpose": "FeatureInsight",
+				"comment": "The command failed."
+			}
+		}
+	}
+}

@@ -1,9 +1,11 @@
-import { defineConfig, rspack } from "@rsbuild/core";
+import { loadEnv, defineConfig } from "@rsbuild/core";
 import path from "node:path";
 
 export default ({ env, command, envMode }) => {
 	const isProd = env === "production";
 	console.log("Production Build:", isProd, envMode);
+
+	const { publicVars } = loadEnv();
 
 	return defineConfig({
 		mode: isProd ? "production" : "none",
@@ -11,6 +13,12 @@ export default ({ env, command, envMode }) => {
 			entry: {
 				extension: "./src/extension.ts",
 				server: "./src/server/index.ts",
+			},
+			define: {
+				"process.env.PUBLIC_TELEMETRY_CONNECTIONSTRING": JSON.stringify(
+					process.env.TELEMETRY_CONNECTIONSTRING
+				),
+				...publicVars,
 			},
 		},
 		tools: {

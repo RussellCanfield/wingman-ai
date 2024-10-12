@@ -16,6 +16,11 @@ import {
 	startClipboardTracking,
 	stopClipboardTracking,
 } from "./providers/clipboardTracker";
+import {
+	EVENT_AI_PROVIDER_VALIDATION_FAILED,
+	EVENT_EXTENSION_LOADED,
+	telemetry,
+} from "./providers/telemetryProvider";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -36,6 +41,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	await lspClient.activate(context, settings);
 
+	telemetry.sendEvent(EVENT_EXTENSION_LOADED, {
+		aiProvider: settings.aiProvider,
+		embeddingProvider: settings.embeddingProvider,
+	});
+
 	diffViewProvider = new DiffViewProvider(context);
 
 	let modelProvider;
@@ -43,12 +53,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		modelProvider = CreateAIProvider(settings, loggingProvider);
 
 		if (!(await modelProvider.validateSettings())) {
+			telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED);
 			throw new Error(
 				`AI Provider ${settings.aiProvider} is not configured correctly.`
 			);
 		}
 	} catch (error) {
 		if (error instanceof Error) {
+			telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
+				reason: error.message,
+			});
 			const result = await vscode.window.showErrorMessage(
 				error.message,
 				"Open Settings"
@@ -179,4 +193,5 @@ export function deactivate() {
 	diffViewProvider?.dispose();
 	stopClipboardTracking();
 	loggingProvider.dispose();
+	telemetry.dispose();
 }

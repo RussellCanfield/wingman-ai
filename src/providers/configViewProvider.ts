@@ -124,39 +124,40 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	private _getSimpleViewHtml = (webview: vscode.Webview): string => {
 		const nonce = this.getNonce();
-		const toolkitUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(
-				this._extensionUri,
-				"node_modules",
-				"@vscode",
-				"webview-ui-toolkit",
-				"dist",
-				"toolkit.js"
-			)
-		);
 
 		return `<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
-        <script type="module" nonce="${nonce}" src="${toolkitUri}"></script>
-        <title>Config View</title>
-    </head>
-    <body>
-      <div>
-        <h3>Wingman</h3>
-        <vscode-button id="open">Open Settings</vscode-button>
-      </div>
-        <script nonce="${nonce}">
-            const vscode = acquireVsCodeApi();
-            document.getElementById('open').addEventListener('click', () => {
-                vscode.postMessage({ command: 'openSettings' });
-            });
-        </script>
-    </body>
-    </html>`;
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <title>Config View</title>
+    <style nonce="${nonce}">
+        button {
+            padding: 8px 16px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+    </style>
+</head>
+<body>
+  <div>
+    <h3>Wingman</h3>
+    <button id="open">Open Settings</button>
+  </div>
+    <script nonce="${nonce}">
+        const vscode = acquireVsCodeApi();
+        document.getElementById('open').addEventListener('click', () => {
+            vscode.postMessage({ command: 'openSettings' });
+        });
+    </script>
+</body>
+</html>`;
 	};
 
 	private _getHtml = (webview: vscode.Webview) => {
