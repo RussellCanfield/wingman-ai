@@ -453,6 +453,11 @@ export class LSPServer {
 			} catch (e) {
 				console.error(e);
 			}
+
+			return {
+				codeDocs: [],
+				projectDetails: "",
+			};
 		});
 
 		this.documents?.onDidSave((e) => {
