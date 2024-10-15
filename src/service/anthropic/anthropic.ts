@@ -1,5 +1,5 @@
 import { asyncIterator } from "../asyncIterator";
-import { AIStreamProvicer } from "../base";
+import { AIStreamProvider } from "../base";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { ClaudeModel } from "./models/claude";
 import { AnthropicRequest } from "./types/ClaudeRequest";
@@ -16,7 +16,7 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ILoggingProvider } from "@shared/types/Logger";
 import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 
-export class Anthropic implements AIStreamProvicer {
+export class Anthropic implements AIStreamProvider {
 	decoder = new TextDecoder();
 	chatHistory: BaseMessage[] = [];
 	chatModel: AnthropicModel | undefined;

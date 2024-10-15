@@ -34,7 +34,7 @@ export interface AIProvider {
 	getRerankModel(): BaseChatModel;
 }
 
-export interface AIStreamProvicer extends AIProvider {
+export interface AIStreamProvider extends AIProvider {
 	codeCompleteStream(
 		beginning: string,
 		ending: string,

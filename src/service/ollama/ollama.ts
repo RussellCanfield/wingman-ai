@@ -1,7 +1,7 @@
 import { OllamaAIModel } from "./types";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { asyncIterator } from "../asyncIterator";
-import { AIStreamProvicer } from "../base";
+import { AIStreamProvider } from "../base";
 import { delay } from "../delay";
 import { CodeLlama } from "./models/codellama";
 import { CodeQwen } from "./models/codeqwen";
@@ -23,7 +23,7 @@ import { ChatOllama } from "@langchain/ollama";
 import { Qwen } from "./models/qwen";
 import { ILoggingProvider } from "@shared/types/Logger";
 
-export class Ollama implements AIStreamProvicer {
+export class Ollama implements AIStreamProvider {
 	decoder = new TextDecoder();
 	chatHistory: OllamaChatMessage[] = [];
 	chatModel: OllamaAIModel | undefined;

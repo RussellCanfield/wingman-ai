@@ -5,7 +5,7 @@ import vscode, {
 	SnippetString,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
-import { AIProvider, AIStreamProvicer } from "../service/base";
+import { AIProvider, AIStreamProvider } from "../service/base";
 import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "@shared/types/Settings";
 
@@ -13,7 +13,7 @@ export class HotKeyCodeSuggestionProvider
 	implements vscode.CompletionItemProvider
 {
 	constructor(
-		private readonly _aiProvider: AIProvider | AIStreamProvicer,
+		private readonly _aiProvider: AIProvider | AIStreamProvider,
 		private readonly _interactionSettings: InteractionSettings
 	) {}
 	static provider: HotKeyCodeSuggestionProvider | null = null;
