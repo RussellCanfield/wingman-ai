@@ -507,15 +507,17 @@ ${result.summary}`,
 				: `The user is currently working on the following line: ${context?.currentLine}`
 		);
 
-		ragContext = ragContext.replace(
-			"{PROJECT_TEMPLATE}",
-			!projectDetails
-				? ""
-				: `Here are details about the current project:
+		if (projectDetails) {
+			ragContext = ragContext.replace(
+				"{PROJECT_TEMPLATE}",
+				!projectDetails
+					? ""
+					: `Here are details about the current project:
 ${projectDetails}
 
 =======`
-		);
+			);
+		}
 
 		if (codeDocs?.length === 0) {
 			ragContext = ragContext.replace(

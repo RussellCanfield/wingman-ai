@@ -183,9 +183,15 @@ export class LSPClient {
 	};
 
 	getEmbeddings = async (query: string): Promise<EmbeddingsResponse> => {
-		return client.sendRequest("wingman/getEmbeddings", {
-			query,
-		});
+		try {
+			return client.sendRequest("wingman/getEmbeddings", {
+				query,
+			});
+		} catch (e) {
+			loggingProvider.logError(e);
+		}
+
+		return { codeDocs: [], projectDetails: "" };
 	};
 
 	indexExists = async () => {
