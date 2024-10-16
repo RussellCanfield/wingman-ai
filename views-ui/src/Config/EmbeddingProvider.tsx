@@ -7,6 +7,7 @@ import {
 import { InitSettings } from "./App";
 import { OllamaEmbeddingSettingsView } from "./OllamaEmbeddingSettingsView";
 import { OpenAIEmbeddingSettingsView } from "./OpenAIEmbeddingSettingsView";
+import { AzureAIEmbeddingSettingsView } from "./AzureAIEmbeddingSettingsView";
 
 export type EmbeddingProviderProps = {
 	embeddingProvider: EmbeddingProviders;
@@ -56,6 +57,12 @@ export const EmbeddingProvider = ({
 			{embeddingProvider === "OpenAI" && (
 				<OpenAIEmbeddingSettingsView
 					{...embeddingSettings.OpenAI!}
+					onChange={onEmbeddingSettingsChange}
+				/>
+			)}
+			{embeddingProvider === "AzureAI" && (
+				<AzureAIEmbeddingSettingsView
+					{...embeddingSettings.AzureAI!}
 					onChange={onEmbeddingSettingsChange}
 				/>
 			)}

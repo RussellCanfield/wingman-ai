@@ -436,7 +436,8 @@ export class LSPServer {
 						request.query,
 						this.codeGraph!,
 						this.vectorStore!,
-						this.workspaceFolders[0]
+						this.workspaceFolders[0],
+						3
 					);
 
 				const projectDetails =

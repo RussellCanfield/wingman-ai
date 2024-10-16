@@ -1,16 +1,16 @@
 import { ApiSettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
 
-type OpenAiSection = InitSettings["providerSettings"]["OpenAI"] & {
-	onChange: (openAISettings: ApiSettingsType) => void;
+type AzureAISection = InitSettings["providerSettings"]["AzureAI"] & {
+	onChange: (azureAISettings: ApiSettingsType) => void;
 };
-export const OpenAISettingsView = ({
+export const AzureAISettingsView = ({
 	codeModel,
 	chatModel,
 	baseUrl,
 	apiKey,
 	onChange,
-}: OpenAiSection) => {
+}: AzureAISection) => {
 	const paths = { codeModel, chatModel, baseUrl, apiKey };
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
@@ -36,7 +36,7 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={codeModel}
 					data-name="codeModel"
-					title="OpenAI Code Model"
+					title="AzureAI Code Model"
 				/>
 			</div>
 
@@ -54,7 +54,7 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={chatModel}
 					data-name="chatModel"
-					title="OpenAI Chat Model"
+					title="AzureAI Chat Model"
 				/>
 			</div>
 
@@ -72,7 +72,7 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={baseUrl}
 					data-name="baseUrl"
-					title="OpenAI base url"
+					title="AzureAI base url"
 				/>
 			</div>
 
@@ -90,7 +90,7 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={apiKey}
 					data-name="apiKey"
-					title="OpenAI api key"
+					title="AzureAI api key"
 				/>
 			</div>
 		</div>

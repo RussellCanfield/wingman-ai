@@ -1,25 +1,29 @@
 import { InteractionSettings, Settings } from "@shared/types/Settings";
-import { AIStreamProvider } from "../base";
+import { AIStreamProvider, buildCodeCompletePrompt } from "../base";
 import { ILoggingProvider } from "@shared/types/Logger";
-import { AnthropicModel, AzureAIModel } from "@shared/types/Models";
+import { AzureAIModel } from "@shared/types/Models";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import {
+	AIMessage,
 	AIMessageChunk,
 	BaseMessage,
 	BaseMessageChunk,
+	HumanMessage,
+	SystemMessage,
 } from "@langchain/core/messages";
 import { AzureChatOpenAI } from "@langchain/openai";
 import { GPTModel } from "../openai/models/gptmodel";
+import { truncateChatHistory } from "../utils/contentWindow";
 
 export class AzureAI implements AIStreamProvider {
 	chatHistory: BaseMessage[] = [];
-	chatModel: AnthropicModel | undefined;
-	codeModel: AnthropicModel | undefined;
+	chatModel: AzureAIModel | undefined;
+	codeModel: AzureAIModel | undefined;
 	baseModel: BaseChatModel | undefined;
 	rerankModel: BaseChatModel | undefined;
 
 	constructor(
-		private readonly settings: Settings["providerSettings"]["Anthropic"],
+		private readonly settings: Settings["providerSettings"]["AzureAI"],
 		private readonly interactionSettings: InteractionSettings,
 		private readonly loggingProvider: ILoggingProvider
 	) {
@@ -36,16 +40,24 @@ export class AzureAI implements AIStreamProvider {
 
 		this.baseModel = new AzureChatOpenAI({
 			apiKey: this.settings.apiKey,
+			azureOpenAIApiKey: this.settings.apiKey,
+			azureOpenAIApiInstanceName: this.settings.instanceName,
 			model: this.settings.chatModel,
 			temperature: 0, //Required for tool calling.
 			maxTokens: this.interactionSettings.chatMaxTokens,
+			openAIApiVersion: this.settings.apiVersion,
+			deploymentName: this.settings.deploymentName,
 		});
 
 		this.rerankModel = new AzureChatOpenAI({
 			apiKey: this.settings.apiKey,
+			azureOpenAIApiKey: this.settings.apiKey,
+			azureOpenAIApiInstanceName: this.settings.instanceName,
 			model: this.settings.chatModel,
 			temperature: 0,
 			maxTokens: 4096,
+			openAIApiVersion: this.settings.apiVersion,
+			deploymentName: this.settings.deploymentName,
 		});
 	}
 
@@ -58,7 +70,13 @@ export class AzureAI implements AIStreamProvider {
 			this.settings?.codeModel?.startsWith("gpt-4") ||
 			this.settings?.codeModel?.startsWith("o1") ||
 			false;
-		return Promise.resolve(isChatModelValid && isCodeModelValid);
+		return Promise.resolve(
+			isChatModelValid &&
+				isCodeModelValid &&
+				!!this.settings?.instanceName &&
+				!!this.settings?.deploymentName &&
+				!!this.settings?.apiVersion
+		);
 	}
 
 	private getCodeModel(codeModel: string): AzureAIModel | undefined {
@@ -82,37 +100,170 @@ export class AzureAI implements AIStreamProvider {
 		additionalContext?: string,
 		recentClipboard?: string
 	): Promise<string> {
-		throw new Error("Method not implemented.");
+		// TODO - make this stream
+		return this.codeComplete(
+			beginning,
+			ending,
+			signal,
+			additionalContext,
+			recentClipboard
+		);
 	}
 
 	clearChatHistory(): void {
 		this.chatHistory = [];
 	}
 
-	codeComplete(
+	async codeComplete(
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
 		additionalContext?: string,
 		recentClipboard?: string
 	): Promise<string> {
-		throw new Error("Method not implemented.");
+		const startTime = new Date().getTime();
+
+		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
+			"{beginning}",
+			beginning
+		).replace("{ending}", ending);
+
+		let response: BaseMessageChunk | undefined;
+		try {
+			response = await this.baseModel!.invoke(
+				[
+					new HumanMessage({
+						content: [
+							{
+								type: "text",
+								text: buildCodeCompletePrompt(
+									prompt,
+									recentClipboard || "",
+									additionalContext || ""
+								),
+							},
+						],
+					}),
+				],
+				{
+					signal,
+				}
+			);
+		} catch (error) {
+			if (error instanceof Error) {
+				this.loggingProvider.logError(
+					`Code Complete failed: ${error.message}`
+				);
+			}
+			return `AzureAI - Code complete request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
+		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		this.loggingProvider.logInfo(
+			`Code Complete To First Token execution time: ${executionTime} ms`
+		);
+
+		return response.content.toString();
 	}
 
-	chat(
+	public async *chat(
 		prompt: string,
 		ragContent: string,
 		signal: AbortSignal
-	): AsyncGenerator<string> {
-		throw new Error("Method not implemented.");
+	) {
+		const messages: BaseMessage[] = [
+			new SystemMessage(this.chatModel!.ChatPrompt),
+		];
+
+		if (this.chatHistory.length > 0) {
+			messages.push(...this.chatHistory);
+		}
+
+		const input = ragContent
+			? `Here is some additional information that may help you generate a more accurate response.
+Please determine if this information is relevant and can be used to supplement your response: 
+
+${ragContent}
+
+------
+
+${prompt}`
+			: prompt;
+
+		const userMsg = new HumanMessage(input);
+
+		messages.push(userMsg);
+		this.chatHistory.push(userMsg);
+
+		truncateChatHistory(6, this.chatHistory);
+
+		try {
+			const stream = await this.baseModel?.stream(messages, { signal })!;
+
+			let completeMessage = "";
+			for await (const chunk of stream) {
+				const result = chunk.content.toString();
+				completeMessage += result;
+				yield result;
+			}
+
+			this.chatHistory.push(
+				new AIMessage(completeMessage || "Ignore this message.")
+			);
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`Chat failed: ${e.message}`,
+					true
+				);
+			}
+		}
+
+		yield "";
 	}
 
-	genCodeDocs(
+	async genCodeDocs(
 		prompt: string,
 		ragContent: string,
 		signal: AbortSignal
 	): Promise<string> {
-		throw new Error("Method not implemented.");
+		const startTime = new Date().getTime();
+		const genDocPrompt =
+			"Generate documentation for the following code:\n" + prompt;
+
+		let systemPrompt = this.chatModel?.genDocPrompt!;
+
+		if (ragContent) {
+			systemPrompt += ragContent;
+		}
+
+		systemPrompt += `\n\n${genDocPrompt}`;
+
+		let response: BaseMessageChunk | undefined;
+		try {
+			response = await this.baseModel?.invoke(
+				[new HumanMessage(systemPrompt)],
+				{ signal }
+			);
+		} catch (error) {
+			if (error instanceof Error) {
+				this.loggingProvider.logError(
+					`GenDocs failed with ${error.message}`
+				);
+			}
+			return `AzureAI - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
+		}
+
+		const endTime = new Date().getTime();
+		const executionTime = (endTime - startTime) / 1000;
+
+		this.loggingProvider.logInfo(
+			`GenDocs Time To First Token execution time: ${executionTime} ms`
+		);
+
+		return response?.content.toString()!;
 	}
 
 	async refactor(

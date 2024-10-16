@@ -14,7 +14,10 @@ export class VSCodeLoggingProvider implements ILoggingProvider {
 		);
 	}
 
-	public logError(messageOrError: string | Error | unknown): void {
+	public logError(
+		messageOrError: string | Error | unknown,
+		showErrorModal?: boolean
+	): void {
 		const message =
 			typeof messageOrError === "string"
 				? messageOrError
@@ -22,6 +25,10 @@ export class VSCodeLoggingProvider implements ILoggingProvider {
 		this.dbgChannel.appendLine(
 			`${new Date().toLocaleString()} - [error] ${message}`
 		);
+
+		if (showErrorModal) {
+			vscode.window.showErrorMessage(message);
+		}
 	}
 
 	public dispose() {

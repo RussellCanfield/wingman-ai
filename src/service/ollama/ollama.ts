@@ -523,18 +523,27 @@ ${ragContent}`
 
 		truncateChatHistory(4, this.chatHistory);
 
-		let completeMessage = "";
-		for await (const chunk of this.generate(chatPayload, signal)) {
-			completeMessage += chunk.message.content;
-			yield chunk.message.content;
-		}
+		try {
+			let completeMessage = "";
+			for await (const chunk of this.generate(chatPayload, signal)) {
+				completeMessage += chunk.message.content;
+				yield chunk.message.content;
+			}
 
-		this.chatHistory.push({
-			role: "assistant",
-			content:
-				completeMessage ||
-				"The user has decided they weren't interested in the response",
-		});
+			this.chatHistory.push({
+				role: "assistant",
+				content:
+					completeMessage ||
+					"The user has decided they weren't interested in the response",
+			});
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`Chat failed: ${e.message}`,
+					true
+				);
+			}
+		}
 	}
 
 	public async genCodeDocs(

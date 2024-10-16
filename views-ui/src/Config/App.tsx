@@ -86,6 +86,9 @@ export const App = () => {
 		} else if (settings.aiProvider === "HuggingFace") {
 			updatedProviderSettings.HuggingFace =
 				aiProviderSettings as ApiSettingsType;
+		} else if (settings.aiProvider === "AzureAI") {
+			updatedProviderSettings.AzureAI =
+				aiProviderSettings as ApiSettingsType;
 		}
 
 		setSettings((s) => ({
@@ -110,8 +113,11 @@ export const App = () => {
 		if (settings.embeddingProvider === "Ollama") {
 			existingEmbeddingSettings.Ollama =
 				embeddingSettings as OllamaEmbeddingSettingsType;
-		} else {
+		} else if (settings.embeddingProvider === "OpenAI") {
 			existingEmbeddingSettings.OpenAI =
+				embeddingSettings as OpenAIEmbeddingSettingsType;
+		} else {
+			existingEmbeddingSettings.AzureAI =
 				embeddingSettings as OpenAIEmbeddingSettingsType;
 		}
 

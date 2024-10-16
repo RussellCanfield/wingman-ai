@@ -312,27 +312,36 @@ ${prompt}`,
 
 		truncateChatHistory(6, this.chatHistory);
 
-		let completeMessage = "";
-		for await (const chunk of this.generate(chatPayload, signal)) {
-			if (!chunk?.choices) {
-				continue;
+		try {
+			let completeMessage = "";
+			for await (const chunk of this.generate(chatPayload, signal)) {
+				if (!chunk?.choices) {
+					continue;
+				}
+
+				const { content } = chunk.choices[0].delta;
+				if (!content) {
+					continue;
+				}
+
+				completeMessage += content;
+				yield content;
 			}
 
-			const { content } = chunk.choices[0].delta;
-			if (!content) {
-				continue;
+			this.chatHistory.push({
+				role: "assistant",
+				content:
+					completeMessage ||
+					"The user has decided they weren't interested in the response",
+			});
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`Chat failed: ${e.message}`,
+					true
+				);
 			}
-
-			completeMessage += content;
-			yield content;
 		}
-
-		this.chatHistory.push({
-			role: "assistant",
-			content:
-				completeMessage ||
-				"The user has decided they weren't interested in the response",
-		});
 	}
 
 	public async genCodeDocs(
