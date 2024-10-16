@@ -31,7 +31,8 @@ const planSchema = z.object({
 });
 
 const plannerPrompt = ChatPromptTemplate.fromTemplate(
-	`You are an expert software engineer tasked with planning a feature implementation. Provide a concise, step-by-step plan based on the given information and files.
+	`You are an expert software engineer tasked with planning a feature implementation. 
+Provide a concise, step-by-step plan based on the given information and files.
 
 {{objective}}
 
@@ -42,25 +43,28 @@ Working directory:
 {{workspace}}
 
 Instructions:
-1. Analyze the project objective and code files.
-2. Determine file relevance (dependencies, modifications needed, or new files required).
-3. Assess technologies, approaches, and architecture.
-4. Develop a clear, concise implementation plan with:
+1. Analyze the project objective and the provided code files.
+2. Determine the relevance of the existing files (dependencies, modifications needed, or new files required) based on the project objective.
+3. If creating a new file is required to fulfill the objective, follow the project's structure for paths and naming conventions. Provide the file path and filename in your response.
+4. Assess the appropriate technologies, approaches, and architecture to address the project objective.
+5. Develop a clear and concise implementation plan that includes:
    - Practical, focused actions
    - Necessary setup or preparation
    - Potential challenges or optimizations
    - Logical order
    - Consistent project-related file paths
-5. Consider all provided files in the plan.
-6. Do not perform any code changes outside of the objective. Focus on what the core ask is.
-7. Create new files if required, following project structure.
-8. Ignore any completed objectives, only focus on new asks.
+6. Consider all provided files in the plan and determine if any need to be created or modified.
+7. Do not perform any code changes outside of the objective. Focus on what the core ask is.
+8. If creating a new file is required, follow the project structure for paths and naming conventions.
+9. Ignore any completed objectives and focus only on the new requirements.
+10. Do not make assumptions about files not in scope, if you need functionality from another file and its not provided then create it.
 
 File Handling:
-- Include relevant files in output.
+- Include the relevant files in your output.
 - Ensure correct file paths and import statements.
 - Verify namespaces and code integration.
 - Consider default and named exports.
+- For new files, provide the file path and filename, but do not include any code.
 
 Notes:
 - Omit steps for testing, team activities, deployment, or logging unless requested.

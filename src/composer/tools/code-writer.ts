@@ -7,6 +7,7 @@ import { NoFilesChangedError } from "../errors";
 import { ChatOllama } from "@langchain/ollama";
 import { AIMessage } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
+import { FileMetadata } from "@shared/types/Message";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -26,28 +27,26 @@ export const codeWriterSchema = z.object({
 		.describe(
 			"An array of manual steps to follow to complete the task, leave empty if there are no manual steps."
 		),
-	files: z
-		.array(
-			z.object({
-				file: z.string().describe("The full file path"),
-				markdown: z
-					.string()
-					.describe(
-						"A markdown formatted code block with the code you've written or modified. Ensure this is always markdown formatted with the proper language set."
-					),
-				changes: z
-					.array(z.string())
-					.describe("A list of changes made to the file")
-					.optional(),
-				hasChanged: z
-					.boolean()
-					.describe(
-						"Whether or not the file has been changed. If false, the file will be skipped"
-					)
-					.optional(),
-			})
-		)
-		.describe("An array of files you have modified or created"),
+	file: z
+		.object({
+			file: z.string().describe("The full file path"),
+			markdown: z
+				.string()
+				.describe(
+					"A markdown formatted code block with the code you've written or modified. Ensure this is always markdown formatted with the proper language set."
+				),
+			changes: z
+				.array(z.string())
+				.describe("A list of changes made to the file")
+				.optional(),
+			hasChanged: z
+				.boolean()
+				.describe(
+					"Whether or not the file has been changed. If false, the file will be skipped"
+				)
+				.optional(),
+		})
+		.describe("The file in scope that you have modified or created"),
 });
 
 const ollamaWriterPrompt = `Analyze this text and output JSON.
@@ -173,7 +172,7 @@ Key Instructions:
 7. Ensure output adheres to the provided JSON schema.
 
 Step Writing Guidelines:
-1. Focus on user-centric, actionable steps not covered in code modifications - these would be manual steps the user still needs to take.
+1. Focus on user-centric, actionable steps not covered in code modifications - these would be manual steps the user still needs to take such as installing dependencies.
 2. Explicitly mention file names when relevant.
 3. Categorize terminal commands in the "command" field.
 4. Ensure clarity, conciseness, and no overlap with file changes, for instance if you imported a file in a code change the user does not need to take manual action.
@@ -304,7 +303,7 @@ ${state.review?.comments?.join("\n")}
 						})
 				  );
 
-		const files: CodeWriterSchema["files"] = [];
+		const files: CodeWriterSchema["file"][] = [];
 		const steps: CodeWriterSchema["steps"] = [];
 		for (const { file, code } of state.plan?.files || [
 			{
@@ -355,16 +354,23 @@ ${f.code}`
 				result = JSON.parse(response);
 			}
 
-			const filesChanged =
-				result.files?.filter(
-					(f) => f.changes && f.changes?.length > 0
-				) || [];
+			const fileChanged =
+				result.file.changes && result.file.changes.length > 0;
 
-			files.push(
-				...(filesChanged || [
-					{ file, changes: ["None were required."] },
-				])
-			);
+			if (!files.some((f) => result.file.file)) {
+				files.push(
+					fileChanged
+						? result.file
+						: {
+								file,
+								changes: [
+									"None were required, this file was not modified.",
+								],
+								markdown: result.file.markdown,
+						  }
+				);
+			}
+
 			steps.push(...result.steps);
 		}
 

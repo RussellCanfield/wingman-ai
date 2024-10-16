@@ -12,6 +12,7 @@ import { getTextDocumentFromPath } from "../server/files/utils";
 import { FileMetadata } from "@shared/types/Message";
 import { CodePlanner } from "./tools/planner";
 import { NoFilesChangedError } from "./errors";
+import path from "path";
 
 export interface Thread {
 	configurable: {
@@ -143,37 +144,37 @@ export async function* generateCommand(
 	}
 
 	if (contextFiles?.length) {
-		const files: FileMetadata[] = [];
 		const uniqueFilePaths = new Set<string>();
 
-		for (const file of contextFiles) {
-			const txtDoc = await getTextDocumentFromPath(file);
-			if (!uniqueFilePaths.has(file)) {
-				uniqueFilePaths.add(file);
-				files.push({
-					file,
-					code: txtDoc?.getText() || "",
-				});
-			}
-		}
-
+		// Get existing files from the checkpoint
 		const existingFiles =
 			(
 				checkpoint?.channel_values["plan"] as
 					| PlanExecuteState["plan"]
 					| undefined
 			)?.files ?? [];
+
+		// First, add all existing files from the checkpoint
 		for (const existingFile of existingFiles) {
-			if (!uniqueFilePaths.has(existingFile.file)) {
-				uniqueFilePaths.add(existingFile.file);
-				delete existingFile.hasChanged;
-				files.push(existingFile);
+			uniqueFilePaths.add(path.relative(workspace, existingFile.file));
+		}
+
+		// Then, add new files from contextFiles if they're not already in the checkpoint
+		for (const file of contextFiles) {
+			const relativeFilePath = path.relative(workspace, file);
+			if (!uniqueFilePaths.has(relativeFilePath)) {
+				uniqueFilePaths.add(relativeFilePath);
+				const txtDoc = await getTextDocumentFromPath(file);
+				existingFiles.push({
+					file,
+					code: txtDoc?.getText() || "",
+				});
 			}
 		}
 
 		inputs.plan = {
 			steps: [],
-			files,
+			files: existingFiles,
 		};
 	}
 

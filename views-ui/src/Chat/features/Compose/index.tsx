@@ -34,6 +34,13 @@ export default function Compose() {
 		};
 	}, []);
 
+	useEffect(() => {
+		if (composerMessages.length === 0) {
+			setCurrentPhase("new");
+			setLoading(false);
+		}
+	}, [composerMessages]);
+
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { data } = event;
 		const { command, value } = data;
