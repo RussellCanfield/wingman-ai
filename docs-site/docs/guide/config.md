@@ -44,10 +44,23 @@ You can use the following models:
 
 You can use the following models:
 
--   GPT4-o
--   GPT4-Turbo
+-   GPT-4o
+-   GPT-4o-mini
+-   GPT-4-Turbo
 -   GPT4
--   GPT 1o
+-   GPT-1o
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
+
+### [AzureAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=python-secure#gpt-4o-and-gpt-4-turbo)
+
+You can use the following models:
+
+-   GPT-4o
+-   GPT-4o-mini
+-   GPT-4-Turbo
+-   GPT4
+-   GPT-1o
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
