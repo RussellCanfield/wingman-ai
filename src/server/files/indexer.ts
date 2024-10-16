@@ -7,11 +7,7 @@ import type {
 	SkeletonizedCodeGraphNode,
 } from "./graph";
 import type { CodeParser } from "./parser";
-import {
-	convertIdToFilePath,
-	convertIdToFileUri,
-	getTextDocumentFromUri,
-} from "./utils";
+import { convertIdToFilePath, getTextDocumentFromUri } from "./utils";
 import { type Generator } from "./generator";
 import {
 	DocumentSymbol,

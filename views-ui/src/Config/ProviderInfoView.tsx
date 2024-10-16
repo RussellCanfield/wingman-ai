@@ -9,11 +9,11 @@ export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
 				them and verify their capabilities. We are unable to load
 				unsupported models.
 			</label>
-			<strong>NOTE: Embeddings have only been tested with OpenAI.</strong>
 			<label>We support the following models:</label>
 			{aiProvider === "Ollama" && <OllamaView />}
 			{aiProvider === "OpenAI" && <OpenAIView />}
 			{aiProvider === "Anthropic" && <AnthropicView />}
+			{aiProvider === "AzureAI" && <OpenAIView />}
 		</div>
 	);
 };

@@ -3,6 +3,7 @@ import { AppMessage } from "@shared/types/Message";
 import {
 	AiProviders,
 	ApiSettingsType,
+	AzureAISettingsType,
 	EmbeddingProviders,
 	InteractionSettings,
 	OllamaEmbeddingSettingsType,
@@ -68,7 +69,10 @@ export const App = () => {
 	};
 
 	const onAiProviderSettingsChanged = (
-		aiProviderSettings: OllamaSettingsType | ApiSettingsType
+		aiProviderSettings:
+			| OllamaSettingsType
+			| ApiSettingsType
+			| AzureAISettingsType
 	) => {
 		const currentProviderSettings = settings.providerSettings;
 
@@ -86,6 +90,9 @@ export const App = () => {
 		} else if (settings.aiProvider === "HuggingFace") {
 			updatedProviderSettings.HuggingFace =
 				aiProviderSettings as ApiSettingsType;
+		} else if (settings.aiProvider === "AzureAI") {
+			updatedProviderSettings.AzureAI =
+				aiProviderSettings as AzureAISettingsType;
 		}
 
 		setSettings((s) => ({
@@ -110,8 +117,11 @@ export const App = () => {
 		if (settings.embeddingProvider === "Ollama") {
 			existingEmbeddingSettings.Ollama =
 				embeddingSettings as OllamaEmbeddingSettingsType;
-		} else {
+		} else if (settings.embeddingProvider === "OpenAI") {
 			existingEmbeddingSettings.OpenAI =
+				embeddingSettings as OpenAIEmbeddingSettingsType;
+		} else {
+			existingEmbeddingSettings.AzureAI =
 				embeddingSettings as OpenAIEmbeddingSettingsType;
 		}
 

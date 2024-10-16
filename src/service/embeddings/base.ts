@@ -1,3 +1,14 @@
+import { AzureOpenAIEmbeddings } from "@langchain/openai";
+import {
+	AzureAIEmbeddingSettingsType,
+	EmbeddingProviders,
+	OllamaEmbeddingSettingsType,
+	OpenAIEmbeddingSettingsType,
+} from "@shared/types/Settings";
+import { getAzureAIEmbeddings } from "./azureai";
+import { getOllamaEmbeddings } from "./ollama";
+import { getOpenAIEmbeddings } from "./openai";
+
 export interface EmbeddingsInterface {
 	/**
 	 * An abstract method that takes an array of documents as input and
@@ -15,3 +26,26 @@ export interface EmbeddingsInterface {
 	 */
 	embedQuery(document: string): Promise<number[]>;
 }
+
+export const createEmbeddingProvider = (
+	provider: EmbeddingProviders,
+	emeddingSettings:
+		| OllamaEmbeddingSettingsType
+		| OpenAIEmbeddingSettingsType
+		| AzureAIEmbeddingSettingsType
+) => {
+	switch (provider) {
+		case "AzureAI":
+			return getAzureAIEmbeddings(
+				emeddingSettings as AzureAIEmbeddingSettingsType
+			);
+		case "Ollama":
+			return getOllamaEmbeddings(
+				emeddingSettings as OllamaEmbeddingSettingsType
+			);
+		case "OpenAI":
+			return getOpenAIEmbeddings(
+				emeddingSettings as OpenAIEmbeddingSettingsType
+			);
+	}
+};

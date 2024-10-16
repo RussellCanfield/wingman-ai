@@ -7,10 +7,10 @@ import { OpenAIModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
-import { AIStreamProvicer } from "../base";
+import { AIStreamProvider } from "../base";
 import { ILoggingProvider } from "@shared/types/Logger";
 
-export class OpenAI implements AIStreamProvicer {
+export class OpenAI implements AIStreamProvider {
 	decoder = new TextDecoder();
 	chatHistory: OpenAIMessage[] = [];
 	chatModel: OpenAIModel | undefined;
@@ -63,7 +63,7 @@ export class OpenAI implements AIStreamProvicer {
 		return this.baseModel!.invoke(prompt);
 	}
 
-	async validateSettings(): Promise<boolean> {
+	validateSettings(): Promise<boolean> {
 		const isChatModelValid =
 			this.settings?.chatModel?.startsWith("gpt-4") ||
 			this.settings?.chatModel?.startsWith("o1") ||
@@ -72,7 +72,7 @@ export class OpenAI implements AIStreamProvicer {
 			this.settings?.codeModel?.startsWith("gpt-4") ||
 			this.settings?.codeModel?.startsWith("o1") ||
 			false;
-		return isChatModelValid && isCodeModelValid;
+		return Promise.resolve(isChatModelValid && isCodeModelValid);
 	}
 
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
@@ -312,27 +312,36 @@ ${prompt}`,
 
 		truncateChatHistory(6, this.chatHistory);
 
-		let completeMessage = "";
-		for await (const chunk of this.generate(chatPayload, signal)) {
-			if (!chunk?.choices) {
-				continue;
+		try {
+			let completeMessage = "";
+			for await (const chunk of this.generate(chatPayload, signal)) {
+				if (!chunk?.choices) {
+					continue;
+				}
+
+				const { content } = chunk.choices[0].delta;
+				if (!content) {
+					continue;
+				}
+
+				completeMessage += content;
+				yield content;
 			}
 
-			const { content } = chunk.choices[0].delta;
-			if (!content) {
-				continue;
+			this.chatHistory.push({
+				role: "assistant",
+				content:
+					completeMessage ||
+					"The user has decided they weren't interested in the response",
+			});
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`Chat failed: ${e.message}`,
+					true
+				);
 			}
-
-			completeMessage += content;
-			yield content;
 		}
-
-		this.chatHistory.push({
-			role: "assistant",
-			content:
-				completeMessage ||
-				"The user has decided they weren't interested in the response",
-		});
 	}
 
 	public async genCodeDocs(

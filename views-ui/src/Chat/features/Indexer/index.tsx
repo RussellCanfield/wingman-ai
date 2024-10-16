@@ -95,12 +95,17 @@ export default function Indexer() {
 							: "Ready"
 						: "Not Found"}
 				</p>
-				<p className="text-lg">
+				<p className="text-md">
 					The indexer will breakdown your codebase to use as context
 					in chat, or interactively with the code composer. It will
 					scan your workspace for any filters meeting the filter
 					criteria below. By default, Wingman will include your
 					'.gitignore' file in your exclusion filter.
+				</p>
+				<p className="text-md">
+					The indexer can be explicitly disabled in Wingman settings.
+					When enabled (default), files will be re-indexed on save, if
+					their contents have changed.
 				</p>
 				{!index.exists && !index.processing && (
 					<section className="flex flex-col gap-4">

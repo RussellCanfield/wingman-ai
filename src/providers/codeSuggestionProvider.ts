@@ -7,7 +7,7 @@ import {
 	TextDocument,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
-import { AIProvider, AIStreamProvicer } from "../service/base";
+import { AIProvider, AIStreamProvider } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "@shared/types/Settings";
@@ -21,7 +21,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	private cache: NodeCache;
 
 	constructor(
-		private readonly _aiProvider: AIProvider | AIStreamProvicer,
+		private readonly _aiProvider: AIProvider | AIStreamProvider,
 		private readonly _interactionSettings: InteractionSettings
 	) {
 		this.cache = new NodeCache({

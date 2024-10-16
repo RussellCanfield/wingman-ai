@@ -28,6 +28,7 @@ We currently support 4 AI providers.
 -   HuggingFace
 -   OpenAI
 -   Anthropic
+-   AzureAI
 
 While we encourage teams to run **Ollama**, it is a challenge to support advanced features due to most machines having limited compute.
 Further the models users are running can have varied context lengths and abilities such as reliable output formats.

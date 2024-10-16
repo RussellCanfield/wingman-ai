@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import {
 	defaultAnthropicSettings,
+	defaultAzureAISettings,
 	defaultHfSettings,
 	defaultInteractionSettings,
 	defaultOllamaEmbeddingSettings,
@@ -20,12 +21,14 @@ export const defaultSettings: Settings = {
 	embeddingSettings: {
 		Ollama: defaultOllamaEmbeddingSettings,
 		OpenAI: defaultOpenAIEmbeddingSettings,
+		AzureAI: defaultOpenAIEmbeddingSettings,
 	},
 	providerSettings: {
 		Ollama: defaultOllamaSettings,
 		HuggingFace: defaultHfSettings,
 		Anthropic: defaultAnthropicSettings,
 		OpenAI: defaultOpenAISettings,
+		AzureAI: defaultAzureAISettings,
 	},
 	validationSettings: defaultValidationSettings,
 };
@@ -80,22 +83,7 @@ export async function LoadSettings(): Promise<Settings> {
 			);
 		}
 
-		settings = {
-			aiProvider: "OpenAI",
-			embeddingProvider: "OpenAI",
-			interactionSettings: defaultInteractionSettings,
-			embeddingSettings: {
-				Ollama: defaultOllamaEmbeddingSettings,
-				OpenAI: defaultOpenAIEmbeddingSettings,
-			},
-			providerSettings: {
-				Ollama: defaultOllamaSettings,
-				HuggingFace: defaultHfSettings,
-				Anthropic: defaultAnthropicSettings,
-				OpenAI: defaultOpenAISettings,
-			},
-			validationSettings: defaultValidationSettings,
-		};
+		settings = { ...defaultSettings };
 	}
 
 	return settings;

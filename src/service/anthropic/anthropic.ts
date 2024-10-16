@@ -1,5 +1,5 @@
 import { asyncIterator } from "../asyncIterator";
-import { AIStreamProvicer } from "../base";
+import { AIStreamProvider } from "../base";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { ClaudeModel } from "./models/claude";
 import { AnthropicRequest } from "./types/ClaudeRequest";
@@ -16,7 +16,7 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ILoggingProvider } from "@shared/types/Logger";
 import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 
-export class Anthropic implements AIStreamProvicer {
+export class Anthropic implements AIStreamProvider {
 	decoder = new TextDecoder();
 	chatHistory: BaseMessage[] = [];
 	chatModel: AnthropicModel | undefined;
@@ -320,41 +320,45 @@ ${prompt}`,
 			this.chatHistory.push(...messages);
 		}
 
-		const userMsg = new HumanMessage(`${
-			ragContent
-				? `Here's some additional information that may help you generate a more accurate response.
-Please determine if this information is relevant and can be used to supplement your response: 
+		const input = ragContent
+			? `Here is some additional information that may help you generate a more accurate response.
+    Please determine if this information is relevant and can be used to supplement your response: 
+    
+    ${ragContent}
+    
+    ------
+    
+    ${prompt}`
+			: prompt;
 
-${ragContent}`
-				: ""
-		}
-
-------
-
-Here is the user's question which may or may not be related:
-
-${prompt}`);
+		const userMsg = new HumanMessage(input);
 
 		messages.push(userMsg);
 		this.chatHistory.push(userMsg);
 
 		truncateChatHistory(6, this.chatHistory);
 
-		const stream = await this.baseModel?.stream(messages, { signal })!;
+		try {
+			const stream = await this.baseModel?.stream(messages, { signal })!;
 
-		let completeMessage = "";
-		for await (const chunk of stream) {
-			const result = chunk.content.toString();
-			completeMessage += result;
-			yield result;
+			let completeMessage = "";
+			for await (const chunk of stream) {
+				const result = chunk.content.toString();
+				completeMessage += result;
+				yield result;
+			}
+
+			this.chatHistory.push(
+				new AIMessage(completeMessage || "Ignore this message.")
+			);
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`Chat failed: ${e.message}`,
+					true
+				);
+			}
 		}
-
-		this.chatHistory.push(
-			new AIMessage(
-				completeMessage ||
-					"The user has decided they weren't interested in the response"
-			)
-		);
 	}
 
 	public clearChatHistory(): void {

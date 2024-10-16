@@ -34,7 +34,6 @@ export class LSPClient {
 		context: ExtensionContext,
 		settings: Settings | undefined
 	) => {
-		// The server is implemented in node
 		const serverModule = vscode.Uri.joinPath(
 			context.extensionUri,
 			"out",
@@ -54,14 +53,8 @@ export class LSPClient {
 			},
 		};
 
-		// Options to control the language client
 		const clientOptions: LanguageClientOptions = {
-			// Register the server for plain text documents
 			documentSelector: [{ scheme: "file", language: "*" }],
-			// synchronize: {
-			// 	// Notify the server about file changes to '.clientrc files contained in the workspace
-			// 	fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
-			// },
 			outputChannel: vscode.window.createOutputChannel(
 				"Wingman Language Server"
 			),
@@ -70,9 +63,6 @@ export class LSPClient {
 			},
 		};
 
-		//await client.setTrace(2);
-
-		// Create the language client and start the client.
 		client = new LanguageClient(
 			"WingmanLSP",
 			"Wingman Language Server",

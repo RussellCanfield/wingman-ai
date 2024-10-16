@@ -35,13 +35,14 @@ export const AiProviders = [
 	"HuggingFace",
 	"OpenAI",
 	"Anthropic",
+	"AzureAI",
 ] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
 // Create a type for AiProviders
 export type AiProviders = (typeof AiProviders)[number];
 
-export const EmbeddingProviders = ["Ollama", "OpenAI"] as const;
+export const EmbeddingProviders = ["Ollama", "OpenAI", "AzureAI"] as const;
 export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
 
 // Create a type for EmbeddingProviders
@@ -60,8 +61,19 @@ export type OpenAIEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
 	apiKey: string;
 };
 
+export type AzureAIEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
+	apiKey: string;
+	apiVersion: string;
+	instanceName: string;
+};
+
 export type ApiSettingsType = BaseServiceSettings & {
 	apiKey: string;
+};
+
+export type AzureAISettingsType = Omit<ApiSettingsType, "baseUrl"> & {
+	apiVersion: string;
+	instanceName: string;
 };
 
 export const defaultInteractionSettings: InteractionSettings = {
@@ -120,6 +132,14 @@ export const defaultAnthropicSettings: ApiSettingsType = {
 	apiKey: "Add me",
 };
 
+export const defaultAzureAISettings: AzureAISettingsType = {
+	chatModel: "gpt-4o",
+	codeModel: "gpt-4o",
+	instanceName: "Add me",
+	apiKey: "Add me",
+	apiVersion: "2024-06-01",
+};
+
 export type Settings = {
 	aiProvider: (typeof AiProviders)[number];
 	interactionSettings: InteractionSettings;
@@ -127,12 +147,14 @@ export type Settings = {
 	embeddingSettings: {
 		Ollama?: OllamaEmbeddingSettingsType;
 		OpenAI?: OpenAIEmbeddingSettingsType;
+		AzureAI?: OpenAIEmbeddingSettingsType;
 	};
 	providerSettings: {
 		Ollama?: OllamaSettingsType;
 		HuggingFace?: ApiSettingsType;
 		OpenAI?: ApiSettingsType;
 		Anthropic?: ApiSettingsType;
+		AzureAI?: AzureAISettingsType;
 	};
 	validationSettings: {
 		validationCommand?: string;

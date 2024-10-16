@@ -103,7 +103,7 @@ export async function* generateCommand(
 		},
 		retryCount: {
 			value: (x?: number, y?: number) => y ?? x,
-			default: () => 1,
+			default: () => 2,
 		},
 	};
 
