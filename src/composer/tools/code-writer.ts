@@ -202,7 +202,7 @@ File Handling:
 - Use any provided file paths as a reference for any new files.
 - Omit irrelevant or unchanged files.
 - Omit code verification or extraneous changes.
-- Use GitHub-flavored markdown for code blocks.
+- Use GitHub-flavored markdown for files, the code must be wrapped in markdown. Do not mess this up.
 - Provide full, functional code responses.
 - Always include the full file path.
 - List changes performed on files, if no changes are performed, omit the file.

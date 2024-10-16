@@ -109,9 +109,9 @@ export async function* generateCommand(
 
 	function shouldEnd(state: PlanExecuteState): "true" | "false" {
 		return !state.review ||
-			!state.review?.comments ||
-			state.review?.comments?.length === 0 ||
-			Number(state.retryCount ?? 0) > 0
+			!state.review.comments ||
+			state.review.comments.length === 0 ||
+			(state.retryCount ?? 0) <= 0
 			? "true"
 			: "false";
 	}
