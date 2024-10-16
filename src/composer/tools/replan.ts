@@ -47,7 +47,8 @@ Criteria:
   - Example: if a new file is created, ensure it is imported correctly.
   - Example: if a new method was imported, ensure it was created.
 4. Identify unrelated changes.
-5. Do not mentioned github markdown in your review response. If the reviewed failed due to it, then add it as a comment.
+5. Do not mention github markdown in your review response.
+6. If the review failed to meet the objective, then add suggestions as review comments.
 
 Note: Exclude suggestions for testing, monitoring, optimization, coding standards, documentation, or additional reviews unless specified in the objective.
 
