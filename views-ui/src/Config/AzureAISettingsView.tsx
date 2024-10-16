@@ -1,17 +1,24 @@
-import { ApiSettingsType } from "@shared/types/Settings";
+import { AzureAISettingsType } from "@shared/types/Settings";
 import { InitSettings } from "./App";
 
 type AzureAISection = InitSettings["providerSettings"]["AzureAI"] & {
-	onChange: (azureAISettings: ApiSettingsType) => void;
+	onChange: (azureAISettings: AzureAISettingsType) => void;
 };
 export const AzureAISettingsView = ({
 	codeModel,
 	chatModel,
-	baseUrl,
+	instanceName,
+	apiVersion,
 	apiKey,
 	onChange,
 }: AzureAISection) => {
-	const paths = { codeModel, chatModel, baseUrl, apiKey };
+	const paths = {
+		codeModel,
+		chatModel,
+		instanceName,
+		apiVersion,
+		apiKey,
+	};
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
 		const clone = { ...paths };
@@ -60,19 +67,37 @@ export const AzureAISettingsView = ({
 
 			<div className="flex flex-col">
 				<label
-					htmlFor="baseUrl"
+					htmlFor="instanceName"
 					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
 				>
-					Base url:
+					Instance Name:
 				</label>
 				<input
-					id="baseUrl"
+					id="instanceName"
 					type="text"
 					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 					onChange={handleChangeInput}
-					value={baseUrl}
-					data-name="baseUrl"
-					title="AzureAI base url"
+					value={instanceName}
+					data-name="instanceName"
+					title="AzureAI Instance Name"
+				/>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="apiVersion"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Api Version
+				</label>
+				<input
+					id="apiVersion"
+					type="text"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					onChange={handleChangeInput}
+					value={apiVersion}
+					data-name="apiVersion"
+					title="AzureAI Api Version"
 				/>
 			</div>
 

@@ -1,7 +1,7 @@
-import { OpenAIEmbeddingSettingsType } from "@shared/types/Settings";
+import { AzureAIEmbeddingSettingsType } from "@shared/types/Settings";
 
-type AzureAIEmbeddingSection = OpenAIEmbeddingSettingsType & {
-	onChange: (azureAISettings: OpenAIEmbeddingSettingsType) => void;
+type AzureAIEmbeddingSection = AzureAIEmbeddingSettingsType & {
+	onChange: (azureAISettings: AzureAIEmbeddingSettingsType) => void;
 };
 
 export const AzureAIEmbeddingSettingsView = ({
@@ -9,9 +9,18 @@ export const AzureAIEmbeddingSettingsView = ({
 	embeddingModel,
 	apiKey,
 	enabled,
+	instanceName,
+	apiVersion,
 	onChange,
 }: AzureAIEmbeddingSection) => {
-	const paths = { dimensions, embeddingModel, apiKey, enabled };
+	const paths = {
+		dimensions,
+		embeddingModel,
+		apiKey,
+		instanceName,
+		apiVersion,
+		enabled,
+	};
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
 		const clone = { ...paths };
@@ -67,8 +76,44 @@ export const AzureAIEmbeddingSettingsView = ({
 			</div>
 
 			<div className="flex flex-col">
+				<label
+					htmlFor="instanceName"
+					className="mb-1 text-sm font-medium"
+				>
+					Instance Name:
+				</label>
+				<input
+					id="instanceName"
+					type="text"
+					className="px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)]"
+					onChange={handleChangeInput}
+					value={instanceName}
+					data-name="instanceName"
+					title="AzureAI Instance Name"
+				/>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="apiVersion"
+					className="mb-1 text-sm font-medium"
+				>
+					Api Version:
+				</label>
+				<input
+					id="apiVersion"
+					type="text"
+					className="px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)]"
+					onChange={handleChangeInput}
+					value={apiVersion}
+					data-name="apiVersion"
+					title="AzureAI Api Version"
+				/>
+			</div>
+
+			<div className="flex flex-col">
 				<label htmlFor="apiKey" className="mb-1 text-sm font-medium">
-					Api key:
+					Api Key:
 				</label>
 				<input
 					id="apiKey"

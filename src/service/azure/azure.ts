@@ -46,7 +46,7 @@ export class AzureAI implements AIStreamProvider {
 			temperature: 0, //Required for tool calling.
 			maxTokens: this.interactionSettings.chatMaxTokens,
 			openAIApiVersion: this.settings.apiVersion,
-			deploymentName: this.settings.deploymentName,
+			deploymentName: this.settings.chatModel,
 		});
 
 		this.rerankModel = new AzureChatOpenAI({
@@ -57,7 +57,7 @@ export class AzureAI implements AIStreamProvider {
 			temperature: 0,
 			maxTokens: 4096,
 			openAIApiVersion: this.settings.apiVersion,
-			deploymentName: this.settings.deploymentName,
+			deploymentName: this.settings.chatModel,
 		});
 	}
 
@@ -74,7 +74,6 @@ export class AzureAI implements AIStreamProvider {
 			isChatModelValid &&
 				isCodeModelValid &&
 				!!this.settings?.instanceName &&
-				!!this.settings?.deploymentName &&
 				!!this.settings?.apiVersion
 		);
 	}

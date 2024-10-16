@@ -27,23 +27,23 @@ import { MemorySaver } from "@langchain/langgraph";
 import { generateCommand } from "../composer/composer";
 import { AIProvider } from "../service/base";
 import {
+	EmbeddingProviders,
 	OllamaEmbeddingSettingsType,
 	OpenAIEmbeddingSettingsType,
 	Settings,
 } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
 import { ComposerRequest } from "@shared/types/Composer";
-import { getOllamaEmbeddings } from "../service/embeddings/ollama";
-import { getOpenAIEmbeddings } from "../service/embeddings/openai";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { loggingProvider } from "./loggingProvider";
+import { createEmbeddingProvider } from "../service/embeddings/base";
 
 const config = { configurable: { thread_id: "conversation-num-1" } };
 
 let memory = new MemorySaver();
 let modelProvider: AIProvider;
-let embeddingProvider: string;
+let embeddingProvider: EmbeddingProviders;
 let embeddingSettings:
 	| OllamaEmbeddingSettingsType
 	| OpenAIEmbeddingSettingsType;
@@ -102,13 +102,7 @@ export class LSPServer {
 		console.log("Wingman LSP initialized for workspace:", workspaceFolder);
 		this.vectorStore = new Store(
 			workspaceFolder,
-			embeddingProvider === "Ollama"
-				? getOllamaEmbeddings(
-						embeddingSettings as OllamaEmbeddingSettingsType
-				  )
-				: getOpenAIEmbeddings(
-						embeddingSettings as OpenAIEmbeddingSettingsType
-				  )
+			createEmbeddingProvider(embeddingProvider, embeddingSettings)
 		);
 		const { result, codeGraph } = await this.vectorStore?.initialize();
 		if (!result) {
@@ -161,10 +155,14 @@ export class LSPServer {
 				}
 
 				embeddingProvider = settings.embeddingProvider;
-				embeddingSettings =
-					settings.embeddingProvider === "Ollama"
-						? settings.embeddingSettings?.Ollama!
-						: settings.embeddingSettings?.OpenAI!;
+
+				if (settings.embeddingProvider === "Ollama") {
+					embeddingSettings = settings.embeddingSettings.Ollama!;
+				} else if (settings.embeddingProvider === "OpenAI") {
+					embeddingSettings = settings.embeddingSettings.OpenAI!;
+				} else if (settings.embeddingProvider === "AzureAI") {
+					embeddingSettings = settings.embeddingSettings.AzureAI!;
+				}
 			}
 
 			this.connection?.console.log(

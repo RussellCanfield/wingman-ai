@@ -3,6 +3,7 @@ import { AppMessage } from "@shared/types/Message";
 import {
 	AiProviders,
 	ApiSettingsType,
+	AzureAISettingsType,
 	EmbeddingProviders,
 	InteractionSettings,
 	OllamaEmbeddingSettingsType,
@@ -68,7 +69,10 @@ export const App = () => {
 	};
 
 	const onAiProviderSettingsChanged = (
-		aiProviderSettings: OllamaSettingsType | ApiSettingsType
+		aiProviderSettings:
+			| OllamaSettingsType
+			| ApiSettingsType
+			| AzureAISettingsType
 	) => {
 		const currentProviderSettings = settings.providerSettings;
 
@@ -88,7 +92,7 @@ export const App = () => {
 				aiProviderSettings as ApiSettingsType;
 		} else if (settings.aiProvider === "AzureAI") {
 			updatedProviderSettings.AzureAI =
-				aiProviderSettings as ApiSettingsType;
+				aiProviderSettings as AzureAISettingsType;
 		}
 
 		setSettings((s) => ({
