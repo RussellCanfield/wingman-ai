@@ -80,9 +80,8 @@ export default function Indexer() {
 	};
 
 	return (
-		<div className="flex flex-col h-full">
-			<div className="space-y-4 mt-4">
-				{/* Other sections remain unchanged */}
+		<div className="flex flex-col h-full gap-8 overflow-hidden">
+			<div className="space-y-4 flex-shrink-0">
 				<p className="text-lg font-bold">
 					Status:{" "}
 					{index.exists
@@ -144,13 +143,17 @@ export default function Indexer() {
 				)}
 			</div>
 			{index.exists && !index.processing && (
-				<div className="mt-4 overflow-y-auto flex-grow">
-					<p className="text-lg font-bold">Indexed Files:</p>
-					<ul className="space-y-1">
-						{index.files.map((f, index) => (
-							<li key={index}>{f}</li>
-						))}
-					</ul>
+				<div className="flex-1 overflow-hidden flex flex-col">
+					<p className="text-lg font-bold flex-shrink-0">
+						Indexed Files:
+					</p>
+					<div className="flex-1 overflow-y-auto">
+						<ul>
+							{index.files.map((f, index) => (
+								<li key={index}>{f}</li>
+							))}
+						</ul>
+					</div>
 				</div>
 			)}
 		</div>

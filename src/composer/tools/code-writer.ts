@@ -7,7 +7,6 @@ import { NoFilesChangedError } from "../errors";
 import { ChatOllama } from "@langchain/ollama";
 import { AIMessage } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
-import { FileMetadata } from "@shared/types/Message";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -39,19 +38,13 @@ export const codeWriterSchema = z.object({
 				.array(z.string())
 				.describe("A list of changes made to the file")
 				.optional(),
-			hasChanged: z
-				.boolean()
-				.describe(
-					"Whether or not the file has been changed. If false, the file will be skipped"
-				)
-				.optional(),
 		})
 		.describe("The file in scope that you have modified or created"),
 });
 
 const ollamaWriterPrompt = `Analyze this text and output JSON.
-Analyze and implement project enhancements for a single file based on the user's objective.
 You are an expert software engineer tasked with providing a comprehensive solution that includes both manual steps and code changes.
+Implement project enhancements for a single file based on the user's objective.
 Focus solely on the file in scope, while considering the context of other files for integration purposes.
 
 Output Structure:
@@ -70,15 +63,14 @@ Key Instructions:
 9. Ensure output adheres to the provided JSON schema.
 
 Step Writing Guidelines:
-1. Focus on user-centric, actionable steps not covered in code modifications - these would be manual steps the user still needs to take.
+1. Focus on user-centric, actionable steps not covered in code modifications - these would be manual steps the user still needs to take such as installing dependencies.
 2. Explicitly mention file names when relevant.
 3. Categorize terminal commands in the "command" field.
 4. Ensure clarity, conciseness, and no overlap with file changes, for instance if you imported a file in a code change the user does not need to take manual action.
 5. Omit steps for testing or code verification unless explicitly required.
 6. Do not include new files created in the steps, these are created for the user automatically.
-7. Omit steps for verifying code, or ensuring code related steps.
-8. If there are no manual steps, simply return an empty array.
-9. Do not return steps such as: "No manual steps are required for this change."
+7. If there are no manual steps, simply return an empty array.
+8. Do not return steps such as: "No manual steps are required for this change."
 
 Code Writing Guidelines:
 1. Use GitHub-flavored markdown for ALL code output.
@@ -121,6 +113,8 @@ File Handling:
 
 ------
 
+{{newsteps}}
+
 {{modified}}
 
 {{otherfiles}}
@@ -143,18 +137,16 @@ You must ALWAYS Output in JSON format using the following template:
       "command": "string (optional)"
     }
   ],
-  "files": [
-    {
-      "file": "string",
-      "markdown": "string",
-      "changes": ["string"]
-    }
-  ]
+  "file": {
+    "file": "string",
+    "markdown": "string",
+    "changes": ["string"]
+  }
 }`;
 
 const baseWriterPrompt = `Analyze this text and output JSON.
-Analyze and implement project enhancements for a single file based on the user's objective.
 You are an expert software engineer tasked with providing a comprehensive solution that includes both manual steps and code changes.
+Implement project enhancements for a single file based on the user's objective.
 Focus solely on the file in scope, while considering the context of other files for integration purposes.
 
 Output Structure:
@@ -222,6 +214,8 @@ File Handling:
 
 ------
 
+{{newsteps}}
+
 {{modified}}
 
 {{otherfiles}}
@@ -237,7 +231,21 @@ File in scope:
 Implement required changes for the file in scope to meet the objective. 
 Use GitHub-flavored markdown for code output and follow the provided JSON schema. 
 Ensure the "files" property is an array of objects, not a string. 
-PRODUCE VALID JSON TO AVOID PENALTIES.`;
+
+You must ALWAYS Output in JSON format using the following template:
+{
+  "steps": [
+    {
+      "description": "string",
+      "command": "string (optional)"
+    }
+  ],
+  "file": {
+    "file": "string",
+    "markdown": "string",
+    "changes": ["string"]
+  }
+}`;
 
 const buildPrompt = (basePrompt: string, rulePack?: string) => {
 	const rulePromptAddition = !rulePack
@@ -317,6 +325,17 @@ ${state.review?.comments?.join("\n")}
 				objective,
 				steps: planningSteps,
 				review: reviewComments,
+				newsteps:
+					steps.length === 0
+						? ""
+						: `Context: Previously Created Manual Steps
+        
+The following list contains manual steps already created based on previously modified or created files.
+Use this information as context for subsequent step process. Do not suggest these again.
+
+${steps.map((s) => `${s.description}\n${s.command}`).join("\n\n")}
+
+------`,
 				modified:
 					files.length === 0
 						? ""
@@ -375,9 +394,7 @@ ${f.code}`
 		}
 
 		if (files.length === 0) {
-			throw new NoFilesChangedError(
-				'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
-			);
+			throw new NoFilesChangedError("No files have been changed.");
 		}
 
 		return {
@@ -388,7 +405,6 @@ ${f.code}`
 						file: f.file,
 						code: f.markdown,
 						changes: f.changes,
-						hasChanged: f.hasChanged,
 					};
 				}),
 			},

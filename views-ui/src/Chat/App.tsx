@@ -23,7 +23,7 @@ const App = () => {
 	}, [view]);
 
 	return (
-		<main className="h-full flex flex-col flex-auto">
+		<main className="h-full flex flex-col overflow-hidden text-base">
 			<Toolbar />
 			{activeComponent}
 		</main>

@@ -16,7 +16,6 @@ export interface FileMetadata {
 	analysis?: string;
 	changes?: string[];
 	review?: string;
-	hasChanged?: boolean;
 }
 
 export interface CodeContextDetails {

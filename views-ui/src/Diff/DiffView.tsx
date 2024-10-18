@@ -107,7 +107,7 @@ export default function DiffView() {
 					oldValue={diff.original}
 					newValue={diff.diff}
 					styles={newStyles}
-					compareMethod={DiffMethod.WORDS_WITH_SPACE}
+					compareMethod={DiffMethod.WORDS}
 					splitView={false}
 					useDarkTheme={isDarkTheme}
 					showDiffOnly={false}

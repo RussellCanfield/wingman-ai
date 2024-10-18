@@ -153,9 +153,7 @@ export class CodePlanner {
 
 			const docs = await this.filterRelevantDocs(finalDocs, plan);
 			if (docs.length === 0) {
-				throw new NoFilesChangedError(
-					'No files have been changed. Please ensure you have set "hasChanged" to true for relevant files.'
-				);
+				throw new NoFilesChangedError("No files have been changed.");
 			}
 
 			return {
