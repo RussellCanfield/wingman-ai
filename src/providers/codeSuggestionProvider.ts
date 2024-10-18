@@ -11,24 +11,24 @@ import { AIProvider, AIStreamProvider } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "@shared/types/Settings";
-import { getSymbolsFromOpenFiles, supportedLanguages } from "./utilities";
+import {
+	extractCodeBlock,
+	getSymbolsFromOpenFiles,
+	supportedLanguages,
+} from "./utilities";
 import { getClipboardHistory } from "./clipboardTracker";
 import NodeCache from "node-cache";
 import { loggingProvider } from "./loggingProvider";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector = supportedLanguages;
-	private cache: NodeCache;
+	private cacheManager: CacheManager;
 
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvider,
 		private readonly _interactionSettings: InteractionSettings
 	) {
-		this.cache = new NodeCache({
-			stdTTL: 300,
-			maxKeys: 100,
-			checkperiod: 120,
-		});
+		this.cacheManager = new CacheManager();
 	}
 
 	async provideInlineCompletionItems(
@@ -70,6 +70,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				return [new InlineCompletionItem("")];
 			}
 			return await this.bouncedRequest(
+				document,
 				prefix,
 				abort.signal,
 				suffix,
@@ -81,11 +82,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		}
 	}
 
-	private generateCacheKey(prefix: string, suffix: string): string {
-		return `${prefix.slice(-100)}:${suffix.slice(0, 100)}`;
-	}
-
 	async bouncedRequest(
+		document: TextDocument,
 		prefix: string,
 		signal: AbortSignal,
 		suffix: string,
@@ -94,13 +92,16 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	): Promise<InlineCompletionItem[]> {
 		try {
 			eventEmitter._onQueryStart.fire();
-			const cacheKey = this.generateCacheKey(
-				prefix.trim(),
-				suffix.trim()
+			const cachedResult = this.cacheManager.get(
+				document,
+				prefix,
+				suffix
 			);
-			const cachedResult = this.cache.get<string>(cacheKey);
 
 			if (cachedResult) {
+				if (cachedResult === "") {
+					return [];
+				}
 				loggingProvider.logInfo(
 					"Code complete - Serving from query cache"
 				);
@@ -127,12 +128,84 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				);
 			}
 
-			this.cache.set(cacheKey, result);
+			if (result.startsWith("```")) {
+				result = extractCodeBlock(result);
+			}
+
+			this.cacheManager.set(document, prefix, suffix, result);
 			return [new InlineCompletionItem(result)];
 		} catch (error) {
 			return [];
 		} finally {
 			eventEmitter._onQueryComplete.fire();
 		}
+	}
+}
+
+class CacheManager {
+	private cache: NodeCache;
+	private documentHashes: Map<string, string>;
+
+	constructor() {
+		this.cache = new NodeCache({
+			stdTTL: 120,
+			maxKeys: 100,
+			checkperiod: 30,
+		});
+		this.documentHashes = new Map();
+	}
+
+	private generateCacheKey(
+		document: TextDocument,
+		prefix: string,
+		suffix: string
+	): string {
+		return `${document.uri.fsPath}:${prefix.slice(-100)}:${suffix.slice(
+			0,
+			100
+		)}`;
+	}
+
+	private generateDocumentHash(document: TextDocument): string {
+		return Buffer.from(document.getText()).toString("base64").slice(0, 20);
+	}
+
+	set(
+		document: TextDocument,
+		prefix: string,
+		suffix: string,
+		value: string
+	): void {
+		const key = this.generateCacheKey(document, prefix, suffix);
+		this.cache.set(key, value);
+		this.documentHashes.set(
+			document.uri.fsPath,
+			this.generateDocumentHash(document)
+		);
+	}
+
+	get(
+		document: TextDocument,
+		prefix: string,
+		suffix: string
+	): string | undefined {
+		const key = this.generateCacheKey(document, prefix, suffix);
+		const cachedHash = this.documentHashes.get(document.uri.fsPath);
+		const currentHash = this.generateDocumentHash(document);
+
+		if (cachedHash !== currentHash) {
+			this.invalidateDocument(document.uri.fsPath);
+			return undefined;
+		}
+
+		return this.cache.get<string>(key);
+	}
+
+	private invalidateDocument(fsPath: string): void {
+		const keysToDelete = this.cache
+			.keys()
+			.filter((key) => key.startsWith(fsPath));
+		keysToDelete.forEach((key) => this.cache.del(key));
+		this.documentHashes.delete(fsPath);
 	}
 }
