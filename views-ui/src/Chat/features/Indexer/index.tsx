@@ -1,9 +1,9 @@
 import { useAppContext } from "../../context";
 import { vscode } from "../../utilities/vscode";
 import { AppMessage } from "@shared/types/Message";
-import { IndexFilter } from "@shared/types/Settings";
 import { useEffect, useState } from "react";
 import { Loader } from "../../Loader";
+import { IndexerSettings } from "@shared/types/Indexer";
 
 type IndexStats = {
 	exists: boolean;
@@ -66,9 +66,9 @@ export default function Indexer() {
 		vscode.postMessage({
 			command: "build-index",
 			value: {
-				filter: indexFilter,
+				indexFilter,
 				exclusionFilter,
-			} satisfies IndexFilter,
+			} satisfies IndexerSettings,
 		});
 		setIndex((idx) => ({ ...idx, processing: true }));
 	};
@@ -81,7 +81,8 @@ export default function Indexer() {
 
 	return (
 		<div className="flex flex-col h-full">
-			<div className="space-y-4 mt-4 overflow-y-auto">
+			<div className="space-y-4 mt-4">
+				{/* Other sections remain unchanged */}
 				<p className="text-lg font-bold">
 					Status:{" "}
 					{index.exists
@@ -134,18 +135,16 @@ export default function Indexer() {
 					</p>
 				)}
 				{index.exists && !index.processing && (
-					<>
-						<button
-							className="bg-red-600 text-white px-4 py-2 rounded"
-							onClick={() => deleteIndex()}
-						>
-							Delete Index
-						</button>
-					</>
+					<button
+						className="bg-red-600 text-white px-4 py-2 rounded"
+						onClick={() => deleteIndex()}
+					>
+						Delete Index
+					</button>
 				)}
 			</div>
 			{index.exists && !index.processing && (
-				<div className="flex-shrink-0 overflow-y-auto max-h-[60vh] mt-4">
+				<div className="mt-4 overflow-y-auto flex-grow">
 					<p className="text-lg font-bold">Indexed Files:</p>
 					<ul className="space-y-1">
 						{index.files.map((f, index) => (
