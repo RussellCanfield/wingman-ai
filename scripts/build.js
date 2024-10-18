@@ -13,7 +13,7 @@ const downloadAndExtract = async (pkg, outDir) => {
 	const { default: fetch } = await import("node-fetch");
 	const url = `https://registry.npmjs.org/${pkg}/-/${pkg
 		.split("/")
-		.pop()}-0.27.1.tgz`;
+		.pop()}-0.28.0.tgz`;
 	console.log(`Downloading ${pkg} from ${url}`);
 	const response = await fetch(url);
 	if (!response.ok) {

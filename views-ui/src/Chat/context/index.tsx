@@ -5,11 +5,10 @@ import React, {
 	useContext,
 	useEffect,
 	useState,
-	useSyncExternalStore,
 } from "react";
-import { localMemState } from "../utilities/localMemState";
 import { vscode } from "../utilities/vscode";
 import { ComposerMessage } from "@shared/types/Composer";
+import { AppState } from "@shared/types/Settings";
 
 export type View = "chat" | "composer" | "index";
 
@@ -25,14 +24,9 @@ interface AppContextType {
 	setView: React.Dispatch<React.SetStateAction<View>>;
 	isLightTheme: boolean;
 	indexFilter: string;
+	setIndexFilter: React.Dispatch<React.SetStateAction<string>>;
 	exclusionFilter?: string;
-}
-
-interface AppState {
-	chatHistory: Record<string, ChatMessage[]>;
-	isLightTheme: boolean;
-	indexFilter: string;
-	exclusionFilter?: string;
+	setExclusionFilter: React.Dispatch<React.SetStateAction<string>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -45,17 +39,17 @@ export const useAppContext = () => {
 };
 
 export const AppProvider = ({ children }: PropsWithChildren) => {
-	const lm = useSyncExternalStore(
-		localMemState.subscribe,
-		localMemState.getSnapshot
-	);
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [composerMessages, setComposerMessages] = useState<ComposerMessage[]>(
 		[]
 	);
-	const [activeWorkspace, setWorkspaceFolder] = useState<string>("");
-	const [appState, setAppState] = useState<AppState | null>(null);
+	const [theme, setTheme] = useState<Number>(1);
+	const [appState, setAppState] = useState<AppState | null>();
 	const [view, setView] = useState<View>("chat");
+	const [indexFilter, setIndexFilter] = useState<string>(
+		"apps/**/*.{js,jsx,ts,tsx}"
+	);
+	const [exclusionFilter, setExclusionFilter] = useState<string>("");
 
 	useEffect(() => {
 		vscode.postMessage({ command: "ready" });
@@ -65,25 +59,24 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 
 			switch (command) {
 				case "init":
-					const { workspaceFolder, theme } = value as {
-						workspaceFolder: string;
-						theme: number;
-					};
-					setWorkspaceFolder(workspaceFolder);
-					localMemState.setState("theme", theme);
-					const storedAppState = vscode.getState() as AppState | null;
+					const storedAppState = value as AppState;
 					setAppState(storedAppState);
-					if (storedAppState?.chatHistory?.[workspaceFolder]) {
-						setMessages(
-							storedAppState.chatHistory[workspaceFolder]
-						);
+					if (storedAppState?.settings.chatMessages) {
+						setMessages(storedAppState.settings.chatMessages);
 					}
+					if (storedAppState?.settings.indexerSettings) {
+						const { indexFilter, exclusionFilter } =
+							storedAppState?.settings.indexerSettings;
+						setIndexFilter(indexFilter);
+						setExclusionFilter(exclusionFilter || "");
+					}
+					setTheme(storedAppState?.theme ?? 1);
 					break;
 				case "switchView":
 					setView(value as View);
 					break;
 				case "setTheme":
-					localMemState.setState("theme", value as number);
+					setTheme(value as number);
 					break;
 			}
 		};
@@ -95,24 +88,22 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 	useEffect(() => {
 		if (!appState) return;
 
-		vscode.setState({
+		const newState: AppState = {
 			...appState,
-			chatHistory: {
-				...appState.chatHistory,
-				[activeWorkspace]: messages,
+			settings: {
+				chatMessages: messages,
+				indexerSettings: {
+					indexFilter,
+					exclusionFilter,
+				},
 			},
-		});
-	}, [appState, messages]);
+		};
 
-	useEffect(() => {
-		const storedAppState = vscode.getState() as AppState | null;
-		if (storedAppState) {
-			setAppState(storedAppState);
-			if (storedAppState.chatHistory && activeWorkspace) {
-				setMessages(storedAppState.chatHistory[activeWorkspace] || []);
-			}
-		}
-	}, [activeWorkspace]);
+		vscode.postMessage({
+			command: "state-update",
+			value: newState,
+		});
+	}, [appState, messages, indexFilter, exclusionFilter]);
 
 	const addMessage = (chatMessage: ChatMessage) => {
 		setMessages((msg) => msg.concat(chatMessage));
@@ -122,7 +113,7 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 		setMessages([]);
 	};
 
-	const isLightTheme = lm["theme"] === 1;
+	const isLightTheme = theme === 1;
 
 	return (
 		<AppContext.Provider
@@ -135,8 +126,10 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 				view,
 				setView,
 				isLightTheme,
-				indexFilter: appState?.indexFilter || "",
-				exclusionFilter: appState?.exclusionFilter,
+				indexFilter,
+				setIndexFilter,
+				exclusionFilter,
+				setExclusionFilter,
 			}}
 		>
 			{children}

@@ -1,5 +1,5 @@
 import { PropsWithChildren, memo, useState } from "react";
-import { FaCopy } from "react-icons/fa6";
+import { FaCopy, FaFile } from "react-icons/fa6";
 import { GoFileSymlinkFile } from "react-icons/go";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -166,23 +166,23 @@ const ChatEntry = ({
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
 	return (
-		<li className="border-b border-gray-300 border-opacity-50 pb-4">
-			<span className="flex items-center mb-2 mt-2">
+		<li className="border-b border-gray-300 border-opacity-50 pb-4 text-base">
+			<span className="flex items-center">
 				<h3 className="text-lg">
 					{from === "user" ? "Me" : "Wingman"}
 				</h3>
 			</span>
-			<div className="mb-4 mt-4">
-				{context && (
+			{context && (
+				<div className="mb-4">
 					<div
 						className="flex items-center gap-1 p-1 border border-solid cursor-pointer"
 						onClick={showSelectedContext}
 					>
-						<i className="codicon codicon-file"></i>
+						<FaFile />
 						<span>{getContextDisplay()}</span>
 					</div>
-				)}
-			</div>
+				</div>
+			)}
 			{loading && message == "" ? (
 				<div>
 					<SkeletonLoader />
@@ -210,7 +210,7 @@ const ChatEntry = ({
 						) : (
 							<code
 								{...rest}
-								className={`whitespace-pre-wrap ${className} bg-transparent mt-2`}
+								className={`whitespace-pre-wrap ${className} bg-transparent`}
 							>
 								{children}
 							</code>

@@ -12,6 +12,7 @@ import {
 import { TypeRequestEvent } from "../server/retriever";
 import { EmbeddingsResponse } from "../server";
 import { Settings } from "@shared/types/Settings";
+import { IndexerSettings } from "@shared/types/Indexer";
 import { ComposerRequest, ComposerResponse } from "@shared/types/Composer";
 import path from "node:path";
 import ignore from "ignore";
@@ -24,6 +25,7 @@ import {
 	EVENT_VECTOR_STORE_LOAD_FAILED,
 	telemetry,
 } from "../providers/telemetryProvider";
+import { Workspace } from "../service/workspace";
 
 let client: LanguageClient;
 
@@ -32,7 +34,8 @@ export class LSPClient {
 
 	activate = async (
 		context: ExtensionContext,
-		settings: Settings | undefined
+		settings: Settings | undefined,
+		workspace: Workspace
 	) => {
 		const serverModule = vscode.Uri.joinPath(
 			context.extensionUri,
@@ -60,6 +63,7 @@ export class LSPClient {
 			),
 			initializationOptions: {
 				settings,
+				indexerSettings: (await workspace.load()).indexerSettings,
 			},
 		};
 
@@ -147,6 +151,11 @@ export class LSPClient {
 		this.composerWebView = webview;
 	};
 
+	setIndexerSettings = async (indexSettings: IndexerSettings) => {
+		this.clearIndexFilterCache();
+		await client.sendRequest("wingman/indexerSettings", indexSettings);
+	};
+
 	compose = async (request: ComposerRequest) => {
 		telemetry.sendEvent(EVENT_COMPOSE_STARTED, {
 			numberOfFiles: request.contextFiles.length.toString(),
@@ -160,9 +169,13 @@ export class LSPClient {
 		await client.sendRequest("wingman/clearChatHistory");
 	};
 
-	buildFullIndex = async (filter: string, exclusionFilter?: string) => {
+	buildFullIndex = async ({
+		indexFilter,
+		exclusionFilter,
+	}: IndexerSettings) => {
 		telemetry.sendEvent(EVENT_FULL_INDEX_BUILD);
-		const foundFiles = await findFiles(filter, exclusionFilter);
+		this.clearIndexFilterCache();
+		const foundFiles = await findFiles(indexFilter, exclusionFilter);
 		return client.sendRequest("wingman/fullIndexBuild", {
 			files: foundFiles.map((f) => f.fsPath),
 		});
@@ -184,6 +197,10 @@ export class LSPClient {
 		return { codeDocs: [], projectDetails: "" };
 	};
 
+	clearIndexFilterCache = () => {
+		cachedGitignorePatterns = null;
+	};
+
 	indexExists = async () => {
 		return client.sendRequest("wingman/getIndex");
 	};
@@ -198,14 +215,14 @@ export class LSPClient {
 
 let cachedGitignorePatterns: string[] | null = null;
 
-async function getGitignorePatterns(): Promise<string[]> {
+async function getGitignorePatterns(exclusionFilter?: string) {
 	if (cachedGitignorePatterns) {
-		return cachedGitignorePatterns;
+		return `{${cachedGitignorePatterns.join(",")}}`;
 	}
 
 	const workspaceFolders = vscode.workspace.workspaceFolders;
 	if (!workspaceFolders) {
-		return [];
+		return "";
 	}
 
 	const gitignorePath = vscode.Uri.file(
@@ -229,28 +246,28 @@ async function getGitignorePatterns(): Promise<string[]> {
 				return `**/${pattern}`;
 			});
 
-		return cachedGitignorePatterns;
+		let combinedExclusionFilter: string | undefined;
+		if (exclusionFilter) {
+			combinedExclusionFilter = `{${exclusionFilter},${cachedGitignorePatterns.join(
+				","
+			)}}`;
+		} else if (cachedGitignorePatterns.length > 0) {
+			combinedExclusionFilter = `{${cachedGitignorePatterns.join(",")}}`;
+		}
+
+		return combinedExclusionFilter;
 	} catch (err) {
 		if (err instanceof Error) {
 			loggingProvider.logError(
 				`Error reading .gitignore file: ${err.message}`
 			);
 		}
-		return [];
+		return "";
 	}
 }
 
 async function findFiles(filter: string, exclusionFilter?: string) {
-	const gitignorePatterns = await getGitignorePatterns();
-
-	let combinedExclusionFilter: string | undefined;
-	if (exclusionFilter) {
-		combinedExclusionFilter = `{${exclusionFilter},${gitignorePatterns.join(
-			","
-		)}}`;
-	} else if (gitignorePatterns.length > 0) {
-		combinedExclusionFilter = `{${gitignorePatterns.join(",")}}`;
-	}
+	const combinedExclusionFilter = await getGitignorePatterns(exclusionFilter);
 
 	const files = await vscode.workspace.findFiles(
 		filter,

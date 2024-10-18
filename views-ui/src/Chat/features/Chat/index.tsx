@@ -115,7 +115,7 @@ export default function Chat() {
 	};
 
 	return (
-		<main className="h-full flex flex-col overflow-auto">
+		<main className="h-full flex flex-col overflow-auto text-base">
 			{messages.length === 0 && (
 				<p>
 					The chat feature allows you to ask general or specific

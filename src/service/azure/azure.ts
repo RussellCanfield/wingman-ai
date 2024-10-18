@@ -154,7 +154,7 @@ export class AzureAI implements AIStreamProvider {
 					`Code Complete failed: ${error.message}`
 				);
 			}
-			return `AzureAI - Code complete request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
+			return "";
 		}
 
 		const endTime = new Date().getTime();

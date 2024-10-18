@@ -275,10 +275,13 @@ ${prompt}`,
 				signal
 			);
 		} catch (error) {
-			if ((error as Error).name === "AbortError") {
-				failedDueToAbort = true;
+			if (error instanceof Error) {
+				this.loggingProvider.logError(error.message);
+				if (error.name === "AbortError") {
+					failedDueToAbort = true;
+				}
 			}
-			return `Anthropic - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
+			return "";
 		}
 
 		const endTime = new Date().getTime();
@@ -292,7 +295,7 @@ ${prompt}`,
 			const responseBody = await response?.text();
 			const msg = `Anthropic - Code Completion failed with the following status code: ${response?.status}, body: ${responseBody}`;
 			this.loggingProvider.logError(msg);
-			return msg;
+			return "";
 		}
 
 		if (!response?.body) {

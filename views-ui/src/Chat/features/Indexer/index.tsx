@@ -14,18 +14,13 @@ type IndexStats = {
 let interval: NodeJS.Timeout;
 
 export default function Indexer() {
-	const { indexFilter, exclusionFilter: savedExclusionFilter } =
+	const { indexFilter, exclusionFilter, setIndexFilter, setExclusionFilter } =
 		useAppContext();
 	const [index, setIndex] = useState<IndexStats>({
 		exists: false,
 		processing: false,
 		files: [],
 	});
-	const [filter, setFilter] = useState(
-		indexFilter || "apps/**/*.{js,jsx,ts,tsx}"
-	);
-	const [exclusionFilter, setExclusionFilter] =
-		useState(savedExclusionFilter);
 
 	useEffect(() => {
 		vscode.postMessage({
@@ -71,7 +66,7 @@ export default function Indexer() {
 		vscode.postMessage({
 			command: "build-index",
 			value: {
-				filter,
+				filter: indexFilter,
 				exclusionFilter,
 			} satisfies IndexFilter,
 		});
@@ -107,31 +102,31 @@ export default function Indexer() {
 					When enabled (default), files will be re-indexed on save, if
 					their contents have changed.
 				</p>
-				{!index.exists && !index.processing && (
-					<section className="flex flex-col gap-4">
-						<label>Inclusion Filter:</label>
-						<input
-							type="text"
-							className="border border-gray-300 rounded px-2 py-1"
-							value={filter || ""}
-							onChange={(e) => setFilter(e.target.value)}
-						/>
-						<label>Exclusion Filter: </label>
-						<input
-							type="text"
-							className="border border-gray-300 rounded px-2 py-1"
-							value={exclusionFilter || ""}
-							onChange={(e) => setExclusionFilter(e.target.value)}
-						/>
+				<section className="flex flex-col gap-4">
+					<label>Inclusion Filter:</label>
+					<input
+						type="text"
+						className="w-full p-2 border bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+						value={indexFilter || ""}
+						onChange={(e) => setIndexFilter(e.target.value)}
+					/>
+					<label>Exclusion Filter: </label>
+					<input
+						type="text"
+						className="w-full p-2 border bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+						value={exclusionFilter || ""}
+						onChange={(e) => setExclusionFilter(e.target.value)}
+					/>
+					{!index.processing && (
 						<button
 							className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
-							disabled={index.processing || !filter}
+							disabled={index.processing || !indexFilter}
 							onClick={() => buildIndex()}
 						>
-							Build Index
+							Full Build Index
 						</button>
-					</section>
-				)}
+					)}
+				</section>
 				{index.processing && (
 					<p className="flex items-center">
 						<Loader />{" "}
@@ -146,23 +141,12 @@ export default function Indexer() {
 						>
 							Delete Index
 						</button>
-						<div>
-							<button
-								className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
-								disabled={index.processing || !filter}
-								onClick={() => buildIndex()}
-							>
-								Build Index
-							</button>
-						</div>
-						<div className="mt-4">
-							<p className="text-lg font-bold">Indexed Files:</p>
-						</div>
 					</>
 				)}
 			</div>
 			{index.exists && !index.processing && (
 				<div className="flex-shrink-0 overflow-y-auto max-h-[60vh] mt-4">
+					<p className="text-lg font-bold">Indexed Files:</p>
 					<ul className="space-y-1">
 						{index.files.map((f, index) => (
 							<li key={index}>{f}</li>

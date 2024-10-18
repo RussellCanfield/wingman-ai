@@ -20,7 +20,13 @@ import { Indexer } from "./files/indexer";
 import { Generator } from "./files/generator";
 import { createSymbolRetriever, SymbolRetriever } from "./retriever";
 import { DocumentQueue } from "./queue";
-import { filePathToUri, getWorkspaceFolderForDocument } from "./files/utils";
+import {
+	checkFileMatch,
+	clearFilterCache,
+	filePathToUri,
+	getGitignorePatterns,
+	getWorkspaceFolderForDocument,
+} from "./files/utils";
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
 import { MemorySaver } from "@langchain/langgraph";
@@ -38,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { loggingProvider } from "./loggingProvider";
 import { createEmbeddingProvider } from "../service/embeddings/base";
+import { IndexerSettings } from "@shared/types/Indexer";
 
 const config = { configurable: { thread_id: "conversation-num-1" } };
 
@@ -48,6 +55,7 @@ let embeddingSettings:
 	| OllamaEmbeddingSettingsType
 	| OpenAIEmbeddingSettingsType;
 let settings: Settings;
+let indexerSettings: IndexerSettings;
 
 export type CustomRange = {
 	start: { line: number; character: number };
@@ -164,6 +172,9 @@ export class LSPServer {
 					embeddingSettings = settings.embeddingSettings.AzureAI!;
 				}
 			}
+
+			indexerSettings =
+				initializationOptions.indexerSettings as IndexerSettings;
 
 			this.connection?.console.log(
 				"Workspace folders: " + this.workspaceFolders.join(", ")
@@ -361,6 +372,14 @@ export class LSPServer {
 		});
 
 		this.connection?.onRequest(
+			"wingman/indexerSettings",
+			(indexSettings: IndexerSettings) => {
+				clearFilterCache();
+				indexerSettings = indexSettings;
+			}
+		);
+
+		this.connection?.onRequest(
 			"wingman/fullIndexBuild",
 			async (request: { files: string[] }) => {
 				try {
@@ -368,6 +387,7 @@ export class LSPServer {
 						return;
 					}
 
+					clearFilterCache();
 					const filePaths = request.files.map((file) =>
 						filePathToUri(file)
 					);
@@ -459,7 +479,7 @@ export class LSPServer {
 			};
 		});
 
-		this.documents?.onDidSave((e) => {
+		this.documents?.onDidSave(async (e) => {
 			try {
 				if (!embeddingSettings?.enabled) {
 					return;
@@ -470,6 +490,28 @@ export class LSPServer {
 					document.uri,
 					this.workspaceFolders
 				);
+
+				const exclusionPattern = await getGitignorePatterns(
+					workspaceFolder!,
+					indexerSettings.exclusionFilter
+				);
+
+				const filePath = fileURLToPath(document.uri);
+				const matches = await checkFileMatch(
+					path.relative(workspaceFolder!, filePath),
+					indexerSettings.indexFilter,
+					exclusionPattern
+				);
+
+				if (!matches) {
+					console.log(
+						"File does not match exclusion filter",
+						filePath,
+						exclusionPattern
+					);
+					return;
+				}
+
 				if (workspaceFolder) {
 					this.connection?.console.log(
 						"Document queued: " + document.uri

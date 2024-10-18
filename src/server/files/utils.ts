@@ -4,6 +4,9 @@ import fs from "node:fs/promises";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { Location } from "vscode-languageserver";
 import { URI } from "vscode-uri";
+import ignore from "ignore";
+import { loggingProvider } from "../loggingProvider";
+import FastGlob from "fast-glob";
 
 export const getWorkspaceFolderForDocument = (
 	documentUri: string,
@@ -90,4 +93,76 @@ export function convertIdToFileUri(
 ) {
 	const startRange = `${rangeStartLine}-${rangeStartCharacter}`;
 	return id.replace(`-${startRange}`, "");
+}
+
+let cachedGitignorePatterns: string[] | null = null;
+
+export function clearFilterCache() {
+	cachedGitignorePatterns = null;
+}
+
+export async function checkFileMatch(
+	filePath: string,
+	includePatterns: string,
+	excludePatterns?: string
+): Promise<boolean> {
+	// Check inclusion
+	const included = await FastGlob(includePatterns, { onlyFiles: true });
+
+	// Check exclusion if patterns are provided
+	const excluded = excludePatterns
+		? await FastGlob(excludePatterns, { onlyFiles: true })
+		: [];
+
+	// File is matched if it appears in included and not in excluded list
+	return included.includes(filePath) && !excluded.includes(filePath);
+}
+
+export async function getGitignorePatterns(
+	workspace: string,
+	exclusionFilter?: string
+) {
+	if (cachedGitignorePatterns) {
+		return `{${cachedGitignorePatterns.join(",")}}`;
+	}
+
+	if (!workspace) {
+		return "";
+	}
+
+	const gitignorePath = path.join(workspace, ".gitignore");
+
+	try {
+		const gitignoreContent = await fs.readFile(gitignorePath);
+		const gitignoreLines = gitignoreContent.toString().split("\n");
+		const ig = ignore().add(gitignoreLines);
+
+		// Convert .gitignore patterns to glob patterns
+		cachedGitignorePatterns = gitignoreLines
+			.filter((line) => line && !line.startsWith("#"))
+			.map((pattern) => {
+				if (pattern.startsWith("!")) {
+					return `!**/${pattern.slice(1)}`;
+				}
+				return `**/${pattern}`;
+			});
+
+		let combinedExclusionFilter: string | undefined;
+		if (exclusionFilter) {
+			combinedExclusionFilter = `{${exclusionFilter},${cachedGitignorePatterns.join(
+				","
+			)}}`;
+		} else if (cachedGitignorePatterns.length > 0) {
+			combinedExclusionFilter = `{${cachedGitignorePatterns.join(",")}}`;
+		}
+
+		return combinedExclusionFilter;
+	} catch (err) {
+		if (err instanceof Error) {
+			loggingProvider.logError(
+				`Error reading .gitignore file: ${err.message}`
+			);
+		}
+		return "";
+	}
 }

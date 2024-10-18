@@ -2,6 +2,7 @@ import {
 	AiProviders,
 	AiProvidersList,
 	ApiSettingsType,
+	AzureAISettingsType,
 	OllamaSettingsType,
 } from "@shared/types/Settings";
 import { InitSettings } from "./App";
@@ -16,7 +17,7 @@ export type AiProviderProps = {
 	settings: InitSettings;
 	onProviderChanged: (provider: AiProviders) => void;
 	onProviderSettingsChanged: (
-		settings: OllamaSettingsType | ApiSettingsType
+		settings: OllamaSettingsType | ApiSettingsType | AzureAISettingsType
 	) => void;
 };
 

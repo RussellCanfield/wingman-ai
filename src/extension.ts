@@ -21,6 +21,7 @@ import {
 	EVENT_EXTENSION_LOADED,
 	telemetry,
 } from "./providers/telemetryProvider";
+import { Workspace } from "./service/workspace";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -39,7 +40,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
-	await lspClient.activate(context, settings);
+	const workspace = new Workspace(
+		context,
+		vscode.workspace.workspaceFolders?.[0].name,
+		vscode.workspace.workspaceFolders?.[0].uri.fsPath
+	);
+
+	await lspClient.activate(context, settings, workspace);
 
 	telemetry.sendEvent(EVENT_EXTENSION_LOADED, {
 		aiProvider: settings.aiProvider,
@@ -112,7 +119,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		context,
 		settings?.interactionSettings,
 		diffViewProvider,
-		settings?.validationSettings
+		settings?.validationSettings,
+		workspace
 	);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(

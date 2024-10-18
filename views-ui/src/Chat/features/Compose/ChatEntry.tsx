@@ -275,7 +275,7 @@ const ChatEntry = ({
 			)}
 			{plan?.files?.length > 0 && (
 				<div>
-					<h3 className="m-0 text-lg">Files:</h3>
+					<h3 className="m-0 text-lg mt-4">Files:</h3>
 					{plan?.files?.map((file, index) => (
 						<ChatArtifact
 							key={index}

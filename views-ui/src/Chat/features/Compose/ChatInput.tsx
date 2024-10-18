@@ -208,7 +208,7 @@ const ChatInput = ({
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>
-						<span className="p-4">
+						<span className="p-4 pr-0">
 							{!loading && (
 								<FaPlay
 									size={16}

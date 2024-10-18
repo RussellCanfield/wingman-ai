@@ -9,10 +9,11 @@ import {
 	FileMetadata,
 } from "@shared/types/Message";
 import {
-	IndexFilter,
+	AppState,
 	InteractionSettings,
 	ValidationSettings,
-} from "../../shared/src/types/Settings";
+} from "@shared/types/Settings";
+import { IndexerSettings } from "@shared/types/Indexer";
 import { loggingProvider } from "./loggingProvider";
 import {
 	addNoneAttributeToLink,
@@ -35,6 +36,8 @@ import {
 	EVENT_VALIDATE_SUCCEEDED,
 	telemetry,
 } from "./telemetryProvider";
+import { Workspace } from "../service/workspace";
+import { getGitignorePatterns } from "../server/files/utils";
 
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
@@ -55,7 +58,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _interactionSettings: InteractionSettings,
 		private readonly _diffViewProvider: DiffViewProvider,
-		private readonly _validationSettings: ValidationSettings
+		private readonly _validationSettings: ValidationSettings,
+		private readonly _workspace: Workspace
 	) {}
 
 	dispose() {
@@ -191,6 +195,17 @@ ${result.summary}`,
 					}
 
 					switch (command) {
+						case "state-update":
+							const appState = value as AppState;
+							await this._workspace.save({
+								indexerSettings:
+									appState.settings.indexerSettings,
+								chatMessages: appState.settings.chatMessages,
+							});
+							this._lspClient.setIndexerSettings(
+								appState.settings.indexerSettings
+							);
+							break;
 						case "diff-view":
 							const { file, diff } = value as DiffViewCommand;
 
@@ -217,6 +232,9 @@ ${result.summary}`,
 							wingmanTerminal?.cancel();
 							break;
 						case "clear-chat-history":
+							await this._workspace.save({
+								chatMessages: [],
+							});
 							this._aiProvider.clearChatHistory();
 							await this._lspClient.clearChatHistory();
 							break;
@@ -296,7 +314,9 @@ ${result.summary}`,
 							// Find all files in the workspace, excluding node_modules
 							const allFiles = await vscode.workspace.findFiles(
 								"**/*",
-								"**/node_modules/**"
+								(await getGitignorePatterns(
+									this._workspace.workspacePath
+								)) || ""
 							);
 
 							// Filter files based on the file name
@@ -334,20 +354,18 @@ ${result.summary}`,
 							await this._lspClient.deleteIndex();
 							break;
 						case "build-index":
-							const { filter, exclusionFilter } =
-								value as IndexFilter;
-							this._context.workspaceState.update(
-								"index-filter",
-								filter
-							);
-							this._context.workspaceState.update(
-								"exclusion-filter",
-								exclusionFilter
-							);
-							await this._lspClient.buildFullIndex(
-								filter,
-								exclusionFilter
-							);
+							const { indexFilter, exclusionFilter } =
+								value as IndexerSettings;
+							await this._workspace.save({
+								indexerSettings: {
+									indexFilter,
+									exclusionFilter,
+								},
+							});
+							await this._lspClient.buildFullIndex({
+								indexFilter,
+								exclusionFilter,
+							});
 							break;
 						case "check-index":
 							webviewView.webview.postMessage({
@@ -371,10 +389,6 @@ ${result.summary}`,
 							this.sendContentToNewDocument(value as string);
 							break;
 						}
-						case "clear": {
-							this._aiProvider.clearChatHistory();
-							break;
-						}
 						case "showContext": {
 							const { fileName, lineRange } =
 								value as CodeContext;
@@ -396,27 +410,17 @@ ${result.summary}`,
 							break;
 						}
 						case "ready": {
-							const appState = {
+							const settings = await this._workspace.load();
+							const appState: AppState = {
 								workspaceFolder: getActiveWorkspace(),
 								theme: vscode.window.activeColorTheme.kind,
-								indexFilter:
-									this._context.workspaceState.get(
-										"index-filter"
-									),
-								exclusionFilter:
-									this._context.workspaceState.get(
-										"exclusion-filter"
-									),
+								settings,
 							};
 							webviewView.webview.postMessage({
 								command: "init",
 								value: appState,
 							});
 							this.showView(this._launchView);
-							break;
-						}
-						case "log": {
-							this.log(value);
 							break;
 						}
 					}

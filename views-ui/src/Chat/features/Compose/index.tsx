@@ -195,7 +195,7 @@ ${values.review.comments.join("\n")}`,
 	}, [composerMessages]);
 
 	return (
-		<main className="h-full flex flex-col overflow-auto">
+		<main className="h-full flex flex-col overflow-auto text-base">
 			{composerMessages.length === 0 && (
 				<p>
 					The composer feature allows you to generate code changes.

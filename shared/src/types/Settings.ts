@@ -1,9 +1,18 @@
+import { IndexerSettings } from "./Indexer";
+import { ChatMessage } from "./Message";
+
 export const defaultMaxTokens = -1;
 
-export type IndexFilter = {
-	filter: string;
-	exclusionFilter?: string;
-};
+export interface WorkspaceSettings {
+	indexerSettings: IndexerSettings;
+	chatMessages: ChatMessage[];
+}
+
+export interface AppState {
+	settings: WorkspaceSettings;
+	theme: Number;
+	workspaceFolder: string;
+}
 
 interface BaseServiceSettings {
 	chatModel: string;

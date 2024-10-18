@@ -22,7 +22,7 @@ Wingman has the ability to index your entire codebase and generate local LLM emb
 
 <center>
 
-<b> [Check out our documentaion site](https://wingman.squadron-ai.com/) - learn about configuration, watch videos and view tips for getting the most out of the extension. </b>
+<b> [Check out our documentation site](https://wingman.squadron-ai.com/) - learn about configuration, watch videos and view tips for getting the most out of the extension. </b>
 
 <b> Want a new feature? Need to report an issue? [visit our GitHub](https://github.com/RussellCanfield/wingman-ai).
 
@@ -39,7 +39,11 @@ Real-time code suggestions as you type
 <h3>Chat</h3>
 Ask questions about your codebase with an interactive real-time chat
 <h3>Composer</h3>
-Generate code with deep project context using an interative thought based agent flow
+Write enhancements, new features and more with cutting edge, self-reviewed and validated code
+<h3>Document Generation</h3>
+Generate documentation for code with one click
+<h3>Refactor</h3>
+Refactor code quickly with one click
 
 </center>
 
