@@ -75,7 +75,7 @@ Use the 'planner' tool to output a JSON array of implementation steps only. No a
 Example output:
 {
   "plan": [{
-    "file": "src/index.ts",
+    "file": "file path relative to the working directory",
     "steps": ["Import react", "Create root"]
   }]
 }
@@ -135,9 +135,9 @@ export class CodePlanner {
 			} else {
 				state.plan?.files?.map((f) => {
 					finalDocs.set(
-						f.file,
+						f.path,
 						TextDocument.create(
-							f!.file,
+							f!.path,
 							"plaintext",
 							0,
 							f!.code || ""
@@ -213,7 +213,7 @@ Search queries:`);
 
 			state.plan.files = Array.from(starterDocs.entries()).map(
 				([file, doc]) => ({
-					file,
+					path: file,
 					code: doc.getText(),
 				})
 			);
@@ -238,7 +238,7 @@ Query: ${objective}
 
 Results to rank:
 ${state.plan?.files?.map((f, index) => {
-	return `${index + 1}. ${f.file}\n${f.code}\n\n-----FILE-----\n\n`;
+	return `${index + 1}. ${f.path}\n${f.code}\n\n-----FILE-----\n\n`;
 })}
 
 Please analyze these results and provide a ranked list from most relevant to least relevant. For each result, only return the new ranking index. Your response should be in this format:
@@ -256,9 +256,9 @@ Ranked results:
 			console.error("Failed to rerank", e);
 			return new Map(
 				state.plan?.files?.map((file) => [
-					file.file,
+					file.path,
 					TextDocument.create(
-						file.file,
+						file.path,
 						"plaintext",
 						0,
 						file.code || ""
@@ -287,9 +287,9 @@ Ranked results:
 
 			const originalFile = state.plan?.files![result - 1];
 			rerankedDocs.set(
-				originalFile!.file,
+				originalFile!.path,
 				TextDocument.create(
-					originalFile!.file,
+					originalFile!.path,
 					"plaintext",
 					0,
 					originalFile!.code || ""
@@ -327,8 +327,8 @@ Ranked results:
 	private async filterRelevantDocs(
 		finalDocs: Map<string, TextDocument>,
 		plan: PlannerSchema["plan"]
-	): Promise<{ file: string; code: string }[]> {
-		const result: { file: string; code: string; steps?: string[] }[] = [];
+	): Promise<{ path: string; code: string }[]> {
+		const result: { path: string; code: string; steps?: string[] }[] = [];
 
 		for (const f of plan) {
 			const filePath = path.resolve(this.workspace, f.file);
@@ -347,7 +347,7 @@ Ranked results:
 			} catch (e) {}
 
 			result.push({
-				file: f.file,
+				path: f.file,
 				code: doc?.getText() || "//This is a new file, fill in.",
 				steps: f.steps,
 			});

@@ -60,7 +60,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		modelProvider = CreateAIProvider(settings, loggingProvider);
 
 		if (!(await modelProvider.validateSettings())) {
-			telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED);
+			telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
+				aiProvider: settings.aiProvider,
+			});
 			throw new Error(
 				`AI Provider ${settings.aiProvider} is not configured correctly.`
 			);

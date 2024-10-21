@@ -11,7 +11,7 @@ export interface ChatMessage {
 }
 
 export interface FileMetadata {
-	file: string;
+	path: string;
 	code?: string;
 	analysis?: string;
 	changes?: string[];

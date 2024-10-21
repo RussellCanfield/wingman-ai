@@ -28,7 +28,7 @@ export const codeWriterSchema = z.object({
 		),
 	file: z
 		.object({
-			file: z.string().describe("The full file path"),
+			path: z.string().describe("The full file path"),
 			markdown: z
 				.string()
 				.describe(
@@ -53,19 +53,18 @@ Output Structure:
 
 Key Instructions:
 1. Process only the file in scope, do not modify a provided file that is not in scope.
-2. Do not perform any code changes outside of the objective. Focus on what the core ask is.
-3. Use other files as context for integration (import paths, exports, names, etc.).
-4. Omit files requiring no changes or just verification.
-5. Output only if changes are made or a new file is created.
-6. Always use GitHub-flavored markdown for code output.
-7. Provide full file paths in the response.
-8. Do not perform extraneous changes to files, dig deep and focus on the integrate between the files given.
-9. Ensure output adheres to the provided JSON schema.
+2. Use other files as context for integration (import paths, exports, names, etc.).
+3. Omit files requiring no changes or just verification.
+4. Output only if changes are made or a new file is created.
+5. Always use GitHub-flavored markdown for code output.
+6. Provide full file paths in the response.
+7. Do not perform extraneous changes to files, dig deep and focus on the integrate between the files given.
+7. Ensure output adheres to the provided JSON schema.
 
 Step Writing Guidelines:
 1. Focus on user-centric, actionable steps not covered in code modifications - these would be manual steps the user still needs to take such as installing dependencies.
 2. Explicitly mention file names when relevant.
-3. Categorize terminal commands in the "command" field.
+3. Categorize terminal commands in the "command" field - group descriptions for the command in a single step.
 4. Ensure clarity, conciseness, and no overlap with file changes, for instance if you imported a file in a code change the user does not need to take manual action.
 5. Omit steps for testing or code verification unless explicitly required.
 6. Do not include new files created in the steps, these are created for the user automatically.
@@ -92,7 +91,7 @@ File Handling:
 - Use any provided file paths as a reference for any new files.
 - Omit irrelevant or unchanged files.
 - Omit code verification or extraneous changes.
-- Use GitHub-flavored markdown for code blocks.
+- Use GitHub-flavored markdown for files, the code must be wrapped in markdown. Do not mess this up.
 - Provide full, functional code responses.
 - Always include the full file path.
 - List changes performed on files, if no changes are performed, omit the file.
@@ -127,7 +126,9 @@ File in scope:
 
 ------
 
-Output Format:
+Implement required changes for the file in scope to meet the objective. 
+Use GitHub-flavored markdown for code output and follow the provided JSON schema. 
+Ensure the "file" property is an object, not a string. 
 
 You must ALWAYS Output in JSON format using the following template:
 {
@@ -138,7 +139,7 @@ You must ALWAYS Output in JSON format using the following template:
     }
   ],
   "file": {
-    "file": "string",
+    "path": "string",
     "markdown": "string",
     "changes": ["string"]
   }
@@ -230,7 +231,7 @@ File in scope:
 
 Implement required changes for the file in scope to meet the objective. 
 Use GitHub-flavored markdown for code output and follow the provided JSON schema. 
-Ensure the "files" property is an array of objects, not a string. 
+Ensure the "file" property is an object, not a string. 
 
 You must ALWAYS Output in JSON format using the following template:
 {
@@ -241,7 +242,7 @@ You must ALWAYS Output in JSON format using the following template:
     }
   ],
   "file": {
-    "file": "string",
+    "path": "string",
     "markdown": "string",
     "changes": ["string"]
   }
@@ -313,9 +314,9 @@ ${state.review?.comments?.join("\n")}
 
 		const files: CodeWriterSchema["file"][] = [];
 		const steps: CodeWriterSchema["steps"] = [];
-		for (const { file, code } of state.plan?.files || [
+		for (const { path: file, code } of state.plan?.files || [
 			{
-				file: "BLANK",
+				path: "BLANK",
 				changes: [],
 				code: "",
 			},
@@ -345,17 +346,17 @@ The following list contains files already processed, along with their changes.
 Use this information as context for subsequent file processing. Do not modify these files again.
 Note: Consider dependencies between files.
 
-${files.map((f) => `File:\n${f.file}\n\nChanges:\n${f.changes?.join("\n")}`)}
+${files.map((f) => `File:\n${f.path}\n\nChanges:\n${f.changes?.join("\n")}`)}
 
 ------`,
 				otherfiles:
 					state.plan?.files
-						?.filter((f) => f.file !== file)
+						?.filter((f) => f.path !== file)
 						?.map(
 							(f) => `${FILE_SEPARATOR}
           
 File:
-${f.file}
+${f.path}
 
 Code:
 ${f.code}`
@@ -376,12 +377,12 @@ ${f.code}`
 			const fileChanged =
 				result.file.changes && result.file.changes.length > 0;
 
-			if (!files.some((f) => result.file.file)) {
+			if (!files.some((f) => result.file.path)) {
 				files.push(
 					fileChanged
 						? result.file
 						: {
-								file,
+								path: result.file.path,
 								changes: [
 									"None were required, this file was not modified.",
 								],
@@ -402,7 +403,7 @@ ${f.code}`
 				steps: steps,
 				files: files.map((f) => {
 					return {
-						file: f.file,
+						path: f.path,
 						code: f.markdown,
 						changes: f.changes,
 					};

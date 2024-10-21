@@ -108,7 +108,7 @@ const ChatArtifact = ({
 			vscode.postMessage({
 				command: "diff-view",
 				value: {
-					file: file.file,
+					file: file.path,
 					diff: file.code,
 				},
 			});
@@ -131,7 +131,7 @@ const ChatArtifact = ({
 		<div className="border border-stone-700 rounded-lg overflow-hidden shadow-lg mb-4 mt-4">
 			<div className="bg-stone-700 text-white flex flex-wrap items-center">
 				<h4 className="m-0 flex-grow p-2 text-wrap break-all">
-					{truncatePath(file.file)}
+					{truncatePath(file.path)}
 				</h4>
 				<div className="flex">
 					<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">

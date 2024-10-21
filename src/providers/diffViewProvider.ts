@@ -68,7 +68,7 @@ export class DiffViewProvider {
 						});
 						break;
 					case "accept-file-changes":
-						const { file: artifactFile, code: markdown } =
+						const { path: artifactFile, code: markdown } =
 							value as FileMetadata;
 						let code = markdown?.startsWith("```")
 							? extractCodeBlock(markdown)

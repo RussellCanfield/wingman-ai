@@ -103,7 +103,7 @@ export class Replanner {
 		const codeFiles = state.plan?.files
 			?.map((f) => {
 				return `File:
-${f.file}
+${f.path}
 
 Changes made:
 - ${f.changes?.join("\n- ")}

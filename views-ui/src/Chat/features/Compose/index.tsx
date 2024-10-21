@@ -181,7 +181,6 @@ ${values.review.comments.join("\n")}`,
 			},
 		]);
 
-		setCurrentPhase("planner");
 		setLoading(true);
 	};
 

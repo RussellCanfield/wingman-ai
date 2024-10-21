@@ -38,7 +38,6 @@ export default function DiffView() {
 
 		switch (command) {
 			case "diff-file":
-				console.log("diff", value);
 				setDiff(value as DiffViewCommand);
 				break;
 		}

@@ -156,7 +156,7 @@ export async function* generateCommand(
 
 		// First, add all existing files from the checkpoint
 		for (const existingFile of existingFiles) {
-			uniqueFilePaths.add(path.relative(workspace, existingFile.file));
+			uniqueFilePaths.add(path.relative(workspace, existingFile.path));
 		}
 
 		// Then, add new files from contextFiles if they're not already in the checkpoint
@@ -166,7 +166,7 @@ export async function* generateCommand(
 				uniqueFilePaths.add(relativeFilePath);
 				const txtDoc = await getTextDocumentFromPath(file);
 				existingFiles.push({
-					file,
+					path: file,
 					code: txtDoc?.getText() || "",
 				});
 			}

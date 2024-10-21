@@ -248,7 +248,7 @@ ${result.summary}`,
 							terminal.sendText(terminalCommand);
 							break;
 						case "mergeIntoFile":
-							const { file: artifactFile, code: markdown } =
+							const { path: artifactFile, code: markdown } =
 								value as FileMetadata;
 
 							let code = markdown?.startsWith("```")
