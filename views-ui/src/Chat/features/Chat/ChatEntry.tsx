@@ -12,6 +12,7 @@ import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
 import React from "react";
 import { SkeletonLoader } from "../../SkeletonLoader";
+import "./ChatEntry.css";
 
 type MarkDownObject = {
 	props: {
@@ -166,7 +167,7 @@ const ChatEntry = ({
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
 	return (
-		<li className="border-b border-gray-300 border-opacity-50 pb-4 text-base">
+		<li className="border-b border-gray-300 border-opacity-50 pb-4 text-base message">
 			<span className="flex items-center">
 				<h3 className="text-lg">
 					{from === "user" ? "Me" : "Wingman"}

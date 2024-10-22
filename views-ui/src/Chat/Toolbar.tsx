@@ -31,12 +31,7 @@ export default function Toolbar() {
 
 	return (
 		<div className="flex justify-between items-center gap-4">
-			<h2
-				className="text-lg font-bold flex-auto"
-				onClick={() => vscode.postMessage({ command: "diff-view" })}
-			>
-				Wingman - {viewName[view]}
-			</h2>
+			<h2 className="text-lg font-bold flex-auto">{viewName[view]}</h2>
 			<button
 				className={`${buttonBaseClasses} ${
 					view === "chat"
