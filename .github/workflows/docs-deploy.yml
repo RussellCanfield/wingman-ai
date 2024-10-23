@@ -23,9 +23,11 @@ jobs:
               with:
                   node-version: 20
             - name: Install Dependencies
+              working-directory: ./docs-site
               run: npm install
-            - name: Build
-              run: npm run build:docs
+            - name: Build Documentation
+              working-directory: ./docs-site
+              run: npm run build
             - name: Publish
               uses: cloudflare/pages-action@v1
               with:
