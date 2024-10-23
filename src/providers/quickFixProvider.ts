@@ -20,8 +20,6 @@ export class QuickFixProvider implements vscode.CodeActionProvider {
 		);
 		quickFix.edit = new vscode.WorkspaceEdit();
 
-		console.log(range, context);
-
 		return [quickFix];
 	}
 }

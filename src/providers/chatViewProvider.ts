@@ -8,11 +8,7 @@ import {
 	CodeContextDetails,
 	FileMetadata,
 } from "@shared/types/Message";
-import {
-	AppState,
-	InteractionSettings,
-	ValidationSettings,
-} from "@shared/types/Settings";
+import { AppState, Settings } from "@shared/types/Settings";
 import { IndexerSettings } from "@shared/types/Indexer";
 import { loggingProvider } from "./loggingProvider";
 import {
@@ -32,6 +28,7 @@ import {
 import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 import {
+	EVENT_CHAT_SENT,
 	EVENT_VALIDATE_FAILED,
 	EVENT_VALIDATE_SUCCEEDED,
 	telemetry,
@@ -56,10 +53,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _lspClient: LSPClient,
 		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
-		private readonly _interactionSettings: InteractionSettings,
 		private readonly _diffViewProvider: DiffViewProvider,
-		private readonly _validationSettings: ValidationSettings,
-		private readonly _workspace: Workspace
+		private readonly _workspace: Workspace,
+		private readonly _settings: Settings
 	) {}
 
 	dispose() {
@@ -141,7 +137,7 @@ Example JSON output format:
 -----
 
 Command executed:
-${this._validationSettings.validationCommand}
+${this._settings.validationSettings.validationCommand}
 
 Exit code: 
 ${code || "Not available."}
@@ -157,7 +153,9 @@ ${data}
 
 			if (result.success) {
 				telemetry.sendEvent(EVENT_VALIDATE_SUCCEEDED, {
-					command: this._validationSettings.validationCommand || "",
+					command:
+						this._settings.validationSettings.validationCommand ||
+						"",
 				});
 				this._webview?.postMessage({
 					command: "validation-success",
@@ -167,7 +165,8 @@ ${data}
 			}
 
 			telemetry.sendEvent(EVENT_VALIDATE_FAILED, {
-				command: this._validationSettings.validationCommand || "",
+				command:
+					this._settings.validationSettings.validationCommand || "",
 			});
 
 			this._webview?.postMessage({
@@ -218,13 +217,17 @@ ${result.summary}`,
 							});
 							break;
 						case "validate":
-							if (this._validationSettings?.validationCommand) {
+							if (
+								this._settings.validationSettings
+									?.validationCommand
+							) {
 								loggingProvider.logInfo(
-									`Validating using command: ${this._validationSettings.validationCommand}`
+									`Validating using command: ${this._settings.validationSettings.validationCommand}`
 								);
 								wingmanTerminal?.spawn();
 								wingmanTerminal?.sendCommand(
-									this._validationSettings.validationCommand
+									this._settings.validationSettings
+										.validationCommand
 								);
 							}
 							break;
@@ -452,7 +455,9 @@ ${result.summary}`,
 
 		await this.streamChatResponse(
 			value as string,
-			getChatContext(this._interactionSettings.chatContextWindow),
+			getChatContext(
+				this._settings.interactionSettings.chatContextWindow
+			),
 			webviewView
 		);
 	}
@@ -468,6 +473,11 @@ ${result.summary}`,
 			await this._lspClient.getEmbeddings(prompt);
 
 		const symbols = await getSymbolsFromOpenFiles();
+
+		telemetry.sendEvent(EVENT_CHAT_SENT, {
+			embeddingCount: (codeDocs?.length ?? 0).toString(),
+			aiProvider: this._settings.aiProvider,
+		});
 
 		ragContext = `{LANGUAGE_TEMPLATE}
 {FILE_TEMPLATE}

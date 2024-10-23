@@ -19,6 +19,11 @@ import {
 import { getClipboardHistory } from "./clipboardTracker";
 import NodeCache from "node-cache";
 import { loggingProvider } from "./loggingProvider";
+import {
+	EVENT_CODE_COMPLETE,
+	EVENT_CODE_COMPLETE_CACHE,
+	telemetry,
+} from "./telemetryProvider";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector = supportedLanguages;
@@ -105,6 +110,9 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				loggingProvider.logInfo(
 					"Code complete - Serving from query cache"
 				);
+				telemetry.sendEvent(EVENT_CODE_COMPLETE_CACHE, {
+					language: document.languageId,
+				});
 				return [new InlineCompletionItem(cachedResult)];
 			}
 
@@ -131,6 +139,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			if (result.startsWith("```")) {
 				result = extractCodeBlock(result);
 			}
+
+			telemetry.sendEvent(EVENT_CODE_COMPLETE, {
+				language: document.languageId,
+			});
 
 			this.cacheManager.set(document, prefix, suffix, result);
 			return [new InlineCompletionItem(result)];

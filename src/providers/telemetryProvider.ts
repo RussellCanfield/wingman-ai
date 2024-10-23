@@ -12,6 +12,12 @@ export const EVENT_COMPOSE_PHASE = "COMPOSE_PHASE";
 export const EVENT_FULL_INDEX_BUILD = "INDEX_BUILD_STARTED";
 export const EVENT_VALIDATE_SUCCEEDED = "VALIDATE_SUCCEEDED";
 export const EVENT_VALIDATE_FAILED = "VALIDATE_FAILED";
+export const EVENT_CHAT_SENT = "CHAT_SENT";
+export const EVENT_CODE_COMPLETE_CACHE = "CODE_COMPLETE_CACHE";
+export const EVENT_CODE_COMPLETE = "CODE_COMPLETE_SENT";
+export const EVENT_CODE_COMPLETE_HOTKEY = "CODE_COMPLETE_HOTKEY";
+export const EVENT_DOC_GEN = "DOC_GEN";
+export const EVENT_REFACTOR = "REFACTOR";
 
 export class Telemetry {
 	reporter: TelemetryReporter | undefined;

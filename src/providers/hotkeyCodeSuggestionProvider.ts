@@ -8,6 +8,7 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvider } from "../service/base";
 import { getContentWindow } from "../service/utils/contentWindow";
 import { InteractionSettings } from "@shared/types/Settings";
+import { EVENT_CODE_COMPLETE_HOTKEY, telemetry } from "./telemetryProvider";
 
 export class HotKeyCodeSuggestionProvider
 	implements vscode.CompletionItemProvider
@@ -50,6 +51,7 @@ export class HotKeyCodeSuggestionProvider
 		const spaces = prefix.substring(lastLineStart + 1).search(/\S/) ?? 0;
 		try {
 			eventEmitter._onQueryStart.fire();
+			telemetry.sendEvent(EVENT_CODE_COMPLETE_HOTKEY);
 			const response = await this._aiProvider.codeComplete(
 				prefix,
 				suffix,

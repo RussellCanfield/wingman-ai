@@ -6,6 +6,7 @@ import {
 	supportedLanguages,
 } from "./utilities";
 import { eventEmitter } from "../events/eventEmitter";
+import { EVENT_REFACTOR, telemetry } from "./telemetryProvider";
 
 let abortController = new AbortController();
 
@@ -72,6 +73,8 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 				const highlightedCode = document.getText(codeContextRange);
 
 				const symbols = await getSymbolsFromOpenFiles();
+
+				telemetry.sendEvent(EVENT_REFACTOR);
 
 				const result = await aiProvider.refactor(
 					`Code to refactor:

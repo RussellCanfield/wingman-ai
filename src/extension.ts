@@ -119,10 +119,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		lspClient,
 		modelProvider!,
 		context,
-		settings?.interactionSettings,
 		diffViewProvider,
-		settings?.validationSettings,
-		workspace
+		workspace,
+		settings
 	);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(

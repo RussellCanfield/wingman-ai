@@ -54,6 +54,8 @@ You can use the following models:
 
 ### [AzureAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=python-secure#gpt-4o-and-gpt-4-turbo)
 
+**NOTE** - AzureAI has general latency due to content filters on models by default. This can cause delays in responses and may require additional configuration to disable content filters.
+
 You can use the following models:
 
 -   GPT-4o

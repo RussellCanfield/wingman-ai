@@ -10,6 +10,7 @@ import {
 import { generateDocPrompFactory } from "../service/generateDocPrompFactory";
 import { isTsRelated } from "../service/langCheckers";
 import { isArrowFunction } from "../providers/utilities";
+import { EVENT_DOC_GEN, telemetry } from "../providers/telemetryProvider";
 
 export class GenDocs implements vscode.CodeActionProvider {
 	constructor(private readonly _aiProvider: AIProvider) {}
@@ -123,6 +124,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 						signal
 					);
 					eventEmitter._onQueryComplete.fire();
+					telemetry.sendEvent(EVENT_DOC_GEN);
 					let code = result; //extractFromCodeMd(result); sometimes I'm not getting the full MD so we'll depend on code blocks
 					if (!code) {
 						loggingProvider.logError(result);

@@ -31,12 +31,14 @@ let client: LanguageClient;
 
 export class LSPClient {
 	composerWebView: vscode.Webview | undefined;
+	settings: Settings | undefined;
 
 	activate = async (
 		context: ExtensionContext,
 		settings: Settings | undefined,
 		workspace: Workspace
 	) => {
+		this.settings = settings;
 		const serverModule = vscode.Uri.joinPath(
 			context.extensionUri,
 			"out",
@@ -159,6 +161,7 @@ export class LSPClient {
 	compose = async (request: ComposerRequest) => {
 		telemetry.sendEvent(EVENT_COMPOSE_STARTED, {
 			numberOfFiles: request.contextFiles.length.toString(),
+			aiProvider: this.settings?.aiProvider || "Unknown",
 		});
 		await client.sendRequest<ComposerResponse>("wingman/compose", {
 			request,

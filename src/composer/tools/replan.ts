@@ -2,7 +2,7 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types/index";
-import { buildObjective, formatMessages } from "../utils";
+import { buildObjective } from "../utils";
 import { ChatOllama } from "@langchain/ollama";
 import { AIMessage } from "@langchain/core/messages";
 
