@@ -14,3 +14,20 @@ export class NoFilesChangedError extends Error {
 		return this.errorCode;
 	}
 }
+
+export class NoFilesFoundError extends Error {
+	public errorCode: number;
+
+	constructor(message: string, errorCode: number = 500) {
+		super(message);
+		this.name = "CustomError";
+		this.errorCode = errorCode;
+
+		// Set the prototype explicitly to maintain the instanceof behavior
+		Object.setPrototypeOf(this, NoFilesFoundError.prototype);
+	}
+
+	public getErrorCode(): number {
+		return this.errorCode;
+	}
+}

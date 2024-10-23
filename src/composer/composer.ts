@@ -9,9 +9,8 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../store/vector.js";
 import { Plan, PlanExecuteState, PlanningSteps, Review } from "./types/index";
 import { getTextDocumentFromPath } from "../server/files/utils";
-import { FileMetadata } from "@shared/types/Message";
 import { CodePlanner } from "./tools/planner";
-import { NoFilesChangedError } from "./errors";
+import { NoFilesChangedError, NoFilesFoundError } from "./errors";
 import path from "path";
 
 export interface Thread {
@@ -196,6 +195,15 @@ export async function* generateCommand(
 				values: {
 					response:
 						"I was not able to generate any changes. Please try again with a different question or try explicitly referencing files.",
+				},
+			};
+			return;
+		} else if (e instanceof NoFilesFoundError) {
+			yield {
+				node: "replan",
+				values: {
+					response:
+						"I was unable to find any indexed code files. Please reference files directly using '@filename', build the full index or make sure embeddings are enabled in settings.",
 				},
 			};
 			return;

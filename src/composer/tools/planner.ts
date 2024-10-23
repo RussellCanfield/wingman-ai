@@ -11,7 +11,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { ChatOllama } from "@langchain/ollama";
 import { AIMessage } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
-import { NoFilesChangedError } from "../errors";
+import { NoFilesChangedError, NoFilesFoundError } from "../errors";
 import { loggingProvider } from "../../server/loggingProvider";
 import path from "node:path";
 import fs from "node:fs";
@@ -203,6 +203,12 @@ Search queries:`);
 					this.workspace,
 					15
 				);
+
+			if (starterDocs.size === 0) {
+				throw new NoFilesFoundError(
+					"Unable to find any indexed documents. Please reference documents directly, build the full index or make sure embedding is enabled in settings."
+				);
+			}
 
 			if (!state.plan) {
 				state.plan = {
