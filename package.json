@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.7.31",
+	"version": "0.7.32",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -179,7 +179,7 @@
 		"docs": "cd docs-site && npm run dev"
 	},
 	"dependencies": {
-		"@ast-grep/napi": "0.28.0",
+		"@ast-grep/napi": "0.28.1",
 		"@langchain/anthropic": "0.3.5",
 		"@langchain/community": "0.3.6",
 		"@langchain/core": "0.3.13",
@@ -192,7 +192,7 @@
 		"node-cache": "^5.1.2",
 		"tree-sitter": "0.21.1",
 		"vectra": "0.9.0",
-		"fast-glob": "3.3.2",
+		"tinyglobby": "0.2.9",
 		"vscode-languageclient": "9.0.1",
 		"vscode-languageserver": "9.0.1",
 		"vscode-languageserver-textdocument": "1.0.12",
@@ -201,7 +201,7 @@
 		"zod-to-json-schema": "3.23.3"
 	},
 	"devDependencies": {
-		"@ast-grep/cli": "0.28.0",
+		"@ast-grep/cli": "0.28.1",
 		"@rsbuild/core": "1.0.15",
 		"@rsbuild/plugin-react": "1.0.5",
 		"@types/mocha": "10.0.8",

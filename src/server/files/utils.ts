@@ -4,9 +4,8 @@ import fs from "node:fs/promises";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { Location } from "vscode-languageserver";
 import { URI } from "vscode-uri";
-import ignore from "ignore";
 import { loggingProvider } from "../loggingProvider";
-import FastGlob from "fast-glob";
+import { glob } from "tinyglobby";
 
 export const getWorkspaceFolderForDocument = (
 	documentUri: string,
@@ -107,11 +106,11 @@ export async function checkFileMatch(
 	excludePatterns?: string
 ): Promise<boolean> {
 	// Check inclusion
-	const included = await FastGlob(includePatterns, { onlyFiles: true });
+	const included = await glob(includePatterns, { onlyFiles: true });
 
 	// Check exclusion if patterns are provided
 	const excluded = excludePatterns
-		? await FastGlob(excludePatterns, { onlyFiles: true })
+		? await glob(excludePatterns, { onlyFiles: true })
 		: [];
 
 	// File is matched if it appears in included and not in excluded list
@@ -121,7 +120,7 @@ export async function checkFileMatch(
 export async function getGitignorePatterns(
 	workspace: string,
 	exclusionFilter?: string
-) {
+): Promise<string> {
 	if (cachedGitignorePatterns) {
 		return `{${cachedGitignorePatterns.join(",")}}`;
 	}
@@ -135,28 +134,44 @@ export async function getGitignorePatterns(
 	try {
 		const gitignoreContent = await fs.readFile(gitignorePath);
 		const gitignoreLines = gitignoreContent.toString().split("\n");
-		const ig = ignore().add(gitignoreLines);
 
-		// Convert .gitignore patterns to glob patterns
+		// Process gitignore patterns
 		cachedGitignorePatterns = gitignoreLines
 			.filter((line) => line && !line.startsWith("#"))
 			.map((pattern) => {
-				if (pattern.startsWith("!")) {
-					return `!**/${pattern.slice(1)}`;
-				}
-				return `**/${pattern}`;
-			});
+				const trimmed = pattern.trim();
+				if (!trimmed) return null;
 
-		let combinedExclusionFilter: string | undefined;
+				// Remove any existing braces or nested groups
+				const sanitizedPattern = trimmed
+					.replace(/[{}]/g, "")
+					.replace(/\s*,\s*/g, ",");
+
+				if (sanitizedPattern.startsWith("!")) {
+					return `!**/${sanitizedPattern.slice(1).trim()}`;
+				}
+
+				// Ensure pattern starts with **/ if it doesn't already
+				const globPattern = sanitizedPattern.startsWith("**/")
+					? sanitizedPattern
+					: `**/${sanitizedPattern}`;
+
+				return globPattern;
+			})
+			.filter(Boolean) as string[];
+
+		// Combine and sanitize additional exclusion filters
 		if (exclusionFilter) {
-			combinedExclusionFilter = `{${exclusionFilter},${cachedGitignorePatterns.join(
-				","
-			)}}`;
-		} else if (cachedGitignorePatterns.length > 0) {
-			combinedExclusionFilter = `{${cachedGitignorePatterns.join(",")}}`;
+			const sanitizedFilters = exclusionFilter
+				.split(",")
+				.map((filter) => filter.replace(/[{}]/g, "").trim())
+				.filter(Boolean);
+
+			cachedGitignorePatterns.push(...sanitizedFilters);
 		}
 
-		return combinedExclusionFilter;
+		// Wrap in single outer group
+		return `{${cachedGitignorePatterns.join(",")}}`;
 	} catch (err) {
 		if (err instanceof Error) {
 			loggingProvider.logError(

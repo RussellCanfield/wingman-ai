@@ -314,38 +314,34 @@ ${result.summary}`,
 							if (!searchTerm || searchTerm?.length === 0) {
 								return [];
 							}
-							// Find all files in the workspace, excluding node_modules
-							const allFiles = await vscode.workspace.findFiles(
-								"**/*",
-								(await getGitignorePatterns(
-									this._workspace.workspacePath
-								)) || ""
-							);
 
-							// Filter files based on the file name
-							const filteredFiles = allFiles.filter((file) => {
-								const fileName =
-									vscode.workspace.asRelativePath(
-										file.fsPath
-									);
-								return (
-									fileName &&
-									fileName.toLowerCase().includes(searchTerm)
+							const searchPattern = `{**/*${searchTerm}*/**,**/*${searchTerm}*,**/${searchTerm},**/${searchTerm}.*}`;
+
+							// Find all files in the workspace that match the search term
+							const matchingFiles =
+								await vscode.workspace.findFiles(
+									searchPattern,
+									(await getGitignorePatterns(
+										this._workspace.workspacePath
+									)) || ""
 								);
-							});
+
+							// Convert to relative paths
+							const filteredFiles: FileSearchResult[] =
+								matchingFiles.map((file) => {
+									const path =
+										vscode.workspace.asRelativePath(
+											file.fsPath
+										);
+									return {
+										file: path.split("/").pop()!,
+										path,
+									} satisfies FileSearchResult;
+								});
 
 							webviewView.webview.postMessage({
 								command: "get-files-result",
-								value: filteredFiles.slice(0, 10).map(
-									(result) =>
-										({
-											file: vscode.workspace
-												.asRelativePath(result)
-												.split("/")
-												.pop()!,
-											path: result.fsPath,
-										} satisfies FileSearchResult)
-								),
+								value: filteredFiles,
 							});
 							break;
 						case "compose":

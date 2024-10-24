@@ -85,7 +85,7 @@ const ChatInput = ({
 
 		const lastWord = value.split(/\s+/).pop() || "";
 		if (lastWord.startsWith("@")) {
-			const searchTerm = lastWord.slice(1).toLowerCase();
+			const searchTerm = lastWord.slice(1);
 			fetchFiles(searchTerm);
 		} else {
 			setShowDropdown(false);
