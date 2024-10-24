@@ -82,24 +82,24 @@ const CodeContainer = memo((props: PropsWithChildren) => {
 			{toolboxVisible && (
 				<div className="flex justify-end absolute -top-5 right-1.5 pr-2.5">
 					<div className="flex-1"></div>
-					<ul className="flex gap-1.5 list-none p-1 bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded-md">
-						<li
+					<div className="flex gap-1.5 list-none p-1 bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded-md">
+						<div
 							className="p-1 rounded transition-colors duration-200 cursor-pointer text-[var(--vscode-input-foreground)] hover:text-white hover:bg-[var(--vscode-input-foreground)]"
 							role="button"
 							title="Copy code to clipboard"
 							onClick={copyToClipboard}
 						>
 							<FaCopy size={16} />
-						</li>
-						<li
+						</div>
+						<div
 							className="p-1 rounded transition-colors duration-200 cursor-pointer text-[var(--vscode-input-foreground)] hover:text-white hover:bg-[var(--vscode-input-foreground)]"
 							role="button"
 							title="Send to new file"
 							onClick={sendToNewFile}
 						>
 							<GoFileSymlinkFile size={16} />
-						</li>
-					</ul>
+						</div>
+					</div>
 				</div>
 			)}
 			<div
