@@ -6,7 +6,7 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 import { memo, PropsWithChildren, useEffect, useState } from "react";
-import { AppMessage } from "@shared/types/Message";
+import { AppMessage, FileMetadata } from "@shared/types/Message";
 import { DiffViewCommand } from "@shared/types/Composer";
 import { FaCheckCircle } from "react-icons/fa";
 import { vscode } from "./utilities/vscode";
@@ -78,9 +78,9 @@ export default function DiffView() {
 		vscode.postMessage({
 			command: "accept-file-changes",
 			value: {
-				file: diff?.file,
+				path: diff?.file!,
 				code: diff?.diff,
-			},
+			} satisfies FileMetadata,
 		});
 	};
 
