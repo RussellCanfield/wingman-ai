@@ -207,7 +207,7 @@ const ChatEntry = ({
 
 	return (
 		<li
-			className="pt-2 pb-2 tracking-wide leading-relaxed text-base"
+			className="pt-2 pb-2 tracking-wide leading-relaxed text-base message"
 			style={
 				index === 0
 					? {}

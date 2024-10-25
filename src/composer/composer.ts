@@ -177,6 +177,8 @@ export async function* generateCommand(
 		};
 	}
 
+	inputs.retryCount = 2;
+
 	const graph = workflow.compile({ checkpointer });
 
 	try {
