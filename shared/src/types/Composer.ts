@@ -23,6 +23,7 @@ export interface PlanExecuteState {
 	review: {
 		comments: string[];
 	};
+	retryCount?: number;
 }
 
 export type ComposerResponse = {

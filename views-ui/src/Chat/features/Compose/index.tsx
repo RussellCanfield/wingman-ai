@@ -1,4 +1,4 @@
-import { AppMessage, CodeContext } from "@shared/types/Message";
+import { AppMessage } from "@shared/types/Message";
 import { ComposerMessage, ComposerResponse } from "@shared/types/Composer";
 import { useEffect, useMemo, useState } from "react";
 import { vscode } from "../../utilities/vscode";
@@ -9,11 +9,14 @@ import ChatResponseList from "./ChatList";
 import Validation from "./Validation";
 
 let currentMessage = "";
-let currentContext: CodeContext | undefined;
 
 type PhaseLabel = {
-	[key: string]: string;
+	new: "Planning";
+	planner: "Writing Code";
+	"code-writer": "Reviewing";
+	replan: "Preparing Results";
 };
+
 const phaseDisplayLabel: PhaseLabel = {
 	new: "Planning",
 	planner: "Writing Code",
@@ -24,7 +27,8 @@ const phaseDisplayLabel: PhaseLabel = {
 export default function Compose() {
 	const { composerMessages, setComposerMessages } = useAppContext();
 	const [loading, setLoading] = useState<boolean>(false);
-	const [currentPhase, setCurrentPhase] = useState<string>("new");
+	const [currentPhase, setCurrentPhase] =
+		useState<keyof typeof phaseDisplayLabel>("new");
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -56,7 +60,7 @@ export default function Compose() {
 
 				const { node, values } = value as ComposerResponse;
 
-				setCurrentPhase(node);
+				setCurrentPhase(node as keyof typeof phaseDisplayLabel);
 
 				if (node === "replan") {
 					if (
@@ -94,6 +98,27 @@ ${values.review.comments.join("\n")}`,
 									from: "assistant",
 									message:
 										"Sorry something went wrong and I was not able to generate any changes.",
+									plan: {
+										files: [],
+										steps: [],
+									},
+								},
+							];
+						});
+						return;
+					}
+
+					if (
+						values.review?.comments?.length > 0 &&
+						values.retryCount === 0
+					) {
+						setComposerMessages((currentMessages) => {
+							return [
+								...currentMessages,
+								{
+									from: "assistant",
+									message:
+										"Sorry the review failed and I was unable to correct the changes. Please try again with a more specific query.",
 									plan: {
 										files: [],
 										steps: [],
@@ -155,7 +180,6 @@ ${values.review.comments.join("\n")}`,
 		setLoading(false);
 
 		currentMessage = "";
-		currentContext = undefined;
 	};
 
 	const handleChatSubmitted = (input: string, contextFiles: string[]) => {
@@ -181,6 +205,7 @@ ${values.review.comments.join("\n")}`,
 			},
 		]);
 
+		setCurrentPhase("new");
 		setLoading(true);
 	};
 

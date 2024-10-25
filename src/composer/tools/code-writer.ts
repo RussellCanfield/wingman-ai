@@ -377,7 +377,7 @@ ${f.code}`
 			const fileChanged =
 				result.file.changes && result.file.changes.length > 0;
 
-			if (!files.some((f) => result.file.path)) {
+			if (!files.some((f) => f.path === result.file.path)) {
 				files.push(
 					fileChanged
 						? result.file
