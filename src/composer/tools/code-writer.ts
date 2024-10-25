@@ -148,6 +148,7 @@ You must ALWAYS Output in JSON format using the following template:
 const baseWriterPrompt = `Analyze this text and output JSON.
 You are an expert software engineer tasked with providing a comprehensive solution that includes both manual steps and code changes.
 Implement project enhancements for a single file based on the user's objective.
+Ensure every modification is fully integrated.
 Focus solely on the file in scope, while considering the context of other files for integration purposes.
 
 Output Structure:
@@ -184,6 +185,8 @@ Code Writing Guidelines:
 7. Update or create documentation as needed.
 8. Ensure seamless integration with existing components.
 9. Maintain existing functionality in files, do not cause regression bugs. This is critical.
+10. Preserve the code's structure, order, comments, and indentation exactly.
+11. Do not include any additional text, explanations, placeholders, ellipses, or code fences. Produce fully functional code.
 
 {RULE_PACK}
 
