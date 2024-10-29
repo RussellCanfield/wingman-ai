@@ -140,6 +140,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				result = extractCodeBlock(result);
 			}
 
+			if (result === "") {
+				return [];
+			}
+
 			telemetry.sendEvent(EVENT_CODE_COMPLETE, {
 				language: document.languageId,
 			});

@@ -233,10 +233,9 @@ export class Anthropic implements AIStreamProvider {
 			messages: [
 				{
 					role: "user",
-					content: `You are an senior software engineer, assit the user with completing their code.
-When generating code focus on existing code style, syntax, and structure and follow use this as a guide.
-
-The following are some of the types available in their file. 
+					content: prompt.replace(
+						"{context}",
+						`The following are some of the types available in their file. 
 Use these types while considering how to complete the code provided. 
 Do not repeat or use these types in your answer.
 
@@ -252,9 +251,8 @@ ${recentClipboard}
 
 -----`
 		: ""
-}
-
-${prompt}`,
+}`
+					),
 				},
 			],
 			temperature: 0.2,

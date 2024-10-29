@@ -178,17 +178,11 @@ export class OpenAI implements AIStreamProvider {
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
 			beginning
-		).replace("{ending}", ending);
-
-		const codeRequestOptions: OpenAIRequest = {
-			model: this.settings?.codeModel!,
-			messages: [
-				{
-					role: "user",
-					content: `You are an senior software engineer, assit the user with completing their code.
-When generating code focus on existing code style, syntax, and structure and follow use this as a guide.
-
-The following are some of the types available in their file. 
+		)
+			.replace("{ending}", ending)
+			.replace(
+				"{context}",
+				`The following are some of the types available in their file. 
 Use these types while considering how to complete the code provided. 
 Do not repeat or use these types in your answer.
 
@@ -196,13 +190,23 @@ ${additionalContext || ""}
 
 -----
 
-The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+${
+	recentClipboard
+		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
 
-${recentClipboard || ""}
+${recentClipboard}
 
------
+-----`
+		: ""
+}`
+			);
 
-${prompt}`,
+		const codeRequestOptions: OpenAIRequest = {
+			model: this.settings?.codeModel!,
+			messages: [
+				{
+					role: "user",
+					content: prompt,
 				},
 			],
 			temperature: 0.2,

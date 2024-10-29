@@ -177,7 +177,7 @@ export class Ollama implements AIStreamProvider {
 		if (signal.aborted) {
 			return undefined;
 		}
-		return await fetch(
+		return fetch(
 			new URL(`${this.settings?.baseUrl}${this.settings?.apiPath}`),
 			{
 				method: "POST",
@@ -294,23 +294,37 @@ export class Ollama implements AIStreamProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
+		recentClipboard?: string
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
 			beginning
-		).replace("{ending}", ending);
-		const codeRequestOptions: OllamaRequest = {
-			model: this.settings?.codeModel!,
-			prompt: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
+		)
+			.replace("{ending}", ending)
+			.replace(
+				"{context}",
+				`The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
 
 ${additionalContext ?? ""}
 
 -----
 
-${prompt}`,
+${
+	recentClipboard
+		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+  
+${recentClipboard}
+
+-----`
+		: ""
+}`
+			);
+		const codeRequestOptions: OllamaRequest = {
+			model: this.settings?.codeModel!,
+			prompt: prompt,
 			stream: false,
 			raw: true,
 			options: {

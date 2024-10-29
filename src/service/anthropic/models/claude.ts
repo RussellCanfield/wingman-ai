@@ -7,15 +7,21 @@ import {
 
 export class ClaudeModel implements AnthropicModel {
 	get CodeCompletionPrompt(): string {
-		return `Fill in the following text.
+		return `Complete the missing code in the following snippet. The missing part is indicated by <|FIM_HOLE|>. 
+Ensure the completed code is syntactically correct and follows best practices for the given programming language.
 
-**Rules**
-1. Do not include the original text in your response, just the middle portion.
-2. Return your response in plain text, do not use a markdown format.
-3. If the code provided does not provide a clear intent and you are unable to complete the code, respond with an empty string "".
-4. Do not include any leading or trailing text with an explanation or intro. Just the middle section.
+**Rules:**
+- Preserve the code's structure, order, comments, and indentation exactly.
+- When generating code focus on existing code style, syntax, and structure and follow use this as a guide.
+- Do not include any additional text, explanations, placeholders, ellipses, or code fences.
+- Do not repeat sections of code around the hole, look to generate high quality unique code.
+- If you are unable to generate code that fits, respond with an empty response.
 
-{beginning} <FILL_HOLE> {ending}`;
+{context}
+
+-----
+
+{beginning}<|FIM_HOLE|>{ending}`;
 	}
 
 	get ChatPrompt(): string {
