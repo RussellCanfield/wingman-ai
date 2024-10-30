@@ -46,6 +46,11 @@ export class Anthropic implements AIStreamProvider {
 			model: this.settings.chatModel,
 			temperature: 0, //Required for tool calling.
 			maxTokens: interactionSettings.chatMaxTokens,
+			clientOptions: {
+				defaultHeaders: {
+					"anthropic-beta": "prompt-caching-2024-07-31",
+				},
+			},
 		});
 
 		this.rerankModel = new ChatAnthropic({

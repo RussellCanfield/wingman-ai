@@ -1,9 +1,13 @@
 import { AppMessage } from "@shared/types/Message";
-import { ComposerMessage, ComposerResponse } from "@shared/types/Composer";
+import {
+	ComposerMessage,
+	ComposerRequest,
+	ComposerResponse,
+} from "@shared/types/Composer";
 import { useEffect, useMemo, useState } from "react";
 import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
-import { ChatInput } from "./ChatInput";
+import { ChatInput } from "./Input/ChatInput";
 import { useAppContext } from "../../context";
 import ChatResponseList from "./ChatList";
 import Validation from "./Validation";
@@ -22,6 +26,19 @@ const phaseDisplayLabel: PhaseLabel = {
 	planner: "Writing Code",
 	"code-writer": "Reviewing",
 	replan: "Preparing Results",
+};
+
+const getFileExtension = (fileName: string): string => {
+	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
+};
+
+const getBase64FromFile = (file: File): Promise<string> => {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.readAsDataURL(file);
+		reader.onload = () => resolve(reader.result as string);
+		reader.onerror = (error) => reject(error);
+	});
 };
 
 export default function Compose() {
@@ -182,15 +199,28 @@ ${values.review.comments.join("\n")}`,
 		currentMessage = "";
 	};
 
-	const handleChatSubmitted = (input: string, contextFiles: string[]) => {
+	const handleChatSubmitted = async (
+		input: string,
+		contextFiles: string[],
+		image?: File
+	) => {
 		currentMessage = "";
+
+		const payload: ComposerRequest = {
+			input,
+			contextFiles,
+		};
+
+		if (image) {
+			payload.image = {
+				data: await getBase64FromFile(image),
+				ext: getFileExtension(image.name),
+			};
+		}
 
 		vscode.postMessage({
 			command: "compose",
-			value: {
-				input,
-				contextFiles,
-			},
+			value: payload,
 		});
 
 		setComposerMessages((messages) => [

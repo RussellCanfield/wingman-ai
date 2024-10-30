@@ -470,10 +470,15 @@ ${result.summary}`,
 
 		const symbols = await getSymbolsFromOpenFiles();
 
-		telemetry.sendEvent(EVENT_CHAT_SENT, {
-			embeddingCount: (codeDocs?.length ?? 0).toString(),
-			aiProvider: this._settings.aiProvider,
-		});
+		try {
+			telemetry.sendEvent(EVENT_CHAT_SENT, {
+				embeddingCount: (codeDocs?.length ?? 0).toString(),
+				aiProvider: this._settings.aiProvider,
+				model: this._settings.providerSettings[
+					this._settings.aiProvider
+				]?.chatModel,
+			});
+		} catch {}
 
 		ragContext = `{LANGUAGE_TEMPLATE}
 {FILE_TEMPLATE}
@@ -488,16 +493,12 @@ ${result.summary}`,
 
 		ragContext = ragContext.replace(
 			"{LANGUAGE_TEMPLATE}",
-			!context?.language
-				? ""
-				: `The user is seeking coding advice using ${context?.language}.`
+			!context?.language ? "" : `Current language:\n${context?.language}.`
 		);
 
 		ragContext = ragContext.replace(
 			"{FILE_TEMPLATE}",
-			!context?.fileName
-				? ""
-				: `The user is currently working on the file: ${context?.fileName}`
+			!context?.fileName ? "" : `Current file:\n${context?.fileName}`
 		);
 
 		ragContext =
@@ -506,15 +507,15 @@ ${result.summary}`,
 				!context?.text
 					? ""
 					: context.fromSelection
-					? `The user has selected the following code and wishes you to focus around this functionality:\n\n${context.text}`
-					: "The user is currently working on the following text:"
+					? `The user has selected the following code and wishes you to focus on it:\n${context.text}`
+					: `The user has provided a snippet of code from the file they are working on:\n${context.text}`
 			) + "\n\n=======";
 
 		ragContext = ragContext.replace(
 			"{CURRENT_LINE_TEMPLATE}",
 			!context?.currentLine || context?.fromSelection
 				? ""
-				: `The user is currently working on the following line: ${context?.currentLine}`
+				: `The user is currently working on the following line:\n${context?.currentLine}`
 		);
 
 		if (projectDetails) {

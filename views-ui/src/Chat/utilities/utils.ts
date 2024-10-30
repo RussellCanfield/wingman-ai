@@ -3,6 +3,8 @@ export const handleAutoResize = (
 	reset: boolean = false,
 	maxHeight: number = 128 // Default max height of 128px
 ) => {
+	if (!element) return;
+
 	// Reset height to auto to get the correct scrollHeight
 	element.style.height = "auto";
 

@@ -1,15 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FaPlay, FaStopCircle } from "react-icons/fa";
-import { useAppContext } from "../../context";
-import { vscode } from "../../utilities/vscode";
+import { FaPlay, FaStopCircle, FaPaperclip } from "react-icons/fa";
+import { useAppContext } from "../../../context";
+import { vscode } from "../../../utilities/vscode";
 import { AppMessage } from "@shared/types/Message";
 import { FileSearchResult } from "@shared/types/Composer";
-import { useAutoFocus } from "../../hooks/useAutoFocus";
-import { useOnScreen } from "../../hooks/useOnScreen";
-import { handleAutoResize } from "../../utilities/utils";
+import { useAutoFocus } from "../../../hooks/useAutoFocus";
+import { useOnScreen } from "../../../hooks/useOnScreen";
+import { handleAutoResize } from "../../../utilities/utils";
+import { FileDropdown } from "./components/FileDropdown";
+import { FileChips } from "./components/FileChips";
+import { ImagePreview } from "./components/ImagePreview";
 
 interface ChatInputProps {
-	onChatSubmitted: (input: string, contextFiles: string[]) => void;
+	onChatSubmitted: (
+		input: string,
+		contextFiles: string[],
+		image?: File
+	) => void;
 	onChatCancelled: () => void;
 	loading: boolean;
 }
@@ -22,31 +29,30 @@ const ChatInput = ({
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useAppContext();
 	const [inputValue, setInputValue] = useState("");
+	const [selectedImage, setSelectedImage] = useState<File | null>(null);
+	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const chatInputBox = useAutoFocus();
-	const dropdownRef = useRef<HTMLDivElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [chips, setChips] = useState<FileSearchResult[]>([]);
 	const [showDropdown, setShowDropdown] = useState(false);
 	const [focusedDropdownIndex, setFocusedDropdownIndex] = useState<number>(1);
 	const [allDropdownItems, setDropdownItems] = useState<FileSearchResult[]>(
 		[]
 	);
-
-	const dropdownClasses = isLightTheme
-		? "bg-white border-slate-300"
-		: "bg-slate-700 border-slate-600";
-	const dropdownItemClasses = isLightTheme
-		? "hover:bg-slate-100"
-		: "hover:bg-slate-600";
-	const chipClasses = isLightTheme
-		? "bg-stone-800 text-white"
-		: "bg-stone-700 text-white";
-	const captionClasses = isLightTheme ? "text-stone-500" : "text-stone-400";
+	const [inputRect, setInputRect] = useState<DOMRect | null>(null);
 
 	useEffect(() => {
 		if (isVisible) {
 			chatInputBox.current?.focus();
 		}
 	}, [isVisible]);
+
+	useEffect(() => {
+		if (chatInputBox.current) {
+			const rect = chatInputBox.current.getBoundingClientRect();
+			setInputRect(rect);
+		}
+	}, [inputValue, chips]);
 
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { data } = event;
@@ -59,8 +65,8 @@ const ChatInput = ({
 				}
 
 				const fileResults = value as FileSearchResult[];
-				setFocusedDropdownIndex(0);
 				setDropdownItems(fileResults);
+				setFocusedDropdownIndex(0);
 				setShowDropdown(fileResults.length > 0);
 				break;
 		}
@@ -68,11 +74,60 @@ const ChatInput = ({
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
+		window.addEventListener("paste", handlePaste);
 
 		return () => {
 			window.removeEventListener("message", handleResponse);
+			window.removeEventListener("paste", handlePaste);
 		};
 	}, []);
+
+	const handlePaste = (e: ClipboardEvent) => {
+		const items = e.clipboardData?.items;
+		if (!items) return;
+
+		//@ts-expect-error
+		for (const item of items) {
+			if (item.type.startsWith("image/")) {
+				const file = item.getAsFile();
+				if (file) {
+					handleImageSelect(file);
+				}
+				break;
+			}
+		}
+	};
+
+	const handleImageSelect = (file: File) => {
+		if (!file.type.startsWith("image/")) {
+			return;
+		}
+		setSelectedImage(file);
+		const reader = new FileReader();
+		reader.onloadend = () => {
+			setImagePreview(reader.result as string);
+		};
+		reader.readAsDataURL(file);
+	};
+
+	const handleImageUpload = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (file) {
+			handleImageSelect(file);
+		}
+	};
+
+	const removeImage = () => {
+		setSelectedImage(null);
+		setImagePreview(null);
+		if (fileInputRef.current) {
+			fileInputRef.current.value = "";
+		}
+	};
 
 	const chipMap = new Set(chips.map((chip) => chip.path));
 	const filteredDropDownItems = allDropdownItems.filter(
@@ -93,14 +148,15 @@ const ChatInput = ({
 	};
 
 	const handleDropdownSelect = (item: FileSearchResult) => {
+		if (!item) return;
+
 		if (!chips.some((chip) => chip.path === item.path)) {
 			const newChips = [...chips, item];
 			setChips(newChips);
 
-			// Remove the partial chip text
 			const words = inputValue.split(/\s+/);
-			words.pop(); // Remove the last word (partial chip)
-			setInputValue(words.join(" ") + (words.length > 0 ? " " : "")); // Add a space if there's text left
+			words.pop();
+			setInputValue(words.join(" ") + (words.length > 0 ? " " : ""));
 		}
 
 		setShowDropdown(false);
@@ -128,12 +184,14 @@ const ChatInput = ({
 					(chips.length > 0 && inputValue ? " " : "") +
 					inputValue;
 
-				if (message.trim()) {
+				if (message.trim() || selectedImage) {
 					onChatSubmitted(
 						inputValue.trim(),
-						chips.map((chip) => chip.path)
+						chips.map((chip) => chip.path),
+						selectedImage || undefined
 					);
 					setInputValue("");
+					removeImage();
 					handleAutoResize(e.target as HTMLTextAreaElement, true);
 				}
 			}
@@ -148,11 +206,6 @@ const ChatInput = ({
 		}
 	};
 
-	const truncatePath = (path: string, maxLength: number = 50) => {
-		if (path.length <= maxLength) return path;
-		return "..." + path.slice(-maxLength);
-	};
-
 	const fetchFiles = (filter: string) => {
 		vscode.postMessage({
 			command: "get-files",
@@ -161,33 +214,23 @@ const ChatInput = ({
 	};
 
 	return (
-		<div
-			className="flex-basis-50 py-3 flex flex-col items-stretch"
-			ref={ref}
-		>
-			<div className="relative flex flex-row items-center">
-				<div className="w-full relative">
-					{chips.length === 0 ? (
-						<></>
-					) : (
-						<div className="flex flex-wrap items-center p-2">
-							{chips.map((chip, index) => (
-								<span
-									key={index}
-									className={`${chipClasses} rounded-sm px-2 py-1 m-1 inline-flex items-center hover:bg-stone-500`}
-									title={chip.path}
-								>
-									{chip.file}
-									<button
-										className="ml-1 font-bold"
-										onClick={() => handleChipRemove(chip)}
-									>
-										×
-									</button>
-								</span>
-							))}
-						</div>
+		<>
+			<div
+				className="flex-basis-50 py-3 flex flex-col items-stretch"
+				ref={ref}
+			>
+				<div className="relative flex flex-col items-stretch">
+					{imagePreview && (
+						<ImagePreview
+							imageUrl={imagePreview}
+							onRemove={removeImage}
+						/>
 					)}
+					<FileChips
+						chips={chips}
+						onChipRemove={handleChipRemove}
+						isLightTheme={isLightTheme}
+					/>
 					<div className="flex flex-wrap items-center p-2">
 						<textarea
 							placeholder={
@@ -208,6 +251,21 @@ const ChatInput = ({
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>
+						<input
+							type="file"
+							ref={fileInputRef}
+							onChange={handleFileChange}
+							accept="image/*"
+							className="hidden"
+						/>
+						<span className="p-4 pr-2">
+							<FaPaperclip
+								size={16}
+								className="cursor-pointer text-gray-400 hover:text-gray-100"
+								onClick={handleImageUpload}
+								title="Attach image"
+							/>
+						</span>
 						<span className="p-4 pr-0">
 							{!loading && (
 								<FaPlay
@@ -241,36 +299,20 @@ const ChatInput = ({
 							)}
 						</span>
 					</div>
+					{showDropdown &&
+						filteredDropDownItems.length > 0 &&
+						inputRect && (
+							<FileDropdown
+								dropdownItems={filteredDropDownItems}
+								onSelect={handleDropdownSelect}
+								isLightTheme={isLightTheme}
+								showDropdown={showDropdown}
+								focusedDropdownIndex={focusedDropdownIndex}
+							/>
+						)}
 				</div>
-				{showDropdown && (
-					<div
-						ref={dropdownRef}
-						className={`absolute bottom-full mb-1 left-0 w-full z-20 ${dropdownClasses} border rounded`}
-					>
-						{allDropdownItems
-							.filter((d) => !chipMap.has(d.path))
-							.map((item, index) => (
-								<div
-									key={index}
-									className={`p-2 cursor-pointer hover:text-white ${dropdownItemClasses} ${
-										index === focusedDropdownIndex
-											? "bg-slate-600 text-white"
-											: ""
-									}`}
-									onClick={() => handleDropdownSelect(item)}
-								>
-									<div>{item.file}</div>
-									<div
-										className={`text-xs ${captionClasses}`}
-									>
-										{truncatePath(item.path)}
-									</div>
-								</div>
-							))}
-					</div>
-				)}
 			</div>
-		</div>
+		</>
 	);
 };
 

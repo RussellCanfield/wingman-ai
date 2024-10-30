@@ -1,4 +1,5 @@
 import { ChatMessage } from "@langchain/core/messages";
+import { ComposerRequest } from "@shared/types/Composer";
 import { FileMetadata } from "@shared/types/Message";
 
 export type PlanStep = {
@@ -22,6 +23,7 @@ export type PlanningSteps = {
 
 export interface PlanExecuteState {
 	messages: ChatMessage[];
+	image?: ComposerRequest["image"];
 	projectDetails?: string;
 	followUpInstructions: ChatMessage[];
 	steps?: PlanningSteps[];

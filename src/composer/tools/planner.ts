@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { VectorQuery } from "../../server/query";
 import { CodeGraph } from "../../server/files/graph";
@@ -9,13 +8,19 @@ import { buildObjective } from "../utils";
 import { PlanExecuteState } from "../types";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { ChatOllama } from "@langchain/ollama";
-import { AIMessage } from "@langchain/core/messages";
+import {
+	AIMessage,
+	HumanMessage,
+	MessageContentImageUrl,
+	MessageContentText,
+} from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
 import { NoFilesChangedError, NoFilesFoundError } from "../errors";
 import { loggingProvider } from "../../server/loggingProvider";
 import path from "node:path";
 import fs from "node:fs";
 import { filePathToUri } from "../../server/files/utils";
+import { ComposerRequest } from "@shared/types/Composer";
 
 export type PlannerSchema = z.infer<typeof planSchema>;
 
@@ -30,8 +35,7 @@ const planSchema = z.object({
 	),
 });
 
-const plannerPrompt = ChatPromptTemplate.fromTemplate(
-	`You are an expert software engineer tasked with planning a feature implementation. 
+const plannerPrompt = `You are an expert software engineer tasked with planning a feature implementation. 
 Provide a concise, step-by-step plan based on the given information and files.
 
 {{objective}}
@@ -43,17 +47,19 @@ Working directory:
 {{workspace}}
 
 Instructions:
-1. Analyze the project objective and the provided code files.
-2. Determine the relevance of the existing files (dependencies, modifications needed, or new files required) based on the project objective.
-3. If creating a new file is required to fulfill the objective, follow the project's structure for paths and naming conventions. Provide the file path and filename in your response.
-4. Assess the appropriate technologies, approaches, and architecture to address the project objective.
-5. Develop a clear and concise implementation plan that includes:
+1. Analyze the objective and the provided code files.
+2. Determine the relevance of the existing files (dependencies, file relationships, modifications needed, or new files required) based on the objective.
+3. For determining file paths, leverage files provided or the working directory as a reference.
+4. Consider all provided files in the plan and determine if any need modified or new files created.
+5. Assess the appropriate technologies, approaches, and architecture to address the project objective.
+6. Develop a clear and concise implementation plan that includes:
    - Practical, focused actions
    - Necessary setup or preparation
    - Potential challenges or optimizations
    - Logical order
    - Consistent project-related file paths
-6. Consider all provided files in the plan and determine if any need to be created or modified.
+   - Follow existing code style and patterns
+   - Maintain backward compatibility when applicable
 7. Do not perform any code changes outside of the objective. Focus on what the core ask is.
 8. If creating a new file is required, follow the project structure for paths and naming conventions.
 9. Ignore any completed objectives and focus only on the new requirements.
@@ -64,6 +70,7 @@ File Handling:
 - Ensure correct file paths and import statements.
 - Verify namespaces and code integration.
 - Consider default and named exports.
+- Maintain backward compatibility when applicable
 - For new files, provide the file path and filename, but do not include any code.
 
 Notes:
@@ -82,15 +89,10 @@ Example output:
 
 Code Files:
 
-{{files}}
-`,
-	{
-		templateFormat: "mustache",
-	}
-);
+{{files}}`;
 
 export class CodePlanner {
-	codePlanner: ReturnType<typeof plannerPrompt.pipe>;
+	codePlanner: any;
 	vectorQuery = new VectorQuery();
 
 	constructor(
@@ -100,14 +102,12 @@ export class CodePlanner {
 		private readonly codeGraph: CodeGraph,
 		private readonly store: Store
 	) {
-		const model = this.chatModel.withStructuredOutput(planSchema, {
-			name: "planner",
-		});
-
 		this.codePlanner =
 			this.chatModel instanceof ChatOllama
-				? plannerPrompt.pipe(this.chatModel)
-				: plannerPrompt.pipe(model);
+				? this.chatModel
+				: this.chatModel.withStructuredOutput(planSchema, {
+						name: "planner",
+				  });
 	}
 
 	codePlannerStep = async (
@@ -148,7 +148,8 @@ export class CodePlanner {
 			const { plan } = await this.generatePlan(
 				finalDocs,
 				projectDetails,
-				objective
+				objective,
+				state.image
 			);
 
 			const docs = await this.filterRelevantDocs(finalDocs, plan);
@@ -315,15 +316,36 @@ Ranked results:
 	private async generatePlan(
 		finalDocs: Map<string, TextDocument>,
 		projectDetails: any,
-		objective: string
+		objective: string,
+		image?: ComposerRequest["image"]
 	): Promise<PlannerSchema> {
 		const filesPrompt = this.buildFilesPrompt(finalDocs);
-		const plan = await this.codePlanner.invoke({
-			details: projectDetails?.description || "Not available.",
-			files: `${FILE_SEPARATOR}\n\n${filesPrompt}`,
-			objective,
-			workspace: this.workspace,
-		});
+		const msgContent: Array<MessageContentText | MessageContentImageUrl> = [
+			{
+				type: "text",
+				text: plannerPrompt
+					.replace(
+						"{{details}}",
+						projectDetails?.description || "Not available."
+					)
+					.replace("{{files}}", `${FILE_SEPARATOR}\n\n${filesPrompt}`)
+					.replace("{{objective}}", objective)
+					.replace("{{workspace}}", this.workspace),
+			},
+		];
+		if (image) {
+			msgContent.push({
+				type: "image_url",
+				image_url: {
+					url: image?.data,
+				},
+			});
+		}
+		const plan = await this.codePlanner.invoke([
+			new HumanMessage({
+				content: msgContent,
+			}),
+		]);
 
 		return this.chatModel instanceof ChatOllama
 			? JSON.parse((plan as AIMessage).content.toString())

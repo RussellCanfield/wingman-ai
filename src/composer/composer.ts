@@ -12,6 +12,7 @@ import { getTextDocumentFromPath } from "../server/files/utils";
 import { CodePlanner } from "./tools/planner";
 import { NoFilesChangedError, NoFilesFoundError } from "./errors";
 import path from "path";
+import { ComposerRequest } from "@shared/types/Composer";
 
 export interface Thread {
 	configurable: {
@@ -21,14 +22,13 @@ export interface Thread {
 
 export async function* generateCommand(
 	workspace: string,
-	description: string,
+	request: ComposerRequest,
 	model: BaseChatModel,
 	rerankModel: BaseChatModel,
 	codeGraph: CodeGraph,
 	store: Store,
 	config?: RunnableConfig,
-	checkpointer?: BaseCheckpointSaver,
-	contextFiles?: string[]
+	checkpointer?: BaseCheckpointSaver
 ) {
 	const planner = new CodePlanner(
 		model,
@@ -105,6 +105,12 @@ export async function* generateCommand(
 			value: (x?: number, y?: number) => y ?? x,
 			default: () => 2,
 		},
+		image: {
+			value: (
+				x?: ComposerRequest["image"],
+				y?: ComposerRequest["image"]
+			) => y ?? x,
+		},
 	};
 
 	function shouldEnd(state: PlanExecuteState): "true" | "false" {
@@ -137,12 +143,12 @@ export async function* generateCommand(
 		review: undefined,
 	};
 	if (checkpoint?.channel_values["response"]) {
-		inputs.followUpInstructions = [new ChatMessage(description, "user")];
+		inputs.followUpInstructions = [new ChatMessage(request.input, "user")];
 	} else {
-		inputs.messages = [new ChatMessage(description, "user")];
+		inputs.messages = [new ChatMessage(request.input, "user")];
 	}
 
-	if (contextFiles?.length) {
+	if (request.contextFiles?.length) {
 		const uniqueFilePaths = new Set<string>();
 
 		// Get existing files from the checkpoint
@@ -159,7 +165,7 @@ export async function* generateCommand(
 		}
 
 		// Then, add new files from contextFiles if they're not already in the checkpoint
-		for (const file of contextFiles) {
+		for (const file of request.contextFiles) {
 			const relativeFilePath = path.relative(workspace, file);
 			if (!uniqueFilePaths.has(relativeFilePath)) {
 				uniqueFilePaths.add(relativeFilePath);
@@ -175,6 +181,23 @@ export async function* generateCommand(
 			steps: [],
 			files: existingFiles,
 		};
+	}
+
+	if (inputs.plan?.files) {
+		[
+			(inputs.plan.files = inputs.plan.files.map((f) => {
+				return {
+					path: f.path,
+					code: f.code,
+					relativePath: path.relative(workspace, f.path),
+					changes: [],
+				};
+			})),
+		];
+	}
+
+	if (request.image) {
+		inputs.image = request.image;
 	}
 
 	inputs.retryCount = 2;

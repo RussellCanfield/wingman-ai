@@ -10,7 +10,7 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvider } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
-import { InteractionSettings } from "@shared/types/Settings";
+import { InteractionSettings, Settings } from "@shared/types/Settings";
 import {
 	extractCodeBlock,
 	getSymbolsFromOpenFiles,
@@ -31,7 +31,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvider,
-		private readonly _interactionSettings: InteractionSettings
+		private readonly _settings: Settings
 	) {
 		this.cacheManager = new CacheManager();
 	}
@@ -42,7 +42,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		context: InlineCompletionContext,
 		token: CancellationToken
 	) {
-		if (!this._interactionSettings.codeCompletionEnabled) {
+		if (!this._settings.interactionSettings.codeCompletionEnabled) {
 			return [];
 		}
 
@@ -52,7 +52,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		const [prefix, suffix] = getContentWindow(
 			document,
 			position,
-			this._interactionSettings.codeContextWindow
+			this._settings.interactionSettings.codeContextWindow
 		);
 
 		const types = await getSymbolsFromOpenFiles();
@@ -79,7 +79,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				prefix,
 				abort.signal,
 				suffix,
-				this._interactionSettings.codeStreaming,
+				this._settings.interactionSettings.codeStreaming,
 				types
 			);
 		} catch {
@@ -112,6 +112,11 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				);
 				telemetry.sendEvent(EVENT_CODE_COMPLETE_CACHE, {
 					language: document.languageId,
+					aiProvider: this._settings.aiProvider,
+					model:
+						this._settings.providerSettings[
+							this._settings.aiProvider
+						]?.codeModel || "Unknown",
 				});
 				return [new InlineCompletionItem(cachedResult)];
 			}
@@ -144,9 +149,16 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				return [];
 			}
 
-			telemetry.sendEvent(EVENT_CODE_COMPLETE, {
-				language: document.languageId,
-			});
+			try {
+				telemetry.sendEvent(EVENT_CODE_COMPLETE, {
+					language: document.languageId,
+					aiProvider: this._settings.aiProvider,
+					model:
+						this._settings.providerSettings[
+							this._settings.aiProvider
+						]?.codeModel || "Unknown",
+				});
+			} catch {}
 
 			this.cacheManager.set(document, prefix, suffix, result);
 			return [new InlineCompletionItem(result)];

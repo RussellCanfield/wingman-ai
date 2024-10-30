@@ -51,7 +51,13 @@ export type FileSearchResult = {
 	path: string;
 };
 
+export type ComposerImage = {
+	data: string;
+	ext: string;
+};
+
 export type ComposerRequest = {
 	input: string;
 	contextFiles: string[];
+	image?: ComposerImage;
 };

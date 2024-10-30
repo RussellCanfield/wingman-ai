@@ -7,7 +7,7 @@ import vscode, {
 import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvider } from "../service/base";
 import { getContentWindow } from "../service/utils/contentWindow";
-import { InteractionSettings } from "@shared/types/Settings";
+import { Settings } from "@shared/types/Settings";
 import { EVENT_CODE_COMPLETE_HOTKEY, telemetry } from "./telemetryProvider";
 
 export class HotKeyCodeSuggestionProvider
@@ -15,7 +15,7 @@ export class HotKeyCodeSuggestionProvider
 {
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvider,
-		private readonly _interactionSettings: InteractionSettings
+		private readonly _settings: Settings
 	) {}
 	static provider: HotKeyCodeSuggestionProvider | null = null;
 	async provideCompletionItems(
@@ -43,7 +43,7 @@ export class HotKeyCodeSuggestionProvider
 		const [prefix, suffix] = getContentWindow(
 			document,
 			position,
-			this._interactionSettings.codeContextWindow
+			this._settings.interactionSettings.codeContextWindow
 		);
 		//get the biginning of the last line in prefix
 		const lastLineStart = prefix.lastIndexOf("\n");
@@ -51,7 +51,16 @@ export class HotKeyCodeSuggestionProvider
 		const spaces = prefix.substring(lastLineStart + 1).search(/\S/) ?? 0;
 		try {
 			eventEmitter._onQueryStart.fire();
-			telemetry.sendEvent(EVENT_CODE_COMPLETE_HOTKEY);
+			try {
+				telemetry.sendEvent(EVENT_CODE_COMPLETE_HOTKEY, {
+					language: document.languageId,
+					aiProvider: this._settings.aiProvider,
+					model:
+						this._settings.providerSettings[
+							this._settings.aiProvider
+						]?.codeModel || "Unknown",
+				});
+			} catch {}
 			const response = await this._aiProvider.codeComplete(
 				prefix,
 				suffix,

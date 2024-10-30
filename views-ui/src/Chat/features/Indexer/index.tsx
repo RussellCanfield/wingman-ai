@@ -93,7 +93,7 @@ export default function Indexer() {
 				<p className="text-md">
 					The indexer will breakdown your codebase to use as context
 					in chat, or interactively with the code composer. It will
-					scan your workspace for any filters meeting the filter
+					scan your workspace for any files meeting the filter
 					criteria below. By default, Wingman will include your
 					'.gitignore' file in your exclusion filter.
 				</p>

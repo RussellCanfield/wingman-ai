@@ -48,10 +48,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	await lspClient.activate(context, settings, workspace);
 
-	telemetry.sendEvent(EVENT_EXTENSION_LOADED, {
-		aiProvider: settings.aiProvider,
-		embeddingProvider: settings.embeddingProvider,
-	});
+	try {
+		telemetry.sendEvent(EVENT_EXTENSION_LOADED, {
+			aiProvider: settings.aiProvider,
+			embeddingProvider: settings.embeddingProvider,
+			chatModel:
+				settings.providerSettings[settings.aiProvider]?.chatModel,
+			codeModel:
+				settings.providerSettings[settings.aiProvider]?.codeModel,
+		});
+	} catch {}
 
 	diffViewProvider = new DiffViewProvider(context);
 
@@ -139,10 +145,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(
 			vscode.languages.registerInlineCompletionItemProvider(
 				CodeSuggestionProvider.selector,
-				new CodeSuggestionProvider(
-					modelProvider!,
-					settings.interactionSettings!
-				)
+				new CodeSuggestionProvider(modelProvider!, settings)
 			)
 		);
 	}
@@ -160,7 +163,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
 		modelProvider!,
-		settings.interactionSettings
+		settings
 	);
 	context.subscriptions.push(
 		vscode.commands.registerCommand(

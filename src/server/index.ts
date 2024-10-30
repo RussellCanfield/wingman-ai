@@ -422,14 +422,13 @@ export class LSPServer {
 			async ({ request }: { request: ComposerRequest }) => {
 				const generator = generateCommand(
 					this.workspaceFolders[0],
-					request.input,
+					request,
 					modelProvider.getModel(),
 					modelProvider.getRerankModel(),
 					this.codeGraph!,
 					this.vectorStore!,
 					config,
-					memory,
-					request.contextFiles
+					memory
 				);
 
 				for await (const { node, values } of generator) {

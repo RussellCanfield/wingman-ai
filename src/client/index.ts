@@ -159,10 +159,15 @@ export class LSPClient {
 	};
 
 	compose = async (request: ComposerRequest) => {
-		telemetry.sendEvent(EVENT_COMPOSE_STARTED, {
-			numberOfFiles: request.contextFiles.length.toString(),
-			aiProvider: this.settings?.aiProvider || "Unknown",
-		});
+		try {
+			telemetry.sendEvent(EVENT_COMPOSE_STARTED, {
+				numberOfFiles: request.contextFiles.length.toString(),
+				aiProvider: this.settings?.aiProvider || "Unknown",
+				model:
+					this.settings?.providerSettings[this.settings.aiProvider]
+						?.codeModel || "Unknown",
+			});
+		} catch {}
 		await client.sendRequest<ComposerResponse>("wingman/compose", {
 			request,
 		});
