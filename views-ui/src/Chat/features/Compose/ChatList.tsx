@@ -47,13 +47,14 @@ function ChatResponseList({
 	}, [ulRef.current]);
 
 	const chatHistory = useMemo(() => {
-		return messages.map(({ from, message, plan }, index) => (
+		return messages.map(({ from, message, plan, image }, index) => (
 			<ChatEntry
 				key={index}
 				from={from}
 				message={message}
 				plan={plan}
 				index={index}
+				image={image}
 			/>
 		));
 	}, [messages]);

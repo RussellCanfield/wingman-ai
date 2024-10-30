@@ -232,6 +232,7 @@ ${values.review.comments.join("\n")}`,
 					files: [],
 					steps: [],
 				},
+				image: payload.image,
 			},
 		]);
 

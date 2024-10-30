@@ -44,6 +44,7 @@ export interface ComposerMessage {
 	message: string;
 	loading?: boolean;
 	plan: Plan;
+	image?: ComposerRequest["image"];
 }
 
 export type FileSearchResult = {

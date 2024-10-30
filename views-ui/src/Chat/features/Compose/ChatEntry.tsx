@@ -10,7 +10,7 @@ import {
 import { FileMetadata } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
-import { ComposerMessage } from "@shared/types/Composer";
+import { ComposerMessage, ComposerRequest } from "@shared/types/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
 import { SkeletonLoader } from "../../SkeletonLoader";
@@ -192,6 +192,7 @@ const ChatEntry = ({
 	loading,
 	plan,
 	index,
+	image,
 }: PropsWithChildren<ComposerMessage & { index: number }>) => {
 	const { isLightTheme } = useAppContext();
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
@@ -224,6 +225,14 @@ const ChatEntry = ({
 				</h3>
 			</span>
 			{message !== "" && renderMarkdown(message, codeTheme)}
+			{image && (
+				<img
+					src={image.data}
+					alt="Image preview"
+					className="max-w-full h-auto rounded-lg mt-4 mb-4"
+					style={{ maxHeight: "512px" }}
+				/>
+			)}
 			{loading && (
 				<div>
 					<SkeletonLoader />
