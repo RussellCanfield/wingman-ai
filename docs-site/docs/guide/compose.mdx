@@ -48,6 +48,10 @@ Automatic context means that Wingman will leverage similar logic to how chat fun
 
 Specific context means you provide files to composer directly using **@filename** in the chat input, this will allow you to search files across your workspace and target a group of files for specific changes. This can be very helpful when you know the general area you want to work in. Wingman will figure out which of those files apply to what you are asking it to do.
 
+### Multi Modal
+
+Composer supports uploading images either through the **attachment icon or copy & paste**, if the chat model configured supports images, it will provide the image along with the context above.
+
 ### How it works
 
 Composer will iterate over 3 unique phases for code generation:

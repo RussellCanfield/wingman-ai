@@ -38,6 +38,8 @@ You can use the following models:
 -   Claude 3.5 Sonnet
 -   Claude 3 Opus
 
+**Anthropic [prompt caching](https://www.anthropic.com/news/prompt-caching) is used for Composer mode for optimization reasons**
+
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
 ### [OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades)
