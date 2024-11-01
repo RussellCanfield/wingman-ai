@@ -253,11 +253,15 @@ ${values.review.comments.join("\n")}`,
 		<main className="h-full flex flex-col overflow-auto text-base">
 			{composerMessages.length === 0 && (
 				<p>
-					The composer feature allows you to generate code changes.
-					You can ask for help with code, or ask for code to be
-					written for you. By default, composer will intelligently
-					choose files in your project based on your input. You can
-					also target specific files using '@filename'. Lets go! 🚀
+					The composer feature allows you to generate code changes
+					across files. You can ask for help with code, or ask for
+					code to be written for you. By default, composer will
+					intelligently choose files in your project based on your
+					input. You can also target specific files using '@filename'.
+					<br />
+					<br />
+					Composer is also multi-modal, copy and paste an image or
+					attach one. Lets go! 🚀
 				</p>
 			)}
 			<ChatResponseList messages={composerMessages}>

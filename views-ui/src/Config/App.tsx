@@ -148,6 +148,19 @@ export const App = () => {
 	return (
 		<div className="flex flex-col p-4">
 			<h2 className="text-xl font-semibold mb-4">Wingman Settings</h2>
+			<p>
+				Visit{" "}
+				<a
+					href="https://wingman.squadron-ai.com/"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-blue-500 hover:text-blue-600 underline"
+				>
+					wingman.squadron-ai.com
+				</a>{" "}
+				for more information about Wingman settings and configuration
+				options.
+			</p>
 			<div className="mb-6 flex justify-end">
 				<button
 					type="button"

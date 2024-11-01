@@ -231,7 +231,7 @@ const ChatInput = ({
 						onChipRemove={handleChipRemove}
 						isLightTheme={isLightTheme}
 					/>
-					<div className="flex flex-wrap items-center p-2">
+					<div className="flex flex-wrap items-center p-2 pb-0 mb-2 border-2 border-gray-500 rounded-md">
 						<textarea
 							placeholder={
 								chips.length === 0
@@ -247,57 +247,59 @@ const ChatInput = ({
 							tabIndex={0}
 							rows={1}
 							autoFocus
-							className="flex-grow resize-none text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] overflow-y-auto min-h-[36px] p-2"
+							className="w-full mt-1 flex-grow resize-none text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] overflow-y-auto min-h-[36px] p-2"
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>
-						<input
-							type="file"
-							ref={fileInputRef}
-							onChange={handleFileChange}
-							accept="image/*"
-							className="hidden"
-						/>
-						<span className="p-4 pr-2">
-							<FaPaperclip
-								size={16}
-								className="cursor-pointer text-gray-400 hover:text-gray-100"
-								onClick={handleImageUpload}
-								title="Attach image"
+						<div className="flex w-full justify-between">
+							<input
+								type="file"
+								ref={fileInputRef}
+								onChange={handleFileChange}
+								accept="image/*"
+								className="hidden"
 							/>
-						</span>
-						<span className="p-4 pr-0">
-							{!loading && (
-								<FaPlay
+							<span className="p-4 pr-2">
+								<FaPaperclip
 									size={16}
-									tabIndex={0}
-									role="presentation"
-									title="Send"
-									className={`${
-										!inputValue.trim()
-											? "text-gray-500"
-											: "text-gray-100"
-									} cursor-pointer`}
-									onClick={() =>
-										handleUserInput({
-											key: "Enter",
-											preventDefault: () => {},
-											shiftKey: false,
-										} as React.KeyboardEvent<HTMLTextAreaElement>)
-									}
+									className="cursor-pointer text-gray-400 hover:text-gray-100"
+									onClick={handleImageUpload}
+									title="Attach image"
 								/>
-							)}
-							{loading && (
-								<FaStopCircle
-									size={16}
-									tabIndex={0}
-									role="presentation"
-									title="Cancel compose"
-									className="cursor-pointer"
-									onClick={onChatCancelled}
-								/>
-							)}
-						</span>
+							</span>
+							<span className="p-4 pr-2">
+								{!loading && (
+									<FaPlay
+										size={16}
+										tabIndex={0}
+										role="presentation"
+										title="Send"
+										className={`${
+											!inputValue.trim()
+												? "text-gray-500"
+												: "text-gray-100"
+										} cursor-pointer`}
+										onClick={() =>
+											handleUserInput({
+												key: "Enter",
+												preventDefault: () => {},
+												shiftKey: false,
+											} as React.KeyboardEvent<HTMLTextAreaElement>)
+										}
+									/>
+								)}
+								{loading && (
+									<FaStopCircle
+										size={16}
+										tabIndex={0}
+										role="presentation"
+										title="Cancel compose"
+										className="cursor-pointer"
+										onClick={onChatCancelled}
+									/>
+								)}
+							</span>
+						</div>
 					</div>
 					{showDropdown &&
 						filteredDropDownItems.length > 0 &&
