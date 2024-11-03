@@ -6,6 +6,8 @@ import {
 	AppMessage,
 	CodeContext,
 	CodeContextDetails,
+	CodeReview,
+	CodeReviewMessage,
 	FileMetadata,
 } from "@shared/types/Message";
 import { AppState, Settings } from "@shared/types/Settings";
@@ -35,6 +37,7 @@ import {
 } from "./telemetryProvider";
 import { Workspace } from "../service/workspace";
 import { getGitignorePatterns } from "../server/files/utils";
+import { CodeReviewer } from "../commands/review/codeReviewer";
 
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
@@ -194,6 +197,33 @@ ${result.summary}`,
 					}
 
 					switch (command) {
+						case "review":
+							const codeReviewer = new CodeReviewer(
+								workspaceFolder.fsPath,
+								this._aiProvider,
+								this._diffViewProvider
+							);
+
+							const review =
+								await codeReviewer.generateDiffsAndSummary(
+									String(value)
+								);
+
+							if (!review) {
+								webviewView.webview.postMessage({
+									command: "code-review-failed",
+								});
+								return;
+							}
+
+							webviewView.webview.postMessage({
+								command: "code-review-result",
+								value: {
+									review,
+									type: "code-review",
+								} satisfies CodeReviewMessage,
+							});
+							break;
 						case "state-update":
 							const appState = value as AppState;
 							await this._workspace.save({
@@ -378,6 +408,7 @@ ${result.summary}`,
 						}
 						case "cancel": {
 							abortController.abort();
+							await this._lspClient.cancelComposer();
 							break;
 						}
 						case "clipboard": {

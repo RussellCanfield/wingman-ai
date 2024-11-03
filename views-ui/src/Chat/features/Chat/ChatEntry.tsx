@@ -7,7 +7,7 @@ import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { ChatMessage } from "@shared/types/Message";
+import { Message } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
 import React from "react";
@@ -123,7 +123,7 @@ const ChatEntry = ({
 	message,
 	loading,
 	context,
-}: PropsWithChildren<ChatMessage>) => {
+}: PropsWithChildren<Omit<Message, "type">>) => {
 	const { isLightTheme } = useAppContext();
 
 	const getContextDisplay = (): string => {

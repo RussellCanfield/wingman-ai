@@ -193,6 +193,10 @@ export class LSPClient {
 		return client.sendRequest("wingman/deleteIndex");
 	};
 
+	cancelComposer = async () => {
+		return client.sendRequest("wingman/cancelComposer");
+	};
+
 	getEmbeddings = async (query: string): Promise<EmbeddingsResponse> => {
 		try {
 			return client.sendRequest("wingman/getEmbeddings", {

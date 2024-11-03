@@ -35,47 +35,41 @@ const planSchema = z.object({
 	),
 });
 
-const plannerPrompt = `You are an expert software engineer tasked with planning a feature implementation. 
-Provide a concise, step-by-step plan based on the given information and files.
-
+const plannerPrompt = `As a senior software engineer, create a focused implementation plan for the following feature:
 {{objective}}
 
-Project overview: 
+Project context:
 {{details}}
 
-Working directory: 
+Working directory:
 {{workspace}}
+Guidelines:
 
-Instructions:
-1. Analyze the objective and the provided code files.
-2. Determine the relevance of the existing files (dependencies, file relationships, modifications needed, or new files required) based on the objective.
-3. For determining file paths, leverage files provided or the working directory as a reference.
-4. Consider all provided files in the plan and determine if any need modified or new files created.
-5. Assess the appropriate technologies, approaches, and architecture to address the project objective.
-6. Develop a clear and concise implementation plan that includes:
-   - Practical, focused actions
-   - Necessary setup or preparation
-   - Potential challenges or optimizations
-   - Logical order
-   - Consistent project-related file paths
-   - Follow existing code style and patterns
-   - Maintain backward compatibility when applicable
-7. Do not perform any code changes outside of the objective. Focus on what the core ask is.
-8. If creating a new file is required, follow the project structure for paths and naming conventions.
-9. Ignore any completed objectives and focus only on the new requirements.
-10. Do not make assumptions about files not in scope, if you need functionality from another file and its not provided then create it.
+1. Analyze existing files and their relationships to determine:
+- Required modifications
+- New files needed
+- Dependencies and integrations
+- File paths and naming conventions
 
-File Handling:
-- Include the relevant files in your output.
-- Ensure correct file paths and import statements.
-- Verify namespaces and code integration.
-- Consider default and named exports.
-- Maintain backward compatibility when applicable
-- For new files, provide the file path and filename, but do not include any code.
+2. Create a step-by-step implementation plan that includes:
+- Clear, actionable steps
+- File changes and additions
+- Integration points
+- Critical considerations
+- Potential challenges
+
+3. Key considerations:
+- Follow existing project structure and patterns
+- Maintain backward compatibility
+- Use correct file paths and import statements
+- Create new files only when necessary
+- Focus solely on the objective requirements
+- If external dependencies are needed, specify them
+- Do not make extraneous changes, stick to the objective
 
 Notes:
-- Omit steps for testing, team activities, deployment, or logging unless requested.
-- Focus on files relevant to the objective.
+- Exclude testing, deployment, and logging unless specified
+- If required functionality is missing, include it in the plan
 
 Use the 'planner' tool to output a JSON array of implementation steps only. No additional explanations.
 

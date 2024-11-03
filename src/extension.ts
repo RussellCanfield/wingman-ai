@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { GenDocs } from "./commands/GenDocs";
+import { GenDocs } from "./commands/genDocs";
 import { ChatViewProvider } from "./providers/chatViewProvider";
 import { CodeSuggestionProvider } from "./providers/codeSuggestionProvider";
 import { ConfigViewProvider } from "./providers/configViewProvider";
@@ -22,6 +22,7 @@ import {
 	telemetry,
 } from "./providers/telemetryProvider";
 import { Workspace } from "./service/workspace";
+import { CodeReviewer } from "./commands/review/codeReviewer";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -34,7 +35,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		!vscode.workspace.workspaceFolders ||
 		vscode.workspace.workspaceFolders.length === 0
 	) {
-		vscode.window.showErrorMessage(
+		vscode.window.showInformationMessage(
 			"Wingman requires an open workspace to function."
 		);
 		return;

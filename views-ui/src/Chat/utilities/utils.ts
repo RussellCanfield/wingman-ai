@@ -9,11 +9,11 @@ export const handleAutoResize = (
 	element.style.height = "auto";
 
 	if (reset) {
-		element.style.height = "36px"; // Minimum height
+		element.style.height = "42px"; // Minimum height
 	} else {
 		// Set the height to either the scrollHeight or the minimum height, but not exceeding maxHeight
 		const newHeight = Math.min(
-			Math.max(element.scrollHeight, 36),
+			Math.max(element.scrollHeight, 42),
 			maxHeight
 		);
 		element.style.height = `${newHeight}px`;

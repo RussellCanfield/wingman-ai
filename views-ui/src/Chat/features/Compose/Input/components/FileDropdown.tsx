@@ -38,7 +38,7 @@ export const FileDropdown: React.FC<FileDropdownProps> = ({
 	return (
 		<div
 			ref={dropdownRef}
-			className={`absolute bottom-[3rem] mb-1 left-0 w-full z-20 ${dropdownClasses} border rounded overflow-y-auto max-h-[512px]`}
+			className={`absolute bottom-[8rem] mb-1 left-0 w-full z-20 ${dropdownClasses} border rounded overflow-y-auto max-h-[512px]`}
 		>
 			{dropdownItems.map((item, index) => (
 				<div

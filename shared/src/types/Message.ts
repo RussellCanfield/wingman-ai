@@ -3,11 +3,31 @@ export interface AppMessage {
 	value: unknown;
 }
 
-export interface ChatMessage {
+export interface CodeReview {
+	summary: string;
+	fileDiffMap?: Map<string, string>;
+}
+
+export type MessageType = "chat" | "code-review";
+
+export type ChatMessages = Message[] | CodeReviewMessage[];
+export type ChatMessage = Message | CodeReviewMessage;
+
+export interface CodeReviewMessage extends BaseMessage {
+	review: CodeReview;
+	type: "code-review";
+}
+
+export interface Message extends BaseMessage {
+	context?: CodeContext;
 	from: "assistant" | "user";
 	message: string;
+	type: "chat";
+}
+
+export interface BaseMessage {
 	loading?: boolean;
-	context?: CodeContext;
+	type?: MessageType;
 }
 
 export interface FileMetadata {

@@ -68,78 +68,68 @@ export class DiffViewProvider {
 						});
 						break;
 					case "accept-file-changes":
-						const { path: artifactFile, code: markdown } =
-							value as FileMetadata;
-						let code = markdown?.startsWith("```")
-							? extractCodeBlock(markdown)
-							: markdown;
-						const relativeFilePath =
-							vscode.workspace.asRelativePath(artifactFile);
-
-						// Get the workspace folder URI
-						const workspaceFolder =
-							vscode.workspace.workspaceFolders?.[0].uri;
-						if (!workspaceFolder) {
-							throw new Error("No workspace folder found");
-						}
-
-						// Construct the full URI of the file
-						const fileUri = vscode.Uri.joinPath(
-							workspaceFolder,
-							relativeFilePath
+						this.acceptFileChanges(
+							currentPanel,
+							file,
+							value as FileMetadata
 						);
-
-						try {
-							// Check if the file exists
-							await vscode.workspace.fs.stat(fileUri);
-
-							// Check if the document is already open
-							let document = vscode.workspace.textDocuments.find(
-								(doc) =>
-									doc.uri.toString() === fileUri.toString()
-							);
-							if (!document) {
-								// Open the text document if it is not already open
-								document =
-									await vscode.workspace.openTextDocument(
-										fileUri
-									);
-							}
-
-							// Replace text in the document
-							await replaceTextInDocument(document, code!, true);
-						} catch (error) {
-							if (
-								(error as vscode.FileSystemError).code ===
-								"FileNotFound"
-							) {
-								// Create the text document if it does not exist
-								await vscode.workspace.fs.writeFile(
-									fileUri,
-									new Uint8Array()
-								);
-								const document =
-									await vscode.workspace.openTextDocument(
-										fileUri
-									);
-								await replaceTextInDocument(
-									document,
-									code!,
-									true
-								);
-							} else {
-								throw error;
-							}
-						} finally {
-							if (currentPanel) {
-								currentPanel.dispose();
-								this.panels.delete(file);
-							}
-						}
 						break;
 				}
 			}
 		);
+	}
+
+	async acceptFileChanges(
+		currentPanel: vscode.WebviewPanel,
+		file: string,
+		{ path: artifactFile, code: markdown }: FileMetadata
+	) {
+		let code = markdown?.startsWith("```")
+			? extractCodeBlock(markdown)
+			: markdown;
+		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+
+		// Get the workspace folder URI
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri;
+		if (!workspaceFolder) {
+			throw new Error("No workspace folder found");
+		}
+
+		// Construct the full URI of the file
+		const fileUri = vscode.Uri.joinPath(workspaceFolder, relativeFilePath);
+
+		try {
+			// Check if the file exists
+			await vscode.workspace.fs.stat(fileUri);
+
+			// Check if the document is already open
+			let document = vscode.workspace.textDocuments.find(
+				(doc) => doc.uri.toString() === fileUri.toString()
+			);
+			if (!document) {
+				// Open the text document if it is not already open
+				document = await vscode.workspace.openTextDocument(fileUri);
+			}
+
+			// Replace text in the document
+			await replaceTextInDocument(document, code!, true);
+		} catch (error) {
+			if ((error as vscode.FileSystemError).code === "FileNotFound") {
+				// Create the text document if it does not exist
+				await vscode.workspace.fs.writeFile(fileUri, new Uint8Array());
+				const document = await vscode.workspace.openTextDocument(
+					fileUri
+				);
+				await replaceTextInDocument(document, code!, true);
+			} else {
+				throw error;
+			}
+		} finally {
+			if (currentPanel) {
+				currentPanel.dispose();
+				this.panels.delete(file);
+			}
+		}
 	}
 
 	dispose() {

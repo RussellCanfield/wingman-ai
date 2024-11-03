@@ -1,11 +1,11 @@
 import { IndexerSettings } from "./Indexer";
-import { ChatMessage } from "./Message";
+import { BaseMessage } from "./Message";
 
 export const defaultMaxTokens = -1;
 
 export interface WorkspaceSettings {
 	indexerSettings: IndexerSettings;
-	chatMessages: ChatMessage[];
+	chatMessages: BaseMessage[];
 }
 
 export interface AppState {

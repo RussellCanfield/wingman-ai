@@ -10,7 +10,7 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider, AIStreamProvider } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
-import { InteractionSettings, Settings } from "@shared/types/Settings";
+import { Settings } from "@shared/types/Settings";
 import {
 	extractCodeBlock,
 	getSymbolsFromOpenFiles,
@@ -145,6 +145,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				result = extractCodeBlock(result);
 			}
 
+			loggingProvider.logInfo(
+				`Code complete: \n${prefix}\n\n${suffix}\n\n${result}`
+			);
+
 			if (result === "") {
 				return [];
 			}
@@ -176,9 +180,9 @@ class CacheManager {
 
 	constructor() {
 		this.cache = new NodeCache({
-			stdTTL: 120,
+			stdTTL: 15,
 			maxKeys: 100,
-			checkperiod: 30,
+			checkperiod: 5,
 		});
 		this.documentHashes = new Map();
 	}

@@ -1,11 +1,12 @@
 import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
-import { ChatMessage } from "@shared/types/Message";
+import { BaseMessage, CodeReviewMessage, Message } from "@shared/types/Message";
 import ChatEntry from "./ChatEntry";
+import CodeReviewSummary from "./CodeReviewSummary";
 
 function ChatResponseList({
 	children,
 	messages,
-}: PropsWithChildren & { messages: ChatMessage[] }) {
+}: PropsWithChildren & { messages: BaseMessage[] }) {
 	const ulRef = useRef<HTMLUListElement>(null);
 	const ref = useRef<HTMLDivElement>(null);
 	const [userHasScrolled, setUserHasScrolled] = useState(false);
@@ -47,14 +48,30 @@ function ChatResponseList({
 	}, [ulRef.current]);
 
 	const chatHistory = useMemo(() => {
-		return messages.map(({ from, message, context }, index) => (
-			<ChatEntry
-				key={index}
-				from={from}
-				message={message}
-				context={context}
-			/>
-		));
+		return messages.map((message, index) => {
+			switch (message.type) {
+				case "chat":
+					const { from, message: body, context } = message as Message;
+					return (
+						<ChatEntry
+							key={`${message.type}-${index}`}
+							from={from}
+							message={body}
+							context={context}
+						/>
+					);
+				case "code-review":
+					console.log("here", message);
+					return (
+						<CodeReviewSummary
+							key={`${message.type}-${index}`}
+							message={message as CodeReviewMessage}
+						/>
+					);
+				default:
+					return null;
+			}
+		});
 	}, [messages]);
 
 	return (
