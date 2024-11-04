@@ -5,12 +5,82 @@ import {
 	replaceTextInDocument,
 } from "./utilities";
 import { DiffViewCommand } from "@shared/types/Composer";
-import { AppMessage, FileMetadata } from "@shared/types/Message";
+import {
+	AppMessage,
+	CodeReview,
+	CodeReviewCommand,
+	FileDetails,
+	FileMetadata,
+} from "@shared/types/Message";
+import { AIProvider } from "../service/base";
+import { CodeReviewer } from "../commands/review/codeReviewer";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
 
-	constructor(private readonly context: vscode.ExtensionContext) {}
+	constructor(
+		private readonly _context: vscode.ExtensionContext,
+		private readonly _aiProvider: AIProvider,
+		private readonly _workspace: string
+	) {}
+
+	async createCodeReviewView(review: CodeReview) {
+		if (this.panels.has(review.summary)) {
+			const existingPanel = this.panels.get(review.summary);
+			existingPanel?.reveal(vscode.ViewColumn.One);
+			return;
+		}
+
+		const currentPanel = vscode.window.createWebviewPanel(
+			"codeReview",
+			`Code Review`,
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+			}
+		);
+
+		this.panels.set(review.summary, currentPanel);
+
+		currentPanel.webview.html = await getWebViewHtml(
+			this._context,
+			currentPanel.webview
+		);
+
+		currentPanel.onDidDispose(() => {
+			this.panels.delete(review.summary);
+		});
+
+		currentPanel.webview.onDidReceiveMessage(
+			async (message: AppMessage) => {
+				if (!message) return;
+
+				const { command, value } = message;
+
+				switch (command) {
+					case "webviewLoaded":
+						currentPanel.webview.postMessage({
+							command: "code-review",
+							value: {
+								isDarkTheme:
+									vscode.window.activeColorTheme.kind !== 1,
+								review: review,
+							} satisfies CodeReviewCommand,
+						});
+						break;
+					case "get-code-review-file":
+						const fileReview = await this.reviewFile(
+							value as FileDetails
+						);
+						currentPanel.webview.postMessage({
+							command: "code-review-file-result",
+							value: fileReview,
+						});
+						break;
+				}
+			}
+		);
+	}
 
 	async createDiffView({ file, diff }: DiffViewCommand) {
 		if (this.panels.has(file)) {
@@ -31,7 +101,7 @@ export class DiffViewProvider {
 		this.panels.set(file, currentPanel);
 
 		currentPanel.webview.html = await getWebViewHtml(
-			this.context,
+			this._context,
 			currentPanel.webview
 		);
 
@@ -50,7 +120,8 @@ export class DiffViewProvider {
 						currentPanel.webview.postMessage({
 							command: "diff-file",
 							value: {
-								theme: vscode.window.activeColorTheme.kind,
+								isDarkTheme:
+									vscode.window.activeColorTheme.kind !== 1,
 								file,
 								diff,
 								original: await vscode.workspace.fs
@@ -77,6 +148,11 @@ export class DiffViewProvider {
 				}
 			}
 		);
+	}
+
+	async reviewFile(fileDetails: FileDetails) {
+		const reviewer = new CodeReviewer(this._workspace, this._aiProvider);
+		return reviewer.reviewFile(fileDetails);
 	}
 
 	async acceptFileChanges(

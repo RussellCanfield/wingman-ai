@@ -6,7 +6,6 @@ import {
 	AppMessage,
 	CodeContext,
 	CodeContextDetails,
-	CodeReview,
 	CodeReviewMessage,
 	FileMetadata,
 } from "@shared/types/Message";
@@ -197,11 +196,15 @@ ${result.summary}`,
 					}
 
 					switch (command) {
+						case "review-files":
+							this._diffViewProvider.createCodeReviewView(
+								(value as CodeReviewMessage).review
+							);
+							break;
 						case "review":
 							const codeReviewer = new CodeReviewer(
 								workspaceFolder.fsPath,
-								this._aiProvider,
-								this._diffViewProvider
+								this._aiProvider
 							);
 
 							const review =

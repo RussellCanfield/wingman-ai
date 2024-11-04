@@ -3,9 +3,37 @@ export interface AppMessage {
 	value: unknown;
 }
 
+export interface FileReviewDetails {
+	file: string;
+	diff?: string;
+	original?: string;
+	current?: string;
+	comments?: CodeReviewComment[];
+}
+
+export interface FileDetails {
+	diff: string;
+	file: string;
+}
+
+export interface CodeReviewComment {
+	comment: {
+		startLine: number;
+		endLine?: number;
+	};
+	body: string;
+	accepted?: boolean;
+	rejected?: boolean;
+}
+
 export interface CodeReview {
 	summary: string;
-	fileDiffMap?: Map<string, string>;
+	fileDiffMap?: Record<string, FileReviewDetails>;
+}
+
+export interface CodeReviewCommand {
+	review: CodeReview;
+	isDarkTheme: boolean;
 }
 
 export type MessageType = "chat" | "code-review";

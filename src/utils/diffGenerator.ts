@@ -11,6 +11,39 @@ export class DiffGenerator {
 	}
 
 	/**
+	 * Gets the base branch name (usually main or master)
+	 * @returns The base branch name
+	 */
+	public async getBaseBranch(): Promise<string> {
+		const upstream = await this.executeGitCommand(
+			"git rev-parse --abbrev-ref @{upstream}"
+		);
+		return upstream.split("/")[1] || "main";
+	}
+
+	/**
+	 * Gets the content of a file from the base branch
+	 * @param filePath The path to the file
+	 * @returns The file content from the base branch
+	 */
+	public async getOriginalContent(filePath: string): Promise<string> {
+		try {
+			// Get merge base commit
+			const mergeBase = await this.executeGitCommand(
+				`git merge-base HEAD ${await this.getBaseBranch()}`
+			);
+
+			// Get file content at merge base
+			return await this.executeGitCommand(
+				`git show ${mergeBase.trim()}:${filePath}`
+			);
+		} catch (error) {
+			console.error("Failed to get original content:", error);
+			return "";
+		}
+	}
+
+	/**
 	 * Executes a git command and returns the output
 	 * @param command The git command to execute
 	 * @returns The command output

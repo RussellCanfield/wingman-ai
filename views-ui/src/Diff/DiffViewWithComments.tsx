@@ -6,8 +6,7 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 import { memo, PropsWithChildren } from "react";
-import { FileMetadata } from "@shared/types/Message";
-import { DiffViewCommand } from "@shared/types/Composer";
+import { FileMetadata, FileReviewDetails } from "@shared/types/Message";
 import { FaCheckCircle } from "react-icons/fa";
 import { vscode } from "./utilities/vscode";
 
@@ -20,11 +19,15 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 });
 
 export interface DiffProps {
-	diff: DiffViewCommand;
+	reviewDetails: FileReviewDetails;
+	isDarkTheme: boolean;
 }
 
-export default function DiffView({ diff }: DiffProps) {
-	const isDarkTheme = diff.isDarkTheme;
+export default function DiffViewWithComments({
+	reviewDetails,
+	isDarkTheme,
+}: DiffProps) {
+	const { diff, original, current } = reviewDetails;
 
 	const highlightSyntax = (str: string) => {
 		return (
@@ -57,33 +60,12 @@ export default function DiffView({ diff }: DiffProps) {
 		},
 	};
 
-	const acceptDiff = () => {
-		vscode.postMessage({
-			command: "accept-file-changes",
-			value: {
-				path: diff?.file!,
-				code: diff?.diff,
-			} satisfies FileMetadata,
-		});
-	};
-
 	return (
-		<div className="fixed inset-0 bg-gray-900 flex flex-col">
-			<div className="bg-gray-800 p-4 flex justify-between items-center z-10">
-				<p className="text-white font-semibold truncate">{diff.file}</p>
-				<button
-					className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
-					title="Accept changes"
-					onClick={() => acceptDiff()}
-				>
-					<FaCheckCircle className="mr-2" />
-					<span>Accept</span>
-				</button>
-			</div>
+		<div className="bg-gray-900 flex flex-col">
 			<div className="flex-grow overflow-y-auto">
 				<ReactDiffViewer
-					oldValue={diff.original}
-					newValue={diff.diff}
+					oldValue={original}
+					newValue={current}
 					styles={newStyles}
 					compareMethod={DiffMethod.CHARS}
 					splitView={false}

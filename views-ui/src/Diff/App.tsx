@@ -1,7 +1,8 @@
 import { DiffViewCommand } from "@shared/types/Composer";
-import { AppMessage } from "@shared/types/Message";
+import { AppMessage, CodeReviewCommand } from "@shared/types/Message";
 import { useEffect, useState } from "react";
 import DiffView from "./DiffView";
+import CodeReviewFileByFile from "./CodeReviewFileByFile";
 
 const SkeletonLoader = () => {
 	return (
@@ -23,7 +24,7 @@ const SkeletonLoader = () => {
 
 export default function App() {
 	const [diff, setDiff] = useState<DiffViewCommand>();
-	const [diffs, setDiffs] = useState<DiffViewCommand[]>([]);
+	const [review, setCodeReview] = useState<CodeReviewCommand | undefined>();
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -42,16 +43,25 @@ export default function App() {
 				setDiff(value as DiffViewCommand);
 				break;
 			case "code-review":
-				setDiffs(value as DiffViewCommand[]);
+				setCodeReview(value as CodeReviewCommand);
 				break;
 		}
 	};
 
-	if (!diff && diffs.length === 0) {
+	if (!diff && !review) {
 		return <SkeletonLoader />;
 	}
 
 	if (diff) {
 		return <DiffView diff={diff} />;
+	}
+
+	if (review) {
+		return (
+			<CodeReviewFileByFile
+				review={review.review}
+				isDarkTheme={review.isDarkTheme}
+			/>
+		);
 	}
 }

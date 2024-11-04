@@ -60,8 +60,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 	} catch {}
 
-	diffViewProvider = new DiffViewProvider(context);
-
 	let modelProvider;
 	try {
 		modelProvider = CreateAIProvider(settings, loggingProvider);
@@ -94,6 +92,11 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
+	diffViewProvider = new DiffViewProvider(
+		context,
+		modelProvider!,
+		workspace.workspacePath
+	);
 	statusBarProvider = new ActivityStatusBar();
 
 	configViewProvider = new ConfigViewProvider(context.extensionUri, settings);

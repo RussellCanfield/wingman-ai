@@ -1,21 +1,10 @@
 import { FileMetadata } from "./Message";
 
-export type CodeReviewComment = {
-	comments: {
-		startLine: number;
-		endLine?: number;
-	};
-	body: string;
-	accepted?: boolean;
-	rejected?: boolean;
-};
-
 export type DiffViewCommand = {
 	file: string;
 	diff: string;
-	theme?: Number;
+	isDarkTheme?: boolean;
 	original?: string;
-	reviewComments?: CodeReviewComment[];
 };
 
 export type PlanStep = {

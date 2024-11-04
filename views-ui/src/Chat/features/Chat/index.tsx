@@ -2,7 +2,6 @@ import {
 	AppMessage,
 	Message,
 	CodeContext,
-	CodeReview,
 	CodeReviewMessage,
 } from "@shared/types/Message";
 import { useEffect, useState } from "react";
@@ -127,15 +126,13 @@ export default function Chat() {
 
 		pushMessage({
 			from: "user",
-			message: input,
+			message: !input ? command || "" : input,
 			context: undefined,
 			type: "chat",
 		});
 
 		setLoading(true);
 	};
-
-	console.log("messages", messages);
 
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base">

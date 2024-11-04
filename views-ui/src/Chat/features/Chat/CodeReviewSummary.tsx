@@ -5,6 +5,7 @@ import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
 
 export interface CodeReviewSummaryProps {
@@ -15,6 +16,13 @@ export default function CodeReviewSummary({ message }: CodeReviewSummaryProps) {
 	const { isLightTheme } = useAppContext();
 
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
+
+	const reviewFiles = () => {
+		vscode.postMessage({
+			command: "review-files",
+			value: message,
+		});
+	};
 
 	return (
 		<li className="border-b border-gray-300 border-opacity-50 pb-4 text-base message">
@@ -51,6 +59,15 @@ export default function CodeReviewSummary({ message }: CodeReviewSummaryProps) {
 			>
 				{message.review.summary}
 			</Markdown>
+			<div className="flex items-center justify-center">
+				<button
+					className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+					type="button"
+					onClick={reviewFiles}
+				>
+					Review File-By-File
+				</button>
+			</div>
 		</li>
 	);
 }

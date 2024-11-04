@@ -61,7 +61,6 @@ function ChatResponseList({
 						/>
 					);
 				case "code-review":
-					console.log("here", message);
 					return (
 						<CodeReviewSummary
 							key={`${message.type}-${index}`}
