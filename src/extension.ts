@@ -22,7 +22,6 @@ import {
 	telemetry,
 } from "./providers/telemetryProvider";
 import { Workspace } from "./service/workspace";
-import { CodeReviewer } from "./commands/review/codeReviewer";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
