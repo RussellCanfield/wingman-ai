@@ -9,3 +9,12 @@ With the new **Indexing** feature, Wingman will automatically find relevant code
 [![Wingman AI chat example](https://img.youtube.com/vi/1W3h2mOdjmc/0.jpg)](https://www.youtube.com/watch?v=1W3h2mOdjmc)
 
 [![Wingman AI chat example](https://img.youtube.com/vi/2sJZpyYi3Fc/0.jpg)](https://www.youtube.com/watch?v=2sJZpyYi3Fc)
+
+## Commands
+
+Wingman now features commands in chat! This is the first step towards condensing experiences and interaction points for the user. While not all interactions fit well under chat, we plan to add additional commands in the near future.
+To get started with commands **type "/" in chat**.
+
+We currently support the following commands:
+
+-   review, this will generate a summary of your local changes and allow you to perform file-by-file reviews.

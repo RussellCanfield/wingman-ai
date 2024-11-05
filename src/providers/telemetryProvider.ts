@@ -18,6 +18,8 @@ export const EVENT_CODE_COMPLETE = "CODE_COMPLETE_SENT";
 export const EVENT_CODE_COMPLETE_HOTKEY = "CODE_COMPLETE_HOTKEY";
 export const EVENT_DOC_GEN = "DOC_GEN";
 export const EVENT_REFACTOR = "REFACTOR";
+export const EVENT_REVIEW_STARTED = "CODE_REVIEW";
+export const EVENT_REVIEW_FILE_BY_FILE = "CODE_REVIEW_FILES";
 
 export class Telemetry {
 	reporter: TelemetryReporter | undefined;

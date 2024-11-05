@@ -30,6 +30,9 @@ import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 import {
 	EVENT_CHAT_SENT,
+	EVENT_COMPOSE_STARTED,
+	EVENT_REVIEW_FILE_BY_FILE,
+	EVENT_REVIEW_STARTED,
 	EVENT_VALIDATE_FAILED,
 	EVENT_VALIDATE_SUCCEEDED,
 	telemetry,
@@ -197,6 +200,7 @@ ${result.summary}`,
 
 					switch (command) {
 						case "review-files":
+							telemetry.sendEvent(EVENT_REVIEW_FILE_BY_FILE);
 							this._diffViewProvider.createCodeReviewView(
 								(value as CodeReviewMessage).review
 							);
@@ -211,6 +215,8 @@ ${result.summary}`,
 								await codeReviewer.generateDiffsAndSummary(
 									String(value)
 								);
+
+							telemetry.sendEvent(EVENT_REVIEW_STARTED);
 
 							if (!review) {
 								webviewView.webview.postMessage({
