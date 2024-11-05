@@ -19,15 +19,15 @@ const CommandDropdown: React.FC<CommandDropdownProps> = ({
 	if (!visible) return null;
 
 	const dropdownClasses = isLightTheme
-		? "bg-white border-slate-300"
-		: "bg-slate-700 border-slate-600";
+		? "bg-white border-stone-300"
+		: "bg-stone-700 border-stone-600";
 	const dropdownItemClasses = isLightTheme
-		? "hover:bg-slate-100"
-		: "hover:bg-slate-600";
+		? "hover:bg-stone-100"
+		: "hover:bg-stone-600";
 
 	return (
 		<div
-			className={`absolute ${dropdownClasses} left-2 bottom-[6rem] z-50 bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded-md shadow-lg`}
+			className={`absolute ${dropdownClasses} left-2 bottom-[6rem] z-50 border border-[var(--vscode-input-border)] rounded-md shadow-lg`}
 			style={{
 				minWidth: "200px",
 			}}

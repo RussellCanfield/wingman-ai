@@ -26,6 +26,7 @@ export const codeWriterSchema = z.object({
 					),
 			})
 		)
+		.optional()
 		.describe(
 			"An array of manual steps to follow to complete the task, leave empty if there are no manual steps."
 		),
@@ -343,7 +344,7 @@ ${
 				);
 			}
 
-			steps.push(...result.steps);
+			steps.push(...(result.steps ?? []));
 		}
 
 		if (files.length === 0) {

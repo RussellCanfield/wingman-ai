@@ -1,15 +1,14 @@
-import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import "./App.css";
 import { memo, PropsWithChildren } from "react";
 import { FileMetadata } from "@shared/types/Message";
 import { DiffViewCommand } from "@shared/types/Composer";
 import { FaCheckCircle } from "react-icons/fa";
 import { vscode } from "./utilities/vscode";
+import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	return (

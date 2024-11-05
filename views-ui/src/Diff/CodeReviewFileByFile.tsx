@@ -2,6 +2,7 @@ import Markdown from "react-markdown";
 import {
 	AppMessage,
 	CodeReview,
+	CodeReviewComment,
 	FileDetails,
 	FileReviewDetails,
 } from "@shared/types/Message";
@@ -10,28 +11,15 @@ import {
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import SyntaxHighlighter from "react-syntax-highlighter";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { vscode } from "./utilities/vscode";
 import DiffViewWithComments from "./DiffViewWithComments";
+import { SkeletonLoader } from "./SkeletonLoader";
 
 export interface CodeReviewProps {
 	review: CodeReview;
 	isDarkTheme: boolean;
 }
-
-const SkeletonLoader = () => {
-	return (
-		<div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg animate-pulse w-full">
-			<div className="p-4">
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-			</div>
-		</div>
-	);
-};
 
 export default function CodeReviewFileByFile({
 	review,
@@ -80,17 +68,61 @@ export default function CodeReviewFileByFile({
 		switch (command) {
 			case "code-review-file-result":
 				const fileReview = value as FileReviewDetails;
-				console.log(fileReview);
 
 				if (fileReviews.has(fileReview.file)) {
 					setFileReviews((reviews) => {
-						reviews.set(fileReview.file, fileReview);
-						return reviews;
+						const newReviews = new Map(reviews);
+						newReviews.set(fileReview.file, fileReview);
+						return newReviews;
 					});
 					setCurrentFileInReview(undefined);
 				}
 				break;
 		}
+	};
+
+	const comments = useMemo(() => {
+		return Array.from(fileReviews.entries())
+			.filter(([_, details]) => {
+				return (
+					details.comments &&
+					Array.isArray(details.comments) &&
+					details.comments.length > 0
+				);
+			})
+			.map(([_, details]) => details);
+	}, [fileReviews]);
+
+	const onDiffAccepted = (
+		fileDiff: FileReviewDetails,
+		comment: CodeReviewComment
+	) => {
+		vscode.postMessage({
+			command: "accept-file-diff",
+			value: {
+				fileDiff,
+				comment,
+			},
+		});
+
+		setFileReviews((reviews) => {
+			comment.accepted = true;
+			const newReviews = new Map(reviews);
+			newReviews.set(fileDiff.file, fileDiff);
+			return newReviews;
+		});
+	};
+
+	const onDiffRejected = (
+		fileDiff: FileReviewDetails,
+		comment: CodeReviewComment
+	) => {
+		setFileReviews((reviews) => {
+			comment.rejected = true;
+			const newReviews = new Map(reviews);
+			newReviews.set(fileDiff.file, fileDiff);
+			return newReviews;
+		});
 	};
 
 	return (
@@ -125,20 +157,25 @@ export default function CodeReviewFileByFile({
 			>
 				{review.summary}
 			</Markdown>
-			<div className="flex flex-row gap-4 mt-8 text-base">
-				{Array.from(fileReviews)
-					.filter(([_, details]) => details.comments?.length === 0)
-					.map(([file, details]) => (
-						<div className="w-full text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md">
-							<p className="mb-2 p-2 font-bold">{file}</p>
-							<DiffViewWithComments
-								key={file}
-								reviewDetails={details}
-								isDarkTheme={isDarkTheme}
-							/>
-						</div>
-					))}
-				{currentFileInReview && <SkeletonLoader />}
+			<div className="flex flex-col gap-4 mt-8 text-base mb-4">
+				{comments.map((details) => (
+					<div
+						key={details.file}
+						className="w-full text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md shadow-sm"
+					>
+						<p className="p-3 font-bold">{details.file}</p>
+						<DiffViewWithComments
+							key={details.file}
+							reviewDetails={details}
+							isDarkTheme={isDarkTheme}
+							onDiffAccepted={onDiffAccepted}
+							onDiffRejected={onDiffRejected}
+						/>
+					</div>
+				))}
+				{currentFileInReview && (
+					<SkeletonLoader isDarkTheme={isDarkTheme} />
+				)}
 			</div>
 		</section>
 	);

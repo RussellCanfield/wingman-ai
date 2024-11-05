@@ -142,6 +142,10 @@ export default function Chat() {
 					questions about your codebase. You can also target specific
 					context by opening a file, or highlighting sections of a
 					file.
+					<br />
+					<br />
+					Chat now features commands! We currently support a code
+					review command: "/review". More will be added in the future.
 				</p>
 			)}
 			<ChatResponseList messages={messages}>

@@ -127,7 +127,7 @@ const ChatInput = ({
 			className="flex-basis-50 py-3 flex flex-col items-stretch"
 			ref={ref}
 		>
-			<div className="relative flex flex-row items-center border-2 border-gray-500 rounded-md p-2 pb-0 mb-2">
+			<div className="relative flex flex-row items-center border-2 border-gray-500 rounded-md mb-2">
 				{isCommandMode && (
 					<CommandDropdown
 						commands={AVAILABLE_COMMANDS}
@@ -161,15 +161,20 @@ const ChatInput = ({
 							tabIndex={0}
 							rows={1}
 							autoFocus
-							className="flex-grow mt-1 resize-none text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] overflow-y-auto min-h-[36px] p-2"
+							className="flex-grow resize-none text-[var(--vscode-input-foreground)] focus:outline-none bg-transparent border-b-2 border-stone-600 overflow-y-auto min-h-[36px] p-2"
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleKeyDown}
 						/>
 						<div className="flex w-full justify-between items-center">
-							<span className="text-[var(--vscode-editor-foreground)] font-medium">
-								{commandMatch
-									? `Command: /${selectedCommand}`
-									: ""}
+							<span className="text-[var(--vscode-editor-foreground)] font-medium flex flex-row gap-1 p-2">
+								{commandMatch && (
+									<>
+										<caption className="italic">
+											Command:{" "}
+										</caption>
+										<span>{`/${selectedCommand}`}</span>
+									</>
+								)}
 							</span>
 							<span className="p-4 pr-2">
 								{!loading && (

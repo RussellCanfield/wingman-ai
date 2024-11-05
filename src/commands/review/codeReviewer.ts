@@ -1,14 +1,13 @@
 import * as vscode from "vscode";
 import { DiffGenerator } from "../../utils/diffGenerator";
 import { AIProvider } from "../../service/base";
-import { getGitignorePatterns } from "../../server/files/utils";
-import { glob } from "tinyglobby";
 import {
-	CodeReview,
+	CodeCommentAction,
 	CodeReviewComment,
 	FileDetails,
 	FileReviewDetails,
 } from "@shared/types/Message";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 const REVIEW_SEPARATOR = "====WINGMAN====";
 
@@ -24,8 +23,8 @@ export class CodeReviewer {
 
 	async generateDiffsAndSummary(instructions: string) {
 		try {
-			const diffs = await this.diffGenerator.generateDiffs();
-			const fileDiffMap = await this.buildFileDiffMap(diffs);
+			const fileDiffMap =
+				await this.diffGenerator.generateDiffWithLineNumbersAndMap();
 
 			if (fileDiffMap) {
 				// Use the cheaper model for summaries
@@ -53,7 +52,7 @@ Generate the following sections:
 
 Example output:
 
-## Summary
+### Summary
 <text>
 
 ### File Summaries
@@ -64,7 +63,7 @@ Example output:
 
 -------
 
-Return your response using a GitHub markdown format.
+Return your response using a GitHub markdown format using plaintext.
 
 -------
 
@@ -80,7 +79,7 @@ ${Object.entries(fileDiffMap)
 ${file}
 
 Changes:
-${diff}
+${diff.diff}
 `;
 	})
 	.join("\n\n-------\n\n")})}`);
@@ -97,16 +96,21 @@ ${diff}
 	}
 
 	async reviewFile(fileDetails: FileDetails): Promise<FileReviewDetails> {
-		const reviewResponse = await this._aiProvider.invoke(
-			`You are a senior software engineer reviewing code changes.
-Your task is to review the code provided based on the criteria below and determine if there are actionable suggestions.
+		const model = this._aiProvider.getModel();
+		const reviewResponse = await model.invoke([
+			new SystemMessage({
+				content: [
+					{
+						type: "text",
+						cache_control: { type: "ephemeral" },
+						text: `You are a senior software engineer reviewing code changes.
+Your task is to review the diff of a file based on the criteria below and determine if there are actionable suggestions.
 Take a deep breathe and focus on the code provided, be thorough.
 Provide actionable, distinct, and non-repetitive suggestions for significant improvements.
-You will receive code blocks in the format of git diffs, it will be incomplete so ignore any "incomplete" code you may see.
 
 IMPORTANT:
-You must NEVER suggest changes that span across different code blocks.
-Your suggestions should be strictly confined within a single code block.
+You must NEVER suggest changes that span across different diff hunks.
+Your suggestions should be strictly confined within a single hunk.
 
 Review Criteria:
 
@@ -124,35 +128,37 @@ Review Criteria:
 Review Guidelines:
 
 1. Focus on Impact and Context:
-   - Prioritize feedback on issues with the most significant impact on functionality, maintainability, and overall quality.
-   - Consider the context and purpose of the code when providing feedback.
-   - Be more relaxed with minor issues and concentrate on critical problems.
+  - Prioritize feedback on issues with the most significant impact on functionality, maintainability, and overall quality.
+  - Consider the context and purpose of the code when providing feedback.
+  - Be more relaxed with minor issues and concentrate on critical problems.
 
 2. Constructive and Balanced Feedback:
-   - Provide constructive feedback that identifies issues and suggests improvements or alternatives.
-   - Balance pointing out problems with acknowledging good practices or clever solutions.
-   - Offer actionable suggestions based on the criteria, avoiding repetitive phrases like "Consider" or "You should".
+  - Provide constructive feedback that identifies issues and suggests improvements or alternatives.
+  - Balance pointing out problems with acknowledging good practices or clever solutions.
+  - Offer actionable suggestions based on the criteria, avoiding repetitive phrases like "Consider" or "You should".
 
 3. Code Organization and Readability:
-   - Suggest code extraction only if it significantly enhances readability or reusability.
-   - Rollup multiple related suggestions into a single comment.
+  - Suggest code extraction only if it significantly enhances readability or reusability.
+  - Only one comment is allowed per line, rollup comments for the same line into a single comment.
 
 4. Review Scope and Boundaries:
-   - Infer line numbers based on the provided code blocks, with each block representing a single commit.
-   - Only offer suggestions within the specified line ranges of a single code block.
-   - Never span suggestions across different blocks or ranges.
-   - Focus on critical issues, ignoring minor details, formatting differences, and incomplete code at range boundaries.
-   - Ignore missing imports and don't make assumptions about undefined variables or unused code.
+  - The line numbers are prefixed on each line.
+  - Only consider lines that were modified, such as ones beginning with "+" or "-".
+  - Only offer suggestions within the specified line ranges of a single hunk.
+  - Never span suggestions across different blocks or ranges.
+  - Focus on critical issues, ignoring minor details, formatting differences, and incomplete code at range boundaries.
+  - Ignore missing imports and don't make assumptions about undefined variables or unused code.
+  - Consider suggestions holistically, understand their impact and intent.
 
 5. Formatting and Presentation:
-   - Use GitHub suggestions to suggest code changes within the correct line ranges of a single code block.
-   - For substantial changes, use complete markdown code blocks.
-   - Ensure line numbers are accurate and align with the provided code blocks.
-   - Use {RESPONSE_SEPARATOR} only as a separator between suggestions.
-   - Do not create multi-line comments that span across different specified line ranges.
-   - Do not use markdown directly in the "body" field; use the special delimiter as shown.
-   - Here is an example of how to suggest code changes instead of using markdown directly in the "body" field:
-      ==__CODE_SUGGESTION__==function test() { return true; }==__CODE_SUGGESTION__==
+  - Ensure line numbers are accurate and align with the provided diff hunks.
+  - Use {RESPONSE_SEPARATOR} only as a separator between suggestions.
+  - Do not create multi-line comments that span across different specified line ranges.
+  - Do not use markdown directly in the "body" field; use the special delimiter as shown.
+  - Omit the "action" field if no code change (suggestion) was provided.
+  - Provide the "action" field that matches with your intent for a code change: "replace" or "remove".
+  - Here is an example of how to suggest code changes instead of using markdown directly in the "body" field:
+    ==__CODE_SUGGESTION__==function test() { return true; }==__CODE_SUGGESTION__==
 
 ------
 
@@ -165,13 +171,14 @@ Review Guidelines:
 - "start_line": Starting line of the comment
 - "end_line": Ending line for multi-line comments (omit for single-line comments)
 - "body": The suggested comment (can include text or markdown)
+- "action": If code suggestions are provided, also provide the desired action: "replace" or "remove"
 
 **Critical Rules:**
 - **The "start_line" must always precede the "end_line" in multi-line suggestions.**
 - **Ensure that "start_line" and "end_line" are within the same code block.**
 - Never suggest changes that span across different code blocks.
 
-Consider the user giving code blocks with the following line numbers: 10-14, 20-29, 71-74
+Consider you had the following hunks: 10-14, 20-29, 71-74
 
 Example of INVALID response (DO NOT DO THIS):
 {RESPONSE_SEPARATOR}
@@ -192,15 +199,24 @@ body: This suggestion is also valid because it's entirely within the 20-29 commi
 start_line: 71
 end_line: 71
 body: Example of how to give code examples ==__CODE_SUGGESTION__==function test() { return true; }==__CODE_SUGGESTION__==
-
---------------
-
+action: "replace"`.replaceAll("{RESPONSE_SEPARATOR}", REVIEW_SEPARATOR),
+					},
+				],
+			}),
+			new HumanMessage({
+				content: [
+					{
+						type: "text",
+						text: `Review the following file and diff:
 File:
 ${fileDetails.file}
 
 Diff:
-${fileDetails.diff}`.replaceAll("{RESPONSE_SEPARATOR}", REVIEW_SEPARATOR)
-		);
+${fileDetails.diff}`,
+					},
+				],
+			}),
+		]);
 
 		const comments = this.parseSuggestions(
 			fileDetails.file,
@@ -234,40 +250,21 @@ ${fileDetails.diff}`.replaceAll("{RESPONSE_SEPARATOR}", REVIEW_SEPARATOR)
 
 			const startLineMatch = block.match(/start_line:\s*(\d+|null)/);
 			const endLineMatch = block.match(/end_line:\s*(\d+)/);
-			const bodyMatch = block.match(/body:\s*([\s\S]*)/);
+			const bodyMatch = block.match(/body:\s*([\s\S]*?)(?=\naction:|$)/);
+			const actionMatch = block.match(/action:\s*([^\n]+)/);
 
 			if (bodyMatch) {
 				let body = bodyMatch[1].trim();
+				let code;
 
 				const codeBlockMatch = body.match(
 					/==__CODE_SUGGESTION__==([\s\S]*?)==__CODE_SUGGESTION__==/
 				);
 				if (codeBlockMatch) {
-					const codeBlock = codeBlockMatch[1].trim();
-					const suggestionMarkdown = `\`\`\`suggestion\n${codeBlock}\n\`\`\``;
-
-					const bodyWithCode = body.replace(
-						codeBlockMatch[0],
-						suggestionMarkdown
-					);
-
-					try {
-						JSON.parse(JSON.stringify({ test: bodyWithCode }));
-						body = body.replace(
-							codeBlockMatch[0],
-							suggestionMarkdown
-						);
-					} catch (error) {
-						console.error(
-							"Error parsing suggestion",
-							file,
-							bodyWithCode,
-							error
-						);
-
-						// Attempt to strip the code if there are formatting issues.
-						body = body.replace(codeBlockMatch[0], "");
-					}
+					code = `\`\`\`${getLanguageFromFile(
+						file
+					)}\n${codeBlockMatch[1].trim()}\n\`\`\``;
+					body = body.replace(codeBlockMatch[0], "").trim();
 				}
 
 				let endLine;
@@ -286,73 +283,129 @@ ${fileDetails.diff}`.replaceAll("{RESPONSE_SEPARATOR}", REVIEW_SEPARATOR)
 					}
 				}
 
+				let action: CodeCommentAction;
+				if (actionMatch) {
+					action = actionMatch[1].trim() as CodeCommentAction;
+				}
+
 				comments.push({
 					body,
-					comment: {
-						startLine: startLine ?? 0,
-						endLine,
-					},
+					code: code || "",
+					startLine: startLine ?? 0,
+					endLine,
+					action,
 				});
 			}
 		}
 
 		return comments;
 	}
-
-	private async buildFileDiffMap(diffs: string) {
-		if (!diffs) {
-			vscode.window.showInformationMessage(
-				"No changes detected to review."
-			);
-			return;
-		}
-
-		// Parse the git diff output into a more manageable format
-		const diffLines = diffs.split("\n");
-		let currentFile = "";
-		let changes: { [key: string]: string[] } = {};
-
-		// Get gitignore patterns once, outside the loop
-		const excludePatterns = await getGitignorePatterns(this._workspace);
-
-		for (const line of diffLines) {
-			if (line.startsWith("diff --git")) {
-				// Extract the file path from diff --git a/path/to/file b/path/to/file
-				currentFile = line.split(" ")[2].substring(2);
-
-				// Check if file should be excluded
-				const matchedFiles = await glob(currentFile, {
-					onlyFiles: true,
-					ignore: excludePatterns,
-					cwd: this._workspace,
-				});
-
-				// Only process the file if it's not in the ignore list
-				if (matchedFiles.length > 0) {
-					changes[currentFile] = [];
-				}
-			} else if (
-				currentFile &&
-				changes[currentFile] && // Only process if file wasn't excluded
-				(line.startsWith("+") || line.startsWith("-"))
-			) {
-				changes[currentFile].push(line);
-			}
-		}
-
-		const fileDiffMap: CodeReview["fileDiffMap"] = {};
-		for (const [file, fileChanges] of Object.entries(changes)) {
-			if (fileChanges.length > 0) {
-				const diffContent = await this.diffGenerator.showDiffForFile(
-					file
-				);
-				fileDiffMap[file] = {
-					file: file,
-					diff: diffContent,
-				};
-			}
-		}
-
-		return fileDiffMap;
-	}
 }
+
+const getLanguageFromFile = (filePath: string): string => {
+	const extension = filePath.split(".").pop()?.toLowerCase() || "";
+
+	const languageMap: Record<string, string> = {
+		// JavaScript/TypeScript family
+		ts: "typescript",
+		tsx: "tsx",
+		cts: "typescript",
+		mts: "typescript",
+		js: "javascript",
+		jsx: "jsx",
+		cjs: "javascript",
+		mjs: "javascript",
+		"d.ts": "typescript",
+
+		// Web technologies
+		html: "html",
+		htm: "html",
+		css: "css",
+		scss: "scss",
+		sass: "sass",
+		less: "less",
+		vue: "vue",
+		svelte: "svelte",
+
+		// Backend languages
+		py: "python",
+		rb: "ruby",
+		php: "php",
+		java: "java",
+		cs: "csharp",
+		go: "go",
+		rs: "rust",
+		swift: "swift",
+		kt: "kotlin",
+		kts: "kotlin",
+		scala: "scala",
+		clj: "clojure",
+		coffee: "coffeescript",
+		elm: "elm",
+		erl: "erlang",
+		fs: "fsharp",
+		fsx: "fsharp",
+		gradle: "gradle",
+		groovy: "groovy",
+		hs: "haskell",
+		lua: "lua",
+		pl: "perl",
+		r: "r",
+
+		// C/C++ family
+		cpp: "cpp",
+		cc: "cpp",
+		cxx: "cpp",
+		c: "c",
+		h: "c",
+		hpp: "cpp",
+		hxx: "cpp",
+
+		// Data/Config formats
+		json: "json",
+		jsonc: "jsonc",
+		yaml: "yaml",
+		yml: "yaml",
+		toml: "toml",
+		xml: "xml",
+		csv: "csv",
+
+		// Shell/Scripts
+		sh: "shellscript",
+		bash: "shellscript",
+		zsh: "shellscript",
+		fish: "shellscript",
+		ps1: "powershell",
+		psm1: "powershell",
+		bat: "bat",
+		cmd: "bat",
+
+		// Documentation
+		md: "markdown",
+		mdx: "mdx",
+		tex: "latex",
+		rst: "restructuredtext",
+		asciidoc: "asciidoc",
+		adoc: "asciidoc",
+
+		// Database
+		sql: "sql",
+		mysql: "sql",
+		pgsql: "sql",
+		plsql: "plsql",
+
+		// Other
+		dockerfile: "dockerfile",
+		graphql: "graphql",
+		prisma: "prisma",
+		proto: "protobuf",
+	};
+
+	// Handle files without extensions (like Dockerfile)
+	const fileName = filePath.split("/").pop()?.toLowerCase() || "";
+	if (fileName === "dockerfile") return "dockerfile";
+	if (fileName === "makefile") return "makefile";
+	if (fileName === "jenkinsfile") return "groovy";
+
+	return languageMap[extension] || "plaintext";
+};

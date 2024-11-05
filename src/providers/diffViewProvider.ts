@@ -9,11 +9,14 @@ import {
 	AppMessage,
 	CodeReview,
 	CodeReviewCommand,
+	CodeReviewComment,
 	FileDetails,
 	FileMetadata,
+	FileReviewDetails,
 } from "@shared/types/Message";
 import { AIProvider } from "../service/base";
 import { CodeReviewer } from "../commands/review/codeReviewer";
+import path from "node:path";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
@@ -37,6 +40,7 @@ export class DiffViewProvider {
 			vscode.ViewColumn.One,
 			{
 				enableScripts: true,
+				retainContextWhenHidden: true,
 			}
 		);
 
@@ -77,6 +81,15 @@ export class DiffViewProvider {
 							value: fileReview,
 						});
 						break;
+					case "accept-file-diff":
+						const acceptedDiff = value as {
+							comment: CodeReviewComment;
+							fileDiff: FileReviewDetails;
+						};
+						await this.mergeCodeIntoFile(
+							acceptedDiff.fileDiff,
+							acceptedDiff.comment
+						);
 				}
 			}
 		);
@@ -148,6 +161,49 @@ export class DiffViewProvider {
 				}
 			}
 		);
+	}
+
+	async mergeCodeIntoFile(
+		fileDiff: FileReviewDetails,
+		comment: CodeReviewComment
+	) {
+		const fileUri = vscode.Uri.file(
+			path.join(this._workspace, fileDiff.file)
+		);
+
+		try {
+			const fileContent = await vscode.workspace.fs.readFile(fileUri);
+			const fileText = Buffer.from(fileContent).toString("utf-8");
+			const lines = fileText.split("\n");
+
+			if (comment.action === "replace") {
+				if (comment.startLine && comment.endLine && comment.code) {
+					lines.splice(
+						comment.startLine - 1,
+						comment.endLine - comment.startLine + 1,
+						extractCodeBlock(comment.code)
+					);
+				}
+			} else if (comment.action === "remove") {
+				if (comment.endLine) {
+					lines.splice(
+						comment.startLine - 1,
+						comment.endLine - comment.startLine + 1
+					);
+				}
+			}
+
+			const updatedContent = lines.join("\n");
+			await vscode.workspace.fs.writeFile(
+				fileUri,
+				Buffer.from(updatedContent)
+			);
+		} catch (error) {
+			vscode.window.showErrorMessage(
+				`Failed to merge changes into file: ${fileDiff.file}`
+			);
+			console.error(error);
+		}
 	}
 
 	async reviewFile(fileDetails: FileDetails) {

@@ -10,7 +10,7 @@ import {
 import { FileMetadata } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
-import { ComposerMessage, ComposerRequest } from "@shared/types/Composer";
+import { ComposerMessage } from "@shared/types/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
 import { SkeletonLoader } from "../../SkeletonLoader";
@@ -234,8 +234,8 @@ const ChatEntry = ({
 				/>
 			)}
 			{loading && (
-				<div>
-					<SkeletonLoader />
+				<div className="mt-4">
+					<SkeletonLoader isDarkTheme={!isLightTheme} />
 				</div>
 			)}
 			{plan?.steps.length > 0 && (

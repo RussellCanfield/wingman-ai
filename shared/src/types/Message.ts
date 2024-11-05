@@ -16,12 +16,14 @@ export interface FileDetails {
 	file: string;
 }
 
+export type CodeCommentAction = undefined | "remove" | "replace";
+
 export interface CodeReviewComment {
-	comment: {
-		startLine: number;
-		endLine?: number;
-	};
+	startLine: number;
+	endLine?: number;
+	action?: CodeCommentAction;
 	body: string;
+	code?: string;
 	accepted?: boolean;
 	rejected?: boolean;
 }

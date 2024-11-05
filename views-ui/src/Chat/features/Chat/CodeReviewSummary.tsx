@@ -25,7 +25,7 @@ export default function CodeReviewSummary({ message }: CodeReviewSummaryProps) {
 	};
 
 	return (
-		<li className="border-b border-gray-300 border-opacity-50 pb-4 text-base message">
+		<li className="border-b border-stone-500 border-opacity-50 pb-4 text-base message">
 			<span className="flex items-center">
 				<h3 className="text-lg">Wingman</h3>
 			</span>
@@ -59,15 +59,18 @@ export default function CodeReviewSummary({ message }: CodeReviewSummaryProps) {
 			>
 				{message.review.summary}
 			</Markdown>
-			<div className="flex items-center justify-center">
-				<button
-					className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-					type="button"
-					onClick={reviewFiles}
-				>
-					Review File-By-File
-				</button>
-			</div>
+			{message.review.fileDiffMap &&
+				Object.keys(message.review.fileDiffMap).length > 0 && (
+					<div className="flex items-center justify-center">
+						<button
+							className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+							type="button"
+							onClick={reviewFiles}
+						>
+							Review File-By-File
+						</button>
+					</div>
+				)}
 		</li>
 	);
 }
