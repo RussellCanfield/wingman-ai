@@ -19,11 +19,12 @@ export const FileDropdown: React.FC<FileDropdownProps> = ({
 	const dropdownRef = useRef<HTMLDivElement>(null);
 
 	const dropdownClasses = isLightTheme
-		? "bg-white border-slate-300"
-		: "bg-slate-700 border-slate-600";
+		? "bg-white border-stone-300"
+		: "bg-stone-700 border-stone-600";
 	const dropdownItemClasses = isLightTheme
-		? "hover:bg-slate-100"
-		: "hover:bg-slate-600";
+		? "hover:bg-stone-100"
+		: "hover:bg-stone-600";
+
 	const captionClasses = isLightTheme ? "text-stone-500" : "text-stone-400";
 
 	const truncatePath = (path: string, maxLength: number = 50) => {
@@ -38,14 +39,14 @@ export const FileDropdown: React.FC<FileDropdownProps> = ({
 	return (
 		<div
 			ref={dropdownRef}
-			className={`absolute bottom-[3rem] mb-1 left-0 w-full z-20 ${dropdownClasses} border rounded overflow-y-auto max-h-[512px]`}
+			className={`absolute bottom-[8rem] mb-1 left-0 w-full z-20 ${dropdownClasses} border rounded overflow-y-auto max-h-[512px]`}
 		>
 			{dropdownItems.map((item, index) => (
 				<div
 					key={index}
-					className={`p-2 cursor-pointer hover:text-white ${dropdownItemClasses} ${
+					className={`p-2 cursor-pointer ${dropdownItemClasses} ${
 						index === focusedDropdownIndex
-							? "bg-slate-600 text-white"
+							? "bg-[var(--vscode-list-hoverBackground)] hover:bg-[var(--vscode-list-hoverBackground)] text-white"
 							: ""
 					}`}
 					onClick={() => onSelect(item)}

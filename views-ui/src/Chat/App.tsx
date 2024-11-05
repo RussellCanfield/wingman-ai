@@ -25,7 +25,7 @@ const App = () => {
 	return (
 		<main className="h-full flex flex-col overflow-hidden text-base">
 			<Toolbar />
-			<div className="border-b border-gray-200 mb-2"></div>
+			<div className="border-b border-stone-500 mb-2"></div>
 			{activeComponent}
 		</main>
 	);

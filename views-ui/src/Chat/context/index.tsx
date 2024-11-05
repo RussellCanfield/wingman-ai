@@ -1,4 +1,11 @@
-import { AppMessage, ChatMessage } from "@shared/types/Message";
+import {
+	AppMessage,
+	BaseMessage,
+	Message,
+	ChatMessages,
+	CodeReviewMessage,
+	ChatMessage,
+} from "@shared/types/Message";
 import React, {
 	createContext,
 	PropsWithChildren,
@@ -13,7 +20,7 @@ import { AppState } from "@shared/types/Settings";
 export type View = "chat" | "composer" | "index";
 
 interface AppContextType {
-	messages: ChatMessage[];
+	messages: ChatMessages;
 	pushMessage: (message: ChatMessage) => void;
 	clearMessages: () => void;
 	composerMessages: ComposerMessage[];
@@ -39,7 +46,7 @@ export const useAppContext = () => {
 };
 
 export const AppProvider = ({ children }: PropsWithChildren) => {
-	const [messages, setMessages] = useState<ChatMessage[]>([]);
+	const [messages, setMessages] = useState<ChatMessages>([]);
 	const [composerMessages, setComposerMessages] = useState<ComposerMessage[]>(
 		[]
 	);
@@ -105,8 +112,14 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 		});
 	}, [appState, messages, indexFilter, exclusionFilter]);
 
-	const addMessage = (chatMessage: ChatMessage) => {
-		setMessages((msg) => msg.concat(chatMessage));
+	const addMessage = <T extends ChatMessage | CodeReviewMessage>(
+		message: T
+	) => {
+		if ("message" in message) {
+			setMessages((prev) => [...prev, message as ChatMessage]);
+		} else {
+			setMessages((prev) => [...prev, message as CodeReviewMessage]);
+		}
 	};
 
 	const clearMessages = () => {

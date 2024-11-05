@@ -5,7 +5,10 @@ export const SkeletonLoader = ({ isDarkTheme }: { isDarkTheme: boolean }) => {
 				isDarkTheme ? "bg-code-dark" : "bg-code-light"
 			} rounded-lg overflow-hidden shadow-lg animate-pulse w-full`}
 		>
-			<div className="h-10 bg-stone-400 rounded w-full"></div>
+			<div className="p-4">
+				<div className="h-4 bg-stone-500 rounded mb-4 w-1/4"></div>
+				<div className="h-12 bg-stone-500 rounded"></div>
+			</div>
 		</div>
 	);
 };

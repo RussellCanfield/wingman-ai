@@ -3,7 +3,7 @@ import { FileMetadata } from "./Message";
 export type DiffViewCommand = {
 	file: string;
 	diff: string;
-	theme?: Number;
+	isDarkTheme?: boolean;
 	original?: string;
 };
 

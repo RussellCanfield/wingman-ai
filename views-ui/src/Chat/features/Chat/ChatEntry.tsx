@@ -7,7 +7,7 @@ import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { ChatMessage } from "@shared/types/Message";
+import { Message } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
 import { useAppContext } from "../../context";
 import React from "react";
@@ -123,7 +123,7 @@ const ChatEntry = ({
 	message,
 	loading,
 	context,
-}: PropsWithChildren<ChatMessage>) => {
+}: PropsWithChildren<Omit<Message, "type">>) => {
 	const { isLightTheme } = useAppContext();
 
 	const getContextDisplay = (): string => {
@@ -167,7 +167,7 @@ const ChatEntry = ({
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
 	return (
-		<li className="border-b border-gray-300 border-opacity-50 pb-4 text-base message">
+		<li className="border-b border-stone-500 border-opacity-50 pb-4 text-base message">
 			<span className="flex items-center">
 				<h3 className="text-lg">
 					{from === "user" ? "Me" : "Wingman"}
@@ -186,7 +186,7 @@ const ChatEntry = ({
 			)}
 			{loading && message == "" ? (
 				<div>
-					<SkeletonLoader />
+					<SkeletonLoader isDarkTheme={!isLightTheme} />
 				</div>
 			) : null}
 			<Markdown

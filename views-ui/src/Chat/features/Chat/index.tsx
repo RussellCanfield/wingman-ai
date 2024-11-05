@@ -1,4 +1,9 @@
-import { AppMessage, ChatMessage, CodeContext } from "@shared/types/Message";
+import {
+	AppMessage,
+	Message,
+	CodeContext,
+	CodeReviewMessage,
+} from "@shared/types/Message";
 import { useEffect, useState } from "react";
 import { vscode } from "../../utilities/vscode";
 import { ChatResponseList } from "./ChatList";
@@ -12,9 +17,7 @@ let currentContext: CodeContext | undefined;
 export default function Chat() {
 	const { messages, pushMessage } = useAppContext();
 	const [loading, setLoading] = useState<boolean>(false);
-	const [activeMessage, setActiveMessage] = useState<
-		ChatMessage | undefined
-	>();
+	const [activeMessage, setActiveMessage] = useState<Message | undefined>();
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -42,11 +45,24 @@ export default function Chat() {
 						from: "assistant",
 						...activeMessage,
 						message: currentMessage,
-					} satisfies ChatMessage;
+						type: "chat",
+					} satisfies Message;
 				});
 				break;
 			case "done":
 				commitMessageToHistory();
+				break;
+			case "code-review-failed":
+				currentContext = undefined;
+				currentMessage =
+					"Sorry I have failed to generate a code review, please ensure Git is available locally";
+				commitMessageToHistory();
+				break;
+			case "code-review-result":
+				pushMessage({
+					...(value as CodeReviewMessage),
+				});
+				clearMessage();
 				break;
 			case "context":
 				currentContext = value as CodeContext;
@@ -57,7 +73,8 @@ export default function Chat() {
 						...activeMessage,
 						message: currentMessage,
 						context: currentContext,
-					} satisfies ChatMessage;
+						type: "chat",
+					} satisfies Message;
 				});
 				break;
 		}
@@ -71,7 +88,8 @@ export default function Chat() {
 			message: tempMessage,
 			loading: false,
 			context: tempContext,
-		});
+			type: "chat",
+		} satisfies Message);
 
 		clearMessage();
 	};
@@ -91,24 +109,26 @@ export default function Chat() {
 			context: undefined,
 			message: "",
 			loading: false,
+			type: "chat",
 		}));
 
 		currentMessage = "";
 		currentContext = undefined;
 	};
 
-	const handleChatSubmitted = (input: string) => {
+	const handleChatSubmitted = (input: string, command?: string) => {
 		currentMessage = "";
 
 		vscode.postMessage({
-			command: "chat",
+			command: command || "chat",
 			value: input,
 		});
 
 		pushMessage({
 			from: "user",
-			message: input,
+			message: !input ? command || "" : input,
 			context: undefined,
+			type: "chat",
 		});
 
 		setLoading(true);
@@ -122,6 +142,10 @@ export default function Chat() {
 					questions about your codebase. You can also target specific
 					context by opening a file, or highlighting sections of a
 					file.
+					<br />
+					<br />
+					Chat now features commands! We currently support a code
+					review command: "/review". More will be added in the future.
 				</p>
 			)}
 			<ChatResponseList messages={messages}>

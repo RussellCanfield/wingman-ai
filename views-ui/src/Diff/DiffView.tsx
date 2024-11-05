@@ -1,15 +1,14 @@
-import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import "./App.css";
-import { memo, PropsWithChildren, useEffect, useState } from "react";
-import { AppMessage, FileMetadata } from "@shared/types/Message";
+import { memo, PropsWithChildren } from "react";
+import { FileMetadata } from "@shared/types/Message";
 import { DiffViewCommand } from "@shared/types/Composer";
 import { FaCheckCircle } from "react-icons/fa";
 import { vscode } from "./utilities/vscode";
+import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	return (
@@ -19,29 +18,12 @@ const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	);
 });
 
-export default function DiffView() {
-	const [diff, setDiff] = useState<DiffViewCommand>();
+export interface DiffProps {
+	diff: DiffViewCommand;
+}
 
-	const isDarkTheme = !diff || diff?.theme !== 1;
-
-	useEffect(() => {
-		window.addEventListener("message", handleResponse);
-
-		return () => {
-			window.removeEventListener("message", handleResponse);
-		};
-	}, []);
-
-	const handleResponse = (event: MessageEvent<AppMessage>) => {
-		const { data } = event;
-		const { command, value } = data;
-
-		switch (command) {
-			case "diff-file":
-				setDiff(value as DiffViewCommand);
-				break;
-		}
-	};
+export default function DiffView({ diff }: DiffProps) {
+	const isDarkTheme = diff.isDarkTheme;
 
 	const highlightSyntax = (str: string) => {
 		return (
@@ -84,10 +66,6 @@ export default function DiffView() {
 		});
 	};
 
-	if (!diff) {
-		return <SkeletonLoader />;
-	}
-
 	return (
 		<div className="fixed inset-0 bg-gray-900 flex flex-col">
 			<div className="bg-gray-800 p-4 flex justify-between items-center z-10">
@@ -106,7 +84,7 @@ export default function DiffView() {
 					oldValue={diff.original}
 					newValue={diff.diff}
 					styles={newStyles}
-					compareMethod={DiffMethod.LINES}
+					compareMethod={DiffMethod.CHARS}
 					splitView={false}
 					useDarkTheme={isDarkTheme}
 					showDiffOnly={false}
@@ -116,21 +94,3 @@ export default function DiffView() {
 		</div>
 	);
 }
-
-const SkeletonLoader = () => {
-	return (
-		<div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg animate-pulse">
-			<div className="bg-gray-800 p-4 flex justify-between items-center">
-				<div className="h-6 bg-gray-700 rounded w-3/4"></div>
-				<div className="h-10 bg-gray-700 rounded w-20"></div>
-			</div>
-			<div className="p-4">
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-				<div className="h-4 bg-gray-700 rounded mb-2"></div>
-			</div>
-		</div>
-	);
-};

@@ -7,7 +7,7 @@ Files will not be re-indexed on save if their contents have not changed.
 :::
 
 :::note
-Wingman will use cheaper models for indexing code files, for **Anthropic** it will use Claude-3-Haiku, and for **OpenAI** it will use gpt-4o-mini
+Wingman will use cheaper models for indexing code files, for **Anthropic** it will use Claude-3.5-Haiku, and for **OpenAI** it will use gpt-4o-mini
 :::
 
 Wingman is the only code assistant that not only embeds files, but creates a comprehensive graph of your entire codebase. Allowing Wingman to leverage file to file relationships.

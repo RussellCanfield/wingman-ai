@@ -231,7 +231,7 @@ const ChatInput = ({
 						onChipRemove={handleChipRemove}
 						isLightTheme={isLightTheme}
 					/>
-					<div className="flex flex-wrap items-center p-2 pb-0 mb-2 border-2 border-gray-500 rounded-md">
+					<div className="flex flex-wrap items-center mb-2 border-2 border-gray-500 rounded-md">
 						<textarea
 							placeholder={
 								chips.length === 0
@@ -247,7 +247,7 @@ const ChatInput = ({
 							tabIndex={0}
 							rows={1}
 							autoFocus
-							className="w-full mt-1 flex-grow resize-none text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] overflow-y-auto min-h-[36px] p-2"
+							className="flex-grow resize-none text-[var(--vscode-input-foreground)] focus:outline-none bg-transparent border-b-2 border-stone-600 overflow-y-auto min-h-[36px] p-2"
 							style={{ minHeight: "36px", outline: "none" }}
 							onKeyDown={handleUserInput}
 						/>

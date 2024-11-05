@@ -5,12 +5,95 @@ import {
 	replaceTextInDocument,
 } from "./utilities";
 import { DiffViewCommand } from "@shared/types/Composer";
-import { AppMessage, FileMetadata } from "@shared/types/Message";
+import {
+	AppMessage,
+	CodeReview,
+	CodeReviewCommand,
+	CodeReviewComment,
+	FileDetails,
+	FileMetadata,
+	FileReviewDetails,
+} from "@shared/types/Message";
+import { AIProvider } from "../service/base";
+import { CodeReviewer } from "../commands/review/codeReviewer";
+import path from "node:path";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
 
-	constructor(private readonly context: vscode.ExtensionContext) {}
+	constructor(
+		private readonly _context: vscode.ExtensionContext,
+		private readonly _aiProvider: AIProvider,
+		private readonly _workspace: string
+	) {}
+
+	async createCodeReviewView(review: CodeReview) {
+		if (this.panels.has(review.summary)) {
+			const existingPanel = this.panels.get(review.summary);
+			existingPanel?.reveal(vscode.ViewColumn.One);
+			return;
+		}
+
+		const currentPanel = vscode.window.createWebviewPanel(
+			"codeReview",
+			`Code Review`,
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+			}
+		);
+
+		this.panels.set(review.summary, currentPanel);
+
+		currentPanel.webview.html = await getWebViewHtml(
+			this._context,
+			currentPanel.webview
+		);
+
+		currentPanel.onDidDispose(() => {
+			this.panels.delete(review.summary);
+		});
+
+		currentPanel.webview.onDidReceiveMessage(
+			async (message: AppMessage) => {
+				if (!message) return;
+
+				const { command, value } = message;
+
+				switch (command) {
+					case "webviewLoaded":
+						currentPanel.webview.postMessage({
+							command: "code-review",
+							value: {
+								isDarkTheme:
+									vscode.window.activeColorTheme.kind !== 1,
+								review: review,
+							} satisfies CodeReviewCommand,
+						});
+						break;
+					case "get-code-review-file":
+						const fileReview = await this.reviewFile(
+							value as FileDetails
+						);
+						currentPanel.webview.postMessage({
+							command: "code-review-file-result",
+							value: fileReview,
+						});
+						break;
+					case "accept-file-diff":
+						const acceptedDiff = value as {
+							comment: CodeReviewComment;
+							fileDiff: FileReviewDetails;
+						};
+						await this.mergeCodeIntoFile(
+							acceptedDiff.fileDiff,
+							acceptedDiff.comment
+						);
+				}
+			}
+		);
+	}
 
 	async createDiffView({ file, diff }: DiffViewCommand) {
 		if (this.panels.has(file)) {
@@ -31,7 +114,7 @@ export class DiffViewProvider {
 		this.panels.set(file, currentPanel);
 
 		currentPanel.webview.html = await getWebViewHtml(
-			this.context,
+			this._context,
 			currentPanel.webview
 		);
 
@@ -50,7 +133,8 @@ export class DiffViewProvider {
 						currentPanel.webview.postMessage({
 							command: "diff-file",
 							value: {
-								theme: vscode.window.activeColorTheme.kind,
+								isDarkTheme:
+									vscode.window.activeColorTheme.kind !== 1,
 								file,
 								diff,
 								original: await vscode.workspace.fs
@@ -68,78 +152,116 @@ export class DiffViewProvider {
 						});
 						break;
 					case "accept-file-changes":
-						const { path: artifactFile, code: markdown } =
-							value as FileMetadata;
-						let code = markdown?.startsWith("```")
-							? extractCodeBlock(markdown)
-							: markdown;
-						const relativeFilePath =
-							vscode.workspace.asRelativePath(artifactFile);
-
-						// Get the workspace folder URI
-						const workspaceFolder =
-							vscode.workspace.workspaceFolders?.[0].uri;
-						if (!workspaceFolder) {
-							throw new Error("No workspace folder found");
-						}
-
-						// Construct the full URI of the file
-						const fileUri = vscode.Uri.joinPath(
-							workspaceFolder,
-							relativeFilePath
+						this.acceptFileChanges(
+							currentPanel,
+							file,
+							value as FileMetadata
 						);
-
-						try {
-							// Check if the file exists
-							await vscode.workspace.fs.stat(fileUri);
-
-							// Check if the document is already open
-							let document = vscode.workspace.textDocuments.find(
-								(doc) =>
-									doc.uri.toString() === fileUri.toString()
-							);
-							if (!document) {
-								// Open the text document if it is not already open
-								document =
-									await vscode.workspace.openTextDocument(
-										fileUri
-									);
-							}
-
-							// Replace text in the document
-							await replaceTextInDocument(document, code!, true);
-						} catch (error) {
-							if (
-								(error as vscode.FileSystemError).code ===
-								"FileNotFound"
-							) {
-								// Create the text document if it does not exist
-								await vscode.workspace.fs.writeFile(
-									fileUri,
-									new Uint8Array()
-								);
-								const document =
-									await vscode.workspace.openTextDocument(
-										fileUri
-									);
-								await replaceTextInDocument(
-									document,
-									code!,
-									true
-								);
-							} else {
-								throw error;
-							}
-						} finally {
-							if (currentPanel) {
-								currentPanel.dispose();
-								this.panels.delete(file);
-							}
-						}
 						break;
 				}
 			}
 		);
+	}
+
+	async mergeCodeIntoFile(
+		fileDiff: FileReviewDetails,
+		comment: CodeReviewComment
+	) {
+		const fileUri = vscode.Uri.file(
+			path.join(this._workspace, fileDiff.file)
+		);
+
+		try {
+			const fileContent = await vscode.workspace.fs.readFile(fileUri);
+			const fileText = Buffer.from(fileContent).toString("utf-8");
+			const lines = fileText.split("\n");
+
+			if (comment.action === "replace") {
+				if (comment.startLine && comment.endLine && comment.code) {
+					lines.splice(
+						comment.startLine - 1,
+						comment.endLine - comment.startLine + 1,
+						extractCodeBlock(comment.code)
+					);
+				}
+			} else if (comment.action === "remove") {
+				if (comment.endLine) {
+					lines.splice(
+						comment.startLine - 1,
+						comment.endLine - comment.startLine + 1
+					);
+				}
+			}
+
+			const updatedContent = lines.join("\n");
+			await vscode.workspace.fs.writeFile(
+				fileUri,
+				Buffer.from(updatedContent)
+			);
+		} catch (error) {
+			vscode.window.showErrorMessage(
+				`Failed to merge changes into file: ${fileDiff.file}`
+			);
+			console.error(error);
+		}
+	}
+
+	async reviewFile(fileDetails: FileDetails) {
+		const reviewer = new CodeReviewer(this._workspace, this._aiProvider);
+		return reviewer.reviewFile(fileDetails);
+	}
+
+	async acceptFileChanges(
+		currentPanel: vscode.WebviewPanel,
+		file: string,
+		{ path: artifactFile, code: markdown }: FileMetadata
+	) {
+		let code = markdown?.startsWith("```")
+			? extractCodeBlock(markdown)
+			: markdown;
+		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+
+		// Get the workspace folder URI
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri;
+		if (!workspaceFolder) {
+			throw new Error("No workspace folder found");
+		}
+
+		// Construct the full URI of the file
+		const fileUri = vscode.Uri.joinPath(workspaceFolder, relativeFilePath);
+
+		try {
+			// Check if the file exists
+			await vscode.workspace.fs.stat(fileUri);
+
+			// Check if the document is already open
+			let document = vscode.workspace.textDocuments.find(
+				(doc) => doc.uri.toString() === fileUri.toString()
+			);
+			if (!document) {
+				// Open the text document if it is not already open
+				document = await vscode.workspace.openTextDocument(fileUri);
+			}
+
+			// Replace text in the document
+			await replaceTextInDocument(document, code!, true);
+		} catch (error) {
+			if ((error as vscode.FileSystemError).code === "FileNotFound") {
+				// Create the text document if it does not exist
+				await vscode.workspace.fs.writeFile(fileUri, new Uint8Array());
+				const document = await vscode.workspace.openTextDocument(
+					fileUri
+				);
+				await replaceTextInDocument(document, code!, true);
+			} else {
+				throw error;
+			}
+		} finally {
+			if (currentPanel) {
+				currentPanel.dispose();
+				this.panels.delete(file);
+			}
+		}
 	}
 
 	dispose() {

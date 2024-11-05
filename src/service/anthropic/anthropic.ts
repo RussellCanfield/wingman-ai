@@ -56,7 +56,7 @@ export class Anthropic implements AIStreamProvider {
 		this.rerankModel = new ChatAnthropic({
 			apiKey: this.settings.apiKey,
 			anthropicApiKey: this.settings.apiKey,
-			model: "claude-3-haiku-20240307",
+			model: "claude-3-5-haiku-20241022",
 			temperature: 0, //Required for tool calling.
 			maxTokens: 4096,
 		});

@@ -6,6 +6,7 @@ import {
 	AppMessage,
 	CodeContext,
 	CodeContextDetails,
+	CodeReviewMessage,
 	FileMetadata,
 } from "@shared/types/Message";
 import { AppState, Settings } from "@shared/types/Settings";
@@ -29,12 +30,16 @@ import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 import {
 	EVENT_CHAT_SENT,
+	EVENT_COMPOSE_STARTED,
+	EVENT_REVIEW_FILE_BY_FILE,
+	EVENT_REVIEW_STARTED,
 	EVENT_VALIDATE_FAILED,
 	EVENT_VALIDATE_SUCCEEDED,
 	telemetry,
 } from "./telemetryProvider";
 import { Workspace } from "../service/workspace";
 import { getGitignorePatterns } from "../server/files/utils";
+import { CodeReviewer } from "../commands/review/codeReviewer";
 
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
@@ -194,6 +199,40 @@ ${result.summary}`,
 					}
 
 					switch (command) {
+						case "review-files":
+							telemetry.sendEvent(EVENT_REVIEW_FILE_BY_FILE);
+							this._diffViewProvider.createCodeReviewView(
+								(value as CodeReviewMessage).review
+							);
+							break;
+						case "review":
+							const codeReviewer = new CodeReviewer(
+								workspaceFolder.fsPath,
+								this._aiProvider
+							);
+
+							const review =
+								await codeReviewer.generateDiffsAndSummary(
+									String(value)
+								);
+
+							telemetry.sendEvent(EVENT_REVIEW_STARTED);
+
+							if (!review) {
+								webviewView.webview.postMessage({
+									command: "code-review-failed",
+								});
+								return;
+							}
+
+							webviewView.webview.postMessage({
+								command: "code-review-result",
+								value: {
+									review,
+									type: "code-review",
+								} satisfies CodeReviewMessage,
+							});
+							break;
 						case "state-update":
 							const appState = value as AppState;
 							await this._workspace.save({
@@ -378,6 +417,7 @@ ${result.summary}`,
 						}
 						case "cancel": {
 							abortController.abort();
+							await this._lspClient.cancelComposer();
 							break;
 						}
 						case "clipboard": {

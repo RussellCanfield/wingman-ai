@@ -20,6 +20,12 @@ export interface Thread {
 	};
 }
 
+let controller = new AbortController();
+
+export function cancelComposer() {
+	controller.abort();
+}
+
 export async function* generateCommand(
 	workspace: string,
 	request: ComposerRequest,
@@ -30,6 +36,8 @@ export async function* generateCommand(
 	config?: RunnableConfig,
 	checkpointer?: BaseCheckpointSaver
 ) {
+	controller = new AbortController();
+
 	const planner = new CodePlanner(
 		model,
 		rerankModel,
@@ -207,6 +215,7 @@ export async function* generateCommand(
 	try {
 		for await (const chunk of await graph.stream(inputs, {
 			streamMode: "updates",
+			signal: controller.signal,
 			...config,
 		})) {
 			for (const [node, values] of Object.entries(chunk)) {
@@ -214,7 +223,15 @@ export async function* generateCommand(
 			}
 		}
 	} catch (e) {
-		if (e instanceof NoFilesChangedError) {
+		if (e instanceof DOMException && e.name === "AbortError") {
+			yield {
+				node: "replan",
+				values: {
+					response: "Operation was cancelled",
+				},
+			};
+			return;
+		} else if (e instanceof NoFilesChangedError) {
 			yield {
 				node: "replan",
 				values: {

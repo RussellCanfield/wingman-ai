@@ -30,7 +30,7 @@ import {
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
 import { MemorySaver } from "@langchain/langgraph";
-import { generateCommand } from "../composer/composer";
+import { cancelComposer, generateCommand } from "../composer/composer";
 import { AIProvider } from "../service/base";
 import {
 	EmbeddingProviders,
@@ -414,6 +414,10 @@ export class LSPServer {
 
 		this.connection?.onRequest("wingman/clearChatHistory", () => {
 			memory = new MemorySaver();
+		});
+
+		this.connection?.onRequest("wingman/cancelComposer", async () => {
+			cancelComposer();
 		});
 
 		this.connection?.onRequest(
