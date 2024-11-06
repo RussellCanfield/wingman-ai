@@ -116,10 +116,6 @@ export default function DiffViewWithComments({
 								<h3 className="text-xl">Wingman</h3>
 								<div className="p-2">
 									<p>{comment.body}</p>
-									<p className="text-yellow-500 italic">
-										The accept and reject feature is still
-										under active development. Coming soon!
-									</p>
 									<div
 										className={`${
 											isDarkTheme
@@ -176,7 +172,7 @@ export default function DiffViewWithComments({
 									</div>
 								</div>
 								<div className="flex justify-start gap-4 mt-2">
-									{false && comment?.action && (
+									{comment?.action && (
 										<button
 											className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
 											type="button"
@@ -190,7 +186,7 @@ export default function DiffViewWithComments({
 											Accept
 										</button>
 									)}
-									{false && comment?.action && (
+									{comment?.action && (
 										<button
 											className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded"
 											type="button"

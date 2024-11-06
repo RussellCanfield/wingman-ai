@@ -1,4 +1,5 @@
 import {
+	AzureAIEmbeddingSettingsType,
 	EmbeddingProviders,
 	EmbeddingProvidersList,
 	OllamaEmbeddingSettingsType,
@@ -14,7 +15,10 @@ export type EmbeddingProviderProps = {
 	embeddingSettings: InitSettings["embeddingSettings"];
 	onProviderChange: (provider: EmbeddingProviders) => void;
 	onEmbeddingSettingsChange: (
-		settings: OllamaEmbeddingSettingsType | OpenAIEmbeddingSettingsType
+		settings:
+			| OllamaEmbeddingSettingsType
+			| OpenAIEmbeddingSettingsType
+			| AzureAIEmbeddingSettingsType
 	) => void;
 };
 
@@ -66,6 +70,10 @@ export const EmbeddingProvider = ({
 					onChange={onEmbeddingSettingsChange}
 				/>
 			)}
+			<p className="mt-4">
+				The embedding provider is responsible for generating embeddings
+				for your code files either on save or on full index builds.
+			</p>
 		</div>
 	);
 };

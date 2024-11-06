@@ -156,7 +156,7 @@ export type Settings = {
 	embeddingSettings: {
 		Ollama?: OllamaEmbeddingSettingsType;
 		OpenAI?: OpenAIEmbeddingSettingsType;
-		AzureAI?: OpenAIEmbeddingSettingsType;
+		AzureAI?: AzureAIEmbeddingSettingsType;
 	};
 	providerSettings: {
 		Ollama?: OllamaSettingsType;

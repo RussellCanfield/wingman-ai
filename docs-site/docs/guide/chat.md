@@ -17,4 +17,4 @@ To get started with commands **type "/" in chat**.
 
 We currently support the following commands:
 
--   review, this will generate a summary of your local changes and allow you to perform file-by-file reviews.
+-   **review**, this will generate a summary of your local changes and allow you to perform file-by-file code reviews. Review mileage may vary based on model provider, for example **Ollama** may not provide the same results as Claude Sonnet 3.5.

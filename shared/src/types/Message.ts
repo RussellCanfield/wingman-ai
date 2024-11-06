@@ -3,12 +3,18 @@ export interface AppMessage {
 	value: unknown;
 }
 
+export type FileModification = {
+	appliedAt: number;
+	offset: number;
+};
+
 export interface FileReviewDetails {
 	file: string;
 	diff?: string;
 	original?: string;
 	current?: string;
 	comments?: CodeReviewComment[];
+	modifications?: FileModification[];
 }
 
 export interface FileDetails {
@@ -20,7 +26,7 @@ export type CodeCommentAction = undefined | "remove" | "replace";
 
 export interface CodeReviewComment {
 	startLine: number;
-	endLine?: number;
+	endLine: number;
 	action?: CodeCommentAction;
 	body: string;
 	code?: string;

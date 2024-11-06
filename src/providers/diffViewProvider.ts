@@ -20,12 +20,15 @@ import path from "node:path";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
+	codeReviewer: CodeReviewer;
 
 	constructor(
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _aiProvider: AIProvider,
 		private readonly _workspace: string
-	) {}
+	) {
+		this.codeReviewer = new CodeReviewer(this._workspace, this._aiProvider);
+	}
 
 	async createCodeReviewView(review: CodeReview) {
 		if (this.panels.has(review.summary)) {
@@ -86,10 +89,15 @@ export class DiffViewProvider {
 							comment: CodeReviewComment;
 							fileDiff: FileReviewDetails;
 						};
-						await this.mergeCodeIntoFile(
+						await this.codeReviewer.mergeCodeIntoFile(
 							acceptedDiff.fileDiff,
 							acceptedDiff.comment
 						);
+
+						currentPanel.webview.postMessage({
+							command: "updated-file",
+							value: acceptedDiff.fileDiff,
+						});
 				}
 			}
 		);
@@ -163,52 +171,8 @@ export class DiffViewProvider {
 		);
 	}
 
-	async mergeCodeIntoFile(
-		fileDiff: FileReviewDetails,
-		comment: CodeReviewComment
-	) {
-		const fileUri = vscode.Uri.file(
-			path.join(this._workspace, fileDiff.file)
-		);
-
-		try {
-			const fileContent = await vscode.workspace.fs.readFile(fileUri);
-			const fileText = Buffer.from(fileContent).toString("utf-8");
-			const lines = fileText.split("\n");
-
-			if (comment.action === "replace") {
-				if (comment.startLine && comment.endLine && comment.code) {
-					lines.splice(
-						comment.startLine - 1,
-						comment.endLine - comment.startLine + 1,
-						extractCodeBlock(comment.code)
-					);
-				}
-			} else if (comment.action === "remove") {
-				if (comment.endLine) {
-					lines.splice(
-						comment.startLine - 1,
-						comment.endLine - comment.startLine + 1
-					);
-				}
-			}
-
-			const updatedContent = lines.join("\n");
-			await vscode.workspace.fs.writeFile(
-				fileUri,
-				Buffer.from(updatedContent)
-			);
-		} catch (error) {
-			vscode.window.showErrorMessage(
-				`Failed to merge changes into file: ${fileDiff.file}`
-			);
-			console.error(error);
-		}
-	}
-
 	async reviewFile(fileDetails: FileDetails) {
-		const reviewer = new CodeReviewer(this._workspace, this._aiProvider);
-		return reviewer.reviewFile(fileDetails);
+		return this.codeReviewer.reviewFile(fileDetails);
 	}
 
 	async acceptFileChanges(

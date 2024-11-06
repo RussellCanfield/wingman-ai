@@ -78,6 +78,16 @@ export default function CodeReviewFileByFile({
 					setCurrentFileInReview(undefined);
 				}
 				break;
+			case "updated-file":
+				const updatedFileDiff = value as FileReviewDetails;
+				if (fileReviews.has(updatedFileDiff.file)) {
+					setFileReviews((reviews) => {
+						const newReviews = new Map(reviews);
+						newReviews.set(updatedFileDiff.file, updatedFileDiff);
+						return newReviews;
+					});
+				}
+				break;
 		}
 	};
 

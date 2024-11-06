@@ -23,8 +23,13 @@ export const AnthropicView = () => {
 		<div className="mt-4">
 			<ul>
 				<li>claude-3-5-sonnet</li>
+				<li>claude-3-5-haiku</li>
+				<li>claude-3-haiku</li>
 				<li>claude-3-opus</li>
 			</ul>
+			<caption className="italic">
+				Prompt caching is enabled for complex operations.
+			</caption>
 		</div>
 	);
 };

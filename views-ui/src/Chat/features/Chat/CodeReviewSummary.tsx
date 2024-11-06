@@ -59,6 +59,26 @@ export default function CodeReviewSummary({ message }: CodeReviewSummaryProps) {
 			>
 				{message.review.summary}
 			</Markdown>
+			<div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-r">
+				<p className="text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2">
+					<svg
+						className="w-8 h-8 inline-block"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+					Note: Code Reviews are still a work in progress. Please
+					carefully review modifications before accepting suggestions.
+					Using Ollama as a provider may not yield code comments.
+				</p>
+			</div>
 			{message.review.fileDiffMap &&
 				Object.keys(message.review.fileDiffMap).length > 0 && (
 					<div className="flex items-center justify-center">

@@ -8,8 +8,19 @@ import {
 	FileReviewDetails,
 } from "@shared/types/Message";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import path from "node:path";
+import { createPatch, applyPatch } from "diff";
+import { Ollama } from "../../service/ollama/ollama";
 
 const REVIEW_SEPARATOR = "====WINGMAN====";
+
+const patterns = {
+	startLine: /^start_line:\s*(\d+|null)$/m,
+	endLine: /^end_line:\s*(\d+)$/m,
+	action: /^action:\s*["']?([\w-]+)["']?\s*$/m,
+	body: /^body:\s*([\s\S]*?)(?=\n(?:action|start_line|end_line|====WINGMAN====)|$)/m,
+	code: /^code:\s*(```[\s\S]*?```)\s*$/m,
+};
 
 export class CodeReviewer {
 	private diffGenerator: DiffGenerator;
@@ -30,13 +41,13 @@ export class CodeReviewer {
 				// Use the cheaper model for summaries
 				const model = this._aiProvider.getRerankModel();
 				const summary =
-					await model.invoke(`You are a senior software engineer tasked with generating a concise summary of a pull request.
+					await model.invoke(`You are a senior software engineer tasked with generating a concise summary of code changes to a project.
 Use the following files and associated git diffs to the summary.
 Do not include introduction text or any other text, just return your review.
 Generate the following sections:
 
 **Summary**
-- Provide an overall summary of the pull request.
+- Provide an overall summary of the code changes.
 - Generate no more than one paragraph detailing the overall business intent of the changes.
 - Use confident, clear language.
 - Do not reference individual files in the summary.
@@ -63,7 +74,7 @@ Example output:
 
 -------
 
-Return your response using a GitHub markdown format using plaintext.
+Return your response using a GitHub markdown format using plaintext, do not include any fencing of the text.
 
 -------
 
@@ -96,7 +107,11 @@ ${diff.diff}
 	}
 
 	async reviewFile(fileDetails: FileDetails): Promise<FileReviewDetails> {
-		const model = this._aiProvider.getModel();
+		let model = this._aiProvider.getModel();
+		if (this._aiProvider instanceof Ollama) {
+			//Avoid JSON mode
+			model = this._aiProvider.getRerankModel();
+		}
 		const reviewResponse = await model.invoke([
 			new SystemMessage({
 				content: [
@@ -150,15 +165,30 @@ Review Guidelines:
   - Ignore missing imports and don't make assumptions about undefined variables or unused code.
   - Consider suggestions holistically, understand their impact and intent.
 
-5. Formatting and Presentation:
+5. Code Generation
+  - Code suggestions can use one of two actions: replace or remove.
+  - Code suggestions need to be generated in a diff format so that a patch can be generated.
+  - For any "replace" action, provide a corresponding code suggestion so that new functional code can be substituted - remember it needs to be generated as a diff.
+  - Use the "code" field to generate a markdown fenced diff for the code changes to apply.
+  - It is critical that the "startLine" and "endLine" represent the current lines in the file to operate on.
+
+6. Formatting and Presentation:
   - Ensure line numbers are accurate and align with the provided diff hunks.
   - Use {RESPONSE_SEPARATOR} only as a separator between suggestions.
   - Do not create multi-line comments that span across different specified line ranges.
-  - Do not use markdown directly in the "body" field; use the special delimiter as shown.
+  - Do not use markdown directly in the "body" field.
   - Omit the "action" field if no code change (suggestion) was provided.
-  - Provide the "action" field that matches with your intent for a code change: "replace" or "remove".
-  - Here is an example of how to suggest code changes instead of using markdown directly in the "body" field:
-    ==__CODE_SUGGESTION__==function test() { return true; }==__CODE_SUGGESTION__==
+  - Provide the "action" field that matches with your intent for a code change: replace or remove.
+  - Here is an example of how to suggest code changes using a diff markdown format in the "code" field:
+    \`\`\`diff\n
+    - function oldFunction() {
+    -   const unused = true;
+    -   return "Hello World";
+    - }
+    + function betterFunction() {
+    +   return "Hello World!";
+    + }
+    \`\`\`
 
 ------
 
@@ -171,7 +201,8 @@ Review Guidelines:
 - "start_line": Starting line of the comment
 - "end_line": Ending line for multi-line comments (omit for single-line comments)
 - "body": The suggested comment (can include text or markdown)
-- "action": If code suggestions are provided, also provide the desired action: "replace" or "remove"
+- "code": A markdown fenced diff, representing the code changes to be made.
+- "action": If code suggestions are provided, also provide the desired action: replace or remove
 
 **Critical Rules:**
 - **The "start_line" must always precede the "end_line" in multi-line suggestions.**
@@ -198,7 +229,16 @@ body: This suggestion is also valid because it's entirely within the 20-29 commi
 {RESPONSE_SEPARATOR}
 start_line: 71
 end_line: 71
-body: Example of how to give code examples ==__CODE_SUGGESTION__==function test() { return true; }==__CODE_SUGGESTION__==
+body: Example of how to give code examples
+code: \`\`\`diff\n
+- function oldFunction() {
+-   const unused = true;
+-   return "Hello World";
+- }
++ function betterFunction() {
++   return "Hello World!";
++ }
+\`\`\`
 action: "replace"`.replaceAll("{RESPONSE_SEPARATOR}", REVIEW_SEPARATOR),
 					},
 				],
@@ -248,24 +288,14 @@ ${fileDetails.diff}`,
 		for (const block of blocks) {
 			if (block.trim() === "") continue; // Skip empty blocks
 
-			const startLineMatch = block.match(/start_line:\s*(\d+|null)/);
-			const endLineMatch = block.match(/end_line:\s*(\d+)/);
-			const bodyMatch = block.match(/body:\s*([\s\S]*?)(?=\naction:|$)/);
-			const actionMatch = block.match(/action:\s*([^\n]+)/);
+			const startLineMatch = block.match(patterns.startLine);
+			const endLineMatch = block.match(patterns.endLine);
+			const actionMatch = block.match(patterns.action);
+			const bodyMatch = block.match(patterns.body);
+			const codeMatch = block.match(patterns.code);
 
 			if (bodyMatch) {
-				let body = bodyMatch[1].trim();
-				let code;
-
-				const codeBlockMatch = body.match(
-					/==__CODE_SUGGESTION__==([\s\S]*?)==__CODE_SUGGESTION__==/
-				);
-				if (codeBlockMatch) {
-					code = `\`\`\`${getLanguageFromFile(
-						file
-					)}\n${codeBlockMatch[1].trim()}\n\`\`\``;
-					body = body.replace(codeBlockMatch[0], "").trim();
-				}
+				const body = bodyMatch[1].trim();
 
 				let endLine;
 				if (endLineMatch) {
@@ -290,9 +320,9 @@ ${fileDetails.diff}`,
 
 				comments.push({
 					body,
-					code: code || "",
+					code: codeMatch ? codeMatch[1] : "",
 					startLine: startLine ?? 0,
-					endLine,
+					endLine: endLine ?? startLine ?? 0,
 					action,
 				});
 			}
@@ -300,7 +330,153 @@ ${fileDetails.diff}`,
 
 		return comments;
 	}
+
+	async mergeCodeIntoFile(
+		fileDiff: FileReviewDetails,
+		comment: CodeReviewComment
+	) {
+		const fileUri = vscode.Uri.file(
+			path.join(this._workspace, fileDiff.file)
+		);
+
+		try {
+			const fileContent = await vscode.workspace.fs.readFile(fileUri);
+			const fileText = Buffer.from(fileContent).toString("utf-8");
+
+			// Calculate adjusted line numbers
+			const adjustedStartLine = getAdjustedLineNumber(
+				comment.startLine,
+				fileDiff.modifications
+			);
+			const adjustedEndLine = getAdjustedLineNumber(
+				comment.endLine,
+				fileDiff.modifications
+			);
+
+			if (comment.action === "replace" && comment.code) {
+				// Parse the diff lines
+				const diffLines = comment.code.split("\n");
+				const oldText = diffLines
+					.filter((line) => line.startsWith("- "))
+					.map((line) => line.slice(2))
+					.join("\n");
+				const newText = diffLines
+					.filter((line) => line.startsWith("+ "))
+					.map((line) => line.slice(2))
+					.join("\n");
+
+				// Create a unified diff patch
+				const patch = createPatch(
+					fileDiff.file,
+					oldText,
+					newText,
+					"",
+					"",
+					{ context: 0 }
+				);
+
+				// Apply the patch to the file content
+				const result = applyPatch(fileText, patch, {
+					fuzzFactor: 0, // Strict matching
+					compareLine: (lineNumber, line, patch, oldLine) => {
+						// Custom line comparison that respects whitespace
+						return line.trim() === oldLine.trim();
+					},
+				});
+
+				if (typeof result === "boolean") {
+					throw new Error("Failed to apply patch");
+				}
+
+				// Calculate line difference for offset tracking
+				const oldLines = oldText.split("\n").length;
+				const newLines = newText.split("\n").length;
+				const linesDiff = newLines - oldLines;
+
+				// Record the offset
+				fileDiff.modifications = fileDiff.modifications || [];
+				fileDiff.modifications.push({
+					appliedAt: comment.startLine,
+					offset: linesDiff,
+				});
+
+				// Write the updated content
+				await vscode.workspace.fs.writeFile(
+					fileUri,
+					Buffer.from(result)
+				);
+			} else if (comment.action === "remove") {
+				// Handle removals using the same patch approach
+				const lines = fileText.split("\n");
+				const removedContent = lines
+					.slice(adjustedStartLine - 1, adjustedEndLine)
+					.join("\n");
+
+				const patch = createPatch(
+					fileDiff.file,
+					removedContent,
+					"", // Empty string for removal
+					"",
+					"",
+					{ context: 0 }
+				);
+
+				const result = applyPatch(fileText, patch);
+				if (typeof result === "boolean") {
+					throw new Error("Failed to apply removal patch");
+				}
+
+				// Record the negative offset
+				fileDiff.modifications = fileDiff.modifications || [];
+				fileDiff.modifications.push({
+					appliedAt: comment.startLine,
+					offset: -(adjustedEndLine - adjustedStartLine + 1),
+				});
+
+				await vscode.workspace.fs.writeFile(
+					fileUri,
+					Buffer.from(result)
+				);
+			}
+
+			// Mark comment as accepted
+			const targetComment = fileDiff.comments?.find(
+				(c) =>
+					c.startLine === comment.startLine &&
+					c.endLine === comment.endLine
+			);
+			if (targetComment) {
+				targetComment.accepted = true;
+			}
+		} catch (error) {
+			vscode.window.showErrorMessage(
+				`Failed to merge changes into file: ${fileDiff.file}`
+			);
+			console.error(error);
+		}
+	}
 }
+
+const getAdjustedLineNumber = (
+	line: number,
+	offsets: FileReviewDetails["modifications"] = []
+): number => {
+	let adjustedLine = line;
+
+	// Sort offsets by line number to ensure consistent results
+	const sortedOffsets = [...offsets].sort(
+		(a, b) => a.appliedAt - b.appliedAt
+	);
+
+	// Apply offsets in order of their position in the file
+	for (const offset of sortedOffsets) {
+		if (offset.appliedAt <= line) {
+			adjustedLine += offset.offset;
+		}
+	}
+
+	return adjustedLine;
+};
 
 const getLanguageFromFile = (filePath: string): string => {
 	const extension = filePath.split(".").pop()?.toLowerCase() || "";
