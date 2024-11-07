@@ -1,7 +1,7 @@
 import { asyncIterator } from "../asyncIterator";
 import { AIStreamProvider } from "../base";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
-import { ClaudeModel } from "./models/claude";
+import { SonnetModel } from "./models/sonnet";
 import { AnthropicRequest } from "./types/ClaudeRequest";
 import {
 	AnthropicResponse,
@@ -14,7 +14,13 @@ import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ILoggingProvider } from "@shared/types/Logger";
-import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
+import {
+	AIMessage,
+	BaseMessage,
+	HumanMessage,
+	SystemMessage,
+} from "@langchain/core/messages";
+import { HaikuModel } from "./models/haiku";
 
 export class Anthropic implements AIStreamProvider {
 	decoder = new TextDecoder();
@@ -84,8 +90,10 @@ export class Anthropic implements AIStreamProvider {
 
 	private getCodeModel(codeModel: string): AnthropicModel | undefined {
 		switch (true) {
-			case codeModel.startsWith("claude"):
-				return new ClaudeModel();
+			case codeModel.includes("sonnet"):
+				return new SonnetModel();
+			case codeModel.includes("haiku"):
+				return new HaikuModel();
 			default:
 				throw new Error(
 					"Invalid code model name, currently code supports Claude 3 model(s)."
@@ -95,8 +103,10 @@ export class Anthropic implements AIStreamProvider {
 
 	private getChatModel(chatModel: string): AnthropicModel | undefined {
 		switch (true) {
-			case chatModel.startsWith("claude"):
-				return new ClaudeModel();
+			case chatModel.includes("sonnet"):
+				return new SonnetModel();
+			case chatModel.includes("haiku"):
+				return new HaikuModel();
 			default:
 				throw new Error(
 					"Invalid chat model name, currently chat supports Claude 3 model(s)."
@@ -228,19 +238,11 @@ export class Anthropic implements AIStreamProvider {
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
-		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
-			"{beginning}",
-			beginning
-		).replace("{ending}", ending);
-
 		const codeRequestOptions: AnthropicRequest = {
 			model: this.settings?.codeModel!,
-			messages: [
-				{
-					role: "user",
-					content: prompt.replace(
-						"{context}",
-						`The following are some of the types available in their file. 
+			system: this.codeModel!.CodeCompletionPrompt.replace(
+				"{context}",
+				`The following are some of the types available in their file. 
 Use these types while considering how to complete the code provided. 
 Do not repeat or use these types in your answer.
 
@@ -251,18 +253,20 @@ ${additionalContext || ""}
 ${
 	recentClipboard
 		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
-  
+
 ${recentClipboard}
 
 -----`
 		: ""
 }`
-					),
+			),
+			messages: [
+				{
+					role: "user",
+					content: `${beginning}[FILL IN THE MIDDLE]${ending}`,
 				},
 			],
 			temperature: 0.2,
-			top_p: 0.3,
-			top_k: 40,
 			max_tokens:
 				this.interactionSettings?.codeMaxTokens === -1
 					? 8192

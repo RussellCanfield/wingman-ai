@@ -3,6 +3,7 @@ export interface AnthropicRequest {
 	messages: AnthropicMessage[];
 	temperature: number;
 	stream?: boolean;
+	system?: string;
 	top_p?: number;
 	top_k?: number;
 	max_tokens: number;

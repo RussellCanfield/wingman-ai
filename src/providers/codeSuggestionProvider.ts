@@ -4,6 +4,7 @@ import {
 	InlineCompletionItem,
 	InlineCompletionItemProvider,
 	Position,
+	Range,
 	TextDocument,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
@@ -27,13 +28,13 @@ import {
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector = supportedLanguages;
-	private cacheManager: CacheManager;
+	//private cacheManager: CacheManager;
 
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvider,
 		private readonly _settings: Settings
 	) {
-		this.cacheManager = new CacheManager();
+		//this.cacheManager = new CacheManager();
 	}
 
 	async provideInlineCompletionItems(
@@ -74,7 +75,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			if (abort.signal.aborted) {
 				return [new InlineCompletionItem("")];
 			}
-			return await this.bouncedRequest(
+			return this.bouncedRequest(
 				document,
 				prefix,
 				abort.signal,
@@ -97,34 +98,36 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	): Promise<InlineCompletionItem[]> {
 		try {
 			eventEmitter._onQueryStart.fire();
-			const cachedResult = this.cacheManager.get(
-				document,
-				prefix,
-				suffix
-			);
+			// const cachedResult = this.cacheManager.get(
+			// 	document,
+			// 	prefix,
+			// 	suffix
+			// );
 
-			if (cachedResult) {
-				if (cachedResult === "") {
-					return [];
-				}
-				loggingProvider.logInfo(
-					"Code complete - Serving from query cache"
-				);
-				telemetry.sendEvent(EVENT_CODE_COMPLETE_CACHE, {
-					language: document.languageId,
-					aiProvider: this._settings.aiProvider,
-					model:
-						this._settings.providerSettings[
-							this._settings.aiProvider
-						]?.codeModel || "Unknown",
-				});
-				return [new InlineCompletionItem(cachedResult)];
-			}
+			// if (cachedResult) {
+			// 	if (cachedResult === "") {
+			// 		return [];
+			// 	}
+			// 	loggingProvider.logInfo(
+			// 		"Code complete - Serving from query cache"
+			// 	);
+			// 	telemetry.sendEvent(EVENT_CODE_COMPLETE_CACHE, {
+			// 		language: document.languageId,
+			// 		aiProvider: this._settings.aiProvider,
+			// 		model:
+			// 			this._settings.providerSettings[
+			// 				this._settings.aiProvider
+			// 			]?.codeModel || "Unknown",
+			// 	});
+			// 	return [new InlineCompletionItem(cachedResult)];
+			// }
 
 			let result: string;
 
 			if ("codeCompleteStream" in this._aiProvider && streaming) {
-				result = await this._aiProvider.codeCompleteStream(
+				result = await (
+					this._aiProvider as AIStreamProvider
+				).codeCompleteStream(
 					prefix,
 					suffix,
 					signal,
@@ -164,7 +167,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				});
 			} catch {}
 
-			this.cacheManager.set(document, prefix, suffix, result);
+			//this.cacheManager.set(document, prefix, suffix, result);
 			return [new InlineCompletionItem(result)];
 		} catch (error) {
 			return [];
