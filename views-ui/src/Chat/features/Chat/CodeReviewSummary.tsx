@@ -6,14 +6,14 @@ import {
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { vscode } from "../../utilities/vscode";
-import { useAppContext } from "../../context";
+import { useSettingsContext } from "../../context/settingsContext";
 
 export interface CodeReviewSummaryProps {
 	message: CodeReviewMessage;
 }
 
 export default function CodeReviewSummary({ message }: CodeReviewSummaryProps) {
-	const { isLightTheme } = useAppContext();
+	const { isLightTheme } = useSettingsContext();
 
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 

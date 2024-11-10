@@ -61,6 +61,26 @@ export class Indexer {
 
 	isSyncing = () => this.syncing;
 
+	deleteFile = async (filePath: string) => {
+		await this.codeGraph.deleteFile(filePath);
+		await this.vectorStore.deleteDocuments([filePath]);
+
+		const relativeImports = Array.from(this.codeGraph.getImportEdges()).map(
+			([key, value]) => [
+				this.convertNodeId(key),
+				Array.from(value).map(this.convertNodeId),
+			]
+		);
+		const relativeExports = Array.from(this.codeGraph.getExportEdges()).map(
+			([key, value]) => [
+				this.convertNodeId(key),
+				Array.from(value).map(this.convertNodeId),
+			]
+		);
+
+		await this.vectorStore.save([], relativeImports as SerializeMap, relativeExports as SerializeMap, this.codeGraph.getSymbolTable());
+	}
+
 	processDocuments = async (documentUris: string[], fullBuild = false) => {
 		if (!this.workspace || !documentUris || documentUris.length === 0) {
 			console.log(
@@ -380,6 +400,14 @@ export class Indexer {
 		return skeletonNode;
 	}
 
+
+	private convertNodeId = (id: string) => {
+		if (id.startsWith("file://")) {
+			return path.relative(this.workspace, fileURLToPath(id));
+		}
+		return id;
+	};
+
 	async embedCodeGraph(
 		skeletonNodes: SkeletonizedCodeGraphNode[]
 	): Promise<IndexerResult> {
@@ -415,23 +443,16 @@ export class Indexer {
 			codeDocs.push(document);
 		}
 
-		const convertNodeId = (id: string) => {
-			if (id.startsWith("file://")) {
-				return path.relative(this.workspace, fileURLToPath(id));
-			}
-			return id;
-		};
-
 		const relativeImports = Array.from(this.codeGraph.getImportEdges()).map(
 			([key, value]) => [
-				convertNodeId(key),
-				Array.from(value).map(convertNodeId),
+				this.convertNodeId(key),
+				Array.from(value).map(this.convertNodeId),
 			]
 		);
 		const relativeExports = Array.from(this.codeGraph.getExportEdges()).map(
 			([key, value]) => [
-				convertNodeId(key),
-				Array.from(value).map(convertNodeId),
+				this.convertNodeId(key),
+				Array.from(value).map(this.convertNodeId),
 			]
 		);
 

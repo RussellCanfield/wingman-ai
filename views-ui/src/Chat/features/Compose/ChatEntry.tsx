@@ -9,11 +9,11 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { FileMetadata } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
-import { useAppContext } from "../../context";
 import { ComposerMessage } from "@shared/types/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
 import { SkeletonLoader } from "../../SkeletonLoader";
+import { useSettingsContext } from "../../context/settingsContext";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -194,7 +194,7 @@ const ChatEntry = ({
 	index,
 	image,
 }: PropsWithChildren<ComposerMessage & { index: number }>) => {
-	const { isLightTheme } = useAppContext();
+	const { isLightTheme } = useSettingsContext();
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
 	const sendTerminalCommand = (payload: string) => {

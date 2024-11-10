@@ -46,7 +46,7 @@ export interface CodeReviewCommand {
 
 export type MessageType = "chat" | "code-review";
 
-export type ChatMessages = Message[] | CodeReviewMessage[];
+export type ChatMessages = Array<Message | CodeReviewMessage>;
 export type ChatMessage = Message | CodeReviewMessage;
 
 export interface CodeReviewMessage extends BaseMessage {

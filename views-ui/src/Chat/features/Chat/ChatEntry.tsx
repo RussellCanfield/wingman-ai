@@ -9,10 +9,10 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Message } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
-import { useAppContext } from "../../context";
 import React from "react";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import "./ChatEntry.css";
+import { useSettingsContext } from "../../context/settingsContext";
 
 type MarkDownObject = {
 	props: {
@@ -28,7 +28,7 @@ type MarkDownEntry = {
 
 const CodeContainer = memo((props: PropsWithChildren) => {
 	const [toolboxVisible, setToolboxVisible] = useState(false);
-	const { isLightTheme } = useAppContext();
+	const { isLightTheme } = useSettingsContext();
 
 	const getMarkdownFromChildren = () => {
 		const markDown = props.children as MarkDownObject;
@@ -124,7 +124,7 @@ const ChatEntry = ({
 	loading,
 	context,
 }: PropsWithChildren<Omit<Message, "type">>) => {
-	const { isLightTheme } = useAppContext();
+	const { isLightTheme } = useSettingsContext();
 
 	const getContextDisplay = (): string => {
 		if (!context) {

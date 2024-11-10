@@ -25,8 +25,6 @@ export const FileDropdown: React.FC<FileDropdownProps> = ({
 		? "hover:bg-stone-100"
 		: "hover:bg-stone-600";
 
-	const captionClasses = isLightTheme ? "text-stone-500" : "text-stone-400";
-
 	const truncatePath = (path: string, maxLength: number = 50) => {
 		if (path.length <= maxLength) return path;
 		return "..." + path.slice(-maxLength);
@@ -46,13 +44,13 @@ export const FileDropdown: React.FC<FileDropdownProps> = ({
 					key={index}
 					className={`p-2 cursor-pointer ${dropdownItemClasses} ${
 						index === focusedDropdownIndex
-							? "bg-[var(--vscode-list-hoverBackground)] hover:bg-[var(--vscode-list-hoverBackground)] text-white"
+							? "bg-[var(--vscode-list-hoverBackground)] hover:bg-[var(--vscode-list-hoverBackground)] text-[var(--vscode-input-foreground)]"
 							: ""
 					}`}
 					onClick={() => onSelect(item)}
 				>
 					<div>{item.file}</div>
-					<div className={`text-xs ${captionClasses}`}>
+					<div className="text-xs">
 						{truncatePath(item.path)}
 					</div>
 				</div>

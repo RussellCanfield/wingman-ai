@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { FaPlay, FaStopCircle, FaPaperclip } from "react-icons/fa";
-import { useAppContext } from "../../../context";
 import { vscode } from "../../../utilities/vscode";
 import { AppMessage } from "@shared/types/Message";
 import { FileSearchResult } from "@shared/types/Composer";
@@ -10,6 +9,7 @@ import { handleAutoResize } from "../../../utilities/utils";
 import { FileDropdown } from "./components/FileDropdown";
 import { FileChips } from "./components/FileChips";
 import { ImagePreview } from "./components/ImagePreview";
+import { useSettingsContext } from "../../../context/settingsContext";
 
 interface ChatInputProps {
 	onChatSubmitted: (
@@ -27,7 +27,7 @@ const ChatInput = ({
 	onChatCancelled,
 }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
-	const { isLightTheme } = useAppContext();
+	const { isLightTheme } = useSettingsContext();
 	const [inputValue, setInputValue] = useState("");
 	const [selectedImage, setSelectedImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);

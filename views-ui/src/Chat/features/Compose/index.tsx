@@ -1,32 +1,15 @@
-import { AppMessage } from "@shared/types/Message";
 import {
-	ComposerMessage,
 	ComposerRequest,
-	ComposerResponse,
 } from "@shared/types/Composer";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./Input/ChatInput";
-import { useAppContext } from "../../context";
 import ChatResponseList from "./ChatList";
 import Validation from "./Validation";
+import { phaseDisplayLabel, useComposerContext } from "../../context/composerContext";
 
 let currentMessage = "";
-
-type PhaseLabel = {
-	new: "Planning";
-	planner: "Writing Code";
-	"code-writer": "Reviewing";
-	replan: "Preparing Results";
-};
-
-const phaseDisplayLabel: PhaseLabel = {
-	new: "Planning",
-	planner: "Writing Code",
-	"code-writer": "Reviewing",
-	replan: "Preparing Results",
-};
 
 const getFileExtension = (fileName: string): string => {
 	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
@@ -42,161 +25,14 @@ const getBase64FromFile = (file: File): Promise<string> => {
 };
 
 export default function Compose() {
-	const { composerMessages, setComposerMessages } = useAppContext();
-	const [loading, setLoading] = useState<boolean>(false);
-	const [currentPhase, setCurrentPhase] =
-		useState<keyof typeof phaseDisplayLabel>("new");
-
-	useEffect(() => {
-		window.addEventListener("message", handleResponse);
-
-		return () => {
-			window.removeEventListener("message", handleResponse);
-		};
-	}, []);
-
-	useEffect(() => {
-		if (composerMessages.length === 0) {
-			setCurrentPhase("new");
-			setLoading(false);
-		}
-	}, [composerMessages]);
-
-	const handleResponse = (event: MessageEvent<AppMessage>) => {
-		const { data } = event;
-		const { command, value } = data;
-
-		switch (command) {
-			case "validation-failed":
-				handleChatSubmitted(String(value), []);
-				break;
-			case "compose-response":
-				if (!value) {
-					return;
-				}
-
-				const { node, values } = value as ComposerResponse;
-
-				setCurrentPhase(node as keyof typeof phaseDisplayLabel);
-
-				if (node === "replan") {
-					if (
-						values.review &&
-						values.review?.comments &&
-						values.review.comments.length > 0
-					) {
-						setComposerMessages((currentMessages) => {
-							return [
-								...currentMessages,
-								{
-									from: "assistant",
-									message: `There were issues with the code changes, we are correcting them! Here was my review:
-                  
-${values.review.comments.join("\n")}`,
-									plan: {
-										files: [],
-										steps: [],
-									},
-								},
-							];
-						});
-
-						return;
-					}
-
-					if (
-						values.plan?.files?.length === 0 &&
-						values.plan?.steps?.length === 0
-					) {
-						setComposerMessages((currentMessages) => {
-							return [
-								...currentMessages,
-								{
-									from: "assistant",
-									message:
-										"Sorry something went wrong and I was not able to generate any changes.",
-									plan: {
-										files: [],
-										steps: [],
-									},
-								},
-							];
-						});
-						return;
-					}
-
-					if (
-						values.review?.comments?.length > 0 &&
-						values.retryCount === 0
-					) {
-						setComposerMessages((currentMessages) => {
-							return [
-								...currentMessages,
-								{
-									from: "assistant",
-									message:
-										"Sorry the review failed and I was unable to correct the changes. Please try again with a more specific query.",
-									plan: {
-										files: [],
-										steps: [],
-									},
-								},
-							];
-						});
-						return;
-					}
-
-					setLoading(false);
-
-					setComposerMessages((currentMessages) => {
-						return [
-							...currentMessages,
-							{
-								from: "assistant",
-								message: values.response!,
-								plan: values.plan!,
-							},
-						];
-					});
-				}
-				break;
-		}
-	};
-
-	const commitMessageToHistory = () => {
-		const tempMessage = structuredClone(currentMessage.toString());
-		setComposerMessages((messages) => {
-			const newHistory: ComposerMessage[] = [
-				...messages,
-				{
-					from: "assistant",
-					message: tempMessage,
-					loading: false,
-					plan: {
-						files: [],
-						steps: [],
-					},
-				},
-			];
-
-			return newHistory;
-		});
-
-		clearMessage();
-	};
+	const { composerMessages, setComposerMessages, loading, setLoading, currentPhase, setCurrentPhase, clearActiveMessage, activeMessage } = useComposerContext();
 
 	const cancelAIResponse = () => {
-		commitMessageToHistory();
-		clearMessage();
+		clearActiveMessage();
 		vscode.postMessage({
 			command: "cancel",
 		});
-	};
-
-	const clearMessage = () => {
 		setLoading(false);
-
-		currentMessage = "";
 	};
 
 	const handleChatSubmitted = async (

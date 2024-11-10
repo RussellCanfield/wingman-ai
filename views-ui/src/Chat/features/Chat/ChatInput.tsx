@@ -4,8 +4,8 @@ import { useOnScreen } from "../../hooks/useOnScreen";
 import { useEffect, useState, useRef } from "react";
 import { handleAutoResize } from "../../utilities/utils";
 import { CommandDropdown } from "./CommandDropdown";
-import { useAppContext } from "../../context";
 import { AVAILABLE_COMMANDS } from "./types";
+import { useSettingsContext } from "../../context/settingsContext";
 
 interface ChatInputProps {
 	onChatSubmitted: (input: string, command?: string) => void;
@@ -18,7 +18,7 @@ const ChatInput = ({
 	onChatSubmitted,
 	onChatCancelled,
 }: ChatInputProps) => {
-	const { isLightTheme } = useAppContext();
+	const { isLightTheme } = useSettingsContext();
 	const [ref, isVisible] = useOnScreen();
 	const [inputValue, setInputValue] = useState("");
 	const [isCommandMode, setIsCommandMode] = useState(false);

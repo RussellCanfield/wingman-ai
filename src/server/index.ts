@@ -420,6 +420,10 @@ export class LSPServer {
 			cancelComposer();
 		});
 
+		this.connection?.onRequest("wingman/deleteFileFromIndex", async ({ filePath }: { filePath: string }) => {
+			await this.indexer?.deleteFile(filePath);
+		})
+
 		this.connection?.onRequest(
 			"wingman/compose",
 

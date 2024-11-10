@@ -1,9 +1,10 @@
-import { useAppContext } from "../../context";
 import { vscode } from "../../utilities/vscode";
 import { AppMessage } from "@shared/types/Message";
 import { useEffect, useState } from "react";
 import { Loader } from "../../Loader";
 import { IndexerSettings } from "@shared/types/Indexer";
+import { useSettingsContext } from "../../context/settingsContext";
+import { FiTrash2 } from 'react-icons/fi';
 
 type IndexStats = {
 	exists: boolean;
@@ -14,8 +15,8 @@ type IndexStats = {
 let interval: NodeJS.Timeout;
 
 export default function Indexer() {
-	const { indexFilter, exclusionFilter, setIndexFilter, setExclusionFilter } =
-		useAppContext();
+	const { indexFilter, exclusionFilter, setIndexFilter, setExclusionFilter, totalFileCount } =
+		useSettingsContext();
 	const [index, setIndex] = useState<IndexStats>({
 		exists: false,
 		processing: false,
@@ -78,6 +79,13 @@ export default function Indexer() {
 			command: "delete-index",
 		});
 	};
+
+	const deleteFileFromIndex = (filePath: string) => {
+		vscode.postMessage({
+			command: 'delete-indexed-file',
+			value: filePath
+		})
+	}
 
 	return (
 		<div className="flex flex-col h-full gap-8 overflow-hidden">
@@ -143,19 +151,63 @@ export default function Indexer() {
 				)}
 			</div>
 			{index.exists && !index.processing && (
-				<div className="flex-1 overflow-hidden flex flex-col">
-					<p className="text-lg font-bold flex-shrink-0">
-						Indexed Files:
-					</p>
-					<div className="flex-1 overflow-y-auto">
-						<ul>
-							{index.files.map((f, index) => (
-								<li key={index}>{f}</li>
-							))}
-						</ul>
+				<div className="flex-1 overflow-hidden flex flex-col gap-4">
+					<div className="bg-[var(--vscode-list-hoverBackground)] rounded-lg p-4 shadow-sm">
+					<div className="flex items-center justify-between">
+						<h3 className="text-lg font-bold">Indexed Files</h3>
+						<span className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm">
+						{index.files.length} / {totalFileCount}
+						</span>
 					</div>
+					<div className="w-full bg-stone-400 rounded-full h-2.5 mt-3">
+						<div 
+						className="bg-blue-500 h-2.5 rounded-full transition-all duration-300"
+						style={{ width: `${(index.files.length / totalFileCount) * 100}%` }}
+						/>
+					</div>
+					</div>
+					<details className="group">
+					<summary className="cursor-pointer list-none">
+						<div className="flex items-center gap-2 text-sm text-[var(--vscode-input-foreground)]">
+						<svg 
+							className="w-4 h-4 transition-transform group-open:rotate-90" 
+							fill="none" 
+							viewBox="0 0 24 24" 
+							stroke="currentColor"
+						>
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+						</svg>
+						View all files
+						</div>
+					</summary>
+					
+					<div className="mt-2 pl-6">
+					<ul className="space-y-1">
+						{index.files.map((file, idx) => (
+						<li 
+							key={idx}
+							className="text-sm text-[var(--vscode-input-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] rounded flex items-center justify-between group px-2 py-1"
+						>
+							<span className="truncate">{file}</span>
+							<button
+							className="p-1  rounded hover:bg-stone-400"
+							onClick={(e) => {
+								e.stopPropagation();
+								deleteFileFromIndex(file);
+							}}
+							title="Remove file from index"
+							>
+							<FiTrash2 
+								className="w-4 h-4 text-red-600" 
+							/>
+							</button>
+						</li>
+						))}
+					</ul>
+					</div>
+					</details>
 				</div>
-			)}
+				)}
 		</div>
 	);
 }

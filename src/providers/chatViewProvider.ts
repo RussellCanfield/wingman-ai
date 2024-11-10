@@ -199,6 +199,9 @@ ${result.summary}`,
 					}
 
 					switch (command) {
+						case "delete-indexed-file":
+							await this._lspClient.deleteFileFromIndex(String(value));
+							break;
 						case "review-files":
 							telemetry.sendEvent(EVENT_REVIEW_FILE_BY_FILE);
 							this._diffViewProvider.createCodeReviewView(
@@ -406,9 +409,10 @@ ${result.summary}`,
 							});
 							break;
 						case "check-index":
+							const indexResult = await this._lspClient.indexExists();
 							webviewView.webview.postMessage({
 								command: "index-status",
-								value: await this._lspClient.indexExists(),
+								value: indexResult,
 							});
 							break;
 						case "chat": {
@@ -450,10 +454,20 @@ ${result.summary}`,
 						}
 						case "ready": {
 							const settings = await this._workspace.load();
+
+							const matchingFiles =
+							await vscode.workspace.findFiles(
+								settings.indexerSettings.indexFilter ?? "*",
+								(await getGitignorePatterns(
+									this._workspace.workspacePath
+								)) || ""
+							);
+
 							const appState: AppState = {
 								workspaceFolder: getActiveWorkspace(),
 								theme: vscode.window.activeColorTheme.kind,
 								settings,
+								totalFiles: matchingFiles?.length ?? 0
 							};
 							webviewView.webview.postMessage({
 								command: "init",

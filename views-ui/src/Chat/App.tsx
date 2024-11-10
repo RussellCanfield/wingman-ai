@@ -1,13 +1,13 @@
 import Toolbar from "./Toolbar";
-import { useAppContext } from "./context";
 import Chat from "./features/Chat";
 import { useMemo } from "react";
 import Indexer from "./features/Indexer";
 import Compose from "./features/Compose";
 import "./App.css";
+import { useSettingsContext } from "./context/settingsContext";
 
 const App = () => {
-	const { view } = useAppContext();
+	const { view } = useSettingsContext();
 
 	const activeComponent = useMemo(() => {
 		switch (view) {

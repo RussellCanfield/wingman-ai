@@ -197,6 +197,12 @@ export class LSPClient {
 		return client.sendRequest("wingman/cancelComposer");
 	};
 
+	deleteFileFromIndex = async (filePath: string) => {
+		return client.sendRequest("wingman/deleteFileFromIndex", {
+			filePath
+		});
+	}
+
 	getEmbeddings = async (query: string): Promise<EmbeddingsResponse> => {
 		try {
 			return client.sendRequest("wingman/getEmbeddings", {

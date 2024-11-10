@@ -2,8 +2,10 @@ import { VscClearAll } from "react-icons/vsc";
 import { HiDatabase } from "react-icons/hi";
 import { HiChatAlt } from "react-icons/hi";
 import { HiLightningBolt } from "react-icons/hi";
-import { useAppContext } from "./context";
 import { vscode } from "./utilities/vscode";
+import { useSettingsContext } from "./context/settingsContext";
+import { useChatContext } from "./context/chatContext";
+import { useComposerContext } from "./context/composerContext";
 
 const viewName = {
 	chat: "Chat",
@@ -14,12 +16,11 @@ const viewName = {
 export default function Toolbar() {
 	const {
 		isLightTheme,
-		pushMessage: setMessages,
-		setComposerMessages,
 		view,
 		setView,
-		clearMessages,
-	} = useAppContext();
+	} = useSettingsContext();
+	const { clearMessages } = useChatContext();
+	const { setComposerMessages } = useComposerContext();
 
 	const buttonBaseClasses = "rounded transition-colors duration-300 p-2";
 	const buttonActiveClasses = isLightTheme

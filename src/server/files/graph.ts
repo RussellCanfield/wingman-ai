@@ -49,6 +49,35 @@ export class CodeGraph {
 		}
 	}
 
+	public deleteFile(file: string) {
+		// Get the file details from the symbol table
+		const fileDetails = this.symbolTable.get(file);
+		if (!fileDetails) {
+			return;
+		}
+	
+		// Clean up all nodes associated with this file
+		for (const nodeId of fileDetails.nodeIds) {
+			// Remove the node
+			this.nodes.delete(nodeId);
+	
+			// Clean up import edges
+			this.edgesImport.delete(nodeId);
+			for (const [, importSet] of this.edgesImport) {
+				importSet.delete(nodeId);
+			}
+	
+			// Clean up export edges
+			this.edgesExport.delete(nodeId);
+			for (const [, exportSet] of this.edgesExport) {
+				exportSet.delete(nodeId);
+			}
+		}
+	
+		// Remove the file from the symbol table
+		this.symbolTable.delete(file);
+	}
+
 	public addOrUpdateFileInSymbolTable(
 		file: string,
 		fileDetails: FileDetails
