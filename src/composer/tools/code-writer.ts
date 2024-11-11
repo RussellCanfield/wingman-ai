@@ -3,13 +3,12 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types";
 import { buildObjective, loadWingmanRules } from "../utils";
 import { NoFilesChangedError } from "../errors";
-import { ChatOllama } from "@langchain/ollama";
 import {
-	AIMessage,
 	HumanMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
+import json5 from 'json5';
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -33,17 +32,18 @@ export const codeWriterSchema = z.object({
 	file: z
 		.object({
 			path: z.string().describe("The full file path"),
-			markdown: z
+			code: z
 				.string()
 				.describe(
-					"A markdown formatted code block with the code you've written or modified. Ensure this is always markdown formatted with the proper language set."
+					"The file code you've written or modified."
 				),
+			markdownLanguage: z.string().describe("The language that should be used for this file in a markdown block."),
 			changes: z
 				.array(z.string())
 				.describe("A list of changes made to the file")
 				.optional(),
 		})
-		.describe("The file in scope that you have modified or created"),
+		.describe("The file object in scope that you have modified or created"),
 });
 
 const baseWriterPrompt = `Analyze this text and output JSON.
@@ -55,6 +55,10 @@ Focus solely on the file in scope, while considering the context of other files 
 Output Structure:
 1. Steps: Concise guide for manual implementation steps, excluding file changes.
 2. File: Modified or created code for the file in scope.
+
+Output Formatting:
+1. Your response needs to be in a JSON format
+2. All new line return characters must be properly escaped. Do not make a mistake this is critical.
 
 Key Instructions:
 1. Process only the file in scope, do not modify a provided file that is not in scope.
@@ -77,7 +81,7 @@ Step Writing Guidelines:
 8. Do not return steps such as: "No manual steps are required for this change."
 
 Code Writing Guidelines:
-1. Use GitHub-flavored markdown for ALL code output.
+1. Focus strictly on the file in scope, ensure file references are relative to this file path.
 2. When generating code focus on existing code style, syntax, and structure.
 3. Maintain consistency in naming, error handling, and state management.
 4. Leverage existing dependencies and ensure correct imports.
@@ -97,6 +101,7 @@ Code Writing Guidelines:
 18. Follow established naming conventions.
 19. Document complex logic or algorithms.
 20. Write modular, reusable code.
+21. When dealing with file imports ensure that default and named exports/imports are handled properly.
 
 {{rulepack}}
 
@@ -106,7 +111,6 @@ File Handling:
 - Use any provided file paths as a reference for any new files.
 - Omit irrelevant or unchanged files.
 - Omit code verification or extraneous changes.
-- Use GitHub-flavored markdown for files, the code must be wrapped in markdown. Do not mess this up.
 - Provide full, functional code responses.
 - Always include the full file path.
 - List changes performed on files, if no changes are performed, omit the file.
@@ -136,7 +140,8 @@ File Handling:
 ------
 
 Implement required changes for the file in scope to meet the objective. 
-Use GitHub-flavored markdown for code output and follow the provided JSON schema. 
+Follow the provided JSON schema.
+Ensure new line returns are handled properly for the JSON formatted response.
 Ensure the "file" property is an object, not a string. 
 
 You must ALWAYS Output in JSON format using the following template:
@@ -148,9 +153,10 @@ You must ALWAYS Output in JSON format using the following template:
     }
   ],
   "file": {
-    "path": "string",
-    "markdown": "string",
-    "changes": ["string"]
+    "path": "<file path>",
+    "code": "<raw file code here>",
+    "changes": ["string"],
+	"markdownLanguage": "<typescript, html, etc>"
   }
 }`;
 
@@ -233,12 +239,7 @@ ${state.review?.comments?.join("\n")}
 
 ------`;
 
-		const codeWriter =
-			this.chatModel instanceof ChatOllama
-				? this.chatModel
-				: this.chatModel.withStructuredOutput(codeWriterSchema, {
-						name: "code-writer",
-				  });
+		const codeWriter = this.chatModel;
 
 		const files: CodeWriterSchema["file"][] = [];
 		const steps: CodeWriterSchema["steps"] = [];
@@ -319,13 +320,9 @@ ${
 						},
 					],
 				}),
-			])) as CodeWriterSchema | AIMessage;
+			]));
 
-			let result: CodeWriterSchema = output as CodeWriterSchema;
-			if (this.chatModel instanceof ChatOllama) {
-				const response = (output as AIMessage).content.toString();
-				result = JSON.parse(response);
-			}
+			const result = json5.parse(output.content.toString()) as CodeWriterSchema;
 
 			const fileChanged =
 				result.file.changes && result.file.changes.length > 0;
@@ -339,7 +336,8 @@ ${
 								changes: [
 									"None were required, this file was not modified.",
 								],
-								markdown: result.file.markdown,
+								code: result.file.code,
+								markdownLanguage: result.file.markdownLanguage
 						  }
 				);
 			}
@@ -357,8 +355,9 @@ ${
 				files: files.map((f) => {
 					return {
 						path: f.path,
-						code: f.markdown,
+						code: f.code,
 						changes: f.changes,
+						language: f.markdownLanguage
 					};
 				}),
 			},

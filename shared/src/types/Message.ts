@@ -72,6 +72,7 @@ export interface FileMetadata {
 	analysis?: string;
 	changes?: string[];
 	review?: string;
+	language?: string;
 }
 
 export interface CodeContextDetails {

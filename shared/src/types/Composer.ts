@@ -5,6 +5,7 @@ export type DiffViewCommand = {
 	diff: string;
 	isDarkTheme?: boolean;
 	original?: string;
+	language?: string;
 };
 
 export type PlanStep = {

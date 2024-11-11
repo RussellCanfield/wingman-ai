@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.8.4",
+	"version": "0.8.5",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -198,7 +198,8 @@
 		"vscode-languageserver-textdocument": "1.0.12",
 		"vscode-uri": "3.0.8",
 		"zod": "3.23.8",
-		"zod-to-json-schema": "3.23.3"
+		"zod-to-json-schema": "3.23.3",
+		"json5": "2.2.3"
 	},
 	"devDependencies": {
 		"@ast-grep/cli": "0.28.1",

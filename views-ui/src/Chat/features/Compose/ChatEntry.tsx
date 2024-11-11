@@ -9,7 +9,7 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { FileMetadata } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
-import { ComposerMessage } from "@shared/types/Composer";
+import { ComposerMessage, DiffViewCommand } from "@shared/types/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
 import { SkeletonLoader } from "../../SkeletonLoader";
@@ -110,7 +110,8 @@ const ChatArtifact = ({
 				value: {
 					file: file.path,
 					diff: file.code,
-				},
+					language: file.language
+				} as DiffViewCommand,
 			});
 		}
 	};

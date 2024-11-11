@@ -28,7 +28,7 @@ export default function DiffView({ diff }: DiffProps) {
 	const highlightSyntax = (str: string) => {
 		return (
 			<SyntaxHighlighter
-				language="typescript"
+				language={diff.language || "typescript"}
 				style={isDarkTheme ? vscDarkPlus : prism}
 				PreTag={CodeContainer}
 			>

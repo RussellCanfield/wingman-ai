@@ -30,7 +30,6 @@ import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 import {
 	EVENT_CHAT_SENT,
-	EVENT_COMPOSE_STARTED,
 	EVENT_REVIEW_FILE_BY_FILE,
 	EVENT_REVIEW_STARTED,
 	EVENT_VALIDATE_FAILED,
@@ -248,7 +247,7 @@ ${result.summary}`,
 							);
 							break;
 						case "diff-view":
-							const { file, diff } = value as DiffViewCommand;
+							const { file, diff, language } = value as DiffViewCommand;
 
 							this._diffViewProvider.createDiffView({
 								file: vscode.Uri.joinPath(
@@ -256,6 +255,7 @@ ${result.summary}`,
 									vscode.workspace.asRelativePath(file)
 								).fsPath,
 								diff: extractCodeBlock(diff),
+								language
 							});
 							break;
 						case "validate":

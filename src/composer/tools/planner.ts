@@ -43,18 +43,20 @@ Project context:
 
 Working directory:
 {{workspace}}
+
 Guidelines:
 
 1. Analyze existing files and their relationships to determine:
-- Required modifications
+- Which files require modification
 - New files needed
 - Dependencies and integrations
 - File paths and naming conventions
 
-2. Create a step-by-step implementation plan that includes:
+2. Create a step-by-step implementation plan only focused on files and their relationships that includes:
 - Clear, actionable steps
 - File changes and additions
-- Integration points
+- Integration points, such as leveraging existing technology that exists in current files or file dependencies
+	- Analyze the provided files or leverage context to determine the technologies available such as: nextjs, tailwindcss, materialui, and other frameworks you can leverage.
 - Critical considerations
 - Potential challenges
 
@@ -70,6 +72,7 @@ Guidelines:
 Notes:
 - Exclude testing, deployment, and logging unless specified
 - If required functionality is missing, include it in the plan
+- You are not writing code in this step, merely determining which files are required to get started and developing that plan.
 
 Use the 'planner' tool to output a JSON array of implementation steps only. No additional explanations.
 
