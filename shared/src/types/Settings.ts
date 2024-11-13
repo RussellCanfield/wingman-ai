@@ -135,6 +135,15 @@ export const defaultOpenAIEmbeddingSettings: OpenAIEmbeddingSettingsType = {
 	enabled: true,
 };
 
+export const defaultAzureAIEmbeddingSettings: AzureAIEmbeddingSettingsType = {
+	embeddingModel: "text-embedding-ada-002",
+	dimensions: "1536",
+	apiKey: "Add me",
+	apiVersion: "Add me",
+	instanceName: "Add me",
+	enabled: true,
+};
+
 export const defaultAnthropicSettings: ApiSettingsType = {
 	chatModel: "claude-3-5-sonnet-20240620",
 	codeModel: "claude-3-5-sonnet-20240620",

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import {
 	defaultAnthropicSettings,
+	defaultAzureAIEmbeddingSettings,
 	defaultAzureAISettings,
 	defaultHfSettings,
 	defaultInteractionSettings,
@@ -21,7 +22,7 @@ export const defaultSettings: Settings = {
 	embeddingSettings: {
 		Ollama: defaultOllamaEmbeddingSettings,
 		OpenAI: defaultOpenAIEmbeddingSettings,
-		AzureAI: defaultOpenAIEmbeddingSettings,
+		AzureAI: defaultAzureAIEmbeddingSettings,
 	},
 	providerSettings: {
 		Ollama: defaultOllamaSettings,

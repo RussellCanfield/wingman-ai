@@ -3,6 +3,7 @@ import { AppMessage } from "@shared/types/Message";
 import {
 	AiProviders,
 	ApiSettingsType,
+	AzureAIEmbeddingSettingsType,
 	AzureAISettingsType,
 	EmbeddingProviders,
 	InteractionSettings,
@@ -78,6 +79,8 @@ export const App = () => {
 
 		const updatedProviderSettings = { ...currentProviderSettings };
 
+		console.log(updatedProviderSettings, aiProviderSettings);
+
 		if (settings.aiProvider === "Ollama") {
 			updatedProviderSettings.Ollama =
 				aiProviderSettings as OllamaSettingsType;
@@ -122,7 +125,7 @@ export const App = () => {
 				embeddingSettings as OpenAIEmbeddingSettingsType;
 		} else {
 			existingEmbeddingSettings.AzureAI =
-				embeddingSettings as OpenAIEmbeddingSettingsType;
+				embeddingSettings as AzureAIEmbeddingSettingsType;
 		}
 
 		setSettings((s) => ({
