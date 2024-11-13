@@ -237,6 +237,24 @@ ${result.summary}`,
 							break;
 						case "state-update":
 							const appState = value as AppState;
+							const currentSettings = await this._workspace.load();
+
+							if (currentSettings.indexerSettings.indexFilter !== appState.settings.indexerSettings.indexFilter) {
+								const matchingFiles =
+								await vscode.workspace.findFiles(
+									appState.settings.indexerSettings.indexFilter ?? "*",
+									(await getGitignorePatterns(
+										this._workspace.workspacePath
+									)) || ""
+								);
+
+								appState.totalFiles = matchingFiles?.length ?? 0;
+								webviewView.webview.postMessage({
+									command: "file-count-update",
+									value: appState,
+								});
+							}
+
 							await this._workspace.save({
 								indexerSettings:
 									appState.settings.indexerSettings,

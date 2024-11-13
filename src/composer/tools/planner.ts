@@ -192,40 +192,28 @@ Search queries:`);
 		state: PlanExecuteState,
 		query: string
 	): Promise<boolean> {
-		if (!state.plan?.files || state.plan.files.length === 0) {
-			const starterDocs =
-				await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
-					query,
-					this.codeGraph,
-					this.store,
-					this.workspace,
-					15
-				);
-
-			if (starterDocs.size === 0) {
-				throw new NoFilesFoundError(
-					"Unable to find any indexed documents. Please reference documents directly, build the full index or make sure embedding is enabled in settings."
-				);
-			}
-
-			if (!state.plan) {
-				state.plan = {
-					files: [],
-					steps: [],
-				};
-			}
-
-			state.plan.files = Array.from(starterDocs.entries()).map(
-				([file, doc]) => ({
-					path: file,
-					code: doc.getText(),
-				})
-			);
-
-			return true;
+		if (Array.isArray(state.plan?.files) && state.plan.files.length > 0) {
+			return false;
 		}
-
-		return false;
+	
+		const starterDocs = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
+			query,
+			this.codeGraph,
+			this.store,
+			this.workspace,
+			15
+		);
+	
+		state.plan = state.plan || { files: [], steps: [] };
+		
+		state.plan.files = Array.from(starterDocs.entries()).map(
+			([file, doc]) => ({
+				path: file,
+				code: doc.getText(),
+			})
+		);
+	
+		return true;
 	}
 
 	private async rerankDocuments(

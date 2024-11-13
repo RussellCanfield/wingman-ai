@@ -38,7 +38,6 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
         case "init":
 					const storedAppState = value as AppState;
 
-          console.log('state', value);
 					setAppState(storedAppState);
 					if (storedAppState?.settings.indexerSettings) {
 						const { indexFilter, exclusionFilter } =
@@ -53,6 +52,12 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
           break;
         case "switchView":
           setView(value as View);
+          break;
+        case "file-count-update":
+					setAppState(prev => ({
+            ...prev!,
+            totalFiles: (value as AppState).totalFiles
+          }));
           break;
       }
     };
