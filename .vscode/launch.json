@@ -9,8 +9,12 @@
 			"name": "Run Extension",
 			"type": "extensionHost",
 			"request": "launch",
-			"args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-			"outFiles": ["${workspaceFolder}/out/**/*.js"],
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
 			"sourceMapPathOverrides": {
 				"webpack:///./src/*": "${workspaceFolder}/src/*",
 				"webpack:///src/*": "${workspaceFolder}/src/*",
@@ -26,19 +30,27 @@
 			"port": 6009,
 			"sourceMaps": true,
 			"timeout": 20000,
-			"restart": true,
+			"restart": {
+				"delay": 1000,
+				"maxAttempts": 10
+			},
 			"sourceMapPathOverrides": {
 				"webpack:///./src/*": "${workspaceFolder}/src/*",
 				"webpack:///src/*": "${workspaceFolder}/src/*",
 				"webpack:///*": "${workspaceFolder}/*"
 			},
-			"outFiles": ["${workspaceFolder}/out/**/*.js"]
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			]
 		}
 	],
 	"compounds": [
 		{
 			"name": "Client + Server",
-			"configurations": ["Run Extension", "Attach to LSP"]
+			"configurations": [
+				"Run Extension",
+				"Attach to LSP"
+			]
 		}
 	]
 }

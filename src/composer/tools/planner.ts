@@ -46,33 +46,79 @@ Working directory:
 
 Guidelines:
 
-1. Analyze existing files and their relationships to determine:
-- Which files require modification
-- New files needed
-- Dependencies and integrations
-- File paths and naming conventions
+1. Project Analysis Phase:
+   - Map the existing file structure and architecture
+   - Identify core technologies and frameworks in use
+   - Document current naming conventions and patterns
+   - List available shared components, utilities, and services
+   - Note relevant configuration files and their purposes
 
-2. Create a step-by-step implementation plan only focused on files and their relationships that includes:
-- Clear, actionable steps
-- File changes and additions
-- Integration points, such as leveraging existing technology that exists in current files or file dependencies
-	- Analyze the provided files or leverage context to determine the technologies available such as: nextjs, tailwindcss, materialui, and other frameworks you can leverage.
-- Critical considerations
-- Potential challenges
+2. File Planning Phase:
+   A. Modifications to Existing Files:
+      INCLUDE ONLY files that:
+      - Require definitive code changes
+      - Need new imports or exports
+      - Require structural modifications
+      - Need new function/component additions
+      - Require state/prop changes
+      DO NOT INCLUDE files that:
+      - Only need verification
+      - Might need changes
+      - Require review only
+      - Are tangentially related
+      - Don't require actual code changes
 
-3. Key considerations:
-- Follow existing project structure and patterns
-- Maintain backward compatibility
-- Use correct file paths and import statements
-- Create new files only when necessary
-- Focus solely on the objective requirements
-- If external dependencies are needed, specify them
-- Do not make extraneous changes, stick to the objective
+   B. New File Requirements:
+      - Define new files with clear purposes
+      - Specify their locations within project structure
+      - Describe relationships with existing files
+      - Detail required imports and exports
+      - Explain how they integrate with existing architecture
+	  - Only create new files if it is absolutely necessary, co-locate changes in existing files if there is a low probability it is shared code
+
+   C. Integration Analysis:
+      - Map direct dependencies only
+      - Document concrete integration points
+      - Specify definitive configuration changes
+      - List required routing updates
+      - Include only files directly involved in the feature
+
+3. Implementation Strategy:
+   - Provide specific, actionable steps
+   - Include only confirmed dependency requirements
+   - List only necessary build/config changes
+   - Define clear integration points
+   - Identify only direct dependencies
+
+4. Technical Considerations:
+   - Framework-specific requirements
+   - Type system implications
+   - State management impact
+   - Performance considerations
+   - Security implications
+   - Browser/device compatibility needs
+
+5. Risk Assessment:
+   - Focus on concrete implementation risks
+   - Include only relevant dependency conflicts
+   - List specific compatibility concerns
+   - Highlight direct performance impacts
+   - Document security considerations
+
+Constraints:
+- Include only files requiring actual modifications
+- List only confirmed changes, not potential ones
+- Avoid speculative file modifications
+- Focus on direct dependencies only
+- Include only files essential to the feature
+- Maintain clear separation of concerns
 
 Notes:
 - Exclude testing, deployment, and logging unless specified
 - If required functionality is missing, include it in the plan
-- You are not writing code in this step, merely determining which files are required to get started and developing that plan.
+- This is a planning phase only, no code implementation
+- All file paths should be relative to the working directory
+- Include only confirmed version requirements for new dependencies
 
 Use the 'planner' tool to output a JSON array of implementation steps only. No additional explanations.
 

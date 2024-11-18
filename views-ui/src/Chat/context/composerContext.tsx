@@ -1,6 +1,7 @@
-import { ComposerMessage, ComposerResponse } from "@shared/types/Composer";
+import { ComposerMessage, ComposerRequest, ComposerResponse } from "@shared/types/Composer";
 import { AppMessage } from "@shared/types/Message";
 import React, { createContext, FC, PropsWithChildren, useContext, useEffect, useState } from "react";
+import { vscode } from "../utilities/vscode";
 
 export type PhaseLabel = {
 	new: "Planning";
@@ -76,6 +77,17 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
                 },
               },
             ];
+
+            vscode.postMessage({
+              command: "compose",
+              value: {
+                input: String(value),
+                contextFiles: []
+              } satisfies ComposerRequest,
+            });
+
+            setLoading(true);
+            setCurrentPhase('new');
       
             return newHistory;
           });

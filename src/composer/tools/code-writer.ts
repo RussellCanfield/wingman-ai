@@ -102,6 +102,7 @@ Code Writing Guidelines:
 19. Document complex logic or algorithms.
 20. Write modular, reusable code.
 21. When dealing with file imports ensure that default and named exports/imports are handled properly.
+22. If there were no changes made, or changes consisted of "verifying" functionality, return an empty "changes" property for the file in scope.
 
 {{rulepack}}
 
