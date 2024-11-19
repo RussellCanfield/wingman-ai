@@ -87,7 +87,7 @@ export default function Compose() {
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{composerMessages.length === 0 && (
 				<>
-					<p className="text-center max-w-2xl px-8 py-6 bg-gradient-to-br from-slate-300/40 to-slate-400/40 rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
+					<p className="text-center max-w-2xl px-8 py-6 bg-[var(--vscode-input-background)] rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
 						<div
 							id="wingman-logo"
 							role="img"
