@@ -41,7 +41,7 @@
 		"url": "https://github.com/RussellCanfield/wingman-ai"
 	},
 	"engines": {
-		"vscode": "^1.93.0"
+		"vscode": "^1.95.0"
 	},
 	"categories": [
 		"Programming Languages",
