@@ -26,8 +26,8 @@ export const FileChips: React.FC<FileChipsProps> = ({
 			{chips.map((chip, index) => (
 				<span
 					key={index}
-					className={`${chipClasses} rounded-sm px-2 py-1 m-1 inline-flex items-center hover:bg-stone-500`}
-					title={chip.path}
+					className={`${chipClasses} rounded-sm px-2 py-1 m-1 inline-flex items-center hover:bg-stone-500 relative group`}
+					data-tooltip={chip.path}
 				>
 					{chip.file}
 					<button
@@ -36,6 +36,9 @@ export const FileChips: React.FC<FileChipsProps> = ({
 					>
 						<FaX />
 					</button>
+					<span className="invisible group-hover:visible absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md whitespace-nowrap p-2">
+						{chip.path}
+					</span>
 				</span>
 			))}
 		</div>
