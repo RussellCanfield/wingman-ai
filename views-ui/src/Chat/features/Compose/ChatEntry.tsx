@@ -89,10 +89,10 @@ type ChatFileArtifact = NonNullable<ComposerMessage["plan"]["files"]>[number];
 
 const ChatArtifact = ({
 	file,
-	isDarkTheme
+	loading
 }: {
 	file: ChatFileArtifact;
-	isDarkTheme: boolean;
+	loading: boolean;
 }) => {
 	const mergeIntoFile = () => {
 		if (file) {
@@ -167,7 +167,7 @@ const ChatArtifact = ({
 							</button>
 						</div>
 					</div>)}
-				{!file.changes?.length && (
+				{loading && !file.changes?.length && (
 					<div className="flex items-center justify-center p-4">
 						<div className="animate-spin rounded-full h-6 w-6 border-2 border-stone-400 border-t-transparent"
 							role="status"
@@ -295,7 +295,7 @@ const ChatEntry = ({
 						<ChatArtifact
 							key={index}
 							file={file}
-							isDarkTheme={!isLightTheme}
+							loading={loading ?? false}
 						/>
 					))}
 				</div>
