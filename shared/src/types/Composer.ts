@@ -8,22 +8,25 @@ export type DiffViewCommand = {
 	language?: string;
 };
 
-export type PlanStep = {
+export type ManualStep = {
 	description: string;
 	command?: string;
 };
 
-export interface Plan {
-	steps: PlanStep[];
-	files: FileMetadata[];
-}
+export type Plan = {
+	summary?: string;
+	steps?: ManualStep[];
+	files?: FileMetadata[];
+};
+
+export type Review = {
+	comments?: string[];
+};
 
 export interface PlanExecuteState {
 	plan?: Plan;
+	review?: Review;
 	response?: string;
-	review: {
-		comments: string[];
-	};
 	retryCount?: number;
 }
 
@@ -32,13 +35,7 @@ export type ComposerResponse = {
 	values: PlanExecuteState;
 };
 
-export type ComposerSteps =
-	| "planner"
-	| "retrieve-documents"
-	| "code-analyzer"
-	| "code-writer"
-	| "code-reviewer"
-	| "replan";
+export type ComposerSteps = "composer-planner" | "composer-manual-steps" | "composer-plan-file" | "composer-done" | "composer-error";
 
 export interface ComposerMessage {
 	from: "assistant" | "user";

@@ -69,8 +69,8 @@ export interface BaseMessage {
 export interface FileMetadata {
 	path: string;
 	code?: string;
-	analysis?: string;
 	changes?: string[];
+	plan?: string[];
 	review?: string;
 	language?: string;
 }

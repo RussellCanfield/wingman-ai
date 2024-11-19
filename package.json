@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.8.7",
+	"version": "0.8.8",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -75,6 +75,15 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
+		"configuration": {
+			"properties": {
+				"wingman-ai.workspace.trust": {
+					"type": "boolean",
+					"default": true,
+					"description": "Trust workspace for file system operations"
+				}
+			}
+		},
 		"icons": {
 			"wingman-logo": {
 				"description": "Wingman icon",
@@ -180,19 +189,19 @@
 	},
 	"dependencies": {
 		"@ast-grep/napi": "0.29.0",
-		"@langchain/anthropic": "0.3.5",
-		"@langchain/community": "0.3.6",
-		"@langchain/core": "0.3.13",
-		"@langchain/langgraph": "0.2.16",
-		"@langchain/ollama": "0.1.0",
-		"@langchain/openai": "0.3.8",
+		"@langchain/anthropic": "0.3.8",
+		"@langchain/community": "0.3.15",
+		"@langchain/core": "0.3.18",
+		"@langchain/langgraph": "0.2.20",
+		"@langchain/ollama": "0.1.2",
+		"@langchain/openai": "0.3.13",
 		"@vscode/extension-telemetry": "^0.9.7",
 		"ignore": "5.2.0",
 		"langchain": "0.3.2",
 		"node-cache": "^5.1.2",
 		"tree-sitter": "0.21.1",
 		"vectra": "0.9.0",
-		"tinyglobby": "0.2.9",
+		"tinyglobby": "0.2.10",
 		"vscode-languageclient": "9.0.1",
 		"vscode-languageserver": "9.0.1",
 		"vscode-languageserver-textdocument": "1.0.12",
@@ -203,11 +212,11 @@
 	},
 	"devDependencies": {
 		"@ast-grep/cli": "0.28.1",
-		"@rsbuild/core": "1.0.19",
-		"@rsbuild/plugin-react": "1.0.6",
+		"@rsbuild/core": "1.1.3",
+		"@rsbuild/plugin-react": "1.0.7",
 		"@types/mocha": "10.0.8",
 		"@types/node": "22.5.5",
-		"@types/vscode": "1.93.0",
+		"@types/vscode": "1.95.0",
 		"@types/vscode-webview": "1.57.5",
 		"@vscode/test-cli": "0.0.10",
 		"@vscode/test-electron": "2.4.1",

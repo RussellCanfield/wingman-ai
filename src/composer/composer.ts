@@ -4,10 +4,9 @@ import { ChatMessage } from "@langchain/core/messages";
 import { CodeGraph } from "../server/files/graph";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { CodeWriter } from "./tools/code-writer";
-import { Replanner } from "./tools/replan";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../store/vector.js";
-import { Plan, PlanExecuteState, PlanningSteps, Review } from "./types/index";
+import { Plan, PlanExecuteState, Review } from "./types/index";
 import { getTextDocumentFromPath } from "../server/files/utils";
 import { CodePlanner } from "./tools/planner";
 import { NoFilesChangedError, NoFilesFoundError } from "./errors";
@@ -46,7 +45,6 @@ export async function* generateCommand(
 		store
 	);
 	const codeWriter = new CodeWriter(model, workspace);
-	const replanner = new Replanner(model, workspace);
 
 	const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
 		messages: {
@@ -80,10 +78,6 @@ export async function* generateCommand(
 				return Array.from(uniqueMessages.values());
 			},
 			default: () => [],
-		},
-		steps: {
-			value: (x?: PlanningSteps[], y?: PlanningSteps[]) =>
-				y ?? x ?? undefined,
 		},
 		plan: {
 			value: (x?: Plan, y?: Plan) => y ?? x ?? undefined,
@@ -121,28 +115,13 @@ export async function* generateCommand(
 		},
 	};
 
-	function shouldEnd(state: PlanExecuteState): "true" | "false" {
-		return !state.review ||
-			!state.review.comments ||
-			state.review.comments.length === 0 ||
-			(state.retryCount ?? 0) <= 0
-			? "true"
-			: "false";
-	}
-
 	let workflow = new StateGraph({
 		channels: planExecuteState,
 	})
 		.addNode("planner", planner.codePlannerStep)
 		.addNode("code-writer", codeWriter.codeWriterStep)
-		.addNode("replan", replanner.replanStep)
 		.addEdge(START, "planner")
-		.addEdge("planner", "code-writer")
-		.addEdge("code-writer", "replan")
-		.addConditionalEdges("replan", shouldEnd, {
-			true: END,
-			false: "planner",
-		});
+		.addEdge("planner", "code-writer");
 
 	const checkpoint = await checkpointer?.get(config!);
 
@@ -186,7 +165,6 @@ export async function* generateCommand(
 		}
 
 		inputs.plan = {
-			steps: [],
 			files: existingFiles,
 		};
 	}
@@ -213,19 +191,23 @@ export async function* generateCommand(
 	const graph = workflow.compile({ checkpointer });
 
 	try {
-		for await (const chunk of await graph.stream(inputs, {
-			streamMode: "updates",
+		for await (const chunk of await graph.streamEvents(inputs, { 
+			streamMode: ["custom"],
 			signal: controller.signal,
-			...config,
+			version: "v2",
+			...config
 		})) {
-			for (const [node, values] of Object.entries(chunk)) {
-				yield { node, values };
+			if (!chunk) continue;
+
+			const { event, name, data } = chunk;
+			if (event === "on_custom_event") {
+			  yield { node: name, values: data };
 			}
 		}
 	} catch (e) {
 		if (e instanceof DOMException && e.name === "AbortError") {
 			yield {
-				node: "replan",
+				node: "composer-error",
 				values: {
 					response: "Operation was cancelled",
 				},
@@ -233,7 +215,7 @@ export async function* generateCommand(
 			return;
 		} else if (e instanceof NoFilesChangedError) {
 			yield {
-				node: "replan",
+				node: "composer-error",
 				values: {
 					response:
 						"I was not able to generate any changes. Please try again with a different question or try explicitly referencing files.",
@@ -242,7 +224,7 @@ export async function* generateCommand(
 			return;
 		} else if (e instanceof NoFilesFoundError) {
 			yield {
-				node: "replan",
+				node: "composer-error",
 				values: {
 					response:
 						"I was unable to find any indexed code files. Please reference files directly using '@filename', build the full index or make sure embeddings are enabled in settings.",
@@ -253,7 +235,7 @@ export async function* generateCommand(
 
 		console.error(e);
 		yield {
-			node: "replan",
+			node: "composer-error",
 			values: {
 				response:
 					"An error occurred, please try again. If this continues use the clear chat button to start over.",

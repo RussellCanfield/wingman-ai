@@ -9,6 +9,9 @@ import {
 } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
 import json5 from 'json5';
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
+import { Plan } from "@shared/types/Composer";
+import { FileMetadata } from "@shared/types/Message";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
 
@@ -211,21 +214,21 @@ export class CodeWriter {
 		const rulePack = loadWingmanRules(this.workspace);
 		const objective = buildObjective(state);
 
-		const planningSteps = state.steps
+		const planningSteps = state.plan?.files
 			? `Implementation steps:
 - Use these as a guide or starting point.
 - Use these to help perform cross file coordination.
 
 Here are the steps per file:
 
-${state.steps
+${state.plan.files
 	.map(
 		(s) => `File:
   
-${s.file}
+${s.path}
 
 Steps:
-- ${s.steps.join("\n- ")}`
+- ${s.plan?.join("\n- ")}`
 	)
 	.join("\n")}`
 			: "";
@@ -242,7 +245,7 @@ ${state.review?.comments?.join("\n")}
 
 		const codeWriter = this.chatModel;
 
-		const files: CodeWriterSchema["file"][] = [];
+		const files: FileMetadata[] = [];
 		const steps: CodeWriterSchema["steps"] = [];
 		for (const { path: file, code } of state.plan?.files || [
 			{
@@ -328,40 +331,48 @@ ${
 			const fileChanged =
 				result.file.changes && result.file.changes.length > 0;
 
-			if (!files.some((f) => f.path === result.file.path)) {
-				files.push(
-					fileChanged
-						? result.file
-						: {
-								path: result.file.path,
-								changes: [
-									"None were required, this file was not modified.",
-								],
-								code: result.file.code,
-								markdownLanguage: result.file.markdownLanguage
-						  }
-				);
-			}
-
 			steps.push(...(result.steps ?? []));
+			
+			await dispatchCustomEvent("composer-manual-steps", {
+				plan: {
+					files: state.plan?.files,
+					summary: state.plan?.summary,
+					steps
+				}
+			} satisfies Partial<PlanExecuteState>);
+
+			if (!files.some((f) => f.path === result.file.path) && fileChanged) {
+				const stateFile = state.plan?.files?.find(f => f.path === result.file.path);
+
+				if (stateFile) {
+					stateFile.language = result.file.markdownLanguage;
+					stateFile.code = result.file.code;
+					stateFile.changes = result.file.changes ?? [];
+
+					files.push(stateFile);
+					await dispatchCustomEvent("composer-plan-files", {
+						plan: state.plan
+					} satisfies Partial<PlanExecuteState>);
+				}
+			}
 		}
 
 		if (files.length === 0) {
 			throw new NoFilesChangedError("No files have been changed.");
 		}
 
+		const updatedPlan = {
+			files,
+			summary: state.plan?.summary || '',
+			steps
+		}
+
+		await dispatchCustomEvent("composer-done", {
+			plan: updatedPlan
+		} satisfies Partial<PlanExecuteState>);
+
 		return {
-			plan: {
-				steps: steps,
-				files: files.map((f) => {
-					return {
-						path: f.path,
-						code: f.code,
-						changes: f.changes,
-						language: f.markdownLanguage
-					};
-				}),
-			},
+			plan: updatedPlan
 		} satisfies Partial<PlanExecuteState>;
 	};
 }

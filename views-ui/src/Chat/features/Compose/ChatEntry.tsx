@@ -85,14 +85,14 @@ const renderMarkdown = (
 	);
 };
 
-type ChatFileArtifact = ComposerMessage["plan"]["files"][number];
+type ChatFileArtifact = NonNullable<ComposerMessage["plan"]["files"]>[number];
 
 const ChatArtifact = ({
 	file,
-	theme,
+	isDarkTheme
 }: {
 	file: ChatFileArtifact;
-	theme: { [index: string]: CSSProperties };
+	isDarkTheme: boolean;
 }) => {
 	const mergeIntoFile = () => {
 		if (file) {
@@ -134,41 +134,51 @@ const ChatArtifact = ({
 				<h4 className="m-0 flex-grow p-2 text-wrap break-all">
 					{truncatePath(file.path)}
 				</h4>
-				<div className="flex">
-					<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
-						<button
-							type="button"
-							title="Copy code to clipboard"
-							className="p-4"
-							onClick={() => copyToClipboard(file.code!)}
-						>
-							<FaCopy size={18} />
-						</button>
+				{file.changes && (
+					<div className="flex">
+						<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+							<button
+								type="button"
+								title="Copy code to clipboard"
+								className="p-4"
+								onClick={() => copyToClipboard(file.code!)}
+							>
+								<FaCopy size={18} />
+							</button>
+						</div>
+						<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+							<button
+								type="button"
+								title="Show diff"
+								className="p-4"
+								onClick={() => showDiffview()}
+							>
+								<MdOutlineDifference size={18} />
+							</button>
+						</div>
+						<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+							<button
+								type="button"
+								title="Accept changes"
+								className="p-4"
+								onClick={() => mergeIntoFile()}
+							>
+								<LuFileCheck size={18} />
+							</button>
+						</div>
+					</div>)}
+				{!file.changes?.length && (
+					<div className="flex items-center justify-center p-4">
+						<div className="animate-spin rounded-full h-6 w-6 border-2 border-stone-400 border-t-transparent"
+							role="status"
+							aria-label="Loading">
+							<span className="sr-only">Loading...</span>
+						</div>
 					</div>
-					<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
-						<button
-							type="button"
-							title="Show diff"
-							className="p-4"
-							onClick={() => showDiffview()}
-						>
-							<MdOutlineDifference size={18} />
-						</button>
-					</div>
-					<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
-						<button
-							type="button"
-							title="Accept changes"
-							className="p-4"
-							onClick={() => mergeIntoFile()}
-						>
-							<LuFileCheck size={18} />
-						</button>
-					</div>
-				</div>
+				)}
 			</div>
-			<div className="p-2 bg-editor-bg">
-				{file.changes?.length && file.changes?.length > 0 && (
+			{file.changes?.length && file.changes?.length > 0 && (
+				<div className="p-2 bg-editor-bg">
 					<div className="mb-4 p-2">
 						<h4 className="m-0 text-md font-semibold">Changes:</h4>
 						<ul className="mt-2 list-disc list-inside">
@@ -181,8 +191,8 @@ const ChatArtifact = ({
 							))}
 						</ul>
 					</div>
-				)}
-			</div>
+				</div>
+			)}
 		</div>
 	);
 };
@@ -214,10 +224,10 @@ const ChatEntry = ({
 				index === 0
 					? {}
 					: {
-							borderTop: "1px solid",
-							borderColor:
-								"rgb(87 83 78 / var(--tw-border-opacity))",
-					  }
+						borderTop: "1px solid",
+						borderColor:
+							"rgb(87 83 78 / var(--tw-border-opacity))",
+					}
 			}
 		>
 			<span className="flex items-center mb-4">
@@ -234,12 +244,7 @@ const ChatEntry = ({
 					style={{ maxHeight: "512px" }}
 				/>
 			)}
-			{loading && (
-				<div className="mt-4">
-					<SkeletonLoader isDarkTheme={!isLightTheme} />
-				</div>
-			)}
-			{plan?.steps.length > 0 && (
+			{plan?.steps && plan?.steps.length > 0 && (
 				<div>
 					<div className="flex flex-col bg-editor-bg mt-4 rounded-lg">
 						<h3 className="m-0 text-lg">Steps:</h3>
@@ -283,16 +288,21 @@ const ChatEntry = ({
 					</div>
 				</div>
 			)}
-			{plan?.files?.length > 0 && (
+			{plan.files && plan?.files?.length > 0 && (
 				<div>
 					<h3 className="m-0 text-lg mt-4">Files:</h3>
 					{plan?.files?.map((file, index) => (
 						<ChatArtifact
 							key={index}
 							file={file}
-							theme={codeTheme}
+							isDarkTheme={!isLightTheme}
 						/>
 					))}
+				</div>
+			)}
+			{from === 'assistant' && loading && (!plan.files || plan.files?.length === 0) && (
+				<div className="mt-4">
+					<SkeletonLoader isDarkTheme={!isLightTheme} />
 				</div>
 			)}
 		</li>

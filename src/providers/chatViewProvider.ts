@@ -94,6 +94,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		this._webview = webviewView.webview;
 		webviewView.webview.options = {
 			enableScripts: true,
+			localResourceRoots: [vscode.Uri.joinPath(this._context.extensionUri, 'media'), vscode.Uri.joinPath(this._context.extensionUri, 'out')]
 		};
 
 		webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
@@ -345,7 +346,7 @@ ${result.summary}`,
 								}
 
 								// Replace text in the document
-								await replaceTextInDocument(document, code!);
+								await replaceTextInDocument(document, code!, true);
 							} catch (error) {
 								if (
 									(error as vscode.FileSystemError).code ===
@@ -671,12 +672,14 @@ ${codeDocs.join("\n\n----\n")}
 		const nonce = getNonce();
 
 		const htmlContent = fs.readFileSync(htmlUri.fsPath, "utf8");
+		const imageUri = getImageUri(webview, this._context, ['media', 
+			vscode.window.activeColorTheme.kind === 1 ? 'Logo-black.png' : 'Logo-white.png']);
 
 		// Replace placeholders in the HTML content
 		const finalHtmlContent = htmlContent.replace(
 			/CSP_NONCE_PLACEHOLDER/g,
 			nonce
-		);
+		).replace('LOGO_URL', imageUri.toString());
 
 		const prefix = webview.asWebviewUri(
 			vscode.Uri.joinPath(this._context.extensionUri, "out", "views")
@@ -779,4 +782,8 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		language: document.languageId,
 		fromSelection: !selection.isEmpty,
 	};
+}
+
+function getImageUri(webview: vscode.Webview, context: vscode.ExtensionContext, imagePath: string[]) {
+	return webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, ...imagePath));
 }

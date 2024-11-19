@@ -5,9 +5,9 @@ import { CodeGraph } from "../../server/files/graph";
 import { Store } from "../../store/vector";
 import { ProjectDetailsHandler } from "../../server/project-details";
 import { buildObjective } from "../utils";
-import { PlanExecuteState } from "../types";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { ChatOllama } from "@langchain/ollama";
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import {
 	AIMessage,
 	HumanMessage,
@@ -15,16 +15,19 @@ import {
 	MessageContentText,
 } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
-import { NoFilesChangedError, NoFilesFoundError } from "../errors";
+import { NoFilesChangedError } from "../errors";
 import { loggingProvider } from "../../server/loggingProvider";
 import path from "node:path";
 import fs from "node:fs";
 import { filePathToUri } from "../../server/files/utils";
 import { ComposerRequest } from "@shared/types/Composer";
+import { PlanExecuteState } from "../types";
+import { FileMetadata } from "@shared/types/Message";
 
 export type PlannerSchema = z.infer<typeof planSchema>;
 
 const planSchema = z.object({
+	summary: z.string().describe("The summary of the implementation plan"),
 	plan: z.array(
 		z.object({
 			file: z.string().describe("The file to create or modify"),
@@ -119,6 +122,8 @@ Notes:
 - This is a planning phase only, no code implementation
 - All file paths should be relative to the working directory
 - Include only confirmed version requirements for new dependencies
+- The generated summary should give a short, concise and technical overview of the plan
+	- Phrase this as a response to the objective, example: "Sure I can do xyz"
 
 Use the 'planner' tool to output a JSON array of implementation steps only. No additional explanations.
 
@@ -160,12 +165,13 @@ export class CodePlanner {
 			throw new Error("Retry attempts exhausted.");
 		}
 
-		const projectDetails = await new ProjectDetailsHandler(
+		const projectDetailsHandler = new ProjectDetailsHandler(
 			this.workspace
-		).retrieveProjectDetails();
-		state.plan = state.plan || { files: [], steps: [] };
-
+		);
 		try {
+			const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
+			state.plan = state.plan || { files: [] };
+			
 			const objective = buildObjective(state);
 			const searchQuery = await this.generateSearchQueries(state);
 			const didRetrieve = await this.populateInitialFiles(
@@ -188,23 +194,37 @@ export class CodePlanner {
 					);
 				});
 			}
-			const { plan } = await this.generatePlan(
+			const response = await this.generatePlan(
 				finalDocs,
 				projectDetails,
 				objective,
 				state.image
 			);
 
-			const docs = await this.filterRelevantDocs(finalDocs, plan);
+			const docs = await this.filterRelevantDocs(finalDocs, response.plan);
 			if (docs.length === 0) {
 				throw new NoFilesChangedError("No files have been changed.");
 			}
 
-			return {
-				steps: plan,
-				projectDetails: projectDetails?.description,
-				plan: { files: docs, steps: [] },
+			const plan: PlanExecuteState["plan"] = {
+				summary: response.summary,
+				files: docs
 			};
+
+			await dispatchCustomEvent("composer-planner", { 
+				plan: {
+					summary: response.summary,
+					files: docs
+				}
+			} satisfies Partial<PlanExecuteState>);
+
+			return {
+				projectDetails: projectDetails?.description,
+				plan: {
+					summary: response.summary,
+					files: docs
+				}
+			} satisfies Partial<PlanExecuteState>;
 		} catch (e) {
 			if (e instanceof NoFilesChangedError) {
 				loggingProvider.logInfo(
@@ -250,12 +270,13 @@ Search queries:`);
 			15
 		);
 	
-		state.plan = state.plan || { files: [], steps: [] };
+		state.plan = state.plan || { files: [] };
 		
 		state.plan.files = Array.from(starterDocs.entries()).map(
 			([file, doc]) => ({
 				path: file,
 				code: doc.getText(),
+
 			})
 		);
 	
@@ -386,8 +407,8 @@ Ranked results:
 	private async filterRelevantDocs(
 		finalDocs: Map<string, TextDocument>,
 		plan: PlannerSchema["plan"]
-	): Promise<{ path: string; code: string }[]> {
-		const result: { path: string; code: string; steps?: string[] }[] = [];
+	): Promise<FileMetadata[]> {
+		const result: FileMetadata[] = [];
 
 		for (const f of plan) {
 			const filePath = path.resolve(this.workspace, f.file);
@@ -403,13 +424,13 @@ Ranked results:
 						await fs.promises.readFile(filePath, "utf8")
 					);
 				}
-			} catch (e) {}
+			} catch {}
 
 			result.push({
 				path: f.file,
 				code: doc?.getText() || "//This is a new file, fill in.",
-				steps: f.steps,
-			});
+				plan: f.steps,
+			} satisfies FileMetadata);
 		}
 
 		return result;

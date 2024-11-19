@@ -32,20 +32,31 @@ export default function Chat() {
 	};
 
 	return (
-		<main className="h-full flex flex-col overflow-auto text-base">
+		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{messages.length === 0 && (
-				<p>
-					The chat feature allows you to ask general or specific
-					questions about your codebase. You can also target specific
-					context by opening a file, or highlighting sections of a
-					file.
-					<br />
-					<br />
-					Chat now features commands! We currently support a code
-					review command: "/review". More will be added in the future.
+				<p className="text-center max-w-2xl px-8 py-6 bg-gradient-to-br from-slate-800/40 to-slate-900/40 rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
+					<div
+						id="wingman-logo"
+						role="img"
+						aria-label="Wingman Logo"
+						className="h-16 w-16 sm:h-32 sm:w-32 bg-no-repeat bg-contain bg-center mb-6 mx-auto my-4"
+					/>
+					<span className="block text-xl font-semibold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+						Wingman-AI
+					</span>
+					<span className="text-slate-300 leading-relaxed">
+						The chat feature allows you to ask general or specific
+						questions about your codebase. You can also target specific
+						context by opening a file, or highlighting sections of a
+						file.
+						<br />
+						<br />
+						Chat now features commands! We currently support a code
+						review command: "/review". More will be added in the future.
+					</span>
 				</p>
 			)}
-			<ChatResponseList messages={messages}>
+			{messages.length > 0 && (<ChatResponseList messages={messages}>
 				{loading && (
 					<ChatEntry
 						from="assistant"
@@ -54,7 +65,7 @@ export default function Chat() {
 						loading={loading}
 					/>
 				)}
-			</ChatResponseList>
+			</ChatResponseList>)}
 			<ChatInput
 				loading={loading}
 				onChatSubmitted={handleChatSubmitted}

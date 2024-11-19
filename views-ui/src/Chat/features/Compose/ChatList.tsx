@@ -51,6 +51,7 @@ function ChatResponseList({
 			<ChatEntry
 				key={index}
 				from={from}
+				loading={false}
 				message={message}
 				plan={plan}
 				index={index}

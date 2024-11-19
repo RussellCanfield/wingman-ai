@@ -2,13 +2,14 @@ import { ChatMessage } from "@langchain/core/messages";
 import { ComposerRequest } from "@shared/types/Composer";
 import { FileMetadata } from "@shared/types/Message";
 
-export type PlanStep = {
+export type ManualStep = {
 	description: string;
 	command?: string;
 };
 
 export type Plan = {
-	steps: PlanStep[];
+	summary?: string;
+	steps?: ManualStep[];
 	files?: FileMetadata[];
 };
 

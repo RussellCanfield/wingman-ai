@@ -10,6 +10,7 @@ import { FileDropdown } from "./components/FileDropdown";
 import { FileChips } from "./components/FileChips";
 import { ImagePreview } from "./components/ImagePreview";
 import { useSettingsContext } from "../../../context/settingsContext";
+import { useComposerContext } from "../../../context/composerContext";
 
 interface ChatInputProps {
 	onChatSubmitted: (
@@ -28,12 +29,12 @@ const ChatInput = ({
 }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useSettingsContext();
+	const { activeFiles, setActiveFiles } = useComposerContext();
 	const [inputValue, setInputValue] = useState("");
 	const [selectedImage, setSelectedImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const chatInputBox = useAutoFocus();
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const [chips, setChips] = useState<FileSearchResult[]>([]);
 	const [showDropdown, setShowDropdown] = useState(false);
 	const [focusedDropdownIndex, setFocusedDropdownIndex] = useState<number>(1);
 	const [allDropdownItems, setDropdownItems] = useState<FileSearchResult[]>(
@@ -52,7 +53,7 @@ const ChatInput = ({
 			const rect = chatInputBox.current.getBoundingClientRect();
 			setInputRect(rect);
 		}
-	}, [inputValue, chips]);
+	}, [inputValue, activeFiles]);
 
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { data } = event;
@@ -129,7 +130,7 @@ const ChatInput = ({
 		}
 	};
 
-	const chipMap = new Set(chips.map((chip) => chip.path));
+	const chipMap = new Set(activeFiles.map((chip) => chip.path));
 	const filteredDropDownItems = allDropdownItems.filter(
 		(d) => !chipMap.has(d.path)
 	);
@@ -150,9 +151,9 @@ const ChatInput = ({
 	const handleDropdownSelect = (item: FileSearchResult) => {
 		if (!item) return;
 
-		if (!chips.some((chip) => chip.path === item.path)) {
-			const newChips = [...chips, item];
-			setChips(newChips);
+		if (!activeFiles.some((chip) => chip.path === item.path)) {
+			const newChips = [...activeFiles, item];
+			setActiveFiles(newChips);
 
 			const words = inputValue.split(/\s+/);
 			words.pop();
@@ -165,7 +166,7 @@ const ChatInput = ({
 	};
 
 	const handleChipRemove = (chip: FileSearchResult) => {
-		setChips(chips.filter((c) => c !== chip));
+		setActiveFiles(activeFiles.filter((c) => c !== chip));
 	};
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -180,14 +181,14 @@ const ChatInput = ({
 				chatInputBox.current?.focus();
 			} else {
 				const message =
-					chips.map((chip) => `@${chip.file}`).join(" ") +
-					(chips.length > 0 && inputValue ? " " : "") +
+					activeFiles.map((chip) => `@${chip.file}`).join(" ") +
+					(activeFiles.length > 0 && inputValue ? " " : "") +
 					inputValue;
 
 				if (message.trim() || selectedImage) {
 					onChatSubmitted(
 						inputValue.trim(),
-						chips.map((chip) => chip.path),
+						activeFiles.map((chip) => chip.path),
 						selectedImage || undefined
 					);
 					setInputValue("");
@@ -227,14 +228,14 @@ const ChatInput = ({
 						/>
 					)}
 					<FileChips
-						chips={chips}
+						chips={activeFiles}
 						onChipRemove={handleChipRemove}
 						isLightTheme={isLightTheme}
 					/>
 					<div className="flex flex-wrap items-center mb-2 border-2 border-gray-500 rounded-md">
 						<textarea
 							placeholder={
-								chips.length === 0
+								activeFiles.length === 0
 									? "Type here to begin, use '@' to search for files to add as context."
 									: ""
 							}
@@ -274,15 +275,14 @@ const ChatInput = ({
 										tabIndex={0}
 										role="presentation"
 										title="Send"
-										className={`${
-											!inputValue.trim()
+										className={`${!inputValue.trim()
 												? "text-gray-500"
 												: "text-gray-100"
-										} cursor-pointer`}
+											} cursor-pointer`}
 										onClick={() =>
 											handleUserInput({
 												key: "Enter",
-												preventDefault: () => {},
+												preventDefault: () => { },
 												shiftKey: false,
 											} as React.KeyboardEvent<HTMLTextAreaElement>)
 										}

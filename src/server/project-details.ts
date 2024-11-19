@@ -128,12 +128,14 @@ export class ProjectDetailsHandler {
 		try {
 			const projectDetailsPath = this.getProjectDetailsFileLocation();
 			if (fs.existsSync(projectDetailsPath)) {
-				const projectDetails = await fs.promises.readFile(
+				const projectDetails = await fs.readFileSync(
 					projectDetailsPath,
 					"utf8"
 				);
 				return JSON.parse(projectDetails) as ProjectDetails;
 			}
-		} catch {}
+		} catch (error) {
+			console.error(error);
+		}
 	};
 }
