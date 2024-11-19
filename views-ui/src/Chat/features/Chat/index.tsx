@@ -34,7 +34,7 @@ export default function Chat() {
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{messages.length === 0 && (
-				<p className="text-center max-w-2xl px-8 py-6 bg-gradient-to-br from-slate-800/40 to-slate-900/40 rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
+				<p className="text-center max-w-2xl px-8 py-6 bg-gradient-to-br from-slate-300/40 to-slate-400/40 rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
 					<div
 						id="wingman-logo"
 						role="img"
@@ -44,7 +44,7 @@ export default function Chat() {
 					<span className="block text-xl font-semibold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
 						Wingman-AI
 					</span>
-					<span className="text-slate-300 leading-relaxed">
+					<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
 						The chat feature allows you to ask general or specific
 						questions about your codebase. You can also target specific
 						context by opening a file, or highlighting sections of a

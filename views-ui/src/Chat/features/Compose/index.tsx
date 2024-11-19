@@ -87,7 +87,7 @@ export default function Compose() {
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{composerMessages.length === 0 && (
 				<>
-					<p className="text-center max-w-2xl px-8 py-6 bg-gradient-to-br from-slate-800/40 to-slate-900/40 rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
+					<p className="text-center max-w-2xl px-8 py-6 bg-gradient-to-br from-slate-300/40 to-slate-400/40 rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
 						<div
 							id="wingman-logo"
 							role="img"
@@ -97,7 +97,7 @@ export default function Compose() {
 						<span className="block text-xl font-semibold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
 							Wingman-AI
 						</span>
-						<span className="text-slate-300 leading-relaxed">
+						<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
 							The composer feature allows you to generate code changes
 							across files. You can ask for help with code, or ask for
 							code to be written for you. By default, composer will
