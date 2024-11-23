@@ -155,6 +155,7 @@ Review Guidelines:
 3. Code Organization and Readability:
   - Suggest code extraction only if it significantly enhances readability or reusability.
   - Only one comment is allowed per line, rollup comments for the same line into a single comment.
+  - Ignore minor differences in formatting and whitespace.
 
 4. Review Scope and Boundaries:
   - The line numbers are prefixed on each line.

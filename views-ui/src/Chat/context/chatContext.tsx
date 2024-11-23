@@ -40,7 +40,7 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
           if (!value) {
             return;
           }
-  
+
           setActiveMessage((prevMessage) => {
             const updatedMessage = {
               loading: true,
@@ -50,7 +50,9 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
               message: !prevMessage?.message ? String(value) : prevMessage.message += String(value),
               type: "chat",
             } satisfies Message;
-            
+
+            setLoading(true);
+
             return updatedMessage;
           });
           break;
@@ -63,6 +65,7 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
             }
             return currentMessage;
           });
+          setLoading(false);
           break;
         case "code-review-failed":
           addMessage({
@@ -89,7 +92,7 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
               context: value as CodeContext,
               type: "chat",
             } satisfies Message;
-            
+
             return updatedMessage;
           });
           break;

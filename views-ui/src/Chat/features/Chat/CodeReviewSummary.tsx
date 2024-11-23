@@ -76,7 +76,7 @@ export default function CodeReviewSummary({ message }: CodeReviewSummaryProps) {
 					</svg>
 					Note: Code Reviews are still a work in progress. Please
 					carefully review modifications before accepting suggestions.
-					Using Ollama as a provider may not yield code comments.
+					If you're using Ollama, ensure you have a powerful enough model to perform code analysis effectively.
 				</p>
 			</div>
 			{message.review.fileDiffMap &&

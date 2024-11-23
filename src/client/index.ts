@@ -154,7 +154,6 @@ export class LSPClient {
 	};
 
 	setIndexerSettings = async (indexSettings: IndexerSettings) => {
-		this.clearIndexFilterCache();
 		await client.sendRequest("wingman/indexerSettings", indexSettings);
 	};
 
@@ -182,7 +181,6 @@ export class LSPClient {
 		exclusionFilter,
 	}: IndexerSettings) => {
 		telemetry.sendEvent(EVENT_FULL_INDEX_BUILD);
-		this.clearIndexFilterCache();
 		const foundFiles = await findFiles(indexFilter, exclusionFilter);
 		return client.sendRequest("wingman/fullIndexBuild", {
 			files: foundFiles.map((f) => f.fsPath),
@@ -215,10 +213,6 @@ export class LSPClient {
 		return { codeDocs: [], projectDetails: "" };
 	};
 
-	clearIndexFilterCache = () => {
-		cachedGitignorePatterns = null;
-	};
-
 	indexExists = async () => {
 		return client.sendRequest("wingman/getIndex");
 	};
@@ -231,57 +225,54 @@ export class LSPClient {
 	};
 }
 
-let cachedGitignorePatterns: string[] | null = null;
-
 async function getGitignorePatterns(exclusionFilter?: string) {
-	if (cachedGitignorePatterns) {
-		return `{${cachedGitignorePatterns.join(",")}}`;
-	}
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        return "";
+    }
 
-	const workspaceFolders = vscode.workspace.workspaceFolders;
-	if (!workspaceFolders) {
-		return "";
-	}
+    const gitignorePath = vscode.Uri.file(
+        path.join(workspaceFolders[0].uri.fsPath, ".gitignore")
+    );
 
-	const gitignorePath = vscode.Uri.file(
-		path.join(workspaceFolders[0].uri.fsPath, ".gitignore")
-	);
+    try {
+        const gitignoreContent = await vscode.workspace.fs.readFile(
+            gitignorePath
+        );
+        const gitignoreLines = gitignoreContent.toString().split("\n");
+        const ig = ignore().add(gitignoreLines);
 
-	try {
-		const gitignoreContent = await vscode.workspace.fs.readFile(
-			gitignorePath
-		);
-		const gitignoreLines = gitignoreContent.toString().split("\n");
-		const ig = ignore().add(gitignoreLines);
+        // Use the ignore instance to filter and process patterns
+        const gitIgnorePatterns = gitignoreLines
+            .filter((line) => line && !line.startsWith("#"))
+            .map((pattern) => {
+                // Verify if the pattern is valid using the ignore instance
+                if (ig.ignores(pattern.replace(/^!/, ''))) {
+                    if (pattern.startsWith("!")) {
+                        return `!**/${pattern.slice(1)}`;
+                    }
+                    return `**/${pattern}`;
+                }
+                return null;
+            })
+            .filter((pattern): pattern is string => pattern !== null);
 
-		// Convert .gitignore patterns to glob patterns
-		cachedGitignorePatterns = gitignoreLines
-			.filter((line) => line && !line.startsWith("#"))
-			.map((pattern) => {
-				if (pattern.startsWith("!")) {
-					return `!**/${pattern.slice(1)}`;
-				}
-				return `**/${pattern}`;
-			});
+        let combinedExclusionFilter: string | undefined;
+        if (exclusionFilter) {
+            combinedExclusionFilter = `{${exclusionFilter},${gitIgnorePatterns.join(",")}}`;
+        } else if (gitIgnorePatterns.length > 0) {
+            combinedExclusionFilter = `{${gitIgnorePatterns.join(",")}}`;
+        }
 
-		let combinedExclusionFilter: string | undefined;
-		if (exclusionFilter) {
-			combinedExclusionFilter = `{${exclusionFilter},${cachedGitignorePatterns.join(
-				","
-			)}}`;
-		} else if (cachedGitignorePatterns.length > 0) {
-			combinedExclusionFilter = `{${cachedGitignorePatterns.join(",")}}`;
-		}
-
-		return combinedExclusionFilter;
-	} catch (err) {
-		if (err instanceof Error) {
-			loggingProvider.logError(
-				`Error reading .gitignore file: ${err.message}`
-			);
-		}
-		return "";
-	}
+        return combinedExclusionFilter;
+    } catch (err) {
+        if (err instanceof Error) {
+            loggingProvider.logError(
+                `Error reading .gitignore file: ${err.message}`
+            );
+        }
+        return "";
+    }
 }
 
 async function findFiles(filter: string, exclusionFilter?: string) {

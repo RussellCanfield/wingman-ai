@@ -51,8 +51,7 @@ export default function Chat() {
 						file.
 						<br />
 						<br />
-						Chat now features commands! We currently support a code
-						review command: "/review". More will be added in the future.
+						Chat now features commands! Type "/" to get started.
 					</span>
 				</p>
 			)}
