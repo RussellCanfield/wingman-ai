@@ -60,7 +60,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _diffViewProvider: DiffViewProvider,
 		private readonly _workspace: Workspace,
 		private readonly _settings: Settings
-	) {}
+	) { }
 
 	dispose() {
 		this._disposables.forEach((d) => d.dispose());
@@ -130,6 +130,7 @@ Rules:
 - Determine if the command ran successfully or not.
 - If the command did not run successfully try to succinctly identify what the error may be.
 - Provide a concise summary of the error, if present.
+- The summary should include details required to take action and fix the error(s). This might include files or paths.
 - If there was no exit code, and an error is not obvious, assume it was successful.
 - Return your response in JSON format, do not include markdown or any other text.
 
@@ -242,12 +243,12 @@ ${result.summary}`,
 
 							if (currentSettings.indexerSettings.indexFilter !== appState.settings.indexerSettings.indexFilter) {
 								const matchingFiles =
-								await vscode.workspace.findFiles(
-									appState.settings.indexerSettings.indexFilter ?? "*",
-									(await getGitignorePatterns(
-										this._workspace.workspacePath
-									)) || ""
-								);
+									await vscode.workspace.findFiles(
+										appState.settings.indexerSettings.indexFilter ?? "*",
+										(await getGitignorePatterns(
+											this._workspace.workspacePath
+										)) || ""
+									);
 
 								appState.totalFiles = matchingFiles?.length ?? 0;
 								webviewView.webview.postMessage({
@@ -475,12 +476,12 @@ ${result.summary}`,
 							const settings = await this._workspace.load();
 
 							const matchingFiles =
-							await vscode.workspace.findFiles(
-								settings.indexerSettings.indexFilter ?? "*",
-								(await getGitignorePatterns(
-									this._workspace.workspacePath
-								)) || ""
-							);
+								await vscode.workspace.findFiles(
+									settings.indexerSettings.indexFilter ?? "*",
+									(await getGitignorePatterns(
+										this._workspace.workspacePath
+									)) || ""
+								);
 
 							const appState: AppState = {
 								workspaceFolder: getActiveWorkspace(),
@@ -551,7 +552,7 @@ ${result.summary}`,
 					this._settings.aiProvider
 				]?.chatModel,
 			});
-		} catch {}
+		} catch { }
 
 		ragContext = `{LANGUAGE_TEMPLATE}
 {FILE_TEMPLATE}
@@ -580,8 +581,8 @@ ${result.summary}`,
 				!context?.text
 					? ""
 					: context.fromSelection
-					? `The user has selected the following code and wishes you to focus on it:\n${context.text}`
-					: `The user has provided a snippet of code from the file they are working on:\n${context.text}`
+						? `The user has selected the following code and wishes you to focus on it:\n${context.text}`
+						: `The user has provided a snippet of code from the file they are working on:\n${context.text}`
 			) + "\n\n=======";
 
 		ragContext = ragContext.replace(
@@ -672,7 +673,7 @@ ${codeDocs.join("\n\n----\n")}
 		const nonce = getNonce();
 
 		const htmlContent = fs.readFileSync(htmlUri.fsPath, "utf8");
-		const imageUri = getImageUri(webview, this._context, ['media', 
+		const imageUri = getImageUri(webview, this._context, ['media',
 			vscode.window.activeColorTheme.kind === 1 ? 'Logo-black.png' : 'Logo-white.png']);
 
 		// Replace placeholders in the HTML content

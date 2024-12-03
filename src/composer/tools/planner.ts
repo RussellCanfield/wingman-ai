@@ -92,6 +92,7 @@ Guidelines:
    - List only necessary build/config changes
    - Define clear integration points
    - Identify only direct dependencies
+   - When using or installing a dependency, always use the latest and most up to date version you are aware of.
 
 4. Technical Considerations:
    - Framework-specific requirements
@@ -154,8 +155,8 @@ export class CodePlanner {
 			this.chatModel instanceof ChatOllama
 				? this.chatModel
 				: this.chatModel.withStructuredOutput(planSchema, {
-						name: "planner",
-				  });
+					name: "planner",
+				});
 	}
 
 	codePlannerStep = async (
@@ -171,7 +172,7 @@ export class CodePlanner {
 		try {
 			const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
 			state.plan = state.plan || { files: [] };
-			
+
 			const objective = buildObjective(state);
 			const searchQuery = await this.generateSearchQueries(state);
 			const didRetrieve = await this.populateInitialFiles(
@@ -211,7 +212,7 @@ export class CodePlanner {
 				files: docs
 			};
 
-			await dispatchCustomEvent("composer-planner", { 
+			await dispatchCustomEvent("composer-planner", {
 				plan: {
 					summary: response.summary,
 					files: docs
@@ -261,7 +262,7 @@ Search queries:`);
 		if (Array.isArray(state.plan?.files) && state.plan.files.length > 0) {
 			return false;
 		}
-	
+
 		const starterDocs = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
 			query,
 			this.codeGraph,
@@ -269,9 +270,9 @@ Search queries:`);
 			this.workspace,
 			15
 		);
-	
+
 		state.plan = state.plan || { files: [] };
-		
+
 		state.plan.files = Array.from(starterDocs.entries()).map(
 			([file, doc]) => ({
 				path: file,
@@ -279,7 +280,7 @@ Search queries:`);
 
 			})
 		);
-	
+
 		return true;
 	}
 
@@ -297,8 +298,8 @@ Query: ${objective}
 
 Results to rank:
 ${state.plan?.files?.map((f, index) => {
-	return `${index + 1}. ${f.path}\n${f.code}\n\n-----FILE-----\n\n`;
-})}
+					return `${index + 1}. ${f.path}\n${f.code}\n\n-----FILE-----\n\n`;
+				})}
 
 Please analyze these results and provide a ranked list from most relevant to least relevant. For each result, only return the new ranking index. Your response should be in this format:
 
@@ -424,7 +425,7 @@ Ranked results:
 						await fs.promises.readFile(filePath, "utf8")
 					);
 				}
-			} catch {}
+			} catch { }
 
 			result.push({
 				path: f.file,
