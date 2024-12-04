@@ -1,5 +1,5 @@
 import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
-import { BaseMessage, CodeReviewMessage, Message } from "@shared/types/Message";
+import { BaseMessage, CodeReviewMessage, CommitMessage, Message } from "@shared/types/Message";
 import ChatEntry from "./ChatEntry";
 import CodeReviewSummary from "./CodeReviewSummary";
 
@@ -50,7 +50,22 @@ function ChatResponseList({
 	const chatHistory = useMemo(() => {
 		return messages.map((message, index) => {
 			switch (message.type) {
-				case "chat":
+				case "code-review":
+					return (
+						<CodeReviewSummary
+							key={`${message.type}-${index}`}
+							message={message as CodeReviewMessage}
+						/>
+					);
+				case "commit-msg":
+					return (
+						<ChatEntry
+							key={`${message.type}-${index}`}
+							from="assistant"
+							message={(message as CommitMessage).message}
+						/>
+					)
+				default:
 					const { from, message: body, context } = message as Message;
 					return (
 						<ChatEntry
@@ -60,15 +75,6 @@ function ChatResponseList({
 							context={context}
 						/>
 					);
-				case "code-review":
-					return (
-						<CodeReviewSummary
-							key={`${message.type}-${index}`}
-							message={message as CodeReviewMessage}
-						/>
-					);
-				default:
-					return null;
 			}
 		});
 	}, [messages]);

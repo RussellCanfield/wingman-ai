@@ -20,4 +20,9 @@ export const AVAILABLE_COMMANDS: Command[] = [
 		label: "/review",
 		description: "Start a code review session",
 	},
+	{
+		id: "commit_msg",
+		label: "/commit_msg",
+		description: "Generate a commit message for staged changes"
+	}
 ];

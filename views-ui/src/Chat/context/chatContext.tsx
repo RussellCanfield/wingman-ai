@@ -75,12 +75,32 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
             type: "chat"
           });
           setActiveMessage(undefined);
+          setLoading(false);
           break;
         case "code-review-result":
           addMessage({
             ...(value as CodeReviewMessage),
           });
           setActiveMessage(undefined);
+          setLoading(false);
+          break;
+        case "commit-msg-failed":
+          addMessage({
+            from: "assistant",
+            loading: false,
+            message: "Sorry I have failed to generate a commit message, please ensure Git is available locally",
+            type: "chat"
+          });
+          setActiveMessage(undefined);
+          setLoading(false);
+          break;
+        case "commit-msg-result":
+          addMessage({
+            ...(value as CodeReviewMessage),
+            loading: false
+          });
+          setActiveMessage(undefined);
+          setLoading(false);
           break;
         case "context":
           setActiveMessage((prevMessage) => {

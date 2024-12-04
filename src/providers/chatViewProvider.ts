@@ -7,6 +7,7 @@ import {
 	CodeContext,
 	CodeContextDetails,
 	CodeReviewMessage,
+	CommitMessage,
 	FileMetadata,
 } from "@shared/types/Message";
 import { AppState, Settings } from "@shared/types/Settings";
@@ -30,6 +31,7 @@ import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 import {
 	EVENT_CHAT_SENT,
+	EVENT_COMMIT_MSG,
 	EVENT_REVIEW_FILE_BY_FILE,
 	EVENT_REVIEW_STARTED,
 	EVENT_VALIDATE_FAILED,
@@ -184,6 +186,11 @@ ${result.summary}`,
 			});
 		});
 
+		const codeReviewer = new CodeReviewer(
+			this._workspace.workspacePath,
+			this._aiProvider
+		);
+
 		this._disposables.push(
 			webviewView.webview.onDidReceiveMessage(
 				async (data: AppMessage) => {
@@ -193,12 +200,7 @@ ${result.summary}`,
 
 					const { command, value } = data;
 
-					const workspaceFolder =
-						vscode.workspace.workspaceFolders?.[0].uri;
-					if (!workspaceFolder) {
-						throw new Error("No workspace folder found");
-					}
-
+					// TODO - save me from the insanity of this switch statement :D
 					switch (command) {
 						case "delete-indexed-file":
 							await this._lspClient.deleteFileFromIndex(String(value));
@@ -210,17 +212,12 @@ ${result.summary}`,
 							);
 							break;
 						case "review":
-							const codeReviewer = new CodeReviewer(
-								workspaceFolder.fsPath,
-								this._aiProvider
-							);
-
 							const review =
 								await codeReviewer.generateDiffsAndSummary(
 									String(value)
 								);
 
-							telemetry.sendEvent(EVENT_REVIEW_STARTED);
+							telemetry.sendEvent(EVENT_COMMIT_MSG);
 
 							if (!review) {
 								webviewView.webview.postMessage({
@@ -235,6 +232,34 @@ ${result.summary}`,
 									review,
 									type: "code-review",
 								} satisfies CodeReviewMessage,
+							});
+							break;
+						case "commit_msg":
+							const commitReview =
+								await codeReviewer.generateCommitMessage(
+									String(value)
+								);
+
+							telemetry.sendEvent(EVENT_COMMIT_MSG);
+
+							if (!commitReview) {
+								webviewView.webview.postMessage({
+									command: "commit-msg-failed",
+								});
+								return;
+							}
+
+							webviewView.webview.postMessage({
+								command: "commit-msg-result",
+								value: {
+									message: `Please use the following commit message for your staged changes:
+
+\`\`\`plaintext								
+${commitReview}
+\`\`\``,
+									type: "commit-msg",
+									loading: false
+								} satisfies CommitMessage,
 							});
 							break;
 						case "state-update":
@@ -271,7 +296,7 @@ ${result.summary}`,
 
 							this._diffViewProvider.createDiffView({
 								file: vscode.Uri.joinPath(
-									workspaceFolder,
+									vscode.Uri.parse(this._workspace.workspacePath),
 									vscode.workspace.asRelativePath(file)
 								).fsPath,
 								diff: extractCodeBlock(diff),
@@ -323,7 +348,7 @@ ${result.summary}`,
 								vscode.workspace.asRelativePath(artifactFile);
 
 							const fileUri = vscode.Uri.joinPath(
-								workspaceFolder,
+								vscode.Uri.parse(this._workspace.workspacePath),
 								relativeFilePath
 							);
 

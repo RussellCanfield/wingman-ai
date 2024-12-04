@@ -20,6 +20,7 @@ export const EVENT_DOC_GEN = "DOC_GEN";
 export const EVENT_REFACTOR = "REFACTOR";
 export const EVENT_REVIEW_STARTED = "CODE_REVIEW";
 export const EVENT_REVIEW_FILE_BY_FILE = "CODE_REVIEW_FILES";
+export const EVENT_COMMIT_MSG = "COMMIT_MSG";
 
 export class Telemetry {
 	reporter: TelemetryReporter | undefined;

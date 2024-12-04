@@ -44,10 +44,15 @@ export interface CodeReviewCommand {
 	isDarkTheme: boolean;
 }
 
-export type MessageType = "chat" | "code-review";
+export type MessageType = "chat" | "code-review" | "commit-msg";
 
-export type ChatMessages = Array<Message | CodeReviewMessage>;
+export type ChatMessages = Array<Message | CodeReviewMessage | CommitMessage>;
 export type ChatMessage = Message | CodeReviewMessage;
+
+export interface CommitMessage extends BaseMessage {
+	message: string;
+	type: "commit-msg";
+}
 
 export interface CodeReviewMessage extends BaseMessage {
 	review: CodeReview;
@@ -89,4 +94,4 @@ export interface CodeContext
 	extends Pick<
 		CodeContextDetails,
 		"fileName" | "lineRange" | "workspaceName"
-	> {}
+	> { }

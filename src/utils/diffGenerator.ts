@@ -10,6 +10,7 @@ interface DiffOptions {
 	includeStagedChanges?: boolean;
 	includeUnstagedChanges?: boolean;
 	includeUntrackedFiles?: boolean;
+	includeCommittedChanges?: boolean;
 	pathSpec?: string;
 }
 
@@ -83,14 +84,15 @@ export class DiffGenerator {
 		return this.executeGitCommand("git rev-parse --abbrev-ref HEAD");
 	}
 
-	public async generateDiffWithLineNumbersAndMap(): Promise<
+	public async generateDiffWithLineNumbersAndMap(params: DiffOptions = {
+		includeStagedChanges: true,
+		includeUnstagedChanges: true,
+		includeUntrackedFiles: true,
+		includeCommittedChanges: false
+	}): Promise<
 		CodeReview["fileDiffMap"]
 	> {
-		const diffs = await this.getDiff({
-			includeStagedChanges: true,
-			includeUnstagedChanges: true,
-			includeUntrackedFiles: true
-		});
+		const diffs = await this.getDiff(params);
 
 		if (!diffs) {
 			vscode.window.showInformationMessage(
@@ -213,6 +215,7 @@ export class DiffGenerator {
 			includeStagedChanges = true,
 			includeUnstagedChanges = true,
 			includeUntrackedFiles = false,
+			includeCommittedChanges = true,
 			pathSpec = ''
 		} = options;
 
@@ -259,14 +262,16 @@ export class DiffGenerator {
 				}
 			}
 
-			// Get all changes against base branch including working directory
-			try {
-				const allChanges = await this.executeGitCommand(`git diff ${mergeBase} ${pathSpec}`);
-				if (allChanges) {
-					diffCommands.push(allChanges);
+			if (includeCommittedChanges) {
+				// Get all changes against base branch including working directory
+				try {
+					const allChanges = await this.executeGitCommand(`git diff ${mergeBase} ${pathSpec}`);
+					if (allChanges) {
+						diffCommands.push(allChanges);
+					}
+				} catch (error) {
+					console.warn('Failed to get branch changes:', error);
 				}
-			} catch (error) {
-				console.warn('Failed to get branch changes:', error);
 			}
 
 			// Get staged changes that aren't committed

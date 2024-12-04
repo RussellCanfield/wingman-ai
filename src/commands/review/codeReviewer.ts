@@ -42,7 +42,7 @@ export class CodeReviewer {
 				const model = this._aiProvider.getRerankModel();
 				const summary =
 					await model.invoke(`You are a senior software engineer tasked with generating a concise summary of code changes to a project.
-Use the following files and associated git diffs to the summary.
+Use the following files and associated git diffs to generate the summary.
 Do not include introduction text or any other text, just return your review.
 Generate the following sections:
 
@@ -85,15 +85,15 @@ ${instructions || "None provided."}
 -------
 
 ${Object.entries(fileDiffMap)
-	.map(([file, diff]) => {
-		return `File: 
+							.map(([file, diff]) => {
+								return `File: 
 ${file}
 
 Changes:
 ${diff.diff}
 `;
-	})
-	.join("\n\n-------\n\n")})}`);
+							})
+							.join("\n\n-------\n\n")})}`);
 
 				return { summary: summary.content.toString(), fileDiffMap };
 			}
@@ -101,6 +101,56 @@ ${diff.diff}
 			if (error instanceof Error) {
 				vscode.window.showErrorMessage(
 					`Failed to start code review: ${error.message}`
+				);
+			}
+		}
+	}
+
+	async generateCommitMessage(instructions: string) {
+		try {
+			const fileDiffMap =
+				await this.diffGenerator.generateDiffWithLineNumbersAndMap({
+					includeCommittedChanges: false,
+					includeStagedChanges: true,
+				});
+
+			if (fileDiffMap) {
+				// Use the cheaper model for summaries
+				const model = this._aiProvider.getRerankModel();
+				const summary =
+					await model.invoke(`You are a senior software engineer tasked with generating a commit message for changes against the code base.
+Use the following files and associated git diffs to generate the commit message.
+Do not include introduction text or any other text, just return your commit message.
+
+**Rules**
+- Keep commit messages short and concise, this will be read by team members.
+- Limit your response to no more than 50 characters.
+
+-------
+
+Here is additional information/instructions from the user to take into consideration:
+
+${instructions || "None provided."}
+
+-------
+
+${Object.entries(fileDiffMap)
+							.map(([file, diff]) => {
+								return `File: 
+${file}
+
+Changes:
+${diff.diff}
+`;
+							})
+							.join("\n\n-------\n\n")})}`);
+
+				return summary.content.toString();
+			}
+		} catch (error) {
+			if (error instanceof Error) {
+				vscode.window.showErrorMessage(
+					`Failed to generate commit message: ${error.message}`
 				);
 			}
 		}
