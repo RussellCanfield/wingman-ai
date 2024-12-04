@@ -57,7 +57,7 @@ export class Indexer {
 		private readonly generator: Generator,
 		private readonly symbolRetriever: SymbolRetriever,
 		private readonly vectorStore: Store
-	) {}
+	) { }
 
 	isSyncing = () => this.syncing;
 
@@ -191,8 +191,7 @@ export class Indexer {
 				}
 
 				if (nodesToProcess.size === 0) {
-					this.syncing = false;
-					return;
+					continue;
 				}
 
 				const skeletonNodes = await this.skeletonizeCodeNodes(
@@ -228,10 +227,10 @@ export class Indexer {
 						error
 					);
 				}
+			} finally {
+				this.syncing = false;
 			}
 		}
-
-		this.syncing = false;
 	};
 
 	createNodesFromDocument = async (
