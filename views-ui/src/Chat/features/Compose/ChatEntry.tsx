@@ -134,7 +134,7 @@ const ChatArtifact = ({
 				<h4 className="m-0 flex-grow p-2 text-wrap break-all">
 					{truncatePath(file.path)}
 				</h4>
-				{file.changes && (
+				{file?.changes && (
 					<div className="flex">
 						<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
 							<button
@@ -177,7 +177,7 @@ const ChatArtifact = ({
 					</div>
 				)}
 			</div>
-			{file.changes?.length && file.changes?.length > 0 && (
+			{file?.changes?.length && file?.changes?.length > 0 && (
 				<div className="p-2 bg-editor-bg">
 					<div className="mb-4 p-2">
 						<h4 className="m-0 text-md font-semibold">Changes:</h4>
@@ -288,7 +288,7 @@ const ChatEntry = ({
 					</div>
 				</div>
 			)}
-			{plan.files && plan?.files?.length > 0 && (
+			{plan?.files && plan?.files?.length > 0 && (
 				<div>
 					<h3 className="m-0 text-lg mt-4">Files:</h3>
 					{plan?.files?.map((file, index) => (
@@ -300,7 +300,7 @@ const ChatEntry = ({
 					))}
 				</div>
 			)}
-			{from === 'assistant' && loading && (!plan.files || plan.files?.length === 0) && (
+			{from === 'assistant' && loading && (!plan?.files || plan.files?.length === 0) && (
 				<div className="mt-4">
 					<SkeletonLoader isDarkTheme={!isLightTheme} />
 				</div>
