@@ -402,12 +402,12 @@ ${commitReview}
 								return [];
 							}
 
-							const searchPattern = `{**/*${searchTerm}*/**,**/*${searchTerm}*,**/${searchTerm},**/${searchTerm}.*}`;
+							const settings = await this._workspace.load();
 
 							// Find all files in the workspace that match the search term
 							const matchingFiles =
 								await vscode.workspace.findFiles(
-									searchPattern,
+									settings.indexerSettings.indexFilter,
 									(await getGitignorePatterns(
 										this._workspace.workspacePath
 									)) || ""
@@ -415,7 +415,7 @@ ${commitReview}
 
 							// Convert to relative paths
 							const filteredFiles: FileSearchResult[] =
-								matchingFiles.map((file) => {
+								matchingFiles.filter(f => f.fsPath.includes(searchTerm)).map((file) => {
 									const path =
 										vscode.workspace.asRelativePath(
 											file.fsPath
