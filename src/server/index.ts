@@ -229,6 +229,8 @@ export class LSPServer {
 			}
 
 			try {
+				await this.postInitialize();
+
 				this.fileEventHandler = new LSPFileEventHandler(
 					//@ts-expect-error
 					this.connection,
@@ -238,7 +240,6 @@ export class LSPServer {
 					indexerSettings.indexFilter
 				);
 
-				await this.postInitialize();
 				await this.addEvents();
 			} catch (e) {
 				console.error(e);

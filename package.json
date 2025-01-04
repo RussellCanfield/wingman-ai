@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.8.17",
+	"version": "0.8.18",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -188,7 +188,7 @@
 		"docs": "cd docs-site && npm run dev"
 	},
 	"dependencies": {
-		"@ast-grep/napi": "0.32.3",
+		"@ast-grep/napi": "0.29.0",
 		"@langchain/anthropic": "0.3.11",
 		"@langchain/community": "0.3.22",
 		"@langchain/core": "0.3.27",

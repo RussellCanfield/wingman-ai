@@ -117,17 +117,9 @@ export class LSPFileEventHandler {
         try {
             if (!(await this.shouldProcessFile(fileURLToPath(event.textDocument.uri)))) return;
 
-            await this.handleChanged(event.textDocument.uri);
+            this.queue?.enqueue([event.textDocument.uri]);
         } catch (error) {
             this.connection.console.error(`Error handling changes: ${error}`);
         }
-    }
-
-    private async handleChanged(uri: string) {
-        if (!await this.shouldProcessFile(fileURLToPath(uri))) {
-            return;
-        }
-
-        this.queue?.enqueue([uri]);
     }
 }
