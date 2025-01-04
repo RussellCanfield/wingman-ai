@@ -10,7 +10,6 @@ import {
 import { FILE_SEPARATOR } from "./common";
 import json5 from 'json5';
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
-import { Plan } from "@shared/types/Composer";
 import { FileMetadata } from "@shared/types/Message";
 
 export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
@@ -118,6 +117,8 @@ File Handling:
 - Provide full, functional code responses.
 - Always include the full file path.
 - List changes performed on files, if no changes are performed, omit the file.
+- Write the best code possible.
+- Make sure the code is the aboslute best you can produce, make it human readable.
 
 ------
 
@@ -206,7 +207,7 @@ export class CodeWriter {
 	constructor(
 		private readonly chatModel: BaseChatModel,
 		private readonly workspace: string
-	) {}
+	) { }
 
 	codeWriterStep = async (
 		state: PlanExecuteState
@@ -222,15 +223,15 @@ export class CodeWriter {
 Here are the steps per file:
 
 ${state.plan.files
-	.map(
-		(s) => `File:
+				.map(
+					(s) => `File:
   
 ${s.path}
 
 Steps:
 - ${s.plan?.join("\n- ")}`
-	)
-	.join("\n")}`
+				)
+				.join("\n")}`
 			: "";
 
 		const reviewComments =
@@ -270,26 +271,26 @@ ${state.review?.comments?.join("\n")}
 									? ""
 									: `Context: Previously Created Manual Steps
             
-    The following list contains manual steps already created based on previously modified or created files.
-    Use this information as context for subsequent step process. Do not suggest these again.
-    
-    ${steps.map((s) => `${s.description}\n${s.command}`).join("\n\n")}
-    
-    ------`,
+The following list contains manual steps already created based on previously modified or created files.
+Use this information as context for subsequent step process. Do not suggest these again.
+
+${steps.map((s) => `${s.description}\n${s.command}`).join("\n\n")}
+
+------`,
 							modifiedFiles:
 								files.length === 0
 									? ""
 									: `Context: Previously Modified/Created Files
     
-    The following list contains files already processed, along with their changes. 
-    Use this information as context for subsequent file processing. Do not modify these files again.
-    Note: Consider dependencies between files.
-    
-    ${files.map(
-		(f) => `File:\n${f.path}\n\nChanges:\n${f.changes?.join("\n")}`
-	)}
-    
-    ------`,
+The following list contains files already processed, along with their changes. 
+Use this information as context for subsequent file processing. Do not modify these files again.
+Note: Consider dependencies between files.
+
+${files.map(
+										(f) => `File:\n${f.path}\n\nChanges:\n${f.changes?.join("\n")}`
+									)}
+
+------`,
 							otherFiles:
 								state.plan?.files
 									?.filter((f) => f.path !== file)
@@ -316,11 +317,10 @@ ${state.review?.comments?.join("\n")}
 							type: "text",
 							text: `Here is the file currently in scope:
             
-${
-	file === "BLANK"
-		? `The user does not currently have any related files, assume this may be a new project and this is your current working directory: ${this.workspace}`
-		: `File:\n${file}\n\nCode:\n${code}`
-}`,
+${file === "BLANK"
+									? `The user does not currently have any related files, assume this may be a new project and this is your current working directory: ${this.workspace}`
+									: `File:\n${file}\n\nCode:\n${code}`
+								}`,
 						},
 					],
 				}),
@@ -332,7 +332,7 @@ ${
 				result.file.changes && result.file.changes.length > 0;
 
 			steps.push(...(result.steps ?? []));
-			
+
 			await dispatchCustomEvent("composer-manual-steps", {
 				plan: {
 					files: state.plan?.files,

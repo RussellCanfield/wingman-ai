@@ -174,6 +174,7 @@ export class Indexer {
 							relatedNodes.add(node.location.uri);
 						} else {
 							nodesToProcess.set(node.id, node);
+							nodeIdsForFile.add(node.id);
 						}
 					}
 

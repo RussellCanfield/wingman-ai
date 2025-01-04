@@ -66,7 +66,7 @@ export class LSPClient {
 			initializationOptions: {
 				settings,
 				indexerSettings: (await workspace.load()).indexerSettings,
-			},
+			}
 		};
 
 		client = new LanguageClient(
@@ -149,6 +149,7 @@ export class LSPClient {
 		);
 	};
 
+
 	setComposerWebViewReference = (webview: vscode.Webview) => {
 		this.composerWebView = webview;
 	};
@@ -166,7 +167,7 @@ export class LSPClient {
 					this.settings?.providerSettings[this.settings.aiProvider]
 						?.codeModel || "Unknown",
 			});
-		} catch {}
+		} catch { }
 		await client.sendRequest<ComposerResponse>("wingman/compose", {
 			request,
 		});
@@ -226,53 +227,56 @@ export class LSPClient {
 }
 
 async function getGitignorePatterns(exclusionFilter?: string) {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-        return "";
-    }
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (!workspaceFolders) {
+		return "";
+	}
 
-    const gitignorePath = vscode.Uri.file(
-        path.join(workspaceFolders[0].uri.fsPath, ".gitignore")
-    );
+	const gitignorePath = vscode.Uri.file(
+		path.join(workspaceFolders[0].uri.fsPath, ".gitignore")
+	);
 
-    try {
-        const gitignoreContent = await vscode.workspace.fs.readFile(
-            gitignorePath
-        );
-        const gitignoreLines = gitignoreContent.toString().split("\n");
-        const ig = ignore().add(gitignoreLines);
+	try {
+		const gitignoreContent = await vscode.workspace.fs.readFile(
+			gitignorePath
+		);
+		const gitignoreLines = gitignoreContent.toString().split("\n");
+		const ig = ignore().add(gitignoreLines);
 
-        // Use the ignore instance to filter and process patterns
-        const gitIgnorePatterns = gitignoreLines
-            .filter((line) => line && !line.startsWith("#"))
-            .map((pattern) => {
-                // Verify if the pattern is valid using the ignore instance
-                if (ig.ignores(pattern.replace(/^!/, ''))) {
-                    if (pattern.startsWith("!")) {
-                        return `!**/${pattern.slice(1)}`;
-                    }
-                    return `**/${pattern}`;
-                }
-                return null;
-            })
-            .filter((pattern): pattern is string => pattern !== null);
+		// Use the ignore instance to filter and process patterns
+		const gitIgnorePatterns = gitignoreLines
+			.filter((line) => line && !line.startsWith("#"))
+			.map((pattern) => {
+				// Remove leading slash if present
+				const normalizedPattern = pattern.replace(/^\//, '');
 
-        let combinedExclusionFilter: string | undefined;
-        if (exclusionFilter) {
-            combinedExclusionFilter = `{${exclusionFilter},${gitIgnorePatterns.join(",")}}`;
-        } else if (gitIgnorePatterns.length > 0) {
-            combinedExclusionFilter = `{${gitIgnorePatterns.join(",")}}`;
-        }
+				// Verify if the pattern is valid using the ignore instance
+				if (ig.ignores(normalizedPattern.replace(/^!/, ''))) {
+					if (normalizedPattern.startsWith("!")) {
+						return `!**/${normalizedPattern.slice(1)}`;
+					}
+					return `**/${normalizedPattern}`;
+				}
+				return null;
+			})
+			.filter((pattern): pattern is string => pattern !== null);
 
-        return combinedExclusionFilter;
-    } catch (err) {
-        if (err instanceof Error) {
-            loggingProvider.logError(
-                `Error reading .gitignore file: ${err.message}`
-            );
-        }
-        return "";
-    }
+		let combinedExclusionFilter: string | undefined;
+		if (exclusionFilter) {
+			combinedExclusionFilter = `{${exclusionFilter},${gitIgnorePatterns.join(",")}}`;
+		} else if (gitIgnorePatterns.length > 0) {
+			combinedExclusionFilter = `{${gitIgnorePatterns.join(",")}}`;
+		}
+
+		return combinedExclusionFilter;
+	} catch (err) {
+		if (err instanceof Error) {
+			loggingProvider.logError(
+				`Error reading .gitignore file: ${err.message}`
+			);
+		}
+		return "";
+	}
 }
 
 async function findFiles(filter: string, exclusionFilter?: string) {

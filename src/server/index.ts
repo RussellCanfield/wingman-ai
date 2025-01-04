@@ -9,7 +9,6 @@ import {
 	DocumentDiagnosticReportKind,
 	type DocumentDiagnosticReport,
 	DidChangeWorkspaceFoldersNotification,
-	FileOperationPatternKind,
 } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -21,11 +20,8 @@ import { Generator } from "./files/generator";
 import { createSymbolRetriever, SymbolRetriever } from "./retriever";
 import { DocumentQueue } from "./queue";
 import {
-	checkFileMatch,
 	clearFilterCache,
 	filePathToUri,
-	getGitignorePatterns,
-	getWorkspaceFolderForDocument,
 } from "./files/utils";
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
@@ -40,11 +36,10 @@ import {
 } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
 import { ComposerRequest } from "@shared/types/Composer";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import { loggingProvider } from "./loggingProvider";
 import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
+import { LSPFileEventHandler } from "./files/eventHandler";
 
 const config = { configurable: { thread_id: "conversation-num-1" } };
 
@@ -92,6 +87,7 @@ export class LSPServer {
 	queue: DocumentQueue | undefined;
 	indexer: Indexer | undefined;
 	projectDetails: ProjectDetailsHandler | undefined;
+	fileEventHandler: LSPFileEventHandler | undefined;
 	// Create a simple text document manager.
 	documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
@@ -199,7 +195,7 @@ export class LSPServer {
 						save: {
 							includeText: true,
 						},
-					},
+					}
 				},
 			};
 			if (hasWorkspaceFolderCapability) {
@@ -207,28 +203,6 @@ export class LSPServer {
 					workspaceFolders: {
 						supported: true,
 						changeNotifications: true,
-					},
-					fileOperations: {
-						didDelete: {
-							filters: [
-								{
-									pattern: {
-										glob: "**/*",
-										matches: FileOperationPatternKind.file,
-									},
-								},
-							],
-						},
-						didRename: {
-							filters: [
-								{
-									pattern: {
-										glob: "**/*",
-										matches: FileOperationPatternKind.file,
-									},
-								},
-							],
-						},
 					},
 				};
 			}
@@ -255,6 +229,15 @@ export class LSPServer {
 			}
 
 			try {
+				this.fileEventHandler = new LSPFileEventHandler(
+					//@ts-expect-error
+					this.connection,
+					this.workspaceFolders,
+					this.vectorStore,
+					this.queue,
+					indexerSettings.indexFilter
+				);
+
 				await this.postInitialize();
 				await this.addEvents();
 			} catch (e) {
@@ -291,48 +274,6 @@ export class LSPServer {
 
 		this.connection?.onDidChangeConfiguration((change) => {
 			this.connection?.languages.diagnostics.refresh();
-		});
-
-		this.connection?.workspace.onDidRenameFiles(async (event) => {
-			const files = event.files.map((file) => {
-				const absolutePath = fileURLToPath(file.oldUri);
-				return path.relative(this.workspaceFolders[0], absolutePath);
-			});
-
-			const relatedDocs =
-				(await this.vectorStore?.findDocumentsByPath(files)) || [];
-
-			if (relatedDocs?.length > 0) {
-				await this.vectorStore?.deleteDocuments(
-					relatedDocs.map((doc) => doc.id!)
-				);
-			}
-
-			this.queue?.enqueue(event.files.map((file) => file.newUri));
-
-			return {
-				changes: {},
-			};
-		});
-
-		this.connection?.workspace.onDidDeleteFiles(async (event) => {
-			const files = event.files.map((file) => {
-				const absolutePath = fileURLToPath(file.uri);
-				return path.relative(this.workspaceFolders[0], absolutePath);
-			});
-
-			const relatedDocs =
-				(await this.vectorStore?.findDocumentsByPath(files)) || [];
-
-			if (relatedDocs?.length > 0) {
-				await this.vectorStore?.deleteDocuments(
-					relatedDocs.map((doc) => doc.id!)
-				);
-			}
-
-			return {
-				changes: {},
-			};
 		});
 
 		this.connection?.onNotification(
@@ -392,8 +333,7 @@ export class LSPServer {
 						filePathToUri(file)
 					);
 					this.connection?.console.log(
-						`Starting full index build, with ${
-							filePaths || 0
+						`Starting full index build, with ${filePaths || 0
 						} files`
 					);
 
@@ -484,50 +424,6 @@ export class LSPServer {
 				codeDocs: [],
 				projectDetails: "",
 			};
-		});
-
-		this.documents?.onDidSave(async (e) => {
-			try {
-				if (!embeddingSettings?.enabled) {
-					return;
-				}
-
-				const document = e.document;
-				const workspaceFolder = getWorkspaceFolderForDocument(
-					document.uri,
-					this.workspaceFolders
-				);
-
-				const exclusionPattern = await getGitignorePatterns(
-					workspaceFolder!,
-					indexerSettings.exclusionFilter
-				);
-
-				const filePath = fileURLToPath(document.uri);
-				const matches = await checkFileMatch(
-					path.relative(workspaceFolder!, filePath),
-					indexerSettings.indexFilter,
-					exclusionPattern
-				);
-
-				if (!matches) {
-					console.log(
-						"File does not match exclusion filter",
-						filePath,
-						exclusionPattern
-					);
-					return;
-				}
-
-				if (workspaceFolder) {
-					this.connection?.console.log(
-						"Document queued: " + document.uri
-					);
-					this.queue?.enqueue([document.uri]);
-				}
-			} catch (error) {
-				console.log("On Document Save:", error, e);
-			}
 		});
 	};
 }

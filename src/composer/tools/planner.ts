@@ -47,92 +47,71 @@ Project context:
 Working directory:
 {{workspace}}
 
-Guidelines:
+Analysis Requirements:
 
-1. Project Analysis Phase:
-   - Map the existing file structure and architecture
-   - Identify core technologies and frameworks in use
-   - Document current naming conventions and patterns
-   - List available shared components, utilities, and services
-   - Note relevant configuration files and their purposes
+1. Project Structure
+   - Map architecture and file structure
+   - Identify core tech stack
+   - Document patterns and conventions
+   - List shared resources and configs
 
-2. File Planning Phase:
-   A. Modifications to Existing Files:
-      INCLUDE ONLY files that:
-      - Require definitive code changes
-      - Need new imports or exports
-      - Require structural modifications
-      - Need new function/component additions
-      - Require state/prop changes
-      DO NOT INCLUDE files that:
-      - Only need verification
-      - Might need changes
-      - Require review only
-      - Are tangentially related
-      - Don't require actual code changes
+2. Required Changes
+   A. Existing Files (only include if requiring):
+      - Code modifications
+      - Import/export changes
+      - Structural updates
+      - New functions/components
+      - State/prop modifications
 
-   B. New File Requirements:
-      - Define new files with clear purposes
-      - Specify their locations within project structure
-      - Describe relationships with existing files
-      - Detail required imports and exports
-      - Explain how they integrate with existing architecture
-	  - Only create new files if it is absolutely necessary, co-locate changes in existing files if there is a low probability it is shared code
+   B. New Files (create only if necessary):
+      - Purpose and location
+      - Dependencies and integrations
+      - Required imports/exports
+      - Integration points
+      - Prefer co-location with existing code
 
-   C. Integration Analysis:
-      - Map direct dependencies only
-      - Document concrete integration points
-      - Specify definitive configuration changes
-      - List required routing updates
-      - Include only files directly involved in the feature
+   C. Integration Points
+      - Direct dependencies
+      - Configuration changes
+      - Routing updates
+      - Integration touchpoints
+	  - Fits in with the overall styling and theme of the application
 
-3. Implementation Strategy:
-   - Provide specific, actionable steps
-   - Include only confirmed dependency requirements
-   - List only necessary build/config changes
-   - Define clear integration points
-   - Identify only direct dependencies
-   - When using or installing a dependency, always use the latest and most up to date version you are aware of.
+3. Implementation Plan
+   - Actionable steps
+   - Required dependencies (latest versions)
+   - Build/config changes
+   - Integration points
 
-4. Technical Considerations:
-   - Framework-specific requirements
-   - Type system implications
-   - State management impact
-   - Performance considerations
-   - Security implications
-   - Browser/device compatibility needs
+4. Technical Scope
+   - Framework requirements
+   - Type system impact
+   - State management
+   - Performance
+   - Security
+   - Compatibility
 
-5. Risk Assessment:
-   - Focus on concrete implementation risks
-   - Include only relevant dependency conflicts
-   - List specific compatibility concerns
-   - Highlight direct performance impacts
-   - Document security considerations
+5. Risk Factors
+   - Implementation risks
+   - Dependency conflicts
+   - Performance impact
+   - Security concerns
 
 Constraints:
-- Include only files requiring actual modifications
-- List only confirmed changes, not potential ones
-- Avoid speculative file modifications
-- Focus on direct dependencies only
-- Include only files essential to the feature
-- Maintain clear separation of concerns
-
-Notes:
-- Exclude testing, deployment, and logging unless specified
-- If required functionality is missing, include it in the plan
-- This is a planning phase only, no code implementation
-- All file paths should be relative to the working directory
-- Include only confirmed version requirements for new dependencies
-- The generated summary should give a short, concise and technical overview of the plan
-	- Phrase this as a response to the objective, example: "Sure I can do xyz"
+- Include only necessary file modifications, do not make changes that are not part of the active objective.
+- Focus on direct dependencies
+- Maintain separation of concerns
+- Exclude testing/deployment unless specified
+- All paths relative to working directory
+- Order files sequentially based on implementation dependencies
 
 Use the 'planner' tool to output a JSON array of implementation steps only. No additional explanations.
 
-Example output:
+Output Format:
 {
   "plan": [{
-    "file": "file path relative to the working directory",
-    "steps": ["Import react", "Create root"]
+    "file": "relative/path/to/file",
+    "steps": ["implementation steps"]
   }]
 }
 
@@ -174,10 +153,8 @@ export class CodePlanner {
 			state.plan = state.plan || { files: [] };
 
 			const objective = buildObjective(state);
-			const searchQuery = await this.generateSearchQueries(state);
 			const didRetrieve = await this.populateInitialFiles(
-				state,
-				searchQuery
+				state
 			);
 			let finalDocs = new Map<string, TextDocument>();
 			if (didRetrieve) {
@@ -213,18 +190,12 @@ export class CodePlanner {
 			};
 
 			await dispatchCustomEvent("composer-planner", {
-				plan: {
-					summary: response.summary,
-					files: docs
-				}
+				plan
 			} satisfies Partial<PlanExecuteState>);
 
 			return {
 				projectDetails: projectDetails?.description,
-				plan: {
-					summary: response.summary,
-					files: docs
-				}
+				plan
 			} satisfies Partial<PlanExecuteState>;
 		} catch (e) {
 			if (e instanceof NoFilesChangedError) {
@@ -237,49 +208,93 @@ export class CodePlanner {
 		}
 	};
 
-	private async generateSearchQueries(
-		state: PlanExecuteState
-	): Promise<string> {
-		const lastUserAsk =
-			state.followUpInstructions[state.followUpInstructions.length - 1] ||
-			state.messages[state.messages.length - 1];
-		const result = await this.rerankModel
-			.invoke(`You are an AI language model assistant. 
-Your task is to generate multiple search queries based on the given question to find relevant information. 
-Generate 5 different search queries related to the following question:
-
-Question: ${lastUserAsk.content.toString()}
-
-Search queries:`);
-
-		return result.content.toString();
-	}
-
 	private async populateInitialFiles(
-		state: PlanExecuteState,
-		query: string
+		state: PlanExecuteState
 	): Promise<boolean> {
 		if (Array.isArray(state.plan?.files) && state.plan.files.length > 0) {
 			return false;
 		}
 
-		const starterDocs = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
-			query,
-			this.codeGraph,
-			this.store,
-			this.workspace,
-			15
-		);
+		const seenFiles = new Set<string>();
+		const allDocs = new Map<string, TextDocument>();
+		const MAX_ITERATIONS = 3;
+		const DOCS_PER_ITERATION = 15;
+		const previousQueries = new Set<string>();
 
+		const objective = (state.followUpInstructions[state.followUpInstructions.length - 1] ||
+			state.messages[state.messages.length - 1]).content.toString();
+
+		// Initial search based on objective
+		let currentQuery = objective;
+		previousQueries.add(currentQuery);
+
+		for (let i = 0; i < MAX_ITERATIONS; i++) {
+			// Get files for current query
+			const docs = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
+				currentQuery,
+				this.codeGraph,
+				this.store,
+				this.workspace,
+				DOCS_PER_ITERATION
+			);
+
+			// Add new unique documents
+			for (const [path, doc] of docs.entries()) {
+				if (!seenFiles.has(path)) {
+					seenFiles.add(path);
+					allDocs.set(path, doc);
+				}
+			}
+
+			// Generate next query based on found files and previous queries
+			const foundFilesSummary = Array.from(docs.keys())
+				.join('\n');
+
+			const nextQueryResponse = await this.rerankModel.invoke(`
+				Based on the objective and files found so far, generate a new unique search query that focuses on different aspects.
+				
+				Objective: ${objective}
+				
+				Files found so far:
+				${foundFilesSummary}
+				
+				Previous queries used:
+				${Array.from(previousQueries).join('\n')}
+				
+				Rules:
+				1. If all necessary files are found, respond with "COMPLETE"
+				2. If more files are needed, provide a specific search query that:
+					- Must be different from all previous queries
+					- Focuses on unexplored aspects of the objective
+					- Is specific and targeted (e.g. "authentication middleware", "database models")
+				3. Focus on finding related files that would be needed for implementation
+				4. Do not return any text besides "COMPLETE" or the new search query
+				
+				Response (either "COMPLETE" or new search query):
+			`);
+
+			const nextQuery = nextQueryResponse.content.toString().trim();
+
+			// Check if we have all needed files
+			if (nextQuery === "COMPLETE" || allDocs.size >= 15) {
+				break;
+			}
+
+			// Ensure the next query is unique
+			if (previousQueries.has(nextQuery)) {
+				continue; // Skip this iteration if we got a duplicate query
+			}
+
+			currentQuery = nextQuery;
+			previousQueries.add(currentQuery);
+		}
+
+		// Update state with found documents
 		state.plan = state.plan || { files: [] };
-
-		state.plan.files = Array.from(starterDocs.entries()).map(
-			([file, doc]) => ({
-				path: file,
-				code: doc.getText(),
-
-			})
-		);
+		state.plan.files = Array.from(allDocs.entries()).map(([file, doc]) => ({
+			path: file,
+			code: doc.getText(),
+		}));
 
 		return true;
 	}
