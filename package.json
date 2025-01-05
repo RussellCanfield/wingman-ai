@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.8.18",
+	"version": "0.8.19",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -212,9 +212,9 @@
 		"minimatch": "10.0.1"
 	},
 	"devDependencies": {
-		"@ast-grep/cli": "0.28.1",
-		"@rsbuild/core": "1.1.8",
-		"@rsbuild/plugin-react": "1.0.7",
+		"@ast-grep/cli": "0.29.0",
+		"@rsbuild/core": "1.1.13",
+		"@rsbuild/plugin-react": "1.1.0",
 		"@types/mocha": "10.0.8",
 		"@types/node": "22.5.5",
 		"@types/vscode": "1.95.0",

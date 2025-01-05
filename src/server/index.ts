@@ -318,6 +318,21 @@ export class LSPServer {
 			(indexSettings: IndexerSettings) => {
 				clearFilterCache();
 				indexerSettings = indexSettings;
+
+				if (this.fileEventHandler) {
+					try {
+						this.fileEventHandler.dispose();
+					} catch { }
+				}
+
+				this.fileEventHandler = new LSPFileEventHandler(
+					//@ts-expect-error
+					this.connection,
+					this.workspaceFolders,
+					this.vectorStore,
+					this.queue,
+					indexerSettings.indexFilter
+				);
 			}
 		);
 

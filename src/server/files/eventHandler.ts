@@ -4,6 +4,7 @@ import { Store } from "../../store/vector";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { minimatch } from 'minimatch';
+import { Disposable } from "vscode-languageserver/node";
 
 export class LSPFileEventHandler {
     private connection: ReturnType<typeof createConnection>;
@@ -11,6 +12,7 @@ export class LSPFileEventHandler {
     private vectorStore: Store;
     private queue: DocumentQueue;
     private inclusionFilter: string;
+    private disposables: Disposable[] = [];
 
     constructor(
         connection: Connection,
@@ -42,17 +44,23 @@ export class LSPFileEventHandler {
     }
 
     private registerEventHandlers() {
-        this.connection.workspace.onDidRenameFiles(async (event) => {
-            await this.handleFileRename(event);
-        });
+        this.disposables.push(
+            this.connection.workspace.onDidRenameFiles(async (event) => {
+                await this.handleFileRename(event);
+            })
+        );
 
-        this.connection.workspace.onDidDeleteFiles(async (event) => {
-            await this.handleFileDelete(event);
-        });
+        this.disposables.push(
+            this.connection.workspace.onDidDeleteFiles(async (event) => {
+                await this.handleFileDelete(event);
+            })
+        );
 
-        this.connection.onDidChangeTextDocument(async (event) => {
-            await this.handleFileChanges(event);
-        });
+        this.disposables.push(
+            this.connection.onDidChangeTextDocument(async (event) => {
+                await this.handleFileChanges(event);
+            })
+        );
     }
 
     private async handleFileRename(event: RenameFilesParams) {
@@ -121,5 +129,10 @@ export class LSPFileEventHandler {
         } catch (error) {
             this.connection.console.error(`Error handling changes: ${error}`);
         }
+    }
+
+    public dispose(): void {
+        this.disposables.forEach(disposable => disposable.dispose());
+        this.disposables = [];
     }
 }

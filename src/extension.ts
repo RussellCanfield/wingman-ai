@@ -57,7 +57,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			codeModel:
 				settings.providerSettings[settings.aiProvider]?.codeModel,
 		});
-	} catch {}
+	} catch { }
 
 	let modelProvider;
 	try {
@@ -68,7 +68,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				aiProvider: settings.aiProvider,
 			});
 			throw new Error(
-				`AI Provider ${settings.aiProvider} is not configured correctly.`
+				`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`
 			);
 		}
 	} catch (error) {
