@@ -8,47 +8,71 @@ import {
 	SystemMessage,
 } from "@langchain/core/messages";
 import { FILE_SEPARATOR } from "./common";
-import json5 from 'json5';
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { FileMetadata } from "@shared/types/Message";
 
-export type CodeWriterSchema = z.infer<typeof codeWriterSchema>;
+type CodeResponse = {
+	steps: Array<{
+		description: string;
+		command?: string;
+	}>;
+	file: {
+		path: string;
+		code: string;
+		markdownLanguage: string;
+		changes?: string[];
+	};
+};
 
-export const codeWriterSchema = z.object({
-	steps: z
-		.array(
-			z.object({
-				description: z.string().describe("The step to take"),
-				command: z
-					.string()
-					.optional()
-					.describe(
-						"If the step is a command, this is the command to run"
-					),
-			})
-		)
-		.optional()
-		.describe(
-			"An array of manual steps to follow to complete the task, leave empty if there are no manual steps."
-		),
-	file: z
-		.object({
-			path: z.string().describe("The full file path"),
-			code: z
-				.string()
-				.describe(
-					"The file code you've written or modified."
-				),
-			markdownLanguage: z.string().describe("The language that should be used for this file in a markdown block."),
-			changes: z
-				.array(z.string())
-				.describe("A list of changes made to the file")
-				.optional(),
-		})
-		.describe("The file object in scope that you have modified or created"),
-});
+const XML_TAGS = {
+	ROOT: 'wingman_response',
+	STEPS: 'wingman_steps',
+	STEP: 'wingman_step',
+	DESCRIPTION: 'wingman_description',
+	COMMAND: 'wingman_command',
+	FILE: 'wingman_file',
+	PATH: 'wingman_path',
+	CODE: 'wingman_code',
+	LANGUAGE: 'wingman_language',
+	CHANGES: 'wingman_changes',
+	CHANGE: 'wingman_change'
+};
 
-const baseWriterPrompt = `Analyze this text and output JSON.
+const parseXMLResponse = (xml: string): CodeResponse => {
+	const getTagContent = (tag: string, content: string) => {
+		const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`);
+		const match = content.match(regex);
+		return match ? match[1].trim() : '';
+	};
+
+	const getMultipleTagContent = (tag: string, content: string) => {
+		const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'g');
+		const matches = content.matchAll(regex);
+		return Array.from(matches).map(match => match[1].trim());
+	};
+
+	const content = getTagContent(XML_TAGS.ROOT, xml);
+
+	// Parse steps
+	const stepsContent = getTagContent(XML_TAGS.STEPS, content);
+	const steps = getMultipleTagContent(XML_TAGS.STEP, stepsContent).map(step => ({
+		description: getTagContent(XML_TAGS.DESCRIPTION, step),
+		command: getTagContent(XML_TAGS.COMMAND, step) || undefined
+	}));
+
+	// Parse file
+	const fileContent = getTagContent(XML_TAGS.FILE, content);
+	const file = {
+		path: getTagContent(XML_TAGS.PATH, fileContent),
+		code: getTagContent(XML_TAGS.CODE, fileContent),
+		markdownLanguage: getTagContent(XML_TAGS.LANGUAGE, fileContent),
+		changes: getMultipleTagContent(XML_TAGS.CHANGE, getTagContent(XML_TAGS.CHANGES, fileContent))
+	};
+
+	return { steps, file };
+};
+
+const baseWriterPrompt = `Analyze this text and output XML.
 You are a senior software engineer tasked with writing code for a company.
 Implement project enhancements for a single file based on the user's objective.
 Ensure every modification is fully integrated.
@@ -58,9 +82,24 @@ Output Structure:
 1. Steps: Concise guide for manual implementation steps, excluding file changes.
 2. File: Modified or created code for the file in scope.
 
-Output Formatting:
-1. Your response needs to be in a JSON format
-2. All new line return characters must be properly escaped. Do not make a mistake this is critical.
+Output Format Example:
+<wingman_response>
+  <wingman_steps>
+    <wingman_step>
+      <wingman_description>Install required dependency</wingman_description>
+      <wingman_command>npm install package-name</wingman_command>
+    </wingman_step>
+  </wingman_steps>
+  <wingman_file>
+    <wingman_path>/path/to/file</wingman_path>
+    <wingman_code>// Your code here</wingman_code>
+    <wingman_language>typescript</wingman_language>
+    <wingman_changes>
+      <wingman_change>Added new function</wingman_change>
+      <wingman_change>Updated imports</wingman_change>
+    </wingman_changes>
+  </wingman_file>
+</wingman_response>
 
 Key Instructions:
 1. Process only the file in scope, do not modify a provided file that is not in scope.
@@ -70,7 +109,6 @@ Key Instructions:
 5. Always use GitHub-flavored markdown for code output.
 6. Provide full file paths in the response.
 7. Do not perform extraneous changes to files, dig deep and focus on the integration between the files given.
-7. Ensure output adheres to the provided JSON schema.
 
 Step Writing Guidelines:
 1. Focus on user-centric, actionable steps not covered in code modifications - these would be manual steps the user still needs to take such as installing dependencies.
@@ -118,7 +156,7 @@ File Handling:
 - Always include the full file path.
 - List changes performed on files, if no changes are performed, omit the file.
 - Write the best code possible.
-- Make sure the code is the aboslute best you can produce, make it human readable.
+- Make sure the code is the absolute best you can produce, make it human readable.
 
 ------
 
@@ -144,26 +182,9 @@ File Handling:
 
 ------
 
-Implement required changes for the file in scope to meet the objective. 
-Follow the provided JSON schema.
-Ensure new line returns are handled properly for the JSON formatted response.
-Ensure the "file" property is an object, not a string. 
-
-You must ALWAYS Output in JSON format using the following template:
-{
-  "steps": [
-    {
-      "description": "string",
-      "command": "string (optional)"
-    }
-  ],
-  "file": {
-    "path": "<file path>",
-    "code": "<raw file code here>",
-    "changes": ["string"],
-	"markdownLanguage": "<typescript, html, etc>"
-  }
-}`;
+Implement required changes for the file in scope to meet the objective.
+Ensure the response is properly formatted in XML.
+Ensure all tags are properly closed and nested.`;
 
 type BuildPromptParams = {
 	projectDetails: string;
@@ -247,7 +268,7 @@ ${state.review?.comments?.join("\n")}
 		const codeWriter = this.chatModel;
 
 		const files: FileMetadata[] = [];
-		const steps: CodeWriterSchema["steps"] = [];
+		const steps: CodeResponse["steps"] = [];
 		for (const { path: file, code } of state.plan?.files || [
 			{
 				path: "BLANK",
@@ -304,6 +325,7 @@ ${files.map(
     ${f.code}`
 									)
 									.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
+							rulePack,
 						}),
 					},
 				],
@@ -326,7 +348,7 @@ ${file === "BLANK"
 				}),
 			]));
 
-			const result = json5.parse(output.content.toString()) as CodeWriterSchema;
+			const result = parseXMLResponse(output.content.toString());
 
 			const fileChanged =
 				result.file.changes && result.file.changes.length > 0;

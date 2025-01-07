@@ -157,21 +157,22 @@ export class CodePlanner {
 				state
 			);
 			let finalDocs = new Map<string, TextDocument>();
-			if (didRetrieve) {
-				finalDocs = await this.rerankDocuments(state, objective);
-			} else {
-				state.plan?.files?.map((f) => {
-					finalDocs.set(
-						f.path,
-						TextDocument.create(
-							f!.path,
-							"plaintext",
-							0,
-							f!.code || ""
-						)
-					);
-				});
-			}
+			// Temporary disable - limiting the documents to 5 on rerank can hide valuable documents.
+			// if (didRetrieve) {
+			// 	finalDocs = await this.rerankDocuments(state, objective);
+			// } else {
+			state.plan?.files?.map((f) => {
+				finalDocs.set(
+					f.path,
+					TextDocument.create(
+						f!.path,
+						"plaintext",
+						0,
+						f!.code || ""
+					)
+				);
+			});
+			//}
 			const response = await this.generatePlan(
 				finalDocs,
 				projectDetails,
@@ -251,26 +252,27 @@ export class CodePlanner {
 				.join('\n');
 
 			const nextQueryResponse = await this.rerankModel.invoke(`
-				Based on the objective and files found so far, generate a new unique search query that focuses on different aspects.
-				
-				Objective: ${objective}
-				
-				Files found so far:
-				${foundFilesSummary}
-				
-				Previous queries used:
-				${Array.from(previousQueries).join('\n')}
-				
-				Rules:
-				1. If all necessary files are found, respond with "COMPLETE"
-				2. If more files are needed, provide a specific search query that:
-					- Must be different from all previous queries
-					- Focuses on unexplored aspects of the objective
-					- Is specific and targeted (e.g. "authentication middleware", "database models")
-				3. Focus on finding related files that would be needed for implementation
-				4. Do not return any text besides "COMPLETE" or the new search query
-				
-				Response (either "COMPLETE" or new search query):
+Based on the objective and files found so far, generate a new unique search query that focuses on different aspects.
+
+Objective: ${objective}
+
+Files found so far:
+${foundFilesSummary}
+
+Previous queries used:
+${Array.from(previousQueries).join('\n')}
+
+Rules:
+1. If all necessary files are found, respond with "COMPLETE"
+2. If more files are needed, provide a specific search query that:
+	- Must be different from all previous queries
+	- Focuses on unexplored aspects of the objective
+	- Is specific and targeted (e.g. "authentication middleware", "database models")
+	- Request files that help give better context about external libraries that are available such as "package.json" "requirements.txt", etc.
+3. Focus on finding related files that would be needed for implementation
+4. Do not return any text besides "COMPLETE" or the new search query
+
+Response (either "COMPLETE" or new search query):
 			`);
 
 			const nextQuery = nextQueryResponse.content.toString().trim();
