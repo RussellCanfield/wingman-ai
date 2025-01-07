@@ -21,6 +21,7 @@ import { createCodeNode } from "./graph";
 import path from "node:path";
 import { SymbolRetriever } from "../retriever";
 import { createHash } from "node:crypto";
+import { glob } from 'tinyglobby';
 
 export type IndexerResult = {
 	codeDocs: Document[];
@@ -56,10 +57,33 @@ export class Indexer {
 		private readonly codeGraph: CodeGraph,
 		private readonly generator: Generator,
 		private readonly symbolRetriever: SymbolRetriever,
-		private readonly vectorStore: Store
+		private readonly vectorStore: Store,
+		private inclusionFilter: string
 	) { }
 
 	isSyncing = () => this.syncing;
+
+	private matchedFilesCache: Set<string> | null = null;
+
+	private async shouldIncludeFile(relativeFilePath: string): Promise<boolean> {
+		if (!this.matchedFilesCache) {
+			const matchedFiles = await glob(this.inclusionFilter, {
+				cwd: this.workspace,
+				onlyFiles: true
+			});
+			this.matchedFilesCache = new Set(matchedFiles);
+		}
+
+		return this.matchedFilesCache.has(relativeFilePath);
+	}
+
+	clearCache = () => {
+		this.matchedFilesCache?.clear();
+	}
+
+	setInclusionFilter = (filter: string) => {
+		this.inclusionFilter = filter;
+	}
 
 	deleteFile = async (filePath: string) => {
 		await this.codeGraph.deleteFile(filePath);
@@ -153,21 +177,20 @@ export class Indexer {
 					const nodeIdsForFile = new Set<string>();
 					for (const node of nodes.values()) {
 						if (node.location.uri !== currentDocument) {
-							const { file, relativeFilePath, sha } =
-								await getFileFromSymbolTable(
-									node.location.uri,
-									this.workspace,
-									this.codeGraph
-								);
+							const { file, relativeFilePath, sha } = await getFileFromSymbolTable(
+								node.location.uri,
+								this.workspace,
+								this.codeGraph
+							);
 
-							if (
-								file &&
-								(file.sha === sha ||
-									fileHashMap.get(relativeFilePath) === sha)
-							) {
-								console.log(
-									"File already indexed: " + node.location.uri
-								);
+							const shouldInclude = await this.shouldIncludeFile(relativeFilePath);
+							if (!shouldInclude) {
+								console.log(`Skipping ${relativeFilePath} - doesn't match inclusion pattern`);
+								continue;
+							}
+
+							if (file && (file.sha === sha || fileHashMap.get(relativeFilePath) === sha)) {
+								console.log("File already indexed: " + node.location.uri);
 								continue;
 							}
 

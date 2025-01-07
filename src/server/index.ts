@@ -122,7 +122,8 @@ export class LSPServer {
 			this.codeGraph!,
 			codeGenerator,
 			this.symbolRetriever!,
-			this.vectorStore!
+			this.vectorStore!,
+			indexerSettings.indexFilter
 		);
 
 		this.queue = new DocumentQueue(this.indexer);
@@ -333,6 +334,9 @@ export class LSPServer {
 					this.queue,
 					indexerSettings.indexFilter
 				);
+
+				this.indexer?.setInclusionFilter(indexSettings.indexFilter);
+				this.indexer?.clearCache();
 			}
 		);
 
