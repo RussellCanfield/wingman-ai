@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types";
 import { buildObjective, loadWingmanRules } from "../utils";
@@ -24,50 +23,85 @@ type CodeResponse = {
 	};
 };
 
-const XML_TAGS = {
-	ROOT: 'wingman_response',
-	STEPS: 'wingman_steps',
-	STEP: 'wingman_step',
-	DESCRIPTION: 'wingman_description',
-	COMMAND: 'wingman_command',
-	FILE: 'wingman_file',
-	PATH: 'wingman_path',
-	CODE: 'wingman_code',
-	LANGUAGE: 'wingman_language',
-	CHANGES: 'wingman_changes',
-	CHANGE: 'wingman_change'
-};
+const DELIMITERS = {
+	STEPS_START: '===STEPS_START===',
+	STEPS_END: '===STEPS_END===',
+	STEP_START: '---STEP---',
+	STEP_END: '---END_STEP---',
+	FILE_START: '===FILE_START===',
+	FILE_END: '===FILE_END==='
+} as const;
 
-const parseXMLResponse = (xml: string): CodeResponse => {
-	const getTagContent = (tag: string, content: string) => {
-		const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`);
+const parseResponse = (response: string): CodeResponse => {
+	// Helper to extract content between delimiters
+	const extractSection = (start: string, end: string, content: string) => {
+		const regex = new RegExp(`${start}\\n([\\s\\S]*?)\\n${end}`);
 		const match = content.match(regex);
 		return match ? match[1].trim() : '';
 	};
 
-	const getMultipleTagContent = (tag: string, content: string) => {
-		const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'g');
-		const matches = content.matchAll(regex);
-		return Array.from(matches).map(match => match[1].trim());
+	// Parse steps section
+	const stepsContent = extractSection(DELIMITERS.STEPS_START, DELIMITERS.STEPS_END, response);
+	const steps: CodeResponse['steps'] = [];
+
+	if (stepsContent) {
+		// Split into individual steps
+		const stepBlocks = stepsContent.split(DELIMITERS.STEP_START)
+			.filter(block => block.trim())
+			.map(block => block.split(DELIMITERS.STEP_END)[0].trim());
+
+		// Parse each step
+		for (const block of stepBlocks) {
+			const descMatch = block.match(/Description: (.*?)(?:\nCommand:|$)/s);
+			const cmdMatch = block.match(/Command: (.*?)$/s);
+
+			if (descMatch) {
+				steps.push({
+					description: descMatch[1].trim(),
+					command: cmdMatch?.[1].trim()
+				});
+			}
+		}
+	}
+
+	// Parse file section
+	const fileContent = extractSection(DELIMITERS.FILE_START, DELIMITERS.FILE_END, response);
+	const file: CodeResponse['file'] = {
+		path: '',
+		code: '',
+		markdownLanguage: '',
+		changes: []
 	};
 
-	const content = getTagContent(XML_TAGS.ROOT, xml);
+	if (fileContent) {
+		// Extract path
+		const pathMatch = fileContent.match(/Path: (.*?)(?:\n|$)/);
+		if (pathMatch) {
+			file.path = pathMatch[1].trim();
+		}
 
-	// Parse steps
-	const stepsContent = getTagContent(XML_TAGS.STEPS, content);
-	const steps = getMultipleTagContent(XML_TAGS.STEP, stepsContent).map(step => ({
-		description: getTagContent(XML_TAGS.DESCRIPTION, step),
-		command: getTagContent(XML_TAGS.COMMAND, step) || undefined
-	}));
+		// Extract language
+		const langMatch = fileContent.match(/Language: (.*?)(?:\n|$)/);
+		if (langMatch) {
+			file.markdownLanguage = langMatch[1].trim();
+		}
 
-	// Parse file
-	const fileContent = getTagContent(XML_TAGS.FILE, content);
-	const file = {
-		path: getTagContent(XML_TAGS.PATH, fileContent),
-		code: getTagContent(XML_TAGS.CODE, fileContent),
-		markdownLanguage: getTagContent(XML_TAGS.LANGUAGE, fileContent),
-		changes: getMultipleTagContent(XML_TAGS.CHANGE, getTagContent(XML_TAGS.CHANGES, fileContent))
-	};
+		// Extract code (everything between Code: and Changes:)
+		const codeMatch = fileContent.match(/Code:\n([\s\S]*?)(?=\nChanges:|$)/);
+		if (codeMatch) {
+			file.code = codeMatch[1].trim();
+		}
+
+		// Extract changes
+		const changesMatch = fileContent.match(/Changes:\n([\s\S]*?)$/);
+		if (changesMatch) {
+			file.changes = changesMatch[1]
+				.split('\n')
+				.map(line => line.trim())
+				.filter(line => line.startsWith('- '))
+				.map(line => line.slice(2));
+		}
+	}
 
 	return { steps, file };
 };
@@ -83,23 +117,22 @@ Output Structure:
 2. File: Modified or created code for the file in scope.
 
 Output Format Example:
-<wingman_response>
-  <wingman_steps>
-    <wingman_step>
-      <wingman_description>Install required dependency</wingman_description>
-      <wingman_command>npm install package-name</wingman_command>
-    </wingman_step>
-  </wingman_steps>
-  <wingman_file>
-    <wingman_path>/path/to/file</wingman_path>
-    <wingman_code>// Your code here</wingman_code>
-    <wingman_language>typescript</wingman_language>
-    <wingman_changes>
-      <wingman_change>Added new function</wingman_change>
-      <wingman_change>Updated imports</wingman_change>
-    </wingman_changes>
-  </wingman_file>
-</wingman_response>
+===STEPS_START===
+---STEP---
+Description: Install required dependency
+Command: npm install package-name
+---END_STEP---
+===STEPS_END===
+
+===FILE_START===
+Path: /path/to/file
+Language: typescript
+Code:
+// Your actual code here
+Changes:
+- Added new function
+- Updated imports
+===FILE_END===
 
 Key Instructions:
 1. Process only the file in scope, do not modify a provided file that is not in scope.
@@ -183,7 +216,7 @@ File Handling:
 ------
 
 Implement required changes for the file in scope to meet the objective.
-Ensure the response is properly formatted in XML.
+Ensure the response is properly formatted using the example provided.
 Ensure all tags are properly closed and nested.`;
 
 type BuildPromptParams = {
@@ -348,7 +381,7 @@ ${file === "BLANK"
 				}),
 			]));
 
-			const result = parseXMLResponse(output.content.toString());
+			const result = parseResponse(output.content.toString());
 
 			const fileChanged =
 				result.file.changes && result.file.changes.length > 0;

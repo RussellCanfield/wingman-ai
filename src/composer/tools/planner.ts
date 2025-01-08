@@ -105,6 +105,13 @@ Constraints:
 - All paths relative to working directory
 - Order files sequentially based on implementation dependencies
 
+Note:
+- You may be provided files not related to the objective.
+- Use the objective to determine which files are related to the objective.
+- Do not make extraneous changes.
+- Do not modify files that are not related to the objective.
+- Focus on the core objective and write your best code.
+
 Use the 'planner' tool to output a JSON array of implementation steps only. No additional explanations.
 
 Output Format:
@@ -209,13 +216,7 @@ export class CodePlanner {
 		}
 	};
 
-	private async populateInitialFiles(
-		state: PlanExecuteState
-	): Promise<boolean> {
-		if (Array.isArray(state.plan?.files) && state.plan.files.length > 0) {
-			return false;
-		}
-
+	private async populateInitialFiles(state: PlanExecuteState): Promise<boolean> {
 		const seenFiles = new Set<string>();
 		const allDocs = new Map<string, TextDocument>();
 		const MAX_ITERATIONS = 3;
@@ -225,12 +226,51 @@ export class CodePlanner {
 		const objective = (state.followUpInstructions[state.followUpInstructions.length - 1] ||
 			state.messages[state.messages.length - 1]).content.toString();
 
-		// Initial search based on objective
+		// First, analyze existing files if present
+		if (state.plan?.files?.length) {
+			for (const file of state.plan.files) {
+				seenFiles.add(file.path);
+				// Convert existing files to TextDocument format
+				const doc = TextDocument.create(
+					file.path,
+					file.language || 'plaintext',
+					1,
+					file.code || ''
+				);
+				allDocs.set(file.path, doc);
+			}
+
+			// Check if existing files are sufficient
+			const existingFilesSummary = Array.from(seenFiles).join('\n');
+			const initialCheckResponse = await this.rerankModel.invoke(`
+	Based on the objective, analyze if the existing files are sufficient.
+	
+	Objective: ${objective}
+	
+	Existing files:
+	${existingFilesSummary}
+	
+	Rules:
+	1. If all necessary files are present, respond with "COMPLETE"
+	2. If more files are needed, respond with "CONTINUE"
+	
+	Response (either "COMPLETE" or "CONTINUE"):
+			`);
+
+			if (initialCheckResponse.content.toString().trim() === "COMPLETE") {
+				state.plan.files = Array.from(allDocs.entries()).map(([file, doc]) => ({
+					path: file,
+					code: doc.getText(),
+				}));
+				return true;
+			}
+		}
+
+		// If we need more files, proceed with search
 		let currentQuery = objective;
 		previousQueries.add(currentQuery);
 
 		for (let i = 0; i < MAX_ITERATIONS; i++) {
-			// Get files for current query
 			const docs = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(
 				currentQuery,
 				this.codeGraph,
@@ -239,7 +279,6 @@ export class CodePlanner {
 				DOCS_PER_ITERATION
 			);
 
-			// Add new unique documents
 			for (const [path, doc] of docs.entries()) {
 				if (!seenFiles.has(path)) {
 					seenFiles.add(path);
@@ -247,51 +286,45 @@ export class CodePlanner {
 				}
 			}
 
-			// Generate next query based on found files and previous queries
-			const foundFilesSummary = Array.from(docs.keys())
-				.join('\n');
-
+			const foundFilesSummary = Array.from(docs.keys()).join('\n');
 			const nextQueryResponse = await this.rerankModel.invoke(`
-Based on the objective and files found so far, generate a new unique search query that focuses on different aspects.
-
-Objective: ${objective}
-
-Files found so far:
-${foundFilesSummary}
-
-Previous queries used:
-${Array.from(previousQueries).join('\n')}
-
-Rules:
-1. If all necessary files are found, respond with "COMPLETE"
-2. If more files are needed, provide a specific search query that:
-	- Must be different from all previous queries
-	- Focuses on unexplored aspects of the objective
-	- Is specific and targeted (e.g. "authentication middleware", "database models")
-	- Request files that help give better context about external libraries that are available such as "package.json" "requirements.txt", etc.
-3. Focus on finding related files that would be needed for implementation
-4. Do not return any text besides "COMPLETE" or the new search query
-
-Response (either "COMPLETE" or new search query):
+	Based on the objective and files found so far, generate a new unique search query that focuses on different aspects.
+	
+	Objective: ${objective}
+	
+	Files found so far:
+	${foundFilesSummary}
+	
+	Previous queries used:
+	${Array.from(previousQueries).join('\n')}
+	
+	Rules:
+	1. If all necessary files are found, respond with "COMPLETE"
+	2. If more files are needed, provide a specific search query that:
+		- Must be different from all previous queries
+		- Focuses on unexplored aspects of the objective
+		- Is specific and targeted (e.g. "authentication middleware", "database models")
+		- Request files that help give better context about external libraries
+	3. Focus on finding related files that would be needed for implementation
+	4. Do not return any text besides "COMPLETE" or the new search query
+	
+	Response (either "COMPLETE" or new search query):
 			`);
 
 			const nextQuery = nextQueryResponse.content.toString().trim();
 
-			// Check if we have all needed files
 			if (nextQuery === "COMPLETE" || allDocs.size >= 15) {
 				break;
 			}
 
-			// Ensure the next query is unique
 			if (previousQueries.has(nextQuery)) {
-				continue; // Skip this iteration if we got a duplicate query
+				continue;
 			}
 
 			currentQuery = nextQuery;
 			previousQueries.add(currentQuery);
 		}
 
-		// Update state with found documents
 		state.plan = state.plan || { files: [] };
 		state.plan.files = Array.from(allDocs.entries()).map(([file, doc]) => ({
 			path: file,
