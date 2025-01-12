@@ -6,6 +6,7 @@ Wingman includes a vector database built in that allows you to configure inclusi
 
 :::info
 The indexing filter is what is used to determine if files should be indexed. This supports glob patterns.
+Files that meet this criteria will be included in code context.
 :::
 
 :::note

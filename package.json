@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI powered assistant to help you write your best code, we won't leave you hanging.",
-	"version": "0.8.22",
+	"version": "0.8.30",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -179,13 +179,14 @@
 		"build:shared": "cd shared && npm run build",
 		"build:docs": "cd docs-site && npm run build",
 		"vscode:prepublish": "npm run compile",
-		"compile": "npm run clean && node ./scripts/build.js && npm run build && npm run build:shared && npm run build:views",
+		"compile": "npm run clean && npm run copy && npm run build && npm run build:shared && npm run build:views && node ./scripts/removeBindings.js",
 		"watch": "tsc -b --watch",
 		"watch:views": "npm run clean && NODE_ENV=development npm run build:views && NODE_ENV=development npm run build",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
 		"clean": "rimraf out",
-		"docs": "cd docs-site && npm run dev"
+		"docs": "cd docs-site && npm run dev",
+		"copy": "node ./scripts/build.js"
 	},
 	"dependencies": {
 		"@ast-grep/napi": "0.29.0",
@@ -209,7 +210,8 @@
 		"zod": "3.24.1",
 		"zod-to-json-schema": "3.24.1",
 		"json5": "2.2.3",
-		"minimatch": "10.0.1"
+		"minimatch": "10.0.1",
+		"tar": "7.4.3"
 	},
 	"devDependencies": {
 		"@ast-grep/cli": "0.29.0",
@@ -225,7 +227,6 @@
 		"generate-license-file": "3.5.1",
 		"node-fetch": "3.3.2",
 		"rimraf": "^6.0.1",
-		"tar": "7.4.3",
 		"typescript": "^5.6.3"
 	},
 	"packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a"

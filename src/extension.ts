@@ -22,6 +22,7 @@ import {
 	telemetry,
 } from "./providers/telemetryProvider";
 import { Workspace } from "./service/workspace";
+import { BindingDownloader } from "./client/bindingDownload";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -38,6 +39,48 @@ export async function activate(context: vscode.ExtensionContext) {
 			"Wingman requires an open workspace to function."
 		);
 		return;
+	}
+
+	try {
+		let progressResolve: (() => void) | undefined;
+		const PROGRESS_DELAY = 3000;
+
+		// Create a delayed progress window
+		const progressPromise = new Promise<void>((resolve) => {
+			const timeout = setTimeout(() => {
+				vscode.window.withProgress({
+					location: vscode.ProgressLocation.Notification,
+					title: "Initializing Wingman",
+					cancellable: false
+				}, async (progress) => {
+					progress.report({ message: "Checking AST-grep bindings..." });
+					return new Promise<void>((res) => {
+						progressResolve = res;
+					});
+				});
+			}, PROGRESS_DELAY);
+
+			// Store the resolve function to be called later
+			progressResolve = () => {
+				clearTimeout(timeout);
+				resolve();
+			};
+		});
+
+		// This is required to download WASM bindings for AST-grep
+		const bindingDownloader = new BindingDownloader(context, loggingProvider);
+		await bindingDownloader.ensureBindings();
+
+		// Resolve the progress window if it was shown
+		if (progressResolve) {
+			progressResolve();
+		}
+
+		// Wait for any pending progress to close
+		await progressPromise;
+	} catch (error) {
+		vscode.window.showErrorMessage("Failed to initialize AST-grep bindings. Some features may not work correctly.");
+		loggingProvider.logError(error, true);
 	}
 
 	const workspace = new Workspace(

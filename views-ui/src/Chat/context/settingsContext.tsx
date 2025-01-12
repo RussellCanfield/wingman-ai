@@ -28,7 +28,7 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   const [theme, setTheme] = useState<Number>(1);
   const [view, setView] = useState<View>("chat");
   const [appState, setAppState] = useState<AppState | null>();
-  const [indexFilter, setIndexFilter] = useState<string>("apps/**/*.{js,jsx,ts,tsx}");
+  const [indexFilter, setIndexFilter] = useState<string>("src/**/*.{js,jsx,ts,tsx}");
   const [exclusionFilter, setExclusionFilter] = useState<string>("");
 
   useEffect(() => {
@@ -36,17 +36,17 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
       const { command, value } = event.data;
       switch (command) {
         case "init":
-					const storedAppState = value as AppState;
+          const storedAppState = value as AppState;
 
-					setAppState(storedAppState);
-					if (storedAppState?.settings.indexerSettings) {
-						const { indexFilter, exclusionFilter } =
-							storedAppState?.settings.indexerSettings;
-						setIndexFilter(indexFilter);
-						setExclusionFilter(exclusionFilter || "");
-					}
-					setTheme(storedAppState?.theme ?? 1);
-					break;
+          setAppState(storedAppState);
+          if (storedAppState?.settings.indexerSettings) {
+            const { indexFilter, exclusionFilter } =
+              storedAppState?.settings.indexerSettings;
+            setIndexFilter(indexFilter);
+            setExclusionFilter(exclusionFilter || "");
+          }
+          setTheme(storedAppState?.theme ?? 1);
+          break;
         case "setTheme":
           setTheme(value as number);
           break;
@@ -54,7 +54,7 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
           setView(value as View);
           break;
         case "file-count-update":
-					setAppState(prev => ({
+          setAppState(prev => ({
             ...prev!,
             totalFiles: (value as AppState).totalFiles
           }));
@@ -67,24 +67,24 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-		if (!appState) return;
+    if (!appState) return;
 
-		const newState: AppState = {
-			...appState,
-			settings: {
-				...appState.settings,
-				indexerSettings: {
-					indexFilter,
-					exclusionFilter,
-				},
-			},
-		};
+    const newState: AppState = {
+      ...appState,
+      settings: {
+        ...appState.settings,
+        indexerSettings: {
+          indexFilter,
+          exclusionFilter,
+        },
+      },
+    };
 
-		vscode.postMessage({
-			command: "state-update",
-			value: newState,
-		});
-	}, [appState, indexFilter, exclusionFilter]);
+    vscode.postMessage({
+      command: "state-update",
+      value: newState,
+    });
+  }, [appState, indexFilter, exclusionFilter]);
 
   return (
     <SettingsContext.Provider

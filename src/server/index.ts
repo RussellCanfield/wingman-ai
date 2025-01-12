@@ -126,6 +126,8 @@ export class LSPServer {
 			indexerSettings.indexFilter
 		);
 
+		await this.codeParser.initialize();
+
 		this.queue = new DocumentQueue(this.indexer);
 
 		this.projectDetails = new ProjectDetailsHandler(

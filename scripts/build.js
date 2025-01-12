@@ -4,9 +4,18 @@ const tar = require("tar");
 
 const packages = [
 	"@ast-grep/napi-win32-x64-msvc",
-	"@ast-grep/napi-darwin-arm64",
 	"@ast-grep/napi-win32-arm64-msvc",
+	"@ast-grep/napi-darwin-arm64",
 	"@ast-grep/napi-darwin-x64",
+	"@ast-grep/napi-linux-x64-gnu",
+	"@ast-grep/napi-linux-arm64-gnu",
+	"@ast-grep/napi-linux-x64-musl",
+	"@ast-grep/napi-linux-arm64-musl",
+	"@ast-grep/napi-linux-arm-gnueabihf",
+	"@ast-grep/napi-linux-arm-musleabihf",
+	"@ast-grep/napi-freebsd-x64",
+	"@ast-grep/napi-alpine-x64-musl",
+	"@ast-grep/napi-alpine-arm64-musl",
 ];
 
 const downloadAndExtract = async (pkg, outDir) => {

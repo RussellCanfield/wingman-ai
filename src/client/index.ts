@@ -66,6 +66,8 @@ export class LSPClient {
 			initializationOptions: {
 				settings,
 				indexerSettings: (await workspace.load()).indexerSettings,
+				extensionPath: context.extensionPath,
+				storagePath: context.globalStorageUri.fsPath,
 			}
 		};
 

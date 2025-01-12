@@ -3,7 +3,7 @@ import { ExtensionContext } from "vscode";
 
 const defaultSettings: WorkspaceSettings = {
 	indexerSettings: {
-		indexFilter: "apps/**/*.{js,jsx,ts,tsx}",
+		indexFilter: "src/**/*.{js,jsx,ts,tsx}",
 	},
 	chatMessages: [],
 };

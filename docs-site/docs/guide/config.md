@@ -1,7 +1,8 @@
 # Configuration
 
 [Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) has a built-in configuration window that will persist configuration locally into the vscode settings file in your repository.
-In the future this may move into a specific file that you can **gitignore** separately.
+In the future this may move into a specific file that you can **gitignore** separately. You can find the settings page by
+clicking **WINGMAN** in the terminal window.
 
 ![](/Config.png)
 
@@ -12,7 +13,6 @@ Since Wingman leverages WASM, there is limited OS support currently due to the s
 -   Windows x64 ARM
 -   macOS x64
 -   macOS ARM
-
 :::
 
 ## Storage

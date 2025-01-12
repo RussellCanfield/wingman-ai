@@ -6,7 +6,7 @@ import {
 	SymbolKind,
 } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { type SgNode, js } from "@ast-grep/napi";
+import { type SgNode, type js as astGrep } from "@ast-grep/napi";
 import {
 	CodeGraphEdgeMap,
 	type CodeGraphNode,
@@ -17,8 +17,19 @@ import { filterSystemLibraries, getTextDocumentFromUri } from "./utils";
 import { SymbolRetriever } from "../retriever";
 import { pathToFileURL } from "url";
 
+async function loadAstGrepBinding() {
+	const { js } = await import("@ast-grep/napi");
+	return js;
+}
+
 export class CodeParser {
-	constructor(private readonly symbolRetriever: SymbolRetriever) {}
+	private js: typeof astGrep | undefined;
+
+	constructor(private readonly symbolRetriever: SymbolRetriever) { }
+
+	async initialize() {
+		this.js = await loadAstGrepBinding();
+	}
 
 	async getDocumentSymbols(
 		textDocumentUri: string
@@ -121,9 +132,9 @@ export class CodeParser {
 			codeBlock = this.replaceLineRange(
 				codeBlock,
 				childNode.location.range.start.line -
-					parentNodeLocation.range.start.line,
+				parentNodeLocation.range.start.line,
 				childNode.location.range.end.line -
-					parentNodeLocation.range.start.line,
+				parentNodeLocation.range.start.line,
 				[childNode.skeleton]
 			);
 		}
@@ -224,7 +235,7 @@ export class CodeParser {
 				Array.from(matchedSymbols.values()).some(
 					(node) =>
 						match.range.start.line >
-							node.location.range.start.line &&
+						node.location.range.start.line &&
 						match.range.end.line < node.location.range.end.line
 				)
 			) {
@@ -267,7 +278,7 @@ export class CodeParser {
 	}
 
 	private findReferencedSymbols(codeBlock: string) {
-		const ast = js.parse(codeBlock);
+		const ast = this.js?.parse(codeBlock)!;
 		const root = ast.root();
 
 		const stack = [root];
@@ -312,7 +323,7 @@ export class CodeParser {
 	}
 
 	findImportStatements(codeBlock: string): SgNode[] {
-		const ast = js.parse(codeBlock);
+		const ast = this?.js?.parse(codeBlock)!;
 		const root = ast.root();
 
 		const importPatterns = [

@@ -13,11 +13,6 @@
 Wingman must be configured before beginning, this involves choosing an AI provider, and adding the API key if applicable.
 If you are running Ollama, make sure Ollama is installed, and started before running the extension, you can always reload the window after you start Ollama.
 
-:::note
-There is a UX issue around the configuration panel, where it will be condensed down to **one save button**
-Currently **you must save every section individually**
-:::
-
 Once you select a provider and configure it, code completion and chat will work as expected. Please visit the other pages in the documentation to see details on configuration sections.
 
 ## Providers
@@ -34,3 +29,7 @@ While we encourage teams to run **Ollama**, it is a challenge to support advance
 Further the models users are running can have varied context lengths and abilities such as reliable output formats.
 
 Currently **Ollama** and **OpenAI** are supported for generating advanced code context about your project. **NOTE** Embedding and query models are separately configured in settings.
+
+## Indexing
+
+Indexing needs to be configured for Wingman to start generating code context, visit the [indexing section]('./indexing') to learn how to configure it.
