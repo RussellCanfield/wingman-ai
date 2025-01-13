@@ -6,6 +6,7 @@ import { vscode } from "./utilities/vscode";
 import { useSettingsContext } from "./context/settingsContext";
 import { useChatContext } from "./context/chatContext";
 import { useComposerContext } from "./context/composerContext";
+import { MdSettings } from "react-icons/md";
 
 const viewName = {
 	chat: "Chat",
@@ -34,37 +35,43 @@ export default function Toolbar() {
 		<div className="flex justify-between items-center gap-4">
 			<h2 className="text-lg font-bold flex-auto">{viewName[view]}</h2>
 			<button
-				className={`${buttonBaseClasses} ${
-					view === "chat"
+				className={`${buttonBaseClasses} ${view === "chat"
 						? buttonActiveClasses
 						: buttonInactiveClasses
-				}`}
+					}`}
 				onClick={() => setView("chat")}
 				title="Chat"
 			>
 				<HiChatAlt size={24} />
 			</button>
 			<button
-				className={`${buttonBaseClasses} ${
-					view === "composer"
+				className={`${buttonBaseClasses} ${view === "composer"
 						? buttonActiveClasses
 						: buttonInactiveClasses
-				}`}
+					}`}
 				onClick={() => setView("composer")}
 				title="Composer"
 			>
 				<HiLightningBolt size={24} />
 			</button>
 			<button
-				className={`${buttonBaseClasses} ${
-					view === "index"
+				className={`${buttonBaseClasses} ${view === "index"
 						? buttonActiveClasses
 						: buttonInactiveClasses
-				}`}
+					}`}
 				onClick={() => setView("index")}
 				title="Index"
 			>
 				<HiDatabase size={24} />
+			</button>
+			<button
+				className={`${buttonBaseClasses} ${buttonInactiveClasses}`}
+				onClick={() => {
+					vscode.postMessage({ command: 'openSettings' })
+				}}
+				title="Settings"
+			>
+				<MdSettings size={24} />
 			</button>
 			<button
 				className={`${buttonBaseClasses} ${buttonInactiveClasses}`}

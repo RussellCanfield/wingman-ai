@@ -173,7 +173,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		context,
 		diffViewProvider,
 		workspace,
-		settings
+		settings,
+		configViewProvider
 	);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(

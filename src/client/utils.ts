@@ -9,12 +9,9 @@ import { family, MUSL } from 'detect-libc';
 export async function getPlatformIdentifier(): Promise<string> {
 	const parts: string[] = [process.platform, process.arch];
 
-	console.log(parts)
-
 	if (process.platform === 'linux') {
 		try {
 			const libcFamily = await family();
-			console.log(libcFamily)
 			if (libcFamily === MUSL) {
 				parts.push('musl');
 			} else if (process.arch === 'arm') {

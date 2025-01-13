@@ -11,13 +11,14 @@ export class BindingDownloader {
     private readonly extensionDir: string;
     private readonly maxRetries = 3;
     private readonly retryDelay = 1000;
+    private readonly bindingVersion = '0.29.0';
 
     constructor(
         context: vscode.ExtensionContext,
         private logger: ILoggingProvider
     ) {
         this.extensionDir = context.extensionPath;
-        this.storageDir = path.join(context.globalStorageUri.fsPath, 'ast-grep-bindings');
+        this.storageDir = path.join(context.globalStorageUri.fsPath, 'ast-grep-bindings', this.bindingVersion);
 
         if (!fs.existsSync(this.storageDir)) {
             fs.mkdirSync(this.storageDir, { recursive: true });
@@ -45,6 +46,8 @@ export class BindingDownloader {
     private async getTargetBindingPath(): Promise<string> {
         const platformId = await getPlatformIdentifier();
         const filename = `ast-grep-napi.${platformId}.node`;
+
+        this.logger.logInfo(`Generated target filename: ${filename}`);
 
         return path.join(
             this.extensionDir,
@@ -82,7 +85,7 @@ export class BindingDownloader {
         const pkg = await this.getNapiPackageName();
         const url = `https://registry.npmjs.org/${pkg}/-/${pkg
             .split('/')
-            .pop()}-0.29.0.tgz`;
+            .pop()}-${this.bindingVersion}.tgz`;
 
         this.logger.logInfo(`Downloading binding for ${process.platform}-${process.arch}`);
         this.logger.logInfo(`URL: ${url}`);
@@ -170,7 +173,7 @@ export class BindingDownloader {
             // Ensure target directory exists
             fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 
-            // Copy from storage to node_modules if needed
+            // Copy from storage to out directory if needed
             if (!fs.existsSync(targetPath) ||
                 fs.statSync(storedPath).size !== fs.statSync(targetPath).size) {
                 await this.retryOperation(

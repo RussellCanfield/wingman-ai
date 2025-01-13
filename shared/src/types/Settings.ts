@@ -118,29 +118,29 @@ export const defaultHfSettings: ApiSettingsType = {
 	codeModel: "codellama/CodeLlama-7b-hf",
 	chatModel: "mistralai/Mixtral-8x7B-Instruct-v0.1",
 	baseUrl: "https://api-inference.huggingface.co/models/",
-	apiKey: "Add me",
+	apiKey: "",
 };
 
 export const defaultOpenAISettings: ApiSettingsType = {
 	chatModel: "gpt-4o-2024-08-06",
 	codeModel: "gpt-4o-2024-08-06",
 	baseUrl: "https://api.openai.com/v1/chat/completions",
-	apiKey: "Add me",
+	apiKey: "",
 };
 
 export const defaultOpenAIEmbeddingSettings: OpenAIEmbeddingSettingsType = {
 	embeddingModel: "text-embedding-ada-002",
 	dimensions: "1536",
-	apiKey: "Add me",
+	apiKey: "",
 	enabled: true,
 };
 
 export const defaultAzureAIEmbeddingSettings: AzureAIEmbeddingSettingsType = {
 	embeddingModel: "text-embedding-ada-002",
 	dimensions: "1536",
-	apiKey: "Add me",
-	apiVersion: "Add me",
-	instanceName: "Add me",
+	apiKey: "",
+	apiVersion: "",
+	instanceName: "",
 	enabled: true,
 };
 
@@ -148,14 +148,14 @@ export const defaultAnthropicSettings: ApiSettingsType = {
 	chatModel: "claude-3-5-sonnet-20240620",
 	codeModel: "claude-3-5-sonnet-20240620",
 	baseUrl: "https://api.anthropic.com/v1",
-	apiKey: "Add me",
+	apiKey: "",
 };
 
 export const defaultAzureAISettings: AzureAISettingsType = {
 	chatModel: "gpt-4o",
 	codeModel: "gpt-4o",
-	instanceName: "Add me",
-	apiKey: "Add me",
+	instanceName: "",
+	apiKey: "",
 	apiVersion: "2024-06-01",
 };
 

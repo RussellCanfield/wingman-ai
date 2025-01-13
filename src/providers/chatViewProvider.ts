@@ -41,6 +41,7 @@ import {
 import { Workspace } from "../service/workspace";
 import { getGitignorePatterns } from "../server/files/utils";
 import { CodeReviewer } from "../commands/review/codeReviewer";
+import { ConfigViewProvider } from "./configViewProvider";
 
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
@@ -61,7 +62,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _diffViewProvider: DiffViewProvider,
 		private readonly _workspace: Workspace,
-		private readonly _settings: Settings
+		private readonly _settings: Settings,
+		private readonly _settingsViewProvider: ConfigViewProvider
 	) { }
 
 	dispose() {
@@ -202,6 +204,9 @@ ${result.summary}`,
 
 					// TODO - save me from the insanity of this switch statement :D
 					switch (command) {
+						case "openSettings":
+							this._settingsViewProvider.openInPanel();
+							break;
 						case "delete-indexed-file":
 							await this._lspClient.deleteFileFromIndex(String(value));
 							break;
