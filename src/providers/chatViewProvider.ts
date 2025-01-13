@@ -33,7 +33,6 @@ import {
 	EVENT_CHAT_SENT,
 	EVENT_COMMIT_MSG,
 	EVENT_REVIEW_FILE_BY_FILE,
-	EVENT_REVIEW_STARTED,
 	EVENT_VALIDATE_FAILED,
 	EVENT_VALIDATE_SUCCEEDED,
 	telemetry,
@@ -443,6 +442,10 @@ ${commitReview}
 							break;
 						case "delete-index":
 							await this._lspClient.deleteIndex();
+							webviewView.webview.postMessage({
+								command: "index-status",
+								value: await this._lspClient.indexExists(),
+							});
 							break;
 						case "build-index":
 							const { indexFilter, exclusionFilter } =
@@ -522,6 +525,10 @@ ${commitReview}
 							webviewView.webview.postMessage({
 								command: "init",
 								value: appState,
+							});
+							webviewView.webview.postMessage({
+								command: "index-status",
+								value: await this._lspClient.indexExists(),
 							});
 							this.showView(this._launchView);
 							break;

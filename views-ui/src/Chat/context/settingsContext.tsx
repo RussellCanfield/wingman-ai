@@ -5,6 +5,12 @@ import { vscode } from "../utilities/vscode";
 
 export type View = "chat" | "composer" | "index";
 
+export type IndexStats = {
+  exists: boolean;
+  processing: boolean;
+  files: string[];
+};
+
 interface SettingsContextType {
   view: View;
   setView: React.Dispatch<React.SetStateAction<View>>;
@@ -14,6 +20,8 @@ interface SettingsContextType {
   exclusionFilter?: string;
   setExclusionFilter: React.Dispatch<React.SetStateAction<string>>;
   totalFileCount: number;
+  indexStats: IndexStats;
+  setIndex: React.Dispatch<React.SetStateAction<IndexStats>>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -30,10 +38,16 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   const [appState, setAppState] = useState<AppState | null>();
   const [indexFilter, setIndexFilter] = useState<string>("src/**/*.{js,jsx,ts,tsx}");
   const [exclusionFilter, setExclusionFilter] = useState<string>("");
+  const [index, setIndex] = useState<IndexStats>({
+    exists: false,
+    processing: false,
+    files: [],
+  });
 
   useEffect(() => {
     const handleResponse = (event: MessageEvent<AppMessage>) => {
       const { command, value } = event.data;
+      console.log(value);
       switch (command) {
         case "init":
           const storedAppState = value as AppState;
@@ -58,6 +72,9 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
             ...prev!,
             totalFiles: (value as AppState).totalFiles
           }));
+          break;
+        case "index-status":
+          setIndex(value as IndexStats);
           break;
       }
     };
@@ -96,7 +113,9 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
         setIndexFilter,
         exclusionFilter,
         setExclusionFilter,
-        totalFileCount: appState?.totalFiles ?? 0
+        totalFileCount: appState?.totalFiles ?? 0,
+        indexStats: index,
+        setIndex
       }}
     >
       {children}

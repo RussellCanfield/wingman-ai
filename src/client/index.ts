@@ -185,6 +185,10 @@ export class LSPClient {
 	}: IndexerSettings) => {
 		telemetry.sendEvent(EVENT_FULL_INDEX_BUILD);
 		const foundFiles = await findFiles(indexFilter, exclusionFilter);
+		if (foundFiles.length == 0) {
+			vscode.window.showErrorMessage('No files found matching the index filter. Please check your indexer settings.');
+			return;
+		}
 		return client.sendRequest("wingman/fullIndexBuild", {
 			files: foundFiles.map((f) => f.fsPath),
 		});

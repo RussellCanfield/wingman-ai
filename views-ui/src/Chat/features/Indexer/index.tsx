@@ -1,6 +1,5 @@
 import { vscode } from "../../utilities/vscode";
-import { AppMessage } from "@shared/types/Message";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Loader } from "../../Loader";
 import { IndexerSettings } from "@shared/types/Indexer";
 import { useSettingsContext } from "../../context/settingsContext";
@@ -15,13 +14,8 @@ type IndexStats = {
 let interval: NodeJS.Timeout;
 
 export default function Indexer() {
-	const { indexFilter, exclusionFilter, setIndexFilter, setExclusionFilter, totalFileCount } =
+	const { indexFilter, exclusionFilter, setIndexFilter, setExclusionFilter, totalFileCount, indexStats, setIndex } =
 		useSettingsContext();
-	const [index, setIndex] = useState<IndexStats>({
-		exists: false,
-		processing: false,
-		files: [],
-	});
 
 	useEffect(() => {
 		vscode.postMessage({
@@ -37,31 +31,6 @@ export default function Indexer() {
 			clearInterval(interval);
 		};
 	}, []);
-
-	useEffect(() => {
-		window.addEventListener("message", handleResponse);
-
-		return () => {
-			window.removeEventListener("message", handleResponse);
-		};
-	}, []);
-
-	const handleResponse = (event: MessageEvent<AppMessage>) => {
-		const { data } = event;
-		const { command } = data;
-
-		switch (command) {
-			case "index-status":
-				const indexStats = data.value as IndexStats;
-				if (
-					indexStats.exists !== index.exists ||
-					indexStats.processing !== index.processing ||
-					indexStats.files.length !== index.files.length
-				) {
-					setIndex(indexStats);
-				}
-		}
-	};
 
 	const buildIndex = () => {
 		vscode.postMessage({
@@ -94,8 +63,8 @@ export default function Indexer() {
 					<div className="space-y-4">
 						<p className="text-lg font-bold">
 							Status:{" "}
-							{index.exists
-								? index.processing
+							{indexStats.exists
+								? indexStats.processing
 									? "Processing"
 									: "Ready"
 								: "Not Found"}
@@ -127,22 +96,22 @@ export default function Indexer() {
 								value={exclusionFilter || ""}
 								onChange={(e) => setExclusionFilter(e.target.value)}
 							/>
-							{!index.processing && (
+							{!indexStats.processing && (
 								<button
 									className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
-									disabled={index.processing || !indexFilter}
+									disabled={indexStats.processing || !indexFilter}
 									onClick={() => buildIndex()}
 								>
 									Full Build Index
 								</button>
 							)}
 						</section>
-						{index.processing && (
+						{indexStats.processing && (
 							<p className="flex items-center">
 								<Loader /> <span className="ml-2">Building Index...</span>
 							</p>
 						)}
-						{index.exists && !index.processing && (
+						{indexStats.exists && !indexStats.processing && (
 							<button
 								className="bg-red-600 text-white px-4 py-2 rounded"
 								onClick={() => deleteIndex()}
@@ -151,19 +120,19 @@ export default function Indexer() {
 							</button>
 						)}
 					</div>
-					{index.exists && !index.processing && (
+					{indexStats.exists && !indexStats.processing && (
 						<div className="flex flex-col gap-4">
 							<div className="bg-[var(--vscode-list-hoverBackground)] rounded-lg p-4 shadow-sm">
 								<div className="flex items-center justify-between">
 									<h3 className="text-lg font-bold">Indexed Files</h3>
 									<span className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm">
-										{index.files.length} / {totalFileCount}
+										{indexStats.files.length} / {totalFileCount}
 									</span>
 								</div>
 								<div className="w-full bg-stone-400 rounded-full h-2.5 mt-3">
 									<div
 										className="bg-blue-500 h-2.5 rounded-full transition-all duration-300"
-										style={{ width: `${(index.files.length / (totalFileCount === 0 ? 1 : totalFileCount)) * 100}%` }}
+										style={{ width: `${(indexStats.files.length / (totalFileCount === 0 ? 1 : totalFileCount)) * 100}%` }}
 									/>
 								</div>
 							</div>
@@ -184,7 +153,7 @@ export default function Indexer() {
 
 								<div className="mt-2 pl-6">
 									<ul className="space-y-1 max-h-[400px] overflow-y-auto pr-2">
-										{index.files && index.files.map((file, idx) => (
+										{indexStats.files && indexStats.files.map((file, idx) => (
 											<li
 												key={idx}
 												className="text-sm text-[var(--vscode-input-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] rounded flex items-center justify-between group px-2 py-1"

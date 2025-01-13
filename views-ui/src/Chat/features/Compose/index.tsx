@@ -9,6 +9,7 @@ import { ChatInput } from "./Input/ChatInput";
 import ChatResponseList from "./ChatList";
 import Validation from "./Validation";
 import { useComposerContext } from "../../context/composerContext";
+import { useSettingsContext } from "../../context/settingsContext";
 
 let currentMessage = "";
 
@@ -27,6 +28,7 @@ const getBase64FromFile = (file: File): Promise<string> => {
 
 export default function Compose() {
 	const { composerMessages, setComposerMessages, loading, setLoading, clearActiveMessage, activeMessage } = useComposerContext();
+	const { indexStats } = useSettingsContext();
 
 	const cancelAIResponse = () => {
 		clearActiveMessage();
@@ -76,6 +78,8 @@ export default function Compose() {
 		setLoading(true);
 	};
 
+	console.log('Index', indexStats, !indexStats.exists || indexStats.files?.length === 0);
+
 	const canValidate = useMemo(() => {
 		if (composerMessages.length === 0) return false;
 
@@ -109,6 +113,13 @@ export default function Compose() {
 							attach one. Lets go!
 							<span className="inline-block animate-bounce ml-4">🚀</span>
 						</span>
+						{(!indexStats.exists || indexStats.files?.length === 0) && (
+							<div className="mt-4 p-4 bg-[var(--vscode-inputValidation-warningBackground)] border border-[var(--vscode-inputValidation-warningBorder)] rounded-md text-[var(--vscode-inputValidation-warningForeground)]">
+								<span className="flex items-center gap-2">
+									⚠️ No context files found. Please build the full index or reference files directly using '@filename'
+								</span>
+							</div>
+						)}
 					</p>
 				</>
 			)}
