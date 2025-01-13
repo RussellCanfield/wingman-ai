@@ -4,6 +4,48 @@ import {
 	LocationLink,
 } from "vscode-languageclient/node";
 import { Range } from "vscode-languageserver-textdocument";
+import { family, MUSL } from 'detect-libc';
+
+export async function getPlatformIdentifier(): Promise<string> {
+	const parts: string[] = [process.platform, process.arch];
+
+	console.log(parts)
+
+	if (process.platform === 'linux') {
+		try {
+			const libcFamily = await family();
+			console.log(libcFamily)
+			if (libcFamily === MUSL) {
+				parts.push('musl');
+			} else if (process.arch === 'arm') {
+				parts.push('gnueabihf');
+			} else {
+				parts.push('gnu');
+			}
+		} catch (error) {
+			// Add debug logging
+			console.log('Fallback detection:', {
+				versions: process.versions,
+				musl: process.versions.musl,
+				isMusl: Boolean(process.versions.musl)
+			});
+
+			const isMusl = Boolean(process.versions.musl);
+
+			if (isMusl) {
+				parts.push('musl');
+			} else if (process.arch === 'arm') {
+				parts.push('gnueabihf');
+			} else {
+				parts.push('gnu');
+			}
+		}
+	} else if (process.platform === 'win32') {
+		parts.push('msvc');
+	}
+
+	return parts.join('-');
+}
 
 export const mapLocation = (location: Location | LocationLink) => {
 	if ("targetUri" in location) {
@@ -46,12 +88,12 @@ export const mapSymbol = (symbol: DocumentSymbol): DocumentSymbol => ({
 	selectionRange: mapRange(symbol.selectionRange),
 	children: symbol.children
 		? symbol.children.map((child) => ({
-				name: child.name,
-				kind: child.kind,
-				range: mapRange(child.range),
-				selectionRange: mapRange(child.selectionRange),
-				children: [], // Assuming no nested children for simplicity
-		  }))
+			name: child.name,
+			kind: child.kind,
+			range: mapRange(child.range),
+			selectionRange: mapRange(child.selectionRange),
+			children: [], // Assuming no nested children for simplicity
+		}))
 		: [],
 });
 

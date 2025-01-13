@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as tar from 'tar';
 import { ILoggingProvider } from "@shared/types/Logger";
 import { EVENT_BINDINGS_FAILED, telemetry } from '../providers/telemetryProvider';
+import { getPlatformIdentifier } from './utils';
 
 export class BindingDownloader {
     private readonly storageDir: string;
@@ -18,21 +19,22 @@ export class BindingDownloader {
         this.extensionDir = context.extensionPath;
         this.storageDir = path.join(context.globalStorageUri.fsPath, 'ast-grep-bindings');
 
-        // Ensure storage directory exists
         if (!fs.existsSync(this.storageDir)) {
             fs.mkdirSync(this.storageDir, { recursive: true });
         }
     }
 
-    private getNapiPackageName(): string {
-        const platform = process.platform;
-        const arch = process.arch;
-        const suffix = platform === 'win32' ? '-msvc' : '';
-        return `@ast-grep/napi-${platform}-${arch}${suffix}`;
+    private async getNapiPackageName(): Promise<string> {
+        const platformId = await getPlatformIdentifier();
+        const packageName = `@ast-grep/napi-${platformId}`;
+
+        this.logger.logInfo(`Using native binding package: ${packageName}`);
+
+        return packageName;
     }
 
-    private getStoredBindingPath(): string {
-        const pkg = this.getNapiPackageName();
+    private async getStoredBindingPath(): Promise<string> {
+        const pkg = await this.getNapiPackageName();
         return path.join(this.storageDir, `${pkg.split('/').pop()}.node`);
     }
 
@@ -40,11 +42,9 @@ export class BindingDownloader {
         return path.join(this.storageDir, 'extract');
     }
 
-    private getTargetBindingPath(): string {
-        const platform = process.platform;
-        const arch = process.arch;
-        const suffix = platform === 'win32' ? '-msvc' : '';
-        const filename = `ast-grep-napi.${platform}-${arch}${suffix}.node`;
+    private async getTargetBindingPath(): Promise<string> {
+        const platformId = await getPlatformIdentifier();
+        const filename = `ast-grep-napi.${platformId}.node`;
 
         return path.join(
             this.extensionDir,
@@ -79,7 +79,7 @@ export class BindingDownloader {
     }
 
     private async downloadBinding(): Promise<void> {
-        const pkg = this.getNapiPackageName();
+        const pkg = await this.getNapiPackageName();
         const url = `https://registry.npmjs.org/${pkg}/-/${pkg
             .split('/')
             .pop()}-0.29.0.tgz`;
@@ -135,7 +135,7 @@ export class BindingDownloader {
             for (const file of files) {
                 if (file.endsWith('.node')) {
                     const srcPath = path.join(packageDir, file);
-                    const destPath = this.getStoredBindingPath();
+                    const destPath = await this.getStoredBindingPath();
                     await this.retryOperation(
                         async () => {
                             fs.copyFileSync(srcPath, destPath);
@@ -156,9 +156,9 @@ export class BindingDownloader {
     }
 
     async ensureBindings(): Promise<void> {
-        const pkg = this.getNapiPackageName();
-        const storedPath = this.getStoredBindingPath();
-        const targetPath = this.getTargetBindingPath();
+        const pkg = await this.getNapiPackageName();
+        const storedPath = await this.getStoredBindingPath();
+        const targetPath = await this.getTargetBindingPath();
 
         try {
             // Check if binding exists in storage
@@ -181,7 +181,7 @@ export class BindingDownloader {
                 );
                 this.logger.logInfo(`Installed binding to ${targetPath}`);
             } else {
-                this.logger.logInfo('Binding already installed in node_modules');
+                this.logger.logInfo('Binding already installed.');
             }
         } catch (error) {
             telemetry.sendError(EVENT_BINDINGS_FAILED, {

@@ -186,7 +186,8 @@
 		"lint": "eslint src --ext ts",
 		"clean": "rimraf out",
 		"docs": "cd docs-site && npm run dev",
-		"copy": "node ./scripts/build.js"
+		"copy": "node ./scripts/build.js",
+		"test": "vitest"
 	},
 	"dependencies": {
 		"@ast-grep/napi": "0.29.0",
@@ -197,37 +198,42 @@
 		"@langchain/ollama": "0.1.4",
 		"@langchain/openai": "0.3.16",
 		"@vscode/extension-telemetry": "^0.9.8",
+		"detect-libc": "2.0.3",
 		"ignore": "5.2.0",
+		"json5": "2.2.3",
 		"langchain": "0.3.9",
+		"minimatch": "10.0.1",
 		"node-cache": "^5.1.2",
+		"tar": "7.4.3",
+		"tinyglobby": "0.2.10",
 		"tree-sitter": "0.22.4",
 		"vectra": "0.9.0",
-		"tinyglobby": "0.2.10",
 		"vscode-languageclient": "9.0.1",
 		"vscode-languageserver": "9.0.1",
 		"vscode-languageserver-textdocument": "1.0.12",
 		"vscode-uri": "3.0.8",
 		"zod": "3.24.1",
-		"zod-to-json-schema": "3.24.1",
-		"json5": "2.2.3",
-		"minimatch": "10.0.1",
-		"tar": "7.4.3"
+		"zod-to-json-schema": "3.24.1"
 	},
 	"devDependencies": {
 		"@ast-grep/cli": "0.29.0",
 		"@rsbuild/core": "1.1.13",
 		"@rsbuild/plugin-react": "1.1.0",
+		"@testing-library/jest-dom": "^6.6.3",
 		"@types/mocha": "10.0.8",
 		"@types/node": "22.5.5",
 		"@types/vscode": "1.95.0",
 		"@types/vscode-webview": "1.57.5",
+		"@vitest/ui": "^2.1.8",
 		"@vscode/test-cli": "0.0.10",
-		"@vscode/test-electron": "2.4.1",
+		"@vscode/test-electron": "^2.4.1",
 		"adm-zip": "0.5.16",
 		"generate-license-file": "3.5.1",
 		"node-fetch": "3.3.2",
 		"rimraf": "^6.0.1",
-		"typescript": "^5.6.3"
+		"typescript": "^5.6.3",
+		"vite-plugin-node-polyfills": "^0.22.0",
+		"vitest": "^2.1.8"
 	},
 	"packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a"
 }
