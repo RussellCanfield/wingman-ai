@@ -1,5 +1,6 @@
 import { PropsWithChildren, memo } from "react";
 import { FaCopy } from "react-icons/fa6";
+import { FaUser } from "react-icons/fa";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FaTerminal } from "react-icons/fa";
@@ -32,8 +33,8 @@ const CodeContainer = memo(
 		step,
 	}: PropsWithChildren<{ file?: FileMetadata; step?: any }>) => {
 		return (
-			<div className="relative">
-				<div className="overflow-x-auto p-2 markdown-container">
+			<div className="relative rounded-md bg-editor-bg">
+				<div className="overflow-x-auto p-4 markdown-container">
 					{children}
 				</div>
 			</div>
@@ -48,7 +49,7 @@ const renderMarkdown = (
 	step?: any
 ) => {
 	return (
-		<div>
+		<div className="prose prose-invert max-w-none">
 			<Markdown
 				children={content}
 				components={{
@@ -69,11 +70,12 @@ const renderMarkdown = (
 								wrapLongLines={true}
 								file={file}
 								step={step}
+								className="!bg-editor-bg !p-0"
 							/>
 						) : (
 							<code
 								{...rest}
-								className={`${className} whitespace-pre-wrap bg-transparent p-2`}
+								className={`${className} whitespace-pre-wrap bg-editor-bg rounded px-2 py-1`}
 							>
 								{children}
 							</code>
@@ -87,10 +89,8 @@ const renderMarkdown = (
 
 const ChatArtifact = ({
 	file,
-	loading
 }: {
 	file: FileMetadata;
-	loading: boolean;
 }) => {
 	const mergeIntoFile = () => {
 		if (file) {
@@ -114,83 +114,53 @@ const ChatArtifact = ({
 		}
 	};
 
-	const copyToClipboard = (code: string) => {
-		vscode.postMessage({
-			command: "clipboard",
-			value: extractCodeBlock(code),
-		});
-	};
-
 	const truncatePath = (path: string, maxLength: number = 50) => {
 		if (path.length <= maxLength) return path;
 		return "..." + path.slice(-maxLength);
 	};
 
+	const diffParts = file.diff?.split(',');
+
 	return (
-		<div className="border border-stone-700 rounded-lg overflow-hidden shadow-lg mb-4 mt-4">
-			<div className="bg-stone-700 text-white flex flex-wrap items-center">
-				<h4 className="m-0 flex-grow p-2 text-wrap break-all">
+		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30">
+			<div className="bg-stone-800/50 text-white flex flex-wrap items-center border-b border-stone-700/50">
+				<h4 className="m-0 flex-grow p-3 text-wrap break-all font-medium">
 					{truncatePath(file.path)}
 				</h4>
-				{file?.changes && (
+				{diffParts && (
+					<div className="flex items-center gap-2 px-3 text-sm">
+						<span className="flex items-center gap-1 text-green-400">
+							<span>{diffParts[0]}</span>
+						</span>
+						<span className="flex items-center gap-1 text-red-400">
+							<span>{diffParts[1]}</span>
+						</span>
+					</div>
+				)}
+				{file?.description && (
 					<div className="flex">
-						<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
-							<button
-								type="button"
-								title="Copy code to clipboard"
-								className="p-4"
-								onClick={() => copyToClipboard(file.code!)}
-							>
-								<FaCopy size={18} />
-							</button>
-						</div>
-						<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+						<div className="flex items-center text-white rounded z-10 hover:bg-stone-700 transition-colors">
 							<button
 								type="button"
 								title="Show diff"
-								className="p-4"
+								className="p-3"
 								onClick={() => showDiffview()}
 							>
-								<MdOutlineDifference size={18} />
+								<MdOutlineDifference size={16} />
 							</button>
 						</div>
-						<div className="flex items-center bg-stone-700 text-white rounded z-10 hover:bg-stone-500 hover:cursor-pointer">
+						<div className="flex items-center text-white rounded z-10 hover:bg-stone-700 transition-colors">
 							<button
 								type="button"
 								title="Accept changes"
-								className="p-4"
+								className="p-3"
 								onClick={() => mergeIntoFile()}
 							>
-								<LuFileCheck size={18} />
+								<LuFileCheck size={16} />
 							</button>
 						</div>
 					</div>)}
-				{loading && !file.changes?.length && (
-					<div className="flex items-center justify-center p-4">
-						<div className="animate-spin rounded-full h-6 w-6 border-2 border-stone-400 border-t-transparent"
-							role="status"
-							aria-label="Loading">
-							<span className="sr-only">Loading...</span>
-						</div>
-					</div>
-				)}
 			</div>
-			{file?.changes?.length && file?.changes?.length > 0 && (
-				<div className="p-2 bg-editor-bg">
-					<div className="mb-4 p-2">
-						<h4 className="m-0 text-md font-semibold">Changes:</h4>
-						<ul className="mt-2 list-disc list-inside">
-							{file.changes?.map((change, index) => (
-								<li key={index} className="ml-4 !border-t-0">
-									{typeof change === "string"
-										? change
-										: JSON.stringify(change)}
-								</li>
-							))}
-						</ul>
-					</div>
-				</div>
-			)}
 		</div>
 	);
 };
@@ -202,9 +172,8 @@ const ChatEntry = ({
 	steps,
 	greeting,
 	loading,
-	index,
 	image,
-}: PropsWithChildren<ComposerMessage & { index: number }>) => {
+}: PropsWithChildren<ComposerMessage>) => {
 	const { isLightTheme } = useSettingsContext();
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
@@ -217,101 +186,103 @@ const ChatEntry = ({
 		}
 	};
 
+	const bgClasses = from === "user" ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
+		} rounded-lg overflow-hidden w-full` : "";
+
 	return (
 		<li
-			className="pt-2 pb-2 tracking-wide leading-relaxed text-base message"
-			style={
-				index === 0
-					? {}
-					: {
-						borderTop: "1px solid",
-						borderColor:
-							"rgb(87 83 78 / var(--tw-border-opacity))",
-					}
-			}
+			className="tracking-wide leading-relaxed text-base message mb-8"
 		>
-			<span className="flex items-center mb-4">
-				<h3 className="text-xl">
-					{from === "user" ? "Me" : "Wingman"}
-				</h3>
-			</span>
-			{greeting && (
-				<p className="mt-4 mb-4">{greeting}</p>
-			)}
-			{message !== "" && renderMarkdown(message, codeTheme)}
-			{image && (
-				<img
-					src={image.data}
-					alt="Image preview"
-					className="max-w-full h-auto rounded-lg mt-4 mb-4"
-					style={{ maxHeight: "512px" }}
-				/>
-			)}
-			{steps && steps.length > 0 && (
-				<div>
-					<div className="flex flex-col bg-editor-bg mt-4 rounded-lg">
-						<h3 className="m-0 text-lg">Steps:</h3>
-						{steps?.map((step, index) => (
-							<div
-								className="border border-stone-700 rounded-lg overflow-hidden shadow-lg mb-4 mt-4"
-								key={index}
-							>
-								<div className="bg-stone-700 text-white flex flex-row">
-									<p className="flex-1 p-2">
-										{step.description}
-									</p>
-									{step.command && (
-										<div className="flex space-x-2 bg-stone-700 text-white rounded hover:bg-stone-500 hover:cursor-pointer z-10">
-											<button
-												type="button"
-												title="Run in terminal"
-												className="p-4"
-												onClick={() =>
-													sendTerminalCommand(
-														step.command!
-													)
-												}
-											>
-												<FaTerminal size={18} />
-											</button>
+			<div className={`max-w-[800px] ${from === "user" ? "" : "pl-[48px]"} pr-[48px] flex items-center text-stone-300`}>
+				<div className="relative flex items-center gap-4 flex-grow">
+					{from === "user" && (
+						<div>
+							<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
+								<FaUser className="text-stone-300" size={16} />
+							</div>
+						</div>
+					)}
+					<div className={`${bgClasses} flex-grow w-full justify-center items-center`}>
+						{greeting && (
+							<p >{greeting}</p>
+						)}
+						<div className={`${from === 'user' ? 'p-3' : ''}`}>
+							{message !== "" && renderMarkdown(message, codeTheme)}
+						</div>
+						{image && (
+							<img
+								src={image.data}
+								alt="Image preview"
+								className="max-w-full h-auto rounded-lg mt-4 mb-4"
+								style={{ maxHeight: "512px" }}
+							/>
+						)}
+						{steps && steps.length > 0 && (
+							<div className="mt-6">
+								<h3 className="text-lg font-semibold text-stone-200 mb-4">Steps:</h3>
+								<div className="space-y-3">
+									{steps?.map((step, index) => (
+										<div
+											className="border border-stone-700/50 rounded-lg overflow-hidden bg-editor-bg/30"
+											key={index}
+										>
+											<div className="bg-stone-800/50 text-white flex flex-row items-center border-b border-stone-700/50">
+												<p className="flex-1 p-3 text-sm">
+													{step.description}
+												</p>
+												{step.command && (
+													<div className="flex space-x-2 text-white rounded hover:bg-stone-700 transition-colors z-10">
+														<button
+															type="button"
+															title="Run in terminal"
+															className="p-3"
+															onClick={() =>
+																sendTerminalCommand(
+																	step.command!
+																)
+															}
+														>
+															<FaTerminal size={16} />
+														</button>
+													</div>
+												)}
+											</div>
+											<div>
+												{step.command &&
+													renderMarkdown(
+														`\`\`\`bash\n${step.command}\n\`\`\``,
+														codeTheme,
+														undefined,
+														step
+													)}
+											</div>
 										</div>
-									)}
-								</div>
-								<div>
-									{step.command &&
-										renderMarkdown(
-											`\`\`\`bash\n${step.command}\n\`\`\``,
-											codeTheme,
-											undefined,
-											step
-										)}
+									))}
 								</div>
 							</div>
-						))}
+						)}
+						{files && files?.length > 0 && (
+							<div>
+								{files?.map((file, index) => (
+									<div key={index}>
+										{file.description && (
+											<p className="mb-2">{file.description}</p>
+										)}
+										<ChatArtifact
+											file={file}
+										/>
+									</div>
+								))}
+							</div>
+						)}
+						{from === 'assistant' && loading && (
+							<div className="mt-4 flex justify-center items-center">
+								<SkeletonLoader isDarkTheme={!isLightTheme} />
+							</div>
+						)}
 					</div>
 				</div>
-			)}
-			{files && files?.length > 0 && (
-				<div>
-					<h3 className="m-0 text-lg mt-4">Files:</h3>
-					{files?.map((file, index) => {
-						return (
-							<>
-								<p>{file.description}</p>
-								<ChatArtifact
-									key={index}
-									file={file}
-									loading={loading ?? false}
-								/>
-							</>)
-					})}
-				</div>
-			)}
-			{from === 'assistant' && loading && (
-				<div className="mt-4">
-					<SkeletonLoader isDarkTheme={!isLightTheme} />
-				</div>
-			)}
+			</div>
 		</li>
 	);
 };

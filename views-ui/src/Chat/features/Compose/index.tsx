@@ -129,7 +129,6 @@ export default function Compose() {
 						steps={activeMessage?.steps}
 						greeting={activeMessage?.greeting}
 						loading={true}
-						index={1}
 					/>
 				)}
 				{canValidate && <Validation />}

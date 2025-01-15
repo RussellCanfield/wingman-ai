@@ -16,7 +16,6 @@ import {
 } from "@shared/types/Message";
 import { AIProvider } from "../service/base";
 import { CodeReviewer } from "../commands/review/codeReviewer";
-import path from "node:path";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();

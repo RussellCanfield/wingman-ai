@@ -526,10 +526,13 @@ ${commitReview}
 								command: "init",
 								value: appState,
 							});
-							webviewView.webview.postMessage({
-								command: "index-status",
-								value: await this._lspClient.indexExists(),
-							});
+
+							setTimeout(async () => {
+								webviewView.webview.postMessage({
+									command: "index-status",
+									value: await this._lspClient.indexExists(),
+								});
+							}, 500);
 							this.showView(this._launchView);
 							break;
 						}

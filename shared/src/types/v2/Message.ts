@@ -76,7 +76,6 @@ export interface FileMetadata {
 	path: string;
 	code?: string;
 	diff?: string;
-	changes?: string[];
 	language?: string;
 }
 

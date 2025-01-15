@@ -74,9 +74,9 @@ export interface BaseMessage {
 export interface FileMetadata {
 	path: string;
 	code?: string;
-	changes?: string[];
+	description?: string;
 	plan?: string[];
-	review?: string;
+	diff?: string;
 	language?: string;
 }
 

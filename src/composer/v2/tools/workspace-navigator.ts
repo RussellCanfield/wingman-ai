@@ -74,10 +74,15 @@ export class WorkspaceNavigator {
     const stream = await this.rerankModel.stream(`You are a helpful AI coding assistant.
 Acknowledge the user's request with a brief, natural greeting. Be friendly but professional.
 Mention that you will create an implementation plan but do not generate one yet.
+Do not detail what an implementation plan is.
 Do not ask a question, make a statement.
 Do not include phrases like "Sure," or "Here is".
+Do not start with a greeting like "Hi" or "Hello" or "Thanks for your request" - just state you'll be helpful.
+Ignore any existing assistant message about an Implementation Plan, this is from a previous interaction.
+Focus on the latest message interaction.
   
-User request: ${question}`);
+Previous conversation and latest request:
+${question}`);
 
     for await (const chunk of stream) {
       yield chunk.content.toString();
@@ -89,47 +94,56 @@ User request: ${question}`);
     const BATCH_SIZE = 1000;
 
     const createPrompt = (fileTargets: string, previousTargets: FileTarget[] = []) => `You are a senior software architect and technical lead.
-  The provided user request is related to writing software.
-  You will work autonomously when possible, without overburdening the user with questions.
-  Analyze this request and identify what files or folders need to be found or created.
-  
-  Consider:
-  1. The type of component being discussed (controller, model, utility, etc.)
-  2. Common directory structures for this type of component
-  3. Related files that might need modification
-  4. If the request is unclear and you are not able to infer direction or intent, ask a clarifying question.
-  5. Start with the provided File Targets before generating new ones, if you feel like there is no match then generate one.
-  
-  Consider for needsFurtherScans:
-  - Set true if initial files don't provide enough context
-  
-  Question Guidelines:
-  1. Do not over burden the user, work with autonomy where possible.
-  2. In the response use type "QUESTION" and put the clarifying question in the description field.
-  
-  ${previousTargets.length > 0 ? `Previous Targets:\n${JSON.stringify(previousTargets, null, 2)}\n\n` : ''}
-  File Targets:
-  ${fileTargets}
-  
-  ------
-  
-  Return a JSON object with the following properties:
-  {
-      "task": "A markdown-formatted response that:
-              1. Starts with '### Implementation Plan'
-              2. Includes a brief overview of what needs to be done
-              3. Lists the key changes in bullet points, bold each file name or directory referenced.
-              4. Ends with '**Would you like me to proceed with these changes?**'",
-      "targets": ["array of possible file targets"]
-  }
-  
-  Schema for "targets" JSON property, where each target has:
-  - type: "CREATE" or "MODIFY" or "QUESTION"
-  - description: Specific description of what to look for
-  - path: Expected file path if known
-  - folderPath: Expected folder path if known
-  
-  User request: ${question}`;
+The provided user request is related to writing software.
+You will work autonomously when possible, without overburdening the user with questions.
+Analyze this request and identify what files or folders need to be found or created.
+
+Consider:
+1. The type of component being discussed (controller, model, utility, etc.)
+2. Common directory structures for this type of component
+3. Related files that might need modification
+4. If the request is unclear and you are not able to infer direction or intent, ask a clarifying question.
+5. Start with the provided File Targets before generating new ones, if you feel like there is no match then generate one.
+6. Focus on the core objective and what files appear to be the most relevant, be selective!
+
+Question Guidelines:
+1. Do not over burden the user, work with autonomy where possible.
+2. In the response use type "QUESTION" and put the clarifying question in the description field.
+
+Workspace path:
+${this.workspace}
+
+${previousTargets.length > 0 ? `Previous Targets:\n${JSON.stringify(previousTargets, null, 2)}\n\n` : ''}
+File Targets:
+${fileTargets}
+
+------
+
+Formatting guidelines:
+1. JSON Structure:
+    - Use double quotes for properties and strings
+    - No trailing commas
+    - Proper escaping of special characters
+    - camelCase property names
+    - Encode newlines as \n
+
+Return a JSON object with the following properties:
+{
+    "task": "A markdown-formatted response that:
+            1. Starts with '### Implementation Plan'
+            2. Includes a brief overview of what needs to be done
+            3. Lists the key changes in bullet points, bold each file name or directory referenced.
+            4. Ends with '**Would you like me to proceed with these changes?**'",
+    "targets": ["array of possible file targets"]
+}
+
+Schema for "targets" JSON property, where each target has:
+- type: "CREATE" or "MODIFY" or "QUESTION"
+- description: Specific description of what to look for
+- path: Expected file path if known
+- folderPath: Expected folder path if known
+
+User request: ${question}`;
 
     // Get initial directory scan
     const allContents = await this.scanDirectory(this.workspace, this.INITIAL_SCAN_DEPTH);

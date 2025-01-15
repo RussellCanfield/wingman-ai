@@ -1,4 +1,4 @@
-import { Command, interrupt, START, StateGraph } from "@langchain/langgraph";
+import { Command, END, interrupt, START, StateGraph } from "@langchain/langgraph";
 import type { BaseCheckpointSaver, StateGraphArgs } from "@langchain/langgraph";
 import { ChatMessage } from "@langchain/core/messages";
 import { CodeGraph } from "../../server/files/graph";
@@ -11,7 +11,6 @@ import { ComposerRequest } from "@shared/types/Composer";
 import { WorkspaceNavigator } from "./tools/workspace-navigator";
 import { FileTarget, UserIntent } from "./types/tools";
 import { FileMetadata } from "@shared/types/v2/Message";
-import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { CodeWriter } from "./tools/code-writer";
 
 export interface Thread {
@@ -39,7 +38,7 @@ export async function* generateCommand(
     controller = new AbortController();
 
     const workspaceNavigator = new WorkspaceNavigator(rerankModel, workspace);
-    const codeWriter = new CodeWriter(model, workspace);
+    const codeWriter = new CodeWriter(model, rerankModel, workspace);
 
     const humanFeedback = async (state: PlanExecuteState) => {
         const lastMessage = state.messages[state.messages.length - 1];
@@ -47,39 +46,56 @@ export async function* generateCommand(
         const userMessage = interruptState.messages![0].content.toString();
 
         const isPositive = await rerankModel.invoke(
-            `Analyze this response and determine if it's a positive confirmation or an instruction/request.
+            `Analyze this response and determine if it's a positive confirmation or any other type of response.
 
 Rules:
-- Respond with 'yes' if it's a clear positive confirmation (e.g., 'yes', 'sure', 'okay', 'proceed')
-- Respond with 'no' if it contains instructions, requests, or negative responses
-- Questions should be treated as 'no'
-- Any specific directions or modifications should be treated as 'no'
+- Respond with 'yes' ONLY for clear positive confirmations like:
+    - "yes", "sure", "okay", "proceed"
+    - "looks good", "that's correct"
+    - "go ahead", "sounds good"
+- Respond with 'no' for:
+    - Any instructions or requests
+    - Questions or queries
+    - Greetings (like "hi", "hello")
+    - Ambiguous or unclear responses
+    - General comments or statements
+    - Any specific directions or modifications
+    - Partial agreements with conditions
 - You must only respond with 'yes' or 'no', do not add any additional text
 
 Examples:
 - "Yes, go ahead" -> "yes"
 - "Looks good" -> "yes"
+- "That works perfectly" -> "yes"
+- "Hi" -> "no"
+- "Hello there" -> "no"
 - "Can you change X" -> "no"
 - "Instead, do this" -> "no"
-- "Please modify X" -> "no"
+- "Maybe" -> "no"
+- "Yes, but can you..." -> "no"
+- "That's interesting" -> "no"
 
 Response: ${userMessage}
 
 Answer (yes/no):`
         );
 
+        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
+
         if (isPositive.content.toString().toLowerCase().includes('yes')) {
-            return {
-                messages: [...state.messages, new ChatMessage(userMessage, "user")],
-                greeting: state.greeting
-            };
+            return new Command({
+                goto: "code-writer",
+                update: {
+                    messages
+                } satisfies Partial<PlanExecuteState>,
+            });
         }
 
         return new Command({
             goto: "find",
             update: {
-                messages: [...state.messages, new ChatMessage(userMessage, "user")]
-            }
+                messages
+            } satisfies Partial<PlanExecuteState>
         });
     };
 
@@ -149,12 +165,18 @@ Answer (yes/no):`
     let workflow = new StateGraph({
         channels: planExecuteState,
     })
-        .addNode("find", workspaceNavigator.navigateWorkspace)
-        .addNode("human-feedback", humanFeedback)
-        .addNode("code-writer", codeWriter.codeWriterStep)
+        .addNode("find", workspaceNavigator.navigateWorkspace, {
+            ends: ["human-feedback"]
+        })
+        .addNode("human-feedback", humanFeedback, {
+            ends: ["find", "code-writer"]
+        })
+        .addNode("code-writer", codeWriter.codeWriterStep, {
+            ends: [END]
+        })
         .addEdge(START, "find")
-        .addEdge("find", "human-feedback")
-        .addEdge("human-feedback", "code-writer");
+        .addEdge("find", "human-feedback");
+
 
     const checkpoint = await checkpointer?.get(config!);
 

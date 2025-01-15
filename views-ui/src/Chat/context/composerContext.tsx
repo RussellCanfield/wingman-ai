@@ -106,8 +106,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         break;
       case "assistant-question":
         if (mostRecentMessage) {
-          setLoading(false);
-          console.log('Active:', activeMessage);
           setComposerMessages((currentMessages) => {
             return [
               ...currentMessages,
@@ -118,6 +116,8 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
               }
             ];
           });
+          setLoading(false);
+          setActiveMessage(undefined);
         }
         break;
     }

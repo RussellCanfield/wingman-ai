@@ -10,18 +10,21 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { FileMetadata } from "@shared/types/Message";
 import { getTextDocumentFromPath } from "../../../server/files/utils";
 import path from "node:path";
+import { GitCommandEngine } from "../../../utils/gitCommandEngine";
+import { createPatch } from 'diff';
+import fs from "node:fs";
 
 type CodeResponse = {
-	description: string;
 	steps: Array<{
 		description: string;
 		command?: string;
 	}>;
 	file: {
+		description: string;
 		path: string;
 		code: string;
 		markdownLanguage: string;
-		changes?: string[];
+		diff?: string;
 	};
 };
 
@@ -44,85 +47,140 @@ const DELIMITERS = {
 
 const FILE_SEPARATOR = "<FILE_SEPARATOR>";
 
-const parseResponse = (response: string): CodeResponse => {
-	// Helper to extract content between delimiters
-	const extractSection = (start: string, end: string, content: string) => {
-		const regex = new RegExp(`${start}\\n([\\s\\S]*?)\\n${end}`);
-		const match = content.match(regex);
-		return match ? match[1].trim() : '';
+class StreamParser {
+	private buffer = '';
+	private currentSection: 'steps' | 'file' | null = null;
+	private gitCommands: GitCommandEngine | undefined;
+	private result: CodeResponse = {
+		steps: [],
+		file: {
+			path: '',
+			code: '',
+			markdownLanguage: '',
+			description: '',
+		}
 	};
 
-	// Extract initial description (any text before first delimiter)
-	const firstDelimiter = response.match(new RegExp(`(${DELIMITERS.STEPS_START}|${DELIMITERS.FILE_START})`));
-	const description = firstDelimiter
-		? response.substring(0, firstDelimiter.index).trim()
-		: '';
+	constructor(private readonly workspace: string) {
+		this.gitCommands = new GitCommandEngine(process.cwd());
+	}
 
-	// Parse steps section
-	const stepsContent = extractSection(DELIMITERS.STEPS_START, DELIMITERS.STEPS_END, response);
-	const steps: CodeResponse['steps'] = [];
+	private isInSection(delimiter: string) {
+		return this.buffer.includes(delimiter);
+	}
 
-	if (stepsContent) {
-		// Split into individual steps
-		const stepBlocks = stepsContent.split(DELIMITERS.STEP_START)
-			.filter(block => block.trim())
-			.map(block => block.split(DELIMITERS.STEP_END)[0].trim());
+	private generateDiffFromModifiedCode(newCode: string, filePath: string): string {
+		let fileContents = '';
 
-		// Parse each step
-		for (const block of stepBlocks) {
-			const descMatch = block.match(/Description: (.*?)(?:\nCommand:|$)/s);
-			const cmdMatch = block.match(/Command: (.*?)$/s);
+		if (fs.existsSync(filePath)) {
+			fileContents = fs.readFileSync(filePath, { encoding: "utf-8" });
+		}
 
-			if (descMatch) {
-				steps.push({
-					description: descMatch[1].trim(),
-					command: cmdMatch?.[1].trim()
-				});
+		const patch = createPatch(
+			filePath,           // filename for the diff header
+			fileContents || '', // original content
+			newCode || '',      // new content
+			'',                 // optional old header
+			'',                 // optional new header
+		);
+
+		// Calculate diff statistics
+		const stats = {
+			additions: 0,
+			deletions: 0
+		};
+
+		// Parse the patch line by line to count additions and deletions
+		const lines = patch.split('\n');
+		for (const line of lines) {
+			if (line.startsWith('+') && !line.startsWith('+++')) {
+				stats.additions++;
+			} else if (line.startsWith('-') && !line.startsWith('---')) {
+				stats.deletions++;
 			}
 		}
+
+		return `+${stats.additions},-${stats.deletions}`;
 	}
 
-	// Parse file section
-	const fileContent = extractSection(DELIMITERS.FILE_START, DELIMITERS.FILE_END, response);
-	const file: CodeResponse['file'] = {
-		path: '',
-		code: '',
-		markdownLanguage: '',
-		changes: []
-	};
+	async parse(chunk: string): Promise<Partial<CodeResponse>> {
+		this.buffer += chunk;
 
-	if (fileContent) {
-		// Extract path
-		const pathMatch = fileContent.match(/Path: (.*?)(?:\n|$)/);
-		if (pathMatch) {
-			file.path = pathMatch[1].trim();
+		// Determine current section
+		if (this.isInSection(DELIMITERS.STEPS_START)) {
+			this.currentSection = 'steps';
+		} else if (this.isInSection(DELIMITERS.FILE_START)) {
+			this.currentSection = 'file';
 		}
 
-		// Extract language
-		const langMatch = fileContent.match(/Language: (.*?)(?:\n|$)/);
-		if (langMatch) {
-			file.markdownLanguage = langMatch[1].trim();
+		const updates: Partial<CodeResponse> = {};
+
+		switch (this.currentSection) {
+			case 'steps':
+				if (this.isInSection(DELIMITERS.STEPS_END)) {
+					const stepsContent = this.buffer.substring(
+						this.buffer.indexOf(DELIMITERS.STEPS_START) + DELIMITERS.STEPS_START.length,
+						this.buffer.indexOf(DELIMITERS.STEPS_END)
+					);
+
+					const newSteps = stepsContent
+						.split(DELIMITERS.STEP_START)
+						.filter(block => block.trim())
+						.map(block => {
+							const stepContent = block.split(DELIMITERS.STEP_END)[0].trim();
+							const descMatch = stepContent.match(/Description: (.*?)(?:\nCommand:|$)/s);
+							const cmdMatch = stepContent.match(/Command: (.*?)$/s);
+
+							return {
+								description: descMatch?.[1].trim() || '',
+								command: cmdMatch?.[1].trim()
+							};
+						})
+						.filter(step => step.description);
+
+					if (newSteps.length > this.result.steps.length) {
+						updates.steps = newSteps;
+						this.result.steps = newSteps;
+					}
+				}
+				break;
+
+			case 'file':
+				if (this.isInSection(DELIMITERS.FILE_END)) {
+					const fileContent = this.buffer.substring(
+						this.buffer.indexOf(DELIMITERS.FILE_START) + DELIMITERS.FILE_START.length,
+						this.buffer.indexOf(DELIMITERS.FILE_END)
+					);
+
+					const pathMatch = fileContent.match(/Path: (.*?)(?:\n|$)/);
+					const langMatch = fileContent.match(/Language: (.*?)(?:\n|$)/);
+					const descMatch = fileContent.match(/Description: (.*?)(?:\n|$)/);
+					const codeMatch = fileContent.match(/Code:\n([\s\S]*?)$/);
+
+					const fileUpdate: CodeResponse['file'] = {
+						path: pathMatch?.[1].trim() || '',
+						markdownLanguage: langMatch?.[1].trim() || '',
+						description: descMatch?.[1].trim() || '',
+						code: codeMatch?.[1].trim() || ''
+					};
+
+					if (fileUpdate.code) {
+						fileUpdate.diff = this.generateDiffFromModifiedCode(fileUpdate.code, path.join(this.workspace, fileUpdate.path));
+					}
+
+					updates.file = fileUpdate;
+					this.result.file = fileUpdate;
+				}
+				break;
 		}
 
-		// Extract code (everything between Code: and Changes:)
-		const codeMatch = fileContent.match(/Code:\n([\s\S]*?)(?=\nChanges:|$)/);
-		if (codeMatch) {
-			file.code = codeMatch[1].trim();
-		}
-
-		// Extract changes
-		const changesMatch = fileContent.match(/Changes:\n([\s\S]*?)$/);
-		if (changesMatch) {
-			file.changes = changesMatch[1]
-				.split('\n')
-				.map(line => line.trim())
-				.filter(line => line.startsWith('- '))
-				.map(line => line.slice(2));
-		}
+		return updates;
 	}
 
-	return { description, steps, file };
-};
+	getResult(): CodeResponse {
+		return this.result;
+	}
+}
 
 const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for AI-powered development tools.
 
@@ -145,11 +203,8 @@ Command: npm install package-name
 ===FILE_START===
 Path: /path/to/file
 Language: typescript
+Description: A short and concise summary of what you changed in the file.
 Code:
-// Your actual code here
-Changes:
-- Added new function
-- Updated imports
 ===FILE_END===
 
 Core Principles:
@@ -229,11 +284,14 @@ Use the following project context to assist in choosing available technology:
 
 ------
 
+Previous conversation and latest request:
+
 {{request}}
 
 ------
 
 Files available to create or modify:
+
 {{availableFiles}}
 
 {{modified}}
@@ -274,16 +332,15 @@ ${rulePack}`;
 export class CodeWriter {
 	constructor(
 		private readonly chatModel: BaseChatModel,
+		private readonly rerankModel: BaseChatModel,
 		private readonly workspace: string
 	) { }
 
 	codeWriterStep = async (
 		state: PlanExecuteState
-	): Promise<Partial<PlanExecuteState>> => {
+	) => {
 		const rulePack = loadWingmanRules(this.workspace);
 		const request = formatMessages(state.messages);
-
-		const codeWriter = this.chatModel;
 
 		const files: FileMetadata[] = [];
 		const steps: CodeResponse["steps"] = [];
@@ -311,14 +368,14 @@ export class CodeWriter {
 							modifiedFiles:
 								files.length === 0
 									? ""
-									: `Context: Previously Modified/Created Files
+									: `-------\n\nContext: Previously Modified/Created Files
     
-The following list contains files you have already processed, along with their changes. 
+The following list contains files you have already processed, along with a description of their changes. 
 Use this information as context for subsequent file processing. Do not modify these files again.
 Note: Consider dependencies between these files and the file you are currently processing.
 
 ${files.map(
-										(f) => `File:\n${f.path}\n\nChanges:\n${f.changes?.join("\n")}`
+										(f) => `File:\n${f.path}\n\Changes:\n${f.description}`
 									).join('\n')}
 
 ------`,
@@ -341,47 +398,39 @@ ${f.code}`
 				],
 			});
 
-			const output = (await codeWriter.invoke([
-				systemMessage,
-				new HumanMessage({
-					content: [
-						{
-							type: "text",
-							text: `Here is the file currently in scope:
-            
+			const parser = new StreamParser(this.workspace);
+
+			for await (const chunk of await this.chatModel.stream([systemMessage, new HumanMessage({
+				content: [
+					{
+						type: "text",
+						text: `Here is the file currently in scope:
+		
 ${file === "BLANK"
-									? `The user does not currently have any related files, assume this may be a new project and this is your current working directory: ${this.workspace}`
-									: `File:\n${file}\n\nCode:\n${code}`
-								}`,
-						},
-					],
-				}),
-			]));
+								? `The user does not currently have any related files, assume this may be a new project and this is your current working directory: ${this.workspace}`
+								: `File:\n${file}\n\nCode:\n${code}`
+							}`,
+					},
+				],
+			})])) {
+				const updates = await parser.parse(chunk.content.toString());
 
-			const result = parseResponse(output.content.toString());
+				if (updates.steps?.length) {
+					steps.push(...updates.steps);
+					await dispatchCustomEvent('composer-manual-steps', { steps });
+				}
 
-			const fileChanged =
-				result.file.changes && result.file.changes.length > 0;
+				if (updates.file) {
+					const stateFile = state?.files?.find(f => f.path === updates.file?.path);
+					if (stateFile && !files.some(f => f.path === updates.file?.path)) {
+						stateFile.language = updates.file.markdownLanguage;
+						stateFile.code = updates.file.code;
+						stateFile.description = updates.file.description;
+						stateFile.diff = updates.file.diff;
 
-			steps.push(...(result.steps ?? []));
-
-			await dispatchCustomEvent("composer-manual-steps", {
-				steps
-			} satisfies Partial<PlanExecuteState>);
-
-			if (!files.some((f) => f.path === result.file.path) && fileChanged) {
-				const stateFile = state?.files?.find(f => f.path === result.file.path);
-
-				if (stateFile) {
-					stateFile.language = result.file.markdownLanguage;
-					stateFile.code = result.file.code;
-					stateFile.changes = result.file.changes ?? [];
-					stateFile.description = result.description;
-
-					files.push(stateFile);
-					await dispatchCustomEvent("composer-files", {
-						files: state.files
-					} satisfies Partial<PlanExecuteState>);
+						files.push(stateFile);
+						await dispatchCustomEvent('composer-files', { files: state.files });
+					}
 				}
 			}
 		}
@@ -398,5 +447,5 @@ ${file === "BLANK"
 		await dispatchCustomEvent("composer-done", updatedPlan);
 
 		return updatedPlan;
-	};
+	}
 }
