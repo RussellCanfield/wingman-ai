@@ -194,7 +194,7 @@
 		"@langchain/anthropic": "0.3.11",
 		"@langchain/community": "0.3.22",
 		"@langchain/core": "0.3.27",
-		"@langchain/langgraph": "0.2.38",
+		"@langchain/langgraph": "0.2.39",
 		"@langchain/ollama": "0.1.4",
 		"@langchain/openai": "0.3.16",
 		"@vscode/extension-telemetry": "^0.9.8",

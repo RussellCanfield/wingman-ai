@@ -1,6 +1,6 @@
 import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
 import ChatEntry from "./ChatEntry";
-import { ComposerMessage } from "@shared/types/Composer";
+import { ComposerMessage } from "@shared/types/v2/Composer";
 
 function ChatResponseList({
 	children,
@@ -47,13 +47,15 @@ function ChatResponseList({
 	}, [ulRef.current]);
 
 	const chatHistory = useMemo(() => {
-		return messages.map(({ from, message, plan, image }, index) => (
+		return messages.map(({ from, message, files, steps, greeting, image }, index) => (
 			<ChatEntry
 				key={index}
 				from={from}
 				loading={false}
 				message={message}
-				plan={plan}
+				files={files}
+				steps={steps}
+				greeting={greeting}
 				index={index}
 				image={image}
 			/>

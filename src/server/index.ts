@@ -26,7 +26,7 @@ import {
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
 import { MemorySaver } from "@langchain/langgraph";
-import { cancelComposer, generateCommand } from "../composer/composer";
+import { cancelComposer, generateCommand } from "../composer/v2/composer";
 import { AIProvider } from "../service/base";
 import {
 	EmbeddingProviders,

@@ -78,14 +78,11 @@ export default function Compose() {
 		setLoading(true);
 	};
 
-	console.log('Index', indexStats, !indexStats.exists || indexStats.files?.length === 0);
-
 	const canValidate = useMemo(() => {
-		if (composerMessages.length === 0) return false;
-
-		const lastMessage = composerMessages[composerMessages.length - 1];
-		return Boolean(lastMessage?.plan?.files?.length ?? 0);
+		return false;
 	}, [composerMessages]);
+
+	console.log("Messages:", composerMessages)
 
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
@@ -128,11 +125,10 @@ export default function Compose() {
 					<ChatEntry
 						from="assistant"
 						message={activeMessage?.message || ""}
+						files={activeMessage?.files}
+						steps={activeMessage?.steps}
+						greeting={activeMessage?.greeting}
 						loading={true}
-						plan={activeMessage?.plan ?? {
-							files: [],
-							steps: []
-						}}
 						index={1}
 					/>
 				)}

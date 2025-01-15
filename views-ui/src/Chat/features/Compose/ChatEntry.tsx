@@ -1,4 +1,4 @@
-import { CSSProperties, PropsWithChildren, memo } from "react";
+import { PropsWithChildren, memo } from "react";
 import { FaCopy } from "react-icons/fa6";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -9,7 +9,7 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { FileMetadata } from "@shared/types/Message";
 import { vscode } from "../../utilities/vscode";
-import { ComposerMessage, DiffViewCommand } from "@shared/types/Composer";
+import { ComposerMessage, DiffViewCommand } from "@shared/types/v2/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
 import { SkeletonLoader } from "../../SkeletonLoader";
@@ -85,13 +85,11 @@ const renderMarkdown = (
 	);
 };
 
-type ChatFileArtifact = NonNullable<ComposerMessage["plan"]["files"]>[number];
-
 const ChatArtifact = ({
 	file,
 	loading
 }: {
-	file: ChatFileArtifact;
+	file: FileMetadata;
 	loading: boolean;
 }) => {
 	const mergeIntoFile = () => {
@@ -200,8 +198,10 @@ const ChatArtifact = ({
 const ChatEntry = ({
 	from,
 	message,
+	files,
+	steps,
+	greeting,
 	loading,
-	plan,
 	index,
 	image,
 }: PropsWithChildren<ComposerMessage & { index: number }>) => {
@@ -235,6 +235,9 @@ const ChatEntry = ({
 					{from === "user" ? "Me" : "Wingman"}
 				</h3>
 			</span>
+			{greeting && (
+				<p className="mt-4 mb-4">{greeting}</p>
+			)}
 			{message !== "" && renderMarkdown(message, codeTheme)}
 			{image && (
 				<img
@@ -244,11 +247,11 @@ const ChatEntry = ({
 					style={{ maxHeight: "512px" }}
 				/>
 			)}
-			{plan?.steps && plan?.steps.length > 0 && (
+			{steps && steps.length > 0 && (
 				<div>
 					<div className="flex flex-col bg-editor-bg mt-4 rounded-lg">
 						<h3 className="m-0 text-lg">Steps:</h3>
-						{plan.steps?.map((step, index) => (
+						{steps?.map((step, index) => (
 							<div
 								className="border border-stone-700 rounded-lg overflow-hidden shadow-lg mb-4 mt-4"
 								key={index}
@@ -288,19 +291,23 @@ const ChatEntry = ({
 					</div>
 				</div>
 			)}
-			{plan?.files && plan?.files?.length > 0 && (
+			{files && files?.length > 0 && (
 				<div>
 					<h3 className="m-0 text-lg mt-4">Files:</h3>
-					{plan?.files?.map((file, index) => (
-						<ChatArtifact
-							key={index}
-							file={file}
-							loading={loading ?? false}
-						/>
-					))}
+					{files?.map((file, index) => {
+						return (
+							<>
+								<p>{file.description}</p>
+								<ChatArtifact
+									key={index}
+									file={file}
+									loading={loading ?? false}
+								/>
+							</>)
+					})}
 				</div>
 			)}
-			{from === 'assistant' && loading && (!plan?.files || plan.files?.length === 0) && (
+			{from === 'assistant' && loading && (
 				<div className="mt-4">
 					<SkeletonLoader isDarkTheme={!isLightTheme} />
 				</div>

@@ -1,0 +1,248 @@
+import { Command, interrupt, START, StateGraph } from "@langchain/langgraph";
+import type { BaseCheckpointSaver, StateGraphArgs } from "@langchain/langgraph";
+import { ChatMessage } from "@langchain/core/messages";
+import { CodeGraph } from "../../server/files/graph";
+import { RunnableConfig } from "@langchain/core/runnables";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { Store } from "../../store/vector.js";
+import { PlanExecuteState } from "./types/index";
+import { NoFilesChangedError, NoFilesFoundError } from "../errors";
+import { ComposerRequest } from "@shared/types/Composer";
+import { WorkspaceNavigator } from "./tools/workspace-navigator";
+import { FileTarget, UserIntent } from "./types/tools";
+import { FileMetadata } from "@shared/types/v2/Message";
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
+import { CodeWriter } from "./tools/code-writer";
+
+export interface Thread {
+    configurable: {
+        thread_id: string;
+    };
+}
+
+let controller = new AbortController();
+
+export function cancelComposer() {
+    controller.abort();
+}
+
+export async function* generateCommand(
+    workspace: string,
+    request: ComposerRequest,
+    model: BaseChatModel,
+    rerankModel: BaseChatModel,
+    codeGraph: CodeGraph,
+    store: Store,
+    config?: RunnableConfig,
+    checkpointer?: BaseCheckpointSaver
+) {
+    controller = new AbortController();
+
+    const workspaceNavigator = new WorkspaceNavigator(rerankModel, workspace);
+    const codeWriter = new CodeWriter(model, workspace);
+
+    const humanFeedback = async (state: PlanExecuteState) => {
+        const lastMessage = state.messages[state.messages.length - 1];
+        const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
+        const userMessage = interruptState.messages![0].content.toString();
+
+        const isPositive = await rerankModel.invoke(
+            `Analyze this response and determine if it's a positive confirmation or an instruction/request.
+
+Rules:
+- Respond with 'yes' if it's a clear positive confirmation (e.g., 'yes', 'sure', 'okay', 'proceed')
+- Respond with 'no' if it contains instructions, requests, or negative responses
+- Questions should be treated as 'no'
+- Any specific directions or modifications should be treated as 'no'
+- You must only respond with 'yes' or 'no', do not add any additional text
+
+Examples:
+- "Yes, go ahead" -> "yes"
+- "Looks good" -> "yes"
+- "Can you change X" -> "no"
+- "Instead, do this" -> "no"
+- "Please modify X" -> "no"
+
+Response: ${userMessage}
+
+Answer (yes/no):`
+        );
+
+        if (isPositive.content.toString().toLowerCase().includes('yes')) {
+            return {
+                messages: [...state.messages, new ChatMessage(userMessage, "user")],
+                greeting: state.greeting
+            };
+        }
+
+        return new Command({
+            goto: "find",
+            update: {
+                messages: [...state.messages, new ChatMessage(userMessage, "user")]
+            }
+        });
+    };
+
+    const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
+        messages: {
+            value: (x: ChatMessage[], y: ChatMessage[]) => {
+                const uniqueMessages = new Map<string, ChatMessage>();
+
+                x?.forEach((msg) => {
+                    return uniqueMessages.set(msg.content.toString(), msg);
+                });
+                y?.forEach((msg) => {
+                    return uniqueMessages.set(msg.content.toString(), msg);
+                });
+
+                return Array.from(uniqueMessages.values());
+            },
+            default: () => [],
+        },
+        followUpInstructions: {
+            value: (x: ChatMessage[], y: ChatMessage[]) => {
+                const uniqueMessages = new Map<string, ChatMessage>();
+
+                x?.forEach((msg) => {
+                    return uniqueMessages.set(msg.content.toString(), msg);
+                });
+                y?.forEach((msg) => {
+                    return uniqueMessages.set(msg.content.toString(), msg);
+                });
+
+                return Array.from(uniqueMessages.values());
+            },
+            default: () => [],
+        },
+        userIntent: {
+            value: (x?: UserIntent, y?: UserIntent) => y ?? x,
+            default: () => undefined,
+        },
+        files: {
+            value: (x?: FileMetadata[], y?: FileMetadata[]) => y ?? x,
+            default: () => undefined,
+        },
+        currentTarget: {
+            value: (x?: FileTarget, y?: FileTarget) => y ?? x,
+            default: () => undefined,
+        },
+        error: {
+            value: (x?: string, y?: string) => y ?? x,
+            default: () => undefined,
+        },
+        projectDetails: {
+            value: (x?: string, y?: string) => y ?? x,
+            default: () => undefined,
+        },
+        image: {
+            value: (
+                x?: ComposerRequest["image"],
+                y?: ComposerRequest["image"]
+            ) => y ?? x,
+        },
+        greeting: {
+            value: (x?: string, y?: string) => y ?? x,
+            default: () => undefined
+        }
+    };
+
+    let workflow = new StateGraph({
+        channels: planExecuteState,
+    })
+        .addNode("find", workspaceNavigator.navigateWorkspace)
+        .addNode("human-feedback", humanFeedback)
+        .addNode("code-writer", codeWriter.codeWriterStep)
+        .addEdge(START, "find")
+        .addEdge("find", "human-feedback")
+        .addEdge("human-feedback", "code-writer");
+
+    const checkpoint = await checkpointer?.get(config!);
+
+    let inputs: Partial<PlanExecuteState> = {};
+    if (checkpoint?.channel_values["response"]) {
+        inputs.followUpInstructions = [new ChatMessage(request.input, "user")];
+    } else {
+        inputs.messages = [new ChatMessage(request.input, "user")];
+    }
+
+    if (request.image) {
+        inputs.image = request.image;
+    }
+
+    const graph = workflow.compile({ checkpointer });
+    const state = await graph.getState({ ...config });
+
+    try {
+        const graphInput = state?.tasks.length > 0 ? new Command({
+            resume: {
+                messages: inputs.messages
+            }
+        }) : inputs;
+
+        const streamingGraph = await graph.streamEvents(graphInput, {
+            streamMode: ["custom"],
+            signal: controller.signal,
+            version: "v2",
+            ...config
+        });
+
+        for await (const chunk of streamingGraph) {
+            if (!chunk) continue;
+
+            const { event, name, data } = chunk;
+            if (event === "on_custom_event") {
+                yield { node: name, values: data };
+            }
+        }
+
+        const graphState = await graph.getState({ ...config });
+
+        if (graphState.tasks?.length > 0 && graphState.tasks[0].name === "human-feedback" &&
+            graphState.tasks[0].interrupts?.length > 0
+        ) {
+            yield {
+                node: "assistant-question", values: {
+                    messages: (graphState.values as Partial<PlanExecuteState>).messages,
+                    greeting: (graphState.values as Partial<PlanExecuteState>).greeting
+                } satisfies Partial<PlanExecuteState>
+            }
+        }
+    } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+            yield {
+                node: "composer-error",
+                values: {
+                    error: "Operation was cancelled",
+                },
+            };
+            return;
+        } else if (e instanceof NoFilesChangedError) {
+            yield {
+                node: "composer-error",
+                values: {
+                    error:
+                        "I was not able to generate any changes. Please try again with a different question or try explicitly referencing files.",
+                },
+            };
+            return;
+        } else if (e instanceof NoFilesFoundError) {
+            yield {
+                node: "composer-error",
+                values: {
+                    error:
+                        "I was unable to find any indexed code files. Please reference files directly using '@filename', build the full index or make sure embeddings are enabled in settings.",
+                },
+            };
+            return;
+        }
+
+        console.error(e);
+        yield {
+            node: "composer-error",
+            values: {
+                error:
+                    "An error occurred, please try again. If this continues use the clear chat button to start over.",
+            },
+        };
+    }
+}

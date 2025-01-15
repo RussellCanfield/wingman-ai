@@ -13,21 +13,24 @@ export type ManualStep = {
 	command?: string;
 };
 
-export type Plan = {
-	summary?: string;
-	steps?: ManualStep[];
-	files?: FileMetadata[];
-};
+export type ComposerRole = "assistant" | "user";
 
-export type Review = {
-	comments?: string[];
-};
+export interface ComposerChatMessage {
+	kwargs: {
+		content: string;
+		role: ComposerRole;
+	},
+	name?: string;
+}
 
 export interface PlanExecuteState {
-	plan?: Plan;
-	review?: Review;
-	response?: string;
-	retryCount?: number;
+	messages?: ComposerChatMessage[];
+	userIntent?: {
+		task: string;
+	},
+	files?: FileMetadata[];
+	steps?: ManualStep[];
+	greeting?: string;
 }
 
 export type ComposerResponse = {
@@ -35,14 +38,16 @@ export type ComposerResponse = {
 	values: PlanExecuteState;
 };
 
-export type ComposerSteps = "composer-planner" | "composer-manual-steps" | "composer-plan-file" | "composer-done" | "composer-error";
+export type ComposerSteps = "assistant-question" | "composer-greeting" | "composer-files" | "composer-manual-steps" | "composer-done" | "composer-error";
 
 export interface ComposerMessage {
-	from: "assistant" | "user";
+	from: ComposerRole;
 	message: string;
 	loading?: boolean;
-	plan?: Plan;
 	image?: ComposerRequest["image"];
+	files?: PlanExecuteState["files"];
+	steps?: PlanExecuteState["steps"];
+	greeting?: string;
 }
 
 export type FileSearchResult = {
