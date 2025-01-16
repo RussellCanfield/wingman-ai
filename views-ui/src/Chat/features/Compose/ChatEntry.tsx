@@ -1,5 +1,4 @@
 import { PropsWithChildren, memo } from "react";
-import { FaCopy } from "react-icons/fa6";
 import { FaUser } from "react-icons/fa";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -123,12 +122,12 @@ const ChatArtifact = ({
 
 	return (
 		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30">
-			<div className="bg-stone-800/50 text-white flex flex-wrap items-center border-b border-stone-700/50">
-				<h4 className="m-0 flex-grow p-3 text-wrap break-all font-medium">
+			<div className="bg-stone-800/50 text-white flex items-center border-b border-stone-700/50">
+				<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink">
 					{truncatePath(file.path)}
 				</h4>
 				{diffParts && (
-					<div className="flex items-center gap-2 px-3 text-sm">
+					<div className="flex items-center gap-2 px-3 text-sm flex-nowrap">
 						<span className="flex items-center gap-1 text-green-400">
 							<span>{diffParts[0]}</span>
 						</span>
@@ -138,7 +137,7 @@ const ChatArtifact = ({
 					</div>
 				)}
 				{file?.description && (
-					<div className="flex">
+					<div className="flex flex-nowrap ml-auto">
 						<div className="flex items-center text-white rounded z-10 hover:bg-stone-700 transition-colors">
 							<button
 								type="button"
@@ -159,7 +158,8 @@ const ChatArtifact = ({
 								<LuFileCheck size={16} />
 							</button>
 						</div>
-					</div>)}
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -186,23 +186,24 @@ const ChatEntry = ({
 		}
 	};
 
-	const bgClasses = from === "user" ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
+	const fromUser = from === "user";
+
+	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
 		} rounded-lg overflow-hidden w-full` : "";
+
 
 	return (
 		<li
-			className="tracking-wide leading-relaxed text-base message mb-8"
+			className="tracking-wide leading-relaxed text-md message mb-8"
 		>
-			<div className={`max-w-[800px] ${from === "user" ? "" : "pl-[48px]"} pr-[48px] flex items-center text-stone-300`}>
+			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[48px] flex items-center text-stone-300`}>
 				<div className="relative flex items-center gap-4 flex-grow">
-					{from === "user" && (
-						<div>
-							<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
-								<FaUser className="text-stone-300" size={16} />
-							</div>
+					{fromUser && (
+						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
+							<FaUser className="text-stone-300" size={16} />
 						</div>
 					)}
-					<div className={`${bgClasses} flex-grow w-full justify-center items-center`}>
+					<div className={`${bgClasses} flex-grow w-full justify-center items-center ${fromUser ? "shadow-lg" : ""}`}>
 						{greeting && (
 							<p >{greeting}</p>
 						)}

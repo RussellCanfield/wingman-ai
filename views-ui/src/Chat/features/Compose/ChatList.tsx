@@ -56,7 +56,6 @@ function ChatResponseList({
 				files={files}
 				steps={steps}
 				greeting={greeting}
-				index={index}
 				image={image}
 			/>
 		));

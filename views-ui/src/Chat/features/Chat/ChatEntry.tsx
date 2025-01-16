@@ -1,5 +1,5 @@
 import { PropsWithChildren, memo, useState } from "react";
-import { FaCopy, FaFile } from "react-icons/fa6";
+import { FaCopy, FaFile, FaUser } from "react-icons/fa6";
 import { GoFileSymlinkFile } from "react-icons/go";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -103,15 +103,14 @@ const CodeContainer = memo((props: PropsWithChildren) => {
 				</div>
 			)}
 			<div
-				className={`overflow-x-auto bg-transparent p-2 mb-4 border-2 ${
-					isLightTheme ? "border-stone-300" : "border-stone-600"
-				}`}
+				className={`overflow-x-auto bg-transparent p-2 mb-4 border-2 ${isLightTheme ? "border-stone-300" : "border-stone-600"
+					}`}
 			>
 				{React.isValidElement(props.children)
 					? React.cloneElement(props.children, {
-							//@ts-expect-error
-							className: "bg-transparent",
-					  })
+						//@ts-expect-error
+						className: "bg-transparent",
+					})
 					: props.children}
 			</div>
 		</div>
@@ -164,61 +163,70 @@ const ChatEntry = ({
 		});
 	};
 
+	const fromUser = from === "user";
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
+	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
+		} rounded-lg overflow-hidden w-full` : "";
 
 	return (
-		<li className="border-b border-stone-500 border-opacity-50 pb-4 text-base message">
-			<span className="flex items-center">
-				<h3 className="text-lg">
-					{from === "user" ? "Me" : "Wingman"}
-				</h3>
-			</span>
-			{context && (
-				<div className="mb-4">
-					<div
-						className="flex items-center gap-1 p-1 border border-solid cursor-pointer"
-						onClick={showSelectedContext}
-					>
-						<FaFile />
-						<span>{getContextDisplay()}</span>
+		<li className="tracking-wide leading-relaxed text-md message mb-8">
+			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[48px] items-center text-stone-300`}>
+				<div className={`relative flex items-center gap-4 flex-grow ${fromUser ? '' : 'flex-col'}`}>
+					{fromUser && (
+						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
+							<FaUser className="text-stone-300" size={16} />
+						</div>
+					)}
+					{context && (
+						<div className="w-full">
+							<div
+								className="flex items-center gap-1 p-1 border border-solid cursor-pointer"
+								onClick={showSelectedContext}
+							>
+								<FaFile />
+								<span>{getContextDisplay()}</span>
+							</div>
+						</div>
+					)}
+					{loading && message == "" ? (
+						<div className="w-full flex justify-center items-center">
+							<SkeletonLoader isDarkTheme={!isLightTheme} />
+						</div>
+					) : null}
+					<div className={`${bgClasses} flex-grow w-full justify-center items-center break-words ${fromUser ? "shadow-lg p-4" : ""}`}>
+						<Markdown
+							children={message}
+							components={{
+								code(props) {
+									const { children, className, node, ...rest } = props;
+
+									const languageType = /language-(\w+)/.exec(
+										className || ""
+									);
+
+									return languageType ? (
+										<SyntaxHighlighter
+											PreTag={CodeContainer}
+											children={String(children).replace(/\n$/, "")}
+											style={codeTheme}
+											language={languageType[1]}
+											wrapLines={true}
+											wrapLongLines={true}
+										/>
+									) : (
+										<code
+											{...rest}
+											className={`whitespace-pre-wrap ${className} bg-transparent`}
+										>
+											{children}
+										</code>
+									);
+								},
+							}}
+						/>
 					</div>
 				</div>
-			)}
-			{loading && message == "" ? (
-				<div>
-					<SkeletonLoader isDarkTheme={!isLightTheme} />
-				</div>
-			) : null}
-			<Markdown
-				children={message}
-				components={{
-					code(props) {
-						const { children, className, node, ...rest } = props;
-
-						const languageType = /language-(\w+)/.exec(
-							className || ""
-						);
-
-						return languageType ? (
-							<SyntaxHighlighter
-								PreTag={CodeContainer}
-								children={String(children).replace(/\n$/, "")}
-								style={codeTheme}
-								language={languageType[1]}
-								wrapLines={true}
-								wrapLongLines={true}
-							/>
-						) : (
-							<code
-								{...rest}
-								className={`whitespace-pre-wrap ${className} bg-transparent`}
-							>
-								{children}
-							</code>
-						);
-					},
-				}}
-			/>
+			</div>
 		</li>
 	);
 };

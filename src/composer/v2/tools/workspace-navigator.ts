@@ -38,7 +38,7 @@ export class WorkspaceNavigator {
       });
     }
 
-    const intent = await this.analyzeRequest(message);
+    const intent = await this.analyzeRequest(message, state.files);
 
     let updatedState: Partial<PlanExecuteState> = {
       userIntent: intent
@@ -80,6 +80,7 @@ Do not include phrases like "Sure," or "Here is".
 Do not start with a greeting like "Hi" or "Hello" or "Thanks for your request" - just state you'll be helpful.
 Ignore any existing assistant message about an Implementation Plan, this is from a previous interaction.
 Focus on the latest message interaction.
+Be chill, keep it short and simple.
   
 Previous conversation and latest request:
 ${question}`);
@@ -89,7 +90,7 @@ ${question}`);
     }
   }
 
-  private async analyzeRequest(question: string): Promise<UserIntent> {
+  private async analyzeRequest(question: string, files?: FileMetadata[]): Promise<UserIntent> {
     const MAX_ITEMS = 1500;
     const BATCH_SIZE = 1000;
 
@@ -112,6 +113,9 @@ Question Guidelines:
 
 Workspace path:
 ${this.workspace}
+
+Here are files you've been working with recently:
+${files?.map(f => `Path: ${f.path}`).join('\n')}
 
 ${previousTargets.length > 0 ? `Previous Targets:\n${JSON.stringify(previousTargets, null, 2)}\n\n` : ''}
 File Targets:
@@ -162,7 +166,7 @@ User request: ${question}`;
 
     for (const batch of batches) {
       const fileTargets = batch
-        .map(c => `Name:${c.name}\nType:${c.type}\nPath:${c.path}`)
+        .map(c => `Name: ${c.name}\nType: ${c.type}\nPath: ${c.path}`)
         .join('\n\n');
 
       const prompt = createPrompt(fileTargets, accumulatedTargets);
