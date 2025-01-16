@@ -532,7 +532,7 @@ ${commitReview}
 									command: "index-status",
 									value: await this._lspClient.indexExists(),
 								});
-							}, 500);
+							}, 50);
 							this.showView(this._launchView);
 							break;
 						}

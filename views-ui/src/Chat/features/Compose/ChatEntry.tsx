@@ -196,7 +196,7 @@ const ChatEntry = ({
 		<li
 			className="tracking-wide leading-relaxed text-md message mb-8"
 		>
-			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[48px] flex items-center text-stone-300`}>
+			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[16px] flex items-center text-stone-300`}>
 				<div className="relative flex items-center gap-4 flex-grow">
 					{fromUser && (
 						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
@@ -218,10 +218,25 @@ const ChatEntry = ({
 								style={{ maxHeight: "512px" }}
 							/>
 						)}
+						{files && files?.length > 0 && (
+							<div>
+								<h3 className="text-lg font-semibold text-stone-200 mb-4">Files:</h3>
+								{files?.map((file, index) => (
+									<div key={index}>
+										{file.description && (
+											<p className="mb-2">{file.description}</p>
+										)}
+										<ChatArtifact
+											file={file}
+										/>
+									</div>
+								))}
+							</div>
+						)}
 						{steps && steps.length > 0 && (
-							<div className="mt-6">
-								<h3 className="text-lg font-semibold text-stone-200 mb-4">Steps:</h3>
-								<div className="space-y-3">
+							<div>
+								<h3 className="text-lg font-semibold text-stone-200 mb-4 mt-0">Steps:</h3>
+								<div className="space-y-3 mb-4">
 									{steps?.map((step, index) => (
 										<div
 											className="border border-stone-700/50 rounded-lg overflow-hidden bg-editor-bg/30"
@@ -260,20 +275,6 @@ const ChatEntry = ({
 										</div>
 									))}
 								</div>
-							</div>
-						)}
-						{files && files?.length > 0 && (
-							<div>
-								{files?.map((file, index) => (
-									<div key={index}>
-										{file.description && (
-											<p className="mb-2">{file.description}</p>
-										)}
-										<ChatArtifact
-											file={file}
-										/>
-									</div>
-								))}
 							</div>
 						)}
 						{from === 'assistant' && loading && (

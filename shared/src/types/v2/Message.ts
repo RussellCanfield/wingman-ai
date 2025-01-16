@@ -77,6 +77,7 @@ export interface FileMetadata {
 	code?: string;
 	diff?: string;
 	language?: string;
+	dependencies?: string[];
 }
 
 export interface CodeContextDetails {

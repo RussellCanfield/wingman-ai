@@ -48,6 +48,21 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     const mostRecentMessage = values.messages ? values.messages[values.messages!.length - 1] : undefined;
 
     switch (node) {
+      case "composer-error":
+        setComposerMessages((currentMessages) => {
+          return [
+            ...currentMessages,
+            {
+              from: "assistant",
+              message: "Ut oh! Sorry but I seem to have failed processing your request. Please try again!",
+              files: values.files,
+              steps: values.steps
+            }
+          ];
+        });
+        setLoading(false);
+        setActiveMessage(undefined);
+        break;
       case "composer-done":
         setComposerMessages((currentMessages) => {
           return [
@@ -69,8 +84,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             from: "assistant",
             message: values.userIntent?.task ?? "",
             ...msg ?? {},
-            files: values.files,
-            steps: values.steps
+            files: values.files
           }
         });
         break;

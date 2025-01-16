@@ -25,6 +25,7 @@ type CodeResponse = {
 		code: string;
 		markdownLanguage: string;
 		diff?: string;
+		dependencies?: string[];
 	};
 };
 
@@ -156,16 +157,22 @@ class StreamParser {
 					const langMatch = fileContent.match(/Language: (.*?)(?:\n|$)/);
 					const descMatch = fileContent.match(/Description: (.*?)(?:\n|$)/);
 					const codeMatch = fileContent.match(/Code:\n([\s\S]*?)$/);
+					const depsMatch = fileContent.match(/Dependencies: (.*?)(?:\n|$)/);
 
 					const fileUpdate: CodeResponse['file'] = {
 						path: pathMatch?.[1].trim() || '',
 						markdownLanguage: langMatch?.[1].trim() || '',
 						description: descMatch?.[1].trim() || '',
-						code: codeMatch?.[1].trim() || ''
+						code: codeMatch?.[1].trim() || '',
+						dependencies: depsMatch?.[1]?.split(',').map(d => d.trim()) || []
 					};
 
 					if (fileUpdate.code) {
-						fileUpdate.diff = this.generateDiffFromModifiedCode(fileUpdate.code, path.join(this.workspace, fileUpdate.path));
+						try {
+							fileUpdate.diff = this.generateDiffFromModifiedCode(fileUpdate.code, path.join(this.workspace, fileUpdate.path));
+						} catch (e) {
+							console.error('Unable to generate diff for:', fileUpdate.path, e);
+						}
 					}
 
 					updates.file = fileUpdate;
@@ -182,28 +189,72 @@ class StreamParser {
 	}
 }
 
-const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for AI-powered development tools.
+const manualStepsPrompt = `You are a dependency and setup specialist focused on providing clear installation and configuration steps.
+Your role is to identify and list only the necessary commands for dependencies, environment setup, and tooling.
+Do not suggest any code changes or file modifications.
 
-Output Structure:
-1. Steps: Concise guide for manual implementation steps
-	- Includes commands the user needs to run
-	- Excludes available files or code modifications
-	- Omit if no manual steps
-2. File: Modified or created code for the file in scope
-	- Include "Changes" made to the file in a concise format
-
-Output Format Example:
+Output Format:
 ===STEPS_START===
 ---STEP---
-Description: Install required dependency
+Description: Clear description of the dependency or setup requirement
 Command: npm install package-name
 ---END_STEP---
 ===STEPS_END===
 
+Focus Areas:
+1. Package dependencies
+2. Development tools
+3. Environment variables
+4. Build tools
+5. CLI commands
+6. Global installations
+
+Guidelines:
+1. Only include command-line steps such as installing dependencies (pnpm/npm/yarn install, pip install, etc.)
+2. No file modifications or code changes
+3. Use exact versions when critical
+4. Include prerequisite checks
+5. Specify platform-specific commands if needed
+6. Provide verification commands where applicable
+7. Provide the bare minimum steps required, no extraneous steps
+8. Use the project details to help determine if dependencies already exist
+9. Only report dependencies that are not present in existing code, only report newly added/imported ones
+10. If no new dependencies are required return an empty string, do not return any other text
+
+Examples of valid steps:
+- Installing npm packages
+- Setting up development tools
+- Configuring environment variables
+- Installing global CLI tools
+- Running build/setup commands
+- Verifying installations
+
+Examples to avoid:
+- File modifications
+- Code changes
+- Configuration file edits
+- Manual file creation
+- Directory structure changes
+- Verification steps, example: "Verify installations and configurations"
+
+Project details:
+{{details}}
+
+Request:
+{{request}}`;
+
+const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for AI-powered development tools.
+
+Output Structure:
+1. File: Modified or created code for the file in scope
+	- Include "Changes" made to the file in a concise format
+
+Output Format Example:
 ===FILE_START===
 Path: /path/to/file
 Language: typescript
 Description: A short and concise summary of what you changed in the file.
+Dependencies: The names of new dependencies added: package1, package2
 Code:
 ===FILE_END===
 
@@ -278,20 +329,17 @@ Implementation Guidelines:
 
 ------
 
-Use the following project context to assist in choosing available technology:
-
+Project details:
 {{details}}
 
 ------
 
 Previous conversation and latest request:
-
 {{request}}
 
 ------
 
 Files available to create or modify:
-
 {{availableFiles}}
 
 {{modified}}
@@ -307,6 +355,15 @@ Remember:
 - Integrate seamlessly
 - Optimize for maintainability
 - Make minimal necessary changes`;
+
+const buildManualStepsPrompt = ({
+	projectDetails,
+	request,
+}: Pick<BuildPromptParams, 'projectDetails' | 'request'>) => {
+	return manualStepsPrompt
+		.replace("{{details}}", projectDetails)
+		.replace("{{request}}", request)
+};
 
 const buildPrompt = ({
 	projectDetails,
@@ -336,21 +393,54 @@ export class CodeWriter {
 		private readonly workspace: string
 	) { }
 
-	codeWriterStep = async (
-		state: PlanExecuteState
-	) => {
+	private async generateManualSteps(
+		state: PlanExecuteState,
+		dependencies: string[]
+	): Promise<CodeResponse["steps"]> {
+		// Skip if no dependencies found
+		if (!dependencies.length) {
+			return [];
+		}
+
+		const systemMessage = new SystemMessage({
+			content: buildManualStepsPrompt({
+				projectDetails: state.projectDetails || "Not available.",
+				request: `Install new dependencies: ${dependencies.join(', ')}`,
+			})
+		});
+
+		const parser = new StreamParser(this.workspace);
+		const steps: CodeResponse["steps"] = [];
+
+		for await (const chunk of await this.chatModel.stream([
+			systemMessage,
+			new HumanMessage({
+				content: [
+					{
+						type: "text",
+						text: `Required dependencies:\n${dependencies.join('\n')}`,
+					},
+				],
+			})
+		])) {
+			const updates = await parser.parse(chunk.content.toString());
+			if (updates.steps?.length) {
+				steps.push(...updates.steps);
+				await dispatchCustomEvent('composer-manual-steps', { steps });
+			}
+		}
+
+		return steps;
+	}
+
+	codeWriterStep = async (state: PlanExecuteState) => {
 		const rulePack = loadWingmanRules(this.workspace);
 		const request = formatMessages(state.messages);
-
 		const files: FileMetadata[] = [];
-		const steps: CodeResponse["steps"] = [];
-		for (let { path: file, code } of state.files || [
-			{
-				path: "BLANK",
-				changes: [],
-				code: "",
-			},
-		]) {
+		const allDependencies = new Set<string>();
+
+		// Process files first
+		for (let { path: file, code } of state.files || [{ path: "BLANK", changes: [], code: "" }]) {
 			if (!code) {
 				const textDocument = await getTextDocumentFromPath(path.join(this.workspace, file));
 				code = textDocument?.getText();
@@ -362,36 +452,16 @@ export class CodeWriter {
 						type: "text",
 						cache_control: { type: "ephemeral" },
 						text: buildPrompt({
-							projectDetails:
-								state.projectDetails || "Not available.",
+							projectDetails: state.projectDetails || "Not available.",
 							request,
-							modifiedFiles:
-								files.length === 0
-									? ""
-									: `-------\n\nContext: Previously Modified/Created Files
-    
-The following list contains files you have already processed, along with a description of their changes. 
-Use this information as context for subsequent file processing. Do not modify these files again.
-Note: Consider dependencies between these files and the file you are currently processing.
-
-${files.map(
-										(f) => `File:\n${f.path}\n\Changes:\n${f.description}`
-									).join('\n')}
-
-------`,
-							availableFiles:
-								state.files
-									?.filter((f) => f.path !== file)
-									?.map(
-										(f) => `${FILE_SEPARATOR}
-              
-File:
-${f.path}
-
-Code:
-${f.code}`
-									)
-									.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
+							modifiedFiles: files.length === 0 ? "" :
+								`Files already processed:\n${files.map(f =>
+									`File: ${f.path}\nChanges: ${f.description}`
+								).join('\n')}`,
+							availableFiles: state.files
+								?.filter((f) => f.path !== file)
+								?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nCode:\n${f.code}`)
+								.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
 							rulePack,
 						}),
 					},
@@ -400,33 +470,28 @@ ${f.code}`
 
 			const parser = new StreamParser(this.workspace);
 
-			for await (const chunk of await this.chatModel.stream([systemMessage, new HumanMessage({
-				content: [
-					{
-						type: "text",
-						text: `Here is the file currently in scope:
-		
-${file === "BLANK"
-								? `The user does not currently have any related files, assume this may be a new project and this is your current working directory: ${this.workspace}`
-								: `File:\n${file}\n\nCode:\n${code}`
-							}`,
-					},
-				],
-			})])) {
+			for await (const chunk of await this.chatModel.stream([
+				systemMessage,
+				new HumanMessage({
+					content: [
+						{
+							type: "text",
+							text: `Current file:\n${file === "BLANK"
+								? `No related files found. Working directory: ${this.workspace}`
+								: `File: ${file}\nCode:\n${code}`}`,
+						},
+					],
+				})
+			])) {
 				const updates = await parser.parse(chunk.content.toString());
-
-				if (updates.steps?.length) {
-					steps.push(...updates.steps);
-					await dispatchCustomEvent('composer-manual-steps', { steps });
-				}
 
 				if (updates.file) {
 					const stateFile = state?.files?.find(f => f.path === updates.file?.path);
 					if (stateFile && !files.some(f => f.path === updates.file?.path)) {
-						stateFile.language = updates.file.markdownLanguage;
-						stateFile.code = updates.file.code;
-						stateFile.description = updates.file.description;
-						stateFile.diff = updates.file.diff;
+						Object.assign(stateFile, updates.file);
+
+						// Collect dependencies
+						updates.file.dependencies?.forEach(dep => allDependencies.add(dep));
 
 						files.push(stateFile);
 						await dispatchCustomEvent('composer-files', { files: state.files });
@@ -439,13 +504,11 @@ ${file === "BLANK"
 			throw new NoFilesChangedError("No files have been changed.");
 		}
 
-		const updatedPlan: Partial<PlanExecuteState> = {
-			files,
-			steps
-		}
+		// Generate manual steps only if we found dependencies
+		const steps = await this.generateManualSteps(state, Array.from(allDependencies));
 
+		const updatedPlan: Partial<PlanExecuteState> = { files, steps };
 		await dispatchCustomEvent("composer-done", updatedPlan);
-
 		return updatedPlan;
 	}
 }

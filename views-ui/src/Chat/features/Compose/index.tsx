@@ -82,8 +82,6 @@ export default function Compose() {
 		return false;
 	}, [composerMessages]);
 
-	console.log("Messages:", composerMessages)
-
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{composerMessages.length === 0 && (

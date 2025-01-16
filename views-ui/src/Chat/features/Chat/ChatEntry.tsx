@@ -1,5 +1,5 @@
-import { PropsWithChildren, memo, useState } from "react";
-import { FaCopy, FaFile, FaUser } from "react-icons/fa6";
+import { PropsWithChildren, memo, useMemo, useState } from "react";
+import { FaCopy, FaUser } from "react-icons/fa6";
 import { GoFileSymlinkFile } from "react-icons/go";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -125,7 +125,18 @@ const ChatEntry = ({
 }: PropsWithChildren<Omit<Message, "type">>) => {
 	const { isLightTheme } = useSettingsContext();
 
-	const getContextDisplay = (): string => {
+	const showSelectedContext = () => {
+		if (!context) {
+			return;
+		}
+
+		vscode.postMessage({
+			command: "showContext",
+			value: context,
+		});
+	};
+
+	const contextDisplay = useMemo(() => {
 		if (!context) {
 			return "";
 		}
@@ -143,25 +154,25 @@ const ChatEntry = ({
 					relativeDir.lastIndexOf("/") + 1,
 					relativeDir.length
 				);
-				return `${file} ${path} ${lineRange}`;
+
+				const pathWithLines = `${path} ${lineRange}`;
+
+				return <div className="w-full">
+					<div
+						className="flex items-center justify-between gap-1 p-2 border rounded-md border-solid border-stone-600 cursor-pointer"
+						onClick={showSelectedContext}
+					>
+						<span>{file}</span>
+						<span className={`${isLightTheme ? 'text-stone-400' : 'text-stone-500'}`}>{pathWithLines}</span>
+					</div>
+				</div>;
 			} catch (error) {
 				console.log(error);
 			}
 		}
 
-		return "";
-	};
-
-	const showSelectedContext = () => {
-		if (!context) {
-			return;
-		}
-
-		vscode.postMessage({
-			command: "showContext",
-			value: context,
-		});
-	};
+		return null;
+	}, [context]);
 
 	const fromUser = from === "user";
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
@@ -170,24 +181,14 @@ const ChatEntry = ({
 
 	return (
 		<li className="tracking-wide leading-relaxed text-md message mb-8">
-			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[48px] items-center text-stone-300`}>
+			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[16px] items-center text-stone-300`}>
 				<div className={`relative flex items-center gap-4 flex-grow ${fromUser ? '' : 'flex-col'}`}>
 					{fromUser && (
 						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
 							<FaUser className="text-stone-300" size={16} />
 						</div>
 					)}
-					{context && (
-						<div className="w-full">
-							<div
-								className="flex items-center gap-1 p-1 border border-solid cursor-pointer"
-								onClick={showSelectedContext}
-							>
-								<FaFile />
-								<span>{getContextDisplay()}</span>
-							</div>
-						</div>
-					)}
+					{contextDisplay}
 					{loading && message == "" ? (
 						<div className="w-full flex justify-center items-center">
 							<SkeletonLoader isDarkTheme={!isLightTheme} />

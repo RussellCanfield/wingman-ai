@@ -38,7 +38,7 @@ export type ComposerResponse = {
 	values: PlanExecuteState;
 };
 
-export type ComposerSteps = "assistant-question" | "composer-greeting" | "composer-files" | "composer-manual-steps" | "composer-done" | "composer-error";
+export type ComposerSteps = "assistant-question" | "composer-greeting" | "composer-files" | "composer-error" | "composer-manual-steps" | "composer-done" | "composer-error";
 
 export interface ComposerMessage {
 	from: ComposerRole;
