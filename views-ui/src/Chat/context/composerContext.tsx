@@ -56,7 +56,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
               from: "assistant",
               message: "Ut oh! Sorry but I seem to have failed processing your request. Please try again!",
               files: values.files,
-              steps: values.steps
+              dependencies: values.dependencies
             }
           ];
         });
@@ -69,9 +69,9 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             ...currentMessages,
             {
               from: "assistant",
-              message: values.userIntent?.task ?? "",
+              message: "",
               files: values.files,
-              steps: values.steps
+              dependencies: values.dependencies
             }
           ];
         });
@@ -85,17 +85,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             message: values.userIntent?.task ?? "",
             ...msg ?? {},
             files: values.files
-          }
-        });
-        break;
-      case "composer-manual-steps":
-        setActiveMessage((msg) => {
-          return {
-            from: "assistant",
-            message: values.userIntent?.task ?? "",
-            files: [],
-            ...msg ?? {},
-            steps: values.steps
           }
         });
         break;

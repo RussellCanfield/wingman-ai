@@ -9,9 +9,14 @@ import { PlanExecuteState } from "./types/index";
 import { NoFilesChangedError, NoFilesFoundError } from "../errors";
 import { ComposerRequest } from "@shared/types/Composer";
 import { WorkspaceNavigator } from "./tools/workspace-navigator";
-import { FileTarget, UserIntent } from "./types/tools";
+import { UserIntent } from "./types/tools";
 import { FileMetadata } from "@shared/types/v2/Message";
 import { CodeWriter } from "./tools/code-writer";
+import path from "node:path";
+import { getTextDocumentFromPath } from "../../server/files/utils";
+import { DirectoryContent } from "../utils";
+import { DependencyManager } from "./tools/dependency-manager";
+import { Dependencies } from "@shared/types/v2/Composer";
 
 export interface Thread {
     configurable: {
@@ -39,6 +44,7 @@ export async function* generateCommand(
 
     const workspaceNavigator = new WorkspaceNavigator(rerankModel, workspace);
     const codeWriter = new CodeWriter(model, rerankModel, workspace);
+    const dependencyManager = new DependencyManager(model, rerankModel, workspace);
 
     const humanFeedback = async (state: PlanExecuteState) => {
         const lastMessage = state.messages[state.messages.length - 1];
@@ -138,8 +144,8 @@ Answer (yes/no):`
             value: (x?: FileMetadata[], y?: FileMetadata[]) => y ?? x,
             default: () => undefined,
         },
-        currentTarget: {
-            value: (x?: FileTarget, y?: FileTarget) => y ?? x,
+        scannedFiles: {
+            value: (x?: DirectoryContent[], y?: DirectoryContent[]) => y ?? x,
             default: () => undefined,
         },
         error: {
@@ -148,6 +154,10 @@ Answer (yes/no):`
         },
         projectDetails: {
             value: (x?: string, y?: string) => y ?? x,
+            default: () => undefined,
+        },
+        dependencies: {
+            value: (x?: Dependencies, y?: Dependencies) => y ?? x,
             default: () => undefined,
         },
         image: {
@@ -172,11 +182,14 @@ Answer (yes/no):`
             ends: ["find", "code-writer"]
         })
         .addNode("code-writer", codeWriter.codeWriterStep, {
+            ends: ["dependency-manager"],
+        })
+        .addNode("dependency-manager", dependencyManager.generateManualSteps, {
             ends: [END]
         })
         .addEdge(START, "find")
-        .addEdge("find", "human-feedback");
-
+        .addEdge("find", "human-feedback")
+        .addEdge("code-writer", "dependency-manager");
 
     const checkpoint = await checkpointer?.get(config!);
 
@@ -185,6 +198,20 @@ Answer (yes/no):`
         inputs.followUpInstructions = [new ChatMessage(request.input, "user")];
     } else {
         inputs.messages = [new ChatMessage(request.input, "user")];
+    }
+
+    if (request.contextFiles) {
+        const codeFiles: FileMetadata[] = [];
+        for (const file of request.contextFiles) {
+            try {
+                const relativePath = path.relative(workspace, file);
+                const txtDoc = await getTextDocumentFromPath(path.join(workspace, relativePath));
+                codeFiles.push({
+                    path: relativePath,
+                    code: txtDoc?.getText(),
+                });
+            } catch { }
+        }
     }
 
     if (request.image) {

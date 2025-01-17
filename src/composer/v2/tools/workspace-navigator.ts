@@ -1,22 +1,12 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { type FileTarget, type UserIntent } from "../types/tools";
-import { promises as fs } from 'fs';
-import path from 'path';
 import { PlanExecuteState } from "../types";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { ChatMessage } from "@langchain/core/messages";
-import { getGitignorePatterns } from "../../../server/files/utils";
-import { minimatch } from "minimatch";
 import { FileMetadata } from "@shared/types/v2/Message";
-import { formatMessages } from "../../utils";
+import { DirectoryContent, formatMessages, scanDirectory } from "../../utils";
 import { ProjectDetailsHandler } from "../../../server/project-details";
-
-interface DirectoryContent {
-  type: 'file' | 'directory';
-  name: string;
-  path: string;
-  depth: number;
-}
+import path from "path";
 
 export class WorkspaceNavigator {
   private INITIAL_SCAN_DEPTH = 10;
@@ -51,7 +41,7 @@ export class WorkspaceNavigator {
 
     const projectDetailsHandler = new ProjectDetailsHandler(this.workspace);
     const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
-    const intent = await this.analyzeRequest(message, state.files, projectDetails?.description);
+    const [intent, scannedFiles] = await this.analyzeRequest(message, state.files, projectDetails?.description);
 
     let updatedState: Partial<PlanExecuteState> = {
       userIntent: intent
@@ -80,7 +70,8 @@ export class WorkspaceNavigator {
       messages: [...state.messages, new ChatMessage(questionMsg, "assistant")],
       files,
       greeting,
-      projectDetails: projectDetails?.description
+      projectDetails: projectDetails?.description,
+      scannedFiles
     };
   };
 
@@ -111,6 +102,7 @@ Consider:
 4. Required dependencies or packages that need to be installed
 5. If the request is unclear and you are not able to infer direction or intent, ask a clarifying question
 6. Focus on the core objective and what files appear to be the most relevant, be selective!
+7. Include any files that manage dependencies, if new dependencies are included.
 
 Question Guidelines:
 1. Work with autonomy where possible
@@ -129,34 +121,55 @@ ${fileTargets}
 
 -----
 
-Format guidelines:
-- Type can either be MODIFY | CREATE
+STRICT OUTPUT FORMAT REQUIREMENTS:
 
-Output Format Example:
-===TASK_START===
-### Implementation Plan
+1. Your response MUST contain exactly two sections:
+    - Implementation Plan (wrapped in ===TASK_START=== and ===TASK_END===)
+    - Targets List (wrapped in ===TARGETS_START=== and ===TARGETS_END===)
 
-[2-3 sentence overview]
+2. Implementation Plan section MUST follow this exact structure for initial requests:
+    ===TASK_START===
+    ### Implementation Plan
+    
+    [Exactly 2-3 sentences describing the approach]
+    
+    Key Changes:
+    - [Bullet points listing specific files/components]
+    - [Include file names and paths]
+    
+    **Would you like me to proceed with these changes?**
+    ===TASK_END===
 
-Key Changes:
-- [List specific files or components to modify always include the file name]
-- [Include creation of new files if needed]
+    For follow-up requests, use this structure:
+    ===TASK_START===
+    ### Updated Plan
+    
+    [One sentence describing what changed from previous plan]
+    
+    Modified Changes:
+    - [Only list changes that differ from previous plan]
+    
+    **Would you like me to proceed with these changes?**
+    ===TASK_END===
 
-**Would you like me to proceed with these changes?**
-===TASK_END===
+3. Targets List section MUST follow this exact structure:
+    ===TARGETS_START===
+    ---TARGET---
+    Type: [MODIFY or CREATE only]
+    Description: [One line description]
+    Path: [Workspace relative file path]
+    ---END_TARGET---
+    [Repeat for each target]
+    ===TARGETS_END===
 
-===TARGETS_START===
----TARGET---
-Type: MODIFY
-Description: Update authentication logic
-Path: /src/auth/service.ts
----END_TARGET---
----TARGET---
-Type: CREATE
-Description: Add new middleware
-Path: /src/middleware/auth.ts
----END_TARGET---
-===TARGETS_END===
+VALIDATION RULES:
+- Each target MUST have exactly 3 fields: Type, Description, and Path
+- Type MUST be either MODIFY or CREATE
+- Paths MUST be full file paths
+- Description MUST be one line only
+- No extra sections or formatting allowed
+- No explanatory text outside the defined sections
+- Implementation Plan must be concise and actionable
 
 ------
 
@@ -198,10 +211,15 @@ User request: ${question}`;
           const pathMatch = content.match(/Path: (.*?)(?:\n|$)/);
           const folderMatch = content.match(/FolderPath: (.*?)(?:\n|$)/);
 
+          let filePath: string | undefined;
+          if (pathMatch) {
+            filePath = path.relative(this.workspace, pathMatch?.[1]);
+          }
+
           return {
             type: typeMatch?.[1] as FileTarget['type'],
             description: descMatch?.[1] || '',
-            path: pathMatch?.[1],
+            path: filePath,
             folderPath: folderMatch?.[1]
           };
         })
@@ -217,9 +235,9 @@ User request: ${question}`;
     return updates;
   }
 
-  private async analyzeRequest(question: string, files?: FileMetadata[], projectDetails?: string): Promise<UserIntent> {
+  private async analyzeRequest(question: string, files?: FileMetadata[], projectDetails?: string): Promise<[UserIntent, DirectoryContent[]]> {
 
-    const allContents = await this.scanDirectory(this.workspace, this.INITIAL_SCAN_DEPTH);
+    const allContents = await scanDirectory(this.workspace, this.INITIAL_SCAN_DEPTH);
 
     const fileTargets = allContents
       .slice(0, 1200)
@@ -244,12 +262,6 @@ User request: ${question}`;
       if (updates.targets?.length) {
         result.targets = updates.targets;
       }
-
-      // Emit progress events if needed
-      await dispatchCustomEvent('composer-analyze-progress', {
-        task: result.task,
-        targets: result.targets
-      });
     }
 
     if (!result.task || !result.targets.length) {
@@ -260,63 +272,6 @@ User request: ${question}`;
       }];
     }
 
-    return result;
-  }
-
-  private async scanDirectory(dir: string, maxDepth: number): Promise<DirectoryContent[]> {
-    const contents: DirectoryContent[] = [];
-    const excludePatterns = await getGitignorePatterns(this.workspace);
-
-    const systemDirs = [
-      '.git',
-      '.vscode',
-      '.idea',
-      'node_modules',
-      'dist',
-      'build'
-    ];
-
-    async function scan(currentPath: string, currentDepth: number) {
-      if (currentDepth > maxDepth) return;
-
-      const entries = await fs.readdir(currentPath, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(currentPath, entry.name);
-        const relativePath = path.relative(dir, fullPath);
-
-        if (systemDirs.includes(entry.name)) continue;
-
-        // Check if path matches exclude patterns using minimatch
-        if (excludePatterns) {
-          const isExcluded = minimatch(relativePath, excludePatterns, {
-            dot: true,
-            matchBase: true
-          });
-          if (isExcluded) continue;
-        }
-
-        if (entry.isDirectory()) {
-          contents.push({
-            type: 'directory',
-            name: entry.name,
-            path: relativePath,
-            depth: currentDepth
-          });
-
-          await scan(fullPath, currentDepth + 1);
-        } else {
-          contents.push({
-            type: 'file',
-            name: entry.name,
-            path: relativePath,
-            depth: currentDepth
-          });
-        }
-      }
-    }
-
-    await scan(dir, 0);
-    return contents;
+    return [result, allContents];
   }
 }

@@ -124,7 +124,7 @@ export default function Compose() {
 						from="assistant"
 						message={activeMessage?.message || ""}
 						files={activeMessage?.files}
-						steps={activeMessage?.steps}
+						dependencies={activeMessage?.dependencies}
 						greeting={activeMessage?.greeting}
 						loading={true}
 					/>

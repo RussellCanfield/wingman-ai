@@ -15,10 +15,6 @@ import { createPatch } from 'diff';
 import fs from "node:fs";
 
 type CodeResponse = {
-	steps: Array<{
-		description: string;
-		command?: string;
-	}>;
 	file: {
 		description: string;
 		path: string;
@@ -38,10 +34,6 @@ type BuildPromptParams = {
 };
 
 const DELIMITERS = {
-	STEPS_START: '===STEPS_START===',
-	STEPS_END: '===STEPS_END===',
-	STEP_START: '---STEP---',
-	STEP_END: '---END_STEP---',
 	FILE_START: '===FILE_START===',
 	FILE_END: '===FILE_END==='
 } as const;
@@ -50,10 +42,9 @@ const FILE_SEPARATOR = "<FILE_SEPARATOR>";
 
 class StreamParser {
 	private buffer = '';
-	private currentSection: 'steps' | 'file' | null = null;
+	private currentSection: 'file' | null = null;
 	private gitCommands: GitCommandEngine | undefined;
 	private result: CodeResponse = {
-		steps: [],
 		file: {
 			path: '',
 			code: '',
@@ -71,81 +62,78 @@ class StreamParser {
 	}
 
 	private generateDiffFromModifiedCode(newCode: string, filePath: string): string {
-		let fileContents = '';
-
-		if (fs.existsSync(filePath)) {
-			fileContents = fs.readFileSync(filePath, { encoding: "utf-8" });
-		}
-
-		const patch = createPatch(
-			filePath,           // filename for the diff header
-			fileContents || '', // original content
-			newCode || '',      // new content
-			'',                 // optional old header
-			'',                 // optional new header
-		);
-
-		// Calculate diff statistics
-		const stats = {
-			additions: 0,
-			deletions: 0
-		};
-
-		// Parse the patch line by line to count additions and deletions
-		const lines = patch.split('\n');
-		for (const line of lines) {
-			if (line.startsWith('+') && !line.startsWith('+++')) {
-				stats.additions++;
-			} else if (line.startsWith('-') && !line.startsWith('---')) {
-				stats.deletions++;
+		try {
+			if (!filePath) {
+				throw new Error('File path is required');
 			}
-		}
 
-		return `+${stats.additions},-${stats.deletions}`;
+			if (typeof newCode !== 'string') {
+				throw new Error('New code must be a string');
+			}
+
+			// Read existing file contents with error handling
+			let fileContents = '';
+			if (fs.existsSync(filePath)) {
+				try {
+					fileContents = fs.readFileSync(filePath, { encoding: 'utf-8' });
+				} catch (e) {
+					console.warn(`Failed to read file ${filePath}:`, e);
+					// Continue with empty string for new files
+				}
+			}
+
+			const patch = createPatch(
+				filePath,
+				fileContents,
+				newCode,
+				'',
+				'',
+				{ context: 3 }  // Optional: control context lines
+			);
+
+			const stats = {
+				additions: 0,
+				deletions: 0
+			};
+
+			// Safer line parsing
+			const lines = patch.split('\n');
+			for (const line of lines) {
+				// Skip diff headers and metadata
+				if (line.startsWith('+++') ||
+					line.startsWith('---') ||
+					line.startsWith('Index:') ||
+					line.startsWith('===') ||
+					line.startsWith('@@') ||
+					line.startsWith('\\')) {
+					continue;
+				}
+
+				if (line.startsWith('+')) {
+					stats.additions++;
+				} else if (line.startsWith('-')) {
+					stats.deletions++;
+				}
+			}
+
+			return `+${stats.additions},-${stats.deletions}`;
+		} catch (error) {
+			console.error('Error generating diff:', error);
+			return '+0,-0'; // Safe fallback
+		}
 	}
 
 	async parse(chunk: string): Promise<Partial<CodeResponse>> {
 		this.buffer += chunk;
 
 		// Determine current section
-		if (this.isInSection(DELIMITERS.STEPS_START)) {
-			this.currentSection = 'steps';
-		} else if (this.isInSection(DELIMITERS.FILE_START)) {
+		if (this.isInSection(DELIMITERS.FILE_START)) {
 			this.currentSection = 'file';
 		}
 
 		const updates: Partial<CodeResponse> = {};
 
 		switch (this.currentSection) {
-			case 'steps':
-				if (this.isInSection(DELIMITERS.STEPS_END)) {
-					const stepsContent = this.buffer.substring(
-						this.buffer.indexOf(DELIMITERS.STEPS_START) + DELIMITERS.STEPS_START.length,
-						this.buffer.indexOf(DELIMITERS.STEPS_END)
-					);
-
-					const newSteps = stepsContent
-						.split(DELIMITERS.STEP_START)
-						.filter(block => block.trim())
-						.map(block => {
-							const stepContent = block.split(DELIMITERS.STEP_END)[0].trim();
-							const descMatch = stepContent.match(/Description: (.*?)(?:\nCommand:|$)/s);
-							const cmdMatch = stepContent.match(/Command: (.*?)$/s);
-
-							return {
-								description: descMatch?.[1].trim() || '',
-								command: cmdMatch?.[1].trim()
-							};
-						})
-						.filter(step => step.description);
-
-					if (newSteps.length > this.result.steps.length) {
-						updates.steps = newSteps;
-						this.result.steps = newSteps;
-					}
-				}
-				break;
-
 			case 'file':
 				if (this.isInSection(DELIMITERS.FILE_END)) {
 					const fileContent = this.buffer.substring(
@@ -167,9 +155,13 @@ class StreamParser {
 						dependencies: depsMatch?.[1]?.split(',').map(d => d.trim()) || []
 					};
 
-					if (fileUpdate.code) {
+					if (fileUpdate.code && !fileUpdate.diff) {
 						try {
-							fileUpdate.diff = this.generateDiffFromModifiedCode(fileUpdate.code, path.join(this.workspace, fileUpdate.path));
+							const filePath = path.isAbsolute(fileUpdate.path)
+								? fileUpdate.path
+								: path.join(this.workspace, fileUpdate.path);
+
+							fileUpdate.diff = this.generateDiffFromModifiedCode(fileUpdate.code, filePath);
 						} catch (e) {
 							console.error('Unable to generate diff for:', fileUpdate.path, e);
 						}
@@ -188,60 +180,6 @@ class StreamParser {
 		return this.result;
 	}
 }
-
-const manualStepsPrompt = `You are a dependency and setup specialist focused on providing clear installation and configuration steps.
-Your role is to identify and list only the necessary commands for dependencies, environment setup, and tooling.
-Do not suggest any code changes or file modifications.
-
-Output Format:
-===STEPS_START===
----STEP---
-Description: Clear description of the dependency or setup requirement
-Command: npm install package-name
----END_STEP---
-===STEPS_END===
-
-Focus Areas:
-1. Package dependencies
-2. Development tools
-3. Environment variables
-4. Build tools
-5. CLI commands
-6. Global installations
-
-Guidelines:
-1. Only include command-line steps such as installing dependencies (pnpm/npm/yarn install, pip install, etc.)
-2. No file modifications or code changes
-3. Use exact versions when critical
-4. Include prerequisite checks
-5. Specify platform-specific commands if needed
-6. Provide verification commands where applicable
-7. Provide the bare minimum steps required, no extraneous steps
-8. Use the project details to help determine if dependencies already exist
-9. Only report dependencies that are not present in existing code, only report newly added/imported ones
-10. If no new dependencies are required return an empty string, do not return any other text
-
-Examples of valid steps:
-- Installing npm packages
-- Setting up development tools
-- Configuring environment variables
-- Installing global CLI tools
-- Running build/setup commands
-- Verifying installations
-
-Examples to avoid:
-- File modifications
-- Code changes
-- Configuration file edits
-- Manual file creation
-- Directory structure changes
-- Verification steps, example: "Verify installations and configurations"
-
-Project details:
-{{details}}
-
-Request:
-{{request}}`;
 
 const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for AI-powered development tools.
 
@@ -356,15 +294,6 @@ Remember:
 - Optimize for maintainability
 - Make minimal necessary changes`;
 
-const buildManualStepsPrompt = ({
-	projectDetails,
-	request,
-}: Pick<BuildPromptParams, 'projectDetails' | 'request'>) => {
-	return manualStepsPrompt
-		.replace("{{details}}", projectDetails)
-		.replace("{{request}}", request)
-};
-
 const buildPrompt = ({
 	projectDetails,
 	request,
@@ -393,48 +322,8 @@ export class CodeWriter {
 		private readonly workspace: string
 	) { }
 
-	private async generateManualSteps(
-		state: PlanExecuteState,
-		dependencies: string[]
-	): Promise<CodeResponse["steps"]> {
-		// Skip if no dependencies found
-		if (!dependencies.length) {
-			return [];
-		}
-
-		const systemMessage = new SystemMessage({
-			content: buildManualStepsPrompt({
-				projectDetails: state.projectDetails || "Not available.",
-				request: `Install new dependencies: ${dependencies.join(', ')}`,
-			})
-		});
-
-		const parser = new StreamParser(this.workspace);
-		const steps: CodeResponse["steps"] = [];
-
-		for await (const chunk of await this.chatModel.stream([
-			systemMessage,
-			new HumanMessage({
-				content: [
-					{
-						type: "text",
-						text: `Required dependencies:\n${dependencies.join('\n')}`,
-					},
-				],
-			})
-		])) {
-			const updates = await parser.parse(chunk.content.toString());
-			if (updates.steps?.length) {
-				steps.push(...updates.steps);
-				await dispatchCustomEvent('composer-manual-steps', { steps });
-			}
-		}
-
-		return steps;
-	}
-
 	codeWriterStep = async (state: PlanExecuteState) => {
-		const rulePack = loadWingmanRules(this.workspace);
+		const rulePack = await loadWingmanRules(this.workspace);
 		const request = formatMessages(state.messages);
 		const files: FileMetadata[] = [];
 		const allDependencies = new Set<string>();
@@ -504,11 +393,8 @@ export class CodeWriter {
 			throw new NoFilesChangedError("No files have been changed.");
 		}
 
-		// Generate manual steps only if we found dependencies
-		const steps = await this.generateManualSteps(state, Array.from(allDependencies));
-
-		const updatedPlan: Partial<PlanExecuteState> = { files, steps };
-		await dispatchCustomEvent("composer-done", updatedPlan);
-		return updatedPlan;
+		return {
+			files
+		} satisfies Partial<PlanExecuteState>;
 	}
 }

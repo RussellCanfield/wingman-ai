@@ -1,7 +1,8 @@
 import { ChatMessage } from "@langchain/core/messages";
-import { ComposerRequest } from "@shared/types/v2/Composer";
+import { ComposerRequest, Dependencies } from "@shared/types/v2/Composer";
 import { FileTarget, UserIntent } from "./tools";
 import { FileMetadata } from "@shared/types/v2/Message";
+import { DirectoryContent } from "../../utils";
 
 export type ManualStep = {
     description: string;
@@ -15,8 +16,9 @@ export interface PlanExecuteState {
     followUpInstructions: ChatMessage[];
     userIntent?: UserIntent;
     currentTarget?: FileTarget;
-    steps?: ManualStep[];
+    dependencies?: Dependencies;
     files?: FileMetadata[];
     error?: string;
     greeting?: string;
+    scannedFiles?: DirectoryContent[];
 }

@@ -169,7 +169,7 @@ const ChatEntry = ({
 	from,
 	message,
 	files,
-	steps,
+	dependencies,
 	greeting,
 	loading,
 	image,
@@ -191,6 +191,7 @@ const ChatEntry = ({
 	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
 		} rounded-lg overflow-hidden w-full` : "";
 
+	console.log(dependencies);
 
 	return (
 		<li
@@ -233,11 +234,12 @@ const ChatEntry = ({
 								))}
 							</div>
 						)}
-						{steps && steps.length > 0 && (
+						{dependencies && dependencies?.steps && dependencies?.steps?.length > 0 && (
 							<div>
-								<h3 className="text-lg font-semibold text-stone-200 mb-4 mt-0">Steps:</h3>
+								<h3 className="text-lg font-semibold text-stone-200 mb-4 mt-0">Dependencies:</h3>
 								<div className="space-y-3 mb-4">
-									{steps?.map((step, index) => (
+									{dependencies.response && (<p>{dependencies.response}</p>)}
+									{dependencies.steps.map((step, index) => (
 										<div
 											className="border border-stone-700/50 rounded-lg overflow-hidden bg-editor-bg/30"
 											key={index}

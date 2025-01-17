@@ -1,8 +1,10 @@
 import { ChatMessage } from "@langchain/core/messages";
-import fs from "node:fs";
+import { promises as fs } from 'fs';
 import path from "node:path";
+import { getGitignorePatterns } from "../server/files/utils";
+import { minimatch } from "minimatch";
 
-export const formatMessages = (messages: ChatMessage[]) => {
+export function formatMessages(messages: ChatMessage[]) {
 	return messages
 		.map(msg => {
 			const role = msg.role === 'user' ? 'User' : 'Assistant';
@@ -11,9 +13,9 @@ export const formatMessages = (messages: ChatMessage[]) => {
 		.join('\n\n');
 }
 
-export const loadWingmanRules = (workspace: string) => {
+export async function loadWingmanRules(workspace: string) {
 	try {
-		const wingmanRules = fs.readFileSync(
+		const wingmanRules = await fs.readFile(
 			path.join(workspace, ".wingmanrules"),
 			"utf-8"
 		);
@@ -22,3 +24,67 @@ export const loadWingmanRules = (workspace: string) => {
 		console.error("Failed to load wingman rules", e);
 	}
 };
+
+export interface DirectoryContent {
+	type: 'file' | 'directory';
+	name: string;
+	path: string;
+	depth: number;
+}
+
+export async function scanDirectory(dir: string, maxDepth: number, cwd?: string): Promise<DirectoryContent[]> {
+	const contents: DirectoryContent[] = [];
+	const excludePatterns = await getGitignorePatterns(cwd ?? dir);
+
+	const systemDirs = [
+		'.git',
+		'.vscode',
+		'.idea',
+		'node_modules',
+		'dist',
+		'build'
+	];
+
+	async function scan(currentPath: string, currentDepth: number) {
+		if (currentDepth > maxDepth) return;
+
+		const entries = await fs.readdir(currentPath, { withFileTypes: true });
+
+		for (const entry of entries) {
+			const fullPath = path.join(currentPath, entry.name);
+			const relativePath = path.relative(dir, fullPath);
+
+			if (systemDirs.includes(entry.name)) continue;
+
+			// Check if path matches exclude patterns using minimatch
+			if (excludePatterns) {
+				const isExcluded = minimatch(relativePath, excludePatterns, {
+					dot: true,
+					matchBase: true
+				});
+				if (isExcluded) continue;
+			}
+
+			if (entry.isDirectory()) {
+				contents.push({
+					type: 'directory',
+					name: entry.name,
+					path: relativePath,
+					depth: currentDepth
+				});
+
+				await scan(fullPath, currentDepth + 1);
+			} else {
+				contents.push({
+					type: 'file',
+					name: entry.name,
+					path: relativePath,
+					depth: currentDepth
+				});
+			}
+		}
+	}
+
+	await scan(dir, 0);
+	return contents;
+}
