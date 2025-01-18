@@ -202,9 +202,16 @@ Answer (yes/no):`
 
     if (request.contextFiles) {
         const codeFiles: FileMetadata[] = [];
+        const existingPaths = new Set(inputs.files?.map(f => f.path) ?? []);
+
         for (const file of request.contextFiles) {
             try {
                 const relativePath = path.relative(workspace, file);
+                // Skip if we already have this file in inputs
+                if (existingPaths.has(relativePath)) {
+                    continue;
+                }
+
                 const txtDoc = await getTextDocumentFromPath(path.join(workspace, relativePath));
                 codeFiles.push({
                     path: relativePath,
@@ -212,6 +219,12 @@ Answer (yes/no):`
                 });
             } catch { }
         }
+
+        if (!inputs.files || !Array.isArray(inputs.files)) {
+            inputs.files = [];
+        }
+
+        inputs.files = [...(inputs.files ?? []), ...codeFiles];
     }
 
     if (request.image) {

@@ -113,11 +113,11 @@ ${this.workspace}
 
 ${projectDetails ? `Project details:\n${projectDetails}` : ''}
 
-Recent files:
-${files?.map(f => `Path: ${f.path}`).join('\n')}
-
-Available files:
+Available workspace files and directories:
 ${fileTargets}
+
+User provided/recently used files - consider these higher priority:
+${files?.map(f => `Path: ${f.path}`).join('\n')}
 
 -----
 
@@ -212,8 +212,24 @@ User request: ${question}`;
           const folderMatch = content.match(/FolderPath: (.*?)(?:\n|$)/);
 
           let filePath: string | undefined;
-          if (pathMatch) {
-            filePath = path.relative(this.workspace, pathMatch?.[1]);
+          if (pathMatch?.[1]) {
+            const rawPath = pathMatch[1].trim();
+
+            // First normalize the paths to handle any platform-specific separators
+            const normalizedWorkspace = path.normalize(this.workspace);
+            const normalizedPath = path.normalize(rawPath);
+
+            // If the path is already relative, resolve it against workspace
+            const absolutePath = path.isAbsolute(normalizedPath)
+              ? normalizedPath
+              : path.resolve(normalizedWorkspace, normalizedPath);
+
+            // Get the relative path from workspace to the target file
+            filePath = path
+              .relative(normalizedWorkspace, absolutePath)
+              // Normalize to forward slashes for consistency
+              .split(path.sep)
+              .join('/');
           }
 
           return {

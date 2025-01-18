@@ -13,6 +13,7 @@ import path from "node:path";
 import { GitCommandEngine } from "../../../utils/gitCommandEngine";
 import { createPatch } from 'diff';
 import fs from "node:fs";
+import { Command } from "@langchain/langgraph";
 
 type CodeResponse = {
 	file: {
@@ -144,7 +145,7 @@ class StreamParser {
 					const pathMatch = fileContent.match(/Path: (.*?)(?:\n|$)/);
 					const langMatch = fileContent.match(/Language: (.*?)(?:\n|$)/);
 					const descMatch = fileContent.match(/Description: (.*?)(?:\n|$)/);
-					const codeMatch = fileContent.match(/Code:\n([\s\S]*?)$/);
+					const codeMatch = fileContent.match(/Code:\s*\n([\s\S]*$)/);
 					const depsMatch = fileContent.match(/Dependencies: (.*?)(?:\n|$)/);
 
 					const fileUpdate: CodeResponse['file'] = {
@@ -183,18 +184,28 @@ class StreamParser {
 
 const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for AI-powered development tools.
 
-Output Structure:
-1. File: Modified or created code for the file in scope
-	- Include "Changes" made to the file in a concise format
+STRICT OUTPUT FORMAT REQUIREMENTS:
 
-Output Format Example:
+Output Format:
 ===FILE_START===
-Path: /path/to/file
-Language: typescript
-Description: A short and concise summary of what you changed in the file.
-Dependencies: The names of new dependencies added: package1, package2
-Code:
+Path: [Full file path]
+Language: [Programming language]
+Description: [One line description of changes]
+Dependencies: [List of new dependencies if any, omit if none]
+Code: 
+[Complete file code]
 ===FILE_END===
+
+VALIDATION RULES:
+1. Each file block MUST contain exactly 5 fields: Path, Language, Description, Dependencies, and Code
+2. Path MUST be the full file path
+3. Language MUST be specified
+4. Description MUST be one line only
+5. Dependencies MUST list new dependencies or state "No new dependencies"
+6. Code MUST be complete and functional
+7. No explanatory text outside the defined sections
+8. No additional formatting or sections allowed
+9. All field values mentioned above in the file block are in a string format.
 
 Core Principles:
 1. Write simple, maintainable code - less code equals debt
@@ -285,6 +296,7 @@ Files available to create or modify:
 ------
 
 Remember:
+- Follow the strict output format
 - Only modify task-related code
 - Preserve existing structure
 - Focus on core objective
@@ -316,11 +328,19 @@ ${rulePack}`;
 };
 
 export class CodeWriter {
+	private readonly _chatModel: BaseChatModel;
 	constructor(
-		private readonly chatModel: BaseChatModel,
+		chatModel: BaseChatModel,
 		private readonly rerankModel: BaseChatModel,
 		private readonly workspace: string
-	) { }
+	) {
+		//@ts-expect-error
+		this._chatModel = chatModel.withConfig({
+			timeout: 120000
+		}).withRetry({
+			stopAfterAttempt: 2
+		})
+	}
 
 	codeWriterStep = async (state: PlanExecuteState) => {
 		const rulePack = await loadWingmanRules(this.workspace);
@@ -359,22 +379,34 @@ export class CodeWriter {
 
 			const parser = new StreamParser(this.workspace);
 
-			for await (const chunk of await this.chatModel.stream([
+			let output = '';
+			for await (const chunk of await this._chatModel.stream([
 				systemMessage,
 				new HumanMessage({
 					content: [
 						{
 							type: "text",
 							text: `Current file:\n${file === "BLANK"
-								? `No related files found. Working directory: ${this.workspace}`
-								: `File: ${file}\nCode:\n${code}`}`,
+								? `No related files found. Working directory:\n${this.workspace}`
+								: `File:\n${file}\n\nCode (blank if must be created):\n${code}`}`,
 						},
 					],
 				})
 			])) {
+				output += chunk.content.toString();
 				const updates = await parser.parse(chunk.content.toString());
 
 				if (updates.file) {
+					if (!updates.file.code) {
+						await dispatchCustomEvent("composer-error", {
+							error:
+								`I was unable to generate code for the following file: ${updates.file.path}, please try again.`,
+						});
+						return new Command({
+							goto: "find",
+						})
+					}
+
 					const stateFile = state?.files?.find(f => f.path === updates.file?.path);
 					if (stateFile && !files.some(f => f.path === updates.file?.path)) {
 						Object.assign(stateFile, updates.file);
@@ -390,7 +422,14 @@ export class CodeWriter {
 		}
 
 		if (files.length === 0) {
-			throw new NoFilesChangedError("No files have been changed.");
+			await dispatchCustomEvent("composer-error", {
+				error:
+					"I've failed to generate any code changes for this session, if this continues please clear the chat and try again.",
+			});
+			console.error("No files have been changed.");
+			return new Command({
+				goto: "find",
+			})
 		}
 
 		return {
