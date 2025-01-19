@@ -1,7 +1,6 @@
 import {
 	ComposerRequest,
-	Plan,
-} from "@shared/types/Composer";
+} from "@shared/types/v2/Composer";
 import { useMemo } from "react";
 import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
@@ -79,7 +78,10 @@ export default function Compose() {
 	};
 
 	const canValidate = useMemo(() => {
-		return false;
+		if (composerMessages.length === 0) return false;
+
+		const lastMessage = composerMessages[composerMessages.length - 1];
+		return Boolean(lastMessage?.files?.length ?? 0);
 	}, [composerMessages]);
 
 	return (

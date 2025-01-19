@@ -16,7 +16,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _settings: Settings
-	) {}
+	) { }
 
 	private createPanel(): vscode.WebviewPanel {
 		panel = vscode.window.createWebviewPanel(
@@ -65,6 +65,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					break;
 				case "saveSettings":
 					SaveSettings(value as Settings);
+					break;
+				case "reloadWindow":
+					await vscode.commands.executeCommand("workbench.action.reloadWindow");
 					break;
 			}
 		});

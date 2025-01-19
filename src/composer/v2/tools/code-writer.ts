@@ -213,6 +213,7 @@ Core Principles:
 3. Ensure code correctness and reliability
 4. Maintain existing patterns and conventions
 5. Make minimal, focused changes
+6. Do not remove existing code unless it is required to complete your change, do not break things.
 
 File Handling:
 1. Process one file at a time

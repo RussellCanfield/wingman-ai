@@ -3,6 +3,7 @@ import { FaUser } from "react-icons/fa";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FaTerminal } from "react-icons/fa";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
 import {
 	prism,
 	vscDarkPlus,
@@ -126,6 +127,14 @@ const ChatArtifact = ({
 				<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink">
 					{truncatePath(file.path)}
 				</h4>
+				{!file.code && (
+					<div className="p-4 flex justify-center">
+						<AiOutlineLoading3Quarters
+							className="animate-spin text-stone-400"
+							size={24}
+						/>
+					</div>
+				)}
 				{diffParts && (
 					<div className="flex items-center gap-2 px-3 text-sm flex-nowrap">
 						<span className="flex items-center gap-1 text-green-400">
@@ -190,8 +199,6 @@ const ChatEntry = ({
 
 	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
 		} rounded-lg overflow-hidden w-full` : "";
-
-	console.log(dependencies);
 
 	return (
 		<li
