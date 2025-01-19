@@ -2,11 +2,12 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { type FileTarget, type UserIntent } from "../types/tools";
 import { PlanExecuteState } from "../types";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
-import { ChatMessage } from "@langchain/core/messages";
+import { ChatMessage, HumanMessage, MessageContentImageUrl, MessageContentText, SystemMessage } from "@langchain/core/messages";
 import { FileMetadata } from "@shared/types/v2/Message";
 import { DirectoryContent, formatMessages, scanDirectory } from "../../utils";
 import { ProjectDetailsHandler } from "../../../server/project-details";
 import path from "path";
+import { ComposerImage } from "@shared/types/v2/Composer";
 
 export class WorkspaceNavigator {
   private INITIAL_SCAN_DEPTH = 10;
@@ -22,7 +23,7 @@ export class WorkspaceNavigator {
   } as const;
 
   constructor(
-    private readonly rerankModel: BaseChatModel,
+    private readonly chatModel: BaseChatModel,
     private readonly workspace: string
   ) { }
 
@@ -41,7 +42,7 @@ export class WorkspaceNavigator {
 
     const projectDetailsHandler = new ProjectDetailsHandler(this.workspace);
     const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
-    const [intent, scannedFiles] = await this.analyzeRequest(message, state.files, projectDetails?.description);
+    const [intent, scannedFiles] = await this.analyzeRequest(message, state.files, state.image, projectDetails?.description);
 
     let updatedState: Partial<PlanExecuteState> = {
       userIntent: intent
@@ -76,7 +77,7 @@ export class WorkspaceNavigator {
   };
 
   private async *generateGreeting(question: string) {
-    const stream = await this.rerankModel.stream(`You are a helpful AI coding assistant.
+    const stream = await this.chatModel.stream(`You are a helpful AI coding assistant.
 Your role is to provide a brief, natural acknowledgment of the user's coding request.
 Keep the response under 20 words and focus on acknowledging their specific request type.
 Mention you'll analyze their request but don't elaborate on next steps.
@@ -103,6 +104,7 @@ Consider:
 5. If the request is unclear and you are not able to infer direction or intent, ask a clarifying question
 6. Focus on the core objective and what files appear to be the most relevant, be selective!
 7. Include any files that manage dependencies, if new dependencies are included.
+8. Directories are for determining file paths, you will not be creating or modifying directories - so do not include them in your output.
 
 Question Guidelines:
 1. Work with autonomy where possible
@@ -251,8 +253,7 @@ User request: ${question}`;
     return updates;
   }
 
-  private async analyzeRequest(question: string, files?: FileMetadata[], projectDetails?: string): Promise<[UserIntent, DirectoryContent[]]> {
-
+  private async analyzeRequest(question: string, files?: FileMetadata[], image?: ComposerImage, projectDetails?: string): Promise<[UserIntent, DirectoryContent[]]> {
     const allContents = await scanDirectory(this.workspace, this.INITIAL_SCAN_DEPTH);
 
     const fileTargets = allContents
@@ -267,18 +268,15 @@ User request: ${question}`;
       targets: []
     };
 
-    // Stream the response and parse incrementally
-    for await (const chunk of await this.rerankModel.stream(prompt)) {
-      const updates = await this.parseStreamingResponse(chunk.content.toString());
-
-      if (updates.task) {
-        result.task = updates.task;
+    // Try with image first if provided, then fallback to text-only
+    await this.streamResponse(prompt, result, image).catch(async error => {
+      if (error instanceof Error && error.message.includes('does not support image input')) {
+        // Retry without image
+        await this.streamResponse(prompt, result);
+      } else {
+        throw error; // Re-throw non-image related errors
       }
-
-      if (updates.targets?.length) {
-        result.targets = updates.targets;
-      }
-    }
+    });
 
     if (!result.task || !result.targets.length) {
       result.task = '### Implementation Plan\nUnable to determine implementation plan from request.\n\n**Would you like to try again with more details?**';
@@ -289,5 +287,39 @@ User request: ${question}`;
     }
 
     return [result, allContents];
+  }
+
+  private async streamResponse(prompt: string, result: UserIntent, image?: ComposerImage) {
+    const msgs: Array<MessageContentText | MessageContentImageUrl> = [
+      {
+        type: "text",
+        text: prompt
+      }
+    ];
+
+    if (image) {
+      msgs.push({
+        type: "image_url",
+        image_url: {
+          url: image.data,
+        },
+      });
+    }
+
+    for await (const chunk of await this.chatModel.stream([
+      new HumanMessage({
+        content: msgs,
+      }),
+    ])) {
+      const updates = await this.parseStreamingResponse(chunk.content.toString());
+
+      if (updates.task) {
+        result.task = updates.task;
+      }
+
+      if (updates.targets?.length) {
+        result.targets = updates.targets;
+      }
+    }
   }
 }

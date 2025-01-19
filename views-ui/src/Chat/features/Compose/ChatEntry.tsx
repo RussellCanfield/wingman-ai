@@ -219,12 +219,14 @@ const ChatEntry = ({
 							{message !== "" && renderMarkdown(message, codeTheme)}
 						</div>
 						{image && (
-							<img
-								src={image.data}
-								alt="Image preview"
-								className="max-w-full h-auto rounded-lg mt-4 mb-4"
-								style={{ maxHeight: "512px" }}
-							/>
+							<div className="p-3">
+								<img
+									src={image.data}
+									alt="Image preview"
+									className="max-w-full h-auto rounded-lg"
+									style={{ maxHeight: "512px" }}
+								/>
+							</div>
 						)}
 						{files && files?.length > 0 && (
 							<div>

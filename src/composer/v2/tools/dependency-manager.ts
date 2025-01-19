@@ -1,5 +1,5 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { ManualStep, PlanExecuteState } from "../types";
+import { PlanExecuteState } from "../types";
 import {
 	HumanMessage,
 	SystemMessage,
@@ -17,7 +17,6 @@ type BuildPromptParams = {
 	availableFiles: string;
 	rulePack?: string;
 };
-
 
 const DELIMITERS = {
 	STEPS_START: '===STEPS_START===',

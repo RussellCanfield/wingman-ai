@@ -42,7 +42,7 @@ export async function* generateCommand(
 ) {
     controller = new AbortController();
 
-    const workspaceNavigator = new WorkspaceNavigator(rerankModel, workspace);
+    const workspaceNavigator = new WorkspaceNavigator(model, workspace);
     const codeWriter = new CodeWriter(model, rerankModel, workspace);
     const dependencyManager = new DependencyManager(model, rerankModel, workspace);
 

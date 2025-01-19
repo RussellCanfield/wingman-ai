@@ -350,7 +350,7 @@ export class CodeWriter {
 		const allDependencies = new Set<string>();
 
 		// Process files first
-		for (let { path: file, code } of state.files || [{ path: "BLANK", changes: [], code: "" }]) {
+		for (let { path: file, code } of state.files ?? []) {
 			if (!code) {
 				const textDocument = await getTextDocumentFromPath(path.join(this.workspace, file));
 				code = textDocument?.getText();

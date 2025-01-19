@@ -180,7 +180,7 @@ ${data}
 
 			this._webview?.postMessage({
 				command: "validation-failed",
-				value: `Fix my build errors.
+				value: `Fixing build errors...
 
 Here is a summary of the command output:
 ${result.summary}`,
