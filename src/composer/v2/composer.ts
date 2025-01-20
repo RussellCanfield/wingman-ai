@@ -42,7 +42,7 @@ export async function* generateCommand(
 ) {
     controller = new AbortController();
 
-    const workspaceNavigator = new WorkspaceNavigator(model, workspace);
+    const workspaceNavigator = new WorkspaceNavigator(model, workspace, codeGraph, store);
     const codeWriter = new CodeWriter(model, rerankModel, workspace);
     const dependencyManager = new DependencyManager(model, rerankModel, workspace);
 
@@ -107,34 +107,8 @@ Answer (yes/no):`
 
     const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
         messages: {
-            value: (x: ChatMessage[], y: ChatMessage[]) => {
-                const uniqueMessages = new Map<string, ChatMessage>();
-
-                x?.forEach((msg) => {
-                    return uniqueMessages.set(msg.content.toString(), msg);
-                });
-                y?.forEach((msg) => {
-                    return uniqueMessages.set(msg.content.toString(), msg);
-                });
-
-                return Array.from(uniqueMessages.values());
-            },
-            default: () => [],
-        },
-        followUpInstructions: {
-            value: (x: ChatMessage[], y: ChatMessage[]) => {
-                const uniqueMessages = new Map<string, ChatMessage>();
-
-                x?.forEach((msg) => {
-                    return uniqueMessages.set(msg.content.toString(), msg);
-                });
-                y?.forEach((msg) => {
-                    return uniqueMessages.set(msg.content.toString(), msg);
-                });
-
-                return Array.from(uniqueMessages.values());
-            },
-            default: () => [],
+            value: (_x: ChatMessage[], y: ChatMessage[]) => y,
+            default: undefined
         },
         userIntent: {
             value: (x?: UserIntent, y?: UserIntent) => y ?? x,
@@ -167,7 +141,7 @@ Answer (yes/no):`
             ) => y ?? x,
         },
         greeting: {
-            value: (x?: string, y?: string) => y ?? x,
+            value: (_x?: string, y?: string) => y,
             default: () => undefined
         }
     };
@@ -194,11 +168,7 @@ Answer (yes/no):`
     const checkpoint = await checkpointer?.get(config!);
 
     let inputs: Partial<PlanExecuteState> = {};
-    if (checkpoint?.channel_values["response"]) {
-        inputs.followUpInstructions = [new ChatMessage(request.input, "user")];
-    } else {
-        inputs.messages = [new ChatMessage(request.input, "user")];
-    }
+    inputs.messages = [new ChatMessage(request.input, "user")];
 
     if (request.contextFiles) {
         const codeFiles: FileMetadata[] = [];

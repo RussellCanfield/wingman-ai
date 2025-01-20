@@ -8,10 +8,19 @@ import { DirectoryContent, formatMessages, scanDirectory } from "../../utils";
 import { ProjectDetailsHandler } from "../../../server/project-details";
 import path from "path";
 import { ComposerImage } from "@shared/types/v2/Composer";
+import { VectorQuery } from "../../../server/query";
+import { CodeGraph } from "../../../server/files/graph";
+import { Store } from "../../../store/vector";
+
+interface GreetingResult {
+  content: string;
+  stopped: boolean;
+}
 
 export class WorkspaceNavigator {
   private INITIAL_SCAN_DEPTH = 10;
   private buffer = '';
+  private vectorQuery = new VectorQuery();
 
   private readonly DELIMITERS = {
     TARGETS_START: '===TARGETS_START===',
@@ -24,24 +33,33 @@ export class WorkspaceNavigator {
 
   constructor(
     private readonly chatModel: BaseChatModel,
-    private readonly workspace: string
+    private readonly workspace: string,
+    private readonly codeGraph: CodeGraph,
+    private readonly vectorStore: Store
   ) { }
 
   navigateWorkspace = async (
     state: PlanExecuteState
-  ): Promise<Partial<PlanExecuteState>> => {
+  ) => {
     const message = formatMessages(state.messages);
+    const projectDetailsHandler = new ProjectDetailsHandler(this.workspace);
+    const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
 
     let greeting = '';
-    for await (const chunk of this.generateGreeting(message)) {
-      greeting += chunk;
+    for await (const result of this.generateGreeting(message)) {
+      greeting = result.content;
+      if (result.stopped) {
+        return {
+          messages: [...(state.messages ?? []), new ChatMessage(greeting, "assistant")],
+          greeting: undefined
+        } satisfies Partial<PlanExecuteState>
+      }
+
       await dispatchCustomEvent("composer-greeting", {
         greeting
       });
     }
 
-    const projectDetailsHandler = new ProjectDetailsHandler(this.workspace);
-    const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
     const [intent, scannedFiles] = await this.analyzeRequest(message, state.files, state.image, projectDetails?.description);
 
     let updatedState: Partial<PlanExecuteState> = {
@@ -76,21 +94,98 @@ export class WorkspaceNavigator {
     };
   };
 
-  private async *generateGreeting(question: string) {
+  private async *generateGreeting(question: string): AsyncGenerator<GreetingResult> {
     const stream = await this.chatModel.stream(`You are a helpful AI coding assistant.
 Your role is to provide a brief, natural acknowledgment of the user's coding request.
 Keep the response under 20 words and focus on acknowledging their specific request type.
 Mention you'll analyze their request but don't elaborate on next steps.
 
-Previous conversation and latest request:
+Consider the ENTIRE conversation for context, but focus on the LAST MESSAGE to determine if the user:
+1. Rejected the previous suggestion
+2. Wants to try a different approach
+3. Expressed dissatisfaction
+4. Indicated the solution isn't what they need
+
+Response Rules:
+- Keep responses under 20 words
+- Be direct and natural
+- Acknowledge their specific feedback
+- Don't elaborate on next steps
+
+Rejection Indicators in Last Message:
+- Direct negatives: "no", "nope", "not right", "that's wrong"
+- Redirections: "instead", "rather", "different approach"
+- Dissatisfaction: "not what I want", "this isn't working"
+- Partial rejection: "yes, but...", "almost but not quite"
+- Confusion: "I don't understand", "that's not what I meant"
+
+If the last message contains ANY rejection indicators:
+1. Acknowledge their feedback clearly and ask how to proceed
+2. End response with "~1~" on a new line
+3. Do not include "~1~" anywhere else
+
+Example Conversation 1:
+User: Can you help with API authentication?
+Assistant: I'll help implement secure API authentication.
+User: No, I meant OAuth specifically
+Response: I understand you want OAuth instead. How would you like to implement it?
+~1~
+
+Example Conversation 2:
+User: Can you refactor this code?
+Assistant: I'll help make this code more maintainable.
+User: That's not what I had in mind
+Response: Let me understand your preferred approach to this refactoring. How should I proceed?
+~1~
+
+Previous conversation and latest message:
 ${question}`);
 
+    let buffer = '';
+    const STOP_SIGNAL = '~1~';
+
     for await (const chunk of stream) {
-      yield chunk.content.toString();
+      const content = chunk.content.toString();
+      buffer += content;
+
+      // Check if we have a stop signal in the buffer
+      if (buffer.includes(STOP_SIGNAL)) {
+        // Clean and yield the content before the stop signal
+        const cleanContent = buffer.split(STOP_SIGNAL)[0].trim();
+        if (cleanContent) {
+          yield {
+            content: cleanContent,
+            stopped: true
+          };
+        }
+
+        // Yield the follow-up question
+        yield {
+          content: '\nWhat would you like me to do differently?',
+          stopped: true
+        };
+        return;
+      }
+
+      // Stream normal content
+      if (content.trim()) {
+        yield {
+          content,
+          stopped: false
+        };
+      }
+    }
+
+    // Handle any remaining buffer without stop signal
+    if (buffer.trim()) {
+      yield {
+        content: buffer,
+        stopped: false
+      };
     }
   }
 
-  private createAnalyzePrompt(question: string, fileTargets: string, files?: FileMetadata[], projectDetails?: string,) {
+  private createAnalyzePrompt(question: string, fileTargets: string, files?: FileMetadata[], contextFiles?: FileMetadata[], projectDetails?: string,) {
     return `You are a senior software architect and technical lead.
 The provided user request is related to writing software.
 You will work autonomously when possible, without overburdening the user with questions.
@@ -118,8 +213,13 @@ ${projectDetails ? `Project details:\n${projectDetails}` : ''}
 Available workspace files and directories:
 ${fileTargets}
 
-User provided/recently used files - consider these higher priority:
-${files?.map(f => `Path: ${f.path}`).join('\n')}
+The following files should be considered wit higher priority
+
+User provided/recently used files:
+${files?.map(f => `Path: ${f.path}`).join('\n') ?? "None provided."}
+
+Context related files:
+${contextFiles?.map(f => f).join('\n') ?? "None provided."}
 
 -----
 
@@ -255,13 +355,20 @@ User request: ${question}`;
 
   private async analyzeRequest(question: string, files?: FileMetadata[], image?: ComposerImage, projectDetails?: string): Promise<[UserIntent, DirectoryContent[]]> {
     const allContents = await scanDirectory(this.workspace, this.INITIAL_SCAN_DEPTH);
+    const relatedDocs = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(question, this.codeGraph, this.vectorStore, this.workspace, 10);
+
+    const relatedCodeFiles = relatedDocs.size > 0
+      ? Array.from(relatedDocs.keys())
+      : [];
 
     const fileTargets = allContents
       .slice(0, 1200)
       .map(c => `Name: ${c.name}\nType: ${c.type}\nPath: ${c.path}`)
       .join('\n\n');
 
-    const prompt = this.createAnalyzePrompt(question, fileTargets, files, projectDetails);
+    const prompt = this.createAnalyzePrompt(question, fileTargets, files, relatedCodeFiles.map(f => ({
+      path: path.relative(this.workspace, f)
+    } satisfies FileMetadata)), projectDetails);
 
     let result: UserIntent = {
       task: '',
@@ -285,7 +392,6 @@ User request: ${question}`;
         description: 'Could you provide more details about what you\'d like to accomplish?'
       }];
     }
-
     return [result, allContents];
   }
 

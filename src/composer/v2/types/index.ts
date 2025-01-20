@@ -13,7 +13,6 @@ export interface PlanExecuteState {
     messages: ChatMessage[];
     image?: ComposerRequest["image"];
     projectDetails?: string;
-    followUpInstructions: ChatMessage[];
     userIntent?: UserIntent;
     currentTarget?: FileTarget;
     dependencies?: Dependencies;
