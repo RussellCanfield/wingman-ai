@@ -65,7 +65,7 @@ const Validation = () => {
 					)}
 					{!success && validating && (
 						<>
-							<FaSpinner className="animate-spin-slow h-5 w-5 text-gray-500" />
+							<FaSpinner className="animate-spin-slow h-5 w-5 text-gray-500 p-4" />
 							<button
 								type="button"
 								title="Cancel validation"

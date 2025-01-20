@@ -56,6 +56,7 @@ function ChatResponseList({
 				files={files}
 				dependencies={dependencies}
 				image={image}
+				isCurrent={index === message.length - 1}
 			/>
 		));
 	}, [messages]);

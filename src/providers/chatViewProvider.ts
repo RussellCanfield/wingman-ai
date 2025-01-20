@@ -207,7 +207,7 @@ ${result.summary}`,
 							webviewView.webview.postMessage({
 								command: "compose-response",
 								value: {
-									node: "compose-replace",
+									node: "composer-replace",
 									values: {
 										...(await this._lspClient.rejectComposerFile(value as FileMetadata))
 									}

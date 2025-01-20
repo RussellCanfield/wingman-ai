@@ -12,11 +12,11 @@ import { FileMetadata } from "@shared/types/v2/Message";
 import { vscode } from "../../utilities/vscode";
 import { ComposerMessage, DiffViewCommand } from "@shared/types/v2/Composer";
 import { MdOutlineDifference } from "react-icons/md";
-import { LuFileCheck } from "react-icons/lu";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
+import { PiGitDiff } from "react-icons/pi";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -105,6 +105,15 @@ const ChatArtifact = ({
 		}
 	};
 
+	const rejectFile = () => {
+		if (file) {
+			vscode.postMessage({
+				command: "reject-file",
+				value: file,
+			});
+		}
+	}
+
 	const showDiffview = () => {
 		if (file) {
 			vscode.postMessage({
@@ -154,24 +163,34 @@ const ChatArtifact = ({
 				)}
 				{!loading && file?.description && !file.accepted && !file.rejected && (
 					<div className="flex flex-nowrap ml-auto">
-						<div className="flex items-center text-white rounded z-10 hover:bg-stone-700 transition-colors">
+						<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-red-600">
+							<button
+								type="button"
+								title="Reject changes"
+								className="p-3"
+								onClick={() => rejectFile()}
+							>
+								<HiOutlineXMark size={18} />
+							</button>
+						</div>
+						<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors" style={{ color: '#ffaf38' }}>
 							<button
 								type="button"
 								title="Show diff"
 								className="p-3"
 								onClick={() => showDiffview()}
 							>
-								<MdOutlineDifference size={16} />
+								<PiGitDiff size={16} />
 							</button>
 						</div>
-						<div className="flex items-center text-white rounded z-10 hover:bg-stone-700 transition-colors">
+						<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-green-400">
 							<button
 								type="button"
 								title="Accept changes"
 								className="p-3"
 								onClick={() => mergeIntoFile()}
 							>
-								<LuFileCheck size={16} />
+								<GrCheckmark size={16} />
 							</button>
 						</div>
 					</div>
@@ -179,10 +198,10 @@ const ChatArtifact = ({
 				{(file.rejected || file.accepted) && (
 					<div className="flex flex-nowrap ml-auto pr-4">
 						{file.rejected && (<span className="flex items-center gap-1 text-red-400">
-							<span><HiOutlineXMark size={18} /></span>
+							<span>Rejected</span>
 						</span>)}
 						{file.accepted && (<span className="flex items-center gap-1 text-green-400">
-							<span><GrCheckmark size={16} /></span>
+							<span>Accepted</span>
 						</span>)}
 					</div>
 				)}
@@ -205,12 +224,12 @@ const ChatEntry = ({
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
 	const mergeIntoFile = (file: FileMetadata) => {
-		if (file) {
-			vscode.postMessage({
-				command: "accept-file",
-				value: file,
-			});
-		}
+		if (!file) return;
+
+		vscode.postMessage({
+			command: "accept-file",
+			value: file,
+		});
 	};
 
 	const rejectFile = (file: FileMetadata) => {
@@ -248,8 +267,6 @@ const ChatEntry = ({
 
 	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
 		} rounded-lg overflow-hidden w-full` : "";
-
-	console.log(files);
 
 	return (
 		<li
