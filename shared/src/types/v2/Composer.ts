@@ -36,6 +36,7 @@ export interface PlanExecuteState {
 	files?: FileMetadata[];
 	dependencies?: Dependencies;
 	greeting?: string;
+	error?: string;
 }
 
 export type ComposerResponse = {

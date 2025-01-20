@@ -50,6 +50,16 @@ export async function* generateCommand(
         const lastMessage = state.messages[state.messages.length - 1];
         const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
         const userMessage = interruptState.messages![0].content.toString();
+        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
+
+        if (state.files?.length === 0) {
+            return new Command({
+                goto: "find",
+                update: {
+                    messages
+                } satisfies Partial<PlanExecuteState>
+            })
+        }
 
         const isPositive = await rerankModel.invoke(
             `Analyze this response and determine if it's a positive confirmation or any other type of response.
@@ -81,12 +91,12 @@ Examples:
 - "Yes, but can you..." -> "no"
 - "That's interesting" -> "no"
 
+Note: Examples above are not exhaustive, use your best judgement!
+
 Response: ${userMessage}
 
 Answer (yes/no):`
         );
-
-        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
 
         if (isPositive.content.toString().toLowerCase().includes('yes')) {
             return new Command({

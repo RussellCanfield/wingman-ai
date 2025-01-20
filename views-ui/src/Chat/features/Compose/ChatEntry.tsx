@@ -212,9 +212,9 @@ const ChatEntry = ({
 						</div>
 					)}
 					<div className={`${bgClasses} flex-grow w-full justify-center items-center ${fromUser ? "shadow-lg" : ""}`}>
-						{greeting && (
-							<p >{greeting}</p>
-						)}
+						{greeting &&
+							renderMarkdown(greeting, codeTheme)
+						}
 						<div className={`${from === 'user' ? 'p-3' : ''}`}>
 							{message !== "" && renderMarkdown(message, codeTheme)}
 						</div>

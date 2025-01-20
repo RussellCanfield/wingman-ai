@@ -27,7 +27,7 @@ const getBase64FromFile = (file: File): Promise<string> => {
 
 export default function Compose() {
 	const { composerMessages, setComposerMessages, loading, setLoading, clearActiveMessage, activeMessage } = useComposerContext();
-	const { indexStats } = useSettingsContext();
+	const { indexStats, setView } = useSettingsContext();
 
 	const cancelAIResponse = () => {
 		clearActiveMessage();
@@ -115,6 +115,12 @@ export default function Compose() {
 								<span className="flex items-center gap-2">
 									⚠️ No context files found. Please build the full index or reference files directly using '@filename'
 								</span>
+								<button
+									className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50 mt-4"
+									onClick={() => setView('index')}
+								>
+									Go to Indexer
+								</button>
 							</div>
 						)}
 					</p>

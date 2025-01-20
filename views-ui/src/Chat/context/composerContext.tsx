@@ -54,7 +54,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             ...currentMessages,
             {
               from: "assistant",
-              message: "Ut oh! Sorry but I seem to have failed processing your request. Please try again!",
+              message: values.error ?? "Ut oh! Sorry but I seem to have failed processing your request. Please try again!",
               files: values.files,
               dependencies: values.dependencies
             }
@@ -115,7 +115,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
               {
                 from: mostRecentMessage?.kwargs.role,
                 message: mostRecentMessage?.kwargs.content,
-                greeting: values?.greeting
               }
             ];
           });

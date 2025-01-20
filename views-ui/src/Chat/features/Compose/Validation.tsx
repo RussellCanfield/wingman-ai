@@ -42,9 +42,9 @@ const Validation = () => {
 	};
 
 	return (
-		<div className="border border-stone-700 rounded-lg overflow-hidden shadow-lg mb-4">
-			<div className="bg-stone-700 text-white flex flex-row items-center">
-				<h4 className="m-0 flex-grow p-2 text-wrap break-all text-lg">
+		<div className="pl-[48px] pr-[16px]">
+			<div className="border rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30 bg-stone-800/50 text-white flex items-center border-b border-stone-700/50 justify-between">
+				<h4 className="m-0 min-w-0 p-3 font-medium truncate">
 					Validate
 				</h4>
 				<div className="flex space-x-2 bg-stone-700 text-white rounded z-10 items-center">

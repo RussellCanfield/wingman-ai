@@ -45,258 +45,78 @@ export class WorkspaceNavigator {
     const projectDetailsHandler = new ProjectDetailsHandler(this.workspace);
     const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
 
-    let greeting = '';
-    for await (const result of this.generateGreeting(message)) {
-      greeting = result.content;
-      if (result.stopped) {
-        return {
-          messages: [...(state.messages ?? []), new ChatMessage(greeting, "assistant")],
-          greeting: undefined
-        } satisfies Partial<PlanExecuteState>
+    const [intent, scannedFiles] = await this.analyzeRequest(message, state.files?.filter(f => f.path !== undefined), state.image, projectDetails?.description);
+
+    if (!intent.targets?.length) {
+      return {
+        messages: [...state.messages, new ChatMessage(intent.task, "assistant")],
       }
-
-      await dispatchCustomEvent("composer-greeting", {
-        greeting
-      });
-    }
-
-    const [intent, scannedFiles] = await this.analyzeRequest(message, state.files, state.image, projectDetails?.description);
-
-    let updatedState: Partial<PlanExecuteState> = {
-      userIntent: intent
-    };
-
-    const question = intent.targets.find(t =>
-      t.type === 'QUESTION'
-    );
-
-    if (!question && (!intent || !intent.targets.length)) {
-      updatedState = {
-        error: 'I am unable to find any files related to your request, please try again.'
-      }
-      await dispatchCustomEvent("composer-error", updatedState);
-      return updatedState;
     }
 
     const files: FileMetadata[] = intent.targets.map(f => ({
       path: f.path!
     }));
 
-    const questionMsg = question ? question.description : intent.task;
-
     return {
       userIntent: { ...intent },
-      messages: [...state.messages, new ChatMessage(questionMsg, "assistant")],
+      messages: [...state.messages, new ChatMessage(intent.task, "assistant")],
       files,
-      greeting,
+      greeting: "",
       projectDetails: projectDetails?.description,
       scannedFiles
     };
   };
 
-  private async *generateGreeting(question: string): AsyncGenerator<GreetingResult> {
-    const stream = await this.chatModel.stream(`You are a helpful AI coding assistant.
-Your role is to provide a brief, natural acknowledgment of the user's coding request.
-Keep the response under 20 words and focus on acknowledging their specific request type.
-Mention you'll analyze their request but don't elaborate on next steps.
-
-Consider the ENTIRE conversation for context, but focus on the LAST MESSAGE to determine if the user:
-1. Rejected the previous suggestion
-2. Wants to try a different approach
-3. Expressed dissatisfaction
-4. Indicated the solution isn't what they need
-
-Response Rules:
-- Keep responses under 20 words
-- Be direct and natural
-- Acknowledge their specific feedback
-- Don't elaborate on next steps
-
-Rejection Indicators in Last Message:
-- Direct negatives: "no", "nope", "not right", "that's wrong"
-- Redirections: "instead", "rather", "different approach"
-- Dissatisfaction: "not what I want", "this isn't working"
-- Partial rejection: "yes, but...", "almost but not quite"
-- Confusion: "I don't understand", "that's not what I meant"
-
-If the last message contains ANY rejection indicators:
-1. Acknowledge their feedback clearly and ask how to proceed
-2. End response with "~1~" on a new line
-3. Do not include "~1~" anywhere else
-
-Example Conversation 1:
-User: Can you help with API authentication?
-Assistant: I'll help implement secure API authentication.
-User: No, I meant OAuth specifically
-Response: I understand you want OAuth instead. How would you like to implement it?
-~1~
-
-Example Conversation 2:
-User: Can you refactor this code?
-Assistant: I'll help make this code more maintainable.
-User: That's not what I had in mind
-Response: Let me understand your preferred approach to this refactoring. How should I proceed?
-~1~
-
-Previous conversation and latest message:
-${question}`);
-
-    let buffer = '';
-    const STOP_SIGNAL = '~1~';
-
-    for await (const chunk of stream) {
-      const content = chunk.content.toString();
-      buffer += content;
-
-      // Check if we have a stop signal in the buffer
-      if (buffer.includes(STOP_SIGNAL)) {
-        // Clean and yield the content before the stop signal
-        const cleanContent = buffer.split(STOP_SIGNAL)[0].trim();
-        if (cleanContent) {
-          yield {
-            content: cleanContent,
-            stopped: true
-          };
-        }
-
-        // Yield the follow-up question
-        yield {
-          content: '\nWhat would you like me to do differently?',
-          stopped: true
-        };
-        return;
-      }
-
-      // Stream normal content
-      if (content.trim()) {
-        yield {
-          content,
-          stopped: false
-        };
-      }
-    }
-
-    // Handle any remaining buffer without stop signal
-    if (buffer.trim()) {
-      yield {
-        content: buffer,
-        stopped: false
-      };
-    }
-  }
-
-  private createAnalyzePrompt(question: string, fileTargets: string, files?: FileMetadata[], contextFiles?: FileMetadata[], projectDetails?: string,) {
-    return `You are a senior software architect and technical lead.
-The provided user request is related to writing software.
-You will work autonomously when possible, without overburdening the user with questions.
-Analyze this request and identify what files or folders need to be found or created.
-
-Consider:
-1. The type of component being discussed (controller, model, utility, etc.)
-2. Common directory structures for this type of component
-3. Related files that might need modification
-4. Required dependencies or packages that need to be installed
-5. If the request is unclear and you are not able to infer direction or intent, ask a clarifying question
-6. Focus on the core objective and what files appear to be the most relevant, be selective!
-7. Include any files that manage dependencies, if new dependencies are included.
-8. Directories are for determining file paths, you will not be creating or modifying directories - so do not include them in your output.
-
-Question Guidelines:
-1. Work with autonomy where possible
-2. Use type "QUESTION" for clarifying questions
-
-Workspace path:
-${this.workspace}
-
-${projectDetails ? `Project details:\n${projectDetails}` : ''}
-
-Available workspace files and directories:
-${fileTargets}
-
-The following files should be considered wit higher priority
-
-User provided/recently used files:
-${files?.map(f => `Path: ${f.path}`).join('\n') ?? "None provided."}
-
-Context related files:
-${contextFiles?.map(f => f).join('\n') ?? "None provided."}
-
------
-
-STRICT OUTPUT FORMAT REQUIREMENTS:
-
-1. Your response MUST contain exactly two sections:
-    - Implementation Plan (wrapped in ===TASK_START=== and ===TASK_END===)
-    - Targets List (wrapped in ===TARGETS_START=== and ===TARGETS_END===)
-
-2. Implementation Plan section MUST follow this exact structure for initial requests:
-    ===TASK_START===
-    ### Implementation Plan
-    
-    [Exactly 2-3 sentences describing the approach]
-    
-    Key Changes:
-    - [Bullet points listing specific files/components]
-    - [Include file names and paths]
-    
-    **Would you like me to proceed with these changes?**
-    ===TASK_END===
-
-    For follow-up requests, use this structure:
-    ===TASK_START===
-    ### Updated Plan
-    
-    [One sentence describing what changed from previous plan]
-    
-    Modified Changes:
-    - [Only list changes that differ from previous plan]
-    
-    **Would you like me to proceed with these changes?**
-    ===TASK_END===
-
-3. Targets List section MUST follow this exact structure:
-    ===TARGETS_START===
-    ---TARGET---
-    Type: [MODIFY or CREATE only]
-    Description: [One line description]
-    Path: [Workspace relative file path]
-    ---END_TARGET---
-    [Repeat for each target]
-    ===TARGETS_END===
-
-VALIDATION RULES:
-- Each target MUST have exactly 3 fields: Type, Description, and Path
-- Type MUST be either MODIFY or CREATE
-- Paths MUST be full file paths
-- Description MUST be one line only
-- No extra sections or formatting allowed
-- No explanatory text outside the defined sections
-- Implementation Plan must be concise and actionable
-
-------
-
-User request: ${question}`;
-  }
-
   private async parseStreamingResponse(chunk: string): Promise<Partial<UserIntent>> {
     this.buffer += chunk;
     const updates: Partial<UserIntent> = {};
 
-    // Parse task section if complete
-    if (this.buffer.includes(this.DELIMITERS.TASK_START) && this.buffer.includes(this.DELIMITERS.TASK_END)) {
-      const taskContent = this.buffer.substring(
-        this.buffer.indexOf(this.DELIMITERS.TASK_START) + this.DELIMITERS.TASK_START.length,
-        this.buffer.indexOf(this.DELIMITERS.TASK_END)
-      ).trim();
+    // Parse task section if we have a start delimiter
+    if (this.buffer.includes(this.DELIMITERS.TASK_START)) {
+      const taskStartIndex = this.buffer.indexOf(this.DELIMITERS.TASK_START) + this.DELIMITERS.TASK_START.length;
+      let taskContent: string;
+
+      // Check if we've hit the targets section or task end
+      if (this.buffer.includes(this.DELIMITERS.TARGETS_START)) {
+        // Extract everything between task start and targets start
+        taskContent = this.buffer.substring(
+          taskStartIndex,
+          this.buffer.indexOf(this.DELIMITERS.TARGETS_START)
+        ).trim();
+      } else if (this.buffer.includes(this.DELIMITERS.TASK_END)) {
+        // Extract everything between task start and task end
+        taskContent = this.buffer.substring(
+          taskStartIndex,
+          this.buffer.indexOf(this.DELIMITERS.TASK_END)
+        ).trim();
+      } else {
+        // Still receiving task content
+        taskContent = this.buffer.substring(taskStartIndex).trim();
+      }
 
       if (taskContent) {
+        // Remove any trailing delimiters and rejection template
+        taskContent = taskContent
+          .replace(this.DELIMITERS.TASK_END, '')
+          .replace(/\[If user responds with rejection\][\s\S]*$/, '') // Remove rejection template
+          .trim();
+
         updates.task = taskContent;
-        // Remove processed task content
+        // Only dispatch if we have actual content
+        if (taskContent.length > 0) {
+          await dispatchCustomEvent("composer-greeting", { greeting: taskContent });
+        }
+      }
+
+      // Clean up buffer after processing
+      if (this.buffer.includes(this.DELIMITERS.TARGETS_START)) {
+        this.buffer = this.buffer.substring(this.buffer.indexOf(this.DELIMITERS.TARGETS_START));
+      } else if (this.buffer.includes(this.DELIMITERS.TASK_END)) {
         this.buffer = this.buffer.substring(this.buffer.indexOf(this.DELIMITERS.TASK_END) + this.DELIMITERS.TASK_END.length);
       }
     }
 
-    // Parse targets section if complete
+    // Rest of the targets parsing logic remains the same
     if (this.buffer.includes(this.DELIMITERS.TARGETS_START) && this.buffer.includes(this.DELIMITERS.TARGETS_END)) {
       const targetsContent = this.buffer.substring(
         this.buffer.indexOf(this.DELIMITERS.TARGETS_START) + this.DELIMITERS.TARGETS_START.length,
@@ -334,20 +154,26 @@ User request: ${question}`;
               .join('/');
           }
 
+          const type = typeMatch?.[1] as "CREATE" | "MODIFY" | "QUESTION";
+          if (!type || !["CREATE", "MODIFY", "QUESTION"].includes(type)) {
+            return null;
+          }
+
           return {
-            type: typeMatch?.[1] as FileTarget['type'],
-            description: descMatch?.[1] || '',
+            type,
+            description: descMatch?.[1] || "",
             path: filePath,
             folderPath: folderMatch?.[1]
-          };
+          } satisfies FileTarget;
         })
-        .filter(target => target.type && target.description);
+        .filter(target => target !== null);
 
       if (targets.length) {
         updates.targets = targets;
-        // Remove processed targets content
-        this.buffer = this.buffer.substring(this.buffer.indexOf(this.DELIMITERS.TARGETS_END) + this.DELIMITERS.TARGETS_END.length);
       }
+
+      // Remove processed targets content
+      this.buffer = this.buffer.substring(this.buffer.indexOf(this.DELIMITERS.TARGETS_END) + this.DELIMITERS.TARGETS_END.length);
     }
 
     return updates;
@@ -355,43 +181,108 @@ User request: ${question}`;
 
   private async analyzeRequest(question: string, files?: FileMetadata[], image?: ComposerImage, projectDetails?: string): Promise<[UserIntent, DirectoryContent[]]> {
     const allContents = await scanDirectory(this.workspace, this.INITIAL_SCAN_DEPTH);
-    const relatedDocs = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(question, this.codeGraph, this.vectorStore, this.workspace, 10);
-
-    const relatedCodeFiles = relatedDocs.size > 0
-      ? Array.from(relatedDocs.keys())
-      : [];
+    const contextFiles = await this.vectorQuery.retrieveDocumentsWithRelatedCodeFiles(question, this.codeGraph, this.vectorStore, this.workspace, 10);
 
     const fileTargets = allContents
       .slice(0, 1200)
       .map(c => `Name: ${c.name}\nType: ${c.type}\nPath: ${c.path}`)
       .join('\n\n');
 
-    const prompt = this.createAnalyzePrompt(question, fileTargets, files, relatedCodeFiles.map(f => ({
-      path: path.relative(this.workspace, f)
-    } satisfies FileMetadata)), projectDetails);
+    const prompt = `You are a senior full-stack software architect and technical lead.
+  The provided user request is related to writing software.
+  Your role is to analyze requests and provide clear, actionable responses.
+  
+  Response Guidelines:
+  1. Start with a brief, natural acknowledgment (under 20 words)
+  2. If the user expressed rejection/dissatisfaction:
+      - Acknowledge the rejection
+      - Ask what specific aspects they'd like to change
+      - Do not include an implementation plan
+  3. For non-rejection scenarios:
+      - Provide a clear implementation plan
+      - Work autonomously when possible
+      - Include specific file paths and changes
+  4. Ask clarifying questions only when absolutely necessary
+  
+  Technical Analysis Considerations:
+  1. Component type (controller, model, utility, etc.)
+  2. Common directory structures
+  3. Related files needing modification
+  4. Required dependencies
+  5. Core objectives and most relevant files
+  6. Dependency management files if needed
+  
+  Workspace path:
+  ${this.workspace}
+  
+  ${projectDetails ? `Project details:\n${projectDetails}` : ''}
+  
+  Available workspace files and directories:
+  ${fileTargets}
+  
+  -----
+  
+  Treat the following files with higher priority:
+  ${[...Array.from(contextFiles.keys()), ...files ?? []].map(file => {
+      const f = typeof file === 'object' && file !== null && 'path' in file ?
+        path.relative(this.workspace, (file as FileMetadata).path) : path.relative(this.workspace, file);
+
+      return `Path: ${path.relative(this.workspace, f)}`
+    }).join('\n') ?? "None provided."}
+  
+  -----
+  
+  STRICT OUTPUT FORMAT:
+  ===TASK_START===
+  [Brief acknowledgment of request]
+  
+  [For rejection scenarios only - ask how you should proceed]
+  
+  [For non-rejection scenarios only]
+  ### Implementation Plan
+  
+  [2-3 sentences describing approach]
+  
+  Key Changes:
+  - [Bullet points listing specific files/components]
+  - [Include file names and paths]
+  
+  **Would you like me to proceed with these changes?**
+  ===TASK_END===
+  
+  ===TARGETS_START===
+  [Internal targets list - not shown to user]
+  ---TARGET---
+  Type: [MODIFY or CREATE only]
+  Description: [One line description]
+  Path: [Workspace relative file path]
+  ---END_TARGET---
+  ===TARGETS_END===
+    
+  Previous conversation and latest message:
+  ${question}`;
 
     let result: UserIntent = {
       task: '',
       targets: []
     };
 
-    // Try with image first if provided, then fallback to text-only
     await this.streamResponse(prompt, result, image).catch(async error => {
       if (error instanceof Error && error.message.includes('does not support image input')) {
-        // Retry without image
         await this.streamResponse(prompt, result);
       } else {
-        throw error; // Re-throw non-image related errors
+        throw error;
       }
     });
 
-    if (!result.task || !result.targets.length) {
-      result.task = '### Implementation Plan\nUnable to determine implementation plan from request.\n\n**Would you like to try again with more details?**';
-      result.targets = [{
-        type: 'QUESTION',
-        description: 'Could you provide more details about what you\'d like to accomplish?'
-      }];
-    }
+    // if (!result.task || !result.targets.length) {
+    //   result.task = '### Implementation Plan\nI need more details about what you\'d like to accomplish. Could you elaborate?\n\n**How would you like to proceed?**';
+    //   result.targets = [{
+    //     type: 'QUESTION',
+    //     description: 'Could you provide more specific details about your request?'
+    //   }];
+    // }
+
     return [result, allContents];
   }
 
