@@ -48,6 +48,20 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     const mostRecentMessage = values.messages ? values.messages[values.messages!.length - 1] : undefined;
 
     switch (node) {
+      case "composer-replace":
+        setComposerMessages((currentMessages) => {
+          const lastMessage = currentMessages[currentMessages.length - 1];
+          const messagesWithoutLast = currentMessages.slice(0, -1);
+
+          return [
+            ...messagesWithoutLast,
+            {
+              ...lastMessage,
+              files: values.files,
+            }
+          ];
+        });
+        break;
       case "composer-error":
         setComposerMessages((currentMessages) => {
           return [

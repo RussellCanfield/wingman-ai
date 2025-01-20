@@ -135,6 +135,7 @@ export default function Compose() {
 						dependencies={activeMessage?.dependencies}
 						greeting={activeMessage?.greeting}
 						loading={true}
+						isCurrent={true}
 					/>
 				)}
 				{canValidate && <Validation />}

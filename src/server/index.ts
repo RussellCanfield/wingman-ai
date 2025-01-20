@@ -26,7 +26,7 @@ import {
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
 import { MemorySaver } from "@langchain/langgraph";
-import { cancelComposer, generateCommand } from "../composer/v2/composer";
+import { cancelComposer, ComposerGraph } from "../composer/v2/composer";
 import { AIProvider } from "../service/base";
 import {
 	EmbeddingProviders,
@@ -40,6 +40,7 @@ import { loggingProvider } from "./loggingProvider";
 import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
 import { LSPFileEventHandler } from "./files/eventHandler";
+import { FileMetadata } from "@shared/types/v2/Message";
 
 const config = { configurable: { thread_id: "conversation-num-1" } };
 
@@ -86,6 +87,7 @@ export class LSPServer {
 	connection: ReturnType<typeof createConnection> | undefined;
 	queue: DocumentQueue | undefined;
 	indexer: Indexer | undefined;
+	composer: ComposerGraph | undefined;
 	projectDetails: ProjectDetailsHandler | undefined;
 	fileEventHandler: LSPFileEventHandler | undefined;
 	// Create a simple text document manager.
@@ -125,6 +127,16 @@ export class LSPServer {
 			this.vectorStore!,
 			indexerSettings.indexFilter
 		);
+
+		this.composer = new ComposerGraph(
+			this.workspaceFolders[0],
+			modelProvider.getModel(),
+			modelProvider.getRerankModel(),
+			this.codeGraph!,
+			this.vectorStore!,
+			config,
+			memory
+		)
 
 		await this.codeParser.initialize();
 
@@ -390,15 +402,10 @@ export class LSPServer {
 			"wingman/compose",
 
 			async ({ request }: { request: ComposerRequest }) => {
-				const generator = generateCommand(
-					this.workspaceFolders[0],
-					request,
-					modelProvider.getModel(),
-					modelProvider.getRerankModel(),
-					this.codeGraph!,
-					this.vectorStore!,
-					config,
-					memory
+				if (!this.composer) return;
+
+				const generator = this.composer.execute(
+					request
 				);
 
 				for await (const { node, values } of generator) {
@@ -410,6 +417,14 @@ export class LSPServer {
 				}
 			}
 		);
+
+		this.connection?.onRequest("wingman/acceptComposerFile", async (file: FileMetadata) => {
+			return this.composer?.acceptFile(file);
+		});
+
+		this.connection?.onRequest("wingman/rejectComposerFile", async (file: FileMetadata) => {
+			return this.composer?.rejectFile(file);
+		});
 
 		this.connection?.onRequest("wingman/getEmbeddings", async (request) => {
 			try {

@@ -12,11 +12,12 @@ import { WorkspaceNavigator } from "./tools/workspace-navigator";
 import { UserIntent } from "./types/tools";
 import { FileMetadata } from "@shared/types/v2/Message";
 import { CodeWriter } from "./tools/code-writer";
-import path from "node:path";
+import path, { join } from "node:path";
 import { getTextDocumentFromPath } from "../../server/files/utils";
 import { DirectoryContent } from "../utils";
 import { DependencyManager } from "./tools/dependency-manager";
 import { Dependencies } from "@shared/types/v2/Composer";
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 
 export interface Thread {
     configurable: {
@@ -30,23 +31,135 @@ export function cancelComposer() {
     controller.abort();
 }
 
-export async function* generateCommand(
-    workspace: string,
-    request: ComposerRequest,
-    model: BaseChatModel,
-    rerankModel: BaseChatModel,
-    codeGraph: CodeGraph,
-    store: Store,
-    config?: RunnableConfig,
-    checkpointer?: BaseCheckpointSaver
-) {
-    controller = new AbortController();
+export class ComposerGraph {
+    private workflow: StateGraph<PlanExecuteState>;
 
-    const workspaceNavigator = new WorkspaceNavigator(model, workspace, codeGraph, store);
-    const codeWriter = new CodeWriter(model, rerankModel, workspace);
-    const dependencyManager = new DependencyManager(model, rerankModel, workspace);
+    constructor(private readonly workspace: string,
+        private readonly model: BaseChatModel,
+        private readonly rerankModel: BaseChatModel,
+        private readonly codeGraph: CodeGraph,
+        private readonly store: Store,
+        private readonly config?: RunnableConfig,
+        private readonly checkpointer?: BaseCheckpointSaver) {
 
-    const humanFeedback = async (state: PlanExecuteState) => {
+        const workspaceNavigator = new WorkspaceNavigator(this.model, this.workspace, this.codeGraph, this.store);
+        const codeWriter = new CodeWriter(this.model, this.rerankModel, this.workspace);
+        const dependencyManager = new DependencyManager(this.model, this.rerankModel, this.workspace);
+
+        const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
+            messages: {
+                value: (_x: ChatMessage[], y: ChatMessage[]) => y,
+                default: undefined
+            },
+            userIntent: {
+                value: (x?: UserIntent, y?: UserIntent) => y ?? x,
+                default: () => undefined,
+            },
+            files: {
+                value: (x?: FileMetadata[], y?: FileMetadata[]) => y ?? x,
+                default: () => undefined,
+            },
+            scannedFiles: {
+                value: (x?: DirectoryContent[], y?: DirectoryContent[]) => y ?? x,
+                default: () => undefined,
+            },
+            error: {
+                value: (x?: string, y?: string) => y ?? x,
+                default: () => undefined,
+            },
+            projectDetails: {
+                value: (x?: string, y?: string) => y ?? x,
+                default: () => undefined,
+            },
+            dependencies: {
+                value: (x?: Dependencies, y?: Dependencies) => y ?? x,
+                default: () => undefined,
+            },
+            image: {
+                value: (
+                    x?: ComposerRequest["image"],
+                    y?: ComposerRequest["image"]
+                ) => y ?? x,
+            },
+            greeting: {
+                value: (_x?: string, y?: string) => y,
+                default: () => undefined
+            }
+        };
+
+        //@ts-expect-error
+        this.workflow = new StateGraph({
+            channels: planExecuteState,
+        })
+            .addNode("find", workspaceNavigator.navigateWorkspace, {
+                ends: ["human-feedback"]
+            })
+            .addNode("human-feedback", this.humanFeedback, {
+                ends: ["find", "code-writer"]
+            })
+            .addNode("code-writer", codeWriter.codeWriterStep, {
+                ends: ["dependency-manager"],
+            })
+            .addNode("dependency-manager", dependencyManager.generateManualSteps, {
+                ends: [END]
+            })
+            .addEdge(START, "find")
+            .addEdge("find", "human-feedback")
+            .addEdge("code-writer", "dependency-manager");
+    }
+
+    rejectFile = async (file: FileMetadata) => {
+        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const state = await graph.getState({ ...this.config });
+
+        const relativePath = path.relative(this.workspace, file.path);
+
+        const graphFiles = (state.values as PlanExecuteState).files;
+        const matchedFile = graphFiles?.find(f => f.path === relativePath);
+
+        if (!matchedFile) return;
+
+        const txtDoc = await getTextDocumentFromPath(join(this.workspace, matchedFile.path));
+        matchedFile.code = txtDoc?.getText();
+
+        matchedFile.rejected = true;
+        matchedFile.accepted = false;
+
+        graph.updateState({ ...this.config }, {
+            files: graphFiles
+        })
+
+        return {
+            ...state.values,
+            files: graphFiles
+        }
+    }
+
+    acceptFile = async (file: FileMetadata) => {
+        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const state = await graph.getState({ ...this.config });
+
+        const relativePath = path.relative(this.workspace, file.path);
+
+        const graphFiles = (state.values as PlanExecuteState).files;
+        const matchedFile = graphFiles?.find(f => f.path === relativePath);
+
+        if (!matchedFile) return;
+
+        matchedFile.accepted = true;
+        matchedFile.rejected = false;
+
+        graph.updateState({ ...this.config }, {
+            files: graphFiles
+        });
+
+        return {
+            ...state.values,
+            files: graphFiles
+        };
+    }
+
+    humanFeedback = async (state: PlanExecuteState) => {
         const lastMessage = state.messages[state.messages.length - 1];
         const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
         const userMessage = interruptState.messages![0].content.toString();
@@ -61,7 +174,7 @@ export async function* generateCommand(
             })
         }
 
-        const isPositive = await rerankModel.invoke(
+        const isPositive = await this.rerankModel.invoke(
             `Analyze this response and determine if it's a positive confirmation or any other type of response.
 
 Rules:
@@ -115,176 +228,120 @@ Answer (yes/no):`
         });
     };
 
-    const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
-        messages: {
-            value: (_x: ChatMessage[], y: ChatMessage[]) => y,
-            default: undefined
-        },
-        userIntent: {
-            value: (x?: UserIntent, y?: UserIntent) => y ?? x,
-            default: () => undefined,
-        },
-        files: {
-            value: (x?: FileMetadata[], y?: FileMetadata[]) => y ?? x,
-            default: () => undefined,
-        },
-        scannedFiles: {
-            value: (x?: DirectoryContent[], y?: DirectoryContent[]) => y ?? x,
-            default: () => undefined,
-        },
-        error: {
-            value: (x?: string, y?: string) => y ?? x,
-            default: () => undefined,
-        },
-        projectDetails: {
-            value: (x?: string, y?: string) => y ?? x,
-            default: () => undefined,
-        },
-        dependencies: {
-            value: (x?: Dependencies, y?: Dependencies) => y ?? x,
-            default: () => undefined,
-        },
-        image: {
-            value: (
-                x?: ComposerRequest["image"],
-                y?: ComposerRequest["image"]
-            ) => y ?? x,
-        },
-        greeting: {
-            value: (_x?: string, y?: string) => y,
-            default: () => undefined
+    async *execute(
+        request: ComposerRequest,
+    ) {
+        controller = new AbortController();
+        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+
+        let inputs: Partial<PlanExecuteState> = {};
+        inputs.messages = [new ChatMessage(request.input, "user")];
+
+        if (request.contextFiles) {
+            const codeFiles: FileMetadata[] = [];
+            const existingPaths = new Set(inputs.files?.map(f => f.path) ?? []);
+
+            for (const file of request.contextFiles) {
+                try {
+                    const relativePath = path.relative(this.workspace, file);
+                    // Skip if we already have this file in inputs
+                    if (existingPaths.has(relativePath)) {
+                        continue;
+                    }
+
+                    const txtDoc = await getTextDocumentFromPath(path.join(this.workspace, relativePath));
+                    codeFiles.push({
+                        path: relativePath,
+                        code: txtDoc?.getText(),
+                    });
+                } catch { }
+            }
+
+            if (!inputs.files || !Array.isArray(inputs.files)) {
+                inputs.files = [];
+            }
+
+            inputs.files = [...(inputs.files ?? []), ...codeFiles];
         }
-    };
 
-    let workflow = new StateGraph({
-        channels: planExecuteState,
-    })
-        .addNode("find", workspaceNavigator.navigateWorkspace, {
-            ends: ["human-feedback"]
-        })
-        .addNode("human-feedback", humanFeedback, {
-            ends: ["find", "code-writer"]
-        })
-        .addNode("code-writer", codeWriter.codeWriterStep, {
-            ends: ["dependency-manager"],
-        })
-        .addNode("dependency-manager", dependencyManager.generateManualSteps, {
-            ends: [END]
-        })
-        .addEdge(START, "find")
-        .addEdge("find", "human-feedback")
-        .addEdge("code-writer", "dependency-manager");
+        if (request.image) {
+            inputs.image = request.image;
+        }
 
-    const checkpoint = await checkpointer?.get(config!);
+        const state = await graph.getState({ ...this.config });
 
-    let inputs: Partial<PlanExecuteState> = {};
-    inputs.messages = [new ChatMessage(request.input, "user")];
-
-    if (request.contextFiles) {
-        const codeFiles: FileMetadata[] = [];
-        const existingPaths = new Set(inputs.files?.map(f => f.path) ?? []);
-
-        for (const file of request.contextFiles) {
-            try {
-                const relativePath = path.relative(workspace, file);
-                // Skip if we already have this file in inputs
-                if (existingPaths.has(relativePath)) {
-                    continue;
+        try {
+            const graphInput = state?.tasks.length > 0 ? new Command({
+                resume: {
+                    messages: inputs.messages
                 }
+            }) : inputs;
 
-                const txtDoc = await getTextDocumentFromPath(path.join(workspace, relativePath));
-                codeFiles.push({
-                    path: relativePath,
-                    code: txtDoc?.getText(),
-                });
-            } catch { }
-        }
+            const streamingGraph = await graph.streamEvents(graphInput, {
+                streamMode: ["custom"],
+                signal: controller.signal,
+                version: "v2",
+                ...this.config
+            });
 
-        if (!inputs.files || !Array.isArray(inputs.files)) {
-            inputs.files = [];
-        }
+            for await (const chunk of streamingGraph) {
+                if (!chunk) continue;
 
-        inputs.files = [...(inputs.files ?? []), ...codeFiles];
-    }
-
-    if (request.image) {
-        inputs.image = request.image;
-    }
-
-    const graph = workflow.compile({ checkpointer });
-    const state = await graph.getState({ ...config });
-
-    try {
-        const graphInput = state?.tasks.length > 0 ? new Command({
-            resume: {
-                messages: inputs.messages
+                const { event, name, data } = chunk;
+                if (event === "on_custom_event") {
+                    yield { node: name, values: data };
+                }
             }
-        }) : inputs;
 
-        const streamingGraph = await graph.streamEvents(graphInput, {
-            streamMode: ["custom"],
-            signal: controller.signal,
-            version: "v2",
-            ...config
-        });
+            const graphState = await graph.getState({ ...this.config });
 
-        for await (const chunk of streamingGraph) {
-            if (!chunk) continue;
-
-            const { event, name, data } = chunk;
-            if (event === "on_custom_event") {
-                yield { node: name, values: data };
+            if (graphState.tasks?.length > 0 && graphState.tasks[0].name === "human-feedback" &&
+                graphState.tasks[0].interrupts?.length > 0
+            ) {
+                yield {
+                    node: "assistant-question", values: {
+                        messages: (graphState.values as Partial<PlanExecuteState>).messages,
+                        greeting: (graphState.values as Partial<PlanExecuteState>).greeting
+                    } satisfies Partial<PlanExecuteState>
+                }
             }
-        }
-
-        const graphState = await graph.getState({ ...config });
-
-        if (graphState.tasks?.length > 0 && graphState.tasks[0].name === "human-feedback" &&
-            graphState.tasks[0].interrupts?.length > 0
-        ) {
-            yield {
-                node: "assistant-question", values: {
-                    messages: (graphState.values as Partial<PlanExecuteState>).messages,
-                    greeting: (graphState.values as Partial<PlanExecuteState>).greeting
-                } satisfies Partial<PlanExecuteState>
+        } catch (e) {
+            if (e instanceof DOMException && e.name === "AbortError") {
+                yield {
+                    node: "composer-error",
+                    values: {
+                        error: "Operation was cancelled",
+                    },
+                };
+                return;
+            } else if (e instanceof NoFilesChangedError) {
+                yield {
+                    node: "composer-error",
+                    values: {
+                        error:
+                            "I was not able to generate any changes. Please try again with a different question or try explicitly referencing files.",
+                    },
+                };
+                return;
+            } else if (e instanceof NoFilesFoundError) {
+                yield {
+                    node: "composer-error",
+                    values: {
+                        error:
+                            "I was unable to find any indexed code files. Please reference files directly using '@filename', build the full index or make sure embeddings are enabled in settings.",
+                    },
+                };
+                return;
             }
-        }
-    } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") {
-            yield {
-                node: "composer-error",
-                values: {
-                    error: "Operation was cancelled",
-                },
-            };
-            return;
-        } else if (e instanceof NoFilesChangedError) {
+
+            console.error(e);
             yield {
                 node: "composer-error",
                 values: {
                     error:
-                        "I was not able to generate any changes. Please try again with a different question or try explicitly referencing files.",
+                        "An error occurred, please try again. If this continues use the clear chat button to start over.",
                 },
             };
-            return;
-        } else if (e instanceof NoFilesFoundError) {
-            yield {
-                node: "composer-error",
-                values: {
-                    error:
-                        "I was unable to find any indexed code files. Please reference files directly using '@filename', build the full index or make sure embeddings are enabled in settings.",
-                },
-            };
-            return;
         }
-
-        console.error(e);
-        yield {
-            node: "composer-error",
-            values: {
-                error:
-                    "An error occurred, please try again. If this continues use the clear chat button to start over.",
-            },
-        };
     }
 }

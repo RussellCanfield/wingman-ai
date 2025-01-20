@@ -89,13 +89,15 @@ export default function Indexer() {
 								value={indexFilter || ""}
 								onChange={(e) => setIndexFilter(e.target.value)}
 							/>
-							<label>Exclusion Filter: (uses .gitignore by default)</label>
-							<input
-								type="text"
-								className="w-full p-2 border bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-								value={exclusionFilter || ""}
-								onChange={(e) => setExclusionFilter(e.target.value)}
-							/>
+							<div className="text-sm text-[var(--vscode-descriptionForeground)]">
+								<p>Example patterns:</p>
+								<ul className="list-disc pl-5 space-y-1">
+									<li>**/*.{'{ts,tsx,js,jsx}'} - All TypeScript and JavaScript files</li>
+									<li>src/**/*.ts - All TypeScript files in src directory</li>
+									<li>**/*.{'{py,go}'} - All Python and Go files</li>
+									<li>{'{src,lib}/**/*.ts'} - TypeScript files in src or lib directories</li>
+								</ul>
+							</div>
 							{!indexStats.processing && (
 								<button
 									className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"

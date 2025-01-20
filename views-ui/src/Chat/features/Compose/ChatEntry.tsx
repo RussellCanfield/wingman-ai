@@ -1,4 +1,4 @@
-import { PropsWithChildren, memo } from "react";
+import { PropsWithChildren, memo, useMemo } from "react";
 import { FaUser } from "react-icons/fa";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -8,13 +8,15 @@ import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { FileMetadata } from "@shared/types/Message";
+import { FileMetadata } from "@shared/types/v2/Message";
 import { vscode } from "../../utilities/vscode";
 import { ComposerMessage, DiffViewCommand } from "@shared/types/v2/Composer";
 import { MdOutlineDifference } from "react-icons/md";
 import { LuFileCheck } from "react-icons/lu";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
+import { HiOutlineXMark } from "react-icons/hi2";
+import { GrCheckmark } from "react-icons/gr";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -89,13 +91,15 @@ const renderMarkdown = (
 
 const ChatArtifact = ({
 	file,
+	loading
 }: {
-	file: FileMetadata;
+	file: FileMetadata,
+	loading: boolean
 }) => {
 	const mergeIntoFile = () => {
 		if (file) {
 			vscode.postMessage({
-				command: "mergeIntoFile",
+				command: "accept-file",
 				value: file,
 			});
 		}
@@ -114,18 +118,21 @@ const ChatArtifact = ({
 		}
 	};
 
-	const truncatePath = (path: string, maxLength: number = 50) => {
-		if (path.length <= maxLength) return path;
-		return "..." + path.slice(-maxLength);
-	};
+	const truncatedPath = useMemo(() => {
+		if (file.path.length <= 50) return file.path;
+		return "..." + file.path.slice(-50);
+	}, [file]);
 
 	const diffParts = file.diff?.split(',');
 
 	return (
 		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30">
 			<div className="bg-stone-800/50 text-white flex items-center border-b border-stone-700/50">
-				<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink">
-					{truncatePath(file.path)}
+				<h4
+					className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer hover:underline transition-all"
+					onClick={showDiffview}
+				>
+					{truncatedPath}
 				</h4>
 				{!file.code && (
 					<div className="p-4 flex justify-center">
@@ -145,7 +152,7 @@ const ChatArtifact = ({
 						</span>
 					</div>
 				)}
-				{file?.description && (
+				{!loading && file?.description && !file.accepted && !file.rejected && (
 					<div className="flex flex-nowrap ml-auto">
 						<div className="flex items-center text-white rounded z-10 hover:bg-stone-700 transition-colors">
 							<button
@@ -169,6 +176,16 @@ const ChatArtifact = ({
 						</div>
 					</div>
 				)}
+				{(file.rejected || file.accepted) && (
+					<div className="flex flex-nowrap ml-auto pr-4">
+						{file.rejected && (<span className="flex items-center gap-1 text-red-400">
+							<span><HiOutlineXMark size={18} /></span>
+						</span>)}
+						{file.accepted && (<span className="flex items-center gap-1 text-green-400">
+							<span><GrCheckmark size={16} /></span>
+						</span>)}
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -182,9 +199,41 @@ const ChatEntry = ({
 	greeting,
 	loading,
 	image,
-}: PropsWithChildren<ComposerMessage>) => {
+	isCurrent
+}: PropsWithChildren<ComposerMessage & { isCurrent?: boolean }>) => {
 	const { isLightTheme } = useSettingsContext();
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
+
+	const mergeIntoFile = (file: FileMetadata) => {
+		if (file) {
+			vscode.postMessage({
+				command: "accept-file",
+				value: file,
+			});
+		}
+	};
+
+	const rejectFile = (file: FileMetadata) => {
+		if (!file) return;
+
+		vscode.postMessage({
+			command: "reject-file",
+			value: file
+		})
+	}
+
+	const showDiffview = (file: FileMetadata) => {
+		if (file) {
+			vscode.postMessage({
+				command: "diff-view",
+				value: {
+					file: file.path,
+					diff: file.code,
+					language: file.language
+				} as DiffViewCommand,
+			});
+		}
+	};
 
 	const sendTerminalCommand = (payload: string) => {
 		if (payload) {
@@ -199,6 +248,8 @@ const ChatEntry = ({
 
 	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
 		} rounded-lg overflow-hidden w-full` : "";
+
+	console.log(files);
 
 	return (
 		<li
@@ -238,6 +289,7 @@ const ChatEntry = ({
 										)}
 										<ChatArtifact
 											file={file}
+											loading={loading ?? false}
 										/>
 									</div>
 								))}
@@ -296,6 +348,60 @@ const ChatEntry = ({
 					</div>
 				</div>
 			</div>
+			{isCurrent && !loading && files && (<div className="border-t border-stone-700/50 mt-4 pt-4">
+				<div className="flex flex-col items-center justify-between text-sm text-stone-400 pl-[48px] pr-[16px]">
+					{files.map(f => {
+						const truncatedPath = useMemo(() => {
+							if (f.path.length <= 50) return f.path;
+							return "..." + f.path.slice(-50);
+						}, [f]);
+
+						const diffParts = f.diff?.split(',') ?? [0, 0];
+
+						return (
+							<div className="flex items-center justify-between gap-4 w-full max-h-24 overflow-y-scroll">
+								<div className="flex">
+									<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer" onClick={() => showDiffview(f)}>
+										{truncatedPath}
+									</h4>
+									<div className="flex items-center gap-2 px-3 text-sm flex-nowrap">
+										<span className="flex items-center gap-1 text-green-400">
+											<span>{diffParts[0]}</span>
+										</span>
+										<span className="flex items-center gap-1 text-red-400">
+											<span>{diffParts[1]}</span>
+										</span>
+									</div>
+								</div>
+								<div className="flex gap-4 items-center">
+									{!f.accepted && !f.rejected && (<HiOutlineXMark size={18} onClick={() => rejectFile(f)} />)}
+									{f.rejected && (<span className=" text-red-400">
+										<span><HiOutlineXMark size={18} /></span>
+									</span>)}
+									{f.accepted && (<span className=" text-green-400">
+										<span><GrCheckmark size={16} /></span>
+									</span>)}
+									{!f.accepted && !f.rejected && (<GrCheckmark size={16} onClick={() => mergeIntoFile(f)} />)}
+								</div>
+							</div>
+						)
+					})}
+					<div className="flex justify-end gap-4 w-full mt-4 border-t border-stone-700/50 pt-4">
+						<button
+							onClick={() => files.forEach(f => rejectFile(f))}
+							className="px-3 py-2 text-sm rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors"
+						>
+							Reject All
+						</button>
+						<button
+							onClick={() => files.forEach(f => mergeIntoFile(f))}
+							className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
+						>
+							Accept All
+						</button>
+					</div>
+				</div>
+			</div>)}
 		</li>
 	);
 };

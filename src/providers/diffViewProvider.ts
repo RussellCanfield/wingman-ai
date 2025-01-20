@@ -9,13 +9,12 @@ import {
 	AppMessage,
 	CodeReview,
 	CodeReviewCommand,
-	CodeReviewComment,
 	FileDetails,
 	FileMetadata,
-	FileReviewDetails,
 } from "@shared/types/Message";
 import { AIProvider } from "../service/base";
 import { CodeReviewer } from "../commands/review/codeReviewer";
+import { LSPClient } from "../client";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
@@ -24,7 +23,8 @@ export class DiffViewProvider {
 	constructor(
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _aiProvider: AIProvider,
-		private readonly _workspace: string
+		private readonly _workspace: string,
+		private readonly _lspClient: LSPClient
 	) {
 		this.codeReviewer = new CodeReviewer(this._workspace, this._aiProvider);
 	}
@@ -83,26 +83,12 @@ export class DiffViewProvider {
 							value: fileReview,
 						});
 						break;
-					case "accept-file-diff":
-						const acceptedDiff = value as {
-							comment: CodeReviewComment;
-							fileDiff: FileReviewDetails;
-						};
-						await this.codeReviewer.mergeCodeIntoFile(
-							acceptedDiff.fileDiff,
-							acceptedDiff.comment
-						);
-
-						currentPanel.webview.postMessage({
-							command: "updated-file",
-							value: acceptedDiff.fileDiff,
-						});
 				}
 			}
 		);
 	}
 
-	async createDiffView({ file, diff }: DiffViewCommand) {
+	async createDiffView({ file, diff, onAccept, onReject }: DiffViewCommand & { onAccept: (file: FileMetadata) => void, onReject: (file: FileMetadata) => void }) {
 		if (this.panels.has(file)) {
 			const existingPanel = this.panels.get(file);
 			existingPanel?.reveal(vscode.ViewColumn.One);
@@ -159,11 +145,19 @@ export class DiffViewProvider {
 						});
 						break;
 					case "accept-file-changes":
-						this.acceptFileChanges(
+						await this.acceptFileChanges(
 							currentPanel,
 							file,
 							value as FileMetadata
 						);
+						onAccept(value as FileMetadata);
+						break;
+					case "reject-file-changes":
+						onReject(value as FileMetadata);
+						if (currentPanel) {
+							currentPanel.dispose();
+							this.panels.delete(file);
+						}
 						break;
 				}
 			}

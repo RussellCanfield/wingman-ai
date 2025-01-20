@@ -26,6 +26,8 @@ import {
 	telemetry,
 } from "../providers/telemetryProvider";
 import { Workspace } from "../service/workspace";
+import { FileMetadata } from "@shared/types/v2/Message";
+import { PlanExecuteState } from "@shared/types/v2/Composer";
 
 let client: LanguageClient;
 
@@ -157,7 +159,7 @@ export class LSPClient {
 	};
 
 	setIndexerSettings = async (indexSettings: IndexerSettings) => {
-		await client.sendRequest("wingman/indexerSettings", indexSettings);
+		return client.sendRequest("wingman/indexerSettings", indexSettings);
 	};
 
 	compose = async (request: ComposerRequest) => {
@@ -170,14 +172,22 @@ export class LSPClient {
 						?.codeModel || "Unknown",
 			});
 		} catch { }
-		await client.sendRequest<ComposerResponse>("wingman/compose", {
+		return client.sendRequest<ComposerResponse>("wingman/compose", {
 			request,
 		});
 	};
 
 	clearChatHistory = async () => {
-		await client.sendRequest("wingman/clearChatHistory");
+		return client.sendRequest("wingman/clearChatHistory");
 	};
+
+	acceptComposerFile = async (file: FileMetadata): Promise<PlanExecuteState> => {
+		return client.sendRequest("wingman/acceptComposerFile", file);
+	}
+
+	rejectComposerFile = async (file: FileMetadata): Promise<PlanExecuteState> => {
+		return client.sendRequest("wingman/rejectComposerFile", file);
+	}
 
 	buildFullIndex = async ({
 		indexFilter,

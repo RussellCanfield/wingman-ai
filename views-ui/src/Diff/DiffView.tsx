@@ -9,6 +9,7 @@ import { DiffViewCommand } from "@shared/types/Composer";
 import { FaCheckCircle } from "react-icons/fa";
 import { vscode } from "./utilities/vscode";
 import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
+import { FaXmark } from "react-icons/fa6";
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	return (
@@ -66,18 +67,38 @@ export default function DiffView({ diff }: DiffProps) {
 		});
 	};
 
+	const rejectDiff = () => {
+		vscode.postMessage({
+			command: "reject-file-changes",
+			value: {
+				path: diff?.file!,
+				code: diff?.diff,
+			} satisfies FileMetadata,
+		});
+	};
+
 	return (
 		<div className="fixed inset-0 bg-gray-900 flex flex-col">
 			<div className="bg-gray-800 p-4 flex justify-between items-center z-10">
 				<p className="text-white font-semibold truncate">{diff.file}</p>
-				<button
-					className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
-					title="Accept changes"
-					onClick={() => acceptDiff()}
-				>
-					<FaCheckCircle className="mr-2" />
-					<span>Accept</span>
-				</button>
+				<div className="flex gap-4">
+					<button
+						className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
+						title="Accept changes"
+						onClick={() => rejectDiff()}
+					>
+						<FaXmark className="mr-2" />
+						<span>Reject</span>
+					</button>
+					<button
+						className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
+						title="Accept changes"
+						onClick={() => acceptDiff()}
+					>
+						<FaCheckCircle className="mr-2" />
+						<span>Accept</span>
+					</button>
+				</div>
 			</div>
 			<div className="flex-grow overflow-y-auto">
 				<ReactDiffViewer

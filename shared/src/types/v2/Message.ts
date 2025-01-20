@@ -78,6 +78,8 @@ export interface FileMetadata {
 	diff?: string;
 	language?: string;
 	dependencies?: string[];
+	accepted?: boolean;
+	rejected?: boolean;
 }
 
 export interface CodeContextDetails {
