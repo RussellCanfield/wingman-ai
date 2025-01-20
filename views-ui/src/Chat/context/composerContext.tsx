@@ -128,7 +128,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
               ...currentMessages,
               {
                 from: mostRecentMessage?.kwargs.role,
-                message: mostRecentMessage?.kwargs.content,
+                message: mostRecentMessage?.kwargs.content ?? 'I have failed to generate an answer, please try again.',
               }
             ];
           });
