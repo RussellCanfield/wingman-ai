@@ -41,21 +41,34 @@ export class WorkspaceNavigator {
   navigateWorkspace = async (
     state: PlanExecuteState
   ) => {
-    const message = formatMessages(state.messages);
     const projectDetailsHandler = new ProjectDetailsHandler(this.workspace);
     const projectDetails = await projectDetailsHandler.retrieveProjectDetails();
 
-    const [intent, scannedFiles] = await this.analyzeRequest(message, state.files?.filter(f => f.path !== undefined), state.image, projectDetails?.description);
+    const generateIntent = async () => {
+      const message = formatMessages(state.messages);
 
-    if (!intent.targets?.length) {
-      return {
-        messages: [...state.messages, new ChatMessage(intent.task, "assistant")],
-      }
+      const [intent, scannedFiles] = await this.analyzeRequest(message, state.files?.filter(f => f.path !== undefined), state.image, projectDetails?.description);
+
+      const files: FileMetadata[] = intent.targets.map(f => ({
+        path: f.path!
+      }));
+
+      return { intent, files, scannedFiles };
     }
 
-    const files: FileMetadata[] = intent.targets.map(f => ({
-      path: f.path!
-    }));
+    let { intent, files, scannedFiles } = await generateIntent();
+
+    // Workaround - Retry once if no task is found
+    if (!intent?.task) {
+      ({ intent, files, scannedFiles } = await generateIntent());
+
+      // If still no task after retry, return empty state
+      if (!intent?.task) {
+        return {
+          messages: state.messages
+        } satisfies Partial<PlanExecuteState>;
+      }
+    }
 
     return {
       userIntent: { ...intent },
@@ -154,9 +167,9 @@ export class WorkspaceNavigator {
               .join('/');
           }
 
-          const type = typeMatch?.[1] as "CREATE" | "MODIFY" | "QUESTION";
-          if (!type || !["CREATE", "MODIFY", "QUESTION"].includes(type)) {
-            return null;
+          let type = typeMatch?.[1] as "CREATE" | "MODIFY";
+          if (!type || !["CREATE", "MODIFY"].includes(type)) {
+            type = 'CREATE';
           }
 
           return {
@@ -258,8 +271,12 @@ export class WorkspaceNavigator {
   Path: [Workspace relative file path]
   ---END_TARGET---
   ===TARGETS_END===
-    
-  Previous conversation and latest message:
+  
+  Use the following conversation with the user to determine your objective
+  Messages are sorted oldest to newest
+  Note - The most recent message may be the user acknowleding you
+
+  Conversation:
   ${question}`;
 
     let result: UserIntent = {

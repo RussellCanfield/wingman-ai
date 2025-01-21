@@ -11,7 +11,6 @@ import {
 import { FileMetadata } from "@shared/types/v2/Message";
 import { vscode } from "../../utilities/vscode";
 import { ComposerMessage, DiffViewCommand } from "@shared/types/v2/Composer";
-import { MdOutlineDifference } from "react-icons/md";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
 import { HiOutlineXMark } from "react-icons/hi2";
@@ -127,6 +126,17 @@ const ChatArtifact = ({
 		}
 	};
 
+	const openFile = () => {
+		if (file) {
+			vscode.postMessage({
+				command: "open-file",
+				value: {
+					path: file.path,
+				} as FileMetadata,
+			});
+		}
+	}
+
 	const truncatedPath = useMemo(() => {
 		if (file.path.length <= 50) return file.path;
 		return "..." + file.path.slice(-50);
@@ -139,11 +149,11 @@ const ChatArtifact = ({
 			<div className="bg-stone-800/50 text-white flex items-center border-b border-stone-700/50">
 				<h4
 					className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer hover:underline transition-all"
-					onClick={showDiffview}
+					onClick={openFile}
 				>
 					{truncatedPath}
 				</h4>
-				{!file.code && (
+				{!file.code && loading && (
 					<div className="p-4 flex justify-center">
 						<AiOutlineLoading3Quarters
 							className="animate-spin text-stone-400"
