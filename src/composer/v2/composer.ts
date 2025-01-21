@@ -108,6 +108,13 @@ export class ComposerGraph {
             .addEdge("code-writer", "dependency-manager");
     }
 
+    resetGraphState = async () => {
+        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        await graph.updateState({ ...this.config }, {
+            messages: []
+        } satisfies Partial<PlanExecuteState>);
+    }
+
     rejectFile = async (file: FileMetadata) => {
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
@@ -125,7 +132,7 @@ export class ComposerGraph {
         matchedFile.rejected = true;
         matchedFile.accepted = false;
 
-        graph.updateState({ ...this.config }, {
+        await graph.updateState({ ...this.config }, {
             files: graphFiles
         })
 
@@ -149,7 +156,7 @@ export class ComposerGraph {
         matchedFile.accepted = true;
         matchedFile.rejected = false;
 
-        graph.updateState({ ...this.config }, {
+        await graph.updateState({ ...this.config }, {
             files: graphFiles
         });
 

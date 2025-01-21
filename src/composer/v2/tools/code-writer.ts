@@ -157,6 +157,14 @@ class StreamParser {
 						dependencies: depsMatch?.[1]?.split(',').map(d => d.trim()) || []
 					};
 
+					if (depsMatch?.[1]) {
+						try {
+							fileUpdate.dependencies = JSON.parse(depsMatch?.[1]?.split(',').map(d => d.trim()) || '[]')
+						} catch (e) {
+							console.error('Unable to parse dependencies: ', e);
+						}
+					}
+
 					if (fileUpdate.code && !fileUpdate.diff) {
 						try {
 							const filePath = path.isAbsolute(fileUpdate.path)
@@ -192,7 +200,7 @@ Output Format:
 Path: [Full file path]
 Language: [Programming language]
 Description: [One line description of changes]
-Dependencies: [List of new dependencies if any, omit if none]
+Dependencies: Array of new dependencies if any, provide empty JSON array if none
 Code: 
 [Complete file code]
 ===FILE_END===
@@ -202,7 +210,7 @@ VALIDATION RULES:
 2. Path MUST be the full file path
 3. Language MUST be specified
 4. Description MUST be one line only
-5. Dependencies MUST list new dependencies or state "No new dependencies"
+5. Dependencies MUST list new dependencies or an empty JSON array
 6. Code MUST be complete and functional
 7. No explanatory text outside the defined sections
 8. No additional formatting or sections allowed
@@ -214,7 +222,7 @@ Core Principles:
 3. Ensure code correctness and reliability
 4. Maintain existing patterns and conventions
 5. Make minimal, focused changes
-6. Do not remove existing code unless it is required to complete your change, do not break things.
+6. Do not remove existing code unless it is required to complete your change, do not break things - THIS IS CRITICAL!
 
 File Handling:
 1. Process one file at a time
@@ -306,7 +314,8 @@ Remember:
 - Handle edge cases
 - Integrate seamlessly
 - Optimize for maintainability
-- Make minimal necessary changes`;
+- Make minimal necessary changes
+- Do not remove code that isn't related to your objective, do not break things or introduce bugs - THIS IS CRITICAL!`;
 
 const buildPrompt = ({
 	projectDetails,

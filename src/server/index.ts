@@ -387,7 +387,7 @@ export class LSPServer {
 		});
 
 		this.connection?.onRequest("wingman/clearChatHistory", () => {
-			memory = new MemorySaver();
+			this.composer?.resetGraphState();
 		});
 
 		this.connection?.onRequest("wingman/cancelComposer", async () => {

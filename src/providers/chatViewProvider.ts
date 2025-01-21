@@ -41,6 +41,7 @@ import { Workspace } from "../service/workspace";
 import { getGitignorePatterns } from "../server/files/utils";
 import { CodeReviewer } from "../commands/review/codeReviewer";
 import { ConfigViewProvider } from "./configViewProvider";
+import path from "node:path";
 
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
@@ -203,6 +204,9 @@ ${result.summary}`,
 
 					// TODO - save me from the insanity of this switch statement :D
 					switch (command) {
+						case "open-file":
+							await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(this._workspace.workspacePath, (value as FileMetadata).path)));
+							break;
 						case "reject-file":
 							webviewView.webview.postMessage({
 								command: "compose-response",
