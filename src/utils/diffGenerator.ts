@@ -5,6 +5,7 @@ import { promisify } from "util";
 import { getGitignorePatterns } from "../server/files/utils";
 import { glob } from "tinyglobby";
 import path from "node:path";
+import { GitCommandEngine, GitDiffOptions } from "./gitCommandEngine";
 
 interface DiffOptions {
 	includeStagedChanges?: boolean;
@@ -16,11 +17,9 @@ interface DiffOptions {
 
 const execAsync = promisify(exec);
 
-export class DiffGenerator {
-	private readonly cwd: string;
-
+export class DiffGenerator extends GitCommandEngine {
 	constructor(workingDirectory: string) {
-		this.cwd = workingDirectory;
+		super(workingDirectory);
 	}
 
 	/**
@@ -84,23 +83,28 @@ export class DiffGenerator {
 		return this.executeGitCommand("git rev-parse --abbrev-ref HEAD");
 	}
 
-	public async generateDiffWithLineNumbersAndMap(params: DiffOptions = {
+	async generateDiffWithLineNumbersAndMap(params: GitDiffOptions = {
 		includeStagedChanges: true,
 		includeUnstagedChanges: true,
 		includeUntrackedFiles: true,
 		includeCommittedChanges: false
-	}): Promise<
-		CodeReview["fileDiffMap"]
-	> {
-		const diffs = await this.getDiff(params);
+	}): Promise<CodeReview["fileDiffMap"]> {
+		try {
+			const diffs = await this.getDiff(params);
 
-		if (!diffs) {
-			vscode.window.showInformationMessage(
-				"No changes detected to review."
-			);
+			if (!diffs) {
+				vscode.window.showInformationMessage("No changes detected to review.");
+				return {};
+			}
+
+			return this.processDiff(diffs);
+		} catch (error) {
+			vscode.window.showErrorMessage(`Failed to generate diff: ${error}`);
 			return {};
 		}
+	}
 
+	private async processDiff(diffs: string): Promise<CodeReview["fileDiffMap"]> {
 		const diffLines = diffs.split("\n");
 		const excludePatterns = await getGitignorePatterns(this.cwd);
 
@@ -132,8 +136,7 @@ export class DiffGenerator {
 						diff: currentDiff.join("\n"),
 					};
 				} else {
-					fileDiffMap[currentFile].diff +=
-						"\n" + currentDiff.join("\n");
+					fileDiffMap[currentFile].diff += "\n" + currentDiff.join("\n");
 				}
 			}
 		};

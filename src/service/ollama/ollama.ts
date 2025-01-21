@@ -22,6 +22,7 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOllama } from "@langchain/ollama";
 import { Qwen } from "./models/qwen";
 import { ILoggingProvider } from "@shared/types/Logger";
+import { Phi } from "./models/phi";
 
 export class Ollama implements AIStreamProvider {
 	decoder = new TextDecoder();
@@ -51,7 +52,6 @@ export class Ollama implements AIStreamProvider {
 			topK: 40,
 			topP: 0.4,
 			maxRetries: 2,
-			format: "json",
 			streaming: false,
 		});
 
@@ -106,6 +106,8 @@ export class Ollama implements AIStreamProvider {
 
 	private getCodeModel(codeModel: string): OllamaAIModel | undefined {
 		switch (true) {
+			case codeModel.startsWith("phi4"):
+				return new Phi();
 			case codeModel.startsWith("qwen"):
 				return new Qwen();
 			case codeModel.includes("magicoder"):
@@ -125,6 +127,8 @@ export class Ollama implements AIStreamProvider {
 
 	private getChatModel(chatModel: string): OllamaAIModel | undefined {
 		switch (true) {
+			case chatModel.startsWith("phi4"):
+				return new Phi();
 			case chatModel.startsWith("qwen"):
 				return new Qwen();
 			case chatModel.includes("magicoder"):
@@ -247,10 +251,9 @@ export class Ollama implements AIStreamProvider {
 			response = await this.fetchModelResponse(payload, signal);
 		} catch (error) {
 			this.loggingProvider.logError(
-				`Unable to generate code:, ${
-					error instanceof Error
-						? error.message
-						: JSON.stringify(error)
+				`Unable to generate code:, ${error instanceof Error
+					? error.message
+					: JSON.stringify(error)
 				}`
 			);
 			return "";
@@ -312,15 +315,14 @@ ${additionalContext ?? ""}
 
 -----
 
-${
-	recentClipboard
-		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+${recentClipboard
+					? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
   
 ${recentClipboard}
 
 -----`
-		: ""
-}`
+					: ""
+				}`
 			);
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
@@ -502,14 +504,13 @@ ${prompt}`,
 
 		messages.push({
 			role: "assistant",
-			content: `${
-				ragContent
-					? `Here's some additional information that may help you generate a more accurate response.
+			content: `${ragContent
+				? `Here's some additional information that may help you generate a more accurate response.
 Please determine if this information is relevant and can be used to supplement your response: 
 
 ${ragContent}`
-					: ""
-			}`,
+				: ""
+				}`,
 		});
 
 		messages.push({

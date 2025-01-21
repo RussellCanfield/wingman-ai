@@ -1,21 +1,7 @@
-import { ComposerMessage, ComposerRequest, ComposerResponse, FileSearchResult, Plan } from "@shared/types/Composer";
-import { AppMessage } from "@shared/types/Message";
+import { ComposerMessage, ComposerRequest, ComposerResponse, FileSearchResult } from "@shared/types/v2/Composer";
+import { AppMessage } from "@shared/types/v2/Message";
 import React, { createContext, FC, PropsWithChildren, useContext, useEffect, useState } from "react";
 import { vscode } from "../utilities/vscode";
-
-export type PhaseLabel = {
-  new: "Planning";
-  planner: "Writing Code";
-  "code-writer": "Reviewing";
-  replan: "Preparing Results";
-};
-
-export const phaseDisplayLabel: PhaseLabel = {
-  new: "Planning",
-  planner: "Writing Code",
-  "code-writer": "Reviewing",
-  replan: "Preparing Results",
-};
 
 interface ComposerContextType {
   composerMessages: ComposerMessage[];
@@ -56,9 +42,108 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     }
   }, [composerMessages]);
 
+  const handleComposerEvent = (value: ComposerResponse) => {
+    const { node, values } = value;
+
+    const mostRecentMessage = values.messages ? values.messages[values.messages!.length - 1] : undefined;
+
+    switch (node) {
+      case "composer-replace":
+        setComposerMessages((currentMessages) => {
+          const lastMessage = currentMessages[currentMessages.length - 1];
+          const messagesWithoutLast = currentMessages.slice(0, -1);
+
+          return [
+            ...messagesWithoutLast,
+            {
+              ...lastMessage,
+              files: values.files,
+            }
+          ];
+        });
+        break;
+      case "composer-error":
+        setComposerMessages((currentMessages) => {
+          return [
+            ...currentMessages,
+            {
+              from: "assistant",
+              message: values.error ?? "Ut oh! Sorry but I seem to have failed processing your request. Please try again!",
+              files: values.files,
+              dependencies: values.dependencies
+            }
+          ];
+        });
+        setLoading(false);
+        setActiveMessage(undefined);
+        break;
+      case "composer-done":
+        setComposerMessages((currentMessages) => {
+          return [
+            ...currentMessages,
+            {
+              from: "assistant",
+              message: "",
+              files: values.files,
+              dependencies: values.dependencies
+            }
+          ];
+        });
+        setLoading(false);
+        setActiveMessage(undefined);
+        break;
+      case "composer-files":
+        setActiveMessage((msg) => {
+          return {
+            from: "assistant",
+            message: values.userIntent?.task ?? "",
+            ...msg ?? {},
+            files: values.files
+          }
+        });
+        break;
+      case "composer-greeting":
+        setActiveMessage((msg) => {
+          return {
+            from: "assistant",
+            message: values.userIntent?.task ?? "",
+            ...msg ?? {},
+            greeting: values.greeting
+          }
+        });
+        break;
+      case "composer-files":
+        setActiveMessage((msg) => {
+          return {
+            ...msg ?? { message: "" },
+            from: "assistant",
+            files: values.files
+          }
+        });
+        break;
+      case "assistant-question":
+        if (mostRecentMessage) {
+          setComposerMessages((currentMessages) => {
+            return [
+              ...currentMessages,
+              {
+                from: mostRecentMessage?.kwargs.role,
+                message: mostRecentMessage?.kwargs.content ?? 'I have failed to generate an answer, please try again.',
+              }
+            ];
+          });
+          setLoading(false);
+          setActiveMessage(undefined);
+        }
+        break;
+    }
+  }
+
   const handleResponse = (event: MessageEvent<AppMessage>) => {
     const { data } = event;
     const { command, value } = data;
+
+    console.log("Composer:", command, value)
 
     switch (command) {
       case "validation-failed":
@@ -69,10 +154,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
               from: "assistant",
               message: String(value),
               loading: false,
-              plan: {
-                files: [],
-                steps: [],
-              } satisfies Plan,
             },
           ];
 
@@ -90,103 +171,8 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         });
         break;
       case "compose-response":
-        if (!value) {
-          return;
-        }
-
-        const { node, values } = value as ComposerResponse;
-
-        if (node === "composer-error") {
-          let failedErrorMsg: string | undefined;
-          if (
-            values.review &&
-            values.review?.comments &&
-            values.review.comments.length > 0
-          ) {
-            failedErrorMsg = `There were issues with the code changes, we are correcting them! Here was my review:
-                  
-${values.review.comments.join("\n")}`
-          } else if (
-            values.plan?.files?.length === 0 &&
-            values.plan?.steps?.length === 0
-          ) {
-            failedErrorMsg = "Sorry something went wrong and I was not able to generate any changes.";
-          } else if (
-            values.review?.comments &&
-            values.review?.comments?.length > 0 &&
-            values.retryCount === 0
-          ) {
-            failedErrorMsg = "Sorry the review failed and I was unable to correct the changes. Please try again with a more specific query.";
-          }
-
-          if (failedErrorMsg) {
-            setComposerMessages((currentMessages) => {
-              return [
-                ...currentMessages,
-                {
-                  from: "assistant",
-                  message: failedErrorMsg || "Unknown error occurred.",
-                  plan: {
-                    files: [],
-                    steps: [],
-                    planningSteps: []
-                  },
-                },
-              ];
-            });
-
-            setLoading(false);
-            return;
-          }
-
-          setLoading(false);
-          setComposerMessages((currentMessages) => {
-            return [
-              ...currentMessages,
-              {
-                from: "assistant",
-                message: values.response!,
-                plan: values.plan!,
-              }
-            ];
-          });
-        } else {
-          if (node === 'composer-done') {
-            setLoading(false);
-            setComposerMessages((currentMessages) => {
-              return [
-                ...currentMessages,
-                {
-                  from: "assistant",
-                  message: values.plan?.summary || "",
-                  plan: values.plan!,
-                }
-              ];
-            });
-            setActiveMessage(undefined);
-          } else {
-            setActiveMessage(activeMsg => ({
-              ...activeMsg,
-              from: "assistant",
-              message: values.plan?.summary || "",
-              loading: true,
-              plan: values.plan ?? {
-                files: [],
-                steps: []
-              }
-            }));
-
-            const activeFiles = values.plan?.files?.map(f => {
-              const fileName = f.path.split(/[/\\]/).pop() || "";
-              return {
-                file: fileName,
-                path: f.path
-              } satisfies FileSearchResult;
-            });
-
-            setChips(activeFiles ?? [])
-          }
-        }
+        handleComposerEvent(value as ComposerResponse);
+        break;
     }
   };
 
@@ -198,11 +184,7 @@ ${values.review.comments.join("\n")}`
         ...currentMessages,
         {
           from: "assistant",
-          message: activeMessage?.plan.summary || activeMessage?.message || "",
-          plan: activeMessage?.plan ?? {
-            files: [],
-            steps: []
-          }
+          message: "",
         }
       ];
     });

@@ -72,12 +72,14 @@ export interface BaseMessage {
 }
 
 export interface FileMetadata {
+	description?: string;
 	path: string;
 	code?: string;
-	description?: string;
-	plan?: string[];
 	diff?: string;
 	language?: string;
+	dependencies?: string[];
+	accepted?: boolean;
+	rejected?: boolean;
 }
 
 export interface CodeContextDetails {

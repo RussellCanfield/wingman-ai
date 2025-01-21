@@ -82,7 +82,7 @@ function ChatResponseList({
 	return (
 		<ul
 			ref={ulRef}
-			className="flex-1 overflow-x-hidden overflow-y-auto list-none m-0 p-0"
+			className="flex-1 overflow-x-hidden overflow-y-auto list-none m-0 p-0 pr-2"
 		>
 			{chatHistory}
 			{children}

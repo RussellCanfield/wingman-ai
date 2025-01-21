@@ -1,5 +1,7 @@
 import { OllamaSettingsType } from "@shared/types/Settings";
+import { VscRefresh } from "react-icons/vsc";
 import { InitSettings } from "./App";
+import { vscode } from "./utilities/vscode";
 
 type OllamaSection = InitSettings["providerSettings"]["Ollama"] & {
 	ollamaModels: string[];
@@ -37,6 +39,12 @@ export const OllamaSettingsView = ({
 		onChange(clone);
 	};
 
+	const reloadWindow = () => {
+		vscode.postMessage({
+			command: "reloadWindow"
+		})
+	}
+
 	return (
 		<div className="flex flex-col space-y-4">
 			<div className="flex flex-col">
@@ -46,18 +54,27 @@ export const OllamaSettingsView = ({
 				>
 					Code model:
 				</label>
-				<select
-					id="code-model"
-					value={codeModel}
-					onChange={handleChange}
-					className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
-				>
-					{ollamaModels.map((model) => (
-						<option key={model} value={model}>
-							{model}
-						</option>
-					))}
-				</select>
+				<div className="flex gap-2">
+					<select
+						id="code-model"
+						value={codeModel}
+						onChange={handleChange}
+						className="flex-1 px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					>
+						{ollamaModels.map((model) => (
+							<option key={model} value={model}>
+								{model}
+							</option>
+						))}
+					</select>
+					<button
+						onClick={reloadWindow}
+						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+						title="Refresh models"
+					>
+						<VscRefresh size={16} />
+					</button>
+				</div>
 			</div>
 
 			<div className="flex flex-col">
@@ -67,18 +84,27 @@ export const OllamaSettingsView = ({
 				>
 					Chat model:
 				</label>
-				<select
-					id="chat-model"
-					value={chatModel}
-					onChange={handleChatChange}
-					className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
-				>
-					{ollamaModels.map((model) => (
-						<option key={model} value={model}>
-							{model}
-						</option>
-					))}
-				</select>
+				<div className="flex gap-2">
+					<select
+						id="chat-model"
+						value={chatModel}
+						onChange={handleChatChange}
+						className="flex-1 px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					>
+						{ollamaModels.map((model) => (
+							<option key={model} value={model}>
+								{model}
+							</option>
+						))}
+					</select>
+					<button
+						onClick={reloadWindow}
+						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+						title="Refresh models"
+					>
+						<VscRefresh size={16} />
+					</button>
+				</div>
 			</div>
 
 			<div className="flex flex-col">

@@ -47,7 +47,6 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     const handleResponse = (event: MessageEvent<AppMessage>) => {
       const { command, value } = event.data;
-      console.log(value);
       switch (command) {
         case "init":
           const storedAppState = value as AppState;

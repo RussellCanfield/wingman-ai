@@ -13,21 +13,30 @@ export type ManualStep = {
 	command?: string;
 };
 
-export type Plan = {
-	summary?: string;
+export type Dependencies = {
+	response?: string;
 	steps?: ManualStep[];
-	files?: FileMetadata[];
-};
+}
 
-export type Review = {
-	comments?: string[];
-};
+export type ComposerRole = "assistant" | "user";
+
+export interface ComposerChatMessage {
+	kwargs: {
+		content: string;
+		role: ComposerRole;
+	},
+	name?: string;
+}
 
 export interface PlanExecuteState {
-	plan?: Plan;
-	review?: Review;
-	response?: string;
-	retryCount?: number;
+	messages?: ComposerChatMessage[];
+	userIntent?: {
+		task: string;
+	},
+	files?: FileMetadata[];
+	dependencies?: Dependencies;
+	greeting?: string;
+	error?: string;
 }
 
 export type ComposerResponse = {
@@ -35,14 +44,16 @@ export type ComposerResponse = {
 	values: PlanExecuteState;
 };
 
-export type ComposerSteps = "composer-planner" | "composer-manual-steps" | "composer-plan-file" | "composer-done" | "composer-error";
+export type ComposerSteps = "assistant-question" | "composer-greeting" | "composer-replace" | "composer-files" | "composer-error" | "composer-done" | "composer-error";
 
 export interface ComposerMessage {
-	from: "assistant" | "user";
+	from: ComposerRole;
 	message: string;
 	loading?: boolean;
-	plan?: Plan;
 	image?: ComposerRequest["image"];
+	files?: PlanExecuteState["files"];
+	dependencies?: PlanExecuteState["dependencies"];
+	greeting?: string;
 }
 
 export type FileSearchResult = {

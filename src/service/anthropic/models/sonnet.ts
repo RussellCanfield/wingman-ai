@@ -7,8 +7,11 @@ import {
 
 export class SonnetModel implements AnthropicModel {
 	get CodeCompletionPrompt(): string {
-		return `Complete the code indicated by [FILL IN THE MIDDLE]. 
+		return `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for filling in missing code snippets.
+Write the best code you possibly can and complete the code indicated by [FILL IN THE MIDDLE]. 
 Only provide the exact code that should replace the hole marker. 
+Ensure the completed code is syntactically correct and follows best practices for the given programming language.
+Ensure proper integration and code completeness.
 
 **Critical Requirements:**
 1. Generate ONLY the middle section of code - no explanations, markers, or decorators
@@ -23,6 +26,7 @@ Only provide the exact code that should replace the hole marker.
   - Comments
   - Whitespace patterns
   - Formatting conventions
+5. Anticipate the user's needs, make an educated guess based on the code provided.
 
 **Strict Constraints:**
 - No leading/trailing text

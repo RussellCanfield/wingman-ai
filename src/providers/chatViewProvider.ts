@@ -180,7 +180,7 @@ ${data}
 
 			this._webview?.postMessage({
 				command: "validation-failed",
-				value: `Fix my build errors.
+				value: `Fixing build errors...
 
 Here is a summary of the command output:
 ${result.summary}`,
@@ -203,6 +203,17 @@ ${result.summary}`,
 
 					// TODO - save me from the insanity of this switch statement :D
 					switch (command) {
+						case "reject-file":
+							webviewView.webview.postMessage({
+								command: "compose-response",
+								value: {
+									node: "composer-replace",
+									values: {
+										...(await this._lspClient.rejectComposerFile(value as FileMetadata))
+									}
+								}
+							});
+							break;
 						case "openSettings":
 							this._settingsViewProvider.openInPanel();
 							break;
@@ -304,7 +315,30 @@ ${commitReview}
 									vscode.workspace.asRelativePath(file)
 								).fsPath,
 								diff: extractCodeBlock(diff),
-								language
+								language,
+								onAccept: async (f) => {
+									webviewView.webview.postMessage({
+										command: "compose-response",
+										value: {
+											node: "composer-replace",
+											values: {
+												...(await this._lspClient.acceptComposerFile(f))
+											}
+										}
+									});
+
+								},
+								onReject: async (f) => {
+									webviewView.webview.postMessage({
+										command: "compose-response",
+										value: {
+											node: "composer-replace",
+											values: {
+												...(await this._lspClient.rejectComposerFile(f))
+											}
+										}
+									});
+								}
 							});
 							break;
 						case "validate":
@@ -341,9 +375,10 @@ ${commitReview}
 							terminal.show();
 							terminal.sendText(terminalCommand);
 							break;
-						case "mergeIntoFile":
-							const { path: artifactFile, code: markdown } =
-								value as FileMetadata;
+						case "accept-file":
+							const acceptedFile = value as FileMetadata;
+
+							const { path: artifactFile, code: markdown } = acceptedFile;
 
 							let code = markdown?.startsWith("```")
 								? extractCodeBlock(markdown)
@@ -399,6 +434,16 @@ ${commitReview}
 									throw error;
 								}
 							}
+
+							webviewView.webview.postMessage({
+								command: "compose-response",
+								value: {
+									node: "composer-replace",
+									values: {
+										...(await this._lspClient.acceptComposerFile(acceptedFile))
+									}
+								}
+							});
 							break;
 						case "get-files":
 							const searchTerm = value as string | undefined;
@@ -526,10 +571,13 @@ ${commitReview}
 								command: "init",
 								value: appState,
 							});
-							webviewView.webview.postMessage({
-								command: "index-status",
-								value: await this._lspClient.indexExists(),
-							});
+
+							setTimeout(async () => {
+								webviewView.webview.postMessage({
+									command: "index-status",
+									value: await this._lspClient.indexExists(),
+								});
+							}, 50);
 							this.showView(this._launchView);
 							break;
 						}

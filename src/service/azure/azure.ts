@@ -72,9 +72,9 @@ export class AzureAI implements AIStreamProvider {
 			false;
 		return Promise.resolve(
 			isChatModelValid &&
-				isCodeModelValid &&
-				!!this.settings?.instanceName &&
-				!!this.settings?.apiVersion
+			isCodeModelValid &&
+			!!this.settings?.instanceName &&
+			!!this.settings?.apiVersion
 		);
 	}
 

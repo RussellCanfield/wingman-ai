@@ -148,6 +148,15 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				result = extractCodeBlock(result);
 			}
 
+			// Get the current line from the prefix
+			const currentLine = prefix.split('\n').pop()?.trim() || '';
+
+			// Check if result starts with current line content
+			if (currentLine && result.trim().startsWith(currentLine)) {
+				// Remove the current line content from the result
+				result = result.trim().slice(currentLine.length).trimStart();
+			}
+
 			loggingProvider.logInfo(
 				`Code complete: \n${prefix}\n\n${suffix}\n\n${result}`
 			);
@@ -165,7 +174,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 							this._settings.aiProvider
 						]?.codeModel || "Unknown",
 				});
-			} catch {}
+			} catch { }
 
 			//this.cacheManager.set(document, prefix, suffix, result);
 			return [new InlineCompletionItem(result)];

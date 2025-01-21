@@ -1,7 +1,6 @@
 import {
 	ComposerRequest,
-	Plan,
-} from "@shared/types/Composer";
+} from "@shared/types/v2/Composer";
 import { useMemo } from "react";
 import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
@@ -28,7 +27,7 @@ const getBase64FromFile = (file: File): Promise<string> => {
 
 export default function Compose() {
 	const { composerMessages, setComposerMessages, loading, setLoading, clearActiveMessage, activeMessage } = useComposerContext();
-	const { indexStats } = useSettingsContext();
+	const { indexStats, setView } = useSettingsContext();
 
 	const cancelAIResponse = () => {
 		clearActiveMessage();
@@ -78,13 +77,11 @@ export default function Compose() {
 		setLoading(true);
 	};
 
-	console.log('Index', indexStats, !indexStats.exists || indexStats.files?.length === 0);
-
 	const canValidate = useMemo(() => {
 		if (composerMessages.length === 0) return false;
 
 		const lastMessage = composerMessages[composerMessages.length - 1];
-		return Boolean(lastMessage?.plan?.files?.length ?? 0);
+		return Boolean(lastMessage?.files?.length ?? 0);
 	}, [composerMessages]);
 
 	return (
@@ -118,6 +115,12 @@ export default function Compose() {
 								<span className="flex items-center gap-2">
 									⚠️ No context files found. Please build the full index or reference files directly using '@filename'
 								</span>
+								<button
+									className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50 mt-4"
+									onClick={() => setView('index')}
+								>
+									Go to Indexer
+								</button>
 							</div>
 						)}
 					</p>
@@ -128,12 +131,11 @@ export default function Compose() {
 					<ChatEntry
 						from="assistant"
 						message={activeMessage?.message || ""}
+						files={activeMessage?.files}
+						dependencies={activeMessage?.dependencies}
+						greeting={activeMessage?.greeting}
 						loading={true}
-						plan={activeMessage?.plan ?? {
-							files: [],
-							steps: []
-						}}
-						index={1}
+						isCurrent={true}
 					/>
 				)}
 				{canValidate && <Validation />}

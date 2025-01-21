@@ -137,7 +137,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	diffViewProvider = new DiffViewProvider(
 		context,
 		modelProvider!,
-		workspace.workspacePath
+		workspace.workspacePath,
+		lspClient
 	);
 	statusBarProvider = new ActivityStatusBar();
 

@@ -1,8 +1,8 @@
 import { OllamaAIModel } from "../types/index";
 
-export class Magicoder extends OllamaAIModel {
+export class Phi extends OllamaAIModel {
 	get CodeCompletionPrompt(): string {
-		return `<｜begin▁of▁sentence｜>system
+		return `<|im_start|>system<|im_sep|>
 You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for filling in missing code snippets.
 Write the best code you possibly can.
 Ensure the completed code is syntactically correct and follows best practices for the given programming language.
@@ -18,13 +18,14 @@ Ensure proper integration and code completeness.
 - When generating code focus on existing code style, syntax, and structure.
 - Anticipate the user's needs, make an educated guess based on the code provided.
 
-{context}
-<｜begin▁of▁sentence｜>user
+{context}<|im_end|>
+<|im_start|>user<|im_sep|>
 Preserve the code's structure, order, comments, and indentation exactly.
 Do not include any additional text, explanations, placeholders, ellipses, or code fences such as markdown.
 
 ----
 
-<｜fim▁begin｜>{beginning}<｜fim▁hole｜>{ending}<｜fim▁end｜>`;
+<|fim_prefix|>{beginning}<|fim_suffix|>{ending}<|fim_middle|><|im_end|>
+<|im_start|>assistant<|im_sep|>`;
 	}
 }

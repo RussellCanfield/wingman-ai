@@ -54,6 +54,11 @@ export const OllamaView = () => {
 			<h4 className="font-bold text-md">Code:</h4>
 			<ul>
 				<li>
+					<a href="https://ollama.com/library/phi4">
+						phi4
+					</a>
+				</li>
+				<li>
 					<a href="https://ollama.com/library/qwen2.5-coder">
 						qwen2.5-coder
 					</a>
@@ -84,6 +89,11 @@ export const OllamaView = () => {
 			</ul>
 			<h4 className="mt-4 font-bold text-md">Chat:</h4>
 			<ul>
+				<li>
+					<a href="https://ollama.com/library/phi4">
+						phi4
+					</a>
+				</li>
 				<li>
 					<a href="https://ollama.com/library/qwen2.5-coder">
 						qwen2.5-coder
