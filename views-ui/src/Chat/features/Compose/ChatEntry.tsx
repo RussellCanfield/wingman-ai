@@ -146,9 +146,9 @@ const ChatArtifact = ({
 
 	return (
 		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30">
-			<div className="bg-stone-800/50 text-white flex items-center border-b border-stone-700/50">
+			<div className="bg-stone-800/50 text-white flex items-center border-b border-stone-700/50 flex-wrap">
 				<h4
-					className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer hover:underline transition-all"
+					className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer hover:underline transition-all text-base sm:text-sm md:text-xs"
 					onClick={openFile}
 				>
 					{truncatedPath}
@@ -283,7 +283,7 @@ const ChatEntry = ({
 			className="tracking-wide leading-relaxed text-md message mb-8"
 		>
 			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[16px] flex items-center text-stone-300`}>
-				<div className="relative flex items-center gap-4 flex-grow">
+				<div className="relative flex items-center gap-4 flex-grow w-full">
 					{fromUser && (
 						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
 							<FaUser className="text-stone-300" size={16} />
