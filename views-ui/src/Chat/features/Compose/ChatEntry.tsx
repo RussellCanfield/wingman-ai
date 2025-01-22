@@ -148,7 +148,7 @@ const ChatArtifact = ({
 		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30">
 			<div className="bg-stone-800/50 text-white flex items-center border-b border-stone-700/50 flex-wrap">
 				<h4
-					className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer hover:underline transition-all text-base sm:text-sm md:text-xs"
+					className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer hover:underline transition-all text-sm"
 					onClick={openFile}
 				>
 					{truncatedPath}
@@ -207,10 +207,10 @@ const ChatArtifact = ({
 				)}
 				{(file.rejected || file.accepted) && (
 					<div className="flex flex-nowrap ml-auto pr-4">
-						{file.rejected && (<span className="flex items-center gap-1 text-red-400">
+						{file.rejected && (<span className="flex items-center gap-1 text-base text-red-400">
 							<span>Rejected</span>
 						</span>)}
-						{file.accepted && (<span className="flex items-center gap-1 text-green-400">
+						{file.accepted && (<span className="flex items-center gap-1 text-base text-green-400">
 							<span>Accepted</span>
 						</span>)}
 					</div>

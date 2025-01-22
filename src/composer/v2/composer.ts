@@ -172,15 +172,6 @@ export class ComposerGraph {
         const userMessage = interruptState.messages![0].content.toString();
         const messages = [...state.messages, new ChatMessage(userMessage, "user")];
 
-        if (state.files?.length === 0) {
-            return new Command({
-                goto: "find",
-                update: {
-                    messages
-                } satisfies Partial<PlanExecuteState>
-            })
-        }
-
         const isPositive = await this.rerankModel.invoke(
             `Analyze this response and determine if it's a positive confirmation or any other type of response.
 
@@ -227,6 +218,8 @@ Answer (yes/no):`
             });
         }
 
+        console.log("Did not detect a positive sentiment response to prompted feedback.");
+
         return new Command({
             goto: "find",
             update: {
@@ -240,18 +233,22 @@ Answer (yes/no):`
     ) {
         controller = new AbortController();
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const state = await graph.getState({ ...this.config });
 
         let inputs: Partial<PlanExecuteState> = {};
         inputs.messages = [new ChatMessage(request.input, "user")];
 
+        inputs.files = [...(state.values as PlanExecuteState)?.files ?? []];
+
         if (request.contextFiles) {
             const codeFiles: FileMetadata[] = [];
-            const existingPaths = new Set(inputs.files?.map(f => f.path) ?? []);
+            // Use existing files from both inputs and current state
+            const existingPaths = new Set(inputs.files.map(f => f.path));
 
             for (const file of request.contextFiles) {
                 try {
                     const relativePath = path.relative(this.workspace, file);
-                    // Skip if we already have this file in inputs
+                    // Skip if we already have this file
                     if (existingPaths.has(relativePath)) {
                         continue;
                     }
@@ -261,21 +258,17 @@ Answer (yes/no):`
                         path: relativePath,
                         code: txtDoc?.getText(),
                     });
+                    existingPaths.add(relativePath); // Track newly added paths
                 } catch { }
             }
 
-            if (!inputs.files || !Array.isArray(inputs.files)) {
-                inputs.files = [];
-            }
-
-            inputs.files = [...(inputs.files ?? []), ...codeFiles];
+            // Merge new files with existing ones
+            inputs.files = [...inputs.files, ...codeFiles];
         }
 
         if (request.image) {
             inputs.image = request.image;
         }
-
-        const state = await graph.getState({ ...this.config });
 
         try {
             const graphInput = state?.tasks.length > 0 ? new Command({

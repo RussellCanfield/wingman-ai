@@ -1,7 +1,6 @@
 export type FileTarget = {
-    type: 'CREATE' | 'MODIFY' | 'QUESTION';
+    type: 'CREATE' | 'MODIFY';
     path?: string;
-    folderPath?: string;
     description: string;
 }
 
