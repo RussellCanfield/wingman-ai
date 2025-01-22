@@ -157,15 +157,13 @@ const ChatEntry = ({
 
 				const pathWithLines = `${path} ${lineRange}`;
 
-				return <div className="w-full">
-					<div
-						className="flex items-center justify-between gap-1 p-2 border rounded-md border-solid border-stone-600 cursor-pointer"
-						onClick={showSelectedContext}
-					>
-						<span>{file}</span>
-						<span className={`${isLightTheme ? 'text-stone-400' : 'text-stone-500'}`}>{pathWithLines}</span>
-					</div>
-				</div>;
+				return (<div
+					className="w-full flex flex-wrap items-center justify-between gap-1 p-2 border rounded-md border-solid border-stone-600 cursor-pointer"
+					onClick={showSelectedContext}
+				>
+					<span>{file}</span>
+					<span className={`${isLightTheme ? 'text-stone-400' : 'text-stone-500'}`}>{pathWithLines}</span>
+				</div>)
 			} catch (error) {
 				console.log(error);
 			}
