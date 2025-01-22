@@ -7,15 +7,11 @@ import { FileMetadata } from "@shared/types/v2/Message";
 import { DirectoryContent, formatMessages, scanDirectory } from "../../utils";
 import { ProjectDetailsHandler } from "../../../server/project-details";
 import path from "path";
+import fs, { promises } from "fs";
 import { ComposerImage } from "@shared/types/v2/Composer";
 import { VectorQuery } from "../../../server/query";
 import { CodeGraph } from "../../../server/files/graph";
 import { Store } from "../../../store/vector";
-
-interface GreetingResult {
-  content: string;
-  stopped: boolean;
-}
 
 export class WorkspaceNavigator {
   private INITIAL_SCAN_DEPTH = 10;
@@ -27,8 +23,8 @@ export class WorkspaceNavigator {
     TARGETS_END: '===TARGETS_END===',
     TARGET_START: '---TARGET---',
     TARGET_END: '---END_TARGET---',
-    TASK_START: '===TASK_START===',
-    TASK_END: '===TASK_END==='
+    ACKNOWLEDGEMENT_START: '===ACKNOWLEDGEMENT_START===',
+    ACKNOWLEDGEMENT_END: '===ACKNOWLEDGEMENT_END==='
   } as const;
 
   constructor(
@@ -80,57 +76,164 @@ export class WorkspaceNavigator {
     };
   };
 
+  private async analyzeTargetFiles(question: string, targets: UserIntent["targets"]): Promise<UserIntent["targets"]> {
+    if (!targets.length) {
+      return [];
+    }
+
+    const filteredFiles = targets.filter(f => path.extname(f.path!)?.length > 0 && f.type !== "CREATE");
+    const analyzedTargets: UserIntent["targets"] = [];
+    let buffer = '';
+
+    for (const target of filteredFiles) {
+      const filePath = String(path.isAbsolute(target.path!) ? target.path : path.join(this.workspace, target.path!));
+
+      if (!fs.existsSync(filePath)) {
+        continue;
+      }
+
+      const fileContents = await promises.readFile(filePath, 'utf-8');
+      let currentAnalysis = '';
+
+      const prompt = `Analyze this file in relation to the user's request:
+  ${question}
+  
+  File path: ${target.path}
+  File contents:
+  ${fileContents}
+  
+  Provide your analysis as a streaming response in this format:
+  
+  ===ANALYSIS_START===
+  [Stream your analysis token by token, describing file relevance and any needed modifications]
+  ===ANALYSIS_END===`;
+
+      for await (const chunk of await this.chatModel.stream([
+        new SystemMessage({
+          content: "You are a code analysis expert. Analyze files and determine their relevance to user requests."
+        }),
+        new HumanMessage({
+          content: prompt
+        })
+      ])) {
+        const content = chunk.content.toString();
+        buffer += content;
+
+        // Check for analysis section markers
+        if (buffer.includes('===ANALYSIS_START===')) {
+          const startIndex = buffer.indexOf('===ANALYSIS_START===') + '===ANALYSIS_START==='.length;
+
+          // If we have an end marker, extract the complete section
+          if (buffer.includes('===ANALYSIS_END===')) {
+            const endIndex = buffer.indexOf('===ANALYSIS_END===');
+            currentAnalysis = buffer.substring(startIndex, endIndex).trim();
+
+            // Update target with complete analysis
+            analyzedTargets.push({
+              ...target,
+              description: currentAnalysis
+            });
+
+            // Dispatch complete analysis
+            await dispatchCustomEvent("file-analysis", {
+              path: target.path,
+              analysis: currentAnalysis,
+              status: 'complete'
+            });
+
+            // Reset buffer
+            buffer = buffer.substring(endIndex + '===ANALYSIS_END==='.length);
+            currentAnalysis = '';
+          } else {
+            // Stream partial analysis
+            const partialAnalysis = buffer.substring(startIndex).trim();
+
+            if (partialAnalysis !== currentAnalysis) {
+              currentAnalysis = partialAnalysis;
+
+              // Dispatch streaming update
+              await dispatchCustomEvent("file-analysis", {
+                path: target.path,
+                analysis: currentAnalysis,
+                status: 'streaming'
+              });
+            }
+          }
+        }
+      }
+
+      // Clean up any remaining buffer content
+      if (buffer.includes('===ANALYSIS_START===') && !buffer.includes('===ANALYSIS_END===')) {
+        const startIndex = buffer.indexOf('===ANALYSIS_START===') + '===ANALYSIS_START==='.length;
+        const finalAnalysis = buffer.substring(startIndex).trim();
+
+        if (finalAnalysis) {
+          analyzedTargets.push({
+            ...target,
+            description: finalAnalysis
+          });
+
+          await dispatchCustomEvent("file-analysis", {
+            path: target.path,
+            analysis: finalAnalysis,
+            status: 'complete'
+          });
+        }
+      }
+
+      // Reset buffer for next file
+      buffer = '';
+    }
+
+    return analyzedTargets;
+  }
+
   private async parseStreamingResponse(chunk: string): Promise<Partial<UserIntent>> {
     this.buffer += chunk;
     const updates: Partial<UserIntent> = {};
 
-    // Parse task section if we have a start delimiter
-    if (this.buffer.includes(this.DELIMITERS.TASK_START)) {
-      const taskStartIndex = this.buffer.indexOf(this.DELIMITERS.TASK_START) + this.DELIMITERS.TASK_START.length;
-      let taskContent: string;
+    // Helper to clean the buffer after processing a section
+    const cleanBuffer = (endDelimiter: string) => {
+      const endIndex = this.buffer.indexOf(endDelimiter) + endDelimiter.length;
+      this.buffer = this.buffer.substring(endIndex);
+    };
 
-      // Check if we've hit the targets section or task end
-      if (this.buffer.includes(this.DELIMITERS.TARGETS_START)) {
-        // Extract everything between task start and targets start
-        taskContent = this.buffer.substring(
-          taskStartIndex,
-          this.buffer.indexOf(this.DELIMITERS.TARGETS_START)
-        ).trim();
-      } else if (this.buffer.includes(this.DELIMITERS.TASK_END)) {
-        // Extract everything between task start and task end
-        taskContent = this.buffer.substring(
-          taskStartIndex,
-          this.buffer.indexOf(this.DELIMITERS.TASK_END)
-        ).trim();
-      } else {
-        // Still receiving task content
-        taskContent = this.buffer.substring(taskStartIndex).trim();
+    // Process sections in order of expected appearance
+    const processAcknowledgement = () => {
+      if (!this.buffer.includes(this.DELIMITERS.ACKNOWLEDGEMENT_START)) {
+        return;
       }
+
+      const startIndex = this.buffer.indexOf(this.DELIMITERS.ACKNOWLEDGEMENT_START)
+        + this.DELIMITERS.ACKNOWLEDGEMENT_START.length;
+      let endIndex = this.buffer.indexOf(this.DELIMITERS.ACKNOWLEDGEMENT_END);
+
+      // If we don't have an end delimiter yet, take everything after start
+      if (endIndex === -1) {
+        const taskContent = this.buffer.substring(startIndex).trim();
+        if (taskContent) {
+          updates.task = taskContent;
+        }
+        return;
+      }
+
+      // Extract complete acknowledgement section
+      const taskContent = this.buffer
+        .substring(startIndex, endIndex)
+        .trim();
 
       if (taskContent) {
-        // Remove any trailing delimiters and rejection template
-        taskContent = taskContent
-          .replace(this.DELIMITERS.TASK_END, '')
-          .replace(/\[If user responds with rejection\][\s\S]*$/, '') // Remove rejection template
-          .trim();
-
         updates.task = taskContent;
-        // Only dispatch if we have actual content
-        if (taskContent.length > 0) {
-          await dispatchCustomEvent("composer-greeting", { greeting: taskContent });
-        }
+        cleanBuffer(this.DELIMITERS.ACKNOWLEDGEMENT_END);
+      }
+    };
+
+    const processTargets = () => {
+      if (!this.buffer.includes(this.DELIMITERS.TARGETS_START)
+        || !this.buffer.includes(this.DELIMITERS.TARGETS_END)) {
+        return;
       }
 
-      // Clean up buffer after processing
-      if (this.buffer.includes(this.DELIMITERS.TARGETS_START)) {
-        this.buffer = this.buffer.substring(this.buffer.indexOf(this.DELIMITERS.TARGETS_START));
-      } else if (this.buffer.includes(this.DELIMITERS.TASK_END)) {
-        this.buffer = this.buffer.substring(this.buffer.indexOf(this.DELIMITERS.TASK_END) + this.DELIMITERS.TASK_END.length);
-      }
-    }
-
-    // Rest of the targets parsing logic remains the same
-    if (this.buffer.includes(this.DELIMITERS.TARGETS_START) && this.buffer.includes(this.DELIMITERS.TARGETS_END)) {
       const targetsContent = this.buffer.substring(
         this.buffer.indexOf(this.DELIMITERS.TARGETS_START) + this.DELIMITERS.TARGETS_START.length,
         this.buffer.indexOf(this.DELIMITERS.TARGETS_END)
@@ -144,50 +247,44 @@ export class WorkspaceNavigator {
           const typeMatch = content.match(/Type: (.*?)(?:\n|$)/);
           const descMatch = content.match(/Description: (.*?)(?:\n|$)/);
           const pathMatch = content.match(/Path: (.*?)(?:\n|$)/);
-          const folderMatch = content.match(/FolderPath: (.*?)(?:\n|$)/);
 
-          let filePath: string | undefined;
-          if (pathMatch?.[1]) {
-            const rawPath = pathMatch[1].trim();
+          if (!pathMatch?.[1]) return null;
 
-            // First normalize the paths to handle any platform-specific separators
-            const normalizedWorkspace = path.normalize(this.workspace);
-            const normalizedPath = path.normalize(rawPath);
+          const rawPath = pathMatch[1].trim();
+          const normalizedWorkspace = path.normalize(this.workspace);
+          const normalizedPath = path.normalize(rawPath);
+          const absolutePath = path.isAbsolute(normalizedPath)
+            ? normalizedPath
+            : path.resolve(normalizedWorkspace, normalizedPath);
 
-            // If the path is already relative, resolve it against workspace
-            const absolutePath = path.isAbsolute(normalizedPath)
-              ? normalizedPath
-              : path.resolve(normalizedWorkspace, normalizedPath);
+          const filePath = path
+            .relative(normalizedWorkspace, absolutePath)
+            .split(path.sep)
+            .join('/');
 
-            // Get the relative path from workspace to the target file
-            filePath = path
-              .relative(normalizedWorkspace, absolutePath)
-              // Normalize to forward slashes for consistency
-              .split(path.sep)
-              .join('/');
-          }
-
-          let type = typeMatch?.[1] as "CREATE" | "MODIFY";
+          const type = typeMatch?.[1] as "CREATE" | "MODIFY";
           if (!type || !["CREATE", "MODIFY"].includes(type)) {
-            type = 'CREATE';
+            return null;
           }
 
           return {
             type,
             description: descMatch?.[1] || "",
             path: filePath,
-            folderPath: folderMatch?.[1]
           } satisfies FileTarget;
         })
-        .filter(target => target !== null);
+        .filter((target) => target !== null);
 
       if (targets.length) {
         updates.targets = targets;
       }
 
-      // Remove processed targets content
-      this.buffer = this.buffer.substring(this.buffer.indexOf(this.DELIMITERS.TARGETS_END) + this.DELIMITERS.TARGETS_END.length);
-    }
+      cleanBuffer(this.DELIMITERS.TARGETS_END);
+    };
+
+    // Process sections in order
+    processAcknowledgement();
+    processTargets();
 
     return updates;
   }
@@ -202,62 +299,91 @@ export class WorkspaceNavigator {
       .join('\n\n');
 
     const prompt = `You are a senior full-stack software architect and technical lead.
-The provided user request is related to writing software.
-Your role is to analyze requests and provide clear, actionable responses.
+Your role is to analyze requests and choose the absolute best files that match the user's request.
+You must think through this step-by-step and consider the user's current implementation context.
+Every response must include an acknowledgement and file targets. This is critical or the application crashes.
 
-Response Guidelines:
-1. Start with a brief, natural acknowledgment (under 20 words)
-2. If the user expressed rejection/dissatisfaction:
-    - Acknowledge the rejection
-    - Ask what specific aspects they'd like to change
-    - Do not include an implementation plan
-3. For non-rejection scenarios:
-    - Provide a clear implementation plan
-    - Work autonomously when possible
-    - Include specific file paths and changes
-4. Ask clarifying questions only when absolutely necessary
-5. The task section is required
-6. Follow the strict output format below
+File Selection Priority:
+1. Active Context (Highest Priority)
+    - Recently modified files matching the request
+    - User provided files from the conversation
+    - Files mentioned in the current implementation plan
+    - These files are most likely to be relevant as they represent active work
+    - These may not always be the best match, look for conversational shifts
 
-Technical Analysis Considerations:
-1. Component type (controller, model, utility, etc.)
-2. Common directory structures
-3. Related files needing modification
-4. Required dependencies
-5. Core objectives and most relevant files
-6. Dependency management files if needed
+2. Semantic Context (Medium Priority)
+    - Files with matching functionality or purpose
+    - Shared dependencies with active files
+    - Files in similar component categories
+    - Only consider if active context files don't fully solve the request
+
+3. Workspace Search (Lower Priority)
+    - Only search here if no matches found above
+    - Look for files matching the technical requirements
+    - Consider common patterns and structures
+
+Technical Analysis Steps:
+1. Review the conversation history
+    - Note any files already being modified
+    - Understand the current implementation plan
+    - Look for user preferences or patterns
+
+2. Analyze file relevance
+    - Match against active implementation
+    - Check technical requirements
+    - Consider component relationships
+
+3. Score potential matches
+    - Active implementation file: Highest
+    - Recently modified related file: High
+    - Contextually related file: Medium
+    - Pattern/structure match: Low
 
 Workspace path:
 ${this.workspace}
 
 ${projectDetails ? `Project details:\n${projectDetails}` : ''}
 
-Available workspace files and directories:
+Active Implementation Files:
+${files?.map(file => {
+      if (typeof file === 'object' && file !== null && 'path' in file) {
+        const relativePath = path.relative(this.workspace, (file as FileMetadata).path);
+        const description = (file as FileMetadata).description || '';
+        return description
+          ? `Path: ${relativePath}\nContext: ${description}`
+          : `Path: ${relativePath}`;
+      }
+      return `Path: ${path.relative(this.workspace, file)}`;
+    }).join('\n') ?? "None provided."}
+
+Related Context Files:
+${Array.from(contextFiles.keys())?.map(file => {
+      if (typeof file === 'object' && file !== null && 'path' in file) {
+        const relativePath = path.relative(this.workspace, (file as FileMetadata).path);
+        const description = (file as FileMetadata).description || '';
+        return description
+          ? `Path: ${relativePath}\nContext: ${description}`
+          : `Path: ${relativePath}`;
+      }
+      return `Path: ${path.relative(this.workspace, file)}`;
+    }).join('\n') ?? "None provided."}
+
+Available workspace files:
 ${fileTargets}
 
 -----
 
-Treat the following files with higher priority:
-${[...Array.from(contextFiles.keys()), ...files ?? []].map(file => {
-      const f = typeof file === 'object' && file !== null && 'path' in file ?
-        path.relative(this.workspace, (file as FileMetadata).path) : path.relative(this.workspace, file);
+Implementation Context:
+The following conversation shows the current implementation plan and file context.
+Messages are sorted oldest to newest.
+Pay special attention to files being modified and implementation decisions.
 
-      return `Path: ${path.relative(this.workspace, f)}`
-    }).join('\n') ?? "None provided."}
-
------
-
-Use the following conversation with the user to determine your objective
-Messages are sorted oldest to newest
-Note - The most recent message may be the user acknowleding you
-
-Conversation:
 ${question}
 
 -----
 
-STRICT OUTPUT FORMAT:
-===TASK_START===
+Response Format:
+===ACKNOWLEDGEMENT_START===
 [Brief acknowledgment of request]
 
 [For rejection scenarios only - ask how you should proceed]
@@ -272,7 +398,7 @@ Key Changes:
 - [Include file names and paths]
 
 **Would you like me to proceed with these changes?**
-===TASK_END===
+===ACKNOWLEDGEMENT_END===
 
 ===TARGETS_START===
 [Internal targets list - not shown to user]
@@ -295,14 +421,6 @@ Path: [Workspace relative file path]
         throw error;
       }
     });
-
-    // if (!result.task || !result.targets.length) {
-    //   result.task = '### Implementation Plan\nI need more details about what you\'d like to accomplish. Could you elaborate?\n\n**How would you like to proceed?**';
-    //   result.targets = [{
-    //     type: 'QUESTION',
-    //     description: 'Could you provide more specific details about your request?'
-    //   }];
-    // }
 
     return [result, allContents];
   }

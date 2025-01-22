@@ -1,10 +1,11 @@
-//@ts-nocheck
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types";
 import { formatMessages, loadWingmanRules } from "../../utils";
 import { NoFilesChangedError } from "../../errors";
 import {
 	HumanMessage,
+	MessageContentImageUrl,
+	MessageContentText,
 	SystemMessage,
 } from "@langchain/core/messages";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
@@ -159,6 +160,7 @@ class StreamParser {
 
 					if (depsMatch?.[1]) {
 						try {
+							//@ts-expect-error
 							fileUpdate.dependencies = JSON.parse(depsMatch?.[1]?.split(',').map(d => d.trim()) || '[]')
 						} catch (e) {
 							console.error('Unable to parse dependencies: ', e);
@@ -274,6 +276,7 @@ Implementation Guidelines:
    - Maintain existing comments
    - Update documentation as needed
    - Keep comments focused and minimal
+   - Do not include extraneous comments, only comment on critical or complex areas.
 
 5. Quality Constraints
    - Write testable code
@@ -390,18 +393,29 @@ export class CodeWriter {
 
 			const parser = new StreamParser(this.workspace);
 
+			const msgs: Array<MessageContentText | MessageContentImageUrl> = [
+				{
+					type: "text",
+					text: `Current file:\n${file === "BLANK"
+						? `No related files found. Working directory:\n${this.workspace}`
+						: `File:\n${file}\n\nCode (blank if must be created):\n${code}`}`,
+				}
+			];
+
+			if (state.image) {
+				msgs.push({
+					type: "image_url",
+					image_url: {
+						url: state.image.data,
+					},
+				});
+			}
+
 			let output = '';
 			for await (const chunk of await this._chatModel.stream([
 				systemMessage,
 				new HumanMessage({
-					content: [
-						{
-							type: "text",
-							text: `Current file:\n${file === "BLANK"
-								? `No related files found. Working directory:\n${this.workspace}`
-								: `File:\n${file}\n\nCode (blank if must be created):\n${code}`}`,
-						},
-					],
+					content: msgs
 				})
 			])) {
 				output += chunk.content.toString();
