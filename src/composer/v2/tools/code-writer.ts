@@ -46,7 +46,6 @@ const FILE_SEPARATOR = "<FILE_SEPARATOR>";
 class StreamParser {
 	private buffer = '';
 	private currentSection: 'file' | null = null;
-	private gitCommands: GitCommandEngine | undefined;
 	private result: CodeResponse = {
 		file: {
 			path: '',
@@ -57,7 +56,6 @@ class StreamParser {
 	};
 
 	constructor(private readonly workspace: string) {
-		this.gitCommands = new GitCommandEngine(process.cwd());
 	}
 
 	private isInSection(delimiter: string) {
@@ -155,7 +153,7 @@ class StreamParser {
 						markdownLanguage: langMatch?.[1].trim() || '',
 						description: descMatch?.[1].trim() || '',
 						code: codeMatch?.[1].trim() || '',
-						dependencies: depsMatch?.[1]?.split(',').map(d => d.trim()) || []
+						dependencies: depsMatch?.[1]?.split(',').map(d => d.trim()) || [],
 					};
 
 					if (depsMatch?.[1]) {
@@ -434,7 +432,10 @@ export class CodeWriter {
 
 					const stateFile = state?.files?.find(f => f.path === updates.file?.path);
 					if (stateFile && !files.some(f => f.path === updates.file?.path)) {
-						Object.assign(stateFile, updates.file);
+						Object.assign(stateFile, updates.file, {
+							accepted: false,
+							rejected: false
+						});
 
 						// Collect dependencies
 						updates.file.dependencies?.forEach(dep => allDependencies.add(dep));
