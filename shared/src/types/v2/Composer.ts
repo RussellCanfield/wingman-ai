@@ -1,11 +1,14 @@
 import { FileMetadata } from "./Message";
 
 export type DiffViewCommand = {
-	file: string;
-	diff: string;
+	file: FileMetadata;
 	isDarkTheme?: boolean;
-	original?: string;
-	language?: string;
+};
+
+export type IndexStats = {
+	exists: boolean;
+	processing: boolean;
+	files: string[];
 };
 
 export type ManualStep = {

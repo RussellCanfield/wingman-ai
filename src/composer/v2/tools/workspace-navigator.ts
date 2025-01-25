@@ -66,9 +66,15 @@ export class WorkspaceNavigator {
       }
     }
 
+    const messages = [...state.messages, new ChatMessage(intent.task, "assistant")];
+
+    await dispatchCustomEvent("assistant-question", {
+      messages
+    });
+
     return {
       userIntent: { ...intent },
-      messages: [...state.messages, new ChatMessage(intent.task, "assistant")],
+      messages,
       files,
       greeting: "",
       projectDetails: projectDetails?.description,

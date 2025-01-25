@@ -4,7 +4,6 @@ import {
 	extractCodeBlock,
 	replaceTextInDocument,
 } from "./utilities";
-import { DiffViewCommand } from "@shared/types/Composer";
 import {
 	AppMessage,
 	CodeReview,
@@ -15,6 +14,7 @@ import {
 import { AIProvider } from "../service/base";
 import { CodeReviewer } from "../commands/review/codeReviewer";
 import { LSPClient } from "../client";
+import { DiffViewCommand } from "@shared/types/v2/Composer";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
@@ -88,23 +88,23 @@ export class DiffViewProvider {
 		);
 	}
 
-	async createDiffView({ file, diff, onAccept, onReject }: DiffViewCommand & { onAccept: (file: FileMetadata) => void, onReject: (file: FileMetadata) => void }) {
-		if (this.panels.has(file)) {
-			const existingPanel = this.panels.get(file);
+	async createDiffView({ file, onAccept, onReject }: DiffViewCommand & { onAccept: (file: FileMetadata) => void, onReject: (file: FileMetadata) => void }) {
+		if (this.panels.has(file.path)) {
+			const existingPanel = this.panels.get(file.path);
 			existingPanel?.reveal(vscode.ViewColumn.One);
 			return;
 		}
 
 		const currentPanel = vscode.window.createWebviewPanel(
 			"diffWebView",
-			`${file} - Diff View`,
+			`${file.path} - Diff View`,
 			vscode.ViewColumn.One,
 			{
 				enableScripts: true,
 			}
 		);
 
-		this.panels.set(file, currentPanel);
+		this.panels.set(file.path, currentPanel);
 
 		currentPanel.webview.html = await getWebViewHtml(
 			this._context,
@@ -112,7 +112,7 @@ export class DiffViewProvider {
 		);
 
 		currentPanel.onDidDispose(() => {
-			this.panels.delete(file);
+			this.panels.delete(file.path);
 		});
 
 		currentPanel.webview.onDidReceiveMessage(
@@ -129,25 +129,13 @@ export class DiffViewProvider {
 								isDarkTheme:
 									vscode.window.activeColorTheme.kind !== 1,
 								file,
-								diff,
-								original: await vscode.workspace.fs
-									.stat(vscode.Uri.file(file))
-									.then(
-										async () =>
-											await vscode.workspace.fs
-												.readFile(vscode.Uri.file(file))
-												.then((buffer) =>
-													buffer.toString()
-												),
-										() => "" // Return an empty string if the file does not exist
-									),
 							} satisfies DiffViewCommand,
 						});
 						break;
 					case "accept-file-changes":
 						await this.acceptFileChanges(
 							currentPanel,
-							file,
+							file.path,
 							value as FileMetadata
 						);
 						onAccept(value as FileMetadata);
@@ -156,7 +144,7 @@ export class DiffViewProvider {
 						onReject(value as FileMetadata);
 						if (currentPanel) {
 							currentPanel.dispose();
-							this.panels.delete(file);
+							this.panels.delete(file.path);
 						}
 						break;
 				}

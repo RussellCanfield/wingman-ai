@@ -13,7 +13,7 @@ import { TypeRequestEvent } from "../server/retriever";
 import { EmbeddingsResponse } from "../server";
 import { Settings } from "@shared/types/Settings";
 import { IndexerSettings } from "@shared/types/Indexer";
-import { ComposerRequest, ComposerResponse } from "@shared/types/Composer";
+import { ComposerRequest, ComposerResponse, IndexStats } from "@shared/types/v2/Composer";
 import path from "node:path";
 import ignore from "ignore";
 import { mapLocation, mapSymbol } from "./utils";
@@ -189,6 +189,22 @@ export class LSPClient {
 		return client.sendRequest("wingman/rejectComposerFile", file);
 	}
 
+	undoComposerFile = async (file: FileMetadata): Promise<PlanExecuteState> => {
+		const fsPath = path.isAbsolute(file.path)
+			? file.path
+			: path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, file.path);
+
+		// Write the original content back to the file
+		if (file.original) {
+			await vscode.workspace.fs.writeFile(
+				vscode.Uri.file(fsPath),
+				Buffer.from(file.original)
+			);
+		}
+
+		return client.sendRequest("wingman/undoComposerFile", file);
+	}
+
 	buildFullIndex = async ({
 		indexFilter,
 		exclusionFilter,
@@ -230,7 +246,7 @@ export class LSPClient {
 		return { codeDocs: [], projectDetails: "" };
 	};
 
-	indexExists = async () => {
+	indexExists = async (): Promise<IndexStats> => {
 		return client.sendRequest("wingman/getIndex");
 	};
 
