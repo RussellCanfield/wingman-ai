@@ -16,6 +16,7 @@ import { useSettingsContext } from "../../context/settingsContext";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
 import { PiGitDiff } from "react-icons/pi";
+import { FaUndo } from "react-icons/fa";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -25,6 +26,55 @@ export function extractCodeBlock(text: string) {
 		matches.push(match[1]);
 	}
 	return matches.length > 0 ? matches.join("\n") : text;
+}
+
+const mergeIntoFile = (file: FileMetadata) => {
+	if (file) {
+		vscode.postMessage({
+			command: "accept-file",
+			value: file,
+		});
+	}
+};
+
+const rejectFile = (file: FileMetadata) => {
+	if (file) {
+		vscode.postMessage({
+			command: "reject-file",
+			value: file,
+		});
+	}
+}
+
+const showDiffview = (file: FileMetadata) => {
+	if (file) {
+		vscode.postMessage({
+			command: "diff-view",
+			value: {
+				file
+			} satisfies DiffViewCommand,
+		});
+	}
+};
+
+const undoFile = (file: FileMetadata) => {
+	if (file) {
+		vscode.postMessage({
+			command: "undo-file",
+			value: file
+		});
+	}
+}
+
+const openFile = (file: FileMetadata) => {
+	if (file) {
+		vscode.postMessage({
+			command: "open-file",
+			value: {
+				path: file.path,
+			} satisfies FileMetadata,
+		});
+	}
 }
 
 const CodeContainer = memo(
@@ -90,53 +140,11 @@ const renderMarkdown = (
 
 const ChatArtifact = ({
 	file,
-	loading
+	loading,
 }: {
 	file: FileMetadata,
 	loading: boolean
 }) => {
-	const mergeIntoFile = () => {
-		if (file) {
-			vscode.postMessage({
-				command: "accept-file",
-				value: file,
-			});
-		}
-	};
-
-	const rejectFile = () => {
-		if (file) {
-			vscode.postMessage({
-				command: "reject-file",
-				value: file,
-			});
-		}
-	}
-
-	const showDiffview = () => {
-		if (file) {
-			vscode.postMessage({
-				command: "diff-view",
-				value: {
-					file: file.path,
-					diff: file.code,
-					language: file.language
-				} as DiffViewCommand,
-			});
-		}
-	};
-
-	const openFile = () => {
-		if (file) {
-			vscode.postMessage({
-				command: "open-file",
-				value: {
-					path: file.path,
-				} as FileMetadata,
-			});
-		}
-	}
-
 	const truncatedPath = useMemo(() => {
 		if (file.path.length <= 50) return file.path;
 		return "..." + file.path.slice(-50);
@@ -146,75 +154,93 @@ const ChatArtifact = ({
 
 	return (
 		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30">
-			<div className="bg-stone-800/50 text-white flex items-center border-b border-stone-700/50 flex-wrap">
-				<h4
-					className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer hover:underline transition-all text-sm"
-					onClick={openFile}
-				>
-					{truncatedPath}
-				</h4>
-				{!file.code && loading && (
-					<div className="p-4 flex justify-center">
-						<AiOutlineLoading3Quarters
-							className="animate-spin text-stone-400"
-							size={24}
-						/>
-					</div>
-				)}
-				{diffParts && (
-					<div className="flex items-center gap-2 px-3 text-sm flex-nowrap">
-						<span className="flex items-center gap-1 text-green-400">
-							<span>{diffParts[0]}</span>
-						</span>
-						<span className="flex items-center gap-1 text-red-400">
-							<span>{diffParts[1]}</span>
-						</span>
-					</div>
-				)}
-				{!loading && file?.description && !file.accepted && !file.rejected && (
-					<div className="flex flex-nowrap ml-auto">
-						<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-red-600">
-							<button
-								type="button"
-								title="Reject changes"
-								className="p-3"
-								onClick={() => rejectFile()}
-							>
-								<HiOutlineXMark size={18} />
-							</button>
+			<div className="bg-stone-800/50 text-white flex flex-col border-b border-stone-700/50">
+				<div className="flex items-center border-b border-stone-700/50">
+					<h4
+						className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm flex-grow"
+						onClick={() => openFile(file)}
+					>
+						{truncatedPath}
+					</h4>
+				</div>
+				<div className="flex flex-wrap items-center gap-2 p-2">
+					{!file.code && loading && (
+						<div className="flex justify-center">
+							<AiOutlineLoading3Quarters
+								className="animate-spin text-stone-400"
+								size={24}
+							/>
 						</div>
-						<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors" style={{ color: '#ffaf38' }}>
-							<button
-								type="button"
-								title="Show diff"
-								className="p-3"
-								onClick={() => showDiffview()}
-							>
-								<PiGitDiff size={16} />
-							</button>
+					)}
+					{diffParts && (
+						<div className="flex items-center gap-2 text-sm">
+							<span className="flex items-center gap-1 text-green-400">
+								<span>{diffParts[0]}</span>
+							</span>
+							<span className="flex items-center gap-1 text-red-400">
+								<span>{diffParts[1]}</span>
+							</span>
 						</div>
-						<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-green-400">
-							<button
-								type="button"
-								title="Accept changes"
-								className="p-3"
-								onClick={() => mergeIntoFile()}
-							>
-								<GrCheckmark size={16} />
-							</button>
+					)}
+					{!loading && file?.description && !file.accepted && !file.rejected && (
+						<div className="flex flex-nowrap gap-1 ml-auto">
+							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-red-600">
+								<button
+									type="button"
+									title="Reject changes"
+									className="p-2"
+									onClick={() => rejectFile(file)}
+								>
+									<HiOutlineXMark size={18} />
+								</button>
+							</div>
+							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors" style={{ color: '#ffaf38' }}>
+								<button
+									type="button"
+									title="Show diff"
+									className="p-2"
+									onClick={() => showDiffview(file)}
+								>
+									<PiGitDiff size={16} />
+								</button>
+							</div>
+							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-green-400">
+								<button
+									type="button"
+									title="Accept changes"
+									className="p-2"
+									onClick={() => mergeIntoFile(file)}
+								>
+									<GrCheckmark size={16} />
+								</button>
+							</div>
 						</div>
-					</div>
-				)}
-				{(file.rejected || file.accepted) && (
-					<div className="flex flex-nowrap ml-auto pr-4">
-						{file.rejected && (<span className="flex items-center gap-1 text-base text-red-400">
-							<span>Rejected</span>
-						</span>)}
-						{file.accepted && (<span className="flex items-center gap-1 text-base text-green-400">
-							<span>Accepted</span>
-						</span>)}
-					</div>
-				)}
+					)}
+					{(file.rejected || file.accepted) && (
+						<div className="flex items-center gap-3 ml-auto">
+							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-stone-400">
+								<button
+									type="button"
+									title="Undo changes"
+									className="p-2"
+									onClick={() => undoFile(file)}
+								>
+									<FaUndo size={14} />
+								</button>
+							</div>
+							{file.rejected && (
+								<span className="flex items-center gap-1 text-base text-red-400">
+									<span>Rejected</span>
+								</span>
+							)}
+							{file.accepted && (
+								<span className="flex items-center gap-1 text-base text-green-400">
+									<span>Accepted</span>
+								</span>
+							)}
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);
@@ -233,37 +259,6 @@ const ChatEntry = ({
 	const { isLightTheme } = useSettingsContext();
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
-	const mergeIntoFile = (file: FileMetadata) => {
-		if (!file) return;
-
-		vscode.postMessage({
-			command: "accept-file",
-			value: file,
-		});
-	};
-
-	const rejectFile = (file: FileMetadata) => {
-		if (!file) return;
-
-		vscode.postMessage({
-			command: "reject-file",
-			value: file
-		})
-	}
-
-	const showDiffview = (file: FileMetadata) => {
-		if (file) {
-			vscode.postMessage({
-				command: "diff-view",
-				value: {
-					file: file.path,
-					diff: file.code,
-					language: file.language
-				} as DiffViewCommand,
-			});
-		}
-	};
-
 	const sendTerminalCommand = (payload: string) => {
 		if (payload) {
 			vscode.postMessage({
@@ -277,6 +272,8 @@ const ChatEntry = ({
 
 	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
 		} rounded-lg overflow-hidden w-full` : "";
+
+	const hasPendingFiles = files?.some(f => !f.accepted && !f.rejected);
 
 	return (
 		<li
@@ -316,7 +313,7 @@ const ChatEntry = ({
 										)}
 										<ChatArtifact
 											file={file}
-											loading={loading ?? false}
+											loading={loading || !isCurrent || false}
 										/>
 									</div>
 								))}
@@ -375,60 +372,104 @@ const ChatEntry = ({
 					</div>
 				</div>
 			</div>
-			{isCurrent && !loading && files && (<div className="border-t border-stone-700/50 mt-4 pt-4">
-				<div className="flex flex-col items-center justify-between text-sm text-stone-400 pl-[48px] pr-[16px]">
-					{files.map(f => {
-						const truncatedPath = useMemo(() => {
-							if (f.path.length <= 50) return f.path;
-							return "..." + f.path.slice(-50);
-						}, [f]);
+			{isCurrent && !loading && files && files?.length > 1 && (
+				<div className="border-t border-stone-700/50 mt-4 pt-4 pl-[48px] pr-[16px]">
+					<p>
+						Summary:
+					</p>
+					<div className="flex flex-col items-center justify-between text-sm text-stone-400">
+						{files.map(f => {
+							const truncatedPath = useMemo(() => {
+								if (f.path.length <= 50) return f.path;
+								return "..." + f.path.slice(-50);
+							}, [f]);
 
-						const diffParts = f.diff?.split(',') ?? [0, 0];
+							const diffParts = f.diff?.split(',') ?? [0, 0];
 
-						return (
-							<div className="flex items-center justify-between gap-4 w-full max-h-24 overflow-y-scroll">
-								<div className="flex">
-									<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer" onClick={() => showDiffview(f)}>
-										{truncatedPath}
-									</h4>
-									<div className="flex items-center gap-2 px-3 text-sm flex-nowrap">
-										<span className="flex items-center gap-1 text-green-400">
-											<span>{diffParts[0]}</span>
-										</span>
-										<span className="flex items-center gap-1 text-red-400">
-											<span>{diffParts[1]}</span>
-										</span>
+							return (
+								<div className="flex items-center justify-between gap-4 w-full max-h-24 overflow-y-scroll">
+									<div className="flex">
+										<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer" onClick={() => showDiffview(f)}>
+											{truncatedPath}
+										</h4>
+										<div className="flex items-center gap-2 px-3 text-sm flex-nowrap">
+											<span className="flex items-center gap-1 text-green-400">
+												<span>{diffParts[0]}</span>
+											</span>
+											<span className="flex items-center gap-1 text-red-400">
+												<span>{diffParts[1]}</span>
+											</span>
+										</div>
 									</div>
+									{(f.rejected || f.accepted) && (
+										<div className="flex items-center gap-3 ml-auto">
+											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-stone-400">
+												<button
+													type="button"
+													title="Undo changes"
+													className="p-2"
+													onClick={() => undoFile(f)}
+												>
+													<FaUndo size={14} />
+												</button>
+											</div>
+											{f.rejected && (
+												<span className="flex items-center gap-1 text-base text-red-400">
+													<span>Rejected</span>
+												</span>
+											)}
+											{f.accepted && (
+												<span className="flex items-center gap-1 text-base text-green-400">
+													<span>Accepted</span>
+												</span>
+											)}
+										</div>
+									)}
+									{!f.rejected && !f.accepted && (
+										<div className="flex flex-nowrap ml-auto">
+											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-red-600">
+												<button
+													type="button"
+													title="Reject changes"
+													className="p-3"
+													onClick={() => rejectFile(f)}
+												>
+													<HiOutlineXMark size={18} />
+												</button>
+											</div>
+											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-green-400">
+												<button
+													type="button"
+													title="Accept changes"
+													className="p-3"
+													onClick={() => mergeIntoFile(f)}
+												>
+													<GrCheckmark size={16} />
+												</button>
+											</div>
+										</div>
+									)}
 								</div>
-								<div className="flex gap-4 items-center">
-									{!f.accepted && !f.rejected && (<HiOutlineXMark size={18} onClick={() => rejectFile(f)} />)}
-									{f.rejected && (<span className=" text-red-400">
-										<span><HiOutlineXMark size={18} /></span>
-									</span>)}
-									{f.accepted && (<span className=" text-green-400">
-										<span><GrCheckmark size={16} /></span>
-									</span>)}
-									{!f.accepted && !f.rejected && (<GrCheckmark size={16} onClick={() => mergeIntoFile(f)} />)}
-								</div>
+							)
+						})}
+						{hasPendingFiles && (
+							<div className="flex justify-end gap-4 w-full mt-4 border-t border-stone-700/50 pt-4">
+								<button
+									onClick={() => files.forEach(f => rejectFile(f))}
+									className="px-3 py-2 text-sm rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors"
+								>
+									Reject All
+								</button>
+								<button
+									onClick={() => files.forEach(f => mergeIntoFile(f))}
+									className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
+								>
+									Accept All
+								</button>
 							</div>
-						)
-					})}
-					<div className="flex justify-end gap-4 w-full mt-4 border-t border-stone-700/50 pt-4">
-						<button
-							onClick={() => files.forEach(f => rejectFile(f))}
-							className="px-3 py-2 text-sm rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors"
-						>
-							Reject All
-						</button>
-						<button
-							onClick={() => files.forEach(f => mergeIntoFile(f))}
-							className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
-						>
-							Accept All
-						</button>
+						)}
 					</div>
-				</div>
-			</div>)}
+				</div>)}
 		</li>
 	);
 };

@@ -7,7 +7,7 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../../store/vector.js";
 import { PlanExecuteState } from "./types/index";
 import { NoFilesChangedError, NoFilesFoundError } from "../errors";
-import { ComposerRequest } from "@shared/types/Composer";
+import { ComposerRequest } from "@shared/types/v2/Composer";
 import { WorkspaceNavigator } from "./tools/workspace-navigator";
 import { UserIntent } from "./types/tools";
 import { FileMetadata } from "@shared/types/v2/Message";
@@ -113,6 +113,30 @@ export class ComposerGraph {
         await graph.updateState({ ...this.config }, {
             messages: []
         } satisfies Partial<PlanExecuteState>);
+    }
+
+    undoFile = async (file: FileMetadata) => {
+        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const state = await graph.getState({ ...this.config });
+
+        const relativePath = path.relative(this.workspace, file.path);
+
+        const graphFiles = (state.values as PlanExecuteState).files;
+        const matchedFile = graphFiles?.find(f => f.path === relativePath);
+
+        if (!matchedFile) return;
+
+        matchedFile.rejected = false;
+        matchedFile.accepted = false;
+
+        await graph.updateState({ ...this.config }, {
+            files: graphFiles
+        })
+
+        return {
+            ...state.values,
+            files: graphFiles
+        }
     }
 
     rejectFile = async (file: FileMetadata) => {
@@ -290,19 +314,6 @@ Answer (yes/no):`
                 const { event, name, data } = chunk;
                 if (event === "on_custom_event") {
                     yield { node: name, values: data };
-                }
-            }
-
-            const graphState = await graph.getState({ ...this.config });
-
-            if (graphState.tasks?.length > 0 && graphState.tasks[0].name === "human-feedback" &&
-                graphState.tasks[0].interrupts?.length > 0
-            ) {
-                yield {
-                    node: "assistant-question", values: {
-                        messages: (graphState.values as Partial<PlanExecuteState>).messages,
-                        greeting: (graphState.values as Partial<PlanExecuteState>).greeting
-                    } satisfies Partial<PlanExecuteState>
                 }
             }
         } catch (e) {

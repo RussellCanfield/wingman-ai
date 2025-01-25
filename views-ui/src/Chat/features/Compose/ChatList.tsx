@@ -1,4 +1,4 @@
-import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
+import { PropsWithChildren, useEffect, useMemo, useRef } from "react";
 import ChatEntry from "./ChatEntry";
 import { ComposerMessage } from "@shared/types/v2/Composer";
 
@@ -8,7 +8,6 @@ function ChatResponseList({
 }: PropsWithChildren & { messages: ComposerMessage[] }) {
 	const ulRef = useRef<HTMLUListElement>(null);
 	const ref = useRef<HTMLDivElement>(null);
-	const [userHasScrolled, setUserHasScrolled] = useState(false);
 
 	const scrollToBottom = () => {
 		if (ref.current) {
@@ -20,32 +19,6 @@ function ChatResponseList({
 		scrollToBottom();
 	}, [messages]);
 
-	useEffect(() => {
-		if (ref.current && ulRef.current) {
-			const observer = new IntersectionObserver(
-				(entries) => {
-					if (!entries[0].isIntersecting) {
-						setUserHasScrolled(true);
-						return;
-					}
-
-					setUserHasScrolled(false);
-				},
-				{
-					root: ulRef.current,
-					rootMargin: "0px",
-					threshold: 1.0,
-				}
-			);
-
-			observer.observe(ref.current as unknown as Element);
-
-			return () => {
-				observer.disconnect();
-			};
-		}
-	}, [ulRef.current]);
-
 	const chatHistory = useMemo(() => {
 		return messages.map(({ from, message, files, dependencies, image }, index) => (
 			<ChatEntry
@@ -56,7 +29,7 @@ function ChatResponseList({
 				files={files}
 				dependencies={dependencies}
 				image={image}
-				isCurrent={index === message.length - 1}
+				isCurrent={index === messages.length - 1}
 			/>
 		));
 	}, [messages]);

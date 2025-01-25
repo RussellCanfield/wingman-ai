@@ -5,7 +5,7 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { memo, PropsWithChildren } from "react";
 import { FileMetadata } from "@shared/types/Message";
-import { DiffViewCommand } from "@shared/types/Composer";
+import { DiffViewCommand } from "@shared/types/v2/Composer";
 import { FaCheckCircle } from "react-icons/fa";
 import { vscode } from "./utilities/vscode";
 import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
@@ -24,12 +24,12 @@ export interface DiffProps {
 }
 
 export default function DiffView({ diff }: DiffProps) {
-	const isDarkTheme = diff.isDarkTheme;
+	const { file, isDarkTheme } = diff;
 
 	const highlightSyntax = (str: string) => {
 		return (
 			<SyntaxHighlighter
-				language={diff.language || "typescript"}
+				language={file.language || "typescript"}
 				style={isDarkTheme ? vscDarkPlus : prism}
 				PreTag={CodeContainer}
 			>
@@ -61,8 +61,8 @@ export default function DiffView({ diff }: DiffProps) {
 		vscode.postMessage({
 			command: "accept-file-changes",
 			value: {
-				path: diff?.file!,
-				code: diff?.diff,
+				path: file.path!,
+				code: file?.code,
 			} satisfies FileMetadata,
 		});
 	};
@@ -71,8 +71,8 @@ export default function DiffView({ diff }: DiffProps) {
 		vscode.postMessage({
 			command: "reject-file-changes",
 			value: {
-				path: diff?.file!,
-				code: diff?.diff,
+				path: file?.path!,
+				code: file?.code,
 			} satisfies FileMetadata,
 		});
 	};
@@ -80,7 +80,7 @@ export default function DiffView({ diff }: DiffProps) {
 	return (
 		<div className="fixed inset-0 bg-gray-900 flex flex-col">
 			<div className="bg-gray-800 p-4 flex justify-between items-center z-10">
-				<p className="text-white font-semibold truncate">{diff.file}</p>
+				<p className="text-white font-semibold truncate">{file.path}</p>
 				<div className="flex gap-4">
 					<button
 						className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
@@ -102,8 +102,8 @@ export default function DiffView({ diff }: DiffProps) {
 			</div>
 			<div className="flex-grow overflow-y-auto">
 				<ReactDiffViewer
-					oldValue={diff.original}
-					newValue={diff.diff}
+					oldValue={file.original}
+					newValue={file.code}
 					styles={newStyles}
 					compareMethod={DiffMethod.CHARS}
 					splitView={false}

@@ -35,7 +35,7 @@ import {
 	Settings,
 } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
-import { ComposerRequest } from "@shared/types/Composer";
+import { ComposerRequest, IndexStats } from "@shared/types/v2/Composer";
 import { loggingProvider } from "./loggingProvider";
 import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
@@ -320,12 +320,12 @@ export class LSPServer {
 
 		this.connection?.onRequest("wingman/getIndex", async () => {
 			return {
-				exists: await this.vectorStore?.indexExists(),
-				processing: this.indexer?.isSyncing(),
+				exists: (await this.vectorStore?.indexExists()) ?? false,
+				processing: this.indexer?.isSyncing() ?? false,
 				files: Array.from(
 					this.codeGraph?.getSymbolTable().keys() ?? []
 				),
-			};
+			} satisfies IndexStats;
 		});
 
 		this.connection?.onRequest(
@@ -424,6 +424,10 @@ export class LSPServer {
 
 		this.connection?.onRequest("wingman/rejectComposerFile", async (file: FileMetadata) => {
 			return this.composer?.rejectFile(file);
+		});
+
+		this.connection?.onRequest("wingman/undoComposerFile", async (file: FileMetadata) => {
+			return this.composer?.undoFile(file);
 		});
 
 		this.connection?.onRequest("wingman/getEmbeddings", async (request) => {

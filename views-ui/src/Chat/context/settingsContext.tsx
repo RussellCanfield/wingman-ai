@@ -2,14 +2,9 @@ import React, { createContext, useContext, useState, useEffect, FC, PropsWithChi
 import { AppMessage } from "@shared/types/Message";
 import { AppState } from "@shared/types/Settings";
 import { vscode } from "../utilities/vscode";
+import { IndexStats } from "@shared/types/v2/Composer";
 
 export type View = "chat" | "composer" | "index";
-
-export type IndexStats = {
-  exists: boolean;
-  processing: boolean;
-  files: string[];
-};
 
 interface SettingsContextType {
   view: View;
@@ -74,6 +69,12 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
           break;
         case "index-status":
           setIndex(value as IndexStats);
+          break;
+        case "available-files":
+          setAppState(state => ({
+            ...state!,
+            totalFiles: value as number
+          }));
           break;
       }
     };

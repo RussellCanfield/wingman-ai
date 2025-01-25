@@ -14,7 +14,7 @@ type IndexStats = {
 let interval: NodeJS.Timeout;
 
 export default function Indexer() {
-	const { indexFilter, exclusionFilter, setIndexFilter, setExclusionFilter, totalFileCount, indexStats, setIndex } =
+	const { indexFilter, exclusionFilter, setIndexFilter, totalFileCount, indexStats, setIndex } =
 		useSettingsContext();
 
 	useEffect(() => {

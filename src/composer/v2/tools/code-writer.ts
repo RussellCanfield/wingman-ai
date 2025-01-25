@@ -1,7 +1,6 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PlanExecuteState } from "../types";
 import { formatMessages, loadWingmanRules } from "../../utils";
-import { NoFilesChangedError } from "../../errors";
 import {
 	HumanMessage,
 	MessageContentImageUrl,
@@ -12,9 +11,8 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { FileMetadata } from "@shared/types/Message";
 import { getTextDocumentFromPath } from "../../../server/files/utils";
 import path from "node:path";
-import { GitCommandEngine } from "../../../utils/gitCommandEngine";
 import { createPatch } from 'diff';
-import fs from "node:fs";
+import fs, { promises } from "node:fs";
 import { Command } from "@langchain/langgraph";
 
 type CodeResponse = {
@@ -62,7 +60,7 @@ class StreamParser {
 		return this.buffer.includes(delimiter);
 	}
 
-	private generateDiffFromModifiedCode(newCode: string, filePath: string): string {
+	private async generateDiffFromModifiedCode(newCode: string, filePath: string): Promise<string> {
 		try {
 			if (!filePath) {
 				throw new Error('File path is required');
@@ -76,7 +74,7 @@ class StreamParser {
 			let fileContents = '';
 			if (fs.existsSync(filePath)) {
 				try {
-					fileContents = fs.readFileSync(filePath, { encoding: 'utf-8' });
+					fileContents = await promises.readFile(filePath, { encoding: 'utf-8' });
 				} catch (e) {
 					console.warn(`Failed to read file ${filePath}:`, e);
 					// Continue with empty string for new files
@@ -171,7 +169,7 @@ class StreamParser {
 								? fileUpdate.path
 								: path.join(this.workspace, fileUpdate.path);
 
-							fileUpdate.diff = this.generateDiffFromModifiedCode(fileUpdate.code, filePath);
+							fileUpdate.diff = await this.generateDiffFromModifiedCode(fileUpdate.code, filePath);
 						} catch (e) {
 							console.error('Unable to generate diff for:', fileUpdate.path, e);
 						}
@@ -199,7 +197,7 @@ Output Format:
 ===FILE_START===
 Path: [Full file path]
 Language: [Programming language]
-Description: [One line description of changes]
+Description: [A short and concise description of changes]
 Dependencies: Array of new dependencies if any, provide empty JSON array if none
 Code: 
 [Complete file code]
@@ -266,6 +264,7 @@ Implementation Guidelines:
    - Prevent regression bugs
    - Consider integration points
    - Ensure seamless component integration
+   - Pay special attention to named and default exports in javascript. Use named exports as your default.
 
 4. Documentation
    - Document complex logic
@@ -360,102 +359,134 @@ export class CodeWriter {
 		const files: FileMetadata[] = [];
 		const allDependencies = new Set<string>();
 
-		// Process files first
-		for (let { path: file, code } of state.files ?? []) {
-			if (!code) {
-				const textDocument = await getTextDocumentFromPath(path.join(this.workspace, file));
-				code = textDocument?.getText();
-			}
+		const executeStep = async (includeImage: boolean) => {
+			// Process files first
+			for (let { path: file, code } of state.files ?? []) {
+				if (!code) {
+					const textDocument = await getTextDocumentFromPath(path.join(this.workspace, file));
+					code = textDocument?.getText();
+				}
 
-			const systemMessage = new SystemMessage({
-				content: [
+				const systemMessage = new SystemMessage({
+					content: [
+						{
+							type: "text",
+							cache_control: { type: "ephemeral" },
+							text: buildPrompt({
+								projectDetails: state.projectDetails || "Not available.",
+								request,
+								modifiedFiles: files.length === 0 ? "" :
+									`Files already processed:\n${files.map(f =>
+										`File: ${f.path}\nChanges: ${f.description}`
+									).join('\n')}`,
+								availableFiles: state.files
+									?.filter((f) => f.path !== file)
+									?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nCode:\n${f.code}`)
+									.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
+								rulePack,
+							}),
+						},
+					],
+				});
+
+				const parser = new StreamParser(this.workspace);
+
+				const msgs: Array<MessageContentText | MessageContentImageUrl> = [
 					{
 						type: "text",
-						cache_control: { type: "ephemeral" },
-						text: buildPrompt({
-							projectDetails: state.projectDetails || "Not available.",
-							request,
-							modifiedFiles: files.length === 0 ? "" :
-								`Files already processed:\n${files.map(f =>
-									`File: ${f.path}\nChanges: ${f.description}`
-								).join('\n')}`,
-							availableFiles: state.files
-								?.filter((f) => f.path !== file)
-								?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nCode:\n${f.code}`)
-								.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
-							rulePack,
-						}),
-					},
-				],
-			});
+						text: `Current file:\n${file === "BLANK"
+							? `No related files found. Working directory:\n${this.workspace}`
+							: `File:\n${file}\n\nCode (blank if must be created):\n${code}`}`,
+					}
+				];
 
-			const parser = new StreamParser(this.workspace);
-
-			const msgs: Array<MessageContentText | MessageContentImageUrl> = [
-				{
-					type: "text",
-					text: `Current file:\n${file === "BLANK"
-						? `No related files found. Working directory:\n${this.workspace}`
-						: `File:\n${file}\n\nCode (blank if must be created):\n${code}`}`,
+				if (includeImage && state.image) {
+					msgs.push({
+						type: "image_url",
+						image_url: {
+							url: state.image.data,
+						},
+					});
 				}
-			];
 
-			if (state.image) {
-				msgs.push({
-					type: "image_url",
-					image_url: {
-						url: state.image.data,
-					},
-				});
-			}
-
-			let output = '';
-			for await (const chunk of await this._chatModel.stream([
-				systemMessage,
-				new HumanMessage({
-					content: msgs
-				})
-			])) {
-				output += chunk.content.toString();
-				const updates = await parser.parse(chunk.content.toString());
-
-				if (updates.file) {
-					if (!updates.file.code) {
-						await dispatchCustomEvent("composer-error", {
-							error:
-								`I was unable to generate code for the following file: ${updates.file.path}, please try again.`,
-						});
-						return new Command({
-							goto: "find",
+				try {
+					let output = '';
+					for await (const chunk of await this._chatModel.stream([
+						systemMessage,
+						new HumanMessage({
+							content: msgs
 						})
-					}
+					])) {
+						output += chunk.content.toString();
+						const updates = await parser.parse(chunk.content.toString());
 
-					const stateFile = state?.files?.find(f => f.path === updates.file?.path);
-					if (stateFile && !files.some(f => f.path === updates.file?.path)) {
-						Object.assign(stateFile, updates.file, {
-							accepted: false,
-							rejected: false
+						if (updates.file) {
+							if (!updates.file.code) {
+								await dispatchCustomEvent("composer-error", {
+									error: `I was unable to generate code for the following file: ${updates.file.path}, please try again.`,
+								});
+								return new Command({
+									goto: "find",
+								});
+							}
+
+							const stateFile = state?.files?.find(f => f.path === updates.file?.path);
+							if (stateFile && !files.some(f => f.path === updates.file?.path)) {
+								Object.assign(stateFile, updates.file, {
+									accepted: false,
+									rejected: false
+								});
+
+								const filePath = path.isAbsolute(this.workspace) ?
+									stateFile.path :
+									path.join(this.workspace, stateFile.path);
+
+								if (fs.existsSync(filePath)) {
+									stateFile.original = (await promises.readFile(filePath)).toString();
+								}
+
+								updates.file.dependencies?.forEach(dep => allDependencies.add(dep));
+
+								files.push(stateFile);
+								await dispatchCustomEvent('composer-files', { files: state.files });
+							}
+						}
+					}
+					return true;
+				} catch (error) {
+					const errorMessage = error?.toString?.() || '';
+					if (includeImage && (
+						errorMessage.includes('image') ||
+						errorMessage.includes('multimodal') ||
+						errorMessage.includes('unsupported')
+					)) {
+						await dispatchCustomEvent("composer-warning", {
+							warning: "Image processing not supported by the model. Retrying without image...",
 						});
-
-						// Collect dependencies
-						updates.file.dependencies?.forEach(dep => allDependencies.add(dep));
-
-						files.push(stateFile);
-						await dispatchCustomEvent('composer-files', { files: state.files });
+						return false;
 					}
+					throw error;
 				}
 			}
+			return true;
+		};
+
+		// First try with image if present
+		const success = await executeStep(true);
+
+		// If failed and had image, retry without
+		if (!success && state.image) {
+			await executeStep(false);
 		}
 
 		if (files.length === 0) {
 			await dispatchCustomEvent("composer-error", {
-				error:
-					"I've failed to generate any code changes for this session, if this continues please clear the chat and try again.",
+				error: "I've failed to generate any code changes for this session, if this continues please clear the chat and try again.",
 			});
 			console.error("No files have been changed.");
 			return new Command({
 				goto: "find",
-			})
+			});
 		}
 
 		return {

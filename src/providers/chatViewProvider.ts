@@ -26,7 +26,8 @@ import {
 	ComposerRequest,
 	DiffViewCommand,
 	FileSearchResult,
-} from "@shared/types/Composer";
+	IndexStats,
+} from "@shared/types/v2/Composer";
 import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 import {
@@ -204,6 +205,17 @@ ${result.summary}`,
 
 					// TODO - save me from the insanity of this switch statement :D
 					switch (command) {
+						case "undo-file":
+							webviewView.webview.postMessage({
+								command: "compose-response",
+								value: {
+									node: "composer-replace",
+									values: {
+										...(await this._lspClient.undoComposerFile(value as FileMetadata))
+									}
+								}
+							});
+							break;
 						case "open-file":
 							await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(this._workspace.workspacePath, (value as FileMetadata).path)));
 							break;
@@ -311,16 +323,11 @@ ${commitReview}
 							);
 							break;
 						case "diff-view":
-							const { file, diff, language } = value as DiffViewCommand;
+							const { file } = value as DiffViewCommand;
 
 							this._diffViewProvider.createDiffView({
-								file: vscode.Uri.joinPath(
-									vscode.Uri.parse(this._workspace.workspacePath),
-									vscode.workspace.asRelativePath(file)
-								).fsPath,
-								diff: extractCodeBlock(diff),
-								language,
-								onAccept: async (f) => {
+								file,
+								onAccept: async (f: FileMetadata) => {
 									webviewView.webview.postMessage({
 										command: "compose-response",
 										value: {
@@ -332,7 +339,7 @@ ${commitReview}
 									});
 
 								},
-								onReject: async (f) => {
+								onReject: async (f: FileMetadata) => {
 									webviewView.webview.postMessage({
 										command: "compose-response",
 										value: {
@@ -381,14 +388,12 @@ ${commitReview}
 							break;
 						case "accept-file":
 							const acceptedFile = value as FileMetadata;
-
 							const { path: artifactFile, code: markdown } = acceptedFile;
 
 							let code = markdown?.startsWith("```")
 								? extractCodeBlock(markdown)
 								: markdown;
-							const relativeFilePath =
-								vscode.workspace.asRelativePath(artifactFile);
+							const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
 
 							const fileUri = vscode.Uri.joinPath(
 								vscode.Uri.parse(this._workspace.workspacePath),
@@ -396,58 +401,25 @@ ${commitReview}
 							);
 
 							try {
-								// Check if the file exists
-								await vscode.workspace.fs.stat(fileUri);
+								// Convert the code string to Uint8Array for writing
+								const contentBytes = new TextEncoder().encode(code);
 
-								// Check if the document is already open
-								let document =
-									vscode.workspace.textDocuments.find(
-										(doc) =>
-											doc.uri.toString() ===
-											fileUri.toString()
-									);
-								if (!document) {
-									// Open the text document if it is not already open
-									document =
-										await vscode.workspace.openTextDocument(
-											fileUri
-										);
-								}
+								// Write the file contents directly
+								await vscode.workspace.fs.writeFile(fileUri, contentBytes);
 
-								// Replace text in the document
-								await replaceTextInDocument(document, code!, true);
-							} catch (error) {
-								if (
-									(error as vscode.FileSystemError).code ===
-									"FileNotFound"
-								) {
-									// Create the text document if it does not exist
-									await vscode.workspace.fs.writeFile(
-										fileUri,
-										new Uint8Array()
-									);
-									const document =
-										await vscode.workspace.openTextDocument(
-											fileUri
-										);
-									await replaceTextInDocument(
-										document,
-										code!
-									);
-								} else {
-									throw error;
-								}
-							}
-
-							webviewView.webview.postMessage({
-								command: "compose-response",
-								value: {
-									node: "composer-replace",
-									values: {
-										...(await this._lspClient.acceptComposerFile(acceptedFile))
+								webviewView.webview.postMessage({
+									command: "compose-response",
+									value: {
+										node: "composer-replace",
+										values: {
+											...(await this._lspClient.acceptComposerFile(acceptedFile))
+										}
 									}
-								}
-							});
+								});
+							} catch (error) {
+								console.error('Failed to write file:', error);
+								throw error;
+							}
 							break;
 						case "get-files":
 							const searchTerm = value as string | undefined;
@@ -493,7 +465,9 @@ ${commitReview}
 							await this._lspClient.deleteIndex();
 							webviewView.webview.postMessage({
 								command: "index-status",
-								value: await this._lspClient.indexExists(),
+								value: {
+									...(await this._lspClient.indexExists())
+								}
 							});
 							break;
 						case "build-index":
@@ -511,10 +485,11 @@ ${commitReview}
 							});
 							break;
 						case "check-index":
-							const indexResult = await this._lspClient.indexExists();
 							webviewView.webview.postMessage({
 								command: "index-status",
-								value: indexResult,
+								value: {
+									...(await this._lspClient.indexExists())
+								}
 							});
 							break;
 						case "chat": {
@@ -557,20 +532,13 @@ ${commitReview}
 						case "ready": {
 							const settings = await this._workspace.load();
 
-							const matchingFiles =
-								await vscode.workspace.findFiles(
-									settings.indexerSettings.indexFilter ?? "*",
-									(await getGitignorePatterns(
-										this._workspace.workspacePath
-									)) || ""
-								);
-
 							const appState: AppState = {
 								workspaceFolder: getActiveWorkspace(),
 								theme: vscode.window.activeColorTheme.kind,
 								settings,
-								totalFiles: matchingFiles?.length ?? 0
+								totalFiles: 0
 							};
+
 							webviewView.webview.postMessage({
 								command: "init",
 								value: appState,
@@ -579,9 +547,21 @@ ${commitReview}
 							setTimeout(async () => {
 								webviewView.webview.postMessage({
 									command: "index-status",
-									value: await this._lspClient.indexExists(),
+									value: {
+										...(await this._lspClient.indexExists())
+									}
 								});
-							}, 50);
+
+								webviewView.webview.postMessage({
+									command: "available-files",
+									value: (await vscode.workspace.findFiles(
+										settings.indexerSettings.indexFilter ?? "*",
+										(await getGitignorePatterns(
+											this._workspace.workspacePath
+										)) || ""
+									)).length
+								})
+							}, 0);
 							this.showView(this._launchView);
 							break;
 						}
