@@ -189,7 +189,7 @@ class StreamParser {
 	}
 }
 
-const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for AI-powered development tools.
+const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code.
 
 STRICT OUTPUT FORMAT REQUIREMENTS:
 

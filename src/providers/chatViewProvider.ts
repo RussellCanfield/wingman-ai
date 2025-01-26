@@ -19,14 +19,12 @@ import {
 	getActiveWorkspace,
 	getNonce,
 	getSymbolsFromOpenFiles,
-	replaceTextInDocument,
 } from "./utilities";
 import { LSPClient } from "../client/index";
 import {
 	ComposerRequest,
 	DiffViewCommand,
 	FileSearchResult,
-	IndexStats,
 } from "@shared/types/v2/Composer";
 import { DiffViewProvider } from "./diffViewProvider";
 import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
@@ -241,6 +239,13 @@ ${result.summary}`,
 							this._diffViewProvider.createCodeReviewView(
 								(value as CodeReviewMessage).review
 							);
+							break;
+						case "web_search":
+							const result = await this._lspClient.webSearch(value as string);
+							webviewView.webview.postMessage({
+								command: "web-search-result",
+								value: result
+							});
 							break;
 						case "review":
 							const review =

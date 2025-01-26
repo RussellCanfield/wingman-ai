@@ -153,6 +153,9 @@ export class LSPClient {
 		);
 	};
 
+	webSearch = async (input: string): Promise<string> => {
+		return client.sendRequest("wingman/webSearch", input);
+	}
 
 	setComposerWebViewReference = (webview: vscode.Webview) => {
 		this.composerWebView = webview;

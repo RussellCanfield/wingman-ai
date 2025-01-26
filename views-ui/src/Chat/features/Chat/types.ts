@@ -24,5 +24,10 @@ export const AVAILABLE_COMMANDS: Command[] = [
 		id: "commit_msg",
 		label: "/commit_msg",
 		description: "Generate a commit message for staged changes"
+	},
+	{
+		id: "web_search",
+		label: "/web",
+		description: "Search the web for information"
 	}
 ];

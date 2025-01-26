@@ -102,6 +102,16 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
           setActiveMessage(undefined);
           setLoading(false);
           break;
+        case "web-search-result":
+          addMessage({
+            from: "assistant",
+            loading: false,
+            message: value as string,
+            type: "chat"
+          });
+          setActiveMessage(undefined);
+          setLoading(false);
+          break;
         case "context":
           setActiveMessage((prevMessage) => {
             const updatedMessage = {

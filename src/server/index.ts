@@ -41,6 +41,8 @@ import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
 import { LSPFileEventHandler } from "./files/eventHandler";
 import { FileMetadata } from "@shared/types/v2/Message";
+import { search, SafeSearchType } from 'duck-duck-scrape';
+import { WebCrawler } from "./web";
 
 const config = { configurable: { thread_id: "conversation-num-1" } };
 
@@ -428,6 +430,11 @@ export class LSPServer {
 
 		this.connection?.onRequest("wingman/undoComposerFile", async (file: FileMetadata) => {
 			return this.composer?.undoFile(file);
+		});
+
+		this.connection?.onRequest("wingman/webSearch", async (input: string) => {
+			const crawler = new WebCrawler(modelProvider);
+			return crawler.searchWeb(input);
 		});
 
 		this.connection?.onRequest("wingman/getEmbeddings", async (request) => {
