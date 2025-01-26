@@ -75,7 +75,7 @@ export class WorkspaceNavigator {
     return {
       userIntent: { ...intent },
       messages,
-      files,
+      files: files.filter(f => path.extname(f.path!)?.length > 0),
       greeting: "",
       projectDetails: projectDetails?.description,
       scannedFiles
@@ -102,17 +102,17 @@ export class WorkspaceNavigator {
       let currentAnalysis = '';
 
       const prompt = `Analyze this file in relation to the user's request:
-  ${question}
-  
-  File path: ${target.path}
-  File contents:
-  ${fileContents}
-  
-  Provide your analysis as a streaming response in this format:
-  
-  ===ANALYSIS_START===
-  [Stream your analysis token by token, describing file relevance and any needed modifications]
-  ===ANALYSIS_END===`;
+${question}
+
+File path: ${target.path}
+File contents:
+${fileContents}
+
+Provide your analysis as a streaming response in this format:
+
+===ANALYSIS_START===
+[Stream your analysis token by token, describing file relevance and any needed modifications]
+===ANALYSIS_END===`;
 
       for await (const chunk of await this.chatModel.stream([
         new SystemMessage({
@@ -355,6 +355,26 @@ Technical Analysis Steps:
 
 Note: When creating new files, do not specify directory creation. The system will automatically create necessary directories when creating files.
 
+File vs Directory Handling:
+1. Directory Filtering
+    - Directories are provided for context only
+    - Never select a directory as a target
+    - A valid target must be a specific file
+    - Paths ending in '/' are directories
+    - Common directories like 'src/', 'components/', etc. are for context only
+
+2. Valid File Targets
+    - Must be individual files with extensions or dot files
+    - Examples: 'src/index.ts', '.env', 'package.json'
+    - Never target patterns like 'src/*.ts' or 'components/'
+    - Configuration files are valid targets even without extensions
+
+3. Directory Context Usage
+    - Use directory structure to understand project organization
+    - Reference directory patterns for new file placement
+    - Consider framework-specific directory conventions
+    - Directory structure informs but doesn't determine targets
+
 Project Creation Guidelines:
 1. Framework-Specific Structures
     - Recognize common framework patterns (React, Vue, Angular, etc.)
@@ -402,20 +422,52 @@ Project Creation Guidelines:
     React:
     - package.json
     - tsconfig.json (if TypeScript)
-    - .eslintrc
-    - .prettierrc
-    - jest.config.js
-    - vite.config.js/webpack.config.js
+    - vite.config.js/webpack.config.js/rspack.config.js/rsbuild.config.js
     - index.html
     
     Node.js:
     - package.json
     - tsconfig.json (if TypeScript)
-    - .eslintrc
-    - .prettierrc
-    - jest.config.js
+    - vitest.config.js
     - nodemon.json
     - .env.example
+
+    Formatter/Linter for javascript/typescript:
+    - Default to biomejs by installing: @biomejs/biome
+    - Sample biomejs config file: "biome.json"
+      {
+        "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+        "vcs": {
+          "enabled": false,
+          "clientKind": "git",
+          "useIgnoreFile": false
+        },
+        "files": { "ignoreUnknown": false, "ignore": [] },
+        "formatter": { "enabled": true, "indentStyle": "tab" },
+        "organizeImports": { "enabled": true },
+        "linter": {
+          "enabled": true,
+          "rules": { "recommended": true }
+        },
+        "javascript": { "formatter": { "quoteStyle": "double" } }
+      }
+
+    Testing projects for javascript/typescript:
+    - Default to using vitest, jest is considered legacy now.
+
+    Projects with rspack:
+    - Install both: @rspack/core, @rspack/cli
+    - Configure based on your knowledge or try to apply your webpack knowledge
+
+    Projects with rsbuild - best choice for new projects!:
+    - Install both: @rsbuild/core, @rsbuild/plugin-react (vue, svelte, solid, etc)
+    - Here is a sample rsbuild config file:
+      import { defineConfig } from '@rsbuild/core';
+      import { pluginReact } from '@rsbuild/plugin-react';
+
+      export default defineConfig({
+        plugins: [pluginReact()],
+      });
 
 Workspace path:
 ${this.workspace}
