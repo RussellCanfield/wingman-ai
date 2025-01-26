@@ -1,7 +1,7 @@
 import { FaPlay, FaStopCircle } from "react-icons/fa";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
 import { useOnScreen } from "../../hooks/useOnScreen";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { handleAutoResize } from "../../utilities/utils";
 import { CommandDropdown } from "./CommandDropdown";
 import { AVAILABLE_COMMANDS } from "./types";
@@ -37,6 +37,15 @@ const ChatInput = ({
 		}
 	}, [isVisible]);
 
+	const filteredCommands = useMemo(() => {
+		if (!inputValue || inputValue === '/') return AVAILABLE_COMMANDS;
+		const searchTerm = inputValue.substring(1).toLowerCase();
+		return AVAILABLE_COMMANDS.filter(
+			command =>
+				command.id.toLowerCase().startsWith(searchTerm)
+		);
+	}, [AVAILABLE_COMMANDS, inputValue]);
+
 	const handleCommandInput = (text: string) => {
 		if (text.startsWith("/")) {
 			const spaceIndex = text.indexOf(" ");
@@ -62,7 +71,7 @@ const ChatInput = ({
 	};
 
 	const handleCommandSelection = (index: number) => {
-		const command = AVAILABLE_COMMANDS[index];
+		const command = filteredCommands[index];
 		const newValue = `/${command.id} `;
 		setInputValue(newValue);
 		setSelectedCommand(command.id);
@@ -130,7 +139,7 @@ const ChatInput = ({
 			<div className="relative flex flex-row items-center border-2 border-gray-500 rounded-md mb-2">
 				{isCommandMode && (
 					<CommandDropdown
-						commands={AVAILABLE_COMMANDS}
+						commands={filteredCommands}
 						isLightTheme={isLightTheme}
 						visible={isCommandMode}
 						selectedIndex={selectedIndex}
@@ -183,15 +192,14 @@ const ChatInput = ({
 										tabIndex={0}
 										role="presentation"
 										title="Send message"
-										className={`${
-											!inputValue.trim()
-												? "text-gray-500"
-												: "text-gray-100"
-										} cursor-pointer`}
+										className={`${!inputValue.trim()
+											? "text-gray-500"
+											: "text-gray-100"
+											} cursor-pointer`}
 										onClick={() =>
 											handleKeyDown({
 												key: "Enter",
-												preventDefault: () => {},
+												preventDefault: () => { },
 												target: chatInputBox.current,
 											} as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
 										}

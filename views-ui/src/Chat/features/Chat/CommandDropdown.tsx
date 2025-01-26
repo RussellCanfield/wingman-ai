@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Command } from "./types";
 
 interface CommandDropdownProps {
@@ -14,9 +14,9 @@ const CommandDropdown: React.FC<CommandDropdownProps> = ({
 	onCommandSelect,
 	visible,
 	isLightTheme,
-	selectedIndex,
+	selectedIndex
 }) => {
-	if (!visible) return null;
+	if (!visible || commands.length === 0) return null;
 
 	const dropdownClasses = isLightTheme
 		? "bg-white border-stone-300"
@@ -36,11 +36,10 @@ const CommandDropdown: React.FC<CommandDropdownProps> = ({
 				{commands.map((command, index) => (
 					<li
 						key={command.id}
-						className={`${dropdownItemClasses} ${
-							selectedIndex === index
-								? "bg-[var(--vscode-list-hoverBackground)]"
-								: ""
-						} px-4 py-2 hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer`}
+						className={`${dropdownItemClasses} ${selectedIndex === index
+							? "bg-[var(--vscode-list-hoverBackground)]"
+							: ""
+							} px-4 py-2 hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer`}
 						onClick={() => onCommandSelect(command)}
 					>
 						<div className="flex items-center">

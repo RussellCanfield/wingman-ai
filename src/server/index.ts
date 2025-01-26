@@ -434,7 +434,29 @@ export class LSPServer {
 
 		this.connection?.onRequest("wingman/webSearch", async (input: string) => {
 			const crawler = new WebCrawler(modelProvider);
-			return crawler.searchWeb(input);
+
+			try {
+				// Start the generator
+				const generator = crawler.searchWeb(input);
+
+				// Stream each chunk back to the client
+				for await (const chunk of generator) {
+					await this.connection?.sendNotification("wingman/webSearchProgress", {
+						type: "progress",
+						content: chunk
+					});
+				}
+
+				// Signal completion
+				await this.connection?.sendNotification("wingman/webSearchProgress", {
+					type: "complete"
+				});
+			} catch (error) {
+				await this.connection?.sendNotification("wingman/webSearchProgress", {
+					type: "error",
+					content: error instanceof Error ? error.message : "Unknown error occurred"
+				});
+			}
 		});
 
 		this.connection?.onRequest("wingman/getEmbeddings", async (request) => {

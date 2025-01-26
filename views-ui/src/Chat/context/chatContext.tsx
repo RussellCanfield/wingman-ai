@@ -30,6 +30,7 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     const handleResponse = (event: MessageEvent<AppMessage>) => {
       const { command, value } = event.data;
+      console.log('Chat', command);
       switch (command) {
         case "init":
           const storedAppState = value as AppState;
@@ -120,6 +121,19 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
               ...prevMessage,
               message: prevMessage?.message || "",
               context: value as CodeContext,
+              type: "chat",
+            } satisfies Message;
+
+            return updatedMessage;
+          });
+          break;
+        case "web-search-progress":
+          setActiveMessage((prevMessage) => {
+            const updatedMessage = {
+              loading: true,
+              from: "assistant",
+              ...prevMessage,
+              message: value as string,
               type: "chat",
             } satisfies Message;
 

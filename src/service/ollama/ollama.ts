@@ -63,6 +63,17 @@ export class Ollama implements AIStreamProvider {
 		});
 	}
 
+	addMessageToHistory(input: string): void {
+		if (!this.chatHistory) {
+			this.chatHistory = [];
+		}
+
+		this.chatHistory.push({
+			role: "assistant",
+			content: input
+		});
+	}
+
 	getModel(): BaseChatModel {
 		return this.baseModel!;
 	}

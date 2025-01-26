@@ -26,23 +26,23 @@ export class WebCrawler {
         const response = await this.aiProvider.getRerankModel().invoke(
             `You are analyzing search results to find the most relevant URL for a user's query.
     
-    Query: "${input}"
-    
-    Search Results:
-    ${searchResultsText}
-    
-    Task: Analyze these search results and return ONLY the URL of the most relevant result that best matches the query.
-    
-    Selection criteria:
-    - Relevance to the original query
-    - Credibility of the source
-    - Content freshness and quality
-    - Avoid sponsored or advertisement links
-    - Prefer official documentation or reputable sources
-    
-    Response format:
-    - Return ONLY the URL, no explanation or additional text
-    - If no results are relevant, return "none"`
+Query: "${input}"
+
+Search Results:
+${searchResultsText}
+
+Task: Analyze these search results and return ONLY the URL of the most relevant result that best matches the query.
+
+Selection criteria:
+- Relevance to the original query
+- Credibility of the source
+- Content freshness and quality
+- Avoid sponsored or advertisement links
+- Prefer official documentation or reputable sources
+
+Response format:
+- Return ONLY the URL, no explanation or additional text
+- If no results are relevant, return "none"`
         );
 
         const url = response.content.toString().trim();
@@ -60,46 +60,54 @@ export class WebCrawler {
         return url;
     }
 
-    searchWeb = async (input: string): Promise<string | undefined> => {
+    searchWeb = (async function* (this: WebCrawler, input: string): AsyncGenerator<string, void, unknown> {
         try {
             const searchResults = await search(input, {
                 safeSearch: SafeSearchType.STRICT
             });
 
             if (!searchResults.results.length) {
+                yield "No search results found";
                 return;
             }
 
+            yield "Searching web...\n\n";
             const bestMatch = await this.getBestMatchUrl(input, searchResults);
 
-            // Fetch the webpage content
+            yield `Summarizing the following url: ${bestMatch}\n\n\n`;
+
             const response = await fetch(bestMatch);
             const html = await response.text();
 
-            // Parse and clean the HTML
+            // Parse HTML
             const $ = cheerio.load(html);
-
-            // Remove unwanted elements
             $('script, style, nav, footer, iframe, noscript').remove();
 
-            // Get the main content
             const mainContent = $('main, article, .content, #content, .main')
                 .first()
                 .html() || $('body').html();
 
             if (!mainContent) {
-                return 'Could not extract content from the webpage';
+                yield "Could not extract content from the webpage";
+                return;
             }
 
-            // Convert to markdown
             const markdown = this.turndown.turndown(mainContent);
 
-            const result = await this.aiProvider.getModel().invoke(
+            const stream = await this.aiProvider.getModel().stream(
                 `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code.
-Summarize the webpage content and extract the most relevant technical information. 
+Summarize the webpage content with a focus on the user's query.
+Extract the most relevant technical information. 
 Focus on providing a concise, developer-friendly overview that highlights key technical details, code snippets, or explanations related to the search query. 
 Ensure the summary is clear, precise, and actionable for a professional software developer.
-Return your response in github markdown format.
+Provide in-depth answers, use the results provided to anticipate the user's needs and fully answer their question.
+Provide code examples when relevant.
+
+Response guidelines:
+- Begin your response with a brief acknowledgement of the query.
+- Do not mention "query", just respond naturally.
+- Do not start your response with "Hey" "Hello" or any other greeting.
+- Return your response using a markdown format.
 
 Query: ${input}
 
@@ -107,13 +115,16 @@ Results from related webpage in markdown format:
 ${markdown}`
             );
 
-            return result.content.toString();
+            // Yield each chunk from the stream
+            for await (const chunk of stream) {
+                yield chunk.content.toString();
+            }
 
         } catch (error) {
             if (error instanceof Error) {
                 console.error('Error in web search:', error);
-                return `Error searching the web: ${error.message}`;
+                yield `Error searching the web: ${error.message}`;
             }
         }
-    }
+    }).bind(this) as (input: string) => AsyncGenerator<string, void, unknown>;
 }

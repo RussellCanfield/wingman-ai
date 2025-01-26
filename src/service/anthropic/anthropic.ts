@@ -18,7 +18,6 @@ import {
 	AIMessage,
 	BaseMessage,
 	HumanMessage,
-	SystemMessage,
 } from "@langchain/core/messages";
 import { HaikuModel } from "./models/haiku";
 
@@ -66,6 +65,14 @@ export class Anthropic implements AIStreamProvider {
 			temperature: 0, //Required for tool calling.
 			maxTokens: 4096,
 		});
+	}
+
+	addMessageToHistory(input: string): void {
+		if (!this.chatHistory) {
+			this.chatHistory = [];
+		}
+
+		this.chatHistory.push(new AIMessage(input));
 	}
 
 	async validateSettings(): Promise<boolean> {
@@ -250,15 +257,14 @@ ${additionalContext || ""}
 
 -----
 
-${
-	recentClipboard
-		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+${recentClipboard
+					? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
 
 ${recentClipboard}
 
 -----`
-		: ""
-}`
+					: ""
+				}`
 			),
 			messages: [
 				{

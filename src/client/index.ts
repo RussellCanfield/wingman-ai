@@ -153,10 +153,6 @@ export class LSPClient {
 		);
 	};
 
-	webSearch = async (input: string): Promise<string> => {
-		return client.sendRequest("wingman/webSearch", input);
-	}
-
 	setComposerWebViewReference = (webview: vscode.Webview) => {
 		this.composerWebView = webview;
 	};
@@ -259,6 +255,57 @@ export class LSPClient {
 		}
 		return client.stop();
 	};
+
+	public async *streamWebSearch(input: string): AsyncGenerator<string, void, unknown> {
+		// Create a queue to store incoming chunks
+		const messageQueue: string[] = [];
+		let isComplete = false;
+		let error: Error | null = null;
+
+		const completed = new Promise<void>((resolve, reject) => {
+			const disposable = client.onNotification(
+				"wingman/webSearchProgress",
+				(params: {
+					type: "progress" | "complete" | "error";
+					content?: string;
+				}) => {
+					if (params.type === "progress" && params.content) {
+						messageQueue.push(params.content);
+					} else if (params.type === "error") {
+						error = new Error(params.content);
+						isComplete = true;
+						reject(error);
+					} else if (params.type === "complete") {
+						isComplete = true;
+						resolve();
+					}
+				}
+			);
+
+			client.sendRequest("wingman/webSearch", input).catch(err => {
+				error = err;
+				isComplete = true;
+				reject(err);
+			});
+		});
+
+		// Process the queue until completion
+		while (!isComplete || messageQueue.length > 0) {
+			if (messageQueue.length > 0) {
+				yield messageQueue.shift()!;
+			} else {
+				await new Promise(resolve => setTimeout(resolve, 50));
+			}
+		}
+
+		// If there was an error, throw it
+		if (error) {
+			throw error;
+		}
+
+		// Wait for completion
+		await completed;
+	}
 }
 
 async function getGitignorePatterns(exclusionFilter?: string) {

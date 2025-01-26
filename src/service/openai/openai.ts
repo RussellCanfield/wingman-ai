@@ -9,6 +9,7 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
 import { AIStreamProvider } from "../base";
 import { ILoggingProvider } from "@shared/types/Logger";
+import { AIMessage } from "@langchain/core/messages";
 
 export class OpenAI implements AIStreamProvider {
 	decoder = new TextDecoder();
@@ -49,6 +50,17 @@ export class OpenAI implements AIStreamProvider {
 			temperature: 0,
 			maxTokens: interactionSettings.chatMaxTokens,
 		});
+	}
+
+	addMessageToHistory(input: string): void {
+		if (!this.chatHistory) {
+			this.chatHistory = [];
+		}
+
+		this.chatHistory.push({
+			role: "assistant",
+			content: input
+		} satisfies OpenAIMessage);
 	}
 
 	getModel(): BaseChatModel {
@@ -190,15 +202,14 @@ ${additionalContext || ""}
 
 -----
 
-${
-	recentClipboard
-		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+${recentClipboard
+					? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
 
 ${recentClipboard}
 
 -----`
-		: ""
-}`
+					: ""
+				}`
 			);
 
 		const codeRequestOptions: OpenAIRequest = {
@@ -287,15 +298,14 @@ ${recentClipboard}
 
 		const userMsg: OpenAIMessage = {
 			role: "user",
-			content: `${
-				ragContent
-					? `Here's some additional information that may help you generate a more accurate response.
+			content: `${ragContent
+				? `Here's some additional information that may help you generate a more accurate response.
 Do not repeat this information in your response to the user, but use it to help generate a more accurate response.
 Please determine if this information is relevant and can be used to supplement your response: 
 
 ${ragContent}`
-					: ""
-			}
+				: ""
+				}
 
 ------
 

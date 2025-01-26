@@ -6,6 +6,7 @@ export interface AIProvider {
 	chatModel: AIModel | undefined;
 	codeModel: AIModel | undefined;
 	validateSettings(): Promise<boolean>;
+	addMessageToHistory(input: string): void;
 	clearChatHistory(): void;
 	codeComplete(
 		beginning: string,
@@ -43,26 +44,3 @@ export interface AIStreamProvider extends AIProvider {
 		recentClipboard?: string
 	): Promise<string>;
 }
-
-const Prompt_CodeComplete = `You are an senior software engineer, assit the user with completing their code.
-When generating code focus on existing code style, syntax, and structure and follow use this as a guide.
-
-The following are some of the types available in their file. 
-Use these types while considering how to complete the code provided. 
-Do not repeat or use these types in your answer.
-
-{CONTEXT}
-
-{CLIPBOARD}
-
-{PROMPT}`;
-
-export const buildCodeCompletePrompt = (
-	prompt: string,
-	clipboardContent: string,
-	context: string
-) => {
-	return Prompt_CodeComplete.replace("{PROMPT}", prompt)
-		.replace("{CLIPBOARD}", `${clipboardContent}\n\n------`)
-		.replace("{CONTEXT}", `${context}\n\n------`);
-};

@@ -1,5 +1,5 @@
 import { InteractionSettings, Settings } from "@shared/types/Settings";
-import { AIStreamProvider, buildCodeCompletePrompt } from "../base";
+import { AIStreamProvider } from "../base";
 import { ILoggingProvider } from "@shared/types/Logger";
 import { AzureAIModel } from "@shared/types/Models";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -59,6 +59,14 @@ export class AzureAI implements AIStreamProvider {
 			openAIApiVersion: this.settings.apiVersion,
 			deploymentName: this.settings.chatModel,
 		});
+	}
+
+	addMessageToHistory(input: string): void {
+		if (!this.chatHistory) {
+			this.chatHistory = [];
+		}
+
+		this.chatHistory.push(new AIMessage(input));
 	}
 
 	validateSettings(): Promise<boolean> {
@@ -132,17 +140,25 @@ export class AzureAI implements AIStreamProvider {
 			response = await this.baseModel!.invoke(
 				[
 					new HumanMessage({
-						content: [
-							{
-								type: "text",
-								text: buildCodeCompletePrompt(
-									prompt,
-									recentClipboard || "",
-									additionalContext || ""
-								),
-							},
-						],
-					}),
+						content: prompt.replace(
+							"{context}",
+							`The following are some of the types available in their file. 
+Use these types while considering how to complete the code provided. 
+Do not repeat or use these types in your answer.
+
+${additionalContext || ""}
+
+-----
+
+${recentClipboard
+								? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+
+${recentClipboard}
+
+-----`
+								: ""
+							}`)
+					})
 				],
 				{
 					signal,

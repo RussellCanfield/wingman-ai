@@ -241,11 +241,7 @@ ${result.summary}`,
 							);
 							break;
 						case "web_search":
-							const result = await this._lspClient.webSearch(value as string);
-							webviewView.webview.postMessage({
-								command: "web-search-result",
-								value: result
-							});
+							this.handleWebSearch(value as string, webviewView.webview);
 							break;
 						case "review":
 							const review =
@@ -732,6 +728,34 @@ ${codeDocs.join("\n\n----\n")}
 			command: "done",
 			value: null,
 		});
+	}
+
+	private async handleWebSearch(input: string, webview: vscode.Webview) {
+		try {
+			const stream = this._lspClient.streamWebSearch(input);
+
+			let msg = '';
+			for await (const chunk of stream) {
+				msg += chunk;
+				webview.postMessage({
+					command: "web-search-progress",
+					value: msg
+				});
+			}
+
+			webview.postMessage({
+				command: "done",
+				value: msg
+			});
+
+			this._aiProvider.addMessageToHistory(`The user previously asked: ${input}`);
+			this._aiProvider.addMessageToHistory(msg);
+		} catch (error) {
+			webview.postMessage({
+				command: "done",
+				content: error instanceof Error ? error.message : "Search failed"
+			});
+		}
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
