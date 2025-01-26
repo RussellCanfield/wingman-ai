@@ -204,6 +204,12 @@ export class WorkspaceNavigator {
       this.buffer = this.buffer.substring(endIndex);
     };
 
+    // Helper to safely extract and trim content
+    const safeExtract = (content: string, pattern: string): string => {
+      const match = content.match(new RegExp(`${pattern}\\s*:\\s*(.*?)(?:\n|$)`));
+      return match?.[1]?.trim() ?? '';
+    };
+
     // Process sections in order of expected appearance
     const processAcknowledgement = () => {
       if (!this.buffer.includes(this.DELIMITERS.ACKNOWLEDGEMENT_START)) {
@@ -250,13 +256,20 @@ export class WorkspaceNavigator {
         .filter(block => block.trim())
         .map(block => {
           const content = block.split(this.DELIMITERS.TARGET_END)[0].trim();
-          const typeMatch = content.match(/Type: (.*?)(?:\n|$)/);
-          const descMatch = content.match(/Description: (.*?)(?:\n|$)/);
-          const pathMatch = content.match(/Path: (.*?)(?:\n|$)/);
 
-          if (!pathMatch?.[1]) return null;
+          // Safely extract and normalize type
+          const extractedType = safeExtract(content, 'Type').toUpperCase();
+          const type = extractedType as "CREATE" | "MODIFY";
 
-          const rawPath = pathMatch[1].trim();
+          if (!type || !["CREATE", "MODIFY"].includes(type)) {
+            return null;
+          }
+
+          const description = safeExtract(content, 'Description');
+          const rawPath = safeExtract(content, 'Path');
+
+          if (!rawPath) return null;
+
           const normalizedWorkspace = path.normalize(this.workspace);
           const normalizedPath = path.normalize(rawPath);
           const absolutePath = path.isAbsolute(normalizedPath)
@@ -268,18 +281,13 @@ export class WorkspaceNavigator {
             .split(path.sep)
             .join('/');
 
-          const type = typeMatch?.[1] as "CREATE" | "MODIFY";
-          if (!type || !["CREATE", "MODIFY"].includes(type)) {
-            return null;
-          }
-
           return {
             type,
-            description: descMatch?.[1] || "",
+            description,
             path: filePath,
           } satisfies FileTarget;
         })
-        .filter((target) => target !== null);
+        .filter(target => target !== null);
 
       if (targets.length) {
         updates.targets = targets;
@@ -345,6 +353,8 @@ Technical Analysis Steps:
     - Contextually related file: Medium
     - Pattern/structure match: Low
 
+Note: When creating new files, do not specify directory creation. The system will automatically create necessary directories when creating files.
+
 Workspace path:
 ${this.workspace}
 
@@ -385,6 +395,51 @@ Messages are sorted oldest to newest.
 Pay special attention to files being modified and implementation decisions.
 
 ${question}
+
+Project Analysis Guidelines:
+1. Requirements Analysis
+    - Break down high-level requirements into technical components
+    - Identify core features vs nice-to-have features
+    - Map dependencies between components
+    - Consider scalability requirements
+    - Analyze potential technical constraints
+
+2. Architecture Planning
+    - Determine appropriate design patterns
+    - Plan component hierarchy and relationships
+    - Identify shared services and utilities
+    - Define data flow and state management
+    - Plan error handling strategy
+    - Consider performance bottlenecks
+    - Design for extensibility
+
+3. Implementation Strategy
+    - Break down into logical implementation phases
+    - Identify critical path components
+    - Plan testing strategy and requirements
+    - Consider deployment requirements
+    - Define success criteria for each component
+    - Plan for monitoring and logging
+    - Consider maintenance requirements
+
+4. Project Structure Planning
+    - Define folder organization
+    - Plan module boundaries
+    - Identify shared types and interfaces
+    - Plan configuration management
+    - Consider build pipeline requirements
+    - Define naming conventions
+    - Plan documentation structure
+
+5. Risk Assessment
+    - Consider integration challenges
+    - Assess third-party dependencies
+    - Plan for potential bottlenecks
+    - Consider security implications
+    - Identify potential maintenance issues
+    - Plan mitigation strategies
+
+Remember: Focus on creating a complete, well-structured project plan that considers all aspects of development, maintenance, and scalability. The goal is to provide clear direction while maintaining flexibility for implementation details.
 
 -----
 

@@ -101,19 +101,22 @@ Output Format:
 
 ===STEPS_START===
 ---STEP---
-Description: What dependency is being installed and why
-Command: pnpm add package-name
+Description: What dependencies are being installed and why (group related packages together)
+Command: pnpm add package1 package2 package3
 ---END_STEP---
 ===STEPS_END===
 
 Guidelines:
-1. Only include command-line steps such as installing dependencies (pnpm/npm/yarn install, pip install, etc.)
+1. Only include command-line steps such as installing dependencies
 2. No file modifications or code changes
 3. Use exact versions when critical
-4. Specify platform-specific commands if needed
-5. Provide the bare minimum steps required, no extraneous steps
-6. Analyze provided files to determine if the dependencies need to be added or changed
-7. If no new dependencies are required, provide a response indicating this
+4. Consolidate related package installations into a single command
+5. Group by package manager (e.g., all pnpm installs together)
+6. Specify platform-specific commands if needed
+7. Provide the bare minimum steps required, no extraneous steps
+8. Analyze provided files to determine if the dependencies need to be added or changed
+9. If no new dependencies are required, provide a response indicating this
+10. For different package managers, use separate steps (e.g., pip install in one step, pnpm in another)
 
 Project details:
 {{details}}
