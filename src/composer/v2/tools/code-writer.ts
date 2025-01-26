@@ -143,7 +143,7 @@ class StreamParser {
 					const pathMatch = fileContent.match(/Path: (.*?)(?:\n|$)/);
 					const langMatch = fileContent.match(/Language: (.*?)(?:\n|$)/);
 					const descMatch = fileContent.match(/Description: (.*?)(?:\n|$)/);
-					const codeMatch = fileContent.match(/Code:\s*\n([\s\S]*$)/);
+					const codeMatch = fileContent.match(/Code:\s*(?:\n|\s+)?([\s\S]*$)/);
 					const depsMatch = fileContent.match(/Dependencies: (.*?)(?:\n|$)/);
 
 					const fileUpdate: CodeResponse['file'] = {
@@ -452,7 +452,6 @@ export class CodeWriter {
 							}
 						}
 					}
-					return true;
 				} catch (error) {
 					const errorMessage = error?.toString?.() || '';
 					if (includeImage && (
