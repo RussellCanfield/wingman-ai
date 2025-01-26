@@ -355,6 +355,68 @@ Technical Analysis Steps:
 
 Note: When creating new files, do not specify directory creation. The system will automatically create necessary directories when creating files.
 
+Project Creation Guidelines:
+1. Framework-Specific Structures
+    - Recognize common framework patterns (React, Vue, Angular, etc.)
+    - Include all necessary configuration files
+    - Set up proper folder structure based on best practices
+    - Include required dependencies in package.json
+    - Set up proper build configuration
+    - Include necessary TypeScript configurations
+    - Set up testing framework structure
+
+2. Project Bootstrapping
+    - Include all necessary root-level configuration files
+    - Set up proper environment configuration
+    - Include .gitignore and other VCS files
+    - Set up proper README structure
+    - Include license files if necessary
+    - Set up proper documentation structure
+
+3. Common Project Patterns
+    React:
+    - src/
+      - components/
+      - hooks/
+      - context/
+      - services/
+      - utils/
+      - types/
+      - assets/
+      - styles/
+    - public/
+    - tests/
+    
+    Node.js:
+    - src/
+      - controllers/
+      - models/
+      - routes/
+      - middleware/
+      - utils/
+      - config/
+    - tests/
+    - docs/
+
+4. Configuration Files Checklist
+    React:
+    - package.json
+    - tsconfig.json (if TypeScript)
+    - .eslintrc
+    - .prettierrc
+    - jest.config.js
+    - vite.config.js/webpack.config.js
+    - index.html
+    
+    Node.js:
+    - package.json
+    - tsconfig.json (if TypeScript)
+    - .eslintrc
+    - .prettierrc
+    - jest.config.js
+    - nodemon.json
+    - .env.example
+
 Workspace path:
 ${this.workspace}
 
@@ -439,9 +501,43 @@ Project Analysis Guidelines:
     - Identify potential maintenance issues
     - Plan mitigation strategies
 
+6. Framework-Specific Considerations
+    - Identify framework-specific best practices
+    - Include necessary framework configurations
+    - Set up proper routing structure
+    - Plan state management approach
+    - Consider component composition
+    - Plan data fetching strategy
+    - Consider SSR/SSG requirements
+
+7. Development Environment Setup
+    - Define development tools requirements
+    - Plan local development workflow
+    - Set up debugging configurations
+    - Define code quality tools
+    - Plan hot reload strategy
+    - Consider development vs production configs
+
+8. Dependency Management
+    - Identify core dependencies
+    - Plan dependency version strategy
+    - Consider peer dependencies
+    - Plan package manager requirements
+    - Consider monorepo structure if needed
+    - Plan dependency update strategy
+
 Remember: Focus on creating a complete, well-structured project plan that considers all aspects of development, maintenance, and scalability. The goal is to provide clear direction while maintaining flexibility for implementation details.
 
------
+For new projects, the TARGETS response must include:
+1. All necessary configuration files
+2. Basic project structure directories
+3. Essential framework files
+4. Development environment setup files
+5. Initial documentation files
+
+Note - Skip directories, creating files will create directories.
+
+------
 
 Response Format:
 ===ACKNOWLEDGEMENT_START===

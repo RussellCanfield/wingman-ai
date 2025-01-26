@@ -380,8 +380,13 @@ const ChatEntry = ({
 					<div className="flex flex-col items-center justify-between text-sm text-stone-400">
 						{files.map(f => {
 							const truncatedPath = useMemo(() => {
-								if (f.path.length <= 50) return f.path;
-								return "..." + f.path.slice(-50);
+								const parts = f.path.split('/');
+								const fileName = parts.pop() ?? '';
+								const lastFolder = parts.pop();
+
+								return lastFolder
+									? `${lastFolder}/${fileName}`
+									: fileName;
 							}, [f]);
 
 							const diffParts = f.diff?.split(',') ?? [0, 0];
