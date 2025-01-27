@@ -125,9 +125,7 @@ export class Anthropic implements AIStreamProvider {
 		payload: AnthropicRequest,
 		signal: AbortSignal
 	) {
-		// Create a combined signal that is aborted when either the provided signal is aborted
-		// or the timeout is reached.
-		const timeoutSignal = AbortSignal.timeout(15000); // Timeout after 5000ms
+		const timeoutSignal = AbortSignal.timeout(15000);
 		const controller = new AbortController();
 
 		const abortHandler = () => {

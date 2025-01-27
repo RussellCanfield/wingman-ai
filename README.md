@@ -14,8 +14,6 @@ Wingman has the ability to index your entire codebase and generate local LLM emb
 
 </b>
 
-### Like the extension? Check out [Squadron AI](https://www.squadron-ai.com) our AI-assisted code reviewer.
-
 </center>
 
 <h2 align="center">Documentation</h2>

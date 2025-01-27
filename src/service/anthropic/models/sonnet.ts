@@ -41,6 +41,8 @@ Ensure proper integration and code completeness.
 - Honor existing architectural decisions
 - Respect apparent security/performance considerations
 
+--------
+
 {context}`;
 	}
 

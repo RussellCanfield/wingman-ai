@@ -19,9 +19,9 @@ File already indexed: file:///Users/russellcanfield/Projects/wingman-ai/src/prov
 File already indexed: file:///Users/russellcanfield/Projects/wingman-ai/src/providers/loggingProvider.ts
 File already indexed: file:///Users/russellcanfield/Projects/wingman-ai/src/providers/utilities.ts
 File already indexed: file:///Users/russellcanfield/Projects/wingman-ai/src/providers/utilities.ts
-Skipping shared/src/types/Message.ts - doesn't match inclusion pattern
-Skipping shared/src/types/Indexer.ts - doesn't match inclusion pattern
-Skipping shared/src/types/Composer.ts - doesn't match inclusion pattern
+Skipping shared/src/types/Message.ts - does not match inclusion pattern
+Skipping shared/src/types/Indexer.ts - does not match inclusion pattern
+Skipping shared/src/types/Composer.ts - does not match inclusion pattern
 ```
 
 :::note

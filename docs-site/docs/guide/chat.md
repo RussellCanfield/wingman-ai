@@ -16,10 +16,11 @@ Wingman now features commands in chat! This is the first step towards condensing
 To get started with commands **type "/" in chat**.
 
 :::note
-All commands rely on git being available locally
+The "review" and "commit_msg" commands rely on git being available locally
 :::
 
 We currently support the following commands:
 
--   **review**, this will generate a summary of your local changes and allow you to perform file-by-file code reviews. Review mileage may vary based on model provider, for example **Ollama** may not provide the same results as Claude Sonnet 3.5.
--   **commit_msg**, this will generate a commit message of your currently staged files.
+-   **review** - Generate a summary of your local changes and allows you to perform file-by-file code reviews. Review mileage may vary based on model provider, for example **Ollama** may not provide the same results as Claude Sonnet 3.5.
+-   **commit_msg** - Generate a commit message of your currently staged files.
+-   **web_search** - Search the web based on a question or code snippet (beta)

@@ -43,7 +43,7 @@ const CommandDropdown: React.FC<CommandDropdownProps> = ({
 						onClick={() => onCommandSelect(command)}
 					>
 						<div className="flex items-center">
-							<span className="font-medium">{command.id}</span>
+							<span className="font-medium">{command.label}</span>
 							{command.description && (
 								<span className="ml-2 text-sm text-[var(--vscode-descriptionForeground)]">
 									{command.description}
