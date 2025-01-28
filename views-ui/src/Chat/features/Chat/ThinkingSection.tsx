@@ -22,7 +22,7 @@ export const ThinkingSection = ({
     const [isExpanded, setIsExpanded] = useState(false);
 
     return (
-        <div className="my-2 border rounded-md border-stone-600">
+        <div className="my-2 border rounded-md border-stone-600 mb-4">
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="w-full flex items-center gap-2 p-2 hover:bg-stone-700 transition-colors"
