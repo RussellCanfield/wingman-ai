@@ -494,7 +494,7 @@ ${commitReview}
 							});
 							break;
 						case "chat": {
-							this.handleChatMessage({ value, webviewView });
+							this.handleChatMessage({ value, webview: webviewView.webview });
 							break;
 						}
 						case "cancel": {
@@ -589,8 +589,8 @@ ${commitReview}
 
 	private async handleChatMessage({
 		value,
-		webviewView,
-	}: Pick<AppMessage, "value"> & { webviewView: vscode.WebviewView }) {
+		webview,
+	}: Pick<AppMessage, "value"> & { webview: vscode.Webview }) {
 		abortController = new AbortController();
 
 		await this.streamChatResponse(
@@ -598,14 +598,14 @@ ${commitReview}
 			getChatContext(
 				this._settings.interactionSettings.chatContextWindow
 			),
-			webviewView
+			webview
 		);
 	}
 
 	private async streamChatResponse(
 		prompt: string,
 		context: CodeContextDetails | undefined,
-		webviewView: vscode.WebviewView
+		webview: vscode.Webview
 	) {
 		let ragContext = "";
 
@@ -697,7 +697,7 @@ ${codeDocs.join("\n\n----\n")}
 
 		if (context) {
 			const { fileName, lineRange, workspaceName } = context;
-			webviewView.webview.postMessage({
+			webview.postMessage({
 				command: "context",
 				value: {
 					fileName,
@@ -716,7 +716,7 @@ ${codeDocs.join("\n\n----\n")}
 		);
 
 		for await (const chunk of response) {
-			webviewView.webview.postMessage({
+			webview.postMessage({
 				command: "response",
 				value: chunk,
 			});
@@ -724,7 +724,7 @@ ${codeDocs.join("\n\n----\n")}
 
 		eventEmitter._onQueryComplete.fire();
 
-		webviewView.webview.postMessage({
+		webview.postMessage({
 			command: "done",
 			value: null,
 		});
@@ -737,19 +737,15 @@ ${codeDocs.join("\n\n----\n")}
 			let msg = '';
 			for await (const chunk of stream) {
 				msg += chunk;
-				webview.postMessage({
-					command: "web-search-progress",
-					value: msg
-				});
 			}
 
-			webview.postMessage({
-				command: "done",
-				value: msg
-			});
+			await this.handleChatMessage({
+				value: `Take the following researched information and help answer my question.
+Question ${input}
 
-			this._aiProvider.addMessageToHistory(`The user previously asked: ${input}`);
-			this._aiProvider.addMessageToHistory(msg);
+Researched Information:
+${msg}`, webview
+			});
 		} catch (error) {
 			webview.postMessage({
 				command: "done",

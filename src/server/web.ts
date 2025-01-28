@@ -71,10 +71,7 @@ Response format:
                 return;
             }
 
-            yield "Searching web...\n\n";
             const bestMatch = await this.getBestMatchUrl(input, searchResults);
-
-            yield `Summarizing the following url: ${bestMatch}\n\n\n`;
 
             const response = await fetch(bestMatch);
             const html = await response.text();
@@ -94,54 +91,7 @@ Response format:
 
             const markdown = this.turndown.turndown(mainContent);
 
-            const stream = await this.aiProvider.getModel().stream(
-                `You are a senior full-stack developer with exceptional technical expertise, focused on delivering precise, actionable information.
-
-Your task is to analyze and synthesize webpage content, focusing on:
-1. Technical accuracy and depth
-2. Practical implementation details
-3. Current best practices and patterns
-4. Performance considerations
-5. Security implications
-
-Content Guidelines:
-- Prioritize code examples, APIs, and technical specifications
-- Include relevant configuration details or setup requirements
-- Highlight common pitfalls and their solutions
-- Extract version-specific information when available
-- Emphasize security considerations and best practices
-- Include performance optimization tips
-- Reference official documentation or specifications
-
-Response Format:
-### Overview
-[Concise technical summary]
-
-### Key Technical Details
-[Core technical concepts and implementation details]
-
-### Code Examples
-\`\`\`[language]
-[Relevant code snippets with comments]
-\`\`\`
-
-### Best Practices
-[Implementation guidelines and recommendations]
-
-### Additional Considerations
-[Security, performance, or compatibility notes]
-
-Query: ${input}
-
-Results from related webpage in markdown format:
-${markdown}`
-            );
-
-            // Yield each chunk from the stream
-            for await (const chunk of stream) {
-                yield chunk.content.toString();
-            }
-
+            yield markdown;
         } catch (error) {
             if (error instanceof Error) {
                 console.error('Error in web search:', error);

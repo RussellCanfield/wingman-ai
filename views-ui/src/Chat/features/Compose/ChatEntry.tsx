@@ -384,9 +384,13 @@ const ChatEntry = ({
 								const fileName = parts.pop() ?? '';
 								const lastFolder = parts.pop();
 
-								return lastFolder
+								const shortPath = lastFolder
 									? `${lastFolder}/${fileName}`
 									: fileName;
+
+								return parts.length > 0
+									? `.../${shortPath}`
+									: shortPath;
 							}, [f]);
 
 							const diffParts = f.diff?.split(',') ?? [0, 0];

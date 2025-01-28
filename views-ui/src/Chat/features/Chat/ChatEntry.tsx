@@ -13,20 +13,22 @@ import React from "react";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import "./ChatEntry.css";
 import { useSettingsContext } from "../../context/settingsContext";
+import { useMessageParser } from "./useMessageParser";
+import { ThinkingSection } from "./ThinkingSection";
 
-type MarkDownObject = {
+export type MarkDownObject = {
 	props: {
 		children: [boolean, MarkDownEntry[] | string];
 	};
 };
 
-type MarkDownEntry = {
+export type MarkDownEntry = {
 	props: {
 		children: string[];
 	};
 };
 
-const CodeContainer = memo((props: PropsWithChildren) => {
+export const CodeContainer = memo((props: PropsWithChildren) => {
 	const [toolboxVisible, setToolboxVisible] = useState(false);
 	const { isLightTheme } = useSettingsContext();
 
@@ -124,6 +126,7 @@ const ChatEntry = ({
 	context,
 }: PropsWithChildren<Omit<Message, "type">>) => {
 	const { isLightTheme } = useSettingsContext();
+	const { mainContent, thinkingContent, isThinking } = useMessageParser(message);
 
 	const showSelectedContext = () => {
 		if (!context) {
@@ -187,14 +190,16 @@ const ChatEntry = ({
 						</div>
 					)}
 					{contextDisplay}
-					{loading && message == "" ? (
-						<div className="w-full flex justify-center items-center">
-							<SkeletonLoader isDarkTheme={!isLightTheme} />
-						</div>
-					) : null}
 					<div className={`${bgClasses} flex-grow w-full justify-center items-center break-words ${fromUser ? "shadow-lg p-4" : ""}`}>
+						{(thinkingContent || isThinking) && (
+							<ThinkingSection
+								content={thinkingContent || ''}
+								isThinking={isThinking}
+								isLightTheme={isLightTheme}
+							/>
+						)}
 						<Markdown
-							children={message}
+							children={mainContent}
 							components={{
 								code(props) {
 									const { children, className, node, ...rest } = props;
@@ -224,6 +229,11 @@ const ChatEntry = ({
 							}}
 						/>
 					</div>
+					{loading && (
+						<div className="w-full flex justify-center items-center">
+							<SkeletonLoader isDarkTheme={!isLightTheme} />
+						</div>
+					)}
 				</div>
 			</div>
 		</li>
