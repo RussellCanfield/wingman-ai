@@ -41,8 +41,9 @@ import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
 import { LSPFileEventHandler } from "./files/eventHandler";
 import { FileMetadata } from "@shared/types/v2/Message";
-import { search, SafeSearchType } from 'duck-duck-scrape';
 import { WebCrawler } from "./web";
+import { promises } from "node:fs";
+import path from "node:path";
 
 const config = { configurable: { thread_id: "conversation-num-1" } };
 
@@ -127,7 +128,9 @@ export class LSPServer {
 			codeGenerator,
 			this.symbolRetriever!,
 			this.vectorStore!,
-			indexerSettings.indexFilter
+			indexerSettings.indexFilter,
+			this.updateFileInComposerGraph,
+			this.removeFileInComposerGraph
 		);
 
 		this.composer = new ComposerGraph(
@@ -154,6 +157,44 @@ export class LSPServer {
 			await this.vectorStore.createIndex();
 		}
 	};
+
+	private removeFileInComposerGraph = async (relativeFilePath: string) => {
+		if (!this.composer) {
+			return;
+		}
+
+		const file: FileMetadata = {
+			path: relativeFilePath
+		}
+
+		await this.composer.removeFile(file);
+
+		await this.connection?.sendNotification("wingman/index-updated", {
+			exists: (await this.vectorStore?.indexExists()) ?? false,
+			processing: this.indexer?.isSyncing() ?? false,
+			files: Array.from(
+				this.codeGraph?.getSymbolTable().keys() ?? []
+			),
+		} satisfies IndexStats);
+	}
+
+	private updateFileInComposerGraph = async (relativeFilePath: string) => {
+		if (!this.composer) {
+			return;
+		}
+
+		const file: FileMetadata = {
+			path: relativeFilePath,
+			code: await promises.readFile(path.join(this.workspaceFolders[0], relativeFilePath), 'utf-8'),
+			lastModified: Date.now()
+		}
+
+		await this.composer.updateFile(file);
+
+		await this.connection?.sendNotification("wingman/webSearchProgress", {
+			type: "complete"
+		});
+	}
 
 	private initialize = () => {
 		let hasConfigurationCapability = false;
@@ -207,7 +248,6 @@ export class LSPServer {
 			const result: InitializeResult = {
 				capabilities: {
 					textDocumentSync: {
-						openClose: true,
 						change: TextDocumentSyncKind.Incremental,
 						save: {
 							includeText: true,
@@ -221,6 +261,14 @@ export class LSPServer {
 						supported: true,
 						changeNotifications: true,
 					},
+					fileOperations: {
+						didDelete: {
+							filters: [{ pattern: { glob: "**/*" } }]
+						},
+						didRename: {
+							filters: [{ pattern: { glob: "**/*" } }]
+						}
+					}
 				};
 			}
 
@@ -252,9 +300,9 @@ export class LSPServer {
 					//@ts-expect-error
 					this.connection,
 					this.workspaceFolders,
-					this.vectorStore,
 					this.queue,
-					indexerSettings.indexFilter
+					indexerSettings.indexFilter,
+					this.vectorStore
 				);
 
 				await this.addEvents();
@@ -346,9 +394,9 @@ export class LSPServer {
 					//@ts-expect-error
 					this.connection,
 					this.workspaceFolders,
-					this.vectorStore,
 					this.queue,
-					indexerSettings.indexFilter
+					indexerSettings.indexFilter,
+					this.vectorStore
 				);
 
 				this.indexer?.setInclusionFilter(indexSettings.indexFilter);

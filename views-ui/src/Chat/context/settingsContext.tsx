@@ -42,6 +42,7 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     const handleResponse = (event: MessageEvent<AppMessage>) => {
       const { command, value } = event.data;
+      console.log('settings', command, value);
       switch (command) {
         case "init":
           const storedAppState = value as AppState;
@@ -60,12 +61,6 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
           break;
         case "switchView":
           setView(value as View);
-          break;
-        case "file-count-update":
-          setAppState(prev => ({
-            ...prev!,
-            totalFiles: (value as AppState).totalFiles
-          }));
           break;
         case "index-status":
           setIndex(value as IndexStats);
@@ -102,6 +97,8 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
       value: newState,
     });
   }, [appState, indexFilter, exclusionFilter]);
+
+  console.log(appState);
 
   return (
     <SettingsContext.Provider

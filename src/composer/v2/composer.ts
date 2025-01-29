@@ -17,7 +17,7 @@ import { getTextDocumentFromPath } from "../../server/files/utils";
 import { DirectoryContent } from "../utils";
 import { DependencyManager } from "./tools/dependency-manager";
 import { Dependencies } from "@shared/types/v2/Composer";
-import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
+import { promises } from "node:fs";
 
 export interface Thread {
     configurable: {
@@ -155,6 +155,7 @@ export class ComposerGraph {
 
         matchedFile.rejected = true;
         matchedFile.accepted = false;
+        matchedFile.lastModified = Date.now();
 
         await graph.updateState({ ...this.config }, {
             files: graphFiles
@@ -179,6 +180,51 @@ export class ComposerGraph {
 
         matchedFile.accepted = true;
         matchedFile.rejected = false;
+
+        await graph.updateState({ ...this.config }, {
+            files: graphFiles
+        });
+
+        return {
+            ...state.values,
+            files: graphFiles
+        };
+    }
+
+    removeFile = async (file: FileMetadata) => {
+        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const state = await graph.getState({ ...this.config });
+
+        const relativePath = path.relative(this.workspace, file.path);
+
+        const graphFiles = (state.values as PlanExecuteState).files;
+        const matchedFile = graphFiles?.find(f => f.path === relativePath);
+
+        if (!matchedFile) return;
+
+        await graph.updateState({ ...this.config }, {
+            files: graphFiles?.filter(f => f.path !== relativePath)
+        });
+
+        return {
+            ...state.values,
+            files: graphFiles
+        };
+    }
+
+    updateFile = async (file: FileMetadata) => {
+        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const state = await graph.getState({ ...this.config });
+
+        const relativePath = path.relative(this.workspace, file.path);
+
+        const graphFiles = (state.values as PlanExecuteState).files;
+        const matchedFile = graphFiles?.find(f => f.path === relativePath);
+
+        if (!matchedFile) return;
+
+        matchedFile.code = (await promises.readFile(path.join(this.workspace, file.path))).toString()
+        matchedFile.lastModified = file.lastModified;
 
         await graph.updateState({ ...this.config }, {
             files: graphFiles
@@ -272,7 +318,7 @@ Answer (yes/no):`
             for (const file of request.contextFiles) {
                 try {
                     const relativePath = path.relative(this.workspace, file);
-                    // Skip if we already have this file
+
                     if (existingPaths.has(relativePath)) {
                         continue;
                     }
@@ -281,6 +327,7 @@ Answer (yes/no):`
                     codeFiles.push({
                         path: relativePath,
                         code: txtDoc?.getText(),
+                        lastModified: Date.now()
                     });
                     existingPaths.add(relativePath); // Track newly added paths
                 } catch { }
@@ -317,6 +364,7 @@ Answer (yes/no):`
                 }
             }
         } catch (e) {
+            console.error('Composer error: ', e);
             if (e instanceof DOMException && e.name === "AbortError") {
                 yield {
                     node: "composer-error",

@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { minimatch } from 'minimatch';
 import { Disposable } from "vscode-languageserver/node";
+import { filePathToUri } from "./utils";
 
 export class LSPFileEventHandler {
     private connection: ReturnType<typeof createConnection>;
     private workspaceFolders: string[];
-    private vectorStore: Store;
     private queue: DocumentQueue;
     private inclusionFilter: string;
     private disposables: Disposable[] = [];
@@ -17,13 +17,12 @@ export class LSPFileEventHandler {
     constructor(
         connection: Connection,
         workspaceFolders: string[],
-        vectorStore: Store,
         queue: DocumentQueue,
-        inclusionGlobFilter: string
+        inclusionGlobFilter: string,
+        private readonly vectorStore: Store
     ) {
         this.connection = connection;
         this.workspaceFolders = workspaceFolders;
-        this.vectorStore = vectorStore;
         this.queue = queue;
         this.inclusionFilter = inclusionGlobFilter;
         this.registerEventHandlers();
@@ -67,28 +66,15 @@ export class LSPFileEventHandler {
         try {
             const filesToProcess = await Promise.all(
                 event.files.filter(async file =>
-                    await this.shouldProcessFile(fileURLToPath(file.oldUri))
+                    await this.shouldProcessFile(fileURLToPath(file.oldUri)) &&
+                    await this.shouldProcessFile(fileURLToPath(file.newUri))
                 )
             );
 
-            const files = filesToProcess.map((file) => {
-                const absolutePath = fileURLToPath(file.oldUri);
-                return path.relative(this.workspaceFolders[0], absolutePath);
-            });
-
-            const relatedDocs = await this.vectorStore?.findDocumentsByPath(files) || [];
-
-            if (relatedDocs?.length > 0) {
-                await this.vectorStore?.deleteDocuments(
-                    relatedDocs.map((doc) => doc.id!)
-                );
-            }
-
             this.queue?.enqueue(filesToProcess.map((file) => file.newUri));
-
-            return { changes: {} };
         } catch (error) {
             this.connection.console.error(`Error handling rename: ${error}`);
+        } finally {
             return { changes: {} };
         }
     }
@@ -96,27 +82,40 @@ export class LSPFileEventHandler {
     private async handleFileDelete(event: DeleteFilesParams) {
         try {
             const filesToProcess = await Promise.all(
-                event.files.filter(async file =>
-                    await this.shouldProcessFile(fileURLToPath(file.uri))
-                )
+                event.files.map(async file => {
+                    const filePath = fileURLToPath(file.uri);
+
+                    // Check if this was a directory deletion
+                    if (path.extname(filePath).length === 0) {
+                        const folderPath = filePath.replace(/\/$/, ''); // Remove trailing slash
+                        const filesInFolder = await this.vectorStore.getAllFilesByPrefix(folderPath);
+
+                        if (filesInFolder.length > 0) {
+                            // Convert file paths back to URIs
+                            return filesInFolder.map(filePath => filePathToUri(filePath));
+                        }
+                        return null;
+                    }
+
+                    // Regular file deletion
+                    if (await this.shouldProcessFile(filePath)) {
+                        return [file.uri];
+                    }
+
+                    return null;
+                })
             );
 
-            const files = filesToProcess.map((file) => {
-                const absolutePath = fileURLToPath(file.uri);
-                return path.relative(this.workspaceFolders[0], absolutePath);
-            });
+            const validFiles = filesToProcess
+                .filter((files): files is string[] => files !== null)
+                .flat();
 
-            const relatedDocs = await this.vectorStore?.findDocumentsByPath(files) || [];
-
-            if (relatedDocs?.length > 0) {
-                await this.vectorStore?.deleteDocuments(
-                    relatedDocs.map((doc) => doc.id!)
-                );
+            if (validFiles.length > 0) {
+                this.queue?.enqueue(validFiles);
             }
-
-            return { changes: {} };
         } catch (error) {
             this.connection.console.error(`Error handling delete: ${error}`);
+        } finally {
             return { changes: {} };
         }
     }

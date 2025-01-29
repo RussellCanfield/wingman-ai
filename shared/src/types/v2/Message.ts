@@ -81,6 +81,7 @@ export interface FileMetadata {
 	dependencies?: string[];
 	accepted?: boolean;
 	rejected?: boolean;
+	lastModified?: number;
 }
 
 export interface CodeContextDetails {

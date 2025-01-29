@@ -394,10 +394,12 @@ Project Creation Guidelines:
     - Set up proper documentation structure
 
 3. Common Project Patterns
-    React:
+
+Project Type 1 - React:
     - src/
       - components/
       - hooks/
+      - features/
       - context/
       - services/
       - utils/
@@ -406,8 +408,10 @@ Project Creation Guidelines:
       - styles/
     - public/
     - tests/
-    
-    Node.js:
+
+----------
+
+Project Type 2 - Node.js:
     - src/
       - controllers/
       - models/
@@ -423,6 +427,7 @@ Project Creation Guidelines:
     - package.json
     - tsconfig.json (if TypeScript)
     - vite.config.js/webpack.config.js/rspack.config.js/rsbuild.config.js
+    - biomejs
     - index.html
     
     Node.js:
@@ -430,6 +435,7 @@ Project Creation Guidelines:
     - tsconfig.json (if TypeScript)
     - vitest.config.js
     - nodemon.json
+    - biomejs
     - .env.example
 
     Formatter/Linter for javascript/typescript:

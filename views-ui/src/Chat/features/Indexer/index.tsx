@@ -122,7 +122,7 @@ export default function Indexer() {
 							</button>
 						)}
 					</div>
-					{indexStats.exists && !indexStats.processing && (
+					{!indexStats.processing && (
 						<div className="flex flex-col gap-4">
 							<div className="bg-[var(--vscode-list-hoverBackground)] rounded-lg p-4 shadow-sm">
 								<div className="flex items-center justify-between">

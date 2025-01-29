@@ -87,17 +87,17 @@ export default function Compose() {
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{composerMessages.length === 0 && (
-				<>
-					<p className="text-center max-w-2xl px-8 py-6 bg-[var(--vscode-input-background)] rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
+				<div className="flex items-center justify-center h-full p-4">
+					<div className="text-center max-w-2xl p-8 bg-[var(--vscode-input-background)] rounded-2xl border border-slate-700/30 shadow-2xl backdrop-blur-md mx-auto transition-all duration-300 hover:border-slate-700/50">
 						<div
 							id="wingman-logo"
 							role="img"
 							aria-label="Wingman Logo"
-							className="h-16 w-16 sm:h-32 sm:w-32 bg-no-repeat bg-contain bg-center mb-6 mx-auto my-4"
+							className="h-16 w-16 sm:h-24 sm:w-24 bg-no-repeat bg-contain bg-center mb-8 mx-auto animate-fade-in"
 						/>
-						<span className="block text-xl font-semibold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-							Wingman-AI
-						</span>
+						<h1 className="text-2xl font-semibold mb-6 bg-gradient-to-r from-blue-400 via-white to-blue-200 bg-clip-text text-transparent animate-gradient">
+							Welcome to Wingman-AI
+						</h1>
 						<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
 							The composer feature allows you to generate code changes
 							across files. You can ask for help with code, or ask for
@@ -123,28 +123,30 @@ export default function Compose() {
 								</button>
 							</div>
 						)}
-					</p>
-				</>
+					</div>
+				</div>
 			)}
-			{composerMessages.length > 0 && (<ChatResponseList messages={composerMessages}>
-				{loading && (
-					<ChatEntry
-						from="assistant"
-						message={activeMessage?.message || ""}
-						files={activeMessage?.files}
-						dependencies={activeMessage?.dependencies}
-						greeting={activeMessage?.greeting}
-						loading={true}
-						isCurrent={true}
-					/>
-				)}
-				{canValidate && <Validation />}
-			</ChatResponseList>)}
+			{
+				composerMessages.length > 0 && (<ChatResponseList messages={composerMessages}>
+					{loading && (
+						<ChatEntry
+							from="assistant"
+							message={activeMessage?.message || ""}
+							files={activeMessage?.files}
+							dependencies={activeMessage?.dependencies}
+							greeting={activeMessage?.greeting}
+							loading={true}
+							isCurrent={true}
+						/>
+					)}
+					{canValidate && <Validation />}
+				</ChatResponseList>)
+			}
 			<ChatInput
 				loading={loading}
 				onChatSubmitted={handleChatSubmitted}
 				onChatCancelled={cancelAIResponse}
 			/>
-		</main>
+		</main >
 	);
 }

@@ -55,26 +55,52 @@ export class CodeGraph {
 		if (!fileDetails) {
 			return;
 		}
-	
+
 		// Clean up all nodes associated with this file
 		for (const nodeId of fileDetails.nodeIds) {
 			// Remove the node
 			this.nodes.delete(nodeId);
-	
+
 			// Clean up import edges
 			this.edgesImport.delete(nodeId);
 			for (const [, importSet] of this.edgesImport) {
 				importSet.delete(nodeId);
 			}
-	
+
 			// Clean up export edges
 			this.edgesExport.delete(nodeId);
 			for (const [, exportSet] of this.edgesExport) {
 				exportSet.delete(nodeId);
 			}
 		}
-	
+
 		// Remove the file from the symbol table
+		this.symbolTable.delete(file);
+	}
+
+	public removeFileFromSymbolTable(file: string) {
+		const fileDetails = this.symbolTable.get(file);
+		if (!fileDetails) return;
+
+		// Clean up all nodes associated with this file
+		for (const nodeId of fileDetails.nodeIds) {
+			// Remove import edges
+			this.edgesImport.delete(nodeId);
+			for (const [, importSet] of this.edgesImport) {
+				importSet.delete(nodeId);
+			}
+
+			// Remove export edges
+			this.edgesExport.delete(nodeId);
+			for (const [, exportSet] of this.edgesExport) {
+				exportSet.delete(nodeId);
+			}
+
+			// Remove the node from the nodes map
+			this.nodes.delete(nodeId);
+		}
+
+		// Remove the file entry from the symbol table
 		this.symbolTable.delete(file);
 	}
 

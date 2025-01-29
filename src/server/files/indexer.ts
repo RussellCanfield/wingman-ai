@@ -19,6 +19,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { SerializeMap, Store } from "../../store/vector";
 import { createCodeNode } from "./graph";
 import path from "node:path";
+import fs from "node:fs";
 import { SymbolRetriever } from "../retriever";
 import { createHash } from "node:crypto";
 import { glob } from 'tinyglobby';
@@ -58,7 +59,9 @@ export class Indexer {
 		private readonly generator: Generator,
 		private readonly symbolRetriever: SymbolRetriever,
 		private readonly vectorStore: Store,
-		private inclusionFilter: string
+		private inclusionFilter: string,
+		private onFileProcessing: (file: string) => Promise<void>,
+		private onFileRemoved: (file: string) => Promise<void>
 	) { }
 
 	isSyncing = () => this.syncing;
@@ -127,6 +130,23 @@ export class Indexer {
 					continue;
 				}
 
+				if (!fs.existsSync(fileURLToPath(documentUri))) {
+					const filePath = fileURLToPath(documentUri);
+					const relativePath = path.relative(this.workspace, filePath);
+					const relatedDocs = await this.vectorStore?.findDocumentsByPath([relativePath]) || [];
+
+					if (relatedDocs?.length > 0) {
+						await this.vectorStore?.deleteDocuments(
+							relatedDocs.map((doc) => doc.id!)
+						);
+					}
+
+					console.log("Removing document from graph: " + documentUri);
+					this.codeGraph.removeFileFromSymbolTable(relativePath);
+					this.onFileRemoved(filePath);
+					continue;
+				}
+
 				console.log("Adding document to graph: " + documentUri);
 				const relatedNodes: Set<string> = new Set([documentUri]);
 				const nodesToProcess: Map<string, CodeGraphNode> = new Map();
@@ -154,6 +174,8 @@ export class Indexer {
 						console.log("File already indexed: " + currentDocument);
 						continue;
 					}
+
+					this.onFileProcessing(relativeFilePath);
 
 					const symbols = await this.symbolRetriever?.getSymbols(
 						currentDocument

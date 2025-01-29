@@ -8,22 +8,15 @@ import {
 	SystemMessage,
 } from "@langchain/core/messages";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
-import { FileMetadata } from "@shared/types/Message";
+import { FileMetadata } from "@shared/types/v2/Message";
 import { getTextDocumentFromPath } from "../../../server/files/utils";
 import path from "node:path";
 import { createPatch } from 'diff';
 import fs, { promises } from "node:fs";
 import { Command } from "@langchain/langgraph";
 
-type CodeResponse = {
-	file: {
-		description: string;
-		path: string;
-		code: string;
-		markdownLanguage: string;
-		diff?: string;
-		dependencies?: string[];
-	};
+export type CodeResponse = {
+	file: FileMetadata & { markdownLanguage: string };
 };
 
 type BuildPromptParams = {
@@ -50,6 +43,7 @@ class StreamParser {
 			code: '',
 			markdownLanguage: '',
 			description: '',
+			lastModified: Date.now()
 		}
 	};
 
@@ -152,6 +146,7 @@ class StreamParser {
 						description: descMatch?.[1].trim() || '',
 						code: codeMatch?.[1].trim() || '',
 						dependencies: depsMatch?.[1]?.split(',').map(d => d.trim()) || [],
+						lastModified: Date.now()
 					};
 
 					if (depsMatch?.[1]) {
@@ -360,9 +355,8 @@ export class CodeWriter {
 		const allDependencies = new Set<string>();
 
 		const executeStep = async (includeImage: boolean) => {
-			// Process files first
-			for (let { path: file, code } of state.files ?? []) {
-				if (!code) {
+			for (let { path: file, code, accepted, rejected } of state.files ?? []) {
+				if (!code || (code && !accepted && !rejected)) {
 					const textDocument = await getTextDocumentFromPath(path.join(this.workspace, file));
 					code = textDocument?.getText();
 				}

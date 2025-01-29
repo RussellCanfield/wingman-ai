@@ -34,37 +34,44 @@ export default function Chat() {
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{messages.length === 0 && (
-				<p className="text-center max-w-2xl px-8 py-6 bg-[var(--vscode-input-background)] rounded-xl border border-slate-700/50 shadow-lg backdrop-blur-sm mx-auto">
-					<div
-						id="wingman-logo"
-						role="img"
-						aria-label="Wingman Logo"
-						className="h-16 w-16 sm:h-32 sm:w-32 bg-no-repeat bg-contain bg-center mb-6 mx-auto my-4"
-					/>
-					<span className="block text-xl font-semibold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-						Wingman-AI
-					</span>
-					<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
-						The chat feature allows you to ask general or specific
-						questions about your codebase. You can also target specific
-						context by opening a file, or highlighting sections of a
-						file.
-						<br />
-						<br />
-						Chat now features commands! Type "/" to get started.
-					</span>
-				</p>
+				<div className="flex items-center justify-center h-full p-4">
+					<div className="text-center max-w-2xl p-8 bg-[var(--vscode-input-background)] rounded-2xl border border-slate-700/30 shadow-2xl backdrop-blur-md mx-auto transition-all duration-300 hover:border-slate-700/50">
+						<div
+							id="wingman-logo"
+							role="img"
+							aria-label="Wingman Logo"
+							className="h-16 w-16 sm:h-24 sm:w-24 bg-no-repeat bg-contain bg-center mb-8 mx-auto animate-fade-in"
+						/>
+						<h1 className="text-2xl font-semibold mb-6 bg-gradient-to-r from-blue-400 via-white to-blue-200 bg-clip-text text-transparent animate-gradient">
+							Welcome to Wingman-AI
+						</h1>
+						<div className="space-y-4 text-[var(--vscode-input-foreground)] leading-relaxed">
+							<p className="opacity-90">
+								Ask questions about your codebase or get help with specific code sections.
+								Simply open a file or highlight code to provide more context.
+							</p>
+							<div className="inline-block mt-6 px-4 py-2 rounded-lg bg-slate-700/20 border border-slate-700/40">
+								<p className="flex items-center gap-2 text-sm">
+									<span className="text-blue-400">Pro tip:</span>
+									Type <kbd className="px-2 py-0.5 rounded bg-slate-700/30">/</kbd> to access commands
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
 			)}
-			{messages.length > 0 && (<ChatResponseList messages={messages}>
-				{loading && (
-					<ChatEntry
-						from="assistant"
-						message={activeMessage?.message || ""}
-						context={activeMessage?.context}
-						loading={loading}
-					/>
-				)}
-			</ChatResponseList>)}
+			{messages.length > 0 && (
+				<ChatResponseList messages={messages}>
+					{loading && (
+						<ChatEntry
+							from="assistant"
+							message={activeMessage?.message || ""}
+							context={activeMessage?.context}
+							loading={loading}
+						/>
+					)}
+				</ChatResponseList>
+			)}
 			<ChatInput
 				loading={loading}
 				onChatSubmitted={handleChatSubmitted}

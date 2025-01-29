@@ -14,6 +14,7 @@ import { convertIdToFileUri } from "../server/files/utils";
 import { LocalIndex } from "vectra";
 import { EmbeddingsInterface } from "../service/embeddings/base";
 import { loggingProvider } from "../server/loggingProvider";
+import { fileURLToPath } from "node:url";
 
 export type SerializeMap = [string, string[]][];
 export type SerializeTable = [string, { nodeIds: string[]; sha: string }][];
@@ -169,7 +170,7 @@ export class Store {
 		try {
 			await this.index?.deleteIndex();
 			await fs.promises.rm(path.join(this.directory, "edges.json"));
-		} catch {}
+		} catch { }
 	};
 
 	indexExists = async () => {
@@ -288,6 +289,30 @@ export class Store {
 
 		if (documents.length > 0) {
 			console.log("Stored document", documents[0].metadata.filePath);
+		}
+	};
+
+	getAllFilesByPrefix = async (prefix: string): Promise<string[]> => {
+		try {
+			const normalizedPrefix = path.posix.normalize(prefix);
+
+			const items = await this.index?.listItems();
+			const filePaths = new Set<string>();
+
+			items?.forEach(item => {
+				const sanitizedPath = item.id.substring(0, item.id.lastIndexOf('/'));
+				const filePath = fileURLToPath(sanitizedPath);
+				const normalizedPath = path.posix.normalize(filePath);
+
+				if (normalizedPath.startsWith(normalizedPrefix)) {
+					filePaths.add(String(item.metadata.filePath));
+				}
+			});
+
+			return Array.from(filePaths);
+		} catch (error) {
+			loggingProvider.logError(`Error getting files by prefix: ${error}`);
+			return [];
 		}
 	};
 }

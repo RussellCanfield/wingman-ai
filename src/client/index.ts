@@ -31,9 +31,29 @@ import { PlanExecuteState } from "@shared/types/v2/Composer";
 
 let client: LanguageClient;
 
+export type IndexUpdateEvent = IndexStats;
+
+export class IndexEventMediator {
+	private listeners: Set<(stats: IndexUpdateEvent) => void> = new Set();
+
+	subscribe(callback: (stats: IndexUpdateEvent) => void): () => void {
+		this.listeners.add(callback);
+		return () => this.listeners.delete(callback);
+	}
+
+	notify(stats: IndexUpdateEvent): void {
+		this.listeners.forEach(listener => listener(stats));
+	}
+}
+
 export class LSPClient {
 	composerWebView: vscode.Webview | undefined;
 	settings: Settings | undefined;
+	private indexMediator = new IndexEventMediator();
+
+	onIndexUpdated(callback: (stats: IndexUpdateEvent) => void): () => void {
+		return this.indexMediator.subscribe(callback);
+	}
 
 	activate = async (
 		context: ExtensionContext,
@@ -151,6 +171,13 @@ export class LSPClient {
 				return locations?.map((l) => mapLocation(l)) || [];
 			}
 		);
+
+		client.onNotification(
+			"wingman/index-updated",
+			(indexStats: IndexStats) => {
+				this.indexMediator.notify(indexStats);
+			}
+		);
 	};
 
 	setComposerWebViewReference = (webview: vscode.Webview) => {
@@ -263,6 +290,7 @@ export class LSPClient {
 		let error: Error | null = null;
 
 		const completed = new Promise<void>((resolve, reject) => {
+			// Store the disposable from the notification listener
 			const disposable = client.onNotification(
 				"wingman/webSearchProgress",
 				(params: {
@@ -287,6 +315,11 @@ export class LSPClient {
 				isComplete = true;
 				reject(err);
 			});
+
+			// Clean up the listener when the promise settles
+			Promise.resolve(completed).finally(() => {
+				disposable.dispose();
+			});
 		});
 
 		// Process the queue until completion
@@ -298,12 +331,10 @@ export class LSPClient {
 			}
 		}
 
-		// If there was an error, throw it
 		if (error) {
 			throw error;
 		}
 
-		// Wait for completion
 		await completed;
 	}
 }

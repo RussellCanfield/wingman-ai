@@ -201,6 +201,13 @@ ${result.summary}`,
 
 					const { command, value } = data;
 
+					this._lspClient.onIndexUpdated((stats) => {
+						webviewView.webview.postMessage({
+							command: "index-status",
+							value: stats
+						});
+					})
+
 					// TODO - save me from the insanity of this switch statement :D
 					switch (command) {
 						case "undo-file":
@@ -297,6 +304,11 @@ ${commitReview}
 						case "state-update":
 							const appState = value as AppState;
 							const currentSettings = await this._workspace.load();
+							await this._workspace.save({
+								indexerSettings:
+									appState.settings.indexerSettings,
+								chatMessages: appState.settings.chatMessages,
+							});
 
 							if (currentSettings.indexerSettings.indexFilter !== appState.settings.indexerSettings.indexFilter) {
 								const matchingFiles =
@@ -307,18 +319,11 @@ ${commitReview}
 										)) || ""
 									);
 
-								appState.totalFiles = matchingFiles?.length ?? 0;
 								webviewView.webview.postMessage({
-									command: "file-count-update",
-									value: appState,
+									command: "available-files",
+									value: matchingFiles?.length ?? 0,
 								});
 							}
-
-							await this._workspace.save({
-								indexerSettings:
-									appState.settings.indexerSettings,
-								chatMessages: appState.settings.chatMessages,
-							});
 							this._lspClient.setIndexerSettings(
 								appState.settings.indexerSettings
 							);

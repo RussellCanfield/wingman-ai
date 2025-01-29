@@ -59,7 +59,22 @@ export const OllamaSettingsView = ({
 						id="code-model"
 						value={codeModel}
 						onChange={handleChange}
-						className="flex-1 px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+						className="w-full
+							px-3 
+							py-2 
+							appearance-none
+							bg-[var(--vscode-input-background)]
+							text-[var(--vscode-input-foreground)]
+							border border-[var(--vscode-input-border)]
+							rounded-md
+							focus:outline-none 
+							focus:ring-2 
+							focus:ring-[var(--vscode-focusBorder)]
+							text-sm
+							sm:text-base
+							disabled:opacity-50
+							disabled:cursor-not-allowed
+							"
 					>
 						{ollamaModels.map((model) => (
 							<option key={model} value={model}>
@@ -89,7 +104,22 @@ export const OllamaSettingsView = ({
 						id="chat-model"
 						value={chatModel}
 						onChange={handleChatChange}
-						className="flex-1 px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+						className="w-full
+								px-3 
+								py-2 
+								appearance-none
+								bg-[var(--vscode-input-background)]
+								text-[var(--vscode-input-foreground)]
+								border border-[var(--vscode-input-border)]
+								rounded-md
+								focus:outline-none 
+								focus:ring-2 
+								focus:ring-[var(--vscode-focusBorder)]
+								text-sm
+								sm:text-base
+								disabled:opacity-50
+								disabled:cursor-not-allowed
+								"
 					>
 						{ollamaModels.map((model) => (
 							<option key={model} value={model}>

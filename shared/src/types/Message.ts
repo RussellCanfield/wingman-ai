@@ -78,6 +78,7 @@ export interface FileMetadata {
 	plan?: string[];
 	diff?: string;
 	language?: string;
+	lastModified?: number;
 }
 
 export interface CodeContextDetails {
