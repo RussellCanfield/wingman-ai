@@ -160,7 +160,7 @@ const ChatInput = ({
 					<div className="flex flex-wrap items-center">
 						<textarea
 							ref={inputRef}
-							placeholder="Type here to chat with your Wingman. Type / for commands."
+							placeholder="Type here to chat..."
 							onChange={(e) => {
 								setInputValue(e.target.value);
 								handleCommandInput(e.target.value);
@@ -183,6 +183,11 @@ const ChatInput = ({
 										</caption>
 										<span>{`/${selectedCommand}`}</span>
 									</>
+								)}
+								{!commandMatch && (
+									<caption className={`italic ${isLightTheme ? "text-gray-700/50" : "text-gray-400/50"}`}>
+										Type / for commands
+									</caption>
 								)}
 							</span>
 							<span className="p-4 pr-2">
@@ -220,7 +225,7 @@ const ChatInput = ({
 					</div>
 				</div>
 			</div>
-		</div>
+		</div >
 	);
 };
 

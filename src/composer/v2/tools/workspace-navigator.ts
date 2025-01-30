@@ -12,6 +12,7 @@ import { ComposerImage } from "@shared/types/v2/Composer";
 import { VectorQuery } from "../../../server/query";
 import { CodeGraph } from "../../../server/files/graph";
 import { Store } from "../../../store/vector";
+import { getTextDocumentFromPath } from "../../../server/files/utils";
 
 export class WorkspaceNavigator {
   private INITIAL_SCAN_DEPTH = 10;
@@ -46,7 +47,9 @@ export class WorkspaceNavigator {
       const [intent, scannedFiles] = await this.analyzeRequest(message, state.files?.filter(f => f.path !== undefined), state.image, projectDetails?.description);
 
       const files: FileMetadata[] = intent.targets.map(f => ({
-        path: f.path!
+        path: f.path!,
+        type: f.type,
+        description: f.description
       }));
 
       return { intent, files, scannedFiles };
@@ -72,10 +75,26 @@ export class WorkspaceNavigator {
       messages
     });
 
+    const fileDetails: FileMetadata[] = (await Promise.all(
+      files.map(async (file) => {
+        try {
+          const textDocument = await getTextDocumentFromPath(path.join(this.workspace, file.path));
+          const code = textDocument?.getText();
+          return {
+            ...file,
+            code,
+          } as FileMetadata;
+        } catch (error) {
+          console.error(`Error reading file ${file.path}:`, error);
+          return null;
+        }
+      })
+    )).filter((file): file is FileMetadata => file !== null);
+
     return {
       userIntent: { ...intent },
       messages,
-      files: files.filter(f => path.extname(f.path!)?.length > 0),
+      files: fileDetails,
       greeting: "",
       projectDetails: projectDetails?.description,
       scannedFiles
@@ -259,9 +278,9 @@ Provide your analysis as a streaming response in this format:
 
           // Safely extract and normalize type
           const extractedType = safeExtract(content, 'Type').toUpperCase();
-          const type = extractedType as "CREATE" | "MODIFY";
+          const type = extractedType as "CREATE" | "MODIFY" | "ANALYZE";
 
-          if (!type || !["CREATE", "MODIFY"].includes(type)) {
+          if (!type || !["CREATE", "MODIFY", "ANALYZE"].includes(type)) {
             return null;
           }
 
@@ -309,13 +328,48 @@ Provide your analysis as a streaming response in this format:
 
     const fileTargets = allContents
       .slice(0, 1200)
-      .map(c => `Name: ${c.name}\nType: ${c.type}\nPath: ${c.path}`)
+      .map(c => `Type: ${c.type}\nPath: ${c.path}`)
       .join('\n\n');
 
     const prompt = `You are a senior full-stack software architect and technical lead.
 Your role is to analyze requests and choose the absolute best files that match the user's request.
 You must think through this step-by-step and consider the user's current implementation context.
 Every response must include an acknowledgement and file targets. This is critical or the application crashes.
+
+MANDATORY TARGET PATTERNS:
+When the user input matches any of these patterns, the corresponding targets MUST be included:
+
+1. Test Creation Pattern:
+   Pattern: "test(s)? for {filename}" or "create test(s)? for {filename}"
+   Required Targets:
+   - {matched_file} -> Type: ANALYZE
+   - {matched_file}.test.{ext} -> Type: CREATE
+
+2. File Reference Pattern:
+   Pattern: Any direct mention of a file name
+   Required Target:
+   - {matched_file} -> Type: ANALYZE
+
+3. File Modification Pattern:
+   Pattern: "update|modify|change|fix {filename}"
+   Required Target:
+   - {matched_file} -> Type: ANALYZE
+
+EXAMPLE:
+Input: "Create tests for index"
+Must Generate:
+---TARGET---
+Type: ANALYZE
+Description: Analyze source file for test implementation
+Path: src/index.ts
+---END_TARGET---
+---TARGET---
+Type: CREATE
+Description: Create test file for index
+Path: src/index.test.ts
+---END_TARGET---
+
+THIS IS A CRITICAL REQUIREMENT - ALL PATTERN MATCHES MUST GENERATE THESE TARGETS
 
 File Selection Priority:
 1. Active Context (Highest Priority)
@@ -336,6 +390,34 @@ File Selection Priority:
     - Look for files matching the technical requirements
     - Consider common patterns and structures
 
+4. Detect Explicit File References
+    - Identify key actionable phrases in the conversation, such as:
+      - "Write tests for xyz"
+      - "Create a new component based on xyz"
+      - "Add implementation for xyz"
+      - "Update xyz"
+      - "Fix xyz"
+      - "Modify xyz"
+      - "Check xyz"
+      - "Review xyz"
+      - "Look at xyz"
+      - "Show me xyz"
+    - Use fuzzy matching to identify potential file references:
+      - Match partial file names (e.g., "index" → "src/index.ts")
+      - Match without extensions (e.g., "UserComponent" → "UserComponent.tsx")
+      - Match basename only (e.g., "auth" → "src/services/auth.service.ts")
+    - If there is a close match for a file under "Available workspace files":
+      1. Compare the mentioned name against all available files
+      2. Score matches based on:
+         - Exact matches (highest priority)
+         - Partial matches at the start of the filename
+         - Partial matches anywhere in the filename
+         - Matches without considering file extension
+      3. Reference the best matching file
+    - Add these files as targets with type "ANALYZE"
+    - When multiple files match, include all relevant matches
+    - Consider context to disambiguate similar file names
+
 Technical Analysis Steps:
 1. Review the conversation history
     - Note any files already being modified
@@ -348,10 +430,29 @@ Technical Analysis Steps:
     - Consider component relationships
 
 3. Score potential matches
-    - Active implementation file: Highest
+    - Active implementation file and explicit file references: Highest
     - Recently modified related file: High
     - Contextually related file: Medium
     - Pattern/structure match: Low
+
+4. Required Target Combinations:
+    - When creating test files:
+        * Add source file as type "ANALYZE"
+        * Add test file as type "CREATE"
+    - When modifying existing files:
+        * Add target file as type "ANALYZE"
+        * Add related files as type "ANALYZE"
+    - When creating new components:
+        * Add template/example files as type "ANALYZE"
+        * Add new component file as type "CREATE"
+
+5. Explicit Handling of File References
+    - Automatically include any file mentioned in 'FileTargets' that has a description containing actionable phrases
+    - When a file is referenced (directly or indirectly):
+        * ALWAYS add it as type "ANALYZE"
+        * Add any new related files as appropriate type (CREATE/MODIFY)
+    - For test creation requests:
+        * ALWAYS include both the source file (ANALYZE) and test file (CREATE)
 
 Note: When creating new files, do not specify directory creation. The system will automatically create necessary directories when creating files.
 
@@ -374,6 +475,12 @@ File vs Directory Handling:
     - Reference directory patterns for new file placement
     - Consider framework-specific directory conventions
     - Directory structure informs but doesn't determine targets
+
+4. Disambiguation Rules
+    - Prefer files in active context
+    - Consider conversation history
+    - Use project structure to inform matches
+    - When in doubt, include all potential matches
 
 Project Creation Guidelines:
 1. Framework-Specific Structures
@@ -424,11 +531,13 @@ Project Type 2 - Node.js:
 
 4. Configuration Files Checklist
     React:
-    - package.json
+    - package.json (Using proper rsbuild commands)
     - tsconfig.json (if TypeScript)
-    - vite.config.js/webpack.config.js/rspack.config.js/rsbuild.config.js
+    - rsbuild.config.ts
     - biomejs
     - index.html
+    - .gitignore
+    - README.md
     
     Node.js:
     - package.json
@@ -437,6 +546,8 @@ Project Type 2 - Node.js:
     - nodemon.json
     - biomejs
     - .env.example
+    - .gitignore
+    - README.md
 
     Formatter/Linter for javascript/typescript:
     - Default to biomejs by installing: @biomejs/biome
@@ -487,7 +598,7 @@ ${files?.map(file => {
         const description = (file as FileMetadata).description || '';
         return description
           ? `Path: ${relativePath}\nContext: ${description}`
-          : `Path: ${relativePath}`;
+          : `Path: ${relativePath}\nContext: User provided`;
       }
       return `Path: ${path.relative(this.workspace, file)}`;
     }).join('\n') ?? "None provided."}
@@ -592,8 +703,30 @@ For new projects, the TARGETS response must include:
 3. Essential framework files
 4. Development environment setup files
 5. Initial documentation files
+6. Fully functional projects, if you're creating a new one make sure the user can run it right away
 
 Note - Skip directories, creating files will create directories.
+
+CRITICAL TARGET RULES:
+1. Test Creation Rule
+    When the request involves creating tests for a file:
+    - MUST include the source file as type "ANALYZE"
+    - MUST include the new test file as type "CREATE"
+    Example: For "Create tests for index":
+    - ANALYZE: src/index.ts
+    - CREATE: src/index.test.ts
+
+2. File Reference Rule
+    When any file is referenced in the request:
+    - MUST include the referenced file as type "ANALYZE"
+    - Then add any additional files as needed
+
+3. Modification Rule
+    When modifying or updating a file:
+    - MUST include the target file as type "ANALYZE"
+    - Then add any additional files as needed
+
+FAILURE TO INCLUDE THESE REQUIRED TARGETS WILL CAUSE SYSTEM ERRORS.
 
 ------
 
@@ -617,8 +750,9 @@ Key Changes:
 
 ===TARGETS_START===
 [Internal targets list - not shown to user]
+REMEMBER: Always include source files as ANALYZE when creating tests or when files are referenced!
 ---TARGET---
-Type: [MODIFY or CREATE only]
+Type: [MODIFY,CREATE or ANALYZE]
 Description: [One line description]
 Path: [Workspace relative file path]
 ---END_TARGET---

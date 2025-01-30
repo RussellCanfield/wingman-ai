@@ -17,6 +17,7 @@ import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
 import { PiGitDiff } from "react-icons/pi";
 import { FaUndo } from "react-icons/fa";
+import { Tooltip } from 'react-tooltip'
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -146,45 +147,48 @@ const ChatArtifact = ({
 	loading: boolean
 }) => {
 	const truncatedPath = useMemo(() => {
-		if (file.path.length <= 50) return file.path;
-		return "..." + file.path.slice(-50);
+		return file.path.split('/').pop();
 	}, [file]);
 
 	const diffParts = file.diff?.split(',');
 
 	return (
-		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-stone-600">
+		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-stone-700">
 			<div className="text-white flex flex-col border-b border-stone-700/50">
-				<div className="flex items-center border-b border-stone-700/50">
+				<div className="flex items-center justify-start border-b border-stone-700/50 relative">
+					<Tooltip id={`${file.path}-tooltip`} />
 					<h4
-						className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm flex-grow"
+						className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm group"
+						data-tooltip-id={`${file.path}-tooltip`}
+						data-tooltip-content={file.path}
 						onClick={() => openFile(file)}
+						style={{ flex: '0 1 auto', minWidth: '0' }}
 					>
 						{truncatedPath}
 					</h4>
-				</div>
-				<div className="flex flex-wrap items-center gap-2 p-2">
+					{diffParts && (
+						<div className="flex items-center justify-evenly text-sm gap-2 mr-4">
+							<span className="flex items-center text-green-400">
+								<span>{diffParts[0]}</span>
+							</span>
+							<span className="flex items-center text-red-400">
+								<span>{diffParts[1]}</span>
+							</span>
+						</div>
+					)}
+
 					{!file.code && loading && (
-						<div className="flex justify-center">
+						<div className="flex justify-center mr-4">
 							<AiOutlineLoading3Quarters
 								className="animate-spin text-stone-400"
 								size={24}
 							/>
 						</div>
 					)}
-					{diffParts && (
-						<div className="flex items-center gap-2 text-sm">
-							<span className="flex items-center gap-1 text-green-400">
-								<span>{diffParts[0]}</span>
-							</span>
-							<span className="flex items-center gap-1 text-red-400">
-								<span>{diffParts[1]}</span>
-							</span>
-						</div>
-					)}
 					{!loading && file?.description && !file.accepted && !file.rejected && (
-						<div className="flex flex-nowrap gap-1 ml-auto">
-							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-red-600">
+						<div className="flex flex-nowrap gap-1 ml-auto mr-4">
+							{/* Reject Button */}
+							<div className="flex items-center rounded z-10 transition-colors text-red-600 hover:bg-red-600/10 hover:shadow-lg focus:ring focus:ring-red-400">
 								<button
 									type="button"
 									title="Reject changes"
@@ -194,7 +198,8 @@ const ChatArtifact = ({
 									<HiOutlineXMark size={18} />
 								</button>
 							</div>
-							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors" style={{ color: '#ffaf38' }}>
+							{/* Show Diff Button */}
+							<div className="flex items-center rounded z-10 transition-colors hover:bg-yellow-500/10 hover:shadow-lg focus:ring focus:ring-yellow-400" style={{ color: '#ffaf38' }}>
 								<button
 									type="button"
 									title="Show diff"
@@ -204,7 +209,8 @@ const ChatArtifact = ({
 									<PiGitDiff size={16} />
 								</button>
 							</div>
-							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-green-400">
+							{/* Accept Button */}
+							<div className="flex items-center rounded z-10 transition-colors text-green-400 hover:bg-green-400/10 hover:shadow-lg focus:ring focus:ring-green-400">
 								<button
 									type="button"
 									title="Accept changes"
@@ -217,8 +223,9 @@ const ChatArtifact = ({
 						</div>
 					)}
 					{(file.rejected || file.accepted) && (
-						<div className="flex items-center gap-3 ml-auto">
-							<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-stone-400">
+						<div className="flex items-center gap-3 ml-auto mr-4">
+							{/* Undo Button */}
+							<div className="flex items-center rounded z-10 transition-colors text-stone-400 hover:bg-stone-700/10 hover:shadow-lg focus:ring focus:ring-stone-400">
 								<button
 									type="button"
 									title="Undo changes"
@@ -270,7 +277,7 @@ const ChatEntry = ({
 
 	const fromUser = from === "user";
 
-	const bgClasses = fromUser ? `bg-stone-600 rounded-lg overflow-hidden w-full` : "";
+	const bgClasses = fromUser ? `bg-stone-700 rounded-lg overflow-hidden w-full` : "";
 	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
 	const hasPendingFiles = files?.some(f => !f.accepted && !f.rejected);
@@ -326,7 +333,7 @@ const ChatEntry = ({
 									{dependencies.response && (<p>{dependencies.response}</p>)}
 									{dependencies.steps.map((step, index) => (
 										<div
-											className={`border border-stone-700/50 bg-stone-600 rounded-lg overflow-hidden w-full`}
+											className={`border border-stone-700/50 bg-stone-700 rounded-lg overflow-hidden w-full`}
 											key={index}
 										>
 											<div className="flex flex-row items-center border-b border-stone-500/50">

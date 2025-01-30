@@ -1,5 +1,5 @@
 export type FileTarget = {
-    type: 'CREATE' | 'MODIFY';
+    type: 'CREATE' | 'MODIFY' | 'ANALYZE';
     path?: string;
     description: string;
 }

@@ -6,11 +6,19 @@ module.exports = {
 		extend: {
 			animation: {
 				"spin-slow": "spin 3s linear infinite",
+				gradient: 'gradient-animation 3s ease infinite',
 			},
 			colors: {
 				code: {
 					light: "#f6f8fa",
 					dark: "#151b23",
+				},
+			},
+			keyframes: {
+				'gradient-animation': {
+					'0%': { backgroundPosition: '0% 50%' },
+					'50%': { backgroundPosition: '100% 50%' },
+					'100%': { backgroundPosition: '0% 50%' },
 				},
 			},
 		},

@@ -108,7 +108,7 @@ export default function Compose() {
 						{(!indexStats.exists || indexStats.files?.length === 0) && (
 							<div className="mt-4 p-4 bg-[var(--vscode-inputValidation-warningBackground)] border border-[var(--vscode-inputValidation-warningBorder)] rounded-md text-[var(--vscode-inputValidation-warningForeground)]">
 								<span className="flex items-center gap-2">
-									⚠️ No context files found. Please ensure the indexer inclusion filter is correct or reference files directly using <kbd className="px-2 py-0.5 rounded bg-slate-700/30">@filename</kbd>
+									⚠️ No context files found. Please ensure the indexer inclusion filter is correct or reference files directly.
 								</span>
 								<button
 									className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50 mt-4"

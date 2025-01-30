@@ -23,6 +23,7 @@ type BuildPromptParams = {
 	projectDetails: string;
 	request: string;
 	modifiedFiles: string;
+	referenceFiles: string;
 	availableFiles: string;
 	rulePack?: string;
 };
@@ -293,6 +294,11 @@ Previous conversation and latest request:
 
 ------
 
+Files available to analyze and reference for your implementation(s):
+{{referenceFiles}}
+
+------
+
 Files available to create or modify:
 {{availableFiles}}
 
@@ -316,6 +322,7 @@ const buildPrompt = ({
 	projectDetails,
 	request,
 	modifiedFiles,
+	referenceFiles,
 	availableFiles,
 	rulePack,
 }: BuildPromptParams) => {
@@ -330,6 +337,7 @@ ${rulePack}`;
 		.replace("{{details}}", projectDetails)
 		.replace("{{request}}", request)
 		.replace("{{modified}}", modifiedFiles)
+		.replace("{{referenceFiles", referenceFiles)
 		.replace("{{availableFiles}}", availableFiles);
 };
 
@@ -355,12 +363,10 @@ export class CodeWriter {
 		const allDependencies = new Set<string>();
 
 		const executeStep = async (includeImage: boolean) => {
-			for (let { path: file, code, accepted, rejected } of state.files ?? []) {
-				if (!code || (code && !accepted && !rejected)) {
-					const textDocument = await getTextDocumentFromPath(path.join(this.workspace, file));
-					code = textDocument?.getText();
-				}
+			const analyzeFiles = state.files?.filter(f => f.type && f.type === "ANALYZE");
+			const createOrModifyFiles = state.files?.filter(f => !f.type || (f.type === "CREATE" || f.type === "MODIFY"));
 
+			for (let { path: file, code } of createOrModifyFiles ?? []) {
 				const systemMessage = new SystemMessage({
 					content: [
 						{
@@ -373,9 +379,12 @@ export class CodeWriter {
 									`Files already processed:\n${files.map(f =>
 										`File: ${f.path}\nChanges: ${f.description}`
 									).join('\n')}`,
-								availableFiles: state.files
+								referenceFiles: analyzeFiles
+									?.map((f) => `File: ${f.path}\nDescription:${f.description}\nCode:\n${f.code}`)
+									.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
+								availableFiles: createOrModifyFiles
 									?.filter((f) => f.path !== file)
-									?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nCode:\n${f.code}`)
+									?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nDescription:${f.description}\nCode:\n${f.code}`)
 									.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
 								rulePack,
 							}),

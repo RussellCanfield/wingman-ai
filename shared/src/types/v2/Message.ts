@@ -82,6 +82,7 @@ export interface FileMetadata {
 	accepted?: boolean;
 	rejected?: boolean;
 	lastModified?: number;
+	type?: "CREATE" | "MODIFY" | "ANALYZE"
 }
 
 export interface CodeContextDetails {

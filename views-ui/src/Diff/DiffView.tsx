@@ -78,8 +78,8 @@ export default function DiffView({ diff }: DiffProps) {
 	};
 
 	return (
-		<div className="fixed inset-0 bg-gray-900 flex flex-col">
-			<div className="bg-gray-800 p-4 flex justify-between items-center z-10">
+		<div className="fixed inset-0 bg-[var(--vscode-editorWidget-background)]flex flex-col">
+			<div className="p-4 flex justify-between items-center z-10">
 				<p className="text-white font-semibold truncate">{file.path}</p>
 				<div className="flex gap-4">
 					<button

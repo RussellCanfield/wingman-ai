@@ -48,7 +48,7 @@ export class ComposerGraph {
 
         const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
             messages: {
-                value: (_x: ChatMessage[], y: ChatMessage[]) => y,
+                value: (x: ChatMessage[], y: ChatMessage[]) => y ?? x,
                 default: undefined
             },
             userIntent: {

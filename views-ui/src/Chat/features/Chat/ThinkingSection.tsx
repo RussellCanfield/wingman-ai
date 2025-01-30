@@ -28,8 +28,13 @@ export const ThinkingSection = ({
                 className="w-full flex items-center gap-2 p-2 hover:bg-stone-700 transition-colors"
             >
                 {isExpanded ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />}
-                <span className={`${isLightTheme ? 'text-stone-400' : 'text-stone-500'}`}>
-                    Thinking Process {isThinking && '...'}
+                <span
+                    className={`text-transparent bg-clip-text ${isLightTheme
+                            ? 'bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-400'
+                            : 'bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500'
+                        } animate-gradient`}
+                >
+                    Thinking
                 </span>
             </button>
             {isExpanded && (
