@@ -7,3 +7,8 @@ li.message ol {
 	list-style-type: decimal;
 	padding-left: 2rem;
 }
+
+li.message hr {
+	margin-top: 1rem;
+	margin-bottom: 1rem;
+}

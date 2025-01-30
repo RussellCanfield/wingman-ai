@@ -193,8 +193,8 @@ const ChatInput = ({
 										role="presentation"
 										title="Send message"
 										className={`${!inputValue.trim()
-											? "text-gray-500"
-											: "text-gray-100"
+											? `${!isLightTheme ? 'text-gray-200' : 'text-gray-400'}`
+											: `${!isLightTheme ? 'text-gray-200' : 'text-gray-800'}`
 											} cursor-pointer`}
 										onClick={() =>
 											handleKeyDown({

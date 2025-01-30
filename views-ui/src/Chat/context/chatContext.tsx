@@ -10,7 +10,7 @@ interface ChatContextType {
   activeMessage: Message | undefined,
   addMessage: (message: ChatMessage) => void;
   clearMessages: () => void;
-  clearActiveMessage: () => void;
+  clearActiveMessage: (wasCancelled?: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -178,7 +178,15 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
     setChatLoading(isLoading);
   }
 
-  const clearActiveMessage = () => {
+  const clearActiveMessage = (wasCancelled?: boolean) => {
+    if (wasCancelled) {
+      addMessage({
+        message: activeMessage?.message ? structuredClone(activeMessage.message) : "Chat was cancelled.",
+        from: "assistant",
+        type: "chat"
+      })
+      setLoading(false);
+    }
     setActiveMessage(undefined);
   }
 

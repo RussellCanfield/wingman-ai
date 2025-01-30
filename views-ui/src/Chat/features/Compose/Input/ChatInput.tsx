@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { FaPlay, FaStopCircle, FaPaperclip } from "react-icons/fa";
 import { vscode } from "../../../utilities/vscode";
 import { AppMessage } from "@shared/types/Message";
-import { FileSearchResult } from "@shared/types/Composer";
+import { FileSearchResult } from "@shared/types/v2/Composer";
 import { useAutoFocus } from "../../../hooks/useAutoFocus";
 import { useOnScreen } from "../../../hooks/useOnScreen";
 import { handleAutoResize } from "../../../utilities/utils";
@@ -263,7 +263,7 @@ const ChatInput = ({
 							<span className="p-4 pr-2">
 								<FaPaperclip
 									size={16}
-									className="cursor-pointer text-gray-400 hover:text-gray-100"
+									className={`cursor-pointer 'text-gray-400' ${!isLightTheme ? 'hover:text-gray-100' : 'hover:text-gray-800'}`}
 									onClick={handleImageUpload}
 									title="Attach image"
 								/>
@@ -276,8 +276,8 @@ const ChatInput = ({
 										role="presentation"
 										title="Send"
 										className={`${!inputValue.trim()
-												? "text-gray-500"
-												: "text-gray-100"
+											? `${!isLightTheme ? 'text-gray-200' : 'text-gray-400'}`
+											: `${!isLightTheme ? 'text-gray-200' : 'text-gray-800'}`
 											} cursor-pointer`}
 										onClick={() =>
 											handleUserInput({

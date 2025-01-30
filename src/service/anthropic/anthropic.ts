@@ -369,7 +369,7 @@ ${recentClipboard}
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					true
+					!e.message.includes("aborted")
 				);
 			}
 		}

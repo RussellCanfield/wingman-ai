@@ -5,19 +5,22 @@ export const handleAutoResize = (
 ) => {
 	if (!element) return;
 
+	if (reset) {
+		// Reset the height to its default value
+		element.style.height = "42px"; // Minimum/default height
+		element.style.overflowY = "hidden";
+		return;
+	}
+
 	// Reset height to auto to get the correct scrollHeight
 	element.style.height = "auto";
 
-	if (reset) {
-		element.style.height = "42px"; // Minimum height
-	} else {
-		// Set the height to either the scrollHeight or the minimum height, but not exceeding maxHeight
-		const newHeight = Math.min(
-			Math.max(element.scrollHeight, 42),
-			maxHeight
-		);
-		element.style.height = `${newHeight}px`;
-	}
+	// Set the height to either the scrollHeight or the minimum height, but not exceeding maxHeight
+	const newHeight = Math.min(
+		Math.max(element.scrollHeight, 42),
+		maxHeight
+	);
+	element.style.height = `${newHeight}px`;
 
 	// Add overflow-y scrolling if content exceeds maxHeight
 	element.style.overflowY =

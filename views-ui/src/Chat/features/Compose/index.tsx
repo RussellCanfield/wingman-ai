@@ -95,29 +95,24 @@ export default function Compose() {
 							aria-label="Wingman Logo"
 							className="h-16 w-16 sm:h-24 sm:w-24 bg-no-repeat bg-contain bg-center mb-8 mx-auto animate-fade-in"
 						/>
-						<h1 className="text-2xl font-semibold mb-6 bg-gradient-to-r from-blue-400 via-white to-blue-200 bg-clip-text text-transparent animate-gradient">
+						<h1 className="text-2xl font-semibold mb-6 bg-gradient-to-r from-blue-500 via-gray-300 to-blue-900 bg-clip-text text-transparent animate-gradient">
 							Welcome to Wingman-AI
 						</h1>
 						<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
-							The composer feature allows you to generate code changes
-							across files. You can ask for help with code, or ask for
-							code to be written for you. By default, composer will
-							intelligently choose files in your project based on your
-							input. You can also target specific files using '@filename'.
+							The composer feature allows you to generate code changes across files. You can ask for help with code, or ask for code to be written for you. By default, composer will intelligently choose files in your project based on your input. You can also target specific files using <kbd className="px-2 py-0.5 rounded bg-slate-700/30">@filename</kbd>.
 							<br />
 							<br />
-							Composer is also multi-modal, copy and paste an image or
-							attach one. Lets go!
+							Composer is also multi-modal. Copy and paste an image or attach one. Let's go!
 							<span className="inline-block animate-bounce ml-4">🚀</span>
 						</span>
 						{(!indexStats.exists || indexStats.files?.length === 0) && (
 							<div className="mt-4 p-4 bg-[var(--vscode-inputValidation-warningBackground)] border border-[var(--vscode-inputValidation-warningBorder)] rounded-md text-[var(--vscode-inputValidation-warningForeground)]">
 								<span className="flex items-center gap-2">
-									⚠️ No context files found. Please ensure the indexer inclusion filter is correct or reference files directly using '@filename'
+									⚠️ No context files found. Please ensure the indexer inclusion filter is correct or reference files directly using <kbd className="px-2 py-0.5 rounded bg-slate-700/30">@filename</kbd>
 								</span>
 								<button
 									className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50 mt-4"
-									onClick={() => setView('index')}
+									onClick={() => setView("index")}
 								>
 									Go to Indexer
 								</button>
@@ -126,8 +121,8 @@ export default function Compose() {
 					</div>
 				</div>
 			)}
-			{
-				composerMessages.length > 0 && (<ChatResponseList messages={composerMessages}>
+			{composerMessages.length > 0 && (
+				<ChatResponseList messages={composerMessages}>
 					{loading && (
 						<ChatEntry
 							from="assistant"
@@ -140,13 +135,13 @@ export default function Compose() {
 						/>
 					)}
 					{canValidate && <Validation />}
-				</ChatResponseList>)
-			}
+				</ChatResponseList>
+			)}
 			<ChatInput
 				loading={loading}
 				onChatSubmitted={handleChatSubmitted}
 				onChatCancelled={cancelAIResponse}
 			/>
-		</main >
+		</main>
 	);
 }

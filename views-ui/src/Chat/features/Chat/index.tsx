@@ -8,7 +8,7 @@ export default function Chat() {
 	const { messages, addMessage, activeMessage, clearActiveMessage, loading, setLoading } = useChatContext();
 
 	const cancelAIResponse = () => {
-		clearActiveMessage();
+		clearActiveMessage(true);
 		vscode.postMessage({
 			command: "cancel",
 		});

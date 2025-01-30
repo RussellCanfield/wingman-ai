@@ -153,8 +153,8 @@ const ChatArtifact = ({
 	const diffParts = file.diff?.split(',');
 
 	return (
-		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-editor-bg/30">
-			<div className="bg-stone-800/50 text-white flex flex-col border-b border-stone-700/50">
+		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-stone-600">
+			<div className="text-white flex flex-col border-b border-stone-700/50">
 				<div className="flex items-center border-b border-stone-700/50">
 					<h4
 						className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm flex-grow"
@@ -270,8 +270,8 @@ const ChatEntry = ({
 
 	const fromUser = from === "user";
 
-	const bgClasses = fromUser ? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
-		} rounded-lg overflow-hidden w-full` : "";
+	const bgClasses = fromUser ? `bg-stone-600 rounded-lg overflow-hidden w-full` : "";
+	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
 	const hasPendingFiles = files?.some(f => !f.accepted && !f.rejected);
 
@@ -279,11 +279,11 @@ const ChatEntry = ({
 		<li
 			className="tracking-wide leading-relaxed text-md message mb-8"
 		>
-			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[16px] flex items-center text-stone-300`}>
+			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[16px] flex items-center ${textColor}`}>
 				<div className="relative flex items-center gap-4 flex-grow w-full">
 					{fromUser && (
 						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
-							<FaUser className="text-stone-300" size={16} />
+							<FaUser className="text-stone-200" size={16} />
 						</div>
 					)}
 					<div className={`${bgClasses} flex-grow w-full justify-center items-center ${fromUser ? "shadow-lg" : ""}`}>
@@ -305,7 +305,7 @@ const ChatEntry = ({
 						)}
 						{files && files?.length > 0 && (
 							<div>
-								<h3 className="text-lg font-semibold text-stone-200 mb-4">Files:</h3>
+								<h3 className="text-lg font-semibold mb-4">Files:</h3>
 								{files?.map((file, index) => (
 									<div key={index}>
 										{file.description && (
@@ -321,20 +321,20 @@ const ChatEntry = ({
 						)}
 						{dependencies && dependencies?.steps && dependencies?.steps?.length > 0 && (
 							<div>
-								<h3 className="text-lg font-semibold text-stone-200 mb-4 mt-0">Dependencies:</h3>
+								<h3 className="text-lg font-semibold mb-4 mt-0">Dependencies:</h3>
 								<div className="space-y-3 mb-4">
 									{dependencies.response && (<p>{dependencies.response}</p>)}
 									{dependencies.steps.map((step, index) => (
 										<div
-											className="border border-stone-700/50 rounded-lg overflow-hidden bg-editor-bg/30"
+											className={`border border-stone-700/50 bg-stone-600 rounded-lg overflow-hidden w-full`}
 											key={index}
 										>
-											<div className="bg-stone-800/50 text-white flex flex-row items-center border-b border-stone-700/50">
+											<div className="flex flex-row items-center border-b border-stone-500/50">
 												<p className="flex-1 p-3 text-sm">
 													{step.description}
 												</p>
 												{step.command && (
-													<div className="flex space-x-2 text-white rounded hover:bg-stone-700 transition-colors z-10">
+													<div className="flex space-x-2 rounded hover:bg-stone-700 transition-colors z-10">
 														<button
 															type="button"
 															title="Run in terminal"
@@ -373,11 +373,11 @@ const ChatEntry = ({
 				</div>
 			</div>
 			{isCurrent && !loading && files && files?.length > 1 && (
-				<div className="border-t border-stone-700/50 mt-4 pt-4 pl-[48px] pr-[16px]">
+				<div className="border-t border-stone-700/50 mt-4 pt-4 pl-[48px] pr-[16px] text-[var(--vscode-input-foreground)]">
 					<p>
 						Summary:
 					</p>
-					<div className="flex flex-col items-center justify-between text-sm text-stone-400">
+					<div className="flex flex-col items-center justify-between text-sm overflow-y-auto max-h-48">
 						{files.map(f => {
 							const truncatedPath = useMemo(() => {
 								const parts = f.path.split('/');
@@ -396,7 +396,7 @@ const ChatEntry = ({
 							const diffParts = f.diff?.split(',') ?? [0, 0];
 
 							return (
-								<div className="flex items-center justify-between gap-4 w-full max-h-24 overflow-y-scroll">
+								<div className="flex items-center justify-between gap-4 w-full max-h-24 overflow-hidden">
 									<div className="flex">
 										<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer" onClick={() => showDiffview(f)}>
 											{truncatedPath}
@@ -412,7 +412,7 @@ const ChatEntry = ({
 									</div>
 									{(f.rejected || f.accepted) && (
 										<div className="flex items-center gap-3 ml-auto">
-											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-stone-400">
+											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors">
 												<button
 													type="button"
 													title="Undo changes"
@@ -461,23 +461,23 @@ const ChatEntry = ({
 								</div>
 							)
 						})}
-						{hasPendingFiles && (
-							<div className="flex justify-end gap-4 w-full mt-4 border-t border-stone-700/50 pt-4">
-								<button
-									onClick={() => files.forEach(f => rejectFile(f))}
-									className="px-3 py-2 text-sm rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors"
-								>
-									Reject All
-								</button>
-								<button
-									onClick={() => files.forEach(f => mergeIntoFile(f))}
-									className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
-								>
-									Accept All
-								</button>
-							</div>
-						)}
 					</div>
+					{hasPendingFiles && (
+						<div className="flex justify-end gap-4 w-full mt-4 border-t border-stone-700/50 pt-4 text-white">
+							<button
+								onClick={() => files.forEach(f => rejectFile(f))}
+								className="px-3 py-2 text-sm rounded-md bg-red-600 hover:bg-red-700 transition-colors"
+							>
+								Reject All
+							</button>
+							<button
+								onClick={() => files.forEach(f => mergeIntoFile(f))}
+								className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 transition-colors"
+							>
+								Accept All
+							</button>
+						</div>
+					)}
 				</div>)}
 		</li>
 	);
