@@ -3,21 +3,20 @@ import type { BaseCheckpointSaver, StateGraphArgs } from "@langchain/langgraph";
 import { ChatMessage } from "@langchain/core/messages";
 import { CodeGraph } from "../../server/files/graph";
 import { RunnableConfig } from "@langchain/core/runnables";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../../store/vector.js";
 import { PlanExecuteState } from "./types/index";
 import { NoFilesChangedError, NoFilesFoundError } from "../errors";
 import { ComposerRequest } from "@shared/types/v2/Composer";
-import { WorkspaceNavigator } from "./tools/workspace-navigator";
-import { UserIntent } from "./types/tools";
 import { FileMetadata } from "@shared/types/v2/Message";
-import { CodeWriter } from "./tools/code-writer";
+import { CodeWriter } from "./agents/code-writer";
 import path, { join } from "node:path";
 import { getTextDocumentFromPath } from "../../server/files/utils";
 import { DirectoryContent } from "../utils";
-import { DependencyManager } from "./tools/dependency-manager";
-import { Dependencies } from "@shared/types/v2/Composer";
+import { DependencyManager } from "./agents/dependency-manager";
 import { promises } from "node:fs";
+import { FeatureParser } from "./agents/feature-parser";
+import { AIProvider } from "../../service/base";
+import { createPlannerAgent } from "./agents/find";
 
 export interface Thread {
     configurable: {
@@ -35,24 +34,24 @@ export class ComposerGraph {
     private workflow: StateGraph<PlanExecuteState>;
 
     constructor(private readonly workspace: string,
-        private readonly model: BaseChatModel,
-        private readonly rerankModel: BaseChatModel,
+        private readonly aiProvider: AIProvider,
         private readonly codeGraph: CodeGraph,
         private readonly store: Store,
         private readonly config?: RunnableConfig,
         private readonly checkpointer?: BaseCheckpointSaver) {
 
-        const workspaceNavigator = new WorkspaceNavigator(this.model, this.workspace, this.codeGraph, this.store);
-        const codeWriter = new CodeWriter(this.model, this.rerankModel, this.workspace);
-        const dependencyManager = new DependencyManager(this.model, this.rerankModel, this.workspace);
+        const plannerAgent = createPlannerAgent(this.aiProvider, this.codeGraph, this.store, this.workspace);
+        const codeWriter = new CodeWriter(this.aiProvider, this.workspace);
+        const dependencyManager = new DependencyManager(this.aiProvider.getLightweightModel(), this.workspace);
+        const featureParser = new FeatureParser(this.aiProvider.getReasoningModel(), this.workspace);
 
         const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
             messages: {
                 value: (x: ChatMessage[], y: ChatMessage[]) => y ?? x,
                 default: undefined
             },
-            userIntent: {
-                value: (x?: UserIntent, y?: UserIntent) => y ?? x,
+            implementationPlan: {
+                value: (x?: string, y?: string) => y ?? x,
                 default: () => undefined,
             },
             files: {
@@ -71,41 +70,57 @@ export class ComposerGraph {
                 value: (x?: string, y?: string) => y ?? x,
                 default: () => undefined,
             },
-            dependencies: {
-                value: (x?: Dependencies, y?: Dependencies) => y ?? x,
-                default: () => undefined,
-            },
             image: {
                 value: (
                     x?: ComposerRequest["image"],
                     y?: ComposerRequest["image"]
                 ) => y ?? x,
             },
-            greeting: {
-                value: (_x?: string, y?: string) => y,
-                default: () => undefined
-            }
+            feature: {
+                value: (x?: string, y?: string) => y ?? x,
+                default: () => undefined,
+            },
+            dependencies: {
+                value: (x?: string[], y?: string[]) => y ?? x,
+                default: () => undefined,
+            },
         };
 
         //@ts-expect-error
         this.workflow = new StateGraph({
             channels: planExecuteState,
         })
-            .addNode("find", workspaceNavigator.navigateWorkspace, {
-                ends: ["human-feedback"]
+            .addNode("find", plannerAgent.invoke, {
+                ends: ["intent-review"]
             })
-            .addNode("human-feedback", this.humanFeedback, {
-                ends: ["find", "code-writer"]
+            .addNode("intent-review", this.intentReviewFeedback, {
+                ends: ["find", "dependency-manager", "code-writer"],
+            })
+            .addNode("dependency-manager", dependencyManager.addDependencies, {
+                ends: ["code-writer"]
             })
             .addNode("code-writer", codeWriter.codeWriterStep, {
-                ends: ["dependency-manager"],
-            })
-            .addNode("dependency-manager", dependencyManager.generateManualSteps, {
                 ends: [END]
             })
+            // .addNode("file-review", this.fileReview, {
+            //     ends: ["find", "feature-parser"]
+            // })
+            // .addNode("feature-parser", featureParser.parseFeature, {
+            //     ends: ["accept-feature-plan"]
+            // })
+            // .addNode("accept-feature-plan", this.acceptFeaturePlan, {
+            //     ends: ["find", END]
+            // })
             .addEdge(START, "find")
-            .addEdge("find", "human-feedback")
-            .addEdge("code-writer", "dependency-manager");
+            .addEdge("find", "intent-review")
+            // .addEdge("intent-review", "dependency-manager")
+            // .addEdge("intent-review", "code-writer")
+            // .addEdge("intent-review", "find")
+            .addEdge("dependency-manager", "code-writer")
+        // .addEdge("code-writer", "file-review")
+        // .addEdge("file-review", "feature-parser")
+        // .addEdge("feature-parser", "accept-feature-plan")
+        // .addEdge("accept-feature-plan", END)
     }
 
     resetGraphState = async () => {
@@ -128,6 +143,7 @@ export class ComposerGraph {
 
         matchedFile.rejected = false;
         matchedFile.accepted = false;
+        matchedFile.code = matchedFile.original;
 
         await graph.updateState({ ...this.config }, {
             files: graphFiles
@@ -139,7 +155,7 @@ export class ComposerGraph {
         }
     }
 
-    rejectFile = async (file: FileMetadata) => {
+    rejectFile = async (file: FileMetadata): Promise<PlanExecuteState | undefined> => {
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
@@ -167,7 +183,7 @@ export class ComposerGraph {
         }
     }
 
-    acceptFile = async (file: FileMetadata) => {
+    acceptFile = async (file: FileMetadata): Promise<PlanExecuteState | undefined> => {
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
@@ -236,14 +252,9 @@ export class ComposerGraph {
         };
     }
 
-    humanFeedback = async (state: PlanExecuteState) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
-        const userMessage = interruptState.messages![0].content.toString();
-        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
-
-        const isPositive = await this.rerankModel.invoke(
-            `Analyze this response and determine if it's a positive confirmation or any other type of response.
+    determinePositiveAnswer = async (userMessage: string) => {
+        const result = await this.aiProvider.getLightweightModel().invoke(
+            `Analyze this response and determine if it's a positive confirmation or providing confirmation.
 
 Rules:
 - Respond with 'yes' ONLY for clear positive confirmations like:
@@ -279,7 +290,70 @@ Response: ${userMessage}
 Answer (yes/no):`
         );
 
-        if (isPositive.content.toString().toLowerCase().includes('yes')) {
+        return result.content.toString().toLowerCase().includes('yes');
+    }
+
+    // fileReview = async (state: PlanExecuteState) => {
+    //     const lastMessage = state.messages[state.messages.length - 1];
+    //     interrupt(lastMessage);
+
+    //     if (state.files?.every(f => f.accepted || f.rejected)) {
+    //         return new Command({
+    //             goto: "feature-parser",
+    //         });
+    //     }
+
+    //     console.log("All files not finalized, restarting flow");
+
+    //     return new Command({
+    //         goto: "find",
+    //         update: {
+    //             messages: state.messages
+    //         } satisfies Partial<PlanExecuteState>
+    //     });
+    // };
+
+    acceptFeaturePlan = async (state: PlanExecuteState) => {
+        const lastMessage = state.messages[state.messages.length - 1];
+        const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
+        const userMessage = interruptState.messages![0].content.toString();
+        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
+
+        const result = await this.determinePositiveAnswer(userMessage);
+
+        if (result) {
+            return new Command({
+                goto: "find",
+                update: {
+                    messages
+                } satisfies Partial<PlanExecuteState>
+            });
+        }
+
+        return new Command({
+            goto: END
+        });
+    }
+
+
+    intentReviewFeedback = async (state: PlanExecuteState) => {
+        const lastMessage = state.messages[state.messages.length - 1];
+        const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
+        const userMessage = interruptState.messages![0].content.toString();
+        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
+
+        const result = await this.determinePositiveAnswer(userMessage);
+
+        if (result) {
+            if (state.dependencies && state.dependencies?.length > 0) {
+                return new Command({
+                    goto: "dependency-manager",
+                    update: {
+                        messages
+                    } satisfies Partial<PlanExecuteState>
+                })
+            }
+
             return new Command({
                 goto: "code-writer",
                 update: {
@@ -306,7 +380,10 @@ Answer (yes/no):`
         const state = await graph.getState({ ...this.config });
 
         let inputs: Partial<PlanExecuteState> = {};
-        inputs.messages = [new ChatMessage(request.input, "user")];
+
+        if (request.input) {
+            inputs.messages = [new ChatMessage(request.input, "user")];
+        }
 
         inputs.files = [...(state.values as PlanExecuteState)?.files ?? []];
 
@@ -363,6 +440,15 @@ Answer (yes/no):`
                     yield { node: name, values: data };
                 }
             }
+
+            const latestState = await graph.getState({ ...this.config });
+
+            if (latestState.tasks?.length === 0) {
+                yield {
+                    node: "composer-done",
+                    values: latestState.values
+                }
+            }
         } catch (e) {
             console.error('Composer error: ', e);
             if (e instanceof DOMException && e.name === "AbortError") {
@@ -392,8 +478,6 @@ Answer (yes/no):`
                 };
                 return;
             }
-
-            console.error(e);
             yield {
                 node: "composer-error",
                 values: {

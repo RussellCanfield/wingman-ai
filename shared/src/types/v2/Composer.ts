@@ -38,7 +38,6 @@ export interface PlanExecuteState {
 	},
 	files?: FileMetadata[];
 	dependencies?: Dependencies;
-	greeting?: string;
 	error?: string;
 }
 
@@ -47,7 +46,7 @@ export type ComposerResponse = {
 	values: PlanExecuteState;
 };
 
-export type ComposerSteps = "assistant-question" | "composer-greeting" | "composer-replace" | "composer-files" | "composer-error" | "composer-done" | "composer-error";
+export type ComposerSteps = "composer-message-stream" | "composer-message-stream-finish" | "composer-message" | "composer-replace" | "composer-files" | "composer-error" | "composer-done" | "composer-error" | "composer-feature";
 
 export interface ComposerMessage {
 	from: ComposerRole;
@@ -56,7 +55,6 @@ export interface ComposerMessage {
 	image?: ComposerRequest["image"];
 	files?: PlanExecuteState["files"];
 	dependencies?: PlanExecuteState["dependencies"];
-	greeting?: string;
 }
 
 export type FileSearchResult = {

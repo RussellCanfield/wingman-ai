@@ -43,6 +43,7 @@ export const OpenAIView = () => {
 				<li>gpt-4-turbo</li>
 				<li>gpt-4</li>
 				<li>o1</li>
+				<li>o3-mini</li>
 			</ul>
 		</div>
 	);
@@ -53,6 +54,11 @@ export const OllamaView = () => {
 		<div className="mt-4">
 			<h4 className="font-bold text-md">Code:</h4>
 			<ul>
+				<li>
+					<a href="https://ollama.com/library/deepseek-r1">
+						deepseek-r1
+					</a>
+				</li>
 				<li>
 					<a href="https://ollama.com/library/phi4">
 						phi4
@@ -89,6 +95,11 @@ export const OllamaView = () => {
 			</ul>
 			<h4 className="mt-4 font-bold text-md">Chat:</h4>
 			<ul>
+				<li>
+					<a href="https://ollama.com/library/deepseek-r1">
+						deepseek-r1
+					</a>
+				</li>
 				<li>
 					<a href="https://ollama.com/library/phi4">
 						phi4

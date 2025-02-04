@@ -258,7 +258,6 @@ const ChatEntry = ({
 	message,
 	files,
 	dependencies,
-	greeting,
 	loading,
 	image,
 	isCurrent
@@ -294,9 +293,6 @@ const ChatEntry = ({
 						</div>
 					)}
 					<div className={`${bgClasses} flex-grow w-full justify-center items-center ${fromUser ? "shadow-lg" : ""}`}>
-						{greeting &&
-							renderMarkdown(greeting, codeTheme)
-						}
 						<div className={`${from === 'user' ? 'p-3' : ''}`}>
 							{message !== "" && renderMarkdown(message, codeTheme)}
 						</div>
@@ -384,7 +380,7 @@ const ChatEntry = ({
 					<p>
 						Summary:
 					</p>
-					<div className="flex flex-col items-center justify-between text-sm overflow-y-auto max-h-48">
+					<div className="flex flex-col items-center text-sm overflow-y-auto h-48">
 						{files.map(f => {
 							const truncatedPath = useMemo(() => {
 								const parts = f.path.split('/');
@@ -403,12 +399,12 @@ const ChatEntry = ({
 							const diffParts = f.diff?.split(',') ?? [0, 0];
 
 							return (
-								<div className="flex items-center justify-between gap-4 w-full max-h-24 overflow-hidden">
-									<div className="flex">
-										<h4 className="m-0 min-w-0 p-3 font-medium truncate flex-shrink cursor-pointer" onClick={() => showDiffview(f)}>
+								<div key={f.path} className="flex items-center justify-between gap-4 w-full min-h-[3rem] py-1 hover:bg-stone-800/50">
+									<div className="flex flex-1 min-w-0">
+										<h4 className="m-0 p-3 font-medium truncate flex-1 cursor-pointer" onClick={() => showDiffview(f)}>
 											{truncatedPath}
 										</h4>
-										<div className="flex items-center gap-2 px-3 text-sm flex-nowrap">
+										<div className="flex items-center gap-2 px-3 text-sm whitespace-nowrap">
 											<span className="flex items-center gap-1 text-green-400">
 												<span>{diffParts[0]}</span>
 											</span>
@@ -418,7 +414,7 @@ const ChatEntry = ({
 										</div>
 									</div>
 									{(f.rejected || f.accepted) && (
-										<div className="flex items-center gap-3 ml-auto">
+										<div className="flex items-center gap-3 shrink-0">
 											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors">
 												<button
 													type="button"
@@ -442,7 +438,7 @@ const ChatEntry = ({
 										</div>
 									)}
 									{!f.rejected && !f.accepted && (
-										<div className="flex flex-nowrap ml-auto">
+										<div className="flex shrink-0">
 											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-red-600">
 												<button
 													type="button"

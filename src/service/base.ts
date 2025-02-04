@@ -2,6 +2,12 @@ import { AIModel } from "@shared/types/Models";
 import type { AIMessageChunk } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
+export type ModelParams = {
+	temperature?: number;
+	model?: string;
+	verbose?: boolean;
+}
+
 export interface AIProvider {
 	chatModel: AIModel | undefined;
 	codeModel: AIModel | undefined;
@@ -30,9 +36,9 @@ export interface AIProvider {
 		ragContent: string,
 		signal: AbortSignal
 	): Promise<string>;
-	invoke(prompt: string): Promise<AIMessageChunk>;
-	getModel(): BaseChatModel;
-	getRerankModel(): BaseChatModel;
+	getModel(params?: ModelParams): BaseChatModel;
+	getLightweightModel(params?: ModelParams): BaseChatModel;
+	getReasoningModel(params?: ModelParams): BaseChatModel;
 }
 
 export interface AIStreamProvider extends AIProvider {

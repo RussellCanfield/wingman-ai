@@ -78,7 +78,7 @@ export class Ollama implements AIStreamProvider {
 		return this.baseModel!;
 	}
 
-	getRerankModel(): BaseChatModel {
+	getLightweightModel(): BaseChatModel {
 		return this.rerankModel!;
 	}
 

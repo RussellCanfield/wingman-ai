@@ -93,6 +93,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         setActiveMessage(undefined);
         break;
       case "composer-files":
+        setLoading(true);
         setActiveMessage((msg) => {
           return {
             from: "assistant",
@@ -102,39 +103,28 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           }
         });
         break;
-      case "composer-greeting":
+      case "composer-message-stream-finish":
+        setComposerMessages((currentMessages) => {
+          return [
+            ...currentMessages,
+            {
+              from: "assistant",
+              message: mostRecentMessage?.kwargs.content || activeMessage?.message || "",
+            }
+          ];
+        });
+        setLoading(false);
+        setActiveMessage(undefined);
+        break;
+      case "composer-message-stream":
+        setLoading(true);
         setActiveMessage((msg) => {
           return {
-            from: "assistant",
-            message: values.userIntent?.task ?? "",
             ...msg ?? {},
-            greeting: values.greeting
-          }
-        });
-        break;
-      case "composer-files":
-        setActiveMessage((msg) => {
-          return {
-            ...msg ?? { message: "" },
             from: "assistant",
-            files: values.files
+            message: values as string
           }
         });
-        break;
-      case "assistant-question":
-        if (mostRecentMessage) {
-          setComposerMessages((currentMessages) => {
-            return [
-              ...currentMessages,
-              {
-                from: mostRecentMessage?.kwargs.role,
-                message: mostRecentMessage?.kwargs.content ?? 'I have failed to generate an answer, please try again.',
-              }
-            ];
-          });
-          setLoading(false);
-          setActiveMessage(undefined);
-        }
         break;
     }
   }

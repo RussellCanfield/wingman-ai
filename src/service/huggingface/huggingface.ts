@@ -78,7 +78,7 @@ export class HuggingFace implements AIProvider {
 		throw new Error("Method not implemented.");
 	}
 
-	getRerankModel(): BaseChatModel {
+	getLightweightModel(): BaseChatModel {
 		throw new Error("Method not implemented.");
 	}
 
@@ -263,7 +263,7 @@ ${prompt}`,
 			(await response?.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
@@ -360,7 +360,7 @@ ${prompt}`,
 			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
@@ -407,7 +407,7 @@ ${prompt}`,
 			(await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			  huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 }

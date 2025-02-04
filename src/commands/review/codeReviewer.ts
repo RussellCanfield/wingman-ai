@@ -39,7 +39,7 @@ export class CodeReviewer {
 
 			if (fileDiffMap) {
 				// Use the cheaper model for summaries
-				const model = this._aiProvider.getRerankModel();
+				const model = this._aiProvider.getLightweightModel();
 				const summary =
 					await model.invoke(`You are a senior software engineer tasked with generating a concise summary of code changes to a project.
 Use the following files and associated git diffs to generate the summary.
@@ -116,7 +116,7 @@ ${diff.diff}
 
 			if (fileDiffMap) {
 				// Use the cheaper model for summaries
-				const model = this._aiProvider.getRerankModel();
+				const model = this._aiProvider.getLightweightModel();
 				const summary =
 					await model.invoke(`You are a senior software engineer tasked with generating a commit message for changes against the code base.
 Use the following files and associated git diffs to generate the commit message.
@@ -160,7 +160,7 @@ ${diff.diff}
 		let model = this._aiProvider.getModel();
 		if (this._aiProvider instanceof Ollama) {
 			//Avoid JSON mode
-			model = this._aiProvider.getRerankModel();
+			model = this._aiProvider.getLightweightModel();
 		}
 		const reviewResponse = await model.invoke([
 			new SystemMessage({

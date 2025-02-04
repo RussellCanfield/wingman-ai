@@ -81,8 +81,8 @@ export default function Compose() {
 		if (composerMessages.length === 0) return false;
 
 		const lastMessage = composerMessages[composerMessages.length - 1];
-		return Boolean(lastMessage?.files?.length ?? 0);
-	}, [composerMessages]);
+		return !loading && Boolean(lastMessage?.files?.length ?? 0);
+	}, [composerMessages, loading]);
 
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
@@ -129,7 +129,6 @@ export default function Compose() {
 							message={activeMessage?.message || ""}
 							files={activeMessage?.files}
 							dependencies={activeMessage?.dependencies}
-							greeting={activeMessage?.greeting}
 							loading={true}
 							isCurrent={true}
 						/>

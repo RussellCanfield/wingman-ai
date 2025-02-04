@@ -125,7 +125,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			}
 
 			loggingProvider.logInfo(`Validation command output:\n\n${data}`);
-			const output = await this._aiProvider.getRerankModel()
+			const output = await this._aiProvider.getLightweightModel()
 				.invoke(`You are a senior software engineer.
 Analyze the following command output.
 

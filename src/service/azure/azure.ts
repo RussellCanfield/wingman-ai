@@ -323,7 +323,7 @@ ${prompt}`
 		return this.baseModel!;
 	}
 
-	getRerankModel(): BaseChatModel {
+	getLightweightModel(): BaseChatModel {
 		return this.rerankModel!;
 	}
 }
