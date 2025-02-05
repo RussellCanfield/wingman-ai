@@ -8,10 +8,12 @@ import { AIProvider } from "../../../service/base";
 import { createCommandExecuteTool } from "../tools/cmd_execute";
 import { ValidationSettings } from "@shared/types/Settings";
 import { ChatMessage } from "@langchain/core/messages";
+import { Command } from "@langchain/langgraph";
 
 const FILE_SEPARATOR = "<FILE_SEPARATOR>";
 const validatorPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on reviewing code changes.
 Your main goal is to validate code changes against an implementation plan.
+Do not mention tool names to the user.
 
 **Analysis Rules:**
 - Verify that the code changes achieved the objective illustrated by the implementation plan
@@ -20,8 +22,8 @@ Your main goal is to validate code changes against an implementation plan.
 - Verify the validation command runs without error
 
 **Validation Command Result Handling:**
-- If the validation command fails, provide a summary with details on potential fixes
-- If the command passes, reply with a simple message that validation succeeded
+- If the validation command indicates a non-zero exit code or the output indicates an error, provide a summary with details on how you might fix it
+- If the command exits with a 0 code and the output looks successful, reply and mention validation succeeded
 
 **Tools:**
 - The validation command will be provided by the user as a means to verify the solution
@@ -157,6 +159,29 @@ export class Validator {
 		}
 
 		const messages: ChatMessage[] = [...state.messages, new ChatMessage(buffer || "", "assistant")];
+
+		const decisionModel = this.aiProvider.getLightweightModel();
+		const didSucceed = await decisionModel.invoke(`You are a senior full-stack developer with exceptional technical expertise, focused on reviewing terminal output from a command.
+The following command was executed: ${this.validationSettings?.validationCommand ?? ""}
+
+Command output along with analysis:
+${buffer}
+
+----
+
+Respond with a "1" if the command succeeded, respond with a "0" if the command failed.
+
+Do not include any other content or explanations.
+Do not respond using markdown or any other format.`);
+
+		if (didSucceed.content.toString().includes("0")) {
+			return new Command({
+				goto: "find",
+				update: {
+					messages
+				}
+			})
+		}
 
 		return {
 			messages

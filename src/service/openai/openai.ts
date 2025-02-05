@@ -67,8 +67,8 @@ export class OpenAI implements AIStreamProvider {
 			apiKey: this.settings?.apiKey,
 			model: this.settings?.chatModel,
 			openAIApiKey: this.settings?.apiKey,
-			modelKwargs: { reasoning_effort: "high" },
-			verbose: params?.verbose
+			modelKwargs: this.settings?.chatModel.startsWith("o3") ? { reasoning_effort: "high" } : undefined,
+			verbose: true
 		});
 	}
 

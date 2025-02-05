@@ -1,5 +1,5 @@
 import { Command, END, interrupt, START, StateGraph } from "@langchain/langgraph";
-import type { BaseCheckpointSaver, StateGraphArgs, StateSnapshot } from "@langchain/langgraph";
+import type { BaseCheckpointSaver, StateGraphArgs } from "@langchain/langgraph";
 import { ChatMessage } from "@langchain/core/messages";
 import { CodeGraph } from "../../server/files/graph";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -104,7 +104,7 @@ export class ComposerGraph {
                 ends: [END, "validator"]
             })
             .addNode("validator", validator.validate, {
-                ends: [END]
+                ends: ["find", END]
             })
             .addEdge(START, "find")
             .addEdge("find", "intent-review")
@@ -142,7 +142,7 @@ export class ComposerGraph {
         matchedFile.code = matchedFile.original;
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         })
 
         return {
@@ -170,7 +170,7 @@ export class ComposerGraph {
         matchedFile.lastModified = Date.now();
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         })
 
         return {
@@ -194,7 +194,7 @@ export class ComposerGraph {
         matchedFile.rejected = false;
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         });
 
         return {
@@ -239,7 +239,7 @@ export class ComposerGraph {
         matchedFile.lastModified = file.lastModified;
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         });
 
         return {
@@ -299,9 +299,23 @@ Answer (yes/no):`
         const lastMessage = state.messages[state.messages.length - 1];
         interrupt(lastMessage);
 
+        if (!state.files?.length) {
+            console.log("No files to process, ending flow");
+            return new Command({ goto: END });
+        }
+
+        const acceptedCount = state.files.filter(f => f.accepted).length;
+        const rejectedCount = state.files.filter(f => f.rejected).length;
+
+        // All files were rejected
+        if (rejectedCount === state.files.length) {
+            console.log("All files were rejected, ending flow");
+            return new Command({ goto: END });
+        }
+
         if (this.validationSettings &&
             this.validationSettings.validationCommand &&
-            state.files?.every(f => f.accepted || f.rejected)) {
+            acceptedCount + rejectedCount === state.files.length) {
             return new Command({
                 goto: "validator",
             });

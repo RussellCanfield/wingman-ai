@@ -46,6 +46,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     const { node, values } = value;
 
     const mostRecentMessage = values.messages ? values.messages[values.messages!.length - 1] : undefined;
+    const lastSafeAssistantMsg = (mostRecentMessage?.kwargs.role === "user" ? activeMessage?.message : mostRecentMessage?.kwargs.content) || "";
 
     console.log('Active Msg:', activeMessage?.message);
     console.log('Values:', values);
@@ -85,7 +86,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             ...currentMessages,
             {
               from: "assistant",
-              message: mostRecentMessage?.kwargs.content || activeMessage?.message || "",
+              message: lastSafeAssistantMsg,
               files: []
             }
           ];
@@ -94,14 +95,12 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         setActiveMessage(undefined);
         break;
       case "composer-files-done":
-        const lastMsg = (mostRecentMessage?.kwargs.role === "user" ? activeMessage?.message : mostRecentMessage?.kwargs.content) || "";
-
         setComposerMessages((currentMessages) => {
           return [
             ...currentMessages,
             {
               from: "assistant",
-              message: lastMsg,
+              message: lastSafeAssistantMsg,
               files: values.files
             },
           ];

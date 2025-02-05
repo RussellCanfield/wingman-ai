@@ -18,7 +18,7 @@ const codeWriterPrompt = `You are a senior full-stack developer with exceptional
 For each file you modify, output two parts in sequence:
 1. A one-line description of the changes for that file.
 2. The complete file block containing the updated code.
-3. The [] surrounding instructions in the response format should not be included in your final response.
+3. In the response format, sections surrounded in [] are not to be used explicitly, replace the content
 
 **CRITICAL RESPONSE FORMAT - FOLLOW EXACTLY:**
 

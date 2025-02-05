@@ -336,7 +336,9 @@ export class LSPServer {
 						.filter(f => !f.original)
 						.map(f => filePathToUri(path.join(this.workspaceFolders[0], f.path)));
 
-					this.queue?.enqueue(fileUris);
+					if (fileUris.length > 0) {
+						this.queue?.enqueue(fileUris); 55
+					}
 				}
 			}
 			await this.connection?.sendRequest("wingman/compose", {
