@@ -101,7 +101,8 @@ export class Validator {
 				files: state.files
 					?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nDescription: ${f.description}\nCode:\n${f.code ?? "(New File)"}`)
 					.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
-				input: `Please use the following command to validate: ${this.validationSettings.validationCommand}`
+				input: `Please use the following command to validate: ${this.validationSettings.validationCommand}`,
+				imageurl: state.image?.data
 			};
 
 			try {

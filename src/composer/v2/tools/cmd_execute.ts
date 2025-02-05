@@ -8,16 +8,15 @@ const commandExecuteSchema = z.object({
 
 type CommandExecuteInput = z.infer<typeof commandExecuteSchema>;
 
-// Dangerous commands that could modify or delete files
 const BLOCKED_COMMANDS = [
     'rm', 'remove', 'del', 'delete',
     'rmdir', 'rd',
     'mv', 'move',
     'format',
-    '>', '>>', // Redirections
-    'chmod', 'chown', // Permission changes
-    ':>', // File truncation
-    'sudo', 'su' // Privilege escalation
+    '>', '>>',
+    'chmod', 'chown',
+    ':>',
+    'sudo', 'su'
 ];
 
 export const createCommandExecuteTool = (workspace: string) => {
@@ -27,69 +26,80 @@ export const createCommandExecuteTool = (workspace: string) => {
         schema: commandExecuteSchema,
         async func(input: CommandExecuteInput) {
             return new Promise((resolve, reject) => {
-                const commandLower = input.command.toLowerCase();
+                try {
+                    const commandLower = input.command.toLowerCase();
 
-                // Check for dangerous commands
-                if (BLOCKED_COMMANDS.some(cmd =>
-                    commandLower.includes(cmd) ||
-                    commandLower.includes(`/${cmd}`) ||
-                    commandLower.includes(`\\${cmd}`))) {
-                    resolve("Command rejected: Contains potentially destructive operations");
-                    return;
-                }
-
-                // Prevent shell script execution
-                if (commandLower.includes('.sh') ||
-                    commandLower.includes('.bat') ||
-                    commandLower.includes('.cmd')) {
-                    resolve("Command rejected: Script execution not allowed");
-                    return;
-                }
-
-                const args = input.command.split(' ').slice(1);
-                const cmd = input.command.split(' ')[0];
-                let output = '';
-
-                const process: ChildProcess = spawn(cmd, args, {
-                    cwd: workspace,
-                    shell: true,
-                    // Prevent access to parent environment variables
-                    env: {
-                        //@ts-expect-error
-                        PATH: process.env.PATH,
+                    if (BLOCKED_COMMANDS.some(cmd =>
+                        commandLower.includes(cmd) ||
+                        commandLower.includes(`/${cmd}`) ||
+                        commandLower.includes(`\\${cmd}`))) {
+                        resolve("Command rejected: Contains potentially destructive operations");
+                        return;
                     }
-                });
 
-                process.stdout?.on('data', (data) => {
-                    output += data.toString();
-                });
-
-                process.stderr?.on('data', (data) => {
-                    output += data.toString();
-                });
-
-                process.on('close', (code) => {
-                    if (code === 0) {
-                        resolve(output);
-                    } else {
-                        resolve(`Command failed with exit code: ${code}\nOutput:\n${output}`);
+                    if (commandLower.includes('.sh') ||
+                        commandLower.includes('.bat') ||
+                        commandLower.includes('.cmd')) {
+                        resolve("Command rejected: Script execution not allowed");
+                        return;
                     }
-                });
 
-                // Set timeout to prevent long-running commands
-                const timeout = setTimeout(() => {
-                    process.kill();
-                    resolve('Command timed out after 5 seconds');
-                }, 60000);
+                    let output = '';
+                    let hasExited = false;
 
-                process.on('error', (err) => {
-                    clearTimeout(timeout);
-                    resolve(`Command failed with exit code: ${1}\nOutput:\n${output}`);
-                });
+                    const terminalProcess: ChildProcess = spawn(input.command, [], {
+                        cwd: workspace,
+                        shell: true,
+                        env: {
+                            ...process.env,
+                            FORCE_COLOR: "0",
+                            NO_COLOR: "1"
+                        },
+                        windowsHide: true
+                    });
 
-                process.on('exit', () => {
-                    clearTimeout(timeout);
-                });
+                    const timeout = setTimeout(() => {
+                        if (!hasExited) {
+                            try {
+                                terminalProcess.kill();
+                            } catch (e) {
+                                // Ignore kill errors
+                            }
+                            resolve('Command timed out after 60 seconds');
+                        }
+                    }, 60000);
+
+                    terminalProcess.stdout?.on('data', (data) => {
+                        output += data.toString();
+                    });
+
+                    terminalProcess.stderr?.on('data', (data) => {
+                        output += data.toString();
+                    });
+
+                    terminalProcess.on('error', (err) => {
+                        if (!hasExited) {
+                            hasExited = true;
+                            clearTimeout(timeout);
+                            resolve(`Command failed: ${err.message}\nOutput:\n${output}`);
+                        }
+                    });
+
+                    terminalProcess.on('exit', (code) => {
+                        if (!hasExited) {
+                            hasExited = true;
+                            clearTimeout(timeout);
+                            if (code === 0) {
+                                resolve(output || 'Command completed successfully');
+                            } else {
+                                resolve(`Command failed with exit code: ${code}\nOutput:\n${output}`);
+                            }
+                        }
+                    });
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                    resolve(`Failed to execute command: ${errorMessage}`);
+                }
             });
         }
     });

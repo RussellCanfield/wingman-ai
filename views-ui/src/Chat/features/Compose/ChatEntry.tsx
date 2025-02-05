@@ -78,6 +78,20 @@ const openFile = (file: FileMetadata) => {
 	}
 }
 
+const getTruncatedPath = (path: string) => {
+	const parts = path.split('/');
+	const fileName = parts.pop() ?? '';
+	const lastFolder = parts.pop();
+
+	const shortPath = lastFolder
+		? `${lastFolder}/${fileName}`
+		: fileName;
+
+	return parts.length > 0
+		? `.../${shortPath}`
+		: shortPath;
+};
+
 const CodeContainer = memo(
 	({
 		children,
@@ -146,11 +160,8 @@ const ChatArtifact = ({
 	file: FileMetadata,
 	loading: boolean
 }) => {
-	const truncatedPath = useMemo(() => {
-		return file.path.split('/').pop();
-	}, [file]);
-
 	const diffParts = file.diff?.split(',');
+	const truncatedPath = getTruncatedPath(file.path);
 
 	return (
 		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-stone-700">
@@ -336,20 +347,7 @@ const ChatEntry = ({
 					</p>
 					<div className="flex flex-col items-center text-sm overflow-y-auto max-h-48">
 						{files.map(f => {
-							const truncatedPath = useMemo(() => {
-								const parts = f.path.split('/');
-								const fileName = parts.pop() ?? '';
-								const lastFolder = parts.pop();
-
-								const shortPath = lastFolder
-									? `${lastFolder}/${fileName}`
-									: fileName;
-
-								return parts.length > 0
-									? `.../${shortPath}`
-									: shortPath;
-							}, [f]);
-
+							const truncatedPath = getTruncatedPath(f.path);
 							const diffParts = f.diff?.split(',') ?? [0, 0];
 
 							return (
