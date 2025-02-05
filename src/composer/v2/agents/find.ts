@@ -173,7 +173,8 @@ ${projectDetails}
 5. Description must be on a single line
 6. No empty lines between entries
 
-** IMPORTANT! - Dependencies are critical, NEVER ASSUME A DEPENDENCY IS AVAILABLE - DO NOT SKIP THIS STEP, read the dependency files and get this right **
+** CRITICAL!!! **
+Dependencies are critical, NEVER ASSUME A DEPENDENCY IS AVAILABLE - DO NOT SKIP THIS STEP, read the dependency files and get this right
 
 **Dependency Management Protocol:**
 1. The "### New Dependencies" section MUST ONLY appear if new dependencies are actually needed

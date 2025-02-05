@@ -111,10 +111,10 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         break;
       case "composer-files":
         setLoading(true);
-        setActiveMessage((_) => {
+        setActiveMessage((am) => {
           return {
             from: "assistant",
-            message: activeMessage?.message || "",
+            message: am?.message || "",
             files: values.files
           }
         });

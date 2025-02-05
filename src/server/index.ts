@@ -318,16 +318,6 @@ export class LSPServer {
 	};
 
 	private executeComposer = async (request: ComposerRequest) => {
-		// if (!this.forge) return;
-
-		// const generator = this.forge!.execute(request);
-		// for await (const { node, values } of generator) {
-		// 	await this.connection?.sendRequest("wingman/compose", {
-		// 		node,
-		// 		values,
-		// 	});
-		// }
-
 		if (!this.composer) {
 			return;
 		}
@@ -338,7 +328,7 @@ export class LSPServer {
 
 		for await (const { node, values } of generator) {
 			if (node === "composer-files-done") {
-				const files = values as PlanExecuteState["files"];
+				const { files } = values as PlanExecuteState;
 
 				if (files && files.length > 0) {
 					//Add new files to the queue since they don't trigger events
