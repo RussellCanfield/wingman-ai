@@ -78,7 +78,6 @@ export interface FileMetadata {
 	diff?: string;
 	original?: string;
 	language?: string;
-	dependencies?: string[];
 	accepted?: boolean;
 	rejected?: boolean;
 	lastModified?: number;

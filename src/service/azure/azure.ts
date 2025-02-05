@@ -1,5 +1,5 @@
 import { InteractionSettings, Settings } from "@shared/types/Settings";
-import { AIStreamProvider } from "../base";
+import { AIStreamProvider, ModelParams } from "../base";
 import { ILoggingProvider } from "@shared/types/Logger";
 import { AzureAIModel } from "@shared/types/Models";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -59,6 +59,10 @@ export class AzureAI implements AIStreamProvider {
 			openAIApiVersion: this.settings.apiVersion,
 			deploymentName: this.settings.chatModel,
 		});
+	}
+
+	getReasoningModel(params?: ModelParams): BaseChatModel {
+		return this.baseModel!;
 	}
 
 	addMessageToHistory(input: string): void {
@@ -231,7 +235,7 @@ ${prompt}`
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}
@@ -323,7 +327,7 @@ ${prompt}`
 		return this.baseModel!;
 	}
 
-	getRerankModel(): BaseChatModel {
+	getLightweightModel(): BaseChatModel {
 		return this.rerankModel!;
 	}
 }

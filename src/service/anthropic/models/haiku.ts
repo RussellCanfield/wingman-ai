@@ -7,45 +7,32 @@ import {
 
 export class HaikuModel implements AnthropicModel {
 	get CodeCompletionPrompt(): string {
-		return `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code for filling in missing code snippets.
-Write the best code you possibly can and complete the code for the [FILL IN THE MIDDLE]. 
-Do not return code prefixed or suffixed after the hole marker.
-Ensure the completed code is syntactically correct and follows best practices for the given programming language.
-Ensure proper integration and code completeness.
+		return `You are a senior full-stack developer specializing in writing clean, maintainable code and natural language content.
 
-**Critical Requirements:**
-1. Generate ONLY the middle section of code - no explanations, markers, or decorators
-  - Do not include the line prefix where the middle token appears
-2. Match the exact:
-  - Indentation level
-  - Coding style
-  - Variable naming conventions
-  - Programming paradigms
-3. Ensure syntactic and logical continuity between sections
-4. Preserve all:
-  - Comments
-  - Whitespace patterns
-  - Formatting conventions
-5. Anticipate the user's needs, make an educated guess based on the code provided.
+**Objective:**
+Complete the content marked by [FILL IN THE MIDDLE] with high-quality output that matches the style and context of the surrounding content, whether it's code, documentation, or natural language.
 
-**Strict Constraints:**
-- No leading/trailing text
-- No code fences or markup
-- No placeholders or TODOs
-- No duplicate code from beginning/ending
-- Return empty response if unable to generate suitable code
+**Rules:**
+- Generate only the content that replaces [FILL IN THE MIDDLE]
+- Return plain text without markdown formatting
+- Adapt completion style based on content type:
+	• For code: Follow existing style, patterns, and type safety
+	• For prompts: Match tone, formatting, and instruction style
+	• For text: Maintain consistent voice and terminology
+- Preserve existing:
+	• Indentation and formatting
+	• Language patterns
+	• Technical terminology
+- If intent is unclear, return an empty response
+- Consider surrounding context for better continuity
 
-**Context Handling:**
-- Use provided context to inform implementation details
-- Maintain consistency with any established patterns
-- Honor existing architectural decisions
-- Respect apparent security/performance considerations
+{context}
 
-The following are some of the types available in their file. 
-Use these types while considering how to complete the code provided. 
-Do not repeat or use these types in your answer.
+**CRITICAL:**
+- Do not return any other text or explanations, just the missing portion of code
 
-{context}`;
+Code:
+{beginning}[FILL IN THE MIDDLE]{ending}`;
 	}
 
 	get ChatPrompt(): string {

@@ -46,6 +46,10 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     const { node, values } = value;
 
     const mostRecentMessage = values.messages ? values.messages[values.messages!.length - 1] : undefined;
+    const lastSafeAssistantMsg = (mostRecentMessage?.kwargs.role === "user" ? activeMessage?.message : mostRecentMessage?.kwargs.content) || "";
+
+    console.log('Active Msg:', activeMessage?.message);
+    console.log('Values:', values);
 
     switch (node) {
       case "composer-replace":
@@ -69,8 +73,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             {
               from: "assistant",
               message: values.error ?? "Ut oh! Sorry but I seem to have failed processing your request. Please try again!",
-              files: values.files,
-              dependencies: values.dependencies
+              files: [],
             }
           ];
         });
@@ -83,58 +86,60 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             ...currentMessages,
             {
               from: "assistant",
-              message: "",
-              files: values.files,
-              dependencies: values.dependencies
+              message: lastSafeAssistantMsg,
+              files: []
             }
           ];
         });
         setLoading(false);
         setActiveMessage(undefined);
         break;
+      case "composer-files-done":
+        setComposerMessages((currentMessages) => {
+          return [
+            ...currentMessages,
+            {
+              from: "assistant",
+              message: lastSafeAssistantMsg,
+              files: values.files
+            },
+          ];
+        });
+        setLoading(false);
+        setActiveMessage(undefined);
+        break;
       case "composer-files":
-        setActiveMessage((msg) => {
+        setLoading(true);
+        setActiveMessage((am) => {
           return {
             from: "assistant",
-            message: values.userIntent?.task ?? "",
-            ...msg ?? {},
+            message: am?.message || "",
             files: values.files
           }
         });
         break;
-      case "composer-greeting":
+      case "composer-message-stream-finish":
+        setComposerMessages((currentMessages) => {
+          return [
+            ...currentMessages,
+            {
+              from: "assistant",
+              message: mostRecentMessage?.kwargs.content || activeMessage?.message || "",
+            }
+          ];
+        });
+        setLoading(false);
+        setActiveMessage(undefined);
+        break;
+      case "composer-message-stream":
+        setLoading(true);
         setActiveMessage((msg) => {
           return {
-            from: "assistant",
-            message: values.userIntent?.task ?? "",
             ...msg ?? {},
-            greeting: values.greeting
-          }
-        });
-        break;
-      case "composer-files":
-        setActiveMessage((msg) => {
-          return {
-            ...msg ?? { message: "" },
             from: "assistant",
-            files: values.files
+            message: values as string
           }
         });
-        break;
-      case "assistant-question":
-        if (mostRecentMessage) {
-          setComposerMessages((currentMessages) => {
-            return [
-              ...currentMessages,
-              {
-                from: mostRecentMessage?.kwargs.role,
-                message: mostRecentMessage?.kwargs.content ?? 'I have failed to generate an answer, please try again.',
-              }
-            ];
-          });
-          setLoading(false);
-          setActiveMessage(undefined);
-        }
         break;
     }
   }
@@ -142,8 +147,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const handleResponse = (event: MessageEvent<AppMessage>) => {
     const { data } = event;
     const { command, value } = data;
-
-    console.log("Composer:", command, value)
 
     switch (command) {
       case "validation-failed":
@@ -177,17 +180,17 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const clearActiveMessage = () => {
-    setActiveMessage(undefined);
-    setLoading(false);
     setComposerMessages((currentMessages) => {
       return [
         ...currentMessages,
         {
           from: "assistant",
-          message: "",
+          message: activeMessage?.message ?? "",
         }
       ];
     });
+    setActiveMessage(undefined);
+    setLoading(false);
   }
 
   return (

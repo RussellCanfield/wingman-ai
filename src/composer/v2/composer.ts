@@ -3,21 +3,21 @@ import type { BaseCheckpointSaver, StateGraphArgs } from "@langchain/langgraph";
 import { ChatMessage } from "@langchain/core/messages";
 import { CodeGraph } from "../../server/files/graph";
 import { RunnableConfig } from "@langchain/core/runnables";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Store } from "../../store/vector.js";
 import { PlanExecuteState } from "./types/index";
 import { NoFilesChangedError, NoFilesFoundError } from "../errors";
 import { ComposerRequest } from "@shared/types/v2/Composer";
-import { WorkspaceNavigator } from "./tools/workspace-navigator";
-import { UserIntent } from "./types/tools";
 import { FileMetadata } from "@shared/types/v2/Message";
-import { CodeWriter } from "./tools/code-writer";
+import { CodeWriter } from "./agents/code-writer";
 import path, { join } from "node:path";
 import { getTextDocumentFromPath } from "../../server/files/utils";
 import { DirectoryContent } from "../utils";
-import { DependencyManager } from "./tools/dependency-manager";
-import { Dependencies } from "@shared/types/v2/Composer";
+import { DependencyManager } from "./agents/dependency-manager";
 import { promises } from "node:fs";
+import { AIProvider } from "../../service/base";
+import { createPlannerAgent } from "./agents/find";
+import { ValidationSettings } from "@shared/types/Settings";
+import { Validator } from "./agents/validator";
 
 export interface Thread {
     configurable: {
@@ -35,24 +35,25 @@ export class ComposerGraph {
     private workflow: StateGraph<PlanExecuteState>;
 
     constructor(private readonly workspace: string,
-        private readonly model: BaseChatModel,
-        private readonly rerankModel: BaseChatModel,
+        private readonly aiProvider: AIProvider,
         private readonly codeGraph: CodeGraph,
         private readonly store: Store,
+        private readonly validationSettings: ValidationSettings,
         private readonly config?: RunnableConfig,
         private readonly checkpointer?: BaseCheckpointSaver) {
 
-        const workspaceNavigator = new WorkspaceNavigator(this.model, this.workspace, this.codeGraph, this.store);
-        const codeWriter = new CodeWriter(this.model, this.rerankModel, this.workspace);
-        const dependencyManager = new DependencyManager(this.model, this.rerankModel, this.workspace);
+        const plannerAgent = createPlannerAgent(this.aiProvider, this.codeGraph, this.store, this.workspace);
+        const codeWriter = new CodeWriter(this.aiProvider, this.workspace);
+        const dependencyManager = new DependencyManager(this.aiProvider.getLightweightModel(), this.workspace);
+        const validator = new Validator(this.aiProvider, this.validationSettings, this.workspace);
 
         const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
             messages: {
                 value: (x: ChatMessage[], y: ChatMessage[]) => y ?? x,
                 default: undefined
             },
-            userIntent: {
-                value: (x?: UserIntent, y?: UserIntent) => y ?? x,
+            implementationPlan: {
+                value: (x?: string, y?: string) => y ?? x,
                 default: () => undefined,
             },
             files: {
@@ -71,47 +72,57 @@ export class ComposerGraph {
                 value: (x?: string, y?: string) => y ?? x,
                 default: () => undefined,
             },
-            dependencies: {
-                value: (x?: Dependencies, y?: Dependencies) => y ?? x,
-                default: () => undefined,
-            },
             image: {
                 value: (
                     x?: ComposerRequest["image"],
                     y?: ComposerRequest["image"]
                 ) => y ?? x,
             },
-            greeting: {
-                value: (_x?: string, y?: string) => y,
-                default: () => undefined
-            }
+            dependencies: {
+                value: (x?: string[], y?: string[]) => y ?? x,
+                default: () => undefined,
+            },
         };
 
         //@ts-expect-error
         this.workflow = new StateGraph({
             channels: planExecuteState,
         })
-            .addNode("find", workspaceNavigator.navigateWorkspace, {
-                ends: ["human-feedback"]
+            .addNode("find", plannerAgent.invoke, {
+                ends: ["intent-review"]
             })
-            .addNode("human-feedback", this.humanFeedback, {
-                ends: ["find", "code-writer"]
+            .addNode("intent-review", this.intentReviewFeedback, {
+                ends: ["find", "dependency-manager", "code-writer"],
+            })
+            .addNode("dependency-manager", dependencyManager.addDependencies, {
+                ends: ["code-writer"]
             })
             .addNode("code-writer", codeWriter.codeWriterStep, {
-                ends: ["dependency-manager"],
+                ends: ["review-files"]
             })
-            .addNode("dependency-manager", dependencyManager.generateManualSteps, {
-                ends: [END]
+            .addNode("review-files", this.filesReviewed, {
+                ends: [END, "validator"]
+            })
+            .addNode("validator", validator.validate, {
+                ends: ["find", END]
             })
             .addEdge(START, "find")
-            .addEdge("find", "human-feedback")
-            .addEdge("code-writer", "dependency-manager");
+            .addEdge("find", "intent-review")
+            .addEdge("dependency-manager", "code-writer")
+            .addEdge("code-writer", "review-files")
     }
 
     resetGraphState = async () => {
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
         await graph.updateState({ ...this.config }, {
-            messages: []
+            messages: [],
+            implementationPlan: undefined,
+            files: [],
+            scannedFiles: [],
+            error: undefined,
+            projectDetails: undefined,
+            image: undefined,
+            dependencies: undefined
         } satisfies Partial<PlanExecuteState>);
     }
 
@@ -128,9 +139,10 @@ export class ComposerGraph {
 
         matchedFile.rejected = false;
         matchedFile.accepted = false;
+        matchedFile.code = matchedFile.original;
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         })
 
         return {
@@ -139,7 +151,7 @@ export class ComposerGraph {
         }
     }
 
-    rejectFile = async (file: FileMetadata) => {
+    rejectFile = async (file: FileMetadata): Promise<PlanExecuteState | undefined> => {
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
@@ -158,7 +170,7 @@ export class ComposerGraph {
         matchedFile.lastModified = Date.now();
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         })
 
         return {
@@ -167,7 +179,7 @@ export class ComposerGraph {
         }
     }
 
-    acceptFile = async (file: FileMetadata) => {
+    acceptFile = async (file: FileMetadata): Promise<PlanExecuteState | undefined> => {
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
@@ -182,7 +194,7 @@ export class ComposerGraph {
         matchedFile.rejected = false;
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         });
 
         return {
@@ -227,7 +239,7 @@ export class ComposerGraph {
         matchedFile.lastModified = file.lastModified;
 
         await graph.updateState({ ...this.config }, {
-            files: graphFiles
+            files: [...graphFiles ?? []]
         });
 
         return {
@@ -236,16 +248,11 @@ export class ComposerGraph {
         };
     }
 
-    humanFeedback = async (state: PlanExecuteState) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
-        const userMessage = interruptState.messages![0].content.toString();
-        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
+    determinePositiveAnswer = async (userMessage: string) => {
+        const result = await this.aiProvider.getLightweightModel().invoke(
+            `Analyze this response and determine if it's a positive confirmation or providing confirmation without giving you further instructions.
 
-        const isPositive = await this.rerankModel.invoke(
-            `Analyze this response and determine if it's a positive confirmation or any other type of response.
-
-Rules:
+**Rules:**
 - Respond with 'yes' ONLY for clear positive confirmations like:
     - "yes", "sure", "okay", "proceed"
     - "looks good", "that's correct"
@@ -260,7 +267,7 @@ Rules:
     - Partial agreements with conditions
 - You must only respond with 'yes' or 'no', do not add any additional text
 
-Examples:
+**Examples:**
 - "Yes, go ahead" -> "yes"
 - "Looks good" -> "yes"
 - "That works perfectly" -> "yes"
@@ -272,14 +279,73 @@ Examples:
 - "Yes, but can you..." -> "no"
 - "That's interesting" -> "no"
 
-Note: Examples above are not exhaustive, use your best judgement!
+**Further Instruction Cases:**
+- "Don't include xyz but yes" -> "no"
+- "Also do xyz" -> "no"
+
+NOTE - Further Instructions indicate the user asking you to alter our implementation plan, these need to be addressed before proceeding.
+
+Examples above are not exhaustive, use your best judgement!
 
 Response: ${userMessage}
 
 Answer (yes/no):`
         );
 
-        if (isPositive.content.toString().toLowerCase().includes('yes')) {
+        return result.content.toString().toLowerCase().includes('yes');
+    }
+
+    filesReviewed = async (state: PlanExecuteState) => {
+        const lastMessage = state.messages[state.messages.length - 1];
+        interrupt(lastMessage);
+
+        if (!state.files?.length) {
+            console.log("No files to process, ending flow");
+            return new Command({ goto: END });
+        }
+
+        const acceptedCount = state.files.filter(f => f.accepted).length;
+        const rejectedCount = state.files.filter(f => f.rejected).length;
+
+        // All files were rejected
+        if (rejectedCount === state.files.length) {
+            console.log("All files were rejected, ending flow");
+            return new Command({ goto: END });
+        }
+
+        if (this.validationSettings &&
+            this.validationSettings.validationCommand &&
+            acceptedCount + rejectedCount === state.files.length) {
+            return new Command({
+                goto: "validator",
+            });
+        }
+
+        console.log("All files not finalized, ending flow");
+
+        return new Command({
+            goto: END
+        });
+    };
+
+    intentReviewFeedback = async (state: PlanExecuteState) => {
+        const lastMessage = state.messages[state.messages.length - 1];
+        const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
+        const userMessage = interruptState.messages![0].content.toString();
+        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
+
+        const result = await this.determinePositiveAnswer(userMessage);
+
+        if (result) {
+            if (state.dependencies && state.dependencies?.length > 0) {
+                return new Command({
+                    goto: "dependency-manager",
+                    update: {
+                        messages
+                    } satisfies Partial<PlanExecuteState>
+                })
+            }
+
             return new Command({
                 goto: "code-writer",
                 update: {
@@ -306,7 +372,10 @@ Answer (yes/no):`
         const state = await graph.getState({ ...this.config });
 
         let inputs: Partial<PlanExecuteState> = {};
-        inputs.messages = [new ChatMessage(request.input, "user")];
+
+        if (request.input) {
+            inputs.messages = [new ChatMessage(request.input, "user")];
+        }
 
         inputs.files = [...(state.values as PlanExecuteState)?.files ?? []];
 
@@ -363,6 +432,15 @@ Answer (yes/no):`
                     yield { node: name, values: data };
                 }
             }
+
+            const latestState = await graph.getState({ ...this.config });
+
+            if (!latestState.tasks || latestState.tasks.length === 0) {
+                yield {
+                    node: "composer-done",
+                    values: latestState.values
+                };
+            }
         } catch (e) {
             console.error('Composer error: ', e);
             if (e instanceof DOMException && e.name === "AbortError") {
@@ -392,8 +470,6 @@ Answer (yes/no):`
                 };
                 return;
             }
-
-            console.error(e);
             yield {
                 node: "composer-error",
                 values: {

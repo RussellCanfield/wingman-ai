@@ -77,13 +77,6 @@ export default function Compose() {
 		setLoading(true);
 	};
 
-	const canValidate = useMemo(() => {
-		if (composerMessages.length === 0) return false;
-
-		const lastMessage = composerMessages[composerMessages.length - 1];
-		return Boolean(lastMessage?.files?.length ?? 0);
-	}, [composerMessages]);
-
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			{composerMessages.length === 0 && (
@@ -128,13 +121,10 @@ export default function Compose() {
 							from="assistant"
 							message={activeMessage?.message || ""}
 							files={activeMessage?.files}
-							dependencies={activeMessage?.dependencies}
-							greeting={activeMessage?.greeting}
 							loading={true}
 							isCurrent={true}
 						/>
 					)}
-					{canValidate && <Validation />}
 				</ChatResponseList>
 			)}
 			<ChatInput

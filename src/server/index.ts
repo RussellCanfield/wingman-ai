@@ -35,7 +35,7 @@ import {
 	Settings,
 } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
-import { ComposerRequest, IndexStats } from "@shared/types/v2/Composer";
+import { ComposerRequest, IndexStats, PlanExecuteState } from "@shared/types/v2/Composer";
 import { loggingProvider } from "./loggingProvider";
 import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
@@ -135,10 +135,10 @@ export class LSPServer {
 
 		this.composer = new ComposerGraph(
 			this.workspaceFolders[0],
-			modelProvider.getModel(),
-			modelProvider.getRerankModel(),
+			modelProvider,
 			this.codeGraph!,
 			this.vectorStore!,
+			settings.validationSettings,
 			config,
 			memory
 		)
@@ -317,6 +317,37 @@ export class LSPServer {
 		}
 	};
 
+	private executeComposer = async (request: ComposerRequest) => {
+		if (!this.composer) {
+			return;
+		}
+
+		const generator = this.composer.execute(
+			request
+		);
+
+		for await (const { node, values } of generator) {
+			if (node === "composer-files-done") {
+				const { files } = values as PlanExecuteState;
+
+				if (files && files.length > 0) {
+					//Add new files to the queue since they don't trigger events
+					const fileUris = files
+						.filter(f => !f.original)
+						.map(f => filePathToUri(path.join(this.workspaceFolders[0], f.path)));
+
+					if (fileUris.length > 0) {
+						this.queue?.enqueue(fileUris); 55
+					}
+				}
+			}
+			await this.connection?.sendRequest("wingman/compose", {
+				node,
+				values,
+			});
+		}
+	}
+
 	private addEvents = async () => {
 		this.connection?.languages.diagnostics.on(async (params) => {
 			const document = this.documents.get(params.textDocument.uri);
@@ -448,32 +479,39 @@ export class LSPServer {
 			await this.indexer?.deleteFile(filePath);
 		})
 
-		this.connection?.onRequest(
-			"wingman/compose",
-
-			async ({ request }: { request: ComposerRequest }) => {
-				if (!this.composer) return;
-
-				const generator = this.composer.execute(
-					request
-				);
-
-				for await (const { node, values } of generator) {
-					console.log(node, values);
-					await this.connection?.sendRequest("wingman/compose", {
-						node,
-						values,
-					});
-				}
-			}
+		this.connection?.onRequest("wingman/compose", async ({ request }: { request: ComposerRequest }) => {
+			await this.executeComposer(request);
+		}
 		);
 
 		this.connection?.onRequest("wingman/acceptComposerFile", async (file: FileMetadata) => {
-			return this.composer?.acceptFile(file);
+			const graphState = await this.composer?.acceptFile(file);
+
+			const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
+
+			if (allFilesReviewed) {
+				this.executeComposer({
+					input: "",
+					contextFiles: []
+				});
+			}
+
+			return graphState;
 		});
 
 		this.connection?.onRequest("wingman/rejectComposerFile", async (file: FileMetadata) => {
-			return this.composer?.rejectFile(file);
+			const graphState = await this.composer?.rejectFile(file);
+
+			const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
+
+			if (allFilesReviewed) {
+				this.executeComposer({
+					input: "",
+					contextFiles: []
+				});
+			}
+
+			return graphState;
 		});
 
 		this.connection?.onRequest("wingman/undoComposerFile", async (file: FileMetadata) => {

@@ -1,23 +1,19 @@
-import { asyncIterator } from "../asyncIterator";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { GPTModel } from "./models/gptmodel";
-import { OpenAIMessage, OpenAIRequest } from "./types/OpenAIRequest";
-import { OpenAIResponse, OpenAIStreamResponse } from "./types/OpenAIResponse";
 import { OpenAIModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
-import { AIStreamProvider } from "../base";
+import { AIStreamProvider, ModelParams } from "../base";
 import { ILoggingProvider } from "@shared/types/Logger";
-import { AIMessage } from "@langchain/core/messages";
+import { BaseMessage, ChatMessage, SystemMessage } from "@langchain/core/messages";
+import { AbortError } from "node-fetch";
 
 export class OpenAI implements AIStreamProvider {
 	decoder = new TextDecoder();
-	chatHistory: OpenAIMessage[] = [];
+	chatHistory: BaseMessage[] = [];
 	chatModel: OpenAIModel | undefined;
 	codeModel: OpenAIModel | undefined;
-	baseModel: BaseChatModel | undefined;
-	rerankModel: BaseChatModel | undefined;
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["OpenAI"],
@@ -34,22 +30,6 @@ export class OpenAI implements AIStreamProvider {
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
-
-		this.baseModel = new ChatOpenAI({
-			apiKey: this.settings.apiKey,
-			model: this.settings.chatModel,
-			openAIApiKey: this.settings.apiKey,
-			temperature: 0,
-			maxTokens: interactionSettings.chatMaxTokens,
-		});
-
-		this.rerankModel = new ChatOpenAI({
-			apiKey: this.settings.apiKey,
-			model: "gpt-4o-mini",
-			openAIApiKey: this.settings.apiKey,
-			temperature: 0,
-			maxTokens: interactionSettings.chatMaxTokens,
-		});
 	}
 
 	addMessageToHistory(input: string): void {
@@ -57,124 +37,64 @@ export class OpenAI implements AIStreamProvider {
 			this.chatHistory = [];
 		}
 
-		this.chatHistory.push({
+		this.chatHistory.push(new ChatMessage({
 			role: "assistant",
 			content: input
-		} satisfies OpenAIMessage);
+		}));
 	}
 
-	getModel(): BaseChatModel {
-		return this.baseModel!;
+	getModel(params?: ModelParams): BaseChatModel {
+		return new ChatOpenAI({
+			apiKey: this.settings?.apiKey,
+			model: params?.model ?? this.settings?.chatModel,
+			openAIApiKey: this.settings?.apiKey,
+			temperature: this.settings?.chatModel.startsWith("o3") ? undefined : params?.temperature,
+		});
 	}
 
-	getRerankModel(): BaseChatModel {
-		return this.baseModel!;
+	getLightweightModel(params?: ModelParams): BaseChatModel {
+		return new ChatOpenAI({
+			apiKey: this.settings?.apiKey,
+			model: "gpt-4o-mini",
+			openAIApiKey: this.settings?.apiKey,
+			temperature: 0,
+			...params ?? {}
+		});
 	}
 
-	invoke(prompt: string) {
-		return this.baseModel!.invoke(prompt);
+	getReasoningModel(params?: ModelParams): BaseChatModel {
+		return new ChatOpenAI({
+			apiKey: this.settings?.apiKey,
+			model: this.settings?.chatModel,
+			openAIApiKey: this.settings?.apiKey,
+			modelKwargs: this.settings?.chatModel.startsWith("o3") ? { reasoning_effort: "high" } : undefined,
+			verbose: true
+		});
 	}
 
 	validateSettings(): Promise<boolean> {
 		const isChatModelValid =
 			this.settings?.chatModel?.startsWith("gpt-4") ||
-			this.settings?.chatModel?.startsWith("o1") ||
+			this.settings?.chatModel?.startsWith("o") ||
 			false;
 		const isCodeModelValid =
 			this.settings?.codeModel?.startsWith("gpt-4") ||
-			this.settings?.codeModel?.startsWith("o1") ||
+			this.settings?.codeModel?.startsWith("o") ||
 			false;
 		return Promise.resolve(isChatModelValid && isCodeModelValid);
 	}
 
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
 		switch (true) {
-			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o1"):
+			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o"):
 				return new GPTModel();
 		}
 	}
 
 	private getChatModel(chatModel: string): OpenAIModel | undefined {
 		switch (true) {
-			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o1"):
+			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o"):
 				return new GPTModel();
-		}
-	}
-
-	private async fetchModelResponse(
-		payload: OpenAIRequest,
-		signal: AbortSignal
-	) {
-		if (signal.aborted) {
-			return undefined;
-		}
-		return fetch(new URL(this.settings?.baseUrl!), {
-			method: "POST",
-			body: JSON.stringify(payload),
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.settings?.apiKey}`,
-			},
-			signal,
-		});
-	}
-
-	async *generate(payload: OpenAIRequest, signal: AbortSignal) {
-		const startTime = new Date().getTime();
-		let response: Response | undefined;
-
-		try {
-			response = await this.fetchModelResponse(payload, signal);
-		} catch (error) {
-			return `OpenAI chat request with model: ${payload.model} failed with the following error: ${error}`;
-		}
-
-		if (!response?.ok) {
-			return `OpenAI - Chat failed with the following status code: ${response?.status}`;
-		}
-
-		if (!response?.body) {
-			return "";
-		}
-
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		console.log(
-			`Chat Time To First Token execution time: ${executionTime} ms`
-		);
-
-		let currentMessage = "";
-		for await (const chunk of asyncIterator(response.body)) {
-			if (signal.aborted) {
-				return "";
-			}
-
-			const decodedValue = new TextDecoder().decode(chunk);
-			currentMessage += decodedValue;
-
-			let eventEndIndex;
-			while ((eventEndIndex = currentMessage.indexOf("\n\n")) !== -1) {
-				const eventData = currentMessage.substring(0, eventEndIndex);
-				currentMessage = currentMessage.substring(eventEndIndex + 2);
-
-				// Check for special non-JSON messages
-				if (eventData.trim() === "data: [DONE]") {
-					this.loggingProvider.logInfo(
-						"Received DONE signal, handling accordingly."
-					);
-					// Handle the DONE signal as needed, possibly breaking the loop or signaling completion
-					continue; // Or break, if appropriate for your use case
-				}
-
-				const jsonStr = eventData.replace(/^data: /, "");
-				try {
-					const parsedData = JSON.parse(jsonStr);
-					yield parsedData as OpenAIStreamResponse;
-				} catch (error) {
-					console.error("Failed to parse JSON", error);
-				}
-			}
 		}
 	}
 
@@ -212,50 +132,18 @@ ${recentClipboard}
 				}`
 			);
 
-		const codeRequestOptions: OpenAIRequest = {
-			model: this.settings?.codeModel!,
-			messages: [
-				{
-					role: "user",
-					content: prompt,
-				},
-			],
-			temperature: 0.2,
-			top_p: 0.3,
-		};
-
-		let response: Response | undefined;
-		let failedDueToAbort = false;
-
 		try {
-			response = await this.fetchModelResponse(
-				codeRequestOptions,
-				signal
-			);
+			const response = await this.getModel({
+				temperature: 0.2,
+				model: this.settings?.codeModel
+			}).invoke(prompt, { signal });
+
+			return response.content.toString();
 		} catch (error) {
-			if ((error as Error).name === "AbortError") {
-				failedDueToAbort = true;
-			}
-			return `OpenAI - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
-		}
-
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		this.loggingProvider.logInfo(
-			`Code Time To First Token execution time: ${executionTime} ms`
-		);
-
-		if (!response?.ok && !failedDueToAbort) {
-			return `OpenAI - Code Completion failed with the following status code: ${response?.status}`;
-		}
-
-		if (!response?.body) {
+			this.loggingProvider.logError(error);
+		} finally {
 			return "";
 		}
-
-		const openAiResponse = (await response.json()) as OpenAIResponse;
-		return openAiResponse.choices[0].message.content;
 	}
 
 	public async codeCompleteStream(
@@ -283,12 +171,17 @@ ${recentClipboard}
 		ragContent: string,
 		signal: AbortSignal
 	) {
-		const messages: OpenAIMessage[] = [
-			{
-				role: "assistant",
-				content: this.chatModel!.ChatPrompt,
-			},
-		];
+		const messages: BaseMessage[] = [
+			new SystemMessage({
+				content: [
+					{
+						type: "text",
+						cache_control: { type: "ephemeral" },
+						text: this.chatModel!.ChatPrompt,
+					},
+				],
+			})
+		]
 
 		if (this.chatHistory.length > 0) {
 			messages.push(...this.chatHistory.slice(1));
@@ -296,7 +189,7 @@ ${recentClipboard}
 			this.chatHistory.push(...messages);
 		}
 
-		const userMsg: OpenAIMessage = {
+		const userMsg = new ChatMessage({
 			role: "user",
 			content: `${ragContent
 				? `Here's some additional information that may help you generate a more accurate response.
@@ -312,47 +205,42 @@ ${ragContent}`
 Here is the user's question which may or may not be related:
 
 ${prompt}`,
-		};
+		});
 		messages.push(userMsg);
 		this.chatHistory.push(userMsg);
 
-		const chatPayload: OpenAIRequest = {
-			model: this.settings?.chatModel!,
-			messages,
-			stream: true,
-			temperature: 0.8,
-			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
-		};
-
 		truncateChatHistory(6, this.chatHistory);
 
+		let completeMessage = "";
 		try {
-			let completeMessage = "";
-			for await (const chunk of this.generate(chatPayload, signal)) {
-				if (!chunk?.choices) {
+			const stream = await this.getModel().stream(messages, { signal });
+			for await (const chunk of stream) {
+				if (!chunk?.content) {
 					continue;
 				}
 
-				const { content } = chunk.choices[0].delta;
-				if (!content) {
-					continue;
-				}
-
-				completeMessage += content;
-				yield content;
+				completeMessage += chunk.content.toString();
+				yield chunk.content.toString();
 			}
 
-			this.chatHistory.push({
+			this.chatHistory.push(new ChatMessage({
 				role: "assistant",
-				content:
-					completeMessage ||
-					"The user has decided they weren't interested in the response",
-			});
+				content: completeMessage
+			}));
 		} catch (e) {
+			if (e instanceof AbortError) {
+				this.chatHistory.push(new ChatMessage({
+					role: "assistant",
+					content:
+						completeMessage ||
+						"The user has decided they weren't interested in the response",
+				}));
+			}
+
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}
@@ -367,7 +255,6 @@ ${prompt}`,
 			return "";
 		}
 
-		const startTime = new Date().getTime();
 		const genDocPrompt =
 			"Generate documentation for the following code:\n" + prompt;
 
@@ -380,42 +267,17 @@ ${prompt}`,
 		systemPrompt += `\n\n${genDocPrompt}`;
 		systemPrompt = systemPrompt.replace(/\t/, "");
 
-		const genDocsPayload: OpenAIRequest = {
-			model: this.settings?.chatModel!,
-			messages: [
-				{
-					role: "user",
-					content: systemPrompt,
-				},
-			],
-			temperature: 0.4,
-			top_p: 0.3,
-		};
-
-		let response: Response | undefined;
 		try {
-			response = await this.fetchModelResponse(genDocsPayload, signal);
+			const response = await this.getModel({
+				temperature: 0.2
+			}).invoke(systemPrompt, { signal });
+
+			return response.content.toString();
 		} catch (error) {
-			return `OpenAI - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
-		}
-
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		this.loggingProvider.logInfo(
-			`CodeDocs Time To First Token execution time: ${executionTime} ms`
-		);
-
-		if (!response?.ok) {
-			return `OpenAI - Gen Docs failed with the following status code: ${response?.status}`;
-		}
-
-		if (!response?.body) {
+			this.loggingProvider.logError(error);
+		} finally {
 			return "";
 		}
-
-		const openAiResponse = (await response.json()) as OpenAIResponse;
-		return openAiResponse.choices[0].message.content;
 	}
 
 	public async refactor(
@@ -425,51 +287,24 @@ ${prompt}`,
 	): Promise<string> {
 		if (!this.chatModel?.refactorPrompt) return "";
 
-		const startTime = new Date().getTime();
-
 		let systemPrompt = this.chatModel?.refactorPrompt;
 
 		if (ragContent) {
-			systemPrompt += ragContent;
+			systemPrompt += `\n${ragContent}`;
 		}
 
 		systemPrompt += `\n\n${prompt}`;
 
-		const refactorPayload: OpenAIRequest = {
-			model: this.settings?.chatModel!,
-			messages: [
-				{
-					role: "user",
-					content: systemPrompt,
-				},
-			],
-			temperature: 0.4,
-			top_p: 0.3,
-		};
-
-		let response: Response | undefined;
 		try {
-			response = await this.fetchModelResponse(refactorPayload, signal);
+			const response = await this.getModel({
+				temperature: 0.4
+			}).invoke(systemPrompt, { signal });
+
+			return response.content.toString();
 		} catch (error) {
-			return `OpenAI - Refactor request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
-		}
-
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		this.loggingProvider.logInfo(
-			`Refactor Time To First Token execution time: ${executionTime} ms`
-		);
-
-		if (!response?.ok) {
-			return `OpenAI - Refactor failed with the following status code: ${response?.status}`;
-		}
-
-		if (!response?.body) {
+			this.loggingProvider.logError(error);
+		} finally {
 			return "";
 		}
-
-		const openAiResponse = (await response.json()) as OpenAIResponse;
-		return openAiResponse.choices[0].message.content;
 	}
 }

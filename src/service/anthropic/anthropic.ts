@@ -1,14 +1,6 @@
-import { asyncIterator } from "../asyncIterator";
-import { AIStreamProvider } from "../base";
+import { AIStreamProvider, ModelParams } from "../base";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { SonnetModel } from "./models/sonnet";
-import { AnthropicRequest } from "./types/ClaudeRequest";
-import {
-	AnthropicResponse,
-	AnthropicResponseStreamContent,
-	AnthropicResponseStreamDelta,
-	AnthropicStreamResponse,
-} from "./types/ClaudeResponse";
 import { AnthropicModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -17,17 +9,18 @@ import { ILoggingProvider } from "@shared/types/Logger";
 import {
 	AIMessage,
 	BaseMessage,
+	ChatMessage,
 	HumanMessage,
+	SystemMessage,
 } from "@langchain/core/messages";
 import { HaikuModel } from "./models/haiku";
+import { AbortError } from "node-fetch";
 
 export class Anthropic implements AIStreamProvider {
 	decoder = new TextDecoder();
 	chatHistory: BaseMessage[] = [];
 	chatModel: AnthropicModel | undefined;
 	codeModel: AnthropicModel | undefined;
-	baseModel: BaseChatModel | undefined;
-	rerankModel: BaseChatModel | undefined;
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["Anthropic"],
@@ -44,27 +37,6 @@ export class Anthropic implements AIStreamProvider {
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
-
-		this.baseModel = new ChatAnthropic({
-			apiKey: this.settings.apiKey,
-			anthropicApiKey: this.settings.apiKey,
-			model: this.settings.chatModel,
-			temperature: 0, //Required for tool calling.
-			maxTokens: interactionSettings.chatMaxTokens,
-			clientOptions: {
-				defaultHeaders: {
-					"anthropic-beta": "prompt-caching-2024-07-31",
-				},
-			},
-		});
-
-		this.rerankModel = new ChatAnthropic({
-			apiKey: this.settings.apiKey,
-			anthropicApiKey: this.settings.apiKey,
-			model: "claude-3-5-haiku-20241022",
-			temperature: 0, //Required for tool calling.
-			maxTokens: 4096,
-		});
 	}
 
 	addMessageToHistory(input: string): void {
@@ -83,16 +55,36 @@ export class Anthropic implements AIStreamProvider {
 		return isChatModelValid && isCodeModelValid;
 	}
 
-	getModel(): BaseChatModel {
-		return this.baseModel!;
+	getModel(params?: ModelParams): BaseChatModel {
+		return new ChatAnthropic({
+			apiKey: this.settings?.apiKey,
+			anthropicApiKey: this.settings?.apiKey,
+			model: params?.model ?? this.settings?.chatModel,
+			temperature: 0,
+			maxTokens: this.interactionSettings?.chatMaxTokens,
+		});
 	}
 
-	getRerankModel(): BaseChatModel {
-		return this.rerankModel!;
+	getLightweightModel(params?: ModelParams): BaseChatModel {
+		return new ChatAnthropic({
+			apiKey: this.settings?.apiKey,
+			anthropicApiKey: this.settings?.apiKey,
+			model: "claude-3-5-haiku-20241022",
+			temperature: 0,
+			maxTokens: 8192,
+			...params
+		});
 	}
 
-	invoke(prompt: string) {
-		return this.baseModel!.invoke(prompt);
+	getReasoningModel(params?: ModelParams): BaseChatModel {
+		return new ChatAnthropic({
+			apiKey: this.settings?.apiKey,
+			anthropicApiKey: this.settings?.apiKey,
+			model: "claude-3-5-haiku-20241022",
+			temperature: 0,
+			maxTokens: 8192,
+			verbose: params?.verbose
+		});
 	}
 
 	private getCodeModel(codeModel: string): AnthropicModel | undefined {
@@ -121,119 +113,6 @@ export class Anthropic implements AIStreamProvider {
 		}
 	}
 
-	private async fetchModelResponse(
-		payload: AnthropicRequest,
-		signal: AbortSignal
-	) {
-		const timeoutSignal = AbortSignal.timeout(15000);
-		const controller = new AbortController();
-
-		const abortHandler = () => {
-			controller.abort();
-		};
-
-		signal.addEventListener("abort", abortHandler);
-		timeoutSignal.addEventListener("abort", abortHandler);
-
-		if (signal.aborted || timeoutSignal.aborted) {
-			return undefined;
-		}
-
-		try {
-			return fetch(new URL(`${this.settings?.baseUrl}/messages`), {
-				method: "POST",
-				body: JSON.stringify(payload),
-				headers: {
-					"Content-Type": "application/json",
-					"x-api-key": this.settings?.apiKey!,
-					"anthropic-version": "2023-06-01",
-				},
-				signal: controller.signal,
-			});
-		} finally {
-			// Cleanup
-			signal.removeEventListener("abort", abortHandler);
-			timeoutSignal.removeEventListener("abort", abortHandler);
-		}
-	}
-
-	async *generate(payload: AnthropicRequest, signal: AbortSignal) {
-		const startTime = new Date().getTime();
-		let response: Response | undefined;
-
-		try {
-			response = await this.fetchModelResponse(payload, signal);
-		} catch (error) {
-			return;
-			`Anthropic chat request with model: ${payload.model} failed with the following error: ${error}`;
-		}
-
-		if (!response?.ok) {
-			return `Anthropic - Chat failed with the following status code: ${response?.status}`;
-		}
-
-		if (!response?.body) {
-			return "";
-		}
-
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		this.loggingProvider.logInfo(
-			`Chat Time To First Token execution time: ${executionTime} ms`
-		);
-
-		let currentMessage = "";
-		for await (const chunk of asyncIterator(response.body)) {
-			if (signal.aborted) {
-				return "";
-			}
-
-			const decodedValue = this.decoder.decode(chunk);
-
-			currentMessage += decodedValue;
-
-			const eventEndIndex = currentMessage.indexOf("\n\n");
-			if (eventEndIndex !== -1) {
-				// Extract the event data
-				const eventData = currentMessage.substring(0, eventEndIndex);
-
-				// Remove the event data from currentMessage
-				currentMessage = currentMessage.substring(eventEndIndex + 2);
-
-				// Remove the "data: " prefix and parse the JSON
-				const blocks = eventData.split("data: ");
-
-				for (const block of blocks) {
-					if (!block || !block.startsWith("{")) {
-						continue;
-					}
-
-					const jsonStr = block.replace(/\n/g, "");
-					const parsedData = JSON.parse(
-						jsonStr
-					) as AnthropicStreamResponse;
-
-					switch (parsedData.type) {
-						case "content_block_start":
-							const blockStart =
-								parsedData as unknown as AnthropicResponseStreamContent;
-							yield blockStart.content_block.text;
-							break;
-						case "content_block_delta":
-							const blockDelta =
-								parsedData as unknown as AnthropicResponseStreamDelta;
-							yield blockDelta.delta.text;
-							break;
-						default:
-							// Handle unknown event type
-							break;
-					}
-				}
-			}
-		}
-	}
-
 	public async codeComplete(
 		beginning: string,
 		ending: string,
@@ -241,80 +120,41 @@ export class Anthropic implements AIStreamProvider {
 		additionalContext?: string,
 		recentClipboard?: string
 	): Promise<string> {
-		const startTime = new Date().getTime();
-
-		const codeRequestOptions: AnthropicRequest = {
-			model: this.settings?.codeModel!,
-			system: this.codeModel!.CodeCompletionPrompt.replace(
-				"{context}",
-				`The following are some of the types available in their file. 
-Use these types while considering how to complete the code provided. 
-Do not repeat or use these types in your answer.
-
-${additionalContext || ""}
-
------
-
-${recentClipboard
-					? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
-
-${recentClipboard}
-
------`
-					: ""
-				}`
-			),
-			messages: [
-				{
-					role: "user",
-					content: `${beginning}[FILL IN THE MIDDLE]${ending}`,
-				},
-			],
-			temperature: 0.2,
-			max_tokens:
-				this.interactionSettings?.codeMaxTokens === -1
-					? 8192
-					: this.interactionSettings?.codeMaxTokens || 8192,
-		};
-
-		let response: Response | undefined;
-		let failedDueToAbort = false;
-
 		try {
-			response = await this.fetchModelResponse(
-				codeRequestOptions,
-				signal
-			);
-		} catch (error) {
-			if (error instanceof Error) {
-				this.loggingProvider.logError(error.message);
-				if (error.name === "AbortError") {
-					failedDueToAbort = true;
-				}
+			const response = await this.getModel({ temperature: 0.2, model: this.settings?.codeModel }).invoke([new SystemMessage({
+				content: this.codeModel!.CodeCompletionPrompt.replace(
+					"{context}",
+					`The following are some of the types available in their file. 
+	Use these types while considering how to complete the code provided. 
+	Do not repeat or use these types in your answer.
+	
+	${additionalContext || ""}
+	
+	-----
+	
+	${recentClipboard
+						? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+	
+	${recentClipboard}
+	
+	-----`
+						: ""}`)
+			}),
+			new HumanMessage({
+				content: `${beginning}[FILL IN THE MIDDLE]${ending}`
+			})], { signal });
+
+			return response.content.toString();
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`Code Complete failed: ${e.message}`,
+					!e.message.includes("AbortError")
+				);
 			}
-			return "";
 		}
 
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		this.loggingProvider.logInfo(
-			`Code Complete Time To First Token execution time: ${executionTime} ms`
-		);
-
-		if (!response?.ok && !failedDueToAbort) {
-			const responseBody = await response?.text();
-			const msg = `Anthropic - Code Completion failed with the following status code: ${response?.status}, body: ${responseBody}`;
-			this.loggingProvider.logError(msg);
-			return "";
-		}
-
-		if (!response?.body) {
-			return "";
-		}
-
-		const AnthropicResponse = (await response.json()) as AnthropicResponse;
-		return AnthropicResponse.content[0].text;
+		return "";
 	}
 
 	public async *chat(
@@ -352,10 +192,9 @@ ${recentClipboard}
 
 		truncateChatHistory(6, this.chatHistory);
 
+		let completeMessage = "";
 		try {
-			const stream = await this.baseModel?.stream(messages, { signal })!;
-
-			let completeMessage = "";
+			const stream = await this.getModel({ temperature: 0.4 }).stream(messages, { signal })!;
 			for await (const chunk of stream) {
 				const result = chunk.content.toString();
 				completeMessage += result;
@@ -366,10 +205,19 @@ ${recentClipboard}
 				new AIMessage(completeMessage || "Ignore this message.")
 			);
 		} catch (e) {
+			if (e instanceof AbortError) {
+				this.chatHistory.push(new ChatMessage({
+					role: "assistant",
+					content:
+						completeMessage ||
+						"The user has decided they weren't interested in the response",
+				}));
+			}
+
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}
@@ -399,43 +247,19 @@ ${recentClipboard}
 		systemPrompt += `\n\n${genDocPrompt}`;
 		systemPrompt = systemPrompt.replace(/\t/, "");
 
-		const genDocsPayload: AnthropicRequest = {
-			model: this.settings?.chatModel!,
-			messages: [
-				{
-					role: "user",
-					content: systemPrompt,
-				},
-			],
-			temperature: 0.4,
-			top_p: 0.3,
-			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
-		};
-
-		let response: Response | undefined;
 		try {
-			response = await this.fetchModelResponse(genDocsPayload, signal);
-		} catch (error) {
-			return `Anthropic - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
+			const response = await this.getModel({ temperature: 0.4 }).invoke(systemPrompt, { signal })!;
+			return response.content.toString();
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`GenCodeDocs failed: ${e.message}`,
+					!e.message.includes("AbortError")
+				);
+			}
 		}
 
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		this.loggingProvider.logInfo(
-			`GenDocs Time To First Token execution time: ${executionTime} ms`
-		);
-
-		if (!response?.ok) {
-			return `Anthropic - Gen Docs failed with the following status code: ${response?.status}`;
-		}
-
-		if (!response?.body) {
-			return "";
-		}
-
-		const AnthropicResponse = (await response.json()) as AnthropicResponse;
-		return AnthropicResponse.content[0].text;
+		return "";
 	}
 
 	public async codeCompleteStream(
@@ -461,53 +285,26 @@ ${recentClipboard}
 	): Promise<string> {
 		if (!this.chatModel?.refactorPrompt) return "";
 
-		const startTime = new Date().getTime();
-
 		let systemPrompt = this.chatModel?.refactorPrompt;
 
 		if (ragContent) {
-			systemPrompt += ragContent;
+			systemPrompt += `\n${ragContent}`;
 		}
 
 		systemPrompt += `\n\n${prompt}`;
 
-		const refactorPayload: AnthropicRequest = {
-			model: this.settings?.chatModel!,
-			messages: [
-				{
-					role: "user",
-					content: systemPrompt,
-				},
-			],
-			temperature: 0.4,
-			top_p: 0.3,
-			top_k: 40,
-			max_tokens: this.interactionSettings?.chatMaxTokens || 4096,
-		};
-
-		let response: Response | undefined;
 		try {
-			response = await this.fetchModelResponse(refactorPayload, signal);
-		} catch (error) {
-			return `Anthropic - Refactor request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
+			const response = await this.getModel({ temperature: 0.4 }).invoke(systemPrompt, { signal })!;
+			return response.content.toString();
+		} catch (e) {
+			if (e instanceof Error) {
+				this.loggingProvider.logError(
+					`Refactor failed: ${e.message}`,
+					!e.message.includes("AbortError")
+				);
+			}
 		}
 
-		const endTime = new Date().getTime();
-		const executionTime = (endTime - startTime) / 1000;
-
-		this.loggingProvider.logInfo(
-			`Refactor Time To First Token execution time: ${executionTime} ms`
-		);
-
-		if (!response?.ok) {
-			return `Anthropic - Refactor failed with the following status code: ${response?.status}`;
-		}
-
-		if (!response?.body) {
-			return "";
-		}
-
-		const AnthropicResponse = (await response.json()) as AnthropicResponse;
-		return AnthropicResponse.content[0].text;
+		return "";
 	}
 }

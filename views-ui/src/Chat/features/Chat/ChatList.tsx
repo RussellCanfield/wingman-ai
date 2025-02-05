@@ -29,6 +29,10 @@ function ChatResponseList({
 		}
 	};
 
+	useEffect(() => {
+		setUserHasScrolled(false);
+	}, [messages]);
+
 	// Observe user scrolling behavior to toggle auto-scroll
 	useEffect(() => {
 		const ulElement = ulRef.current;

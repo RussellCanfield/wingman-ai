@@ -23,7 +23,7 @@ export class WebCrawler {
             ))
             .join('\n\n');
 
-        const response = await this.aiProvider.getRerankModel().invoke(
+        const response = await this.aiProvider.getLightweightModel().invoke(
             `You are analyzing search results to find the most relevant URL for a user's query.
     
 Query: "${input}"

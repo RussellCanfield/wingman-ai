@@ -9,7 +9,7 @@ export class Generator {
 	constructor(
 		private readonly codeParser: CodeParser,
 		private readonly aiProvider: AIProvider
-	) {}
+	) { }
 
 	public async generatorProjectSummary(
 		configFileContents: string,
@@ -42,7 +42,7 @@ Main configuration file contents:
 
 ${configFileContents}`;
 
-		const result = await this.aiProvider.invoke(prompt);
+		const result = await this.aiProvider.getLightweightModel().invoke(prompt);
 
 		return result.content.toString();
 	}
@@ -60,14 +60,13 @@ ${configFileContents}`;
 		const fileText = `File: 
 ${filePath}
 
-${
-	fileImports?.length === 0
-		? ""
-		: `
+${fileImports?.length === 0
+				? ""
+				: `
 File Imports:
 ${fileImports.join("\n")}
 `
-}
+			}
 
 Code Snippet:
 
@@ -178,7 +177,7 @@ ${fileContents}
 Respond in plain text, without markdown.
 `;
 
-		const result = await this.aiProvider.getRerankModel().invoke(prompt);
+		const result = await this.aiProvider.getLightweightModel().invoke(prompt);
 
 		return {
 			id: codeNode.id,
