@@ -36,6 +36,7 @@ Your task is to execute commands and add dependencies to the software project ba
 4. Before calling tools, explain why to the user
 5. Do not write any code or provide code examples, just focus on dependencies
 6. Do not EVER, EVER EVER, delete a file or a directory. Do not. THIS IS CRITICAL!!!
+7. You do not write code, do not use commands to modify files. You will only use commands for dependency management.
 
 **Protocol:**
 - Use **Project details** to determine which commands to run, if not available then guess based on the implementation plan
@@ -74,7 +75,7 @@ ${state.dependencies?.join('\n')}
 
 [Do not add a recap or summary section]
 
-[State you are finished and ready to generate code, its a statement not a question]
+[State you are finished and will begin making the changes, its a statement not a question]
 
 Remember: 
 - Take monorepos into consideration

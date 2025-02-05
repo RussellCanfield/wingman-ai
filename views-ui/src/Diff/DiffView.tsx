@@ -78,13 +78,13 @@ export default function DiffView({ diff }: DiffProps) {
 	};
 
 	return (
-		<div className="inset-0 bg-[var(--vscode-editorWidget-background)] flex flex-col">
-			<div className="p-4 flex justify-between items-center z-10">
+		<div className="inset-0 bg-[var(--vscode-editorWidget-background)] flex flex-col h-full">
+			<div className="sticky top-0 bg-[var(--vscode-editorWidget-background)] border-b border-[var(--vscode-widget-shadow)] p-4 flex justify-between items-center z-10">
 				<p className="text-white font-semibold truncate">{file.path}</p>
 				<div className="flex gap-4">
 					<button
 						className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
-						title="Accept changes"
+						title="Reject changes"
 						onClick={() => rejectDiff()}
 					>
 						<FaXmark className="mr-2" />
@@ -100,6 +100,7 @@ export default function DiffView({ diff }: DiffProps) {
 					</button>
 				</div>
 			</div>
+
 			<div className="flex-grow overflow-y-auto">
 				<ReactDiffViewer
 					oldValue={file.original}

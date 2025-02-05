@@ -75,27 +75,25 @@ export class OpenAI implements AIStreamProvider {
 	validateSettings(): Promise<boolean> {
 		const isChatModelValid =
 			this.settings?.chatModel?.startsWith("gpt-4") ||
-			this.settings?.chatModel?.startsWith("o1") ||
-			this.settings?.chatModel?.startsWith("o3") ||
+			this.settings?.chatModel?.startsWith("o") ||
 			false;
 		const isCodeModelValid =
 			this.settings?.codeModel?.startsWith("gpt-4") ||
-			this.settings?.codeModel?.startsWith("o1") ||
-			this.settings?.chatModel?.startsWith("o3") ||
+			this.settings?.codeModel?.startsWith("o") ||
 			false;
 		return Promise.resolve(isChatModelValid && isCodeModelValid);
 	}
 
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
 		switch (true) {
-			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o1") || codeModel.startsWith("o3"):
+			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o"):
 				return new GPTModel();
 		}
 	}
 
 	private getChatModel(chatModel: string): OpenAIModel | undefined {
 		switch (true) {
-			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o1") || chatModel.startsWith("o3"):
+			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o"):
 				return new GPTModel();
 		}
 	}
@@ -242,7 +240,7 @@ ${prompt}`,
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}

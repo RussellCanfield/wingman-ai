@@ -257,7 +257,6 @@ const ChatEntry = ({
 	from,
 	message,
 	files,
-	dependencies,
 	loading,
 	image,
 	isCurrent
@@ -322,51 +321,6 @@ const ChatEntry = ({
 								))}
 							</div>
 						)}
-						{dependencies && dependencies?.steps && dependencies?.steps?.length > 0 && (
-							<div>
-								<h3 className="text-lg font-semibold mb-4 mt-0">Dependencies:</h3>
-								<div className="space-y-3 mb-4">
-									{dependencies.response && (<p>{dependencies.response}</p>)}
-									{dependencies.steps.map((step, index) => (
-										<div
-											className={`border border-stone-700/50 bg-stone-700 rounded-lg overflow-hidden w-full`}
-											key={index}
-										>
-											<div className="flex flex-row items-center border-b border-stone-500/50">
-												<p className="flex-1 p-3 text-sm">
-													{step.description}
-												</p>
-												{step.command && (
-													<div className="flex space-x-2 rounded hover:bg-stone-700 transition-colors z-10">
-														<button
-															type="button"
-															title="Run in terminal"
-															className="p-3"
-															onClick={() =>
-																sendTerminalCommand(
-																	step.command!
-																)
-															}
-														>
-															<FaTerminal size={16} />
-														</button>
-													</div>
-												)}
-											</div>
-											<div>
-												{step.command &&
-													renderMarkdown(
-														`\`\`\`bash\n${step.command}\n\`\`\``,
-														codeTheme,
-														undefined,
-														step
-													)}
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-						)}
 						{from === 'assistant' && loading && (
 							<div className="mt-4 flex justify-center items-center">
 								<SkeletonLoader isDarkTheme={!isLightTheme} />
@@ -380,7 +334,7 @@ const ChatEntry = ({
 					<p>
 						Summary:
 					</p>
-					<div className="flex flex-col items-center text-sm overflow-y-auto h-48">
+					<div className="flex flex-col items-center text-sm overflow-y-auto max-h-48">
 						{files.map(f => {
 							const truncatedPath = useMemo(() => {
 								const parts = f.path.split('/');

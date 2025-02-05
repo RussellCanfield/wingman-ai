@@ -4,7 +4,6 @@ import {
 	InlineCompletionItem,
 	InlineCompletionItemProvider,
 	Position,
-	Range,
 	TextDocument,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
@@ -22,7 +21,6 @@ import NodeCache from "node-cache";
 import { loggingProvider } from "./loggingProvider";
 import {
 	EVENT_CODE_COMPLETE,
-	EVENT_CODE_COMPLETE_CACHE,
 	telemetry,
 } from "./telemetryProvider";
 
@@ -75,7 +73,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			if (abort.signal.aborted) {
 				return [new InlineCompletionItem("")];
 			}
-			return this.bouncedRequest(
+			return await this.bouncedRequest(
 				document,
 				prefix,
 				abort.signal,

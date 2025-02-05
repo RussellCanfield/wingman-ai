@@ -20,7 +20,7 @@ For each file you modify, output two parts in sequence:
 2. The complete file block containing the updated code.
 3. The [] surrounding instructions in the response format should not be included in your final response.
 
-**STREAMING RESPONSE FORMAT:**
+**CRITICAL RESPONSE FORMAT - FOLLOW EXACTLY:**
 
 For each file, first output a description line in the following format (do not wrap it in any additional markers):
 [Brief summary of the changes made to the file]
@@ -52,6 +52,7 @@ Core Principles:
 4. Maintain existing patterns and conventions
 5. Make minimal, focused changes
 6. Do not remove existing code unless it is required to complete your change, do not break things - THIS IS CRITICAL!
+7. Be surgical, make the necessary changes only. Think very carefully before deleting code - stay focused.
 
 File Handling:
 1. Process one file at a time
@@ -388,6 +389,7 @@ export class CodeWriter {
 				text: "{{input}}"
 			});
 
+			await dispatchCustomEvent('composer-files', { files: [] });
 			for (let { path: file, code } of state.files ?? []) {
 				const systemTemplate = PromptTemplate.fromTemplate(codeWriterPrompt,
 					{ templateFormat: "mustache" }
@@ -459,8 +461,6 @@ export class CodeWriter {
 									const updates = await parser.parseToken(chunk);
 									const file = updates?.result;
 
-									//await dispatchCustomEvent("composer-message-stream", updates.text);
-
 									if (file) {
 										if (!file.code) {
 											await dispatchCustomEvent("composer-error", {
@@ -518,14 +518,13 @@ export class CodeWriter {
 		}
 
 		if (files.length === 0) {
-			await dispatchCustomEvent("composer-error", {
-				error: "I've failed to generate any code changes for this session, if this continues please clear the chat and try again.",
-			});
-			console.error("No files have been changed.");
-			return new Command({
-				goto: "find",
-			});
+			throw new Error("I've failed to generate any code changes for this session, if this continues please clear the chat and try again.");
 		}
+
+		await dispatchCustomEvent("composer-files-done", {
+			files,
+			messages: state.messages
+		})
 
 		return {
 			files

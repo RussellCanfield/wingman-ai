@@ -1,5 +1,5 @@
 import { Command, END, interrupt, START, StateGraph } from "@langchain/langgraph";
-import type { BaseCheckpointSaver, StateGraphArgs } from "@langchain/langgraph";
+import type { BaseCheckpointSaver, StateGraphArgs, StateSnapshot } from "@langchain/langgraph";
 import { ChatMessage } from "@langchain/core/messages";
 import { CodeGraph } from "../../server/files/graph";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -14,9 +14,10 @@ import { getTextDocumentFromPath } from "../../server/files/utils";
 import { DirectoryContent } from "../utils";
 import { DependencyManager } from "./agents/dependency-manager";
 import { promises } from "node:fs";
-import { FeatureParser } from "./agents/feature-parser";
 import { AIProvider } from "../../service/base";
 import { createPlannerAgent } from "./agents/find";
+import { ValidationSettings } from "@shared/types/Settings";
+import { Validator } from "./agents/validator";
 
 export interface Thread {
     configurable: {
@@ -37,13 +38,14 @@ export class ComposerGraph {
         private readonly aiProvider: AIProvider,
         private readonly codeGraph: CodeGraph,
         private readonly store: Store,
+        private readonly validationSettings: ValidationSettings,
         private readonly config?: RunnableConfig,
         private readonly checkpointer?: BaseCheckpointSaver) {
 
         const plannerAgent = createPlannerAgent(this.aiProvider, this.codeGraph, this.store, this.workspace);
         const codeWriter = new CodeWriter(this.aiProvider, this.workspace);
         const dependencyManager = new DependencyManager(this.aiProvider.getLightweightModel(), this.workspace);
-        const featureParser = new FeatureParser(this.aiProvider.getReasoningModel(), this.workspace);
+        const validator = new Validator(this.aiProvider, this.validationSettings, this.workspace);
 
         const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
             messages: {
@@ -76,10 +78,6 @@ export class ComposerGraph {
                     y?: ComposerRequest["image"]
                 ) => y ?? x,
             },
-            feature: {
-                value: (x?: string, y?: string) => y ?? x,
-                default: () => undefined,
-            },
             dependencies: {
                 value: (x?: string[], y?: string[]) => y ?? x,
                 default: () => undefined,
@@ -100,33 +98,31 @@ export class ComposerGraph {
                 ends: ["code-writer"]
             })
             .addNode("code-writer", codeWriter.codeWriterStep, {
+                ends: ["review-files"]
+            })
+            .addNode("review-files", this.filesReviewed, {
+                ends: [END, "validator"]
+            })
+            .addNode("validator", validator.validate, {
                 ends: [END]
             })
-            // .addNode("file-review", this.fileReview, {
-            //     ends: ["find", "feature-parser"]
-            // })
-            // .addNode("feature-parser", featureParser.parseFeature, {
-            //     ends: ["accept-feature-plan"]
-            // })
-            // .addNode("accept-feature-plan", this.acceptFeaturePlan, {
-            //     ends: ["find", END]
-            // })
             .addEdge(START, "find")
             .addEdge("find", "intent-review")
-            // .addEdge("intent-review", "dependency-manager")
-            // .addEdge("intent-review", "code-writer")
-            // .addEdge("intent-review", "find")
             .addEdge("dependency-manager", "code-writer")
-        // .addEdge("code-writer", "file-review")
-        // .addEdge("file-review", "feature-parser")
-        // .addEdge("feature-parser", "accept-feature-plan")
-        // .addEdge("accept-feature-plan", END)
+            .addEdge("code-writer", "review-files")
     }
 
     resetGraphState = async () => {
         const graph = this.workflow.compile({ checkpointer: this.checkpointer });
         await graph.updateState({ ...this.config }, {
-            messages: []
+            messages: [],
+            implementationPlan: undefined,
+            files: [],
+            scannedFiles: [],
+            error: undefined,
+            projectDetails: undefined,
+            image: undefined,
+            dependencies: undefined
         } satisfies Partial<PlanExecuteState>);
     }
 
@@ -254,9 +250,9 @@ export class ComposerGraph {
 
     determinePositiveAnswer = async (userMessage: string) => {
         const result = await this.aiProvider.getLightweightModel().invoke(
-            `Analyze this response and determine if it's a positive confirmation or providing confirmation.
+            `Analyze this response and determine if it's a positive confirmation or providing confirmation without giving you further instructions.
 
-Rules:
+**Rules:**
 - Respond with 'yes' ONLY for clear positive confirmations like:
     - "yes", "sure", "okay", "proceed"
     - "looks good", "that's correct"
@@ -271,7 +267,7 @@ Rules:
     - Partial agreements with conditions
 - You must only respond with 'yes' or 'no', do not add any additional text
 
-Examples:
+**Examples:**
 - "Yes, go ahead" -> "yes"
 - "Looks good" -> "yes"
 - "That works perfectly" -> "yes"
@@ -283,7 +279,13 @@ Examples:
 - "Yes, but can you..." -> "no"
 - "That's interesting" -> "no"
 
-Note: Examples above are not exhaustive, use your best judgement!
+**Further Instruction Cases:**
+- "Don't include xyz but yes" -> "no"
+- "Also do xyz" -> "no"
+
+NOTE - Further Instructions indicate the user asking you to alter our implementation plan, these need to be addressed before proceeding.
+
+Examples above are not exhaustive, use your best judgement!
 
 Response: ${userMessage}
 
@@ -293,48 +295,24 @@ Answer (yes/no):`
         return result.content.toString().toLowerCase().includes('yes');
     }
 
-    // fileReview = async (state: PlanExecuteState) => {
-    //     const lastMessage = state.messages[state.messages.length - 1];
-    //     interrupt(lastMessage);
-
-    //     if (state.files?.every(f => f.accepted || f.rejected)) {
-    //         return new Command({
-    //             goto: "feature-parser",
-    //         });
-    //     }
-
-    //     console.log("All files not finalized, restarting flow");
-
-    //     return new Command({
-    //         goto: "find",
-    //         update: {
-    //             messages: state.messages
-    //         } satisfies Partial<PlanExecuteState>
-    //     });
-    // };
-
-    acceptFeaturePlan = async (state: PlanExecuteState) => {
+    filesReviewed = async (state: PlanExecuteState) => {
         const lastMessage = state.messages[state.messages.length - 1];
-        const interruptState = interrupt(lastMessage) as Partial<PlanExecuteState>;
-        const userMessage = interruptState.messages![0].content.toString();
-        const messages = [...state.messages, new ChatMessage(userMessage, "user")];
+        interrupt(lastMessage);
 
-        const result = await this.determinePositiveAnswer(userMessage);
-
-        if (result) {
+        if (this.validationSettings &&
+            this.validationSettings.validationCommand &&
+            state.files?.every(f => f.accepted || f.rejected)) {
             return new Command({
-                goto: "find",
-                update: {
-                    messages
-                } satisfies Partial<PlanExecuteState>
+                goto: "validator",
             });
         }
+
+        console.log("All files not finalized, ending flow");
 
         return new Command({
             goto: END
         });
-    }
-
+    };
 
     intentReviewFeedback = async (state: PlanExecuteState) => {
         const lastMessage = state.messages[state.messages.length - 1];
@@ -443,11 +421,11 @@ Answer (yes/no):`
 
             const latestState = await graph.getState({ ...this.config });
 
-            if (latestState.tasks?.length === 0) {
+            if (!latestState.tasks || latestState.tasks.length === 0) {
                 yield {
                     node: "composer-done",
                     values: latestState.values
-                }
+                };
             }
         } catch (e) {
             console.error('Composer error: ', e);

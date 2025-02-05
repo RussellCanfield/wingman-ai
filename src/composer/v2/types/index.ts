@@ -12,5 +12,4 @@ export interface PlanExecuteState {
     files?: FileMetadata[];
     error?: string;
     scannedFiles?: DirectoryContent[];
-    feature?: string;
 }

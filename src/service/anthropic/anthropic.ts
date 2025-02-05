@@ -149,7 +149,7 @@ export class Anthropic implements AIStreamProvider {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Code Complete failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}
@@ -217,7 +217,7 @@ export class Anthropic implements AIStreamProvider {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}
@@ -254,7 +254,7 @@ export class Anthropic implements AIStreamProvider {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`GenCodeDocs failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}
@@ -300,7 +300,7 @@ export class Anthropic implements AIStreamProvider {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Refactor failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}

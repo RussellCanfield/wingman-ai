@@ -1,7 +1,7 @@
 import { OllamaAIModel } from "./types";
 import { InteractionSettings, Settings } from "@shared/types/Settings";
 import { asyncIterator } from "../asyncIterator";
-import { AIStreamProvider } from "../base";
+import { AIStreamProvider, ModelParams } from "../base";
 import { delay } from "../delay";
 import { CodeLlama } from "./models/codellama";
 import { CodeQwen } from "./models/codeqwen";
@@ -80,6 +80,10 @@ export class Ollama implements AIStreamProvider {
 
 	getLightweightModel(): BaseChatModel {
 		return this.rerankModel!;
+	}
+
+	getReasoningModel(params?: ModelParams): BaseChatModel {
+		return this.baseModel!;
 	}
 
 	invoke(prompt: string) {
@@ -566,7 +570,7 @@ ${ragContent}`
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("aborted")
+					!e.message.includes("AbortError")
 				);
 			}
 		}

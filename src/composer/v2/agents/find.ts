@@ -2,7 +2,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { CodeGraph } from "../../../server/files/graph";
 import { Store } from "../../../store/vector";
 import { AIProvider } from "../../../service/base";
-import { scanDirectory } from "../../utils";
+import { formatMessages, scanDirectory } from "../../utils";
 import fs, { promises } from 'node:fs';
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { AgentExecutor, createToolCallingAgent } from "langchain/agents";
@@ -128,6 +128,10 @@ export class PlannerAgent {
     }
 
     invoke = async (state: PlanExecuteState) => {
+        this.analyzedFiles.clear();
+        this.dependencies.clear();
+        this.fileContentBuffer = '';
+
         const contents = await scanDirectory(this.workspace, 12);
         const projectDetailsHandler = new ProjectDetailsHandler(this.workspace);
         const projectDetails = (await projectDetailsHandler.retrieveProjectDetails())?.description ?? "Not available.";
@@ -179,8 +183,9 @@ ${projectDetails}
    - requirements.txt
 3. For each potential new dependency:
    - Verify it's not already present
-   - Check version compatibility
+   - Only update the dependency version if its absolutely vital, otherwise use the existing one
 4. Never include an empty dependencies section
+5. Make sure you carefully examine existing dependencies before making suggestions!
 
 ** IMPORTANT! - Files that require modification or creation, especially those from semantic search, need to be included in the "### Required File Changes" section **
 
@@ -202,10 +207,11 @@ ${projectDetails}
    - Find affected test files
    - Check type definition files
 
-3. Searching tips:
-   - Call the semantic_search_codebase tool as many times as necessary
+**Tools:**
+   - Use the semantic_search_codebase tool as many times as necessary
+   - Available Files or Files resulting from semantic_search_codebase can also be verified using the read_file tool
+   - Focus semantic search queries on different aspects of integration (api, routing, state management, etc) - as well as choosing files out of Available Files
    - If no results, attempt to search using more concise phrases
-   - Include the right terms to focus on not only finding existing components but integration points, call multiple times if needed
 
 **File Analysis Format:**
 - File: \`file path\`
@@ -325,7 +331,14 @@ CRITICAL REMINDERS:
 
         let buffer = '';
         for await (const event of await executor.streamEvents(
-            { input: state.messages[state.messages.length - 1].content.toString() },
+            {
+                input: `Use the following conversation, sorted oldest to newest to guide you in generating your plan.
+Focus on the latest ask, but use the whole conversation as context, as I might be building on a previously created plan.
+Use your best judgement around file selection and don't be too eager to choose files based on older/out of context asks.
+
+Conversation:
+${formatMessages(state.messages)}`
+            },
             { version: "v2" }
         )) {
             switch (event.event) {
@@ -371,7 +384,8 @@ CRITICAL REMINDERS:
             files: Array.from(this.analyzedFiles.values()),
             projectDetails,
             dependencies: Array.from(this.dependencies),
-            implementationPlan: buffer
+            implementationPlan: buffer,
+            error: undefined
         } satisfies Partial<PlanExecuteState>;
     }
 }

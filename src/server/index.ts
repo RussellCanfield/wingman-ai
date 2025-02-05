@@ -35,7 +35,7 @@ import {
 	Settings,
 } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
-import { ComposerRequest, IndexStats } from "@shared/types/v2/Composer";
+import { ComposerRequest, IndexStats, PlanExecuteState } from "@shared/types/v2/Composer";
 import { loggingProvider } from "./loggingProvider";
 import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
@@ -138,6 +138,7 @@ export class LSPServer {
 			modelProvider,
 			this.codeGraph!,
 			this.vectorStore!,
+			settings.validationSettings,
 			config,
 			memory
 		)
@@ -336,7 +337,18 @@ export class LSPServer {
 		);
 
 		for await (const { node, values } of generator) {
-			console.log(node, values);
+			if (node === "composer-files-done") {
+				const files = values as PlanExecuteState["files"];
+
+				if (files && files.length > 0) {
+					//Add new files to the queue since they don't trigger events
+					const fileUris = files
+						.filter(f => !f.original)
+						.map(f => filePathToUri(path.join(this.workspaceFolders[0], f.path)));
+
+					this.queue?.enqueue(fileUris);
+				}
+			}
 			await this.connection?.sendRequest("wingman/compose", {
 				node,
 				values,

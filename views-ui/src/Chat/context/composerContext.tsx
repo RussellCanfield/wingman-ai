@@ -47,6 +47,9 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
 
     const mostRecentMessage = values.messages ? values.messages[values.messages!.length - 1] : undefined;
 
+    console.log('Active Msg:', activeMessage?.message);
+    console.log('Values:', values);
+
     switch (node) {
       case "composer-replace":
         setComposerMessages((currentMessages) => {
@@ -69,8 +72,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             {
               from: "assistant",
               message: values.error ?? "Ut oh! Sorry but I seem to have failed processing your request. Please try again!",
-              files: values.files,
-              dependencies: values.dependencies
+              files: [],
             }
           ];
         });
@@ -83,10 +85,25 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             ...currentMessages,
             {
               from: "assistant",
-              message: "",
-              files: values.files,
-              dependencies: values.dependencies
+              message: mostRecentMessage?.kwargs.content || activeMessage?.message || "",
+              files: []
             }
+          ];
+        });
+        setLoading(false);
+        setActiveMessage(undefined);
+        break;
+      case "composer-files-done":
+        const lastMsg = (mostRecentMessage?.kwargs.role === "user" ? activeMessage?.message : mostRecentMessage?.kwargs.content) || "";
+
+        setComposerMessages((currentMessages) => {
+          return [
+            ...currentMessages,
+            {
+              from: "assistant",
+              message: lastMsg,
+              files: values.files
+            },
           ];
         });
         setLoading(false);
@@ -94,11 +111,10 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         break;
       case "composer-files":
         setLoading(true);
-        setActiveMessage((msg) => {
+        setActiveMessage((_) => {
           return {
             from: "assistant",
-            message: values.userIntent?.task ?? "",
-            ...msg ?? {},
+            message: activeMessage?.message || "",
             files: values.files
           }
         });
@@ -133,8 +149,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     const { data } = event;
     const { command, value } = data;
 
-    console.log("Composer:", command, value)
-
     switch (command) {
       case "validation-failed":
         setComposerMessages((messages) => {
@@ -167,17 +181,17 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const clearActiveMessage = () => {
-    setActiveMessage(undefined);
-    setLoading(false);
     setComposerMessages((currentMessages) => {
       return [
         ...currentMessages,
         {
           from: "assistant",
-          message: "",
+          message: activeMessage?.message ?? "",
         }
       ];
     });
+    setActiveMessage(undefined);
+    setLoading(false);
   }
 
   return (
