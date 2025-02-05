@@ -75,15 +75,28 @@ export class Ollama implements AIStreamProvider {
 	}
 
 	getModel(): BaseChatModel {
-		return this.baseModel!;
+		return new ChatOllama({
+			baseUrl: this.settings!.baseUrl,
+			model: this.settings!.chatModel,
+			maxRetries: 2,
+		})
 	}
 
 	getLightweightModel(): BaseChatModel {
-		return this.rerankModel!;
+		return new ChatOllama({
+			baseUrl: this.settings!.baseUrl,
+			model: this.settings!.chatModel,
+			maxRetries: 2,
+		})
 	}
 
 	getReasoningModel(params?: ModelParams): BaseChatModel {
-		return this.baseModel!;
+		return new ChatOllama({
+			baseUrl: this.settings!.baseUrl,
+			model: this.settings!.chatModel,
+			temperature: 0,
+			maxRetries: 2,
+		})
 	}
 
 	invoke(prompt: string) {
