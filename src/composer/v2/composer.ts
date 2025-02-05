@@ -32,7 +32,7 @@ export function cancelComposer() {
 }
 
 export class ComposerGraph {
-    private workflow: StateGraph<PlanExecuteState>;
+    private workflow: StateGraph<PlanExecuteState> | undefined;
 
     constructor(private readonly workspace: string,
         private readonly aiProvider: AIProvider,
@@ -41,7 +41,10 @@ export class ComposerGraph {
         private readonly validationSettings: ValidationSettings,
         private readonly config?: RunnableConfig,
         private readonly checkpointer?: BaseCheckpointSaver) {
+        this.compileGraph();
+    }
 
+    compileGraph = () => {
         const plannerAgent = createPlannerAgent(this.aiProvider, this.codeGraph, this.store, this.workspace);
         const codeWriter = new CodeWriter(this.aiProvider, this.workspace);
         const dependencyManager = new DependencyManager(this.aiProvider.getLightweightModel(), this.workspace);
@@ -113,21 +116,11 @@ export class ComposerGraph {
     }
 
     resetGraphState = async () => {
-        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
-        await graph.updateState({ ...this.config }, {
-            messages: [],
-            implementationPlan: undefined,
-            files: [],
-            scannedFiles: [],
-            error: undefined,
-            projectDetails: undefined,
-            image: undefined,
-            dependencies: undefined
-        } satisfies Partial<PlanExecuteState>);
+        this.compileGraph();
     }
 
     undoFile = async (file: FileMetadata) => {
-        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
         const relativePath = path.relative(this.workspace, file.path);
@@ -152,7 +145,7 @@ export class ComposerGraph {
     }
 
     rejectFile = async (file: FileMetadata): Promise<PlanExecuteState | undefined> => {
-        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
         const relativePath = path.relative(this.workspace, file.path);
@@ -180,7 +173,7 @@ export class ComposerGraph {
     }
 
     acceptFile = async (file: FileMetadata): Promise<PlanExecuteState | undefined> => {
-        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
         const relativePath = path.relative(this.workspace, file.path);
@@ -204,7 +197,7 @@ export class ComposerGraph {
     }
 
     removeFile = async (file: FileMetadata) => {
-        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
         const relativePath = path.relative(this.workspace, file.path);
@@ -225,7 +218,7 @@ export class ComposerGraph {
     }
 
     updateFile = async (file: FileMetadata) => {
-        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
         const relativePath = path.relative(this.workspace, file.path);
@@ -368,7 +361,7 @@ Answer (yes/no):`
         request: ComposerRequest,
     ) {
         controller = new AbortController();
-        const graph = this.workflow.compile({ checkpointer: this.checkpointer });
+        const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
 
         let inputs: Partial<PlanExecuteState> = {};
