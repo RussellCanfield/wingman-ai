@@ -50,3 +50,7 @@ export interface AIStreamProvider extends AIProvider {
 		recentClipboard?: string
 	): Promise<string>;
 }
+
+export const isOClassModel = (model?: string) => {
+	return model?.startsWith("o") ?? false;
+}

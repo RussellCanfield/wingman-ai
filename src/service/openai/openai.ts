@@ -4,7 +4,7 @@ import { OpenAIModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
-import { AIStreamProvider, ModelParams } from "../base";
+import { AIStreamProvider, isOClassModel, ModelParams } from "../base";
 import { ILoggingProvider } from "@shared/types/Logger";
 import { BaseMessage, ChatMessage, SystemMessage } from "@langchain/core/messages";
 import { AbortError } from "node-fetch";
@@ -44,15 +44,30 @@ export class OpenAI implements AIStreamProvider {
 	}
 
 	getModel(params?: ModelParams): BaseChatModel {
+		if (isOClassModel(this.settings?.chatModel) ||
+			isOClassModel(params?.model)) {
+			if (params) {
+				params.temperature = undefined;
+			}
+		}
+
 		return new ChatOpenAI({
 			apiKey: this.settings?.apiKey,
 			model: params?.model ?? this.settings?.chatModel,
 			openAIApiKey: this.settings?.apiKey,
-			temperature: this.settings?.chatModel.startsWith("o3") ? undefined : params?.temperature,
+			temperature: 0,
+			...(params ?? {})
 		});
 	}
 
 	getLightweightModel(params?: ModelParams): BaseChatModel {
+		if (isOClassModel(this.settings?.chatModel) ||
+			isOClassModel(params?.model)) {
+			if (params) {
+				params.temperature = undefined;
+			}
+		}
+
 		return new ChatOpenAI({
 			apiKey: this.settings?.apiKey,
 			model: "gpt-4o-mini",
@@ -63,10 +78,18 @@ export class OpenAI implements AIStreamProvider {
 	}
 
 	getReasoningModel(params?: ModelParams): BaseChatModel {
+		if (isOClassModel(this.settings?.chatModel) ||
+			isOClassModel(params?.model)) {
+			if (params) {
+				params.temperature = undefined;
+			}
+		}
+
 		return new ChatOpenAI({
 			apiKey: this.settings?.apiKey,
 			model: this.settings?.chatModel,
 			openAIApiKey: this.settings?.apiKey,
+			temperature: 0,
 			modelKwargs: this.settings?.chatModel.startsWith("o3") ? { reasoning_effort: "high" } : undefined,
 			verbose: true
 		});

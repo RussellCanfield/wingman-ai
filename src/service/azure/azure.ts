@@ -5,7 +5,6 @@ import { AzureAIModel } from "@shared/types/Models";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import {
 	AIMessage,
-	AIMessageChunk,
 	BaseMessage,
 	BaseMessageChunk,
 	HumanMessage,
@@ -14,13 +13,12 @@ import {
 import { AzureChatOpenAI } from "@langchain/openai";
 import { GPTModel } from "../openai/models/gptmodel";
 import { truncateChatHistory } from "../utils/contentWindow";
+import { isOClassModel } from '../base';
 
 export class AzureAI implements AIStreamProvider {
 	chatHistory: BaseMessage[] = [];
 	chatModel: AzureAIModel | undefined;
 	codeModel: AzureAIModel | undefined;
-	baseModel: BaseChatModel | undefined;
-	rerankModel: BaseChatModel | undefined;
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["AzureAI"],
@@ -37,31 +35,67 @@ export class AzureAI implements AIStreamProvider {
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
+	}
 
-		this.baseModel = new AzureChatOpenAI({
-			apiKey: this.settings.apiKey,
-			azureOpenAIApiKey: this.settings.apiKey,
-			azureOpenAIApiInstanceName: this.settings.instanceName,
-			model: this.settings.chatModel,
+	getModel(params?: ModelParams): BaseChatModel {
+		if (isOClassModel(this.settings?.chatModel) ||
+			isOClassModel(params?.model)) {
+			if (params) {
+				params.temperature = undefined;
+			}
+		}
+
+		return new AzureChatOpenAI({
+			apiKey: this.settings?.apiKey,
+			azureOpenAIApiKey: this.settings?.apiKey,
+			azureOpenAIApiInstanceName: this.settings?.instanceName,
+			model: this.settings?.chatModel,
 			temperature: 0, //Required for tool calling.
-			maxTokens: this.interactionSettings.chatMaxTokens,
-			openAIApiVersion: this.settings.apiVersion,
-			deploymentName: this.settings.chatModel,
+			openAIApiVersion: this.settings?.apiVersion,
+			deploymentName: this.settings?.chatModel,
+			...(params ?? {})
 		});
+	}
 
-		this.rerankModel = new AzureChatOpenAI({
-			apiKey: this.settings.apiKey,
-			azureOpenAIApiKey: this.settings.apiKey,
-			azureOpenAIApiInstanceName: this.settings.instanceName,
-			model: this.settings.chatModel,
-			temperature: 0,
-			openAIApiVersion: this.settings.apiVersion,
-			deploymentName: this.settings.chatModel,
+	getLightweightModel(params?: ModelParams): BaseChatModel {
+		if (isOClassModel(this.settings?.chatModel) ||
+			isOClassModel(params?.model)) {
+			if (params) {
+				params.temperature = undefined;
+			}
+		}
+
+		return new AzureChatOpenAI({
+			apiKey: this.settings?.apiKey,
+			azureOpenAIApiKey: this.settings?.apiKey,
+			azureOpenAIApiInstanceName: this.settings?.instanceName,
+			model: this.settings?.chatModel,
+			temperature: 0, //Required for tool calling.
+			openAIApiVersion: this.settings?.apiVersion,
+			deploymentName: this.settings?.chatModel,
+			...(params ?? {})
 		});
 	}
 
 	getReasoningModel(params?: ModelParams): BaseChatModel {
-		return this.baseModel!;
+		if (isOClassModel(this.settings?.chatModel) ||
+			isOClassModel(params?.model)) {
+			if (params) {
+				params.temperature = undefined;
+			}
+		}
+
+		return new AzureChatOpenAI({
+			apiKey: this.settings?.apiKey,
+			azureOpenAIApiKey: this.settings?.apiKey,
+			azureOpenAIApiInstanceName: this.settings?.instanceName,
+			model: this.settings?.chatModel,
+			temperature: 0, //Required for tool calling.
+			openAIApiVersion: this.settings?.apiVersion,
+			deploymentName: this.settings?.chatModel,
+			modelKwargs: this.settings?.chatModel.startsWith("o3") ? { reasoning_effort: "high" } : undefined,
+			...(params ?? {})
+		});
 	}
 
 	addMessageToHistory(input: string): void {
@@ -140,7 +174,10 @@ export class AzureAI implements AIStreamProvider {
 
 		let response: BaseMessageChunk | undefined;
 		try {
-			response = await this.baseModel!.invoke(
+			response = await this.getModel({
+				temperature: 0.2,
+				model: this.settings?.codeModel
+			})!.invoke(
 				[
 					new HumanMessage({
 						content: prompt.replace(
@@ -218,7 +255,7 @@ ${prompt}`
 		truncateChatHistory(6, this.chatHistory);
 
 		try {
-			const stream = await this.baseModel?.stream(messages, { signal })!;
+			const stream = await this.getModel()?.stream(messages, { signal })!;
 
 			let completeMessage = "";
 			for await (const chunk of stream) {
@@ -261,7 +298,9 @@ ${prompt}`
 
 		let response: BaseMessageChunk | undefined;
 		try {
-			response = await this.baseModel?.invoke(
+			response = await this.getModel({
+				temperature: 0.2
+			})?.invoke(
 				[new HumanMessage(systemPrompt)],
 				{ signal }
 			);
@@ -301,7 +340,9 @@ ${prompt}`
 
 		let response: BaseMessageChunk | undefined;
 		try {
-			response = await this.baseModel!.invoke(String(systemPrompt), {
+			response = await this.getModel({
+				temperature: 0.4
+			}).invoke(String(systemPrompt), {
 				signal,
 			});
 		} catch (error) {
@@ -316,17 +357,5 @@ ${prompt}`
 		);
 
 		return response.content.toString();
-	}
-
-	invoke(prompt: string): Promise<AIMessageChunk> {
-		return this.baseModel!.invoke(prompt);
-	}
-
-	getModel(): BaseChatModel {
-		return this.baseModel!;
-	}
-
-	getLightweightModel(): BaseChatModel {
-		return this.rerankModel!;
 	}
 }
