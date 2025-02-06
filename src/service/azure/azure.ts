@@ -55,7 +55,6 @@ export class AzureAI implements AIStreamProvider {
 			azureOpenAIApiInstanceName: this.settings.instanceName,
 			model: this.settings.chatModel,
 			temperature: 0,
-			maxTokens: 4096,
 			openAIApiVersion: this.settings.apiVersion,
 			deploymentName: this.settings.chatModel,
 		});
@@ -76,11 +75,11 @@ export class AzureAI implements AIStreamProvider {
 	validateSettings(): Promise<boolean> {
 		const isChatModelValid =
 			this.settings?.chatModel?.startsWith("gpt-4") ||
-			this.settings?.chatModel?.startsWith("o1") ||
+			this.settings?.chatModel?.startsWith("o") ||
 			false;
 		const isCodeModelValid =
 			this.settings?.codeModel?.startsWith("gpt-4") ||
-			this.settings?.codeModel?.startsWith("o1") ||
+			this.settings?.codeModel?.startsWith("o") ||
 			false;
 		return Promise.resolve(
 			isChatModelValid &&
@@ -92,14 +91,14 @@ export class AzureAI implements AIStreamProvider {
 
 	private getCodeModel(codeModel: string): AzureAIModel | undefined {
 		switch (true) {
-			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o1"):
+			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o"):
 				return new GPTModel();
 		}
 	}
 
 	private getChatModel(chatModel: string): AzureAIModel | undefined {
 		switch (true) {
-			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o1"):
+			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o"):
 				return new GPTModel();
 		}
 	}
