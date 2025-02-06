@@ -46,16 +46,16 @@ export class OpenAI implements AIStreamProvider {
 	getModel(params?: ModelParams): BaseChatModel {
 		if (isOClassModel(this.settings?.chatModel) ||
 			isOClassModel(params?.model)) {
-			if (params) {
-				params.temperature = undefined;
-			}
+			params = {
+				...(params ?? {}),
+				temperature: undefined
+			};
 		}
 
 		return new ChatOpenAI({
 			apiKey: this.settings?.apiKey,
 			model: params?.model ?? this.settings?.chatModel,
 			openAIApiKey: this.settings?.apiKey,
-			temperature: 0,
 			...(params ?? {})
 		});
 	}
@@ -63,35 +63,35 @@ export class OpenAI implements AIStreamProvider {
 	getLightweightModel(params?: ModelParams): BaseChatModel {
 		if (isOClassModel(this.settings?.chatModel) ||
 			isOClassModel(params?.model)) {
-			if (params) {
-				params.temperature = undefined;
-			}
+			params = {
+				...(params ?? {}),
+				temperature: undefined
+			};
 		}
 
 		return new ChatOpenAI({
 			apiKey: this.settings?.apiKey,
 			model: "gpt-4o-mini",
 			openAIApiKey: this.settings?.apiKey,
-			temperature: 0,
-			...params ?? {}
+			...(params ?? {})
 		});
 	}
 
 	getReasoningModel(params?: ModelParams): BaseChatModel {
 		if (isOClassModel(this.settings?.chatModel) ||
 			isOClassModel(params?.model)) {
-			if (params) {
-				params.temperature = undefined;
-			}
+			params = {
+				...(params ?? {}),
+				temperature: undefined
+			};
 		}
 
 		return new ChatOpenAI({
 			apiKey: this.settings?.apiKey,
 			model: this.settings?.chatModel,
 			openAIApiKey: this.settings?.apiKey,
-			temperature: 0,
 			modelKwargs: this.settings?.chatModel.startsWith("o3") ? { reasoning_effort: "high" } : undefined,
-			verbose: true
+			...(params ?? {})
 		});
 	}
 

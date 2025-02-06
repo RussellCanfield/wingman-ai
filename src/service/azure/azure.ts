@@ -40,9 +40,10 @@ export class AzureAI implements AIStreamProvider {
 	getModel(params?: ModelParams): BaseChatModel {
 		if (isOClassModel(this.settings?.chatModel) ||
 			isOClassModel(params?.model)) {
-			if (params) {
-				params.temperature = undefined;
-			}
+			params = {
+				...(params ?? {}),
+				temperature: undefined
+			};
 		}
 
 		return new AzureChatOpenAI({
@@ -50,7 +51,6 @@ export class AzureAI implements AIStreamProvider {
 			azureOpenAIApiKey: this.settings?.apiKey,
 			azureOpenAIApiInstanceName: this.settings?.instanceName,
 			model: this.settings?.chatModel,
-			temperature: 0, //Required for tool calling.
 			openAIApiVersion: this.settings?.apiVersion,
 			deploymentName: this.settings?.chatModel,
 			...(params ?? {})
@@ -60,9 +60,10 @@ export class AzureAI implements AIStreamProvider {
 	getLightweightModel(params?: ModelParams): BaseChatModel {
 		if (isOClassModel(this.settings?.chatModel) ||
 			isOClassModel(params?.model)) {
-			if (params) {
-				params.temperature = undefined;
-			}
+			params = {
+				...(params ?? {}),
+				temperature: undefined
+			};
 		}
 
 		return new AzureChatOpenAI({
@@ -70,7 +71,6 @@ export class AzureAI implements AIStreamProvider {
 			azureOpenAIApiKey: this.settings?.apiKey,
 			azureOpenAIApiInstanceName: this.settings?.instanceName,
 			model: this.settings?.chatModel,
-			temperature: 0, //Required for tool calling.
 			openAIApiVersion: this.settings?.apiVersion,
 			deploymentName: this.settings?.chatModel,
 			...(params ?? {})
@@ -80,9 +80,10 @@ export class AzureAI implements AIStreamProvider {
 	getReasoningModel(params?: ModelParams): BaseChatModel {
 		if (isOClassModel(this.settings?.chatModel) ||
 			isOClassModel(params?.model)) {
-			if (params) {
-				params.temperature = undefined;
-			}
+			params = {
+				...(params ?? {}),
+				temperature: undefined
+			};
 		}
 
 		return new AzureChatOpenAI({
@@ -90,7 +91,6 @@ export class AzureAI implements AIStreamProvider {
 			azureOpenAIApiKey: this.settings?.apiKey,
 			azureOpenAIApiInstanceName: this.settings?.instanceName,
 			model: this.settings?.chatModel,
-			temperature: 0, //Required for tool calling.
 			openAIApiVersion: this.settings?.apiVersion,
 			deploymentName: this.settings?.chatModel,
 			modelKwargs: this.settings?.chatModel.startsWith("o3") ? { reasoning_effort: "high" } : undefined,
