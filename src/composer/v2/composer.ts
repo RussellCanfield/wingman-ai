@@ -16,8 +16,9 @@ import { DependencyManager } from "./agents/dependency-manager";
 import { promises } from "node:fs";
 import { AIProvider } from "../../service/base";
 import { createPlannerAgent } from "./agents/find";
-import { ValidationSettings } from "@shared/types/Settings";
+import { Settings, ValidationSettings } from "@shared/types/Settings";
 import { Validator } from "./agents/validator";
+import { MidsceneTestAgent } from "./agents/midscene-test";
 
 export interface Thread {
     configurable: {
@@ -39,6 +40,7 @@ export class ComposerGraph {
         private readonly codeGraph: CodeGraph,
         private readonly store: Store,
         private readonly validationSettings: ValidationSettings,
+        private readonly settings: Settings,
         private readonly config?: RunnableConfig,
         private readonly checkpointer?: BaseCheckpointSaver) {
         this.compileGraph();
@@ -49,6 +51,7 @@ export class ComposerGraph {
         const codeWriter = new CodeWriter(this.aiProvider, this.workspace);
         const dependencyManager = new DependencyManager(this.aiProvider.getLightweightModel(), this.workspace);
         const validator = new Validator(this.aiProvider, this.validationSettings, this.workspace);
+        const midsceneTester = new MidsceneTestAgent(this.aiProvider, this.codeGraph, this.store, this.settings["providerSettings"], this.settings["validationSettings"], this.workspace);
 
         const planExecuteState: StateGraphArgs<PlanExecuteState>["channels"] = {
             messages: {
@@ -95,24 +98,27 @@ export class ComposerGraph {
                 ends: ["intent-review"]
             })
             .addNode("intent-review", this.intentReviewFeedback, {
-                ends: ["find", "dependency-manager", "code-writer"],
-            })
-            .addNode("dependency-manager", dependencyManager.addDependencies, {
-                ends: ["code-writer"]
+                ends: ["find", "code-writer"],
             })
             .addNode("code-writer", codeWriter.codeWriterStep, {
                 ends: ["review-files"]
             })
             .addNode("review-files", this.filesReviewed, {
-                ends: [END, "validator"]
+                ends: [END, "validator", "dependency-manager"]
+            })
+            .addNode("dependency-manager", dependencyManager.addDependencies, {
+                ends: ["validator"]
             })
             .addNode("validator", validator.validate, {
-                ends: ["find", END]
+                ends: ["find", "midscene-tester"]
+            })
+            .addNode("midscene-tester", midsceneTester.execute, {
+                ends: [END],
             })
             .addEdge(START, "find")
             .addEdge("find", "intent-review")
-            .addEdge("dependency-manager", "code-writer")
             .addEdge("code-writer", "review-files")
+            .addEdge("dependency-manager", "validator")
     }
 
     resetGraphState = async () => {
@@ -136,7 +142,7 @@ export class ComposerGraph {
 
         await graph.updateState({ ...this.config }, {
             files: [...graphFiles ?? []]
-        })
+        }, "code-writer")
 
         return {
             ...state.values,
@@ -164,7 +170,7 @@ export class ComposerGraph {
 
         await graph.updateState({ ...this.config }, {
             files: [...graphFiles ?? []]
-        })
+        }, "code-writer")
 
         return {
             ...state.values,
@@ -188,7 +194,7 @@ export class ComposerGraph {
 
         await graph.updateState({ ...this.config }, {
             files: [...graphFiles ?? []]
-        });
+        }, "code-writer");
 
         return {
             ...state.values,
@@ -209,7 +215,7 @@ export class ComposerGraph {
 
         await graph.updateState({ ...this.config }, {
             files: graphFiles?.filter(f => f.path !== relativePath)
-        });
+        }, "code-writer");
 
         return {
             ...state.values,
@@ -233,7 +239,7 @@ export class ComposerGraph {
 
         await graph.updateState({ ...this.config }, {
             files: [...graphFiles ?? []]
-        });
+        }, "code-writer");
 
         return {
             ...state.values,
@@ -306,6 +312,12 @@ Answer (yes/no):`
             return new Command({ goto: END });
         }
 
+        if (state.dependencies && state.dependencies?.length > 0) {
+            return new Command({
+                goto: "dependency-manager",
+            });
+        }
+
         if (this.validationSettings &&
             this.validationSettings.validationCommand &&
             acceptedCount + rejectedCount === state.files.length) {
@@ -330,15 +342,6 @@ Answer (yes/no):`
         const result = await this.determinePositiveAnswer(userMessage);
 
         if (result) {
-            if (state.dependencies && state.dependencies?.length > 0) {
-                return new Command({
-                    goto: "dependency-manager",
-                    update: {
-                        messages
-                    } satisfies Partial<PlanExecuteState>
-                })
-            }
-
             return new Command({
                 goto: "code-writer",
                 update: {

@@ -145,8 +145,8 @@ export const defaultAzureAIEmbeddingSettings: AzureAIEmbeddingSettingsType = {
 };
 
 export const defaultAnthropicSettings: ApiSettingsType = {
-	chatModel: "claude-3-5-sonnet-20240620",
-	codeModel: "claude-3-5-sonnet-20240620",
+	chatModel: "claude-3-5-sonnet-latest",
+	codeModel: "claude-3-5-haiku-latest",
 	baseUrl: "https://api.anthropic.com/v1",
 	apiKey: "",
 };
@@ -177,5 +177,6 @@ export type Settings = {
 	};
 	validationSettings: {
 		validationCommand?: string;
+		midsceneEnabled?: boolean;
 	};
 };

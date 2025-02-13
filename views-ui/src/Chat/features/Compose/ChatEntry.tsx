@@ -187,8 +187,7 @@ const ChatArtifact = ({
 							</span>
 						</div>
 					)}
-
-					{!file.code && loading && (
+					{!file.code && !file.diff && loading && (
 						<div className="flex justify-center mr-4">
 							<AiOutlineLoading3Quarters
 								className="animate-spin text-stone-400"

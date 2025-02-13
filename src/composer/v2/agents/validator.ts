@@ -14,15 +14,18 @@ const FILE_SEPARATOR = "<FILE_SEPARATOR>";
 const validatorPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on reviewing code changes.
 Your main goal is to validate code changes against an implementation plan.
 Do not mention tool names to the user.
+Provide a short and concise report on your validation results.
+Do not mention tool names to the user.
 
 **Analysis Rules:**
 - Verify that the code changes achieved the objective illustrated by the implementation plan
 - Verify the quality of the changes meet your standards
+- Verify the code is actually integrated properly into the application
 - Verify no extraneous code was removed, or the file was altered in a way outside of the scope of the implementation plan
 - Verify the validation command runs without error
 
 **Validation Command Result Handling:**
-- If the validation command indicates a non-zero exit code or the output indicates an error, provide a summary with details on how you might fix it
+- If the validation command indicates a non-zero exit code or the output indicates an error, provide a summary with details on how you might fix it but do not ask the user if they want it fixed, just say you will fix it and how
 - If the command exits with a 0 code and the output looks successful, reply and mention validation succeeded
 
 **Tools:**
@@ -154,12 +157,24 @@ export class Validator {
 			return buffer;
 		};
 
-		const buffer = await executeStep(true);
+		if (!this.validationSettings || !this.validationSettings.validationCommand) {
+			return {
+				messages: state.messages
+			}
+		}
+
+		let buffer = await executeStep(true);
 		if (!buffer && state.image) {
-			await executeStep(false);
+			buffer = await executeStep(false);
 		}
 
 		const messages: ChatMessage[] = [...state.messages, new ChatMessage(buffer || "", "assistant")];
+
+		await dispatchCustomEvent("composer-message-stream-finish",
+			{
+				messages
+			}
+		)
 
 		const decisionModel = this.aiProvider.getLightweightModel();
 		const didSucceed = await decisionModel.invoke(`You are a senior full-stack developer with exceptional technical expertise, focused on reviewing terminal output from a command.
@@ -184,8 +199,11 @@ Do not respond using markdown or any other format.`);
 			})
 		}
 
-		return {
-			messages
-		} satisfies Partial<PlanExecuteState>;
+		return new Command({
+			goto: "midscene-tester",
+			update: {
+				messages
+			}
+		})
 	}
 }

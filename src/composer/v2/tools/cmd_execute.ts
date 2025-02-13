@@ -19,7 +19,7 @@ const BLOCKED_COMMANDS = [
     'sudo', 'su'
 ];
 
-export const createCommandExecuteTool = (workspace: string) => {
+export const createCommandExecuteTool = (workspace: string, envVariables?: any, timeoutInMilliseconds: number = 60000) => {
     return new DynamicStructuredTool<typeof commandExecuteSchema>({
         name: "command_execute",
         description: "Executes a command in a terminal and reports the output",
@@ -36,7 +36,7 @@ export const createCommandExecuteTool = (workspace: string) => {
                         resolve("Command rejected: Contains potentially destructive operations");
                         return;
                     }
-
+                    5
                     if (commandLower.includes('.sh') ||
                         commandLower.includes('.bat') ||
                         commandLower.includes('.cmd')) {
@@ -53,7 +53,8 @@ export const createCommandExecuteTool = (workspace: string) => {
                         env: {
                             ...process.env,
                             FORCE_COLOR: "0",
-                            NO_COLOR: "1"
+                            NO_COLOR: "1",
+                            ...(envVariables ?? {})
                         },
                         windowsHide: true
                     });
@@ -67,7 +68,7 @@ export const createCommandExecuteTool = (workspace: string) => {
                             }
                             resolve('Command timed out after 60 seconds');
                         }
-                    }, 60000);
+                    }, timeoutInMilliseconds);
 
                     terminalProcess.stdout?.on('data', (data) => {
                         output += data.toString();

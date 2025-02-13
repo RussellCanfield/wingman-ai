@@ -10,7 +10,7 @@ const semanticSearchSchema = z.object({
 
 type SemanticSearchInput = z.infer<typeof semanticSearchSchema>;
 
-export const semanticSearchTool = (workspace: string, codeGraph: CodeGraph, vectorStore: Store) => {
+export const createSemanticSearchTool = (workspace: string, codeGraph: CodeGraph, vectorStore: Store) => {
     return new DynamicStructuredTool<typeof semanticSearchSchema>({
         name: "semantic_search_codebase",
         description: "Searches the codebase for files related to a concept or feature. Use this tool to discover relevant files when you don't know the exact file paths. Do not use this for reading dependency or configuration files.",

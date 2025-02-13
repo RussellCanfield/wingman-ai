@@ -139,6 +139,7 @@ export class LSPServer {
 			this.codeGraph!,
 			this.vectorStore!,
 			settings.validationSettings,
+			settings,
 			config,
 			memory
 		)

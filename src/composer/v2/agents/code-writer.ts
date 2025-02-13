@@ -15,7 +15,9 @@ import { AIProvider } from "../../../service/base";
 export type CodeResponse = FileMetadata & { markdownLanguage: string };
 
 const codeWriterPrompt = `You are a senior full-stack developer with exceptional technical expertise, focused on writing clean, maintainable code.
-For each file you modify, output two parts in sequence:
+You are a master at UX, when you write frontend code make the UI mind blowing!
+
+**For each file you modify, output two parts in sequence:**
 1. A one-line description of the changes for that file.
 2. The complete file block containing the updated code.
 3. In the response format, sections surrounded in [] are not to be used explicitly, replace the content
@@ -35,7 +37,7 @@ Code:
 
 -----
 
-VALIDATION RULES:
+## VALIDATION RULES:
 1. Each file block MUST contain exactly 3 fields: Path, Language, and Code
 2. Path should not be modified, use the provided current file path
 3. Language MUST be specified
@@ -45,16 +47,17 @@ VALIDATION RULES:
 7. All field values mentioned above in the file block are in a string format.
 8. Do not wrap any fields in quotes!
 
-Core Principles:
-1. Write simple, maintainable code - less code equals less debt
+## Core Principles:
+1. Write the least code possible to accomplish an objective, make it simple and maintainable - less code equals less debt
 2. Focus on readability over optimization
 3. Ensure code correctness and reliability
 4. Maintain existing patterns and conventions
 5. Make minimal, focused changes
 6. Do not remove existing code unless it is required to complete your change, do not break things - THIS IS CRITICAL!
-7. Be surgical, make the necessary changes only. Think very carefully before deleting code - stay focused.
+7. Be surgical, make the necessary changes only. Think very carefully before deleting code - stay focused
+8. Do not make meaningless changes to a file, every change should be made against the overall objective
 
-File Handling:
+## File Handling:
 1. Process one file at a time
 2. Only modify/create files relevant to objective
 3. Use provided file paths as reference
@@ -66,8 +69,11 @@ File Handling:
 9. Ensure human readability
 10. Preserve existing code structure
 
-Implementation Guidelines:
+## File References:
+1. If adding a reference to another file, ensure it exists or is part of the current implementation plan
+2. If adding a dependency, ensure it exists or is part of the current implementation plan
 
+## Implementation Guidelines:
 1. Code Structure
    - Use early returns to reduce nesting
    - Order functions logically
@@ -136,6 +142,36 @@ Implementation Guidelines:
     - Plan hot reload strategy
     - Consider development vs production configs
 
+## File Examples:
+1. 'rspack.config.ts'
+\`\`\`typescript
+import { defineConfig } from '@rsbuild/core';
+import { pluginReact } from '@rsbuild/plugin-react';
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  source: {
+    alias: {
+      '@': './src',
+    },
+  },
+  server: {
+    port: 3000,
+  },
+  html: {
+    title: 'Add title here',
+  },
+});
+\`\`\`
+2. 'postcss.config.cjs'
+\`\`\`javascript
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+  },
+};
+\`\`\`
+
 {{rulepack}}
 
 ------
@@ -143,16 +179,17 @@ Implementation Guidelines:
 Project details:
 {{projectdetails}}
 
-------
-
 Implementation plan:
 {{implementationplan}}
+
+Dependencies being added:
+{{dependencies}}
 
 ------
 
 {{modifiedfiles}}
 
-Files available for reference:
+Files that are part of the implementation plan or that are available for reference:
 {{availablefiles}}
 
 ------
@@ -347,6 +384,7 @@ class StreamParser {
 				fileUpdate.diff = await this.generateDiffFromModifiedCode(fileUpdate.code, filePath);
 			} catch (e) {
 				console.error('Unable to generate diff for:', fileUpdate.path, e);
+				fileUpdate.diff = '+0,-0';
 			}
 		}
 	}
@@ -419,6 +457,12 @@ export class CodeWriter {
 							`File: ${f.path}\nChanges Made: ${f.description}`
 						).join('\n')}`,
 					availablefiles: state.files
+						?.sort((a, b) => {
+							// Sort ANALYZE files first
+							if (a.type === "ANALYZE" && b.type !== "ANALYZE") return -1;
+							if (a.type !== "ANALYZE" && b.type === "ANALYZE") return 1;
+							return 0;
+						})
 						?.filter((f) => f.path !== file)
 						?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nDescription: ${f.description}\nCode:\n${f.code ?? "(New File)"}`)
 						.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
@@ -426,6 +470,7 @@ export class CodeWriter {
 					input: `Current file:\n${file === "BLANK"
 						? `No related files found. Working directory:\n${this.workspace}`
 						: `File:\n${file}\n\nCode:\n${code ?? "(New File)"}`}`,
+					dependencies: state.dependencies?.join('\n') ?? "None",
 					imageurl: state.image?.data
 				};
 
@@ -521,7 +566,7 @@ export class CodeWriter {
 			throw new Error("I've failed to generate any code changes for this session, if this continues please clear the chat and try again.");
 		}
 
-		await dispatchCustomEvent("composer-files-done", {
+		await dispatchCustomEvent("composer-message-stream-finish", {
 			files,
 			messages: state.messages
 		})

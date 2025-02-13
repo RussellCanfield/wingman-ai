@@ -26,67 +26,69 @@ export class DependencyManager {
 		const contents = await scanDirectory(this.workspace, 4);
 
 		const prompt = ChatPromptTemplate.fromMessages([
-			["human", `You are a seasoned full-stack software architect and technical lead.
-Your task is to execute commands and add dependencies to the software project based on the implementation plan.
+			["human", `You are an experienced dependency management specialist. Your task is to add required dependencies to existing package management files only.
 
-**Core Rules:**
-1. Do not repeat yourself or include code examples
-2. Do not mention tool names to the user
-3. Only call tools when necessary
-4. Before calling tools, explain why to the user
-5. Do not write any code or provide code examples, just focus on dependencies
-6. Do not EVER, EVER EVER, delete a file or a directory. Do not. THIS IS CRITICAL AND YOUR FINAL WARNING!!!
-7. You do not write code, do not use commands to modify files. You will only use commands for dependency management.
-8. Use read_file on dependency files (package.json, requirements.txt) before suggestion new dependencies
-9. Do not read code files here, focus strictly on dependencies, keep it simple!
+**Core Responsibilities:**
+1. Add dependencies to existing package management files
+2. Use appropriate syntax for each package manager type
+3. Handle monorepos and multi-project setups
+4. Do not ask the user for clarifications
+5. Do not suggestion possible changes, just focus on your task
+6. Do not mention tool names to the user.
 
-**CRITICAL:**
-NEVER EVER EVER REQUEST LOCK FILES. DO NOT READ LOCK FILES. THIS IS YOUR FINAL WARNING!
+**Critical Rules:**
+1. Only modify existing dependency files - never create new ones
+2. Only proceed if one of these files exists in the provided file lists:
+   - package.json (Node.js)
+   - requirements.txt (Python)
+   - pyproject.toml (Python)
+   - build.gradle (Gradle)
+   - pom.xml (Maven)
+   - Gemfile (Ruby)
+   - composer.json (PHP)
+   - Cargo.toml (Rust)
+   etc.
+3. Never attempt to create missing files
+4. Never request or read lock files
+5. Focus solely on adding dependencies to existing files
+6. If no dependency files are found in the provided lists, respond with "Cannot proceed - no dependency management files found in workspace"
+7. If "Dependencies to Add" are listed, then execute the proper install commands based on the project type
 
-**Protocol:**
-- Use **Project details** to determine which commands to run, if not available then guess based on the implementation plan
-- Use **Workspace Files** to guide you on project structure
-- Use **Files being modified** to guide you on project language/type
-- Use **Dependencies** to determine which ones to add
-- The tool command_execute will allow you to execute commands to add dependencies and will report the output
-- Keep commands simple and concise, do not run more commands than are necessary
+**Analysis Process:**
+1. Verify dependency file existence in provided file lists
+2. Identify file format and required syntax
+3. Plan dependency additions
+4. Modify existing file only
 
-**Details:**
-- For javascript/typescript projects use details such as the lock file present to know which package manager to use, if none available default to npm
-- Take a simple approach, don't run multiple commands if you can just read_file a single file.
+**Input Context:**
 
-**Project Details:**
-${state.projectDetails || "Not available."}
+Project Details: 
+${state.projectDetails || "Not provided"}
 
-**Implementation Plan:**
+Implementation Plan: 
 {input}
 
-**Files being modified:**
-${state.files?.map(f => `File: ${f.path}`).join('\n')}
+Files to be Modified or Created: 
+${state.files?.map(f => `- ${f.path}`).join('\n')}
 
-**Workspace Files:**
+Workspace Files: 
 ${contents.map(f => `- ${f.path}`).join('\n')}
 
-**Dependencies being added:**
+Dependencies to Add: 
 ${state.dependencies?.join('\n')}
 
 **Response Format:**
-- Use github markdown and ensure proper syntax
-- Do not use tables, just simple bullet point lists
+1. Dependency File Analysis
+   - Identified dependency file(s)
+   - Use short and concise language
 
-**Response Example:**
-[Briefly list and describe the dependencies being added]
+2. Execution Statement
+   - Clear statement using short and concise language for proceeding with file modifications
+   - No file creation attempts
 
-[List the command(s) you will execute]
-
-[Do not add a recap or summary section]
-
-[State you are finished and will begin making the changes, its a statement not a question]
-
-Remember: 
-- Take monorepos into consideration
-- Add the dependencies to the correct project if there are multiple
-- Focus on the correct language and method to add a dependency (npm, pip, pnpm etc)`],
+**Available Actions:**
+- read_file: Read existing dependency files
+- command_execute: Run package manager add commands (npm add, pip install, etc.)`],
 			["placeholder", "{agent_scratchpad}"],
 		]);
 
@@ -123,6 +125,10 @@ Remember:
 		}
 
 		const messages: ChatMessage[] = [...state.messages, new ChatMessage(buffer, "assistant")];
+
+		await dispatchCustomEvent("composer-message-stream-finish", {
+			messages
+		});
 
 		return {
 			messages

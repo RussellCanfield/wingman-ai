@@ -69,7 +69,7 @@ export class Anthropic implements AIStreamProvider {
 		return new ChatAnthropic({
 			apiKey: this.settings?.apiKey,
 			anthropicApiKey: this.settings?.apiKey,
-			model: "claude-3-5-haiku-20241022",
+			model: "claude-3-5-haiku-latest",
 			temperature: 0,
 			maxTokens: 8192,
 			...params
@@ -80,7 +80,7 @@ export class Anthropic implements AIStreamProvider {
 		return new ChatAnthropic({
 			apiKey: this.settings?.apiKey,
 			anthropicApiKey: this.settings?.apiKey,
-			model: "claude-3-5-haiku-20241022",
+			model: "claude-3-5-haiku-latest",
 			temperature: 0,
 			maxTokens: 8192,
 			verbose: params?.verbose

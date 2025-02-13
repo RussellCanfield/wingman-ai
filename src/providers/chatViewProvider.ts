@@ -567,7 +567,7 @@ ${commitReview}
 										)) || ""
 									)).length
 								})
-							}, 0);
+							}, 50);
 							this.showView(this._launchView);
 							break;
 						}

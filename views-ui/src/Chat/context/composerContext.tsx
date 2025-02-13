@@ -124,7 +124,8 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             ...currentMessages,
             {
               from: "assistant",
-              message: mostRecentMessage?.kwargs.content || activeMessage?.message || "",
+              message: activeMessage?.message || lastSafeAssistantMsg,
+              files: activeMessage?.files ?? values.files ?? []
             }
           ];
         });
