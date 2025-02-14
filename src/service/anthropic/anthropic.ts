@@ -71,7 +71,7 @@ export class Anthropic implements AIStreamProvider {
 			anthropicApiKey: this.settings?.apiKey,
 			model: "claude-3-5-haiku-latest",
 			temperature: 0,
-			maxTokens: 8192,
+			maxTokens: this.interactionSettings?.chatMaxTokens,
 			...params
 		});
 	}
@@ -82,7 +82,7 @@ export class Anthropic implements AIStreamProvider {
 			anthropicApiKey: this.settings?.apiKey,
 			model: "claude-3-5-haiku-latest",
 			temperature: 0,
-			maxTokens: 8192,
+			maxTokens: this.interactionSettings?.chatMaxTokens,
 			verbose: params?.verbose
 		});
 	}

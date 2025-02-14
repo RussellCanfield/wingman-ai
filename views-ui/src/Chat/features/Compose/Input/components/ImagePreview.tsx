@@ -27,32 +27,33 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ imageUrl, onRemove }) => {
 		>
 			{isLoading && (
 				<div
-					className="w-[200px] h-[150px] bg-gray-200 animate-pulse rounded-lg"
+					className="w-[160px] h-[120px] bg-gray-200 animate-pulse rounded-lg"
 					aria-label="Loading image..."
 				/>
 			)}
 			{hasError ? (
 				<div
-					className="w-[200px] h-[150px] flex items-center justify-center bg-red-100 text-red-500 rounded-lg"
+					className="w-[160px] h-[120px] flex items-center justify-center bg-red-100 text-red-500 rounded-lg"
 					aria-label="Failed to load image"
 				>
 					Failed to load image
 				</div>
 			) : (
 				<div className="pl-2 relative text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] rounded-md p-2 flex gap-2">
-					<img
-						src={imageUrl}
-						alt="Preview"
-						crossOrigin="anonymous"
-						className={`max-w-[200px] max-h-[150px] rounded-lg object-cover pointer-events-none ${
-							isLoading ? "opacity-0" : "opacity-100"
-						}`}
-						onLoad={handleImageLoad}
-						onError={handleImageError}
-					/>
+					<div className="w-[160px] h-[120px] flex items-center justify-center overflow-hidden">
+						<img
+							src={imageUrl}
+							alt="Preview"
+							crossOrigin="anonymous"
+							className={`w-full h-full rounded-lg object-contain pointer-events-none select-none ${isLoading ? "opacity-0" : "opacity-100"
+								}`}
+							onLoad={handleImageLoad}
+							onError={handleImageError}
+						/>
+					</div>
 					<button
 						onClick={onRemove}
-						className="top-1 right-1 flex items-center justify-center w-6 h-6 p-0 border-none rounded-full bg-black/70 text-white cursor-pointer transition-all duration-200 ease-in-out shadow-md hover:bg-black/85 hover:shadow-lg pointer-events-auto z-10"
+						className="absolute top-1 right-1 flex items-center justify-center w-6 h-6 p-0 border-none rounded-full bg-black/70 text-white cursor-pointer transition-all duration-200 ease-in-out shadow-md hover:bg-black/85 hover:shadow-lg pointer-events-auto z-10"
 						aria-label="Remove image"
 						title="Remove image"
 						tabIndex={0}

@@ -12,6 +12,73 @@ import { ImagePreview } from "./components/ImagePreview";
 import { useSettingsContext } from "../../../context/settingsContext";
 import { useComposerContext } from "../../../context/composerContext";
 
+const MAX_WIDTH = 1024; // Maximum width for compressed image
+const MAX_HEIGHT = 1024; // Maximum height for compressed image
+const QUALITY = 0.8; // Image quality (0 to 1)
+
+const dataUrlToFile = (dataUrl: string, fileName: string): File => {
+	const arr = dataUrl.split(',');
+	const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+	const bstr = atob(arr[1]);
+	let n = bstr.length;
+	const u8arr = new Uint8Array(n);
+
+	while (n--) {
+		u8arr[n] = bstr.charCodeAt(n);
+	}
+
+	return new File([u8arr], fileName, { type: mime });
+};
+
+const compressImage = (file: File): Promise<string> => {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		const reader = new FileReader();
+
+		reader.onload = (e) => {
+			img.src = e.target?.result as string;
+
+			img.onload = () => {
+				let width = img.width;
+				let height = img.height;
+
+				if (width > height) {
+					if (width > MAX_WIDTH) {
+						height = Math.round((height * MAX_WIDTH) / width);
+						width = MAX_WIDTH;
+					}
+				} else {
+					if (height > MAX_HEIGHT) {
+						width = Math.round((width * MAX_HEIGHT) / height);
+						height = MAX_HEIGHT;
+					}
+				}
+
+				const canvas = document.createElement('canvas');
+				canvas.width = width;
+				canvas.height = height;
+
+				const ctx = canvas.getContext('2d');
+				if (!ctx) {
+					reject(new Error('Failed to get canvas context'));
+					return;
+				}
+
+				ctx.drawImage(img, 0, 0, width, height);
+
+				// Convert directly to data URL
+				const dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
+				resolve(dataUrl);
+			};
+
+			img.onerror = () => reject(new Error('Failed to load image'));
+		};
+
+		reader.onerror = () => reject(new Error('Failed to read file'));
+		reader.readAsDataURL(file);
+	});
+};
+
 interface ChatInputProps {
 	onChatSubmitted: (
 		input: string,
@@ -99,16 +166,27 @@ const ChatInput = ({
 		}
 	};
 
-	const handleImageSelect = (file: File) => {
+	const handleImageSelect = async (file: File) => {
 		if (!file.type.startsWith("image/")) {
 			return;
 		}
-		setSelectedImage(file);
-		const reader = new FileReader();
-		reader.onloadend = () => {
-			setImagePreview(reader.result as string);
-		};
-		reader.readAsDataURL(file);
+
+		try {
+			const compressedDataUrl = await compressImage(file);
+			const compressedFile = dataUrlToFile(compressedDataUrl, file.name);
+
+			setSelectedImage(compressedFile); // Store compressed file for upload
+			setImagePreview(compressedDataUrl);
+		} catch (error) {
+			console.error('Error compressing image:', error);
+			// Fallback to original file
+			const reader = new FileReader();
+			reader.onloadend = () => {
+				setSelectedImage(file);
+				setImagePreview(reader.result as string);
+			};
+			reader.readAsDataURL(file);
+		}
 	};
 
 	const handleImageUpload = () => {
