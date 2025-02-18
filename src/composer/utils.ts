@@ -40,6 +40,7 @@ export async function scanDirectory(dir: string, maxDepth: number, cwd?: string)
 		'.git',
 		'.vscode',
 		'.idea',
+		'.DS_Store',
 		'node_modules',
 		'dist',
 		'build'

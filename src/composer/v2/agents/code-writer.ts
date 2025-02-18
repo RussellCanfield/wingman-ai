@@ -20,14 +20,16 @@ You are a master at UX, when you write frontend code make the UI mind blowing!
 **For each file you modify, output two parts in sequence:**
 1. A one-line description of the changes for that file.
 2. The complete file block containing the updated code.
-3. In the response format, sections surrounded in [] are not to be used explicitly, replace the content
+3. In the response format below, follow instructions surrounded in [] but do not include the brackets in your actual response!!!
 
 **CRITICAL RESPONSE FORMAT - FOLLOW EXACTLY:**
 
-For each file, first output a description line in the following format (do not wrap it in any additional markers):
-[Brief summary of the changes made to the file]
+For each file, first output a brief summary of the changes made to the file:
+
+[Summary here]
 
 Then, immediately output the file block exactly in the format below:
+
 ===FILE_START===
 Path: [Workspace relative file path]
 Language: [Programming language]
@@ -428,7 +430,9 @@ export class CodeWriter {
 			});
 
 			await dispatchCustomEvent('composer-files', { files: [] });
-			for (let { path: file, code } of state.files ?? []) {
+
+			const filesToCreateOrModify = state.files?.filter(f => !f.type || f.type !== 'ANALYZE');
+			for (let { path: file, code } of filesToCreateOrModify ?? []) {
 				const systemTemplate = PromptTemplate.fromTemplate(codeWriterPrompt,
 					{ templateFormat: "mustache" }
 				);
@@ -464,7 +468,7 @@ export class CodeWriter {
 							return 0;
 						})
 						?.filter((f) => f.path !== file)
-						?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nDescription: ${f.description}\nCode:\n${f.code ?? "(New File)"}`)
+						?.map((f) => `${FILE_SEPARATOR}\nFile: ${f.path}\nDescription: ${f.description ?? "File included for reference."}\nCode:\n${f.code ?? "(New File)"}`)
 						.join(`\n\n${FILE_SEPARATOR}\n\n`) || "",
 					rulepack: rulePack || "No extra rules provided",
 					input: `Current file:\n${file === "BLANK"

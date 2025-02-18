@@ -1,10 +1,9 @@
-import { Connection, createConnection, DeleteFilesParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams, FileChangeType, RenameFilesParams } from "vscode-languageserver/node";
+import { Connection, createConnection, DeleteFilesParams, DidChangeTextDocumentParams, RenameFilesParams, Disposable } from "vscode-languageserver/node";
 import { DocumentQueue } from "../queue";
 import { Store } from "../../store/vector";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { minimatch } from 'minimatch';
-import { Disposable } from "vscode-languageserver/node";
 import { filePathToUri } from "./utils";
 
 export class LSPFileEventHandler {
@@ -30,7 +29,6 @@ export class LSPFileEventHandler {
 
     private async shouldProcessFile(filePath: string): Promise<boolean> {
         const relativePath = path.relative(this.workspaceFolders[0], filePath);
-
         try {
             return minimatch(relativePath, this.inclusionFilter, {
                 dot: true,
@@ -64,14 +62,21 @@ export class LSPFileEventHandler {
 
     private async handleFileRename(event: RenameFilesParams) {
         try {
-            const filesToProcess = await Promise.all(
-                event.files.filter(async file =>
-                    await this.shouldProcessFile(fileURLToPath(file.oldUri)) &&
-                    await this.shouldProcessFile(fileURLToPath(file.newUri))
-                )
+            // Use map to process each file with your async check, then filter the valid ones.
+            const filesWithCheck = await Promise.all(
+                event.files.map(async file => {
+                    const oldOk = await this.shouldProcessFile(fileURLToPath(file.oldUri));
+                    const newOk = await this.shouldProcessFile(fileURLToPath(file.newUri));
+                    return (oldOk && newOk) ? file : null;
+                })
             );
+            const filesToProcess = filesWithCheck
+                .filter((file): file is { oldUri: string; newUri: string } => file !== null)
+                .map(file => file.newUri);
 
-            this.queue?.enqueue(filesToProcess.map((file) => file.newUri));
+            if (filesToProcess.length > 0) {
+                this.queue?.enqueue(filesToProcess);
+            }
         } catch (error) {
             this.connection.console.error(`Error handling rename: ${error}`);
         } finally {
@@ -81,32 +86,30 @@ export class LSPFileEventHandler {
 
     private async handleFileDelete(event: DeleteFilesParams) {
         try {
-            const filesToProcess = await Promise.all(
+            const filesWithCheck = await Promise.all(
                 event.files.map(async file => {
                     const filePath = fileURLToPath(file.uri);
 
-                    // Check if this was a directory deletion
+                    // Check if this was a directory deletion.
                     if (path.extname(filePath).length === 0) {
-                        const folderPath = filePath.replace(/\/$/, ''); // Remove trailing slash
+                        const folderPath = filePath.replace(/\/$/, ''); // Remove trailing slash.
                         const filesInFolder = await this.vectorStore.getAllFilesByPrefix(folderPath);
-
                         if (filesInFolder.length > 0) {
-                            // Convert file paths back to URIs
+                            // Convert file paths back to URIs.
                             return filesInFolder.map(filePath => filePathToUri(filePath));
                         }
                         return null;
                     }
 
-                    // Regular file deletion
+                    // Regular file deletion.
                     if (await this.shouldProcessFile(filePath)) {
                         return [file.uri];
                     }
-
                     return null;
                 })
             );
 
-            const validFiles = filesToProcess
+            const validFiles = filesWithCheck
                 .filter((files): files is string[] => files !== null)
                 .flat();
 
@@ -123,7 +126,6 @@ export class LSPFileEventHandler {
     private async handleFileChanges(event: DidChangeTextDocumentParams) {
         try {
             if (!(await this.shouldProcessFile(fileURLToPath(event.textDocument.uri)))) return;
-
             this.queue?.enqueue([event.textDocument.uri]);
         } catch (error) {
             this.connection.console.error(`Error handling changes: ${error}`);

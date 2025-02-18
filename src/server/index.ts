@@ -297,6 +297,10 @@ export class LSPServer {
 			try {
 				await this.postInitialize();
 
+				if (this.fileEventHandler) {
+					this.fileEventHandler.dispose();
+				}
+
 				this.fileEventHandler = new LSPFileEventHandler(
 					//@ts-expect-error
 					this.connection,

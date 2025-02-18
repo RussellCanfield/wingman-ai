@@ -21,6 +21,7 @@ export class PlannerAgent {
     private readonly model: BaseChatModel;
     private dependencies: Set<string> = new Set();
     private analyzedFiles: Map<string, FileMetadata> = new Map();
+    private relatedFiles: Set<string> = new Set();
     private fileContentBuffer: string = '';
 
     constructor(
@@ -45,9 +46,36 @@ export class PlannerAgent {
 
         // Process both sections
         this.processFilesInScope();
+        this.processRelatedFiles();
         this.processDependencies();
 
         return;
+    }
+
+    private processRelatedFiles() {
+        // Match the entire Related Files section
+        const sectionRegex =
+            /###\s*Related\s*Files\s*\n([\s\S]*?)(?=###|$)/i;
+        const sectionMatch = sectionRegex.exec(this.fileContentBuffer);
+
+        if (sectionMatch) {
+            const sectionContent = sectionMatch[1].trim();
+            // Regex to extract the file paths from lines like "- File: `file path`"
+            const fileEntryRegex = /[-*•]\s*File:\s*[`'"]*([^`'"]+)[`'"]*/gi;
+            let match;
+
+            while ((match = fileEntryRegex.exec(sectionContent)) !== null) {
+                const filePath = match[1].trim();
+                if (filePath) {
+                    this.relatedFiles.add(filePath);
+                }
+            }
+
+            // Remove the processed section from the buffer
+            this.fileContentBuffer = this.fileContentBuffer
+                .replace(sectionMatch[0], "")
+                .trim();
+        }
     }
 
     private processFilesInScope() {
@@ -130,6 +158,8 @@ export class PlannerAgent {
     invoke = async (state: PlanExecuteState) => {
         this.analyzedFiles.clear();
         this.dependencies.clear();
+        this.relatedFiles.clear();
+
         this.fileContentBuffer = '';
 
         const contents = await scanDirectory(this.workspace, 12);
@@ -146,7 +176,8 @@ To complete this task effectively, you have access to these tools:
 - read_file: Reads the exact contents of a specific file. Use this tool when you need to check: 1) dependency management files (package.json, pnpm-workspace.yaml, etc.), 2) configuration files, or 3) a specific file you already know the path to.
 
 ALWAYS use these tools before making any recommendations. You must:
-1. Search the codebase first using semantic_search_codebase.
+1. Search the codebase first using semantic_search_codebase
+    - If no appropriate files are found, look for files by name under the "Workspace Files" section and use the read_file tool
 2. Read important files using read_file.
 3. Use read_file specifically to check dependency files (pnpm-workspace.yaml, package.json, requirements.txt) and analyze their contents.
 4. Only after gathering information, provide your plan.
@@ -167,6 +198,58 @@ ${projectDetails}
 3. Only call tools when necessary.
 4. Before calling tools, explain why you are doing so.
 5. Do not write any code or provide code examples.
+
+## File Selection Priority
+1. Active Context (Highest Priority)
+    - Recently modified files matching the request
+    - User provided files from the conversation
+    - Files mentioned in the current implementation plan
+    - These files are most likely to be relevant as they represent active work
+    - These may not always be the best match, look for conversational shifts
+
+2. Semantic Context (Medium Priority)
+    - Files with matching functionality or purpose
+    - Shared dependencies with active files
+    - Files in similar component categories
+    - Only consider if active context files don't fully solve the request
+
+3. Workspace Search (Lower Priority)
+    - Only search here if no matches found above
+    - Look for files matching the technical requirements
+    - Consider common patterns and structures
+
+## Detect Explicit File References
+1. The may reference files indirectly
+2. File References are for ANALYSIS REASONS ONLY! These files do not get modified or created
+3. Do not include a File Reference if the file is already selected for modification or creation
+4. Identify key actionable phrases in the conversation, such as:
+    - "Write tests for xyz"
+    - "Create a new component based on xyz"
+    - "Add implementation for xyz"
+    - "Update xyz"
+    - "Fix xyz"
+    - "Modify xyz"
+    - "Check xyz"
+    - "Review xyz"
+    - "Look at xyz"
+    - "Show me xyz"
+5. Use fuzzy matching to identify potential file references:
+    - Match partial file names (e.g., "index" → "src/index.ts")
+    - Match without extensions (e.g., "UserComponent" → "UserComponent.tsx")
+    - Match basename only (e.g., "auth" → "src/services/auth.service.ts")
+6. If there is a close match for a file under "Workspace Files":
+    1. Compare the mentioned name against all workspace files
+    2. Score matches based on:
+        - Exact matches (highest priority)
+        - Partial matches at the start of the filename
+        - Partial matches anywhere in the filename
+        - Matches without considering file extension
+    3. Reference the best matching file
+7. Add these files as targets under the "### Related Files" response section
+8. When multiple files match, include all relevant matches
+    - Consider context to disambiguate similar file names
+
+**CRITICAL - The "### Related Files" section MUST ONLY appear if file references are present**
 
 ## Project Creation Guidelines
 For new projects, ensure COMPLETE setup with ALL required files and configurations:
@@ -285,19 +368,6 @@ YOU MUST CHOOSE A BUNDLER/BUILD TOOL! DO NOT LEAVE THIS OUT OR THE PROGRAM CRASH
 - Best practices for development, testing, and deployment.
 - **Actionable Steps:** Ensure that the blueprint is comprehensive enough for a developer to set up the project immediately, including code snippets or sample configuration files where applicable.
 
-**CRITICAL RESPONSE FORMAT - FOLLOW EXACTLY:**
-[Brief acknowledgment of the user's request]
-
-### Implementation Plan
-[Numbered list of technical steps]
-
-### Required File Changes
-- File: \`[exact file path]\`
-- Analysis: [single line description]
-
-[Optional] ### New Dependencies
-- [package-name]@[version]
-
 **File Changes Format Rules:**
 1. Each file entry MUST follow this exact format:
 - File: \`path/to/file\`
@@ -358,7 +428,8 @@ Generate complete configurations for:
 5. Ensure all new dependency suggestions have been analyzed using read_file.
 
 **IMPORTANT!**
-Files that require modification or creation, especially those found via semantic_search_codebase, must be included in the "### Required File Changes" section.
+- Files that require modification or creation, especially those found via semantic_search_codebase, must be included in the "### Required File Changes" section.
+- Files that are referenced must be included in the "### Related Files" section.
 
 **Integration Analysis Protocol:**
 
@@ -445,54 +516,6 @@ Files that require modification or creation, especially those found via semantic
 
 **DO NOT SUGGEST A DEPENDENCY THE USER ALREADY HAS!**
 
-### File Selection Priority
-
-1. Active Context (Highest Priority)
-    - Recently modified files matching the request
-    - User provided files from the conversation
-    - Files mentioned in the current implementation plan
-    - These files are most likely to be relevant as they represent active work
-    - These may not always be the best match, look for conversational shifts
-
-2. Semantic Context (Medium Priority)
-    - Files with matching functionality or purpose
-    - Shared dependencies with active files
-    - Files in similar component categories
-    - Only consider if active context files don't fully solve the request
-
-3. Workspace Search (Lower Priority)
-    - Only search here if no matches found above
-    - Look for files matching the technical requirements
-    - Consider common patterns and structures
-
-4. Detect Explicit File References
-    - Identify key actionable phrases in the conversation, such as:
-      - "Write tests for xyz"
-      - "Create a new component based on xyz"
-      - "Add implementation for xyz"
-      - "Update xyz"
-      - "Fix xyz"
-      - "Modify xyz"
-      - "Check xyz"
-      - "Review xyz"
-      - "Look at xyz"
-      - "Show me xyz"
-    - Use fuzzy matching to identify potential file references:
-      - Match partial file names (e.g., "index" → "src/index.ts")
-      - Match without extensions (e.g., "UserComponent" → "UserComponent.tsx")
-      - Match basename only (e.g., "auth" → "src/services/auth.service.ts")
-    - If there is a close match for a file under "Available workspace files":
-      1. Compare the mentioned name against all available files
-      2. Score matches based on:
-         - Exact matches (highest priority)
-         - Partial matches at the start of the filename
-         - Partial matches anywhere in the filename
-         - Matches without considering file extension
-      3. Reference the best matching file
-    - Add these files as targets with type "ANALYZE"
-    - When multiple files match, include all relevant matches
-    - Consider context to disambiguate similar file names
-
 -------
 
 **CRITICAL RESPONSE RULES:**
@@ -501,9 +524,10 @@ Files that require modification or creation, especially those found via semantic
 - File Analysis should be a single line with a description of the changes.
 - Do not include a description or reason for New Dependencies, just the name (if any).
 - Use GitHub markdown syntax to format the response elegantly.
+- There can never be the same file referenced in Required File Changes and Related Files. Either a file needs changes or it doesn't.
 
-**RESPONSE FORMAT:**
-[Brief acknowledgment]
+**CRITICAL RESPONSE FORMAT - FOLLOW EXACTLY:**
+[Brief acknowledgment of the user's request]
 
 [Report tool progress with simple informational statements]
 
@@ -514,7 +538,11 @@ Files that require modification or creation, especially those found via semantic
 - File: \`file path\`
 - Analysis: [description of changes, not using a list format]
 
-[Only include the New Dependencies section if verified new ones are needed]
+### Related Files
+- File: \`[exact file path]\`
+
+### New Dependencies
+- [package-name]@[version]
 
 Would you like me to proceed with this implementation plan?
 
@@ -604,6 +632,26 @@ ${formatMessages(state.messages)}`
             if (fs.existsSync(absolutePath)) {
                 file.code = (await promises.readFile(absolutePath)).toString();
             }
+        }
+
+        for (const file of this.relatedFiles) {
+            const sanitizedPath = file.replaceAll('`', '');
+
+            if (this.analyzedFiles.has(sanitizedPath)) continue;
+
+            const absolutePath = path.isAbsolute(sanitizedPath) ?
+                sanitizedPath : path.join(this.workspace, sanitizedPath);
+
+            const fileMetadata: FileMetadata = {
+                path: sanitizedPath,
+                type: 'ANALYZE'
+            }
+
+            if (fs.existsSync(absolutePath)) {
+                fileMetadata.code = (await promises.readFile(absolutePath)).toString();
+            }
+
+            this.analyzedFiles.set(sanitizedPath, fileMetadata);
         }
 
         return {

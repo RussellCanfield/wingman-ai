@@ -15,7 +15,7 @@ const validatorPrompt = `You are a senior full-stack developer with exceptional 
 Your main goal is to validate code changes against an implementation plan.
 Do not mention tool names to the user.
 Provide a short and concise report on your validation results.
-Do not mention tool names to the user.
+Do not mention exit codes or low level details to the user.
 
 **Analysis Rules:**
 - Verify that the code changes achieved the objective illustrated by the implementation plan
@@ -25,7 +25,9 @@ Do not mention tool names to the user.
 - Verify the validation command runs without error
 
 **Validation Command Result Handling:**
-- If the validation command indicates a non-zero exit code or the output indicates an error, provide a summary with details on how you might fix it but do not ask the user if they want it fixed, just say you will fix it and how
+- If the validation command indicates a non-zero exit code or the output indicates an error:
+	- Provide a summary with details on how you might fix it but do not ask the user if they want it fixed, just say you will fix it and how
+	- Be specific in exactly how you'd fix it based on the errors, outline specific errors capture in the response in a concise way
 - If the command exits with a 0 code and the output looks successful, reply and mention validation succeeded
 
 **Tools:**
@@ -170,12 +172,6 @@ export class Validator {
 
 		const messages: ChatMessage[] = [...state.messages, new ChatMessage(buffer || "", "assistant")];
 
-		await dispatchCustomEvent("composer-message-stream-finish",
-			{
-				messages
-			}
-		)
-
 		const decisionModel = this.aiProvider.getLightweightModel();
 		const didSucceed = await decisionModel.invoke(`You are a senior full-stack developer with exceptional technical expertise, focused on reviewing terminal output from a command.
 The following command was executed: ${this.validationSettings?.validationCommand ?? ""}
@@ -189,6 +185,12 @@ Respond with a "1" if the command succeeded, respond with a "0" if the command f
 
 Do not include any other content or explanations.
 Do not respond using markdown or any other format.`);
+
+		await dispatchCustomEvent("composer-message-stream-finish",
+			{
+				messages
+			}
+		)
 
 		if (didSucceed.content.toString().includes("0")) {
 			return new Command({
