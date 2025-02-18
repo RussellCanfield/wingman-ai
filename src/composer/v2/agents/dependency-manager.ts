@@ -103,7 +103,8 @@ ${state.dependencies?.join('\n')}
 			tools: this.tools
 		});
 
-		let buffer = '';
+		let buffer = 'Analyzing dependencies...\n';
+		await dispatchCustomEvent("composer-message-stream", buffer);
 		for await (const event of await executor.streamEvents(
 			{ input: state.implementationPlan },
 			{ version: "v2" }

@@ -585,6 +585,7 @@ ${contents.map(f => `- ${f.path}`).join('\n')}
         });
 
         let buffer = '';
+        await dispatchCustomEvent("composer-message-stream", buffer);
         for await (const event of await executor.streamEvents(
             {
                 input: `Use the following conversation, sorted oldest to newest to guide you in generating your plan.

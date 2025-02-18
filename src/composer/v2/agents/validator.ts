@@ -64,7 +64,7 @@ export class Validator {
 	validate = async (state: PlanExecuteState) => {
 		const executeStep = async (includeImage: boolean) => {
 			const humanMsg = [];
-			let buffer = '';
+			let buffer = 'Validating changes...\n';
 
 			if (includeImage && state.image) {
 				humanMsg.push({
@@ -121,6 +121,8 @@ export class Validator {
 					agent,
 					tools: this.tools
 				});
+
+				await dispatchCustomEvent("composer-message-stream", buffer);
 
 				for await (const event of await executor.streamEvents(
 					variables,
