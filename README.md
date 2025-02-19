@@ -17,15 +17,11 @@ Wingman has the ability to index your entire codebase and generate local LLM emb
 </center>
 
 <p align="center">
-    <video autoplay loop muted playsinline>
-        <source src="./docs-site/docs/public/Wingman_ChatVideo.mp4" type="video/mp4">
-    </video>
+  <img src="./docs-site/docs/public/Wingman_ChatVideo.gif" alt="Chat Demo">
 </p>
 
 <p align="center">
-    <video autoplay loop muted playsinline>
-        <source src="./docs-site/docs/public/Wingman_ComposeVideo.mp4" type="video/mp4">
-    </video>
+  <img src="./docs-site/docs/public/Wingman_ComposeVideo.gif" alt="Compose Demo">
 </p>
 
 <h2 align="center">Documentation</h2>
@@ -49,7 +45,7 @@ Real-time code suggestions as you type
 <h3>Chat</h3>
 Ask questions about your codebase with an interactive real-time chat
 <h3>Composer</h3>
-Write enhancements, new features and more with cutting edge, self-reviewed and validated code
+Write enhancements, new features and more with cutting edge, self-reviewed and validated code. Composer supports undo, and automatically executing custom validation commands you provide!
 <h3>Document Generation</h3>
 Generate documentation for code with one click
 <h3>Refactor</h3>
@@ -62,6 +58,10 @@ Refactor code quickly with one click
 
 <p align="center">
   <img src="./docs-site/docs/public/Chat.png" width="400" alt="Chat">
+</p>
+
+<p align="center">
+  <img src="./docs-site/docs/public/Composer_Example.png" width="400" alt="Chat">
 </p>
 
 <p align="center">
