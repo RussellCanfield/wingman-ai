@@ -10,11 +10,23 @@
 
 [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) brings high quality AI assisted coding right to your computer. We support most major AI providers - OpenAI, Anthropic and Ollama which is 100% free and private.
 
-Wingman has the ability to index your entire codebase and generate local LLM embeddings across your project, get meaningful project related answers quickly.
+Wingman has the ability to index your entire codebase and generate local LLM embeddings across your project, get meaningful project related answers quickly. Wingman-AI is the only AI extension on the market that uses a Graph RAG technique, providing the deepest insights into your code.
 
 </b>
 
 </center>
+
+<p align="center">
+    <video autoplay loop muted playsinline>
+        <source src="./docs-site/docs/public/Wingman_ChatVideo.mp4" type="video/mp4">
+    </video>
+</p>
+
+<p align="center">
+    <video autoplay loop muted playsinline>
+        <source src="./docs-site/docs/public/Wingman_ComposeVideo.mp4" type="video/mp4">
+    </video>
+</p>
 
 <h2 align="center">Documentation</h2>
 
@@ -44,6 +56,17 @@ Generate documentation for code with one click
 Refactor code quickly with one click
 
 </center>
+
+<br />
+<br />
+
+<p align="center">
+  <img src="./docs-site/docs/public/Chat.png" width="400" alt="Chat">
+</p>
+
+<p align="center">
+  <img src="./docs-site/docs/public/Indexer.png" width="400" alt="Indexer">
+</p>
 
 ## Release Notes
 

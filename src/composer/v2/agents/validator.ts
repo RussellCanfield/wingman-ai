@@ -26,8 +26,8 @@ Do not mention exit codes or low level details to the user.
 
 **Validation Command Result Handling:**
 - If the validation command indicates a non-zero exit code or the output indicates an error:
+	- Provide specific errors along with any relevant files
 	- Provide a summary with details on how you might fix it but do not ask the user if they want it fixed, just say you will fix it and how
-	- Be specific in exactly how you'd fix it based on the errors, outline specific errors capture in the response in a concise way
 - If the command exits with a 0 code and the output looks successful, reply and mention validation succeeded
 
 **Tools:**

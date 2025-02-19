@@ -541,7 +541,7 @@ Generate complete configurations for:
 ### Related Files
 - File: \`[exact file path]\`
 
-### New Dependencies
+[Optional] ### New Dependencies
 - [package-name]@[version]
 
 Would you like me to proceed with this implementation plan?
