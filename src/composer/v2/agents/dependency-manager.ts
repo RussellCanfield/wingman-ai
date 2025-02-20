@@ -23,6 +23,12 @@ export class DependencyManager {
 	addDependencies = async (
 		state: PlanExecuteState,
 	) => {
+		if (!state.dependencies) {
+			return {
+				messages: state.messages
+			}
+		}
+
 		const contents = await scanDirectory(this.workspace, 4);
 
 		const prompt = ChatPromptTemplate.fromMessages([

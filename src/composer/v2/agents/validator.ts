@@ -62,6 +62,12 @@ export class Validator {
 	}
 
 	validate = async (state: PlanExecuteState) => {
+		if (!this.validationSettings.validationCommand) {
+			return {
+				messages: state.messages
+			}
+		}
+
 		const executeStep = async (includeImage: boolean) => {
 			const humanMsg = [];
 			let buffer = 'Validating changes...\n';
