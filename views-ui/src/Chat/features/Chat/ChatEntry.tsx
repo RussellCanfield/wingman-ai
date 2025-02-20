@@ -212,7 +212,7 @@ const ChatEntry = memo(
 		const codeTheme = isLightTheme ? prism : vscDarkPlus;
 		const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 		const bgClasses = fromUser
-			? `${!isLightTheme ? "bg-stone-600" : "bg-stone-600"
+			? `${!isLightTheme ? "bg-stone-800" : "bg-stone-600"
 			} rounded-lg overflow-hidden w-full`
 			: "";
 
@@ -227,7 +227,7 @@ const ChatEntry = memo(
 							}`}
 					>
 						{fromUser && (
-							<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
+							<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center">
 								<FaUser className="text-stone-200" size={16} />
 							</div>
 						)}

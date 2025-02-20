@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { Command } from "./types";
 
 interface CommandDropdownProps {
@@ -20,39 +20,42 @@ const CommandDropdown: React.FC<CommandDropdownProps> = ({
 
 	const dropdownClasses = isLightTheme
 		? "bg-white border-stone-300"
-		: "bg-stone-700 border-stone-600";
-	const dropdownItemClasses = isLightTheme
-		? "hover:bg-stone-100"
-		: "hover:bg-stone-600";
+		: "bg-stone-800 border-stone-600";
+
+	const dropdownItemClasses = `
+        p-2 cursor-pointer transition-colors duration-200
+        ${isLightTheme
+			? 'hover:bg-gray-100 active:bg-gray-200'
+			: 'hover:bg-gray-600 active:bg-gray-700'
+		}
+    `;
+
+	const selectedItemClasses = `
+        ${isLightTheme
+			? 'bg-gray-100 hover:bg-gray-100'
+			: 'bg-gray-800 hover:bg-gray-600'
+		}
+        text-[var(--vscode-input-foreground)]
+    `;
 
 	return (
 		<div
-			className={`absolute ${dropdownClasses} left-2 bottom-[6rem] z-50 border border-[var(--vscode-input-border)] rounded-md shadow-lg`}
-			style={{
-				minWidth: "200px",
-			}}
+			className={`absolute ${dropdownClasses} left-0 bottom-[8rem] w-full z-20 border rounded overflow-y-auto max-h-[512px]`}
 		>
-			<ul className="py-1">
-				{commands.map((command, index) => (
-					<li
-						key={command.id}
-						className={`${dropdownItemClasses} ${selectedIndex === index
-							? "bg-[var(--vscode-list-hoverBackground)]"
-							: ""
-							} px-4 py-2 hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer`}
-						onClick={() => onCommandSelect(command)}
-					>
-						<div className="flex items-center">
-							<span className="font-medium">{command.label}</span>
-							{command.description && (
-								<span className="ml-2 text-sm text-[var(--vscode-descriptionForeground)]">
-									{command.description}
-								</span>
-							)}
+			{commands.map((command, index) => (
+				<div
+					key={command.id}
+					className={`${dropdownItemClasses} ${selectedIndex === index ? selectedItemClasses : ''}`}
+					onClick={() => onCommandSelect(command)}
+				>
+					<div className="font-medium">{command.label}</div>
+					{command.description && (
+						<div className="text-xs text-[var(--vscode-descriptionForeground)]">
+							{command.description}
 						</div>
-					</li>
-				))}
-			</ul>
+					)}
+				</div>
+			))}
 		</div>
 	);
 };

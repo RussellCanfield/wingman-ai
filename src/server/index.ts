@@ -45,8 +45,7 @@ import { WebCrawler } from "./web";
 import { promises } from "node:fs";
 import path from "node:path";
 
-const config = { configurable: { thread_id: "conversation-num-1" } };
-
+let config = { configurable: { thread_id: "conversation-num-1" } };
 let memory = new MemorySaver();
 let modelProvider: AIProvider;
 let embeddingProvider: EmbeddingProviders;
@@ -473,7 +472,19 @@ export class LSPServer {
 		});
 
 		this.connection?.onRequest("wingman/clearChatHistory", () => {
-			this.composer?.resetGraphState();
+			config = { configurable: { thread_id: "conversation-num-1" } };
+			memory = new MemorySaver();
+
+			this.composer = new ComposerGraph(
+				this.workspaceFolders[0],
+				modelProvider,
+				this.codeGraph!,
+				this.vectorStore!,
+				settings.validationSettings,
+				settings,
+				config,
+				memory
+			)
 		});
 
 		this.connection?.onRequest("wingman/cancelComposer", async () => {

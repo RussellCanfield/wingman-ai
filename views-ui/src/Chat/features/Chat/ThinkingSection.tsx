@@ -25,13 +25,13 @@ export const ThinkingSection = ({
         <div className="my-2 border rounded-md border-stone-600 mb-4">
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full flex items-center gap-2 p-2 hover:bg-stone-700 transition-colors"
+                className="w-full flex items-center gap-2 p-2 hover:bg-stone-800 transition-colors"
             >
                 {isExpanded ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />}
                 <span
                     className={`text-transparent bg-clip-text ${isLightTheme
-                            ? 'bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-400'
-                            : 'bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500'
+                        ? 'bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-400'
+                        : 'bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500'
                         } animate-gradient`}
                 >
                     Thinking

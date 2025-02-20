@@ -30,7 +30,6 @@ export const ChatProvider: FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     const handleResponse = (event: MessageEvent<AppMessage>) => {
       const { command, value } = event.data;
-      console.log('Chat', command);
       switch (command) {
         case "init":
           const storedAppState = value as AppState;

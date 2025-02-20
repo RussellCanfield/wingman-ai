@@ -89,7 +89,7 @@ const ChatInput = ({
 				case "ArrowDown":
 					e.preventDefault();
 					setSelectedIndex((prev) =>
-						prev < AVAILABLE_COMMANDS.length - 1 ? prev + 1 : prev
+						prev < filteredCommands.length - 1 ? prev + 1 : prev
 					);
 					break;
 				case "ArrowUp":
@@ -98,7 +98,7 @@ const ChatInput = ({
 					break;
 				case "Enter":
 					e.preventDefault();
-					if (selectedIndex >= 0) {
+					if (selectedIndex >= 0 && selectedIndex < filteredCommands.length) {
 						handleCommandSelection(selectedIndex);
 					}
 					break;
@@ -131,12 +131,35 @@ const ChatInput = ({
 		}
 	};
 
+	const inputContainerClass = `
+		relative flex flex-col items-stretch p-4 
+		${isLightTheme
+			? 'bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]'
+			: 'bg-[#1e1e1e] shadow-[0_2px_4px_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25),0_12px_24px_rgba(0,0,0,0.25)]'
+		}
+		transition-shadow duration-300 ease-in-out rounded-xl
+	`;
+
+	const textareaClass = `
+		flex-grow resize-none text-[var(--vscode-input-foreground)]
+		focus:outline-none outline-none bg-transparent overflow-y-auto min-h-[36px] p-2 transition-all duration-200
+	`;
+
+	const buttonContainerClass = `
+		flex justify-between items-center gap-2 pt-4 h-[52px]
+	`;
+
+	const iconButtonClass = `
+		rounded-lg transition-all duration-200 flex items-center gap-2
+		${isLightTheme
+			? 'hover:bg-gray-100 active:bg-gray-200'
+			: 'hover:bg-gray-800 active:bg-gray-700'
+		}
+	`;
+
 	return (
-		<div
-			className="flex-basis-50 py-3 flex flex-col items-stretch"
-			ref={ref}
-		>
-			<div className="relative flex flex-row items-center border-2 border-gray-500 rounded-md mb-2">
+		<div className="flex-basis-50 py-3 flex flex-col items-stretch" ref={ref}>
+			<div className={inputContainerClass}>
 				{isCommandMode && (
 					<CommandDropdown
 						commands={filteredCommands}
@@ -156,76 +179,59 @@ const ChatInput = ({
 						}}
 					/>
 				)}
-				<div className="w-full relative">
-					<div className="flex flex-wrap items-center">
-						<textarea
-							ref={inputRef}
-							placeholder="Type here to chat..."
-							onChange={(e) => {
-								setInputValue(e.target.value);
-								handleCommandInput(e.target.value);
-								handleAutoResize(e.target);
-							}}
-							value={inputValue}
-							tabIndex={0}
-							rows={1}
-							autoFocus
-							className="flex-grow resize-none text-[var(--vscode-input-foreground)] focus:outline-none bg-transparent border-b-2 border-stone-600 overflow-y-auto min-h-[36px] p-2"
-							style={{ minHeight: "36px", outline: "none" }}
-							onKeyDown={handleKeyDown}
-						/>
-						<div className="flex w-full justify-between items-center">
-							<span className="text-[var(--vscode-editor-foreground)] font-medium flex flex-row gap-1 p-2">
-								{commandMatch && (
-									<>
-										<caption className="italic">
-											Command:{" "}
-										</caption>
-										<span>{`/${selectedCommand}`}</span>
-									</>
-								)}
-								{!commandMatch && (
-									<caption className={`italic ${isLightTheme ? "text-gray-700/50" : "text-gray-400/50"}`}>
-										Type / for commands
-									</caption>
-								)}
-							</span>
-							<span className="p-4 pr-2">
-								{!loading && (
-									<FaPlay
-										size={16}
-										tabIndex={0}
-										role="presentation"
-										title="Send message"
-										className={`${!inputValue.trim()
-											? `${!isLightTheme ? 'text-gray-200' : 'text-gray-400'}`
-											: `${!isLightTheme ? 'text-gray-200' : 'text-gray-800'}`
-											} cursor-pointer`}
-										onClick={() =>
-											handleKeyDown({
-												key: "Enter",
-												preventDefault: () => { },
-												target: chatInputBox.current,
-											} as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
-										}
-									/>
-								)}
-								{loading && (
-									<FaStopCircle
-										size={16}
-										tabIndex={0}
-										role="presentation"
-										title="Cancel chat"
-										className="cursor-pointer"
-										onClick={onChatCancelled}
-									/>
-								)}
-							</span>
-						</div>
-					</div>
+				<textarea
+					ref={inputRef}
+					placeholder="Type here to chat, use / for commands..."
+					onChange={(e) => {
+						setInputValue(e.target.value);
+						handleCommandInput(e.target.value);
+						handleAutoResize(e.target);
+					}}
+					value={inputValue}
+					tabIndex={0}
+					rows={1}
+					autoFocus
+					className={textareaClass}
+					onKeyDown={handleKeyDown}
+				/>
+				<div className={buttonContainerClass}>
+					<span className={`font-medium ${isLightTheme ? 'text-gray-600' : 'text-gray-300'}`}>
+						{commandMatch ? (
+							<>
+								<span className="opacity-70">Command:</span>
+								<span className="font-semibold ml-2">{`/${selectedCommand}`}</span>
+							</>
+						) : (
+							<span className="opacity-50 text-sm p-2.5">Type / for commands</span>
+						)}
+					</span>
+					{!loading ? (
+						<button
+							className={`${iconButtonClass} ${!inputValue.trim() ? 'opacity-50 cursor-not-allowed' : ''} p-2.5`}
+							onClick={() =>
+								handleKeyDown({
+									key: "Enter",
+									preventDefault: () => { },
+									target: chatInputBox.current,
+								} as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
+							}
+							disabled={!inputValue.trim()}
+							title="Send message"
+						>
+							<FaPlay size={16} />
+						</button>
+					) : (
+						<button
+							className={`${iconButtonClass} text-white`}
+							onClick={onChatCancelled}
+							title="Cancel chat"
+						>
+							<FaStopCircle size={16} />
+						</button>
+					)}
 				</div>
 			</div>
-		</div >
+		</div>
 	);
 };
 

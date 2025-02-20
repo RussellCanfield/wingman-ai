@@ -164,7 +164,7 @@ const ChatArtifact = ({
 	const truncatedPath = getTruncatedPath(file.path);
 
 	return (
-		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-stone-700">
+		<div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-stone-800">
 			<div className="text-white flex flex-col border-b border-stone-700/50">
 				<div className="flex items-center justify-start border-b border-stone-700/50 relative">
 					<Tooltip id={`${file.path}-tooltip`} />
@@ -235,7 +235,7 @@ const ChatArtifact = ({
 					{(file.rejected || file.accepted) && (
 						<div className="flex items-center gap-3 ml-auto mr-4">
 							{/* Undo Button */}
-							<div className="flex items-center rounded z-10 transition-colors text-stone-400 hover:bg-stone-700/10 hover:shadow-lg focus:ring focus:ring-stone-400">
+							<div className="flex items-center rounded z-10 transition-colors text-stone-400 hover:bg-stone-800/10 hover:shadow-lg focus:ring focus:ring-stone-400">
 								<button
 									type="button"
 									title="Undo changes"
@@ -285,7 +285,7 @@ const ChatEntry = ({
 
 	const fromUser = from === "user";
 
-	const bgClasses = fromUser ? `bg-stone-700 rounded-lg overflow-hidden w-full` : "";
+	const bgClasses = fromUser ? `bg-stone-800 rounded-lg overflow-hidden w-full` : "";
 	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
 	const hasPendingFiles = files?.some(f => !f.accepted && !f.rejected);
@@ -297,7 +297,7 @@ const ChatEntry = ({
 			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[16px] flex items-center ${textColor}`}>
 				<div className="relative flex items-center gap-4 flex-grow w-full">
 					{fromUser && (
-						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center">
+						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center">
 							<FaUser className="text-stone-200" size={16} />
 						</div>
 					)}
@@ -366,7 +366,7 @@ const ChatEntry = ({
 									</div>
 									{(f.rejected || f.accepted) && (
 										<div className="flex items-center gap-3 shrink-0">
-											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors">
+											<div className="flex items-center rounded z-10 hover:bg-stone-800 transition-colors">
 												<button
 													type="button"
 													title="Undo changes"
@@ -390,7 +390,7 @@ const ChatEntry = ({
 									)}
 									{!f.rejected && !f.accepted && (
 										<div className="flex shrink-0">
-											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-red-600">
+											<div className="flex items-center rounded z-10 hover:bg-stone-800 transition-colors text-red-600">
 												<button
 													type="button"
 													title="Reject changes"
@@ -400,7 +400,7 @@ const ChatEntry = ({
 													<HiOutlineXMark size={18} />
 												</button>
 											</div>
-											<div className="flex items-center rounded z-10 hover:bg-stone-700 transition-colors text-green-400">
+											<div className="flex items-center rounded z-10 hover:bg-stone-800 transition-colors text-green-400">
 												<button
 													type="button"
 													title="Accept changes"

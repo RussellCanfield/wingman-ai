@@ -1,6 +1,6 @@
 import React from "react";
 import { FaX } from "react-icons/fa6";
-import { FileSearchResult } from "@shared/types/Composer";
+import { FileSearchResult } from "@shared/types/v2/Composer";
 
 interface FileChipsProps {
 	chips: FileSearchResult[];
@@ -15,7 +15,7 @@ export const FileChips: React.FC<FileChipsProps> = ({
 }) => {
 	const chipClasses = isLightTheme
 		? "bg-stone-800 text-white"
-		: "bg-stone-700 text-white";
+		: "bg-stone-800 text-white";
 
 	if (chips.length === 0) {
 		return null;

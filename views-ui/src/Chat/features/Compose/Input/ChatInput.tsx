@@ -12,9 +12,9 @@ import { ImagePreview } from "./components/ImagePreview";
 import { useSettingsContext } from "../../../context/settingsContext";
 import { useComposerContext } from "../../../context/composerContext";
 
-const MAX_WIDTH = 1024; // Maximum width for compressed image
-const MAX_HEIGHT = 1024; // Maximum height for compressed image
-const QUALITY = 0.8; // Image quality (0 to 1)
+const MAX_WIDTH = 1024;
+const MAX_HEIGHT = 1024;
+const QUALITY = 0.8;
 
 const dataUrlToFile = (dataUrl: string, fileName: string): File => {
 	const arr = dataUrl.split(',');
@@ -65,8 +65,6 @@ const compressImage = (file: File): Promise<string> => {
 				}
 
 				ctx.drawImage(img, 0, 0, width, height);
-
-				// Convert directly to data URL
 				const dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
 				resolve(dataUrl);
 			};
@@ -80,20 +78,12 @@ const compressImage = (file: File): Promise<string> => {
 };
 
 interface ChatInputProps {
-	onChatSubmitted: (
-		input: string,
-		contextFiles: string[],
-		image?: File
-	) => void;
+	onChatSubmitted: (input: string, contextFiles: string[], image?: File) => void;
 	onChatCancelled: () => void;
 	loading: boolean;
 }
 
-const ChatInput = ({
-	loading,
-	onChatSubmitted,
-	onChatCancelled,
-}: ChatInputProps) => {
+const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useSettingsContext();
 	const { activeFiles, setActiveFiles } = useComposerContext();
@@ -104,9 +94,7 @@ const ChatInput = ({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [showDropdown, setShowDropdown] = useState(false);
 	const [focusedDropdownIndex, setFocusedDropdownIndex] = useState<number>(1);
-	const [allDropdownItems, setDropdownItems] = useState<FileSearchResult[]>(
-		[]
-	);
+	const [allDropdownItems, setDropdownItems] = useState<FileSearchResult[]>([]);
 	const [inputRect, setInputRect] = useState<DOMRect | null>(null);
 
 	useEffect(() => {
@@ -126,17 +114,11 @@ const ChatInput = ({
 		const { data } = event;
 		const { command, value } = data;
 
-		switch (command) {
-			case "get-files-result":
-				if (!value) {
-					return;
-				}
-
-				const fileResults = value as FileSearchResult[];
-				setDropdownItems(fileResults);
-				setFocusedDropdownIndex(0);
-				setShowDropdown(fileResults.length > 0);
-				break;
+		if (command === "get-files-result" && value) {
+			const fileResults = value as FileSearchResult[];
+			setDropdownItems(fileResults);
+			setFocusedDropdownIndex(0);
+			setShowDropdown(fileResults.length > 0);
 		}
 	};
 
@@ -167,19 +149,15 @@ const ChatInput = ({
 	};
 
 	const handleImageSelect = async (file: File) => {
-		if (!file.type.startsWith("image/")) {
-			return;
-		}
+		if (!file.type.startsWith("image/")) return;
 
 		try {
 			const compressedDataUrl = await compressImage(file);
 			const compressedFile = dataUrlToFile(compressedDataUrl, file.name);
-
-			setSelectedImage(compressedFile); // Store compressed file for upload
+			setSelectedImage(compressedFile);
 			setImagePreview(compressedDataUrl);
 		} catch (error) {
 			console.error('Error compressing image:', error);
-			// Fallback to original file
 			const reader = new FileReader();
 			reader.onloadend = () => {
 				setSelectedImage(file);
@@ -189,15 +167,11 @@ const ChatInput = ({
 		}
 	};
 
-	const handleImageUpload = () => {
-		fileInputRef.current?.click();
-	};
+	const handleImageUpload = () => fileInputRef.current?.click();
 
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
-		if (file) {
-			handleImageSelect(file);
-		}
+		if (file) handleImageSelect(file);
 	};
 
 	const removeImage = () => {
@@ -209,9 +183,7 @@ const ChatInput = ({
 	};
 
 	const chipMap = new Set(activeFiles.map((chip) => chip.path));
-	const filteredDropDownItems = allDropdownItems.filter(
-		(d) => !chipMap.has(d.path)
-	);
+	const filteredDropDownItems = allDropdownItems.filter((d) => !chipMap.has(d.path));
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		const value = e.target.value;
@@ -248,20 +220,16 @@ const ChatInput = ({
 	};
 
 	const handleUserInput = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-		if (!inputValue.trim() || loading) return;
+		if (!inputValue.trim() && !selectedImage || loading) return;
 
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			if (showDropdown && filteredDropDownItems.length > 0) {
-				handleDropdownSelect(
-					filteredDropDownItems[focusedDropdownIndex]
-				);
+				handleDropdownSelect(filteredDropDownItems[focusedDropdownIndex]);
 				chatInputBox.current?.focus();
 			} else {
-				const message =
-					activeFiles.map((chip) => `@${chip.file}`).join(" ") +
-					(activeFiles.length > 0 && inputValue ? " " : "") +
-					inputValue;
+				const message = activeFiles.map((chip) => `@${chip.file}`).join(" ") +
+					(activeFiles.length > 0 && inputValue ? " " : "") + inputValue;
 
 				if (message.trim() || selectedImage) {
 					onChatSubmitted(
@@ -292,107 +260,109 @@ const ChatInput = ({
 		});
 	};
 
+	const inputContainerClass = `
+		relative flex flex-col items-stretch p-4 
+		${isLightTheme
+			? 'bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]'
+			: 'bg-[#1e1e1e] shadow-[0_2px_4px_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25),0_12px_24px_rgba(0,0,0,0.25)]'
+		}
+		transition-shadow duration-300 ease-in-out rounded-xl
+	`;
+
+	const textareaClass = `
+		flex-grow resize-none text-[var(--vscode-input-foreground)] 
+		focus:outline-none outline-none bg-transparent overflow-y-auto min-h-[36px] p-2 transition-all duration-200
+	`;
+
+	const buttonContainerClass = `
+		flex justify-between items-center gap-2 pt-4 h-[52px]
+	`;
+
+	const iconButtonClass = `
+		p-2.5 rounded-lg transition-all duration-200 flex items-center gap-2
+		${isLightTheme
+			? 'hover:bg-gray-100 active:bg-gray-200'
+			: 'hover:bg-gray-800 active:bg-gray-700'
+		}
+	`;
+
 	return (
-		<>
-			<div
-				className="flex-basis-50 py-3 flex flex-col items-stretch"
-				ref={ref}
-			>
-				<div className="relative flex flex-col items-stretch">
-					{imagePreview && (
-						<ImagePreview
-							imageUrl={imagePreview}
-							onRemove={removeImage}
-						/>
-					)}
-					<FileChips
-						chips={activeFiles}
-						onChipRemove={handleChipRemove}
-						isLightTheme={isLightTheme}
+		<div className="flex-basis-50 py-3 flex flex-col items-stretch" ref={ref}>
+			<div className={inputContainerClass}>
+				{imagePreview && (
+					<ImagePreview
+						imageUrl={imagePreview}
+						onRemove={removeImage}
 					/>
-					<div className="flex flex-wrap items-center mb-2 border-2 border-gray-500 rounded-md">
-						<textarea
-							placeholder={
-								activeFiles.length === 0
-									? "Type here to begin, use '@' to search for files to add as context."
-									: ""
-							}
-							value={inputValue}
-							onChange={(e) => {
-								handleInputChange(e);
-								handleAutoResize(e.target);
-							}}
-							ref={chatInputBox}
-							tabIndex={0}
-							rows={1}
-							autoFocus
-							className="flex-grow resize-none text-[var(--vscode-input-foreground)] focus:outline-none bg-transparent border-b-2 border-stone-600 overflow-y-auto min-h-[36px] p-2"
-							style={{ minHeight: "36px", outline: "none" }}
-							onKeyDown={handleUserInput}
-						/>
-						<div className="flex w-full justify-between">
-							<input
-								type="file"
-								ref={fileInputRef}
-								onChange={handleFileChange}
-								accept="image/*"
-								className="hidden"
-							/>
-							<span className="p-4 pr-2">
-								<FaPaperclip
-									size={16}
-									className={`cursor-pointer 'text-gray-400' ${!isLightTheme ? 'hover:text-gray-100' : 'hover:text-gray-800'}`}
-									onClick={handleImageUpload}
-									title="Attach image"
-								/>
-							</span>
-							<span className="p-4 pr-2">
-								{!loading && (
-									<FaPlay
-										size={16}
-										tabIndex={0}
-										role="presentation"
-										title="Send"
-										className={`${!inputValue.trim()
-											? `${!isLightTheme ? 'text-gray-200' : 'text-gray-400'}`
-											: `${!isLightTheme ? 'text-gray-200' : 'text-gray-800'}`
-											} cursor-pointer`}
-										onClick={() =>
-											handleUserInput({
-												key: "Enter",
-												preventDefault: () => { },
-												shiftKey: false,
-											} as React.KeyboardEvent<HTMLTextAreaElement>)
-										}
-									/>
-								)}
-								{loading && (
-									<FaStopCircle
-										size={16}
-										tabIndex={0}
-										role="presentation"
-										title="Cancel compose"
-										className="cursor-pointer"
-										onClick={onChatCancelled}
-									/>
-								)}
-							</span>
-						</div>
-					</div>
-					{showDropdown &&
-						filteredDropDownItems.length > 0 &&
-						inputRect && (
-							<FileDropdown
-								dropdownItems={filteredDropDownItems}
-								onSelect={handleDropdownSelect}
-								isLightTheme={isLightTheme}
-								showDropdown={showDropdown}
-								focusedDropdownIndex={focusedDropdownIndex}
-							/>
-						)}
+				)}
+				<FileChips
+					chips={activeFiles}
+					onChipRemove={handleChipRemove}
+					isLightTheme={isLightTheme}
+				/>
+				<textarea
+					placeholder={
+						activeFiles.length === 0
+							? "Type here to begin, use '@' to search for files to add as context."
+							: ""
+					}
+					value={inputValue}
+					onChange={(e) => {
+						handleInputChange(e);
+						handleAutoResize(e.target);
+					}}
+					ref={chatInputBox}
+					tabIndex={0}
+					rows={1}
+					autoFocus
+					className={textareaClass}
+					onKeyDown={handleUserInput}
+				/>
+				<input
+					type="file"
+					ref={fileInputRef}
+					onChange={handleFileChange}
+					accept="image/*"
+					className="hidden"
+				/>
+				<div className={buttonContainerClass}>
+					<button
+						className={iconButtonClass}
+						onClick={handleImageUpload}
+						title="Attach image"
+					>
+						<FaPaperclip size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
+					</button>
+					{!loading ? (
+						<button
+							className={`${iconButtonClass} ${!inputValue.trim() ? 'opacity-50 cursor-not-allowed' : ''} p-2.5`}
+							onClick={() => handleUserInput({ key: "Enter", preventDefault: () => { }, shiftKey: false } as React.KeyboardEvent<HTMLTextAreaElement>)}
+							disabled={!inputValue.trim() && !selectedImage}
+							title="Send message"
+						>
+							<FaPlay size={16} />
+						</button>
+					) : (
+						<button
+							className={`${iconButtonClass} text-white`}
+							onClick={onChatCancelled}
+							title="Cancel compose"
+						>
+							<FaStopCircle size={16} />
+						</button>
+					)}
 				</div>
 			</div>
-		</>
+			{showDropdown && filteredDropDownItems.length > 0 && inputRect && (
+				<FileDropdown
+					dropdownItems={filteredDropDownItems}
+					onSelect={handleDropdownSelect}
+					isLightTheme={isLightTheme}
+					showDropdown={showDropdown}
+					focusedDropdownIndex={focusedDropdownIndex}
+				/>
+			)}
+		</div>
 	);
 };
 

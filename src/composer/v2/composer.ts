@@ -121,10 +121,6 @@ export class ComposerGraph {
             .addEdge("dependency-manager", "validator")
     }
 
-    resetGraphState = async () => {
-        this.compileGraph();
-    }
-
     undoFile = async (file: FileMetadata) => {
         const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
         const state = await graph.getState({ ...this.config });
