@@ -346,7 +346,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 						<button
 							className={`${iconButtonClass} text-white`}
 							onClick={onChatCancelled}
-							title="Cancel compose"
+							title="Cancel"
 						>
 							<FaStopCircle size={16} />
 						</button>

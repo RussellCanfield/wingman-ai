@@ -1,13 +1,14 @@
 import {
+	ComposerMessage,
 	ComposerRequest,
 } from "@shared/types/v2/Composer";
-import { useMemo } from "react";
 import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./Input/ChatInput";
 import ChatResponseList from "./ChatList";
 import { useComposerContext } from "../../context/composerContext";
-import { useSettingsContext } from "../../context/settingsContext";
+import ThreadManagement from "./ThreadManagement";
+import { AddMessageToThread } from "@shared/types/Settings";
 
 let currentMessage = "";
 
@@ -25,8 +26,14 @@ const getBase64FromFile = (file: File): Promise<string> => {
 };
 
 export default function Compose() {
-	const { composerMessages, setComposerMessages, loading, setLoading, clearActiveMessage, activeMessage } = useComposerContext();
-	const { indexStats, setView } = useSettingsContext();
+	const {
+		composerMessages,
+		setComposerMessages,
+		loading,
+		setLoading,
+		clearActiveMessage,
+		activeMessage,
+	} = useComposerContext();
 
 	const cancelAIResponse = () => {
 		clearActiveMessage();
@@ -41,6 +48,7 @@ export default function Compose() {
 		image?: File
 	) => {
 		currentMessage = "";
+
 		const payload: ComposerRequest = {
 			input,
 			contextFiles,
@@ -53,19 +61,26 @@ export default function Compose() {
 			};
 		}
 
+		const composerMessage: ComposerMessage = {
+			from: "user",
+			message: input,
+			loading: false,
+			image: payload.image,
+		};
+
 		vscode.postMessage({
 			command: "compose",
 			value: payload,
 		});
 
+		vscode.postMessage({
+			command: "add-message-to-thread",
+			value: { threadId: crypto.randomUUID(), message: composerMessage } satisfies AddMessageToThread
+		});
+
 		setComposerMessages((messages) => [
 			...messages,
-			{
-				from: "user",
-				message: input,
-				loading: false,
-				image: payload.image,
-			},
+			composerMessage
 		]);
 
 		setLoading(true);
@@ -73,6 +88,9 @@ export default function Compose() {
 
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
+			<div className="flex items-center justify-between p-2 pt-0 border-b border-[var(--vscode-panel-border)]">
+				<ThreadManagement />
+			</div>
 			{composerMessages.length === 0 && (
 				<div className="flex items-center justify-center h-full p-4">
 					<div className="text-center max-w-2xl p-8 bg-[var(--vscode-input-background)] rounded-2xl border border-slate-700/30 shadow-2xl backdrop-blur-md mx-auto transition-all duration-300 hover:border-slate-700/50">

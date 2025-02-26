@@ -1,17 +1,38 @@
 import { IndexerSettings } from "./Indexer";
-import { ChatMessages } from "./Message";
+import { ComposerMessage } from "./v2/Composer";
 
 export const defaultMaxTokens = -1;
 
+export interface Thread {
+	id: string;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+	messages: ComposerMessage[];
+}
+
+export interface AddMessageToThread {
+	threadId: string;
+	message: ComposerMessage;
+}
+
+export interface RenameThread {
+	threadId: string;
+	title: string;
+}
+
 export interface WorkspaceSettings {
 	indexerSettings: IndexerSettings;
-	chatMessages: ChatMessages;
+	threads?: Thread[];
+	activeThreadId?: string;
 }
 
 export interface AppState {
 	settings: WorkspaceSettings;
 	theme: number;
 	workspaceFolder: string;
+	threads?: Thread[];
+	activeThreadId?: string;
 	totalFiles: number;
 }
 

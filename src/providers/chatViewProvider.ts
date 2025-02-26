@@ -10,7 +10,7 @@ import {
 	CommitMessage,
 	FileMetadata,
 } from "@shared/types/Message";
-import { AppState, Settings } from "@shared/types/Settings";
+import { AddMessageToThread, AppState, RenameThread, Settings, Thread } from "@shared/types/Settings";
 import { IndexerSettings } from "@shared/types/Indexer";
 import { loggingProvider } from "./loggingProvider";
 import {
@@ -208,8 +208,44 @@ ${result.summary}`,
 						});
 					})
 
-					// TODO - save me from the insanity of this switch statement :D
+					// TODO - move to a mediator pattern
 					switch (command) {
+						case "add-message-to-thread":
+							await this.addMessageToThread(value as AddMessageToThread);
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
+							break;
+						case "create-thread":
+							await this.createThread(value as Thread);
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
+							break;
+						case "switch-thread":
+							await this.switchThread(String(value));
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
+							break;
+						case "delete-thread":
+							await this.deleteThread(String(value));
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
+							break;
+						case "rename-thread":
+							await this.renameThread(value as RenameThread);
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
+							break;
+
 						case "undo-file":
 							webviewView.webview.postMessage({
 								command: "compose-response",
@@ -307,7 +343,6 @@ ${commitReview}
 							await this._workspace.save({
 								indexerSettings:
 									appState.settings.indexerSettings,
-								chatMessages: appState.settings.chatMessages,
 							});
 
 							if (currentSettings.indexerSettings.indexFilter !== appState.settings.indexerSettings.indexFilter) {
@@ -377,9 +412,6 @@ ${commitReview}
 							wingmanTerminal?.cancel();
 							break;
 						case "clear-chat-history":
-							await this._workspace.save({
-								chatMessages: [],
-							});
 							this._aiProvider.clearChatHistory();
 							await this._lspClient.clearChatHistory();
 							break;
@@ -534,10 +566,11 @@ ${commitReview}
 						}
 						case "ready": {
 							const settings = await this._workspace.load();
-
 							const appState: AppState = {
 								workspaceFolder: getActiveWorkspace(),
 								theme: vscode.window.activeColorTheme.kind,
+								threads: settings.threads,
+								activeThreadId: settings.activeThreadId,
 								settings,
 								totalFiles: 0
 							};
@@ -546,6 +579,11 @@ ${commitReview}
 								command: "init",
 								value: appState,
 							});
+
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: settings
+							})
 
 							setTimeout(async () => {
 								webviewView.webview.postMessage({
@@ -754,6 +792,40 @@ ${msg}`, webview
 				content: error instanceof Error ? error.message : "Search failed"
 			});
 		}
+	}
+
+	private async deleteThread(threadId: string) {
+		await this._workspace.deleteThread(threadId);
+	}
+
+	private async renameThread({ threadId, title }: RenameThread) {
+		await this._workspace.updateThread(threadId, { title });
+	}
+
+	private async switchThread(threadId: string) {
+		await this._workspace.switchThread(threadId);
+	}
+
+	private async createThread(thread: Thread) {
+		await this._workspace.createThread(thread.title);
+	}
+
+	private async addMessageToThread({ threadId, message }: AddMessageToThread) {
+		const activeThread = await this._workspace.getThreadById(threadId);
+
+		if (activeThread) {
+			activeThread.messages.push(message);
+			await this._workspace.updateThread(threadId, activeThread);
+			return;
+		}
+
+		const words = message.message.split(' ');
+		let threadTitle = words.slice(0, 5).join(' ');
+		if (threadTitle.length > 30) {
+			threadTitle = threadTitle.substring(0, 27) + '...';
+		}
+
+		await this._workspace.createThread(threadTitle, [message]);
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
