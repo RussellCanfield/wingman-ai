@@ -41,6 +41,7 @@ export interface PlanExecuteState {
 
 export type GraphState = {
 	events: StreamEvent[];
+	threadId: string;
 }
 
 export type ComposerResponse = {
@@ -81,6 +82,7 @@ export type ComposerImage = {
 
 export type ComposerRequest = {
 	input: string;
+	threadId: string;
 	contextFiles: string[];
 	image?: ComposerImage;
 	context?: CodeContextDetails

@@ -33,6 +33,7 @@ export default function Compose() {
 		setLoading,
 		clearActiveMessage,
 		activeMessage,
+		activeThread,
 	} = useComposerContext();
 
 	const cancelAIResponse = () => {
@@ -49,8 +50,11 @@ export default function Compose() {
 	) => {
 		currentMessage = "";
 
+		const threadId = activeThread?.id ?? crypto.randomUUID();
+
 		const payload: ComposerRequest = {
 			input,
+			threadId,
 			contextFiles,
 		};
 
@@ -61,7 +65,7 @@ export default function Compose() {
 			};
 		}
 
-		const composerMessage: ComposerMessage = {
+		const message: ComposerMessage = {
 			from: "user",
 			message: input,
 			loading: false,
@@ -75,12 +79,12 @@ export default function Compose() {
 
 		vscode.postMessage({
 			command: "add-message-to-thread",
-			value: { threadId: crypto.randomUUID(), message: composerMessage } satisfies AddMessageToThread
+			value: { threadId, message } satisfies AddMessageToThread
 		});
 
 		setComposerMessages((messages) => [
 			...messages,
-			composerMessage
+			message
 		]);
 
 		setLoading(true);

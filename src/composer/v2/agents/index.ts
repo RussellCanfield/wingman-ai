@@ -12,7 +12,7 @@ import { createReadFileTool } from "../tools/read_file";
 import { createListDirectoryTool } from "../tools/list_workspace_files";
 import { createWriteFileTool } from "../tools/write_file";
 import { StructuredTool } from "@langchain/core/tools";
-import { ComposerImage, ComposerRequest, StreamEvent } from "@shared/types/v2/Composer";
+import { ComposerImage, ComposerRequest, ComposerResponse, StreamEvent } from "@shared/types/v2/Composer";
 import { CodeContextDetails, FileMetadata } from "@shared/types/v2/Message";
 import path from "node:path";
 import { getTextDocumentFromPath } from "../../../server/files/utils";
@@ -121,12 +121,11 @@ ${this.workspace}
     /**
      * Execute a message in a conversation thread
      */
-    async * execute(request: ComposerRequest, threadId?: string) {
+    async * execute(request: ComposerRequest) {
         try {
             controller = new AbortController();
-            const conversationId = threadId || uuidv4();
             const config = {
-                configurable: { thread_id: conversationId },
+                configurable: { thread_id: request.threadId },
                 signal: controller.signal,
                 streamMode: "custom" as StreamMode,
                 version: "v2" as const,
@@ -182,7 +181,7 @@ Contents: ${request.context.text}`
                 files: contextFiles
             } satisfies typeof GraphAnnotation.State, config);
 
-            yield* this.handleStreamEvents(stream);
+            yield* this.handleStreamEvents(stream, request.threadId);
         } catch (e) {
             console.error(e);
             yield {
@@ -223,7 +222,7 @@ Contents: ${request.context.text}`
      * @param stream The LangChain event stream
      * @param eventName The name of the custom event to dispatch
      */
-    async *handleStreamEvents(stream: AsyncIterable<any>) {
+    async *handleStreamEvents(stream: AsyncIterable<any>, threadId: string) {
         let buffer = '';
         let events: StreamEvent[] = [];
 
@@ -232,9 +231,10 @@ Contents: ${request.context.text}`
             return {
                 node: "composer-events",
                 values: {
-                    events
+                    events,
+                    threadId
                 }
-            }
+            } satisfies ComposerResponse
         }
 
         try {
@@ -307,9 +307,10 @@ Contents: ${request.context.text}`
             yield {
                 node: "composer-done",
                 values: {
-                    events
+                    events,
+                    threadId
                 }
-            }
+            } satisfies ComposerResponse
         } catch (e) {
             console.error(e);
         }

@@ -1,7 +1,7 @@
 import { ComposerMessage, ComposerResponse, FileSearchResult } from "@shared/types/v2/Composer";
 import { AppMessage } from "@shared/types/v2/Message";
 import { AddMessageToThread, AppState, RenameThread, Thread, WorkspaceSettings } from "@shared/types/Settings";
-import React, { createContext, FC, PropsWithChildren, useContext, useEffect, useState } from "react";
+import React, { createContext, FC, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
 import { vscode } from "../utilities/vscode";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -40,6 +40,18 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   // Thread management state
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThread, setActiveThread] = useState<Thread | null>(null);
+
+  const threadsRef = useRef<Thread[]>([]);
+  const activeThreadRef = useRef<Thread | null>(null);
+
+  // Update refs whenever state changes
+  useEffect(() => {
+    threadsRef.current = threads;
+  }, [threads]);
+
+  useEffect(() => {
+    activeThreadRef.current = activeThread;
+  }, [activeThread]);
 
   useEffect(() => {
     window.addEventListener("message", handleResponse);
@@ -166,26 +178,10 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           newMessage
         ]);
 
-        // Update thread with new message
-        if (activeThread) {
-          setThreads(prevThreads => {
-            return prevThreads.map(thread => {
-              if (thread.id === activeThread.id) {
-                return {
-                  ...thread,
-                  messages: [...thread.messages, newMessage],
-                  updatedAt: Date.now()
-                };
-              }
-              return thread;
-            });
-          });
-
-          vscode.postMessage({
-            command: "add-message-to-thread",
-            value: { threadId: activeThread?.id, message: composerMessages[composerMessages.length - 1] } satisfies AddMessageToThread
-          });
-        }
+        vscode.postMessage({
+          command: "add-message-to-thread",
+          value: { threadId: values.threadId, message: newMessage } satisfies AddMessageToThread
+        });
 
         setLoading(false);
         setActiveMessage(undefined);
@@ -197,7 +193,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             from: "assistant",
             message: am?.message || "",
             events: values.events,
-            threadId: activeThread?.id
+            threadId: values.threadId
           }
         });
         break;
@@ -214,8 +210,8 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         break;
       case "thread-data":
         const workspaceSettings = value as AppState;
-        console.log(workspaceSettings);
         const { threads, activeThreadId } = workspaceSettings;
+        console.log(threads, activeThreadId)
         // Handle threads data from extension
         if (threads && Array.isArray(threads)) {
           setThreads(threads);

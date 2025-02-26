@@ -203,8 +203,8 @@ export class LSPClient {
 		});
 	};
 
-	clearChatHistory = async () => {
-		return client.sendRequest("wingman/clearChatHistory");
+	clearChatHistory = async (activeThreadId: string) => {
+		return client.sendRequest("wingman/clearChatHistory", activeThreadId);
 	};
 
 	acceptComposerFile = async (file: FileMetadata): Promise<PlanExecuteState> => {

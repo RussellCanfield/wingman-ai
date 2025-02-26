@@ -412,8 +412,7 @@ ${commitReview}
 							wingmanTerminal?.cancel();
 							break;
 						case "clear-chat-history":
-							this._aiProvider.clearChatHistory();
-							await this._lspClient.clearChatHistory();
+							this.clearChatHistory();
 							break;
 						case "terminal":
 							// Use value to spawn new terminal with command
@@ -794,6 +793,15 @@ ${msg}`, webview
 		}
 	}
 
+	private async clearChatHistory() {
+		const settings = this._workspace.getSettings();
+
+		if (settings.activeThreadId) {
+			await this._lspClient.clearChatHistory(settings.activeThreadId);
+			await this._workspace.updateThread(settings.activeThreadId, { messages: [] });
+		}
+	}
+
 	private async deleteThread(threadId: string) {
 		await this._workspace.deleteThread(threadId);
 	}
@@ -866,10 +874,6 @@ ${msg}`, webview
 
 		return addNoneAttributeToLink(updatedHtmlContent, nonce);
 	}
-
-	private log = (value: unknown) => {
-		loggingProvider.logInfo(JSON.stringify(value ?? ""));
-	};
 }
 
 function getChatContext(contextWindow: number): CodeContextDetails | undefined {

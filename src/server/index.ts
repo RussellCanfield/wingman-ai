@@ -25,7 +25,7 @@ import {
 } from "./files/utils";
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
-import { MemorySaver } from "@langchain/langgraph";
+import { emptyCheckpoint, MemorySaver } from "@langchain/langgraph";
 import { AIProvider } from "../service/base";
 import {
 	EmbeddingProviders,
@@ -467,15 +467,21 @@ export class LSPServer {
 			await this.postInitialize();
 		});
 
-		this.connection?.onRequest("wingman/clearChatHistory", () => {
-			memory = new MemorySaver();
+		this.connection?.onRequest("wingman/clearChatHistory", async (threadId: string) => {
+			const existingThreadData = await memory.get({ configurable: { thread_id: threadId } })
 
-			this.composer = new WingmanAgent(
-				modelProvider,
-				this.workspaceFolders[0],
-				memory,
-				this.codeParser!
-			)
+			if (existingThreadData) {
+				await memory.put(
+					{ configurable: { thread_id: threadId } },
+					emptyCheckpoint(),
+					{
+						source: "update",
+						step: 0,
+						writes: {},
+						parents: {}
+					}
+				);
+			}
 		});
 
 		this.connection?.onRequest("wingman/cancelComposer", async () => {
