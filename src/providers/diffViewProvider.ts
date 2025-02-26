@@ -9,12 +9,12 @@ import {
 	CodeReview,
 	CodeReviewCommand,
 	FileDetails,
-	FileMetadata,
 } from "@shared/types/Message";
 import { AIProvider } from "../service/base";
 import { CodeReviewer } from "../commands/review/codeReviewer";
 import { LSPClient } from "../client";
 import { DiffViewCommand } from "@shared/types/v2/Composer";
+import { FileMetadata } from "@shared/types/v2/Message";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
@@ -88,7 +88,7 @@ export class DiffViewProvider {
 		);
 	}
 
-	async createDiffView({ file, onAccept, onReject }: DiffViewCommand & { onAccept: (file: FileMetadata) => void, onReject: (file: FileMetadata) => void }) {
+	async createDiffView({ file, threadId, onAccept, onReject }: DiffViewCommand & { onAccept: (file: FileMetadata, threadId: string) => void, onReject: (file: FileMetadata, threadId: string) => void }) {
 		if (this.panels.has(file.path)) {
 			const existingPanel = this.panels.get(file.path);
 			existingPanel?.reveal(vscode.ViewColumn.One);
@@ -129,6 +129,7 @@ export class DiffViewProvider {
 								isDarkTheme:
 									vscode.window.activeColorTheme.kind !== 1,
 								file,
+								threadId
 							} satisfies DiffViewCommand,
 						});
 						break;
@@ -138,10 +139,10 @@ export class DiffViewProvider {
 							file.path,
 							value as FileMetadata
 						);
-						onAccept(value as FileMetadata);
+						onAccept(value as FileMetadata, threadId);
 						break;
 					case "reject-file-changes":
-						onReject(value as FileMetadata);
+						onReject(value as FileMetadata, threadId);
 						if (currentPanel) {
 							currentPanel.dispose();
 							this.panels.delete(file.path);

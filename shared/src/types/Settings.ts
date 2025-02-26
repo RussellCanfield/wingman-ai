@@ -11,16 +11,6 @@ export interface Thread {
 	messages: ComposerMessage[];
 }
 
-export interface AddMessageToThread {
-	threadId: string;
-	message: ComposerMessage;
-}
-
-export interface RenameThread {
-	threadId: string;
-	title: string;
-}
-
 export interface WorkspaceSettings {
 	indexerSettings: IndexerSettings;
 	threads?: Thread[];

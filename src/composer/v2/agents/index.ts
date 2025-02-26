@@ -3,7 +3,8 @@ import {
     MessagesAnnotation,
     Annotation,
     StreamMode,
-    BaseCheckpointSaver
+    BaseCheckpointSaver,
+    CheckpointTuple
 } from "@langchain/langgraph";
 import { HumanMessage, BaseMessage } from "@langchain/core/messages";
 import { AIProvider } from "../../../service/base";
@@ -18,6 +19,8 @@ import path from "node:path";
 import { getTextDocumentFromPath } from "../../../server/files/utils";
 import { CodeParser } from "../../../server/files/parser";
 import { createFindFileDependenciesTool } from "../tools/file_dependencies";
+import { loggingProvider } from "../../../server/loggingProvider";
+import { RunnableConfig } from "@langchain/core/runnables";
 
 let controller = new AbortController();
 
@@ -43,7 +46,9 @@ const GraphAnnotation = Annotation.Root({
         reducer: (currentState, updateValue) => currentState ?? updateValue
     }),
     files: Annotation<FileMetadata[]>({
-        reducer: (currentState, updateValue) => currentState ?? updateValue,
+        reducer: (currentState, updateValue) => {
+            return currentState.concat(updateValue)
+        },
         default: () => []
     }),
 });
@@ -75,6 +80,104 @@ export class WingmanAgent {
             stateModifier: this.stateModifier,
             checkpointer: this.checkpointer
         });
+    }
+
+    private updateGraphState = async (tuple: CheckpointTuple, event: string, state: typeof GraphAnnotation.State) => {
+        const newCheckpoint = {
+            ...tuple.checkpoint,
+            id: Date.now().toString(),
+            channel_values: state
+        };
+
+        const metadata = {
+            source: "update" as const,
+            step: (tuple.metadata?.step || 0) + 1,
+            writes: tuple.metadata?.writes || {},
+            parents: {
+                [tuple.config.configurable?.checkpoint_id || ""]: "accept_file"
+            }
+        };
+
+        const newVersions: Record<string, string> = {};
+
+        await this.checkpointer.put(
+            tuple.config,
+            newCheckpoint,
+            metadata,
+            newVersions
+        );
+    }
+
+    acceptFile = async (file: FileMetadata, threadId: string) => {
+        const checkpoint = { configurable: { thread_id: threadId } };
+        const data = await this.checkpointer.get(checkpoint);
+        const tuple = await this.checkpointer.getTuple(checkpoint);
+
+        if (!tuple || !data?.channel_values) return;
+
+        const state = data.channel_values as typeof GraphAnnotation.State;
+
+        const matchingFile = state.files.find(f => f.id === file.id && f.path === file.path);
+
+        if (!matchingFile) {
+            loggingProvider.logError(`Unable to accept file - file not found! ${file.path} ${file.id}`);
+            return state;
+        }
+
+        matchingFile.accepted = true;
+        matchingFile.rejected = false;
+
+        await this.updateGraphState(tuple, "accept_file", state);
+
+        return state;
+    }
+
+    rejectFile = async (file: FileMetadata, threadId: string) => {
+        const checkpoint = { configurable: { thread_id: threadId } };
+        const data = await this.checkpointer.get(checkpoint);
+        const tuple = await this.checkpointer.getTuple(checkpoint);
+
+        if (!tuple || !data?.channel_values) return;
+
+        const state = data.channel_values as typeof GraphAnnotation.State;
+
+        const matchingFile = state.files.find(f => f.id === file.id && f.path === file.path);
+
+        if (!matchingFile) {
+            loggingProvider.logError(`Unable to accept file - file not found! ${file.path} ${file.id}`);
+            return state;
+        }
+
+        matchingFile.accepted = false;
+        matchingFile.rejected = true;
+
+        await this.updateGraphState(tuple, "reject_file", state);
+
+        return state;
+    }
+
+    undoFile = async (file: FileMetadata, threadId: string) => {
+        const checkpoint = { configurable: { thread_id: threadId } };
+        const data = await this.checkpointer.get(checkpoint);
+        const tuple = await this.checkpointer.getTuple(checkpoint);
+
+        if (!tuple || !data?.channel_values) return;
+
+        const state = data.channel_values as typeof GraphAnnotation.State;
+
+        const matchingFile = state.files.find(f => f.id === file.id && f.path === file.path);
+
+        if (!matchingFile) {
+            loggingProvider.logError(`Unable to accept file - file not found! ${file.path} ${file.id}`);
+            return state;
+        }
+
+        matchingFile.accepted = false;
+        matchingFile.rejected = false;
+
+        await this.updateGraphState(tuple, "undo_file", state);
+
+        return state;
     }
 
     stateModifier = (state: typeof MessagesAnnotation.State) => {
@@ -211,6 +314,7 @@ Contents: ${request.context.text}`
 
                     const txtDoc = await getTextDocumentFromPath(path.join(this.workspace, relativePath));
                     codeFiles.push({
+                        id: uuidv4(),
                         path: relativePath,
                         code: txtDoc?.getText(),
                         lastModified: Date.now()
@@ -301,7 +405,7 @@ Contents: ${request.context.text}`
                         yield pushEvent({
                             id: event.run_id,
                             type: 'tool-end',
-                            content: event.data?.output.content ?? '',
+                            content: event.name === "write_file" ? JSON.stringify(event.data.output.update.files[0]) : event.data?.output.content ?? '',
                             metadata: {
                                 tool: event.name,
                                 path: event.name.endsWith("_file") ? JSON.parse(event.data.input.input).filePath : undefined

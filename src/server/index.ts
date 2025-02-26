@@ -10,6 +10,8 @@ import {
 	type DocumentDiagnosticReport,
 	DidChangeWorkspaceFoldersNotification,
 } from "vscode-languageserver/node";
+import fs from "node:fs";
+import os from "node:os";
 import { URI } from "vscode-uri";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { Store } from "../store/vector";
@@ -25,7 +27,7 @@ import {
 } from "./files/utils";
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
-import { emptyCheckpoint, MemorySaver } from "@langchain/langgraph";
+import { emptyCheckpoint } from "@langchain/langgraph";
 import { AIProvider } from "../service/base";
 import {
 	EmbeddingProviders,
@@ -44,8 +46,11 @@ import { WebCrawler } from "./web";
 import { promises } from "node:fs";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer/v2/agents";
+import { FileSystemCheckpointer } from "../composer/checkpointer";
+import { AcceptFileEvent, RejectFileEvent, UndoFileEvent } from "@shared/types/Events";
+import { threadId } from "node:worker_threads";
 
-let memory = new MemorySaver();
+let memory: FileSystemCheckpointer;
 let modelProvider: AIProvider;
 let embeddingProvider: EmbeddingProviders;
 let embeddingSettings:
@@ -130,6 +135,8 @@ export class LSPServer {
 			this.removeFileInComposerGraph
 		);
 
+		memory = new FileSystemCheckpointer(this.getPersistancePath());
+
 		this.composer = new WingmanAgent(
 			modelProvider,
 			this.workspaceFolders[0],
@@ -152,14 +159,30 @@ export class LSPServer {
 		}
 	};
 
+	private getPersistancePath = () => {
+		const homeDir = os.homedir();
+		const targetPath = path.join(
+			homeDir,
+			".wingman",
+			path.basename(this.workspaceFolders[0]),
+			"checkpoints.json"
+		);
+
+		// Ensure the directory exists
+		const dbDir = path.dirname(targetPath);
+		fs.mkdirSync(dbDir, { recursive: true });
+
+		return targetPath;
+	}
+
 	private removeFileInComposerGraph = async (relativeFilePath: string) => {
 		if (!this.composer) {
 			return;
 		}
 
-		const file: FileMetadata = {
-			path: relativeFilePath
-		}
+		// const file: FileMetadata = {
+		// 	path: relativeFilePath
+		// }
 
 		//TODO - readd
 		//await this.composer.removeFile(file);
@@ -178,11 +201,11 @@ export class LSPServer {
 			return;
 		}
 
-		const file: FileMetadata = {
-			path: relativeFilePath,
-			code: await promises.readFile(path.join(this.workspaceFolders[0], relativeFilePath), 'utf-8'),
-			lastModified: Date.now()
-		}
+		// const file: FileMetadata = {
+		// 	path: relativeFilePath,
+		// 	code: await promises.readFile(path.join(this.workspaceFolders[0], relativeFilePath), 'utf-8'),
+		// 	lastModified: Date.now()
+		// }
 
 		//TODO - readd
 		//await this.composer.updateFile(file);
@@ -512,41 +535,16 @@ export class LSPServer {
 			//await this.executeComposer(request);
 		});
 
-		this.connection?.onRequest("wingman/acceptComposerFile", async (file: FileMetadata) => {
-			//TODO - readd
-			// const graphState = await this.composer?.acceptFile(file);
-
-			// const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
-
-			// if (allFilesReviewed) {
-			// 	this.executeComposer({
-			// 		input: "",
-			// 		contextFiles: []
-			// 	});
-			// }
-
-			// return graphState;
+		this.connection?.onRequest("wingman/acceptComposerFile", async ({ file, threadId }: AcceptFileEvent) => {
+			return this.composer?.acceptFile(file, threadId);;
 		});
 
-		this.connection?.onRequest("wingman/rejectComposerFile", async (file: FileMetadata) => {
-			//TODO - readd
-			/*const graphState = await this.composer?.rejectFile(file);
-
-			const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
-
-			if (allFilesReviewed) {
-				this.executeComposer({
-					input: "",
-					contextFiles: []
-				});
-			}
-
-			return graphState;*/
+		this.connection?.onRequest("wingman/rejectComposerFile", async ({ file, threadId }: RejectFileEvent) => {
+			return this.composer?.rejectFile(file, threadId);
 		});
 
-		this.connection?.onRequest("wingman/undoComposerFile", async (file: FileMetadata) => {
-			//TODO - readd
-			//return this.composer?.undoFile(file);
+		this.connection?.onRequest("wingman/undoComposerFile", async ({ file, threadId }: UndoFileEvent) => {
+			return this.composer?.undoFile(file, threadId);
 		});
 
 		this.connection?.onRequest("wingman/webSearch", async (input: string) => {

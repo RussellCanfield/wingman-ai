@@ -72,6 +72,7 @@ export interface BaseMessage {
 }
 
 export interface FileMetadata {
+	id: string;
 	description?: string;
 	path: string;
 	code?: string;

@@ -7,41 +7,53 @@ import { PiGitDiff } from "react-icons/pi";
 import { Tooltip } from "react-tooltip";
 import { vscode } from "../../../utilities/vscode";
 import { DiffViewCommand, StreamEvent } from "@shared/types/v2/Composer";
+import { useComposerContext } from "../../../context/composerContext";
+import { AcceptFileEvent, RejectFileEvent, UndoFileEvent } from "@shared/types/Events";
 
-const mergeIntoFile = (file: FileMetadata) => {
+const mergeIntoFile = (file: FileMetadata, threadId: string) => {
     if (file) {
         vscode.postMessage({
             command: "accept-file",
-            value: file,
+            value: {
+                file,
+                threadId
+            } satisfies AcceptFileEvent,
         });
     }
 };
 
-const rejectFile = (file: FileMetadata) => {
+const rejectFile = (file: FileMetadata, threadId: string) => {
     if (file) {
         vscode.postMessage({
             command: "reject-file",
-            value: file,
+            value: {
+                file,
+                threadId
+            } satisfies RejectFileEvent,
         });
     }
 }
 
-const showDiffview = (file: FileMetadata) => {
+const showDiffview = (file: FileMetadata, threadId: string) => {
     if (file) {
         vscode.postMessage({
             command: "diff-view",
             value: {
-                file
+                file,
+                threadId
             } satisfies DiffViewCommand,
         });
     }
 };
 
-const undoFile = (file: FileMetadata) => {
+const undoFile = (file: FileMetadata, threadId: string) => {
     if (file) {
         vscode.postMessage({
             command: "undo-file",
-            value: file
+            value: {
+                file,
+                threadId
+            } satisfies UndoFileEvent
         });
     }
 }
@@ -52,6 +64,7 @@ const openFile = (file: FileMetadata) => {
             command: "open-file",
             value: {
                 path: file.path,
+                id: file.id
             } satisfies FileMetadata,
         });
     }
@@ -80,8 +93,11 @@ export const ChatArtifact = ({
     loading: boolean,
     isLightTheme: boolean
 }) => {
+    const { activeThread } = useComposerContext();
+
     let file: FileMetadata = {
-        path: event?.metadata?.path!
+        path: event?.metadata?.path!,
+        id: crypto.randomUUID()
     }
 
     const isEdit = event?.metadata?.tool === 'write_file';
@@ -148,7 +164,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Reject changes"
                                     className="p-2"
-                                    onClick={() => rejectFile(file)}
+                                    onClick={() => rejectFile(file, activeThread!.id)}
                                 >
                                     <HiOutlineXMark size={18} />
                                 </button>
@@ -159,7 +175,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Show diff"
                                     className="p-2"
-                                    onClick={() => showDiffview(file)}
+                                    onClick={() => showDiffview(file, activeThread!.id)}
                                 >
                                     <PiGitDiff size={16} />
                                 </button>
@@ -170,7 +186,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Accept changes"
                                     className="p-2"
-                                    onClick={() => mergeIntoFile(file)}
+                                    onClick={() => mergeIntoFile(file, activeThread!.id)}
                                 >
                                     <GrCheckmark size={16} />
                                 </button>
@@ -185,7 +201,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Undo changes"
                                     className="p-2"
-                                    onClick={() => undoFile(file)}
+                                    onClick={() => undoFile(file, activeThread!.id)}
                                 >
                                     <FaUndo size={14} />
                                 </button>

@@ -8,7 +8,7 @@ import { ChatInput } from "./Input/ChatInput";
 import ChatResponseList from "./ChatList";
 import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
-import { AddMessageToThread } from "@shared/types/Settings";
+import { AddMessageToThreadEvent } from "@shared/types/Events";
 
 let currentMessage = "";
 
@@ -79,7 +79,7 @@ export default function Compose() {
 
 		vscode.postMessage({
 			command: "add-message-to-thread",
-			value: { threadId, message } satisfies AddMessageToThread
+			value: { threadId, message } satisfies AddMessageToThreadEvent
 		});
 
 		setComposerMessages((messages) => [

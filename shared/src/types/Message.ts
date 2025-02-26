@@ -75,16 +75,6 @@ export interface BaseMessage {
 	createdAt?: number;
 }
 
-export interface FileMetadata {
-	path: string;
-	code?: string;
-	description?: string;
-	plan?: string[];
-	diff?: string;
-	language?: string;
-	lastModified?: number;
-}
-
 export interface CodeContextDetails {
 	lineRange: string;
 	fileName: string;

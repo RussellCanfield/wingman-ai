@@ -28,6 +28,7 @@ import {
 import { Workspace } from "../service/workspace";
 import { FileMetadata } from "@shared/types/v2/Message";
 import { PlanExecuteState } from "@shared/types/v2/Composer";
+import { AcceptFileEvent, RejectFileEvent, UndoFileEvent } from "@shared/types/Events";
 
 let client: LanguageClient;
 
@@ -207,27 +208,15 @@ export class LSPClient {
 		return client.sendRequest("wingman/clearChatHistory", activeThreadId);
 	};
 
-	acceptComposerFile = async (file: FileMetadata): Promise<PlanExecuteState> => {
-		return client.sendRequest("wingman/acceptComposerFile", file);
+	acceptComposerFile = async ({ file, threadId }: AcceptFileEvent): Promise<PlanExecuteState> => {
+		return client.sendRequest("wingman/acceptComposerFile", { file, threadId });
 	}
 
-	rejectComposerFile = async (file: FileMetadata): Promise<PlanExecuteState> => {
-		return client.sendRequest("wingman/rejectComposerFile", file);
+	rejectComposerFile = async ({ file, threadId }: RejectFileEvent): Promise<PlanExecuteState> => {
+		return client.sendRequest("wingman/rejectComposerFile", { file, threadId });
 	}
 
-	undoComposerFile = async (file: FileMetadata): Promise<PlanExecuteState> => {
-		const fsPath = path.isAbsolute(file.path)
-			? file.path
-			: path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, file.path);
-
-		// Write the original content back to the file
-		if (file.original) {
-			await vscode.workspace.fs.writeFile(
-				vscode.Uri.file(fsPath),
-				Buffer.from(file.original)
-			);
-		}
-
+	undoComposerFile = async ({ file, threadId }: UndoFileEvent): Promise<PlanExecuteState> => {
 		return client.sendRequest("wingman/undoComposerFile", file);
 	}
 

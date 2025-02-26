@@ -5,6 +5,8 @@ import path from "node:path";
 import { z } from "zod";
 import { baseFileSchema } from "./base_file_schema";
 import { FileMetadata } from "@shared/types/v2/Message";
+import { Command } from "@langchain/langgraph";
+import { v4 as uuidv4 } from "uuid";
 
 export const writeFileSchema = baseFileSchema.extend({
     contents: z.string().describe("The contents of the file to write"),
@@ -69,24 +71,42 @@ const generateDiffFromModifiedCode = async (newCode: string, filePath: string, o
  */
 export const createWriteFileTool = (workspace: string) => {
     return tool(
-        async (input) => {
-            let fileContents = input.contents;
-            const filePath = path.join(workspace, input.filePath);
-            if (fs.existsSync(filePath)) {
-                try {
-                    fileContents = await promises.readFile(filePath, { encoding: 'utf-8' });
-                } catch (e) {
-                    console.warn(`Failed to read file ${filePath}:`, e);
-                    // Continue with empty string for new files
+        async (input, config) => {
+            try {
+                let fileContents = "";
+                const filePath = path.join(workspace, input.filePath);
+                if (fs.existsSync(filePath)) {
+                    try {
+                        fileContents = await promises.readFile(filePath, { encoding: 'utf-8' });
+                    } catch (e) {
+                        console.warn(`Failed to read file ${filePath}:`, e);
+                    }
                 }
-            }
 
-            return {
-                path: input.filePath,
-                code: input.contents,
-                original: fileContents ?? "",
-                diff: await generateDiffFromModifiedCode(input.contents, input.filePath)
-            } satisfies FileMetadata;
+                const file: FileMetadata = {
+                    id: uuidv4(),
+                    path: input.filePath,
+                    code: input.contents,
+                    original: fileContents ?? "",
+                    diff: await generateDiffFromModifiedCode(input.contents, input.filePath, fileContents)
+                }
+
+                return new Command({
+                    update: {
+                        files: [file],
+                        messages: [
+                            {
+                                role: "tool",
+                                content: `Successfully wrote ${input.filePath}`,
+                                tool_call_id: config.toolCall.id,
+                            },
+                        ],
+                    },
+                });
+            } catch (e) {
+                console.error(e);
+                throw e;
+            }
         },
         {
             name: "write_file",

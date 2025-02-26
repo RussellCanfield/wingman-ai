@@ -4,21 +4,17 @@ import { eventEmitter } from "../events/eventEmitter";
 import { AIProvider } from "../service/base";
 import {
 	AppMessage,
-	CodeContext,
 	CodeContextDetails,
 	CodeReviewMessage,
-	CommitMessage,
-	FileMetadata,
 } from "@shared/types/Message";
-import { AddMessageToThread, AppState, RenameThread, Settings, Thread } from "@shared/types/Settings";
+import { AppState, Settings, Thread } from "@shared/types/Settings";
+import { AcceptFileEvent, AddMessageToThreadEvent, RenameThreadEvent, RejectFileEvent, UndoFileEvent } from '@shared/types/Events';
 import { IndexerSettings } from "@shared/types/Indexer";
-import { loggingProvider } from "./loggingProvider";
 import {
 	addNoneAttributeToLink,
 	extractCodeBlock,
 	getActiveWorkspace,
 	getNonce,
-	getSymbolsFromOpenFiles,
 } from "./utilities";
 import { LSPClient } from "../client/index";
 import {
@@ -27,23 +23,15 @@ import {
 	FileSearchResult,
 } from "@shared/types/v2/Composer";
 import { DiffViewProvider } from "./diffViewProvider";
-import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
 import {
-	EVENT_CHAT_SENT,
-	EVENT_COMMIT_MSG,
 	EVENT_REVIEW_FILE_BY_FILE,
-	EVENT_VALIDATE_FAILED,
-	EVENT_VALIDATE_SUCCEEDED,
 	telemetry,
 } from "./telemetryProvider";
 import { Workspace } from "../service/workspace";
 import { getGitignorePatterns } from "../server/files/utils";
-import { CodeReviewer } from "../commands/review/codeReviewer";
 import { ConfigViewProvider } from "./configViewProvider";
 import path from "node:path";
-
-let abortController = new AbortController();
-let wingmanTerminal: WingmanTerminal | undefined;
+import { FileMetadata } from "@shared/types/v2/Message";
 
 export type ChatView = "composer" | "indexer";
 
@@ -105,92 +93,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		this._lspClient.setComposerWebViewReference(webviewView.webview);
 
 		token.onCancellationRequested((e) => {
-			abortController.abort();
+			this._lspClient.cancelComposer();
 			eventEmitter._onQueryComplete.fire();
 		});
-
-		wingmanTerminal = new WingmanTerminal(
-			vscode.workspace.workspaceFolders?.[0].uri.fsPath || ""
-		);
-		wingmanTerminal.subscribe(async (data, code) => {
-			if (!data) return;
-
-			if (code === CustomTimeoutExitCode) {
-				loggingProvider.logInfo("Validation command timeout occurred");
-				this._webview?.postMessage({
-					command: "validation-success",
-				});
-				wingmanTerminal?.cancel();
-				return;
-			}
-
-			loggingProvider.logInfo(`Validation command output:\n\n${data}`);
-			const output = await this._aiProvider.getLightweightModel()
-				.invoke(`You are a senior software engineer.
-Analyze the following command output.
-
-Rules:
-- Determine if the command ran successfully or not.
-- If the command did not run successfully try to succinctly identify what the error may be.
-- Provide a concise summary of the error, if present.
-- The summary should include details required to take action and fix the error(s). This might include files or paths.
-- If there was no exit code, and an error is not obvious, assume it was successful.
-- Return your response in JSON format, do not include markdown or any other text.
-
-Example JSON output format:
-{
-   "success": true|false,
-   "summary": "Command files due to xyz"
-}
-   
------
-
-Command executed:
-${this._settings.validationSettings.validationCommand}
-
-Exit code: 
-${code || "Not available."}
-
-Command output:
-${data}
-`);
-
-			const result = JSON.parse(output.content.toString()) as {
-				success: boolean;
-				summary: string;
-			};
-
-			if (result.success) {
-				telemetry.sendEvent(EVENT_VALIDATE_SUCCEEDED, {
-					command:
-						this._settings.validationSettings.validationCommand ||
-						"",
-				});
-				this._webview?.postMessage({
-					command: "validation-success",
-				});
-				wingmanTerminal?.cancel();
-				return;
-			}
-
-			telemetry.sendEvent(EVENT_VALIDATE_FAILED, {
-				command:
-					this._settings.validationSettings.validationCommand || "",
-			});
-
-			this._webview?.postMessage({
-				command: "validation-failed",
-				value: `Fixing build errors...
-
-Here is a summary of the command output:
-${result.summary}`,
-			});
-		});
-
-		const codeReviewer = new CodeReviewer(
-			this._workspace.workspacePath,
-			this._aiProvider
-		);
 
 		this._disposables.push(
 			webviewView.webview.onDidReceiveMessage(
@@ -211,7 +116,7 @@ ${result.summary}`,
 					// TODO - move to a mediator pattern
 					switch (command) {
 						case "add-message-to-thread":
-							await this.addMessageToThread(value as AddMessageToThread);
+							await this.addMessageToThread(value as AddMessageToThreadEvent);
 							webviewView.webview.postMessage({
 								command: "thread-data",
 								value: this._workspace.getSettings()
@@ -239,38 +144,38 @@ ${result.summary}`,
 							});
 							break;
 						case "rename-thread":
-							await this.renameThread(value as RenameThread);
+							await this.renameThread(value as RenameThreadEvent);
 							webviewView.webview.postMessage({
 								command: "thread-data",
 								value: this._workspace.getSettings()
 							});
 							break;
 
-						case "undo-file":
+						case "accept-file":
+							await this.acceptFile(value as AcceptFileEvent);
 							webviewView.webview.postMessage({
-								command: "compose-response",
-								value: {
-									node: "composer-replace",
-									values: {
-										...(await this._lspClient.undoComposerFile(value as FileMetadata))
-									}
-								}
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
+							break;
+						case "reject-file":
+							await this.rejectFile(value as RejectFileEvent)
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
+							break;
+						case "undo-file":
+							await this.undoFile(value as UndoFileEvent);
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
 							});
 							break;
 						case "open-file":
 							await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(this._workspace.workspacePath, (value as FileMetadata).path)));
 							break;
-						case "reject-file":
-							webviewView.webview.postMessage({
-								command: "compose-response",
-								value: {
-									node: "composer-replace",
-									values: {
-										...(await this._lspClient.rejectComposerFile(value as FileMetadata))
-									}
-								}
-							});
-							break;
+
 						case "openSettings":
 							this._settingsViewProvider.openInPanel();
 							break;
@@ -282,60 +187,6 @@ ${result.summary}`,
 							this._diffViewProvider.createCodeReviewView(
 								(value as CodeReviewMessage).review
 							);
-							break;
-						case "web_search":
-							this.handleWebSearch(value as string, webviewView.webview);
-							break;
-						case "review":
-							const review =
-								await codeReviewer.generateDiffsAndSummary(
-									String(value)
-								);
-
-							telemetry.sendEvent(EVENT_COMMIT_MSG);
-
-							if (!review) {
-								webviewView.webview.postMessage({
-									command: "code-review-failed",
-								});
-								return;
-							}
-
-							webviewView.webview.postMessage({
-								command: "code-review-result",
-								value: {
-									review,
-									type: "code-review",
-								} satisfies CodeReviewMessage,
-							});
-							break;
-						case "commit_msg":
-							const commitReview =
-								await codeReviewer.generateCommitMessage(
-									String(value)
-								);
-
-							telemetry.sendEvent(EVENT_COMMIT_MSG);
-
-							if (!commitReview) {
-								webviewView.webview.postMessage({
-									command: "commit-msg-failed",
-								});
-								return;
-							}
-
-							webviewView.webview.postMessage({
-								command: "commit-msg-result",
-								value: {
-									message: `Please use the following commit message for your staged changes:
-
-\`\`\`plaintext								
-${commitReview}
-\`\`\``,
-									type: "commit-msg",
-									loading: false
-								} satisfies CommitMessage,
-							});
 							break;
 						case "state-update":
 							const appState = value as AppState;
@@ -364,52 +215,17 @@ ${commitReview}
 							);
 							break;
 						case "diff-view":
-							const { file } = value as DiffViewCommand;
-
+							const { file, threadId } = value as DiffViewCommand;
 							this._diffViewProvider.createDiffView({
 								file,
-								onAccept: async (f: FileMetadata) => {
-									webviewView.webview.postMessage({
-										command: "compose-response",
-										value: {
-											node: "composer-replace",
-											values: {
-												...(await this._lspClient.acceptComposerFile(f))
-											}
-										}
-									});
-
+								onAccept: async (file: FileMetadata, threadId: string) => {
+									await this.acceptFile({ file, threadId });
 								},
-								onReject: async (f: FileMetadata) => {
-									webviewView.webview.postMessage({
-										command: "compose-response",
-										value: {
-											node: "composer-replace",
-											values: {
-												...(await this._lspClient.rejectComposerFile(f))
-											}
-										}
-									});
-								}
+								onReject: async (file: FileMetadata, threadId: string) => {
+									await this.rejectFile({ file, threadId });
+								},
+								threadId
 							});
-							break;
-						case "validate":
-							if (
-								this._settings.validationSettings
-									?.validationCommand
-							) {
-								loggingProvider.logInfo(
-									`Validating using command: ${this._settings.validationSettings.validationCommand}`
-								);
-								wingmanTerminal?.spawn();
-								wingmanTerminal?.sendCommand(
-									this._settings.validationSettings
-										.validationCommand
-								);
-							}
-							break;
-						case "cancel-validate":
-							wingmanTerminal?.cancel();
 							break;
 						case "clear-chat-history":
 							this.clearChatHistory();
@@ -423,41 +239,7 @@ ${commitReview}
 							terminal.show();
 							terminal.sendText(terminalCommand);
 							break;
-						case "accept-file":
-							const acceptedFile = value as FileMetadata;
-							const { path: artifactFile, code: markdown } = acceptedFile;
 
-							let code = markdown?.startsWith("```")
-								? extractCodeBlock(markdown)
-								: markdown;
-							const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
-
-							const fileUri = vscode.Uri.joinPath(
-								vscode.Uri.parse(this._workspace.workspacePath),
-								relativeFilePath
-							);
-
-							try {
-								// Convert the code string to Uint8Array for writing
-								const contentBytes = new TextEncoder().encode(code);
-
-								// Write the file contents directly
-								await vscode.workspace.fs.writeFile(fileUri, contentBytes);
-
-								webviewView.webview.postMessage({
-									command: "compose-response",
-									value: {
-										node: "composer-replace",
-										values: {
-											...(await this._lspClient.acceptComposerFile(acceptedFile))
-										}
-									}
-								});
-							} catch (error) {
-								console.error('Failed to write file:', error);
-								throw error;
-							}
-							break;
 						case "get-files":
 							const searchTerm = value as string | undefined;
 							if (!searchTerm || searchTerm?.length === 0) {
@@ -531,36 +313,7 @@ ${commitReview}
 							});
 							break;
 						case "cancel": {
-							abortController.abort();
 							await this._lspClient.cancelComposer();
-							break;
-						}
-						case "clipboard": {
-							vscode.env.clipboard.writeText(value as string);
-							break;
-						}
-						case "copyToFile": {
-							this.sendContentToNewDocument(value as string);
-							break;
-						}
-						case "showContext": {
-							const { fileName, lineRange } =
-								value as CodeContext;
-							const [start, end] = lineRange
-								.split("-")
-								.map(Number);
-							const uri = vscode.Uri.file(fileName);
-							vscode.window.showTextDocument(uri).then(() => {
-								if (!vscode.window.activeTextEditor) {
-									return;
-								}
-
-								vscode.window.activeTextEditor.selection =
-									new vscode.Selection(
-										new vscode.Position(start, 0),
-										new vscode.Position(end, 0)
-									);
-							});
 							break;
 						}
 						case "ready": {
@@ -619,177 +372,128 @@ ${commitReview}
 		);
 	}
 
-	private async sendContentToNewDocument(content: string) {
-		const newFile = await vscode.workspace.openTextDocument({
-			content,
-		});
-		vscode.window.showTextDocument(newFile);
-	}
+	private async undoFile({ file, threadId }: UndoFileEvent) {
+		const { path: artifactFile, original } = file;
 
-	private async handleChatMessage({
-		value,
-		webview,
-	}: Pick<AppMessage, "value"> & { webview: vscode.Webview }) {
-		abortController = new AbortController();
+		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
 
-		await this.streamChatResponse(
-			value as string,
-			getChatContext(
-				this._settings.interactionSettings.chatContextWindow
-			),
-			webview
-		);
-	}
-
-	private async streamChatResponse(
-		prompt: string,
-		context: CodeContextDetails | undefined,
-		webview: vscode.Webview
-	) {
-		let ragContext = "";
-
-		const { codeDocs, projectDetails } =
-			await this._lspClient.getEmbeddings(prompt);
-
-		const symbols = await getSymbolsFromOpenFiles();
-
-		try {
-			telemetry.sendEvent(EVENT_CHAT_SENT, {
-				embeddingCount: (codeDocs?.length ?? 0).toString(),
-				aiProvider: this._settings.aiProvider,
-				model: this._settings.providerSettings[
-					this._settings.aiProvider
-				]?.chatModel,
-			});
-		} catch { }
-
-		ragContext = `{LANGUAGE_TEMPLATE}
-{FILE_TEMPLATE}
-
-{PROJECT_TEMPLATE}
-
-{CONTEXT_TEMPLATE}
-
-{SYMBOLS_TEMPLATE}
-
-{CURRENT_LINE_TEMPLATE}`;
-
-		ragContext = ragContext.replace(
-			"{LANGUAGE_TEMPLATE}",
-			!context?.language ? "" : `Current language:\n${context?.language}.`
+		const fileUri = vscode.Uri.joinPath(
+			vscode.Uri.parse(this._workspace.workspacePath),
+			relativeFilePath
 		);
 
-		ragContext = ragContext.replace(
-			"{FILE_TEMPLATE}",
-			!context?.fileName ? "" : `Current file:\n${context?.fileName}`
-		);
-
-		ragContext =
-			ragContext.replace(
-				"{CONTEXT_TEMPLATE}",
-				!context?.text
-					? ""
-					: context.fromSelection
-						? `The user has selected the following code and wishes you to focus on it:\n${context.text}`
-						: `The user has provided a snippet of code from the file they are working on:\n${context.text}`
-			) + "\n\n=======";
-
-		ragContext = ragContext.replace(
-			"{CURRENT_LINE_TEMPLATE}",
-			!context?.currentLine || context?.fromSelection
-				? ""
-				: `The user is currently working on the following line:\n${context?.currentLine}`
-		);
-
-		if (projectDetails) {
-			ragContext = ragContext.replace(
-				"{PROJECT_TEMPLATE}",
-				!projectDetails
-					? ""
-					: `Here are details about the current project:
-${projectDetails}
-
-=======`
-			);
-		}
-
-		if (codeDocs?.length === 0) {
-			ragContext = ragContext.replace(
-				"{SYMBOLS_TEMPLATE}",
-				`Here are the available types reference by the code in context to use as a reference when answering questions, these may not be related to the code provided:
-
-${symbols}
-
-=======`
-			);
+		if (original) {
+			const contentBytes = new TextEncoder().encode(original);
+			await vscode.workspace.fs.writeFile(fileUri, contentBytes);
 		} else {
-			ragContext = ragContext.replace(
-				"{SYMBOLS_TEMPLATE}",
-				`Use these code snippets from the current project as a reference when answering questions.
-These code snippets serve as additional context for the user's question:
-
-${codeDocs.join("\n\n----\n")}
-
-=======`
-			);
+			await vscode.workspace.fs.delete(fileUri);
 		}
 
-		if (context) {
-			const { fileName, lineRange, workspaceName } = context;
-			webview.postMessage({
-				command: "context",
-				value: {
-					fileName,
-					lineRange,
-					workspaceName,
-				} satisfies CodeContext,
-			});
+		const targetThread = await this._workspace.getThreadById(threadId);
+		if (targetThread) {
+			const targetMessage = targetThread.messages.find(m => m.events?.some(e => !!e.metadata?.tool));
+			if (targetMessage) {
+				const filesWritten = targetMessage.events?.filter(e => e.metadata?.tool && e.metadata.tool === "write_file");
+				for (const fileWritten of filesWritten ?? []) {
+					const file = JSON.parse(fileWritten.content) as FileMetadata;
+					if (file.id === file.id) {
+						file.accepted = false;
+						file.rejected = false;
+						fileWritten.content = JSON.stringify(file);
+						await this._workspace.updateThread(threadId, { ...targetThread });
+						this._webview?.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings()
+						});
+						return;
+					}
+				}
+			}
 		}
-
-		eventEmitter._onQueryStart.fire();
-
-		const response = this._aiProvider.chat(
-			prompt,
-			ragContext,
-			abortController.signal
-		);
-
-		for await (const chunk of response) {
-			webview.postMessage({
-				command: "response",
-				value: chunk,
-			});
-		}
-
-		eventEmitter._onQueryComplete.fire();
-
-		webview.postMessage({
-			command: "done",
-			value: null,
-		});
 	}
 
-	private async handleWebSearch(input: string, webview: vscode.Webview) {
-		try {
-			const stream = this._lspClient.streamWebSearch(input);
+	private async acceptFile({ file, threadId }: AcceptFileEvent) {
+		const { path: artifactFile, code: markdown } = file;
 
-			let msg = '';
-			for await (const chunk of stream) {
-				msg += chunk;
+		let code = markdown?.startsWith("```")
+			? extractCodeBlock(markdown)
+			: markdown;
+		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+
+		const fileUri = vscode.Uri.joinPath(
+			vscode.Uri.parse(this._workspace.workspacePath),
+			relativeFilePath
+		);
+
+		// Convert the code string to Uint8Array for writing
+		const contentBytes = new TextEncoder().encode(code);
+
+		// Write the file contents directly
+		await vscode.workspace.fs.writeFile(fileUri, contentBytes);
+
+		const targetThread = await this._workspace.getThreadById(threadId);
+		if (targetThread) {
+			const targetMessage = targetThread.messages.find(m => m.events?.some(e => !!e.metadata?.tool));
+			if (targetMessage) {
+				const filesWritten = targetMessage.events?.filter(e => e.metadata?.tool && e.metadata.tool === "write_file");
+				for (const fileWritten of filesWritten ?? []) {
+					const file = JSON.parse(fileWritten.content) as FileMetadata;
+					if (file.id === file.id) {
+						file.accepted = true;
+						file.rejected = false;
+						fileWritten.content = JSON.stringify(file);
+						await this._workspace.updateThread(threadId, { ...targetThread });
+						this._webview?.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings()
+						});
+						return;
+					}
+				}
 			}
+		}
 
-			await this.handleChatMessage({
-				value: `Take the following researched information and help answer my question.
-Question ${input}
+	}
 
-Researched Information:
-${msg}`, webview
-			});
-		} catch (error) {
-			webview.postMessage({
-				command: "done",
-				content: error instanceof Error ? error.message : "Search failed"
-			});
+	private async rejectFile({ file, threadId }: AcceptFileEvent) {
+		const { path: artifactFile, code: markdown } = file;
+
+		let code = markdown?.startsWith("```")
+			? extractCodeBlock(markdown)
+			: markdown;
+		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+
+		const fileUri = vscode.Uri.joinPath(
+			vscode.Uri.parse(this._workspace.workspacePath),
+			relativeFilePath
+		);
+
+		// Convert the code string to Uint8Array for writing
+		const contentBytes = new TextEncoder().encode(code);
+
+		// Write the file contents directly
+		await vscode.workspace.fs.writeFile(fileUri, contentBytes);
+
+		const targetThread = await this._workspace.getThreadById(threadId);
+		if (targetThread) {
+			const targetMessage = targetThread.messages.find(m => m.events?.some(e => !!e.metadata?.tool));
+			if (targetMessage) {
+				const filesWritten = targetMessage.events?.filter(e => e.metadata?.tool && e.metadata.tool === "write_file");
+				for (const fileWritten of filesWritten ?? []) {
+					const file = JSON.parse(fileWritten.content) as FileMetadata;
+					if (file.id === file.id) {
+						file.accepted = false;
+						file.rejected = true;
+						fileWritten.content = JSON.stringify(file);
+						await this._workspace.updateThread(threadId, { ...targetThread });
+						this._webview?.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings()
+						});
+						return;
+					}
+				}
+			}
 		}
 	}
 
@@ -797,8 +501,8 @@ ${msg}`, webview
 		const settings = this._workspace.getSettings();
 
 		if (settings.activeThreadId) {
-			await this._lspClient.clearChatHistory(settings.activeThreadId);
 			await this._workspace.updateThread(settings.activeThreadId, { messages: [] });
+			await this._lspClient.clearChatHistory(settings.activeThreadId);
 		}
 	}
 
@@ -806,7 +510,7 @@ ${msg}`, webview
 		await this._workspace.deleteThread(threadId);
 	}
 
-	private async renameThread({ threadId, title }: RenameThread) {
+	private async renameThread({ threadId, title }: RenameThreadEvent) {
 		await this._workspace.updateThread(threadId, { title });
 	}
 
@@ -818,7 +522,7 @@ ${msg}`, webview
 		await this._workspace.createThread(thread.title);
 	}
 
-	private async addMessageToThread({ threadId, message }: AddMessageToThread) {
+	private async addMessageToThread({ threadId, message }: AddMessageToThreadEvent) {
 		const activeThread = await this._workspace.getThreadById(threadId);
 
 		if (activeThread) {

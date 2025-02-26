@@ -1,9 +1,9 @@
 import { ComposerMessage, ComposerResponse, FileSearchResult } from "@shared/types/v2/Composer";
 import { AppMessage } from "@shared/types/v2/Message";
-import { AddMessageToThread, AppState, RenameThread, Thread, WorkspaceSettings } from "@shared/types/Settings";
+import { AppState, Thread } from "@shared/types/Settings";
+import { AddMessageToThreadEvent, RenameThreadEvent } from '@shared/types/Events';
 import React, { createContext, FC, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
 import { vscode } from "../utilities/vscode";
-import { v4 as uuidv4 } from 'uuid';
 
 interface ComposerContextType {
   composerMessages: ComposerMessage[];
@@ -69,7 +69,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const createThread = (title: string) => {
     const timestamp = Date.now();
     const newThread: Thread = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       title,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -154,7 +154,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     // Notify extension about thread rename
     vscode.postMessage({
       command: "rename-thread",
-      value: { threadId, title: newTitle } satisfies RenameThread
+      value: { threadId, title: newTitle } satisfies RenameThreadEvent
     });
   };
 
@@ -180,7 +180,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
 
         vscode.postMessage({
           command: "add-message-to-thread",
-          value: { threadId: values.threadId, message: newMessage } satisfies AddMessageToThread
+          value: { threadId: values.threadId, message: newMessage } satisfies AddMessageToThreadEvent
         });
 
         setLoading(false);
