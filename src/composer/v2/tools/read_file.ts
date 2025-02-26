@@ -1,20 +1,18 @@
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool } from "@langchain/core/tools";
 import fs, { promises } from "node:fs";
 import path from "node:path";
-import { z } from "zod";
+import { baseFileSchema } from "./base_file_schema";
 
-const readFileSchema = z.object({
-    filePath: z.string().describe("The relative path of the file to read")
+export const readFileSchema = baseFileSchema.extend({
+    // Additional read-specific properties would go here
 });
 
-type ReadFileInput = z.infer<typeof readFileSchema>;
-
+/**
+ * Creates a tool that reads file contents
+ */
 export const createReadFileTool = (workspace: string) => {
-    return new DynamicStructuredTool<typeof readFileSchema>({
-        name: "read_file",
-        description: "Reads the exact contents of a specific file. Use this tool when you need to check: 1) dependency management files (package.json, pnpm-workspace.yaml, etc.), 2) configuration files, or 3) a specific file you already know the path to.",
-        schema: readFileSchema,
-        async func(input: ReadFileInput) {
+    return tool(
+        async (input) => {
             const filePath = path.isAbsolute(input.filePath) ?
                 input.filePath : path.join(workspace, input.filePath);
 
@@ -23,6 +21,11 @@ export const createReadFileTool = (workspace: string) => {
             }
 
             return (await promises.readFile(filePath)).toString();
+        },
+        {
+            name: "read_file",
+            description: "Reads the contents of a specific file.",
+            schema: readFileSchema
         }
-    });
+    );
 };

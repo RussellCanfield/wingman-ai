@@ -303,7 +303,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 				<textarea
 					placeholder={
 						activeFiles.length === 0
-							? "Type here to begin, use '@' to search for files to add as context."
+							? "Ask a question or describe a task, and I'll help you"
 							: ""
 					}
 					value={inputValue}

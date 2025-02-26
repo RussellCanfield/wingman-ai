@@ -15,7 +15,8 @@ import {
 } from "./graph";
 import { filterSystemLibraries, getTextDocumentFromUri } from "./utils";
 import { SymbolRetriever } from "../retriever";
-import { pathToFileURL } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
+import path from "path";
 
 async function loadAstGrepBinding() {
 	const { js } = await import("@ast-grep/napi");
@@ -25,7 +26,9 @@ async function loadAstGrepBinding() {
 export class CodeParser {
 	private js: typeof astGrep | undefined;
 
-	constructor(private readonly symbolRetriever: SymbolRetriever) { }
+	constructor(
+		private readonly workspace: string,
+		private readonly symbolRetriever: SymbolRetriever) { }
 
 	async initialize() {
 		this.js = await loadAstGrepBinding();
@@ -188,7 +191,7 @@ export class CodeParser {
 				const refSymbolRange = refSymbol.range();
 				const symbolPosition = Position.create(
 					symbolDefRange.start.line + refSymbolRange.start.line,
-					symbolDefRange.start.character + refSymbolRange.start.column
+					refSymbolRange.start.column
 				);
 				const [def, typeDef] = await Promise.all([
 					this.symbolRetriever.getDefinition(
@@ -361,6 +364,92 @@ export class CodeParser {
 		}
 
 		return Array.from(uniqueImportsMap.values());
+	}
+
+	createNodesFromDocument = async (
+		textDocument: TextDocument
+	) => {
+		const importEdges: CodeGraphEdgeMap = new Map();
+		const exportEdges: CodeGraphEdgeMap = new Map();
+		const nodes: Map<string, CodeGraphNode> = new Map();
+
+		const symbols = await this.symbolRetriever.getSymbols(textDocument.uri);
+
+		const documentText = textDocument.getText();
+
+		if (symbols.length === 0) {
+			// calculate the last line and last character of the document
+			const lastLine = textDocument.lineCount - 1;
+			const lastCharacter = documentText.split("\n")?.pop()?.length || 0;
+
+			const node = createCodeNode(
+				Location.create(
+					textDocument.uri,
+					Range.create(
+						Position.create(0, 0),
+						Position.create(lastLine, lastCharacter)
+					)
+				)
+			);
+
+			nodes.set(node.id, node);
+			return { nodes, importEdges, exportEdges };
+		}
+
+		for (const symbol of symbols) {
+			const { node, extractedCodeNodes } =
+				await this.processSymbol(textDocument, symbol);
+
+			nodes.set(node.id, node);
+
+			for (const extractedCodeNode of extractedCodeNodes) {
+				nodes.set(extractedCodeNode.id, extractedCodeNode);
+				if (node.id !== extractedCodeNode.id) {
+					const convertedNodeId = this.convertNodeId(node.id);
+					const convertedExtractedId = this.convertNodeId(extractedCodeNode.id);
+
+					if (importEdges.has(convertedNodeId)) {
+						importEdges.get(convertedNodeId)?.add(convertedExtractedId);
+					} else {
+						importEdges.set(
+							convertedNodeId,
+							new Set<string>().add(convertedExtractedId)
+						);
+					}
+
+					if (exportEdges.has(convertedExtractedId)) {
+						exportEdges.get(convertedExtractedId)?.add(convertedNodeId);
+					} else {
+						exportEdges.set(
+							convertedExtractedId,
+							new Set<string>().add(convertedNodeId)
+						);
+					}
+				}
+			}
+
+			const childNodes = await this.processChildSymbols(
+				textDocument,
+				node,
+				symbol,
+				importEdges,
+				exportEdges
+			);
+
+			for (const childNode of childNodes) {
+				nodes.set(childNode.id, childNode);
+			}
+		}
+
+		return {
+			nodes,
+			importEdges,
+			exportEdges,
+		};
+	};
+
+	convertNodeId(id: string) {
+		return path.relative(this.workspace, (fileURLToPath(id)));
 	}
 
 	async retrieveCodeByPathAndRange(

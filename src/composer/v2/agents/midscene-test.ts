@@ -15,10 +15,8 @@ import { AzureAI } from "../../../service/azure/azure";
 import { createReadFileTool } from "../tools/read_file";
 import { createWriteFileTool } from "../tools/write_file";
 import { cleanupProcesses, createBackgroundProcessTool } from "../tools/background_process";
-import { createSemanticSearchTool } from "../tools/semantic_search";
 import { CodeGraph } from "../../../server/files/graph";
 import { Store } from "../../../store/vector";
-import { createDisplayInfoTool } from "../tools/display_info";
 
 const FILE_SEPARATOR = "<FILE_SEPARATOR>";
 
@@ -305,9 +303,9 @@ export class MidsceneTestAgent {
         private readonly workspace: string,
     ) {
         this.tools = [
-            createDisplayInfoTool(),
+            //createDisplayInfoTool(),
             createBackgroundProcessTool(this.workspace),
-            createSemanticSearchTool(this.workspace, this.codeGraph, this.store),
+            //createSemanticSearchTool(this.workspace, this.codeGraph, this.store),
             createCommandExecuteTool(this.workspace, createEnvVariablesFromAIProvider(this.aiProvider, this.settings)),
             createReadFileTool(this.workspace),
             createWriteFileTool(this.workspace)

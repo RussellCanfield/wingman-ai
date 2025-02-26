@@ -13,7 +13,7 @@ export default ({ env, command, envMode }) => {
 		mode: isProd ? "production" : "development",
 		source: {
 			entry: {
-				chat: "./src/Chat/index.tsx",
+				chat: "./src/App/index.tsx",
 				config: "./src/Config/index.tsx",
 				diff: "./src/Diff/index.tsx",
 			},

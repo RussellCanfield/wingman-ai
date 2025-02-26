@@ -159,7 +159,7 @@ export const App = () => {
 					rel="noopener noreferrer"
 					className="text-blue-500 hover:text-blue-600 underline"
 				>
-					wingman.squadron-ai.com
+					our documentation
 				</a>{" "}
 				for more information about Wingman settings and configuration
 				options.

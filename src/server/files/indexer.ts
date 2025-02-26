@@ -9,15 +9,8 @@ import type {
 import type { CodeParser } from "./parser";
 import { convertIdToFilePath, getTextDocumentFromUri } from "./utils";
 import { type Generator } from "./generator";
-import {
-	DocumentSymbol,
-	Location,
-	Position,
-	Range,
-} from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { SerializeMap, Store } from "../../store/vector";
-import { createCodeNode } from "./graph";
 import path from "node:path";
 import fs from "node:fs";
 import { SymbolRetriever } from "../retriever";
@@ -57,7 +50,6 @@ export class Indexer {
 		private readonly codeParser: CodeParser,
 		private readonly codeGraph: CodeGraph,
 		private readonly generator: Generator,
-		private readonly symbolRetriever: SymbolRetriever,
 		private readonly vectorStore: Store,
 		private inclusionFilter: string,
 		private onFileProcessing: (file: string) => Promise<void>,
@@ -142,6 +134,7 @@ export class Indexer {
 					}
 
 					console.log("Removing document from graph: " + documentUri);
+
 					this.codeGraph.removeFileFromSymbolTable(relativePath);
 					this.onFileRemoved(filePath);
 					continue;
@@ -177,24 +170,20 @@ export class Indexer {
 
 					this.onFileProcessing(relativeFilePath);
 
-					const symbols = await this.symbolRetriever?.getSymbols(
-						currentDocument
-					);
+					const textDocument = await getTextDocumentFromUri(currentDocument);
+
+					if (!textDocument) return;
 
 					const { importEdges, exportEdges, nodes } =
-						(await this.createNodesFromDocument(
-							currentDocument,
-							symbols || []
+						(await this.codeParser.createNodesFromDocument(
+							textDocument
 						)) || {
 							importEdges: new Map() as CodeGraphEdgeMap,
 							exportEdges: new Map() as CodeGraphEdgeMap,
 							nodes: new Map() as Map<string, CodeGraphNode>,
 						};
 
-					if (nodes.size === 0) {
-						this.syncing = false;
-						return;
-					}
+					if (nodes.size === 0) return;
 
 					const nodeIdsForFile = new Set<string>();
 					for (const node of nodes.values()) {
@@ -219,21 +208,21 @@ export class Indexer {
 							relatedNodes.add(node.location.uri);
 						} else {
 							nodesToProcess.set(node.id, node);
-							nodeIdsForFile.add(node.id);
+							const relativeId = path.relative(this.workspace, fileURLToPath(node.id));
+							nodeIdsForFile.add(relativeId);
 						}
 					}
 
 					fileHashMap.set(relativeFilePath, sha);
-					this.codeGraph?.addOrUpdateFileInSymbolTable(
+					this.codeGraph?.updateFileWithEdges(
 						relativeFilePath,
 						{
 							nodeIds: nodeIdsForFile,
 							sha: sha,
-						}
+						},
+						importEdges,
+						exportEdges
 					);
-
-					this.codeGraph?.mergeImportEdges(importEdges);
-					this.codeGraph?.mergeExportEdges(exportEdges);
 				}
 
 				if (nodesToProcess.size === 0) {
@@ -273,83 +262,10 @@ export class Indexer {
 						error
 					);
 				}
-			} finally {
-				this.syncing = false;
-			}
-		}
-	};
-
-	createNodesFromDocument = async (
-		fileUri: string,
-		symbols: DocumentSymbol[]
-	) => {
-		const importEdges: CodeGraphEdgeMap = new Map();
-		const exportEdges: CodeGraphEdgeMap = new Map();
-		const nodes: Map<string, CodeGraphNode> = new Map();
-
-		const textDocument = await getTextDocumentFromUri(fileUri);
-		if (!textDocument) {
-			return { nodes, importEdges, exportEdges };
-		}
-		const documentText = textDocument.getText();
-
-		if (symbols.length === 0) {
-			// calculate the last line and last character of the document
-			const lastLine = textDocument.lineCount - 1;
-			const lastCharacter = documentText.split("\n")?.pop()?.length || 0;
-
-			const node = createCodeNode(
-				Location.create(
-					textDocument.uri,
-					Range.create(
-						Position.create(0, 0),
-						Position.create(lastLine, lastCharacter)
-					)
-				)
-			);
-
-			nodes.set(node.id, node);
-			return { nodes, importEdges, exportEdges };
-		}
-
-		for (const symbol of symbols) {
-			const { node, extractedCodeNodes } =
-				await this.codeParser.processSymbol(textDocument, symbol);
-
-			nodes.set(node.id, node);
-
-			for (const extractedCodeNode of extractedCodeNodes) {
-				nodes.set(extractedCodeNode.id, extractedCodeNode);
-				if (node.id !== extractedCodeNode.id) {
-					if (importEdges.has(node.id)) {
-						importEdges.get(node.id)?.add(extractedCodeNode.id);
-					} else {
-						importEdges.set(
-							node.id,
-							new Set<string>().add(extractedCodeNode.id)
-						);
-					}
-				}
-			}
-
-			const childNodes = await this.codeParser.processChildSymbols(
-				textDocument,
-				node,
-				symbol,
-				importEdges,
-				exportEdges
-			);
-
-			for (const childNode of childNodes) {
-				nodes.set(childNode.id, childNode);
 			}
 		}
 
-		return {
-			nodes,
-			importEdges,
-			exportEdges,
-		};
+		this.syncing = false;
 	};
 
 	async skeletonizeCodeNodes(nodes: CodeGraphNode[]) {
@@ -444,7 +360,6 @@ export class Indexer {
 
 		return skeletonNode;
 	}
-
 
 	private convertNodeId = (id: string) => {
 		if (id.startsWith("file://")) {

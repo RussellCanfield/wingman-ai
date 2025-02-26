@@ -20,13 +20,13 @@ function ChatResponseList({
 	}, [messages]);
 
 	const chatHistory = useMemo(() => {
-		return messages.map(({ from, message, files, image }, index) => (
+		return messages.map(({ from, message, events, image }, index) => (
 			<ChatEntry
 				key={index}
 				from={from}
 				loading={false}
 				message={message}
-				files={files}
+				events={events}
 				image={image}
 				isCurrent={index === messages.length - 1}
 			/>

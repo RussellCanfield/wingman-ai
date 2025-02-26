@@ -28,8 +28,6 @@ Wingman has the ability to index your entire codebase and generate local LLM emb
 
 <center>
 
-<b> [Check out our documentation site](https://wingman.squadron-ai.com/) - learn about configuration, watch videos and view tips for getting the most out of the extension. </b>
-
 <b> Want a new feature? Need to report an issue? [visit our GitHub](https://github.com/RussellCanfield/wingman-ai).
 
 </center>

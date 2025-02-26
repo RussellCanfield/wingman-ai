@@ -6,8 +6,6 @@
 
 [Suggestion? Problem? Open a GitHub issue](https://github.com/RussellCanfield/wingman-ai)
 
-### **Like the extension? Check out [Squadron AI](https://www.squadron-ai.com)** our GitHub AI-powered code review application.
-
 ## How to begin
 
 Wingman must be configured before beginning, this involves choosing an AI provider, and adding the API key if applicable.

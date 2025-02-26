@@ -6,7 +6,6 @@ import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./Input/ChatInput";
 import ChatResponseList from "./ChatList";
-import Validation from "./Validation";
 import { useComposerContext } from "../../context/composerContext";
 import { useSettingsContext } from "../../context/settingsContext";
 
@@ -42,7 +41,6 @@ export default function Compose() {
 		image?: File
 	) => {
 		currentMessage = "";
-
 		const payload: ComposerRequest = {
 			input,
 			contextFiles,
@@ -66,10 +64,6 @@ export default function Compose() {
 				from: "user",
 				message: input,
 				loading: false,
-				plan: {
-					files: [],
-					steps: [],
-				},
 				image: payload.image,
 			},
 		]);
@@ -92,25 +86,19 @@ export default function Compose() {
 							Welcome to Wingman-AI
 						</h1>
 						<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
-							The composer feature allows you to generate code changes across files. You can ask for help with code, or ask for code to be written for you. By default, composer will intelligently choose files in your project based on your input. You can also target specific files using <kbd className="px-2 py-0.5 rounded bg-slate-700/30">@filename</kbd>.
+							Start exploring your codebase, ask questions about your project, or get AI-assisted coding help.
 							<br />
 							<br />
-							Composer is also multi-modal. Copy and paste an image or attach one. Let's go!
-							<span className="inline-block animate-bounce ml-4">🚀</span>
+							Wingman has your back!
 						</span>
-						{(!indexStats.exists || indexStats.files?.length === 0) && (
-							<div className="mt-4 p-4 bg-[var(--vscode-inputValidation-warningBackground)] border border-[var(--vscode-inputValidation-warningBorder)] rounded-md text-[var(--vscode-inputValidation-warningForeground)]">
-								<span className="flex items-center gap-2">
-									⚠️ No context files found. Please ensure the indexer inclusion filter is correct or reference files directly.
-								</span>
-								<button
-									className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50 mt-4"
-									onClick={() => setView("index")}
-								>
-									Go to Indexer
-								</button>
-							</div>
-						)}
+						<div className="inline-block mt-6 px-4 py-2 rounded-lg bg-slate-700/20 border border-slate-700/40">
+							<section className="flex flex-col items-center gap-2 text-sm">
+								<span className="text-blue-400">Pro tip:</span>
+								<div>
+									Type <kbd className="px-2 py-0.5 rounded bg-slate-700/30">@</kbd> to reference a file directly, or highlight text in your editor
+								</div>
+							</section>
+						</div>
 					</div>
 				</div>
 			)}
@@ -120,7 +108,7 @@ export default function Compose() {
 						<ChatEntry
 							from="assistant"
 							message={activeMessage?.message || ""}
-							files={activeMessage?.files}
+							events={activeMessage?.events}
 							loading={true}
 							isCurrent={true}
 						/>

@@ -1,3 +1,4 @@
+import { CodeContextDetails } from "../Message";
 import { FileMetadata } from "./Message";
 
 export type DiffViewCommand = {
@@ -38,19 +39,34 @@ export interface PlanExecuteState {
 	error?: string;
 }
 
+export type GraphState = {
+	events: StreamEvent[];
+}
+
 export type ComposerResponse = {
 	node: ComposerSteps;
-	values: PlanExecuteState;
+	values: GraphState;
 };
 
-export type ComposerSteps = "composer-message-stream" | "composer-message-stream-finish" | "composer-message" | "composer-replace" | "composer-files" | "composer-error" | "composer-done" | "composer-error" | "composer-files-done";
+export interface StreamEvent {
+	id: string,
+	type: 'message' | 'tool-start' | 'tool-end';
+	content: string;
+	metadata?: {
+		tool?: string;
+		path?: string;
+		action?: 'read' | 'write' | 'modify';
+	};
+}
+
+export type ComposerSteps = "composer-events" | "composer-message-stream" | "composer-message-stream-finish" | "composer-message" | "composer-replace" | "composer-files" | "composer-error" | "composer-done" | "composer-error" | "composer-files-done";
 
 export interface ComposerMessage {
 	from: ComposerRole;
 	message: string;
 	loading?: boolean;
 	image?: ComposerRequest["image"];
-	files?: PlanExecuteState["files"];
+	events?: StreamEvent[];
 }
 
 export type FileSearchResult = {
@@ -67,4 +83,5 @@ export type ComposerRequest = {
 	input: string;
 	contextFiles: string[];
 	image?: ComposerImage;
+	context?: CodeContextDetails
 };

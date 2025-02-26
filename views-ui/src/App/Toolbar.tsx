@@ -1,16 +1,13 @@
 import { VscClearAll } from "react-icons/vsc";
 import { HiDatabase } from "react-icons/hi";
-import { HiChatAlt } from "react-icons/hi";
 import { HiLightningBolt } from "react-icons/hi";
 import { vscode } from "./utilities/vscode";
 import { useSettingsContext } from "./context/settingsContext";
-import { useChatContext } from "./context/chatContext";
 import { useComposerContext } from "./context/composerContext";
 import { MdSettings } from "react-icons/md";
 
 const viewName = {
-	chat: "Chat",
-	composer: "Compose",
+	composer: "Wingman",
 	index: "Index",
 };
 
@@ -20,7 +17,6 @@ export default function Toolbar() {
 		view,
 		setView,
 	} = useSettingsContext();
-	const { clearMessages } = useChatContext();
 	const { setComposerMessages } = useComposerContext();
 
 	const buttonBaseClasses = "rounded transition-colors duration-300 p-2";
@@ -35,19 +31,9 @@ export default function Toolbar() {
 		<div className="flex justify-between items-center gap-4">
 			<h2 className="text-lg font-bold flex-auto">{viewName[view]}</h2>
 			<button
-				className={`${buttonBaseClasses} ${view === "chat"
-						? buttonActiveClasses
-						: buttonInactiveClasses
-					}`}
-				onClick={() => setView("chat")}
-				title="Chat"
-			>
-				<HiChatAlt size={24} />
-			</button>
-			<button
 				className={`${buttonBaseClasses} ${view === "composer"
-						? buttonActiveClasses
-						: buttonInactiveClasses
+					? buttonActiveClasses
+					: buttonInactiveClasses
 					}`}
 				onClick={() => setView("composer")}
 				title="Composer"
@@ -56,8 +42,8 @@ export default function Toolbar() {
 			</button>
 			<button
 				className={`${buttonBaseClasses} ${view === "index"
-						? buttonActiveClasses
-						: buttonInactiveClasses
+					? buttonActiveClasses
+					: buttonInactiveClasses
 					}`}
 				onClick={() => setView("index")}
 				title="Index"
@@ -79,7 +65,6 @@ export default function Toolbar() {
 					vscode.postMessage({
 						command: "clear-chat-history",
 					});
-					clearMessages();
 					setComposerMessages([]);
 				}}
 				title="Clear chat history"

@@ -45,7 +45,7 @@ import path from "node:path";
 let abortController = new AbortController();
 let wingmanTerminal: WingmanTerminal | undefined;
 
-export type ChatView = "chat" | "composer" | "indexer";
+export type ChatView = "composer" | "indexer";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.chatview";
@@ -53,7 +53,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	private _disposables: vscode.Disposable[] = [];
 	private _webview: vscode.Webview | undefined;
-	private _launchView: ChatView = "chat";
+	private _launchView: ChatView = "composer";
 
 	constructor(
 		private readonly _lspClient: LSPClient,
@@ -463,9 +463,10 @@ ${commitReview}
 							});
 							break;
 						case "compose":
-							await this._lspClient.compose(
-								value as ComposerRequest
-							);
+							await this._lspClient.compose({
+								...(value as ComposerRequest),
+								context: getChatContext(1024)
+							});
 							break;
 						case "delete-index":
 							await this._lspClient.deleteIndex();
@@ -498,10 +499,6 @@ ${commitReview}
 								}
 							});
 							break;
-						case "chat": {
-							this.handleChatMessage({ value, webview: webviewView.webview });
-							break;
-						}
 						case "cancel": {
 							abortController.abort();
 							await this._lspClient.cancelComposer();

@@ -4,7 +4,7 @@ import { AppState } from "@shared/types/Settings";
 import { vscode } from "../utilities/vscode";
 import { IndexStats } from "@shared/types/v2/Composer";
 
-export type View = "chat" | "composer" | "index";
+export type View = "composer" | "index";
 
 interface SettingsContextType {
   view: View;
@@ -29,7 +29,7 @@ export const useSettingsContext = () => {
 
 export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   const [theme, setTheme] = useState<Number>(1);
-  const [view, setView] = useState<View>("chat");
+  const [view, setView] = useState<View>("composer");
   const [appState, setAppState] = useState<AppState | null>();
   const [indexFilter, setIndexFilter] = useState<string>("src/**/*.{js,jsx,ts,tsx}");
   const [exclusionFilter, setExclusionFilter] = useState<string>("");
@@ -42,7 +42,6 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     const handleResponse = (event: MessageEvent<AppMessage>) => {
       const { command, value } = event.data;
-      console.log('settings', command, value);
       switch (command) {
         case "init":
           const storedAppState = value as AppState;
@@ -97,8 +96,6 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
       value: newState,
     });
   }, [appState, indexFilter, exclusionFilter]);
-
-  console.log(appState);
 
   return (
     <SettingsContext.Provider

@@ -104,25 +104,24 @@ export class CodeGraph {
 		this.symbolTable.delete(file);
 	}
 
-	public addOrUpdateFileInSymbolTable(
+	public updateFileWithEdges(
 		file: string,
-		fileDetails: FileDetails
+		fileDetails: FileDetails,
+		importEdges?: CodeGraphEdgeMap,
+		exportEdges?: CodeGraphEdgeMap
 	) {
-		// Get the existing node IDs for this file, if any
+		// Get existing node IDs for this file
 		const existingNodeIds = (
 			this.symbolTable.get(file) ||
-			({
-				nodeIds: new Set(),
-				sha: "",
-			} satisfies FileDetails)
+			({ nodeIds: new Set(), sha: "" } satisfies FileDetails)
 		).nodeIds;
 
-		// Find nodes that are no longer present in the file
+		// Find nodes that are no longer present
 		const removedNodeIds = new Set(
-			[...existingNodeIds].filter((x) => !fileDetails.nodeIds.has(x))
+			[...existingNodeIds].filter(x => !fileDetails.nodeIds.has(x))
 		);
 
-		// Remove import and export edges for the removed nodes
+		// Clean up removed nodes and their edges
 		for (const removedNodeId of removedNodeIds) {
 			// Remove import edges
 			this.edgesImport.delete(removedNodeId);
@@ -136,12 +135,30 @@ export class CodeGraph {
 				exportSet.delete(removedNodeId);
 			}
 
-			// Remove the node from the nodes map
+			// Remove the node
 			this.nodes.delete(removedNodeId);
 		}
 
-		// Update the symbol table with the new set of node IDs
+		// Update symbol table
 		this.symbolTable.set(file, fileDetails);
+
+		// Merge new import edges
+		if (importEdges) {
+			for (const [nodeId, edges] of importEdges) {
+				const existingEdges = this.edgesImport.get(nodeId) || new Set<string>();
+				edges.forEach(edge => existingEdges.add(edge));
+				this.edgesImport.set(nodeId, existingEdges);
+			}
+		}
+
+		// Merge new export edges
+		if (exportEdges) {
+			for (const [nodeId, edges] of exportEdges) {
+				const existingEdges = this.edgesExport.get(nodeId) || new Set<string>();
+				edges.forEach(edge => existingEdges.add(edge));
+				this.edgesExport.set(nodeId, existingEdges);
+			}
+		}
 	}
 
 	public getSymbolTable() {
@@ -154,30 +171,6 @@ export class CodeGraph {
 
 	public addNode(node: CodeGraphNode) {
 		this.nodes.set(node.id, node);
-	}
-
-	public mergeImportEdges(importEdges: CodeGraphEdgeMap) {
-		for (const [nodeId, edges] of importEdges) {
-			if (this.edgesImport.has(nodeId)) {
-				for (const edge of edges) {
-					this.edgesImport.get(nodeId)?.add(edge);
-				}
-			} else {
-				this.edgesImport.set(nodeId, edges);
-			}
-		}
-	}
-
-	public mergeExportEdges(exportEdges: CodeGraphEdgeMap) {
-		for (const [nodeId, edges] of exportEdges) {
-			if (this.edgesExport.has(nodeId)) {
-				for (const edge of edges) {
-					this.edgesExport.get(nodeId)?.add(edge);
-				}
-			} else {
-				this.edgesExport.set(nodeId, edges);
-			}
-		}
 	}
 
 	public addImportEdge(nodeId: string, edge: string) {

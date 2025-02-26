@@ -26,7 +26,6 @@ import {
 import { VectorQuery } from "./query";
 import { ProjectDetailsHandler } from "./project-details";
 import { MemorySaver } from "@langchain/langgraph";
-import { cancelComposer, ComposerGraph } from "../composer/v2/composer";
 import { AIProvider } from "../service/base";
 import {
 	EmbeddingProviders,
@@ -44,8 +43,8 @@ import { FileMetadata } from "@shared/types/v2/Message";
 import { WebCrawler } from "./web";
 import { promises } from "node:fs";
 import path from "node:path";
+import { cancelComposer, WingmanAgent } from "../composer/v2/agents";
 
-let config = { configurable: { thread_id: "conversation-num-1" } };
 let memory = new MemorySaver();
 let modelProvider: AIProvider;
 let embeddingProvider: EmbeddingProviders;
@@ -89,7 +88,7 @@ export class LSPServer {
 	connection: ReturnType<typeof createConnection> | undefined;
 	queue: DocumentQueue | undefined;
 	indexer: Indexer | undefined;
-	composer: ComposerGraph | undefined;
+	composer: WingmanAgent | undefined;
 	projectDetails: ProjectDetailsHandler | undefined;
 	fileEventHandler: LSPFileEventHandler | undefined;
 	// Create a simple text document manager.
@@ -118,29 +117,24 @@ export class LSPServer {
 		}
 
 		this.codeGraph = codeGraph;
-		this.codeParser = new CodeParser(this.symbolRetriever!);
+		this.codeParser = new CodeParser(workspaceFolder, this.symbolRetriever!);
 		const codeGenerator = new Generator(this.codeParser!, modelProvider);
 		this.indexer = new Indexer(
 			workspaceFolder,
 			this.codeParser!,
 			this.codeGraph!,
 			codeGenerator,
-			this.symbolRetriever!,
 			this.vectorStore!,
 			indexerSettings.indexFilter,
 			this.updateFileInComposerGraph,
 			this.removeFileInComposerGraph
 		);
 
-		this.composer = new ComposerGraph(
-			this.workspaceFolders[0],
+		this.composer = new WingmanAgent(
 			modelProvider,
-			this.codeGraph!,
-			this.vectorStore!,
-			settings.validationSettings,
-			settings,
-			config,
-			memory
+			this.workspaceFolders[0],
+			memory,
+			this.codeParser
 		)
 
 		await this.codeParser.initialize();
@@ -167,7 +161,8 @@ export class LSPServer {
 			path: relativeFilePath
 		}
 
-		await this.composer.removeFile(file);
+		//TODO - readd
+		//await this.composer.removeFile(file);
 
 		await this.connection?.sendNotification("wingman/index-updated", {
 			exists: (await this.vectorStore?.indexExists()) ?? false,
@@ -189,7 +184,8 @@ export class LSPServer {
 			lastModified: Date.now()
 		}
 
-		await this.composer.updateFile(file);
+		//TODO - readd
+		//await this.composer.updateFile(file);
 
 		await this.connection?.sendNotification("wingman/webSearchProgress", {
 			type: "complete"
@@ -472,18 +468,13 @@ export class LSPServer {
 		});
 
 		this.connection?.onRequest("wingman/clearChatHistory", () => {
-			config = { configurable: { thread_id: "conversation-num-1" } };
 			memory = new MemorySaver();
 
-			this.composer = new ComposerGraph(
-				this.workspaceFolders[0],
+			this.composer = new WingmanAgent(
 				modelProvider,
-				this.codeGraph!,
-				this.vectorStore!,
-				settings.validationSettings,
-				settings,
-				config,
-				memory
+				this.workspaceFolders[0],
+				memory,
+				this.codeParser!
 			)
 		});
 
@@ -496,27 +487,44 @@ export class LSPServer {
 		})
 
 		this.connection?.onRequest("wingman/compose", async ({ request }: { request: ComposerRequest }) => {
-			await this.executeComposer(request);
-		}
-		);
+			const graph = new WingmanAgent(
+				modelProvider,
+				this.workspaceFolders[0],
+				memory,
+				this.codeParser!
+			);
+			try {
+				for await (const { node, values } of graph.execute(request)) {
+					await this.connection?.sendRequest("wingman/compose", {
+						node,
+						values,
+					});
+				}
+			} catch (e) {
+				console.error(e);
+			}
+			//await this.executeComposer(request);
+		});
 
 		this.connection?.onRequest("wingman/acceptComposerFile", async (file: FileMetadata) => {
-			const graphState = await this.composer?.acceptFile(file);
+			//TODO - readd
+			// const graphState = await this.composer?.acceptFile(file);
 
-			const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
+			// const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
 
-			if (allFilesReviewed) {
-				this.executeComposer({
-					input: "",
-					contextFiles: []
-				});
-			}
+			// if (allFilesReviewed) {
+			// 	this.executeComposer({
+			// 		input: "",
+			// 		contextFiles: []
+			// 	});
+			// }
 
-			return graphState;
+			// return graphState;
 		});
 
 		this.connection?.onRequest("wingman/rejectComposerFile", async (file: FileMetadata) => {
-			const graphState = await this.composer?.rejectFile(file);
+			//TODO - readd
+			/*const graphState = await this.composer?.rejectFile(file);
 
 			const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
 
@@ -527,11 +535,12 @@ export class LSPServer {
 				});
 			}
 
-			return graphState;
+			return graphState;*/
 		});
 
 		this.connection?.onRequest("wingman/undoComposerFile", async (file: FileMetadata) => {
-			return this.composer?.undoFile(file);
+			//TODO - readd
+			//return this.composer?.undoFile(file);
 		});
 
 		this.connection?.onRequest("wingman/webSearch", async (input: string) => {
