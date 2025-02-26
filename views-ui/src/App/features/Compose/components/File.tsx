@@ -73,10 +73,12 @@ const getTruncatedPath = (path: string) => {
 
 export const ChatArtifact = ({
     event,
-    loading
+    loading,
+    isLightTheme
 }: {
     event?: StreamEvent,
     loading: boolean,
+    isLightTheme: boolean
 }) => {
     let file: FileMetadata = {
         path: event?.metadata?.path!
@@ -93,10 +95,15 @@ export const ChatArtifact = ({
     const diffParts = file.diff?.split(',');
     const truncatedPath = getTruncatedPath(file.path);
 
+    const cssClasses = `${isLightTheme
+        ? 'bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]'
+        : 'bg-[#1e1e1e] shadow-[0_2px_4px_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25),0_12px_24px_rgba(0,0,0,0.25)]'
+        }`
+
     return (
-        <div className="border border-stone-700/50 rounded-lg overflow-hidden shadow-lg mb-4 mt-4 bg-stone-800">
-            <div className="text-white flex flex-col border-b border-stone-700/50">
-                <div className="flex items-center justify-start border-b border-stone-700/50 relative">
+        <div className={`rounded-lg overflow-hidden shadow-lg mb-4 mt-4 ${cssClasses}`}>
+            <div className="text-[var(--vscode-input-foreground)] flex flex-col">
+                <div className="flex items-center justify-start relative">
                     <Tooltip id={`${file.path}-tooltip`} />
                     <h4
                         className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm group"

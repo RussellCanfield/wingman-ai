@@ -87,16 +87,16 @@ const ChatEntry = ({
 							// Show tool-start events (that don't have an end event yet)
 							else if (e.type === "tool-start") {
 								if (FileToolNames.includes(e.metadata?.tool!)) {
-									return <ChatArtifact loading={true} event={e} key={e.id} />;
+									return <ChatArtifact loading={true} isLightTheme={isLightTheme} event={e} key={e.id} />;
 								}
-								return <ToolOutput loading={true} event={e} key={e.id} />;
+								return <ToolOutput loading={true} isLightTheme={isLightTheme} event={e} key={e.id} />;
 							}
 							// Show tool-end events
 							else if (e.type === "tool-end") {
 								if (FileToolNames.includes(e.metadata?.tool!)) {
-									return <ChatArtifact loading={false} event={e} key={e.id} />;
+									return <ChatArtifact loading={false} isLightTheme={isLightTheme} event={e} key={e.id} />;
 								}
-								return <ToolOutput loading={false} event={e} key={e.id} />;
+								return <ToolOutput loading={false} isLightTheme={isLightTheme} event={e} key={e.id} />;
 							}
 
 							return null;

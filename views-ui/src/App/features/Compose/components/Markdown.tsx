@@ -4,7 +4,11 @@ import { memo, PropsWithChildren } from "react";
 import Markdown from "react-markdown";
 import SyntaxHighlighter from "react-syntax-highlighter";
 
-export const MessageWithMarkdown = ({ message, from, codeTheme }: { message: ComposerMessage["message"], from: ComposerMessage["from"], codeTheme: any }) => {
+export const MessageWithMarkdown = ({ message, from, codeTheme }: {
+    message: ComposerMessage["message"],
+    from: ComposerMessage["from"],
+    codeTheme: any
+}) => {
     return (
         <div className={`${from === 'user' ? 'p-3' : ''}`}>
             {message !== "" && renderMarkdown(message, codeTheme)}
