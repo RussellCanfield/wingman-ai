@@ -1,6 +1,6 @@
-import { ComposerMessage } from "@shared/types/v2/Composer";
-import { FileMetadata } from "@shared/types/v2/Message";
-import { memo, PropsWithChildren } from "react";
+import type { ComposerMessage } from "@shared/types/v2/Composer";
+import type { FileMetadata } from "@shared/types/v2/Message";
+import { memo, type PropsWithChildren } from "react";
 import Markdown from "react-markdown";
 import SyntaxHighlighter from "react-syntax-highlighter";
 
@@ -39,7 +39,6 @@ const renderMarkdown = (
     return (
         <div className="prose prose-invert max-w-none" key={content}>
             <Markdown
-                children={content}
                 components={{
                     code(props) {
                         const { children, className, ...rest } = props;
@@ -51,7 +50,6 @@ const renderMarkdown = (
                             <SyntaxHighlighter
                                 {...rest}
                                 PreTag={CodeContainer}
-                                children={String(children).replace(/\n$/, "")}
                                 style={theme}
                                 language={languageType[1]}
                                 wrapLines={true}
@@ -59,7 +57,9 @@ const renderMarkdown = (
                                 file={file}
                                 step={step}
                                 className="!bg-editor-bg !p-0"
-                            />
+                            >
+                                {String(children).replace(/\n$/, "")}
+                            </SyntaxHighlighter>
                         ) : (
                             <code
                                 {...rest}
@@ -70,7 +70,9 @@ const renderMarkdown = (
                         );
                     },
                 }}
-            />
+            >
+                {content}
+            </Markdown>
         </div>
     );
 };

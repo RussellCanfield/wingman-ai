@@ -1,14 +1,14 @@
-import {
+import type {
 	ComposerMessage,
 	ComposerRequest,
 } from "@shared/types/v2/Composer";
-import { vscode } from "../../utilities/vscode";
 import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./Input/ChatInput";
 import ChatResponseList from "./ChatList";
 import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
-import { AddMessageToThreadEvent } from "@shared/types/Events";
+import type { AddMessageToThreadEvent } from "@shared/types/Events";
+import { vscode } from "../../../utilities/vscode";
 
 let currentMessage = "";
 

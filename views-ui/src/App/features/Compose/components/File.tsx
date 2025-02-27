@@ -1,88 +1,13 @@
-import { FileMetadata } from "@shared/types/v2/Message";
+import type { FileMetadata } from "@shared/types/v2/Message";
 import { AiOutlineCheckCircle, AiOutlineLoading3Quarters } from "react-icons/ai";
 import { FaUndo } from "react-icons/fa";
 import { GrCheckmark } from "react-icons/gr";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { PiGitDiff } from "react-icons/pi";
 import { Tooltip } from "react-tooltip";
-import { vscode } from "../../../utilities/vscode";
-import { DiffViewCommand, StreamEvent } from "@shared/types/v2/Composer";
+import type { StreamEvent } from "@shared/types/v2/Composer";
 import { useComposerContext } from "../../../context/composerContext";
-import { AcceptFileEvent, RejectFileEvent, UndoFileEvent } from "@shared/types/Events";
-
-const mergeIntoFile = (file: FileMetadata, threadId: string) => {
-    if (file) {
-        vscode.postMessage({
-            command: "accept-file",
-            value: {
-                file,
-                threadId
-            } satisfies AcceptFileEvent,
-        });
-    }
-};
-
-const rejectFile = (file: FileMetadata, threadId: string) => {
-    if (file) {
-        vscode.postMessage({
-            command: "reject-file",
-            value: {
-                file,
-                threadId
-            } satisfies RejectFileEvent,
-        });
-    }
-}
-
-const showDiffview = (file: FileMetadata, threadId: string) => {
-    if (file) {
-        vscode.postMessage({
-            command: "diff-view",
-            value: {
-                file,
-                threadId
-            } satisfies DiffViewCommand,
-        });
-    }
-};
-
-const undoFile = (file: FileMetadata, threadId: string) => {
-    if (file) {
-        vscode.postMessage({
-            command: "undo-file",
-            value: {
-                file,
-                threadId
-            } satisfies UndoFileEvent
-        });
-    }
-}
-
-const openFile = (file: FileMetadata) => {
-    if (file) {
-        vscode.postMessage({
-            command: "open-file",
-            value: {
-                path: file.path,
-                id: file.id
-            } satisfies FileMetadata,
-        });
-    }
-}
-
-const getTruncatedPath = (path: string) => {
-    const parts = path.split('/');
-    const fileName = parts.pop() ?? '';
-    const lastFolder = parts.pop();
-
-    const shortPath = lastFolder
-        ? `${lastFolder}/${fileName}`
-        : fileName;
-
-    return parts.length > 0
-        ? `.../${shortPath}`
-        : shortPath;
-};
+import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../../utilities/files";
 
 export const ChatArtifact = ({
     event,
@@ -108,6 +33,8 @@ export const ChatArtifact = ({
         }
     }
 
+    console.log(file, event?.content)
+
     const diffParts = file.diff?.split(',');
     const truncatedPath = getTruncatedPath(file.path);
 
@@ -126,6 +53,12 @@ export const ChatArtifact = ({
                         data-tooltip-id={`${file.path}-tooltip`}
                         data-tooltip-content={file.path}
                         onClick={() => openFile(file)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openFile(file);
+                            }
+                        }}
                         style={{ flex: '0 1 auto', minWidth: '0' }}
                     >
                         {truncatedPath}
@@ -186,7 +119,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Accept changes"
                                     className="p-2"
-                                    onClick={() => mergeIntoFile(file, activeThread!.id)}
+                                    onClick={() => acceptFile(file, activeThread!.id)}
                                 >
                                     <GrCheckmark size={16} />
                                 </button>

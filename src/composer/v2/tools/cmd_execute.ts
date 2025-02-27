@@ -129,7 +129,7 @@ export const createCommandExecuteTool = (
 		{
 			name: "command_execute",
 			description:
-				"Executes a command in a terminal and reports the output. Cannot execute potentially destructive commands like rm, mv, chmod, sudo, etc. Use for safe operations like listing files, reading content, or running build commands. Commands run with a timeout and in the current workspace context.",
+				"Executes a command in a terminal and reports the output. Cannot execute potentially destructive commands like rm, mv, chmod, sudo, etc. Use for safe operations like running build commands. Commands run with a timeout and in the current workspace context.",
 			schema: commandExecuteSchema,
 		},
 	);

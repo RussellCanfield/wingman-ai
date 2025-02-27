@@ -1,7 +1,7 @@
-import { Thread, WorkspaceSettings } from "@shared/types/Settings";
-import { ExtensionContext } from "vscode";
-import { v4 as uuidv4 } from 'uuid';
-import { ComposerMessage } from "@shared/types/v2/Composer";
+import type { Thread, WorkspaceSettings } from "@shared/types/Settings";
+import type { ExtensionContext } from "vscode";
+import { v4 as uuidv4 } from "uuid";
+import type { ComposerMessage } from "@shared/types/v2/Composer";
 
 const defaultSettings: WorkspaceSettings = {
 	indexerSettings: {
@@ -16,7 +16,7 @@ export class Workspace {
 	constructor(
 		private readonly context: ExtensionContext,
 		public readonly workspaceFolder: string,
-		public readonly workspacePath: string
+		public readonly workspacePath: string,
 	) {
 		// Initialize settings with default values
 		this.settings = defaultSettings;
@@ -42,7 +42,7 @@ export class Workspace {
 		try {
 			this.settings =
 				(await this.context.workspaceState.get<WorkspaceSettings>(
-					"settings"
+					"settings",
 				)) ?? defaultSettings;
 
 			// Initialize threads array if it doesn't exist
@@ -57,7 +57,10 @@ export class Workspace {
 	}
 
 	// Thread management methods
-	async createThread(title: string = "New Thread", messages: ComposerMessage[] = []): Promise<Thread> {
+	async createThread(
+		title = "New Thread",
+		messages: ComposerMessage[] = [],
+	): Promise<Thread> {
 		const timestamp = Date.now();
 		const newThread: Thread = {
 			id: uuidv4(),
@@ -70,7 +73,7 @@ export class Workspace {
 		const threads = [...(this.settings.threads || []), newThread];
 		await this.save({
 			threads,
-			activeThreadId: newThread.id
+			activeThreadId: newThread.id,
 		});
 
 		return newThread;
@@ -80,15 +83,18 @@ export class Workspace {
 		const threads = [...(this.settings.threads || []), newThread];
 		await this.save({
 			threads,
-			activeThreadId: newThread.id
+			activeThreadId: newThread.id,
 		});
 
 		return newThread;
 	}
 
-	async updateThread(threadId: string, updates: Partial<Thread>): Promise<Thread | null> {
+	async updateThread(
+		threadId: string,
+		updates: Partial<Thread>,
+	): Promise<Thread | null> {
 		const threads = [...(this.settings.threads || [])];
-		const threadIndex = threads.findIndex(t => t.id === threadId);
+		const threadIndex = threads.findIndex((t) => t.id === threadId);
 
 		if (threadIndex === -1) {
 			return null;
@@ -97,7 +103,7 @@ export class Workspace {
 		const updatedThread = {
 			...threads[threadIndex],
 			...updates,
-			updatedAt: Date.now()
+			updatedAt: Date.now(),
 		};
 
 		threads[threadIndex] = updatedThread;
@@ -108,7 +114,7 @@ export class Workspace {
 
 	async deleteThread(threadId: string): Promise<boolean> {
 		const threads = [...(this.settings.threads || [])];
-		const threadIndex = threads.findIndex(t => t.id === threadId);
+		const threadIndex = threads.findIndex((t) => t.id === threadId);
 
 		if (threadIndex === -1) {
 			return false;
@@ -122,9 +128,17 @@ export class Workspace {
 			activeThreadId = threads.length > 0 ? threads[0].id : undefined;
 		}
 
+		// Orphan branched threads
+		const childThreads = threads.filter(
+			(t) => t.originatingThreadId === threadId,
+		);
+		for (const childThread of childThreads) {
+			childThread.originatingThreadId = undefined;
+		}
+
 		await this.save({
 			threads,
-			activeThreadId
+			activeThreadId,
 		});
 
 		return true;
@@ -132,7 +146,7 @@ export class Workspace {
 
 	async switchThread(threadId: string): Promise<Thread | null> {
 		const threads = this.settings.threads || [];
-		const thread = threads.find(t => t.id === threadId);
+		const thread = threads.find((t) => t.id === threadId);
 
 		if (!thread) {
 			return null;
@@ -149,7 +163,7 @@ export class Workspace {
 			return null;
 		}
 
-		return threads.find(t => t.id === activeThreadId) || null;
+		return threads.find((t) => t.id === activeThreadId) || null;
 	}
 
 	async getAllThreads(): Promise<Thread[]> {
@@ -158,12 +172,15 @@ export class Workspace {
 
 	async getThreadById(threadId: string): Promise<Thread | null> {
 		const threads = this.settings.threads || [];
-		return threads.find(t => t.id === threadId) || null;
+		return threads.find((t) => t.id === threadId) || null;
 	}
 
-	async addMessageToThread(threadId: string, message: any): Promise<boolean> {
+	async addMessageToThread(
+		threadId: string,
+		message: ComposerMessage,
+	): Promise<boolean> {
 		const threads = [...(this.settings.threads || [])];
-		const threadIndex = threads.findIndex(t => t.id === threadId);
+		const threadIndex = threads.findIndex((t) => t.id === threadId);
 
 		if (threadIndex === -1) {
 			return false;
@@ -173,7 +190,7 @@ export class Workspace {
 		const updatedThread = {
 			...thread,
 			messages: [...thread.messages, message],
-			updatedAt: Date.now()
+			updatedAt: Date.now(),
 		};
 
 		threads[threadIndex] = updatedThread;

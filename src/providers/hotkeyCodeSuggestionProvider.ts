@@ -1,13 +1,12 @@
 import vscode, {
-	CompletionItem,
 	CompletionTriggerKind,
-	QuickPickItem,
+	type QuickPickItem,
 	SnippetString,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
-import { AIProvider, AIStreamProvider } from "../service/base";
+import type { AIProvider, AIStreamProvider } from "../service/base";
 import { getContentWindow } from "../service/utils/contentWindow";
-import { Settings } from "@shared/types/Settings";
+import type { Settings } from "@shared/types/Settings";
 import { EVENT_CODE_COMPLETE_HOTKEY, telemetry } from "./telemetryProvider";
 
 export class HotKeyCodeSuggestionProvider
@@ -15,14 +14,14 @@ export class HotKeyCodeSuggestionProvider
 {
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvider,
-		private readonly _settings: Settings
+		private readonly _settings: Settings,
 	) {}
 	static provider: HotKeyCodeSuggestionProvider | null = null;
 	async provideCompletionItems(
 		document: vscode.TextDocument,
 		position: vscode.Position,
 		token: vscode.CancellationToken,
-		_: vscode.CompletionContext
+		_: vscode.CompletionContext,
 	): Promise<
 		vscode.CompletionItem[] | vscode.CompletionList<vscode.CompletionItem>
 	> {
@@ -43,7 +42,7 @@ export class HotKeyCodeSuggestionProvider
 		const [prefix, suffix] = getContentWindow(
 			document,
 			position,
-			this._settings.interactionSettings.codeContextWindow
+			this._settings.interactionSettings.codeContextWindow,
 		);
 		//get the biginning of the last line in prefix
 		const lastLineStart = prefix.lastIndexOf("\n");
@@ -56,22 +55,21 @@ export class HotKeyCodeSuggestionProvider
 					language: document.languageId,
 					aiProvider: this._settings.aiProvider,
 					model:
-						this._settings.providerSettings[
-							this._settings.aiProvider
-						]?.codeModel || "Unknown",
+						this._settings.providerSettings[this._settings.aiProvider]
+							?.codeModel || "Unknown",
 				});
 			} catch {}
 			const response = await this._aiProvider.codeComplete(
 				prefix,
 				suffix,
-				abort.signal
+				abort.signal,
 			);
 			const snippet = new vscode.SnippetString(
-				response.replace(new RegExp(`\n[\\s]{${spaces}}`, "g"), "\n")
+				response.replace(new RegExp(`\n[\\s]{${spaces}}`, "g"), "\n"),
 			);
 			const item = new vscode.CompletionItem(
 				response,
-				vscode.CompletionItemKind.Snippet
+				vscode.CompletionItemKind.Snippet,
 			);
 			item.insertText = snippet;
 			return [item];
@@ -102,7 +100,7 @@ export class HotKeyCodeSuggestionProvider
 				documnet,
 				position,
 				token,
-				context
+				context,
 			);
 		if (!items || !Array.isArray(items)) {
 			return;
@@ -117,18 +115,16 @@ export class HotKeyCodeSuggestionProvider
 		const lines = quickPickItem.description!.split("\n");
 		const decoratorsForEachLine: [
 			vscode.TextEditorDecorationType,
-			vscode.Range
+			vscode.Range,
 		][] = lines.map((line, index) => {
 			const range = new vscode.Range(
 				position.translate(index, 0),
-				position.translate(index, line.length)
+				position.translate(index, line.length),
 			);
 			return [
 				vscode.window.createTextEditorDecorationType({
 					after: {
-						color: new vscode.ThemeColor(
-							"editorSuggestWidget.foreground"
-						),
+						color: new vscode.ThemeColor("editorSuggestWidget.foreground"),
 						contentText: line,
 					},
 				}),
@@ -138,8 +134,9 @@ export class HotKeyCodeSuggestionProvider
 		// add new lines to the editor
 		editor.insertSnippet(
 			new SnippetString("\n".repeat(lines.length)),
-			position
+			position,
 		);
+		// biome-ignore lint/complexity/noForEach: <explanation>
 		decoratorsForEachLine.forEach(([decorator, range]) => {
 			editor.setDecorations(decorator, [range]);
 		});
@@ -154,6 +151,7 @@ export class HotKeyCodeSuggestionProvider
 			const insertText = items[0].insertText as SnippetString;
 			editor.insertSnippet(insertText, position);
 		}
+		// biome-ignore lint/complexity/noForEach: <explanation>
 		decoratorsForEachLine.forEach(([decorator]) => {
 			decorator.dispose();
 		});

@@ -7,16 +7,22 @@ import {
 } from "vscode-languageserver";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { SgNode, js as astGrep } from "@ast-grep/napi";
-import {
-	type CodeGraphEdgeMap,
-	type CodeGraphNode,
-	createCodeNode,
-	type SkeletonizedCodeGraphNode,
-} from "./graph";
 import { filterSystemLibraries, getTextDocumentFromUri } from "./utils";
 import type { SymbolRetriever } from "../retriever";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+
+export type CodeGraphNode = {
+	id: string;
+	location: Location;
+	parentNodeId?: string;
+};
+
+export type SkeletonizedCodeGraphNode = {
+	skeleton: string;
+} & CodeGraphNode;
+
+export type CodeGraphEdgeMap = Map<string, Set<string>>;
 
 async function loadAstGrepBinding() {
 	const { js } = await import("@ast-grep/napi");
@@ -470,6 +476,17 @@ export class CodeParser {
 
 		return codeBlock;
 	}
+}
+
+export function generateCodeNodeId(location: Location): string {
+	return `${location.uri}-${location.range.start.line}-${location.range.start.character}`;
+}
+
+export function createCodeNode(location: Location): CodeGraphNode {
+	return {
+		id: generateCodeNodeId(location),
+		location,
+	};
 }
 
 export const isMethod = (symbol: DocumentSymbol) =>

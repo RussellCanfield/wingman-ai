@@ -13,10 +13,6 @@ import { eventEmitter } from "./events/eventEmitter";
 import { LoadSettings } from "./service/settings";
 import { DiffViewProvider } from "./providers/diffViewProvider";
 import {
-	startClipboardTracking,
-	stopClipboardTracking,
-} from "./providers/clipboardTracker";
-import {
 	EVENT_AI_PROVIDER_VALIDATION_FAILED,
 	EVENT_EXTENSION_LOADED,
 	telemetry,
@@ -24,6 +20,8 @@ import {
 import { Workspace } from "./service/workspace";
 import { BindingDownloader } from "./client/bindingDownload";
 import { ThreadViewProvider } from "./providers/threadViewProvider";
+import type { AIProvider } from "./service/base";
+import { getRecentFileTracker } from "./providers/recentFileTracker";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -38,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.workspaceFolders.length === 0
 	) {
 		vscode.window.showInformationMessage(
-			"Wingman requires an open workspace to function."
+			"Wingman requires an open workspace to function.",
 		);
 		return;
 	}
@@ -50,16 +48,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		// Create a delayed progress window
 		const progressPromise = new Promise<void>((resolve) => {
 			const timeout = setTimeout(() => {
-				vscode.window.withProgress({
-					location: vscode.ProgressLocation.Notification,
-					title: "Initializing Wingman",
-					cancellable: false
-				}, async (progress) => {
-					progress.report({ message: "Checking AST-grep bindings..." });
-					return new Promise<void>((res) => {
-						progressResolve = res;
-					});
-				});
+				vscode.window.withProgress(
+					{
+						location: vscode.ProgressLocation.Notification,
+						title: "Initializing Wingman",
+						cancellable: false,
+					},
+					async (progress) => {
+						progress.report({ message: "Checking AST-grep bindings..." });
+						return new Promise<void>((res) => {
+							progressResolve = res;
+						});
+					},
+				);
 			}, PROGRESS_DELAY);
 
 			// Store the resolve function to be called later
@@ -81,14 +82,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		// Wait for any pending progress to close
 		await progressPromise;
 	} catch (error) {
-		vscode.window.showErrorMessage("Failed to initialize AST-grep bindings. Some features may not work correctly.");
+		vscode.window.showErrorMessage(
+			"Failed to initialize AST-grep bindings. Some features may not work correctly.",
+		);
 		loggingProvider.logError(error, true);
 	}
 
 	const workspace = new Workspace(
 		context,
 		vscode.workspace.workspaceFolders?.[0].name,
-		vscode.workspace.workspaceFolders?.[0].uri.fsPath
+		vscode.workspace.workspaceFolders?.[0].uri.fsPath,
 	);
 
 	await lspClient.activate(context, settings, workspace);
@@ -96,15 +99,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	try {
 		telemetry.sendEvent(EVENT_EXTENSION_LOADED, {
 			aiProvider: settings.aiProvider,
-			embeddingProvider: settings.embeddingProvider,
-			chatModel:
-				settings.providerSettings[settings.aiProvider]?.chatModel,
-			codeModel:
-				settings.providerSettings[settings.aiProvider]?.codeModel,
+			chatModel: settings.providerSettings[settings.aiProvider]?.chatModel,
+			codeModel: settings.providerSettings[settings.aiProvider]?.codeModel,
 		});
-	} catch { }
+	} catch {}
 
-	let modelProvider;
+	let modelProvider: AIProvider;
 	try {
 		modelProvider = CreateAIProvider(settings, loggingProvider);
 
@@ -113,7 +113,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				aiProvider: settings.aiProvider,
 			});
 			throw new Error(
-				`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`
+				`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
 			);
 		}
 	} catch (error) {
@@ -123,13 +123,11 @@ export async function activate(context: vscode.ExtensionContext) {
 			});
 			const result = await vscode.window.showErrorMessage(
 				error.message,
-				"Open Settings"
+				"Open Settings",
 			);
 
 			if (result === "Open Settings") {
-				vscode.commands.executeCommand(
-					ConfigViewProvider.showConfigCommand
-				);
+				vscode.commands.executeCommand(ConfigViewProvider.showConfigCommand);
 			}
 			loggingProvider.logInfo(error.message);
 			eventEmitter._onFatalError.fire();
@@ -140,7 +138,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		context,
 		modelProvider!,
 		workspace.workspacePath,
-		lspClient
+		lspClient,
 	);
 	threadViewProvider = new ThreadViewProvider(context);
 	statusBarProvider = new ActivityStatusBar();
@@ -149,26 +147,26 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ConfigViewProvider.viewType,
-			configViewProvider
-		)
+			configViewProvider,
+		),
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand(GenDocs.command, GenDocs.generateDocs)
+		vscode.commands.registerCommand(GenDocs.command, GenDocs.generateDocs),
 	);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			RefactorProvider.command,
-			RefactorProvider.refactorCode
-		)
+			RefactorProvider.refactorCode,
+		),
 	);
 
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
 			CodeSuggestionProvider.selector,
-			new GenDocs(modelProvider!)
-		)
+			new GenDocs(modelProvider!),
+		),
 	);
 
 	chatViewProvider = new ChatViewProvider(
@@ -177,7 +175,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		diffViewProvider,
 		threadViewProvider,
 		workspace,
-		configViewProvider
+		configViewProvider,
 	);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -187,16 +185,16 @@ export async function activate(context: vscode.ExtensionContext) {
 				webviewOptions: {
 					retainContextWhenHidden: true,
 				},
-			}
-		)
+			},
+		),
 	);
 
 	if (settings.interactionSettings!.codeCompletionEnabled) {
 		context.subscriptions.push(
 			vscode.languages.registerInlineCompletionItemProvider(
 				CodeSuggestionProvider.selector,
-				new CodeSuggestionProvider(modelProvider!, settings)
-			)
+				new CodeSuggestionProvider(modelProvider!, settings),
+			),
 		);
 	}
 
@@ -205,21 +203,20 @@ export async function activate(context: vscode.ExtensionContext) {
 			RefactorProvider.selector,
 			new RefactorProvider(modelProvider!),
 			{
-				providedCodeActionKinds:
-					RefactorProvider.providedCodeActionKinds,
-			}
-		)
+				providedCodeActionKinds: RefactorProvider.providedCodeActionKinds,
+			},
+		),
 	);
 
 	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
 		modelProvider!,
-		settings
+		settings,
 	);
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			HotKeyCodeSuggestionProvider.command,
-			HotKeyCodeSuggestionProvider.showSuggestion
-		)
+			HotKeyCodeSuggestionProvider.showSuggestion,
+		),
 	);
 
 	context.subscriptions.push(
@@ -228,10 +225,10 @@ export async function activate(context: vscode.ExtensionContext) {
 			async () => {
 				chatViewProvider.setLaunchView("composer");
 				await vscode.commands.executeCommand(
-					`${ChatViewProvider.viewType}.focus`
+					`${ChatViewProvider.viewType}.focus`,
 				);
-			}
-		)
+			},
+		),
 	);
 
 	context.subscriptions.push(
@@ -239,11 +236,9 @@ export async function activate(context: vscode.ExtensionContext) {
 			ConfigViewProvider.showConfigCommand,
 			async () => {
 				configViewProvider.openInPanel();
-			}
-		)
+			},
+		),
 	);
-
-	startClipboardTracking();
 }
 
 export function deactivate() {
@@ -251,10 +246,10 @@ export function deactivate() {
 		statusBarProvider.dispose();
 	}
 
+	getRecentFileTracker().dispose();
 	lspClient?.deactivate();
 	diffViewProvider?.dispose();
 	threadViewProvider?.dispose();
-	stopClipboardTracking();
 	loggingProvider.dispose();
 	telemetry.dispose();
 }

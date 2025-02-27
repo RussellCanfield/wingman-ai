@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 import { FaTimes } from "react-icons/fa";
 
 interface ImagePreviewProps {
@@ -22,7 +23,6 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ imageUrl, onRemove }) => {
 	return (
 		<div
 			className="p-2 relative flex items-center"
-			role="figure"
 			aria-label="Image preview"
 		>
 			{isLoading && (
@@ -52,6 +52,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ imageUrl, onRemove }) => {
 						/>
 					</div>
 					<button
+						type="button"
 						onClick={onRemove}
 						className="absolute top-1 right-1 flex items-center justify-center w-6 h-6 p-0 border-none rounded-full bg-black/70 text-white cursor-pointer transition-all duration-200 ease-in-out shadow-md hover:bg-black/85 hover:shadow-lg pointer-events-auto z-10"
 						aria-label="Remove image"

@@ -1,23 +1,18 @@
 import { useEffect, useState } from "react";
-import { AppMessage } from "@shared/types/Message";
-import {
+import type { AppMessage } from "@shared/types/Message";
+import type {
 	AiProviders,
 	ApiSettingsType,
-	AzureAIEmbeddingSettingsType,
 	AzureAISettingsType,
-	EmbeddingProviders,
 	InteractionSettings,
-	OllamaEmbeddingSettingsType,
 	OllamaSettingsType,
-	OpenAIEmbeddingSettingsType,
 	Settings,
 	ValidationSettings,
 } from "@shared/types/Settings";
 import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
-import { vscode } from "./utilities/vscode";
+import { vscode } from "../utilities/vscode";
 import "./App.css";
-import { EmbeddingProvider } from "./EmbeddingProvider";
 import { ValidationView } from "./ValidationView";
 
 export type InitSettings = Settings & { ollamaModels: string[] };
@@ -25,11 +20,14 @@ export type InitSettings = Settings & { ollamaModels: string[] };
 export const App = () => {
 	const [loading, setLoading] = useState(true);
 	const [settings, setSettings] = useState<InitSettings | null>(null);
+	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+	const [isLightTheme, setIsLightTheme] = useState(false);
 
 	useEffect(() => {
 		vscode.postMessage({
 			command: "init",
 		});
+
 		window.addEventListener("message", handleResponse);
 		return () => {
 			window.removeEventListener("message", handleResponse);
@@ -40,19 +38,40 @@ export const App = () => {
 		const { command, value } = event.data;
 
 		switch (command) {
-			case "init":
-				setSettings(JSON.parse(value as string) as InitSettings);
+			case "init": {
+				const settings = value as { settings: InitSettings, theme: number };
+				setSettings(settings.settings);
+				setIsLightTheme(settings.theme === 1 || settings.theme === 4)
 				setLoading(false);
+				return;
+			}
+			case "settingsSaved":
+				setSaveStatus("saved");
+				setTimeout(() => setSaveStatus("idle"), 2000);
 				return;
 		}
 	};
 
 	if (loading) {
-		return <h3>Loading ...</h3>;
+		return (
+			<div className="flex items-center justify-center h-screen">
+				<div className="animate-pulse flex flex-col items-center">
+					<div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
+					<h3 className="text-lg font-medium text-[var(--vscode-foreground)]">Loading settings...</h3>
+				</div>
+			</div>
+		);
 	}
 
 	if (!settings) {
-		return <h3>Error loading settings</h3>;
+		return (
+			<div className="flex items-center justify-center h-screen">
+				<div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md shadow-md">
+					<h3 className="font-bold">Error loading settings</h3>
+					<p>Unable to load configuration. Please try refreshing the page.</p>
+				</div>
+			</div>
+		);
 	}
 
 	const onInteractionSettingsChanged = (settings: InteractionSettings) => {
@@ -76,10 +95,7 @@ export const App = () => {
 			| AzureAISettingsType
 	) => {
 		const currentProviderSettings = settings.providerSettings;
-
 		const updatedProviderSettings = { ...currentProviderSettings };
-
-		console.log(updatedProviderSettings, aiProviderSettings);
 
 		if (settings.aiProvider === "Ollama") {
 			updatedProviderSettings.Ollama =
@@ -104,36 +120,6 @@ export const App = () => {
 		}));
 	};
 
-	const onEmbeddingProviderChanged = (provider: EmbeddingProviders) => {
-		setSettings((s) => ({
-			...s!,
-			embeddingProvider: provider,
-		}));
-	};
-
-	const onEmbeddingSettingsChanged = (
-		embeddingSettings:
-			| OllamaEmbeddingSettingsType
-			| OpenAIEmbeddingSettingsType
-	) => {
-		const existingEmbeddingSettings = settings.embeddingSettings;
-		if (settings.embeddingProvider === "Ollama") {
-			existingEmbeddingSettings.Ollama =
-				embeddingSettings as OllamaEmbeddingSettingsType;
-		} else if (settings.embeddingProvider === "OpenAI") {
-			existingEmbeddingSettings.OpenAI =
-				embeddingSettings as OpenAIEmbeddingSettingsType;
-		} else {
-			existingEmbeddingSettings.AzureAI =
-				embeddingSettings as AzureAIEmbeddingSettingsType;
-		}
-
-		setSettings((s) => ({
-			...s!,
-			embeddingSettings: existingEmbeddingSettings,
-		}));
-	};
-
 	const onValidationSettingsChanged = (settings: ValidationSettings) => {
 		setSettings((s) => ({
 			...s!,
@@ -142,48 +128,100 @@ export const App = () => {
 	};
 
 	const saveSettings = () => {
+		setSaveStatus("saving");
 		vscode.postMessage({
 			command: "saveSettings",
 			value: settings,
 		});
 	};
 
+	const cardClass = `
+    relative flex flex-col p-6 rounded-xl
+    ${isLightTheme
+			? 'bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]'
+			: 'bg-[#1e1e1e] shadow-[0_2px_4px_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25),0_12px_24px_rgba(0,0,0,0.25)]'
+		}
+    transition-all duration-300 ease-in-out
+    border border-[var(--vscode-editorWidget-border)]
+  `;
+
+	const buttonClass = `
+    ${saveStatus === "saving"
+			? "bg-blue-500 cursor-wait"
+			: saveStatus === "saved"
+				? "bg-green-600 hover:bg-green-700"
+				: "bg-blue-600 hover:bg-blue-700"
+		}
+    text-white py-2 px-6 rounded-md shadow-md 
+    transition duration-300 ease-in-out 
+    text-sm font-semibold flex items-center gap-2
+  `;
+
 	return (
-		<div className="flex flex-col p-4">
-			<h2 className="text-xl font-semibold mb-4">Wingman Settings</h2>
-			<p>
-				Visit{" "}
-				<a
-					href="https://wingman.squadron-ai.com/"
-					target="_blank"
-					rel="noopener noreferrer"
-					className="text-blue-500 hover:text-blue-600 underline"
-				>
-					our documentation
-				</a>{" "}
-				for more information about Wingman settings and configuration
-				options.
-			</p>
-			<div className="mb-6 flex justify-end">
+		<div className="flex flex-col p-6 max-w-7xl mx-auto">
+			<div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+				<div>
+					<h1 className="text-2xl font-bold mb-2 text-[var(--vscode-foreground)]">
+						Wingman Settings
+					</h1>
+					<p className="text-[var(--vscode-descriptionForeground)] max-w-2xl">
+						Configure your AI assistant to match your workflow. Visit{" "}
+						<a
+							href="https://wingman.squadron-ai.com/"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-blue-500 hover:text-blue-600 underline"
+						>
+							our documentation
+						</a>{" "}
+						for more information about configuration options.
+					</p>
+				</div>
 				<button
 					type="button"
 					onClick={saveSettings}
-					className="bg-blue-600 hover:bg-blue-700 text-white  py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out text-sm font-semibold"
+					disabled={saveStatus === "saving"}
+					className={buttonClass}
 				>
-					Save
+					{saveStatus === "saving" ? (
+						<>
+							{/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
+							<svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+								<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+								<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+							</svg>
+							Saving...
+						</>
+					) : saveStatus === "saved" ? (
+						<>
+							{/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
+							<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+							</svg>
+							Saved!
+						</>
+					) : (
+						"Save Settings"
+					)}
 				</button>
 			</div>
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md  hover:shadow-lg transition duration-300 ease-in-out p-6">
-					<h2 className="text-xl font-semibold mb-4">AI Provider</h2>
+
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+				<section className={cardClass}>
+					<div className="absolute top-0 right-0 bg-blue-600 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
+					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
+						AI Provider
+					</h2>
 					<AiProvider
 						settings={settings}
 						onProviderChanged={onAiProviderChanged}
 						onProviderSettingsChanged={onAiProviderSettingsChanged}
 					/>
 				</section>
-				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md hover:shadow-lg transition duration-300 ease-in-out p-6">
-					<h2 className="text-xl font-semibold mb-4">
+
+				<section className={cardClass}>
+					<div className="absolute top-0 right-0 bg-green-600 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
+					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
 						Interaction Settings
 					</h2>
 					<InteractionSettingsConfig
@@ -191,18 +229,12 @@ export const App = () => {
 						onChange={onInteractionSettingsChanged}
 					/>
 				</section>
-				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md hover:shadow-lg transition duration-300 ease-in-out p-6">
-					<h2 className="text-xl font-semibold mb-4">
-						Embedding Provider
+
+				<section className={cardClass}>
+					<div className="absolute top-0 right-0 bg-purple-600 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
+					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
+						Validation
 					</h2>
-					<EmbeddingProvider
-						{...settings}
-						onProviderChange={onEmbeddingProviderChanged}
-						onEmbeddingSettingsChange={onEmbeddingSettingsChanged}
-					/>
-				</section>
-				<section className="bg-[var(--vscode-editorWidget-border)] rounded-lg shadow-md hover:shadow-lg transition duration-300 ease-in-out p-6">
-					<h2 className="text-xl font-semibold mb-4">Validation</h2>
 					<ValidationView
 						validationSettings={settings.validationSettings}
 						onValidationChanged={onValidationSettingsChanged}

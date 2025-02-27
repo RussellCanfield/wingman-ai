@@ -77,11 +77,12 @@ export interface FileMetadata {
 	path: string;
 	code?: string;
 	diff?: string;
+	original?: string;
 	language?: string;
 	accepted?: boolean;
 	rejected?: boolean;
 	lastModified?: number;
-	type?: "CREATE" | "MODIFY" | "ANALYZE"
+	type?: "CREATE" | "MODIFY" | "ANALYZE";
 }
 
 export interface CodeContextDetails {
@@ -98,4 +99,4 @@ export interface CodeContext
 	extends Pick<
 		CodeContextDetails,
 		"fileName" | "lineRange" | "workspaceName"
-	> { }
+	> {}

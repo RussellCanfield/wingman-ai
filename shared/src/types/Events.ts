@@ -1,27 +1,27 @@
-import { ComposerMessage } from "./v2/Composer";
-import { FileMetadata } from "./v2/Message";
+import type { ComposerMessage } from "./v2/Composer";
+import type { FileMetadata } from "./v2/Message";
 
 export interface AddMessageToThreadEvent {
-    threadId: string;
-    message: ComposerMessage;
+	threadId: string;
+	message: ComposerMessage;
 }
 
 export interface RenameThreadEvent {
-    threadId: string;
-    title: string;
+	threadId: string;
+	title: string;
 }
 
 export interface AcceptFileEvent {
-    file: FileMetadata,
-    threadId: string
+	file: FileMetadata;
+	threadId: string;
 }
 
 export interface RejectFileEvent {
-    file: FileMetadata;
-    threadId: string;
+	file: FileMetadata;
+	threadId: string;
 }
 
 export interface UndoFileEvent {
-    file: FileMetadata;
-    threadId: string;
+	file: FileMetadata;
+	threadId: string;
 }

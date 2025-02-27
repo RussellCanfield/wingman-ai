@@ -3,13 +3,13 @@ import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { memo, PropsWithChildren } from "react";
-import { FileMetadata } from "@shared/types/Message";
-import { DiffViewCommand } from "@shared/types/v2/Composer";
+import { memo, type PropsWithChildren } from "react";
+import type { DiffViewCommand } from "@shared/types/v2/Composer";
 import { FaCheckCircle } from "react-icons/fa";
-import { vscode } from "./utilities/vscode";
 import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
 import { FaXmark } from "react-icons/fa6";
+import { vscode } from "../utilities/vscode";
+import type { FileMetadata } from "@shared/types/v2/Message";
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	return (
@@ -61,7 +61,8 @@ export default function DiffView({ diff }: DiffProps) {
 		vscode.postMessage({
 			command: "accept-file-changes",
 			value: {
-				path: file.path!,
+				id: file.id,
+				path: file.path,
 				code: file?.code,
 			} satisfies FileMetadata,
 		});
@@ -71,7 +72,8 @@ export default function DiffView({ diff }: DiffProps) {
 		vscode.postMessage({
 			command: "reject-file-changes",
 			value: {
-				path: file?.path!,
+				id: file.id,
+				path: file?.path,
 				code: file?.code,
 			} satisfies FileMetadata,
 		});
@@ -83,6 +85,7 @@ export default function DiffView({ diff }: DiffProps) {
 				<p className="text-white font-semibold truncate">{file.path}</p>
 				<div className="flex gap-4">
 					<button
+						type="button"
 						className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
 						title="Reject changes"
 						onClick={() => rejectDiff()}
@@ -91,6 +94,7 @@ export default function DiffView({ diff }: DiffProps) {
 						<span>Reject</span>
 					</button>
 					<button
+						type="button"
 						className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
 						title="Accept changes"
 						onClick={() => acceptDiff()}

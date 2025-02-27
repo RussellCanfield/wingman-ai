@@ -1,11 +1,7 @@
 import * as vscode from "vscode";
 import fs from "node:fs";
 import { eventEmitter } from "../events/eventEmitter";
-import type {
-	AppMessage,
-	CodeContextDetails,
-	CodeReviewMessage,
-} from "@shared/types/Message";
+import type { AppMessage, CodeContextDetails } from "@shared/types/Message";
 import type { AppState, Thread } from "@shared/types/Settings";
 import type {
 	AcceptFileEvent,
@@ -14,7 +10,6 @@ import type {
 	RejectFileEvent,
 	UndoFileEvent,
 } from "@shared/types/Events";
-import type { IndexerSettings } from "@shared/types/Indexer";
 import {
 	addNoneAttributeToLink,
 	extractCodeBlock,
@@ -28,7 +23,6 @@ import type {
 	FileSearchResult,
 } from "@shared/types/v2/Composer";
 import type { DiffViewProvider } from "./diffViewProvider";
-import { EVENT_REVIEW_FILE_BY_FILE, telemetry } from "./telemetryProvider";
 import type { Workspace } from "../service/workspace";
 import { getGitignorePatterns } from "../server/files/utils";
 import type { ConfigViewProvider } from "./configViewProvider";
@@ -203,43 +197,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					case "openSettings":
 						this._settingsViewProvider.openInPanel();
 						break;
-					case "delete-indexed-file":
-						await this._lspClient.deleteFileFromIndex(String(value));
-						break;
-					case "review-files":
-						telemetry.sendEvent(EVENT_REVIEW_FILE_BY_FILE);
-						this._diffViewProvider.createCodeReviewView(
-							(value as CodeReviewMessage).review,
-						);
-						break;
-					case "state-update":
-						const appState = value as AppState;
-						const currentSettings = await this._workspace.load();
-						await this._workspace.save({
-							indexerSettings: appState.settings.indexerSettings,
-						});
-
-						if (
-							currentSettings.indexerSettings.indexFilter !==
-							appState.settings.indexerSettings.indexFilter
-						) {
-							const matchingFiles = await vscode.workspace.findFiles(
-								appState.settings.indexerSettings.indexFilter ?? "*",
-								(await getGitignorePatterns(this._workspace.workspacePath)) ||
-									"",
-							);
-
-							webviewView.webview.postMessage({
-								command: "available-files",
-								value: matchingFiles?.length ?? 0,
-							});
-						}
-						this._lspClient.setIndexerSettings(
-							appState.settings.indexerSettings,
-						);
-						break;
-					case "diff-view":
+					case "diff-view": {
 						const { file, threadId } = value as DiffViewCommand;
+						file.original = await this._lspClient.fetchOriginalFileContents({
+							file: file.path,
+							threadId,
+						});
 						this._diffViewProvider.createDiffView({
 							file,
 							onAccept: async (file: FileMetadata, threadId: string) => {
@@ -251,20 +214,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							threadId,
 						});
 						break;
+					}
 					case "clear-chat-history":
 						this.clearChatHistory();
 						break;
-					case "terminal":
-						// Use value to spawn new terminal with command
-						const terminalCommand = value as string;
-						const terminal = vscode.window.createTerminal({
-							name: "Wingman Command",
-						});
-						terminal.show();
-						terminal.sendText(terminalCommand);
-						break;
-
-					case "get-files":
+					case "get-files": {
 						const searchTerm = value as string | undefined;
 						if (!searchTerm || searchTerm?.length === 0) {
 							return [];
@@ -274,7 +228,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 						// Find all files in the workspace that match the search term
 						const matchingFiles = await vscode.workspace.findFiles(
-							settings.indexerSettings.indexFilter,
+							"**/*",
 							(await getGitignorePatterns(this._workspace.workspacePath)) || "",
 						);
 
@@ -284,7 +238,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							.map((file) => {
 								const path = vscode.workspace.asRelativePath(file.fsPath);
 								return {
-									file: path.split("/").pop()!,
+									file: String(path.split("/").pop()),
 									path,
 								} satisfies FileSearchResult;
 							});
@@ -294,40 +248,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							value: filteredFiles,
 						});
 						break;
+					}
 					case "compose":
 						await this._lspClient.compose({
 							...(value as ComposerRequest),
 							context: getChatContext(1024),
-						});
-						break;
-					case "delete-index":
-						await this._lspClient.deleteIndex();
-						webviewView.webview.postMessage({
-							command: "index-status",
-							value: {
-								...(await this._lspClient.indexExists()),
-							},
-						});
-						break;
-					case "build-index":
-						const { indexFilter, exclusionFilter } = value as IndexerSettings;
-						await this._workspace.save({
-							indexerSettings: {
-								indexFilter,
-								exclusionFilter,
-							},
-						});
-						await this._lspClient.buildFullIndex({
-							indexFilter,
-							exclusionFilter,
-						});
-						break;
-					case "check-index":
-						webviewView.webview.postMessage({
-							command: "index-status",
-							value: {
-								...(await this._lspClient.indexExists()),
-							},
 						});
 						break;
 					case "cancel": {
@@ -354,27 +279,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							command: "thread-data",
 							value: settings,
 						});
-
-						setTimeout(async () => {
-							webviewView.webview.postMessage({
-								command: "index-status",
-								value: {
-									...(await this._lspClient.indexExists()),
-								},
-							});
-
-							webviewView.webview.postMessage({
-								command: "available-files",
-								value: (
-									await vscode.workspace.findFiles(
-										settings.indexerSettings.indexFilter ?? "*",
-										(await getGitignorePatterns(
-											this._workspace.workspacePath,
-										)) || "",
-									)
-								).length,
-							});
-						}, 50);
 						this.showView(this._launchView);
 						break;
 					}
@@ -399,7 +303,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		});
 
 		let original = "";
-		if (graphState.fileBackups && graphState.fileBackups[file.path]) {
+		if (graphState.fileBackups?.[file.path]) {
 			original = graphState.fileBackups[file.path];
 		}
 
@@ -425,11 +329,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					(e) => e.metadata?.tool && e.metadata.tool === "write_file",
 				);
 				for (const fileWritten of filesWritten ?? []) {
-					const file = JSON.parse(fileWritten.content) as FileMetadata;
-					if (file.id === file.id) {
-						file.accepted = false;
-						file.rejected = false;
-						fileWritten.content = JSON.stringify(file);
+					const fileContents = JSON.parse(fileWritten.content) as FileMetadata;
+					if (file.id === fileContents.id) {
+						fileContents.accepted = false;
+						fileContents.rejected = false;
+						fileWritten.content = JSON.stringify(fileContents);
 						await this._workspace.updateThread(threadId, { ...targetThread });
 						this._webview?.postMessage({
 							command: "thread-data",
@@ -445,7 +349,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	private async acceptFile({ file, threadId }: AcceptFileEvent) {
 		const { path: artifactFile, code: markdown } = file;
 
-		let code = markdown?.startsWith("```")
+		const code = markdown?.startsWith("```")
 			? extractCodeBlock(markdown)
 			: markdown;
 		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
@@ -471,11 +375,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					(e) => e.metadata?.tool && e.metadata.tool === "write_file",
 				);
 				for (const fileWritten of filesWritten ?? []) {
-					const file = JSON.parse(fileWritten.content) as FileMetadata;
-					if (file.id === file.id) {
-						file.accepted = true;
-						file.rejected = false;
-						fileWritten.content = JSON.stringify(file);
+					const fileContent = JSON.parse(fileWritten.content) as FileMetadata;
+					if (file.id === fileContent.id) {
+						fileContent.accepted = true;
+						fileContent.rejected = false;
+						fileWritten.content = JSON.stringify(fileContent);
 						await this._workspace.updateThread(threadId, { ...targetThread });
 						this._webview?.postMessage({
 							command: "thread-data",
@@ -491,7 +395,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	private async rejectFile({ file, threadId }: AcceptFileEvent) {
 		const { path: artifactFile, code: markdown } = file;
 
-		let code = markdown?.startsWith("```")
+		const code = markdown?.startsWith("```")
 			? extractCodeBlock(markdown)
 			: markdown;
 		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
@@ -517,11 +421,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					(e) => e.metadata?.tool && e.metadata.tool === "write_file",
 				);
 				for (const fileWritten of filesWritten ?? []) {
-					const file = JSON.parse(fileWritten.content) as FileMetadata;
-					if (file.id === file.id) {
-						file.accepted = false;
-						file.rejected = true;
-						fileWritten.content = JSON.stringify(file);
+					const fileContents = JSON.parse(fileWritten.content) as FileMetadata;
+					if (file.id === fileWritten.id) {
+						fileContents.accepted = false;
+						fileContents.rejected = true;
+						fileWritten.content = JSON.stringify(fileContents);
 						await this._workspace.updateThread(threadId, { ...targetThread });
 						this._webview?.postMessage({
 							command: "thread-data",
@@ -546,6 +450,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async deleteThread(threadId: string) {
+		await this._lspClient.deleteThread(threadId);
 		await this._workspace.deleteThread(threadId);
 	}
 
@@ -565,7 +470,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		await this._workspace.branchThread(thread);
 		await this._lspClient.branchThread({
 			threadId: thread.id,
-			originalThreadId: thread.originatingThreadId!,
+			originalThreadId: thread.originatingThreadId,
 		});
 	}
 
@@ -584,7 +489,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		const words = message.message.split(" ");
 		let threadTitle = words.slice(0, 5).join(" ");
 		if (threadTitle.length > 30) {
-			threadTitle = threadTitle.substring(0, 27) + "...";
+			threadTitle = `${threadTitle.substring(0, 27)}...`;
 		}
 
 		await this._workspace.createThread(threadTitle, [message]);
@@ -664,13 +569,13 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 		for (let i = 0; i < halfContext; i++) {
 			if (upperLine > 0) {
 				upperLine--;
-				upperText = document.lineAt(upperLine).text + "\n" + upperText;
+				upperText = `${document.lineAt(upperLine).text}\n${upperText}`;
 				lastDirection = 0;
 			}
 
 			if (lowerLine < document.lineCount - 1) {
 				lowerLine++;
-				lowerText += "\n" + document.lineAt(lowerLine).text;
+				lowerText += `\n${document.lineAt(lowerLine).text}`;
 				lastDirection = 1;
 			}
 

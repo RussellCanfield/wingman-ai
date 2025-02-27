@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import type React from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import ReactFlow, {
-    Node,
-    Edge,
+    type Node,
+    type Edge,
     Controls,
     Background,
     useNodesState,
@@ -12,7 +13,7 @@ import ReactFlow, {
     Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Thread } from '@shared/types/Settings';
+import type { Thread } from '@shared/types/Settings';
 import './ThreadVisualization.css';
 import * as d3Force from 'd3-force';
 
@@ -242,10 +243,11 @@ const ThreadVisualization: React.FC<ThreadVisualizationProps> = ({
             <div className="visualization-header">
                 <h3>Thread Relationships</h3>
                 {onClose && (
-                    <button className="close-button" onClick={onClose}>
+                    <button className="close-button" onClick={onClose} type="button">
+                        {/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 )}
@@ -286,15 +288,15 @@ const ThreadVisualization: React.FC<ThreadVisualizationProps> = ({
             </div>
             <div className="visualization-legend">
                 <div className="legend-item">
-                    <div className="legend-node"></div>
+                    <div className="legend-node" />
                     <span>Thread</span>
                 </div>
                 <div className="legend-item">
-                    <div className="legend-node active"></div>
+                    <div className="legend-node active" />
                     <span>Active Thread</span>
                 </div>
                 <div className="legend-item">
-                    <div className="legend-edge"></div>
+                    <div className="legend-edge" />
                     <span>Branch Relationship</span>
                 </div>
             </div>

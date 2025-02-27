@@ -1,14 +1,16 @@
 import { VscClearAll } from "react-icons/vsc";
-import { HiDatabase } from "react-icons/hi";
 import { HiLightningBolt } from "react-icons/hi";
-import { vscode } from "./utilities/vscode";
-import { useSettingsContext } from "./context/settingsContext";
+import { useSettingsContext, type View } from "./context/settingsContext";
 import { useComposerContext } from "./context/composerContext";
 import { MdSettings } from "react-icons/md";
+import { vscode } from "../utilities/vscode";
 
-const viewName = {
+type ViewNames = {
+	[key in View]: string;
+};
+
+const viewName: ViewNames = {
 	composer: "Wingman",
-	index: "Index",
 };
 
 export default function Toolbar() {
@@ -17,6 +19,7 @@ export default function Toolbar() {
 		view,
 		setView,
 	} = useSettingsContext();
+	const { activeThread } = useComposerContext();
 	const { setComposerMessages } = useComposerContext();
 
 	const buttonBaseClasses = "rounded transition-colors duration-300 p-2";
@@ -31,6 +34,7 @@ export default function Toolbar() {
 		<div className="flex justify-between items-center gap-4">
 			<h2 className="text-lg font-bold flex-auto">{viewName[view]}</h2>
 			<button
+				type="button"
 				className={`${buttonBaseClasses} ${view === "composer"
 					? buttonActiveClasses
 					: buttonInactiveClasses
@@ -41,16 +45,7 @@ export default function Toolbar() {
 				<HiLightningBolt size={24} />
 			</button>
 			<button
-				className={`${buttonBaseClasses} ${view === "index"
-					? buttonActiveClasses
-					: buttonInactiveClasses
-					}`}
-				onClick={() => setView("index")}
-				title="Index"
-			>
-				<HiDatabase size={24} />
-			</button>
-			<button
+				type="button"
 				className={`${buttonBaseClasses} ${buttonInactiveClasses}`}
 				onClick={() => {
 					vscode.postMessage({ command: 'openSettings' })
@@ -60,6 +55,7 @@ export default function Toolbar() {
 				<MdSettings size={24} />
 			</button>
 			<button
+				type="button"
 				className={`${buttonBaseClasses} ${buttonInactiveClasses}`}
 				onClick={() => {
 					vscode.postMessage({

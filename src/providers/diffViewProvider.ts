@@ -4,91 +4,36 @@ import {
 	extractCodeBlock,
 	replaceTextInDocument,
 } from "./utilities";
-import {
+import type {
 	AppMessage,
 	CodeReview,
 	CodeReviewCommand,
 	FileDetails,
 } from "@shared/types/Message";
-import { AIProvider } from "../service/base";
-import { CodeReviewer } from "../commands/review/codeReviewer";
-import { LSPClient } from "../client";
-import { DiffViewCommand } from "@shared/types/v2/Composer";
-import { FileMetadata } from "@shared/types/v2/Message";
+import type { AIProvider } from "../service/base";
+import type { LSPClient } from "../client";
+import type { DiffViewCommand } from "@shared/types/v2/Composer";
+import type { FileMetadata } from "@shared/types/v2/Message";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
-	codeReviewer: CodeReviewer;
 
 	constructor(
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _aiProvider: AIProvider,
 		private readonly _workspace: string,
-		private readonly _lspClient: LSPClient
-	) {
-		this.codeReviewer = new CodeReviewer(this._workspace, this._aiProvider);
-	}
+		private readonly _lspClient: LSPClient,
+	) {}
 
-	async createCodeReviewView(review: CodeReview) {
-		if (this.panels.has(review.summary)) {
-			const existingPanel = this.panels.get(review.summary);
-			existingPanel?.reveal(vscode.ViewColumn.One);
-			return;
-		}
-
-		const currentPanel = vscode.window.createWebviewPanel(
-			"codeReview",
-			`Code Review`,
-			vscode.ViewColumn.One,
-			{
-				enableScripts: true,
-				retainContextWhenHidden: true,
-			}
-		);
-
-		this.panels.set(review.summary, currentPanel);
-
-		currentPanel.webview.html = await getWebViewHtml(
-			this._context,
-			currentPanel.webview
-		);
-
-		currentPanel.onDidDispose(() => {
-			this.panels.delete(review.summary);
-		});
-
-		currentPanel.webview.onDidReceiveMessage(
-			async (message: AppMessage) => {
-				if (!message) return;
-
-				const { command, value } = message;
-
-				switch (command) {
-					case "webviewLoaded":
-						currentPanel.webview.postMessage({
-							command: "code-review",
-							value: {
-								isDarkTheme:
-									vscode.window.activeColorTheme.kind !== 1,
-								review: review,
-							} satisfies CodeReviewCommand,
-						});
-						break;
-					case "get-code-review-file":
-						const fileReview = await this.reviewFile(
-							value as FileDetails
-						);
-						currentPanel.webview.postMessage({
-							command: "code-review-file-result",
-							value: fileReview,
-						});
-						break;
-				}
-			}
-		);
-	}
-
-	async createDiffView({ file, threadId, onAccept, onReject }: DiffViewCommand & { onAccept: (file: FileMetadata, threadId: string) => void, onReject: (file: FileMetadata, threadId: string) => void }) {
+	async createDiffView({
+		file,
+		threadId,
+		onAccept,
+		onReject,
+	}: DiffViewCommand & {
+		onAccept: (file: FileMetadata, threadId: string) => void;
+		onReject: (file: FileMetadata, threadId: string) => void;
+	}) {
 		if (this.panels.has(file.path)) {
 			const existingPanel = this.panels.get(file.path);
 			existingPanel?.reveal(vscode.ViewColumn.One);
@@ -101,68 +46,61 @@ export class DiffViewProvider {
 			vscode.ViewColumn.One,
 			{
 				enableScripts: true,
-			}
+			},
 		);
 
 		this.panels.set(file.path, currentPanel);
 
 		currentPanel.webview.html = await getWebViewHtml(
 			this._context,
-			currentPanel.webview
+			currentPanel.webview,
 		);
 
 		currentPanel.onDidDispose(() => {
 			this.panels.delete(file.path);
 		});
 
-		currentPanel.webview.onDidReceiveMessage(
-			async (message: AppMessage) => {
-				if (!message) return;
+		currentPanel.webview.onDidReceiveMessage(async (message: AppMessage) => {
+			if (!message) return;
 
-				const { command, value } = message;
+			const { command, value } = message;
 
-				switch (command) {
-					case "webviewLoaded":
-						currentPanel.webview.postMessage({
-							command: "diff-file",
-							value: {
-								isDarkTheme:
-									vscode.window.activeColorTheme.kind !== 1,
-								file,
-								threadId
-							} satisfies DiffViewCommand,
-						});
-						break;
-					case "accept-file-changes":
-						await this.acceptFileChanges(
-							currentPanel,
-							file.path,
-							value as FileMetadata
-						);
-						onAccept(value as FileMetadata, threadId);
-						break;
-					case "reject-file-changes":
-						onReject(value as FileMetadata, threadId);
-						if (currentPanel) {
-							currentPanel.dispose();
-							this.panels.delete(file.path);
-						}
-						break;
-				}
+			switch (command) {
+				case "webviewLoaded":
+					currentPanel.webview.postMessage({
+						command: "diff-file",
+						value: {
+							isDarkTheme: vscode.window.activeColorTheme.kind !== 1,
+							file,
+							threadId,
+						} satisfies DiffViewCommand,
+					});
+					break;
+				case "accept-file-changes":
+					await this.acceptFileChanges(
+						currentPanel,
+						file.path,
+						value as FileMetadata,
+					);
+					onAccept(value as FileMetadata, threadId);
+					break;
+				case "reject-file-changes":
+					onReject(value as FileMetadata, threadId);
+					if (currentPanel) {
+						currentPanel.dispose();
+						this.panels.delete(file.path);
+					}
+					break;
 			}
-		);
-	}
-
-	async reviewFile(fileDetails: FileDetails) {
-		return this.codeReviewer.reviewFile(fileDetails);
+		});
 	}
 
 	async acceptFileChanges(
 		currentPanel: vscode.WebviewPanel,
 		file: string,
-		{ path: artifactFile, code: markdown }: FileMetadata
+		{ path: artifactFile, code: markdown }: FileMetadata,
 	) {
-		let code = markdown?.startsWith("```")
+		const code = markdown?.startsWith("```")
 			? extractCodeBlock(markdown)
 			: markdown;
 		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
@@ -182,7 +120,7 @@ export class DiffViewProvider {
 
 			// Check if the document is already open
 			let document = vscode.workspace.textDocuments.find(
-				(doc) => doc.uri.toString() === fileUri.toString()
+				(doc) => doc.uri.toString() === fileUri.toString(),
 			);
 			if (!document) {
 				// Open the text document if it is not already open
@@ -195,9 +133,7 @@ export class DiffViewProvider {
 			if ((error as vscode.FileSystemError).code === "FileNotFound") {
 				// Create the text document if it does not exist
 				await vscode.workspace.fs.writeFile(fileUri, new Uint8Array());
-				const document = await vscode.workspace.openTextDocument(
-					fileUri
-				);
+				const document = await vscode.workspace.openTextDocument(fileUri);
 				await replaceTextInDocument(document, code!, true);
 			} else {
 				throw error;
@@ -211,30 +147,28 @@ export class DiffViewProvider {
 	}
 
 	dispose() {
+		// biome-ignore lint/complexity/noForEach: <explanation>
 		this.panels.forEach((panel) => panel.dispose());
 	}
 }
 
 async function getWebViewHtml(
 	context: vscode.ExtensionContext,
-	webview: vscode.Webview
+	webview: vscode.Webview,
 ) {
 	const nonce = getNonce();
 	const htmlUri = webview.asWebviewUri(
-		vscode.Uri.joinPath(context.extensionUri, "out", "views", "diff.html")
+		vscode.Uri.joinPath(context.extensionUri, "out", "views", "diff.html"),
 	);
 	const htmlContent = (
 		await vscode.workspace.fs.readFile(vscode.Uri.file(htmlUri.fsPath))
 	).toString();
 
 	// Replace placeholders in the HTML content
-	const finalHtmlContent = htmlContent.replace(
-		/CSP_NONCE_PLACEHOLDER/g,
-		nonce
-	);
+	const finalHtmlContent = htmlContent.replace(/CSP_NONCE_PLACEHOLDER/g, nonce);
 
 	const prefix = webview.asWebviewUri(
-		vscode.Uri.joinPath(context.extensionUri, "out", "views")
+		vscode.Uri.joinPath(context.extensionUri, "out", "views"),
 	);
 	const srcHrefRegex = /(src|href)="([^"]+)"/g;
 
@@ -244,7 +178,7 @@ async function getWebViewHtml(
 		(match, attribute, filename) => {
 			const prefixedFilename = `${prefix}${filename}`;
 			return `${attribute}="${prefixedFilename}"`;
-		}
+		},
 	);
 
 	return addNoneAttributeToLink(updatedHtmlContent, nonce).replace(
@@ -258,7 +192,7 @@ async function getWebViewHtml(
                         window.vscode.postMessage({ command: 'webviewLoaded' });
                     });
                 })();
-            </script></body>`
+            </script></body>`,
 	);
 }
 

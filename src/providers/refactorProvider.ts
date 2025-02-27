@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { AIProvider } from "../service/base";
+import type { AIProvider } from "../service/base";
 import {
 	extractCodeBlock,
 	getSymbolsFromOpenFiles,
@@ -8,6 +8,7 @@ import {
 import { eventEmitter } from "../events/eventEmitter";
 import { EVENT_REFACTOR, telemetry } from "./telemetryProvider";
 
+// biome-ignore lint/style/useConst: <explanation>
 let abortController = new AbortController();
 
 export class RefactorProvider implements vscode.CodeActionProvider {
@@ -25,7 +26,7 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 		document: vscode.TextDocument,
 		range: vscode.Range | vscode.Selection,
 		context: vscode.CodeActionContext,
-		token: vscode.CancellationToken
+		token: vscode.CancellationToken,
 	) {
 		if (context.triggerKind !== vscode.CodeActionTriggerKind.Invoke) {
 			return [];
@@ -33,7 +34,7 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 
 		const codeAction = new vscode.CodeAction(
 			"✈️ Refactor using Wingman",
-			vscode.CodeActionKind.Refactor
+			vscode.CodeActionKind.Refactor,
 		);
 		codeAction.edit = new vscode.WorkspaceEdit();
 		codeAction.command = {
@@ -53,7 +54,7 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 		document: vscode.TextDocument,
 		range: vscode.Range | vscode.Selection,
 		aiProvider: AIProvider,
-		editor: vscode.TextEditor
+		editor: vscode.TextEditor,
 	) {
 		return vscode.window.withProgress(
 			{
@@ -66,10 +67,7 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 				}
 
 				eventEmitter._onQueryStart.fire();
-				const codeContextRange = new vscode.Range(
-					range.start,
-					range.end
-				);
+				const codeContextRange = new vscode.Range(range.start, range.end);
 				const highlightedCode = document.getText(codeContextRange);
 
 				const symbols = await getSymbolsFromOpenFiles();
@@ -84,7 +82,7 @@ ${highlightedCode}
 					symbols
 						? `\nHere are the available types to use as a reference in answering questions, these may not be related to the code provided:\n${symbols}\n----------\n`
 						: "",
-					abortController.signal
+					abortController.signal,
 				);
 
 				const newCode = extractCodeBlock(result);
@@ -95,7 +93,7 @@ ${highlightedCode}
 					});
 				}
 				eventEmitter._onQueryComplete.fire();
-			}
+			},
 		);
 	}
 }

@@ -3,7 +3,6 @@ import {
 	type MessagesAnnotation,
 	Annotation,
 	type StreamMode,
-	type BaseCheckpointSaver,
 	type CheckpointTuple,
 } from "@langchain/langgraph";
 import { HumanMessage, type BaseMessage } from "@langchain/core/messages";
@@ -30,6 +29,7 @@ import { createFindFileDependenciesTool } from "../tools/file_dependencies";
 import { loggingProvider } from "../../../server/loggingProvider";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { createCommandExecuteTool } from "../tools/cmd_execute";
+import type { PartitionedFileSystemSaver } from "../../checkpointer";
 
 let controller = new AbortController();
 
@@ -78,7 +78,7 @@ export class WingmanAgent {
 	constructor(
 		private readonly aiProvider: AIProvider,
 		private readonly workspace: string,
-		private readonly checkpointer: BaseCheckpointSaver,
+		private readonly checkpointer: PartitionedFileSystemSaver,
 		private readonly codeParser: CodeParser,
 	) {
 		this.tools = [
@@ -158,18 +158,129 @@ export class WingmanAgent {
 			},
 		};
 
-		const newVersions: Record<string, string> = {};
 		const resultConfig = await this.checkpointer.put(
 			newConfig,
 			newCheckpoint,
 			metadata,
-			newVersions,
 		);
 
 		return {
 			threadId: newThreadId,
 			config: resultConfig,
 		};
+	}
+
+	/**
+	 * Deletes a thread and all its associated checkpoints
+	 * @param threadId The ID of the thread to delete
+	 * @param options Optional configuration for deletion behavior
+	 * @returns A boolean indicating whether the deletion was successful
+	 */
+	async deleteThread(
+		threadId: string,
+		options: {
+			/**
+			 * Whether to also delete any branches created from this thread
+			 * Default: false
+			 */
+			deleteBranches?: boolean;
+			/**
+			 * Whether to perform a soft delete (mark as deleted but retain data)
+			 * Default: false
+			 */
+			softDelete?: boolean;
+		} = {},
+	): Promise<boolean> {
+		const { deleteBranches = false, softDelete = false } = options;
+
+		try {
+			// Get the thread configuration
+			const threadConfig: RunnableConfig = {
+				configurable: {
+					thread_id: threadId,
+				},
+			};
+
+			// Check if thread exists
+			const threadTuple = await this.checkpointer.getTuple(threadConfig);
+			if (!threadTuple) {
+				console.warn(`Thread ${threadId} not found or has no checkpoints`);
+				return false;
+			}
+
+			// If we need to delete branches, find all branches first
+			if (deleteBranches) {
+				try {
+					// Get all checkpoints to find branches
+					const allCheckpoints: CheckpointTuple[] = [];
+
+					// Use a filter to find all checkpoints across all threads
+					const checkpointGenerator = this.checkpointer.list({
+						configurable: {
+							// Empty config to get all checkpoints
+						},
+					});
+
+					// Collect all checkpoints into an array
+					for await (const checkpoint of checkpointGenerator) {
+						allCheckpoints.push(checkpoint);
+					}
+
+					// Find branches that reference this thread as source
+					const branches = allCheckpoints.filter((checkpoint) => {
+						const metadata = checkpoint.metadata as any;
+						return metadata?.branch_source?.thread_id === threadId;
+					});
+
+					// Delete each branch
+					for (const branch of branches) {
+						if (branch.config.configurable?.thread_id) {
+							await this.deleteThread(
+								branch.config.configurable.thread_id,
+								options,
+							);
+						}
+					}
+				} catch (error) {
+					console.warn(
+						`Error finding branches for thread ${threadId}: ${error}`,
+					);
+					// Continue with deleting the main thread even if branch deletion fails
+				}
+			}
+
+			if (softDelete) {
+				// Mark the thread as deleted without removing data
+				const metadata = {
+					...threadTuple.metadata,
+					deleted: true,
+					deleted_at: Date.now(),
+					step: 0,
+					writes: {},
+					parents: {},
+					source: "update" as const,
+				};
+
+				// Update the checkpoint with deleted metadata
+				await this.checkpointer.put(
+					threadConfig,
+					threadTuple.checkpoint,
+					metadata,
+				);
+
+				return true;
+			}
+
+			// Hard delete - remove all checkpoints for this thread
+			return await this.checkpointer.delete({
+				configurable: {
+					thread_id: threadId,
+				},
+			});
+		} catch (error) {
+			console.error(`Error deleting thread ${threadId}: ${error}`, error);
+			return false;
+		}
 	}
 
 	private updateGraphState = async (
@@ -192,16 +303,24 @@ export class WingmanAgent {
 			},
 		};
 
-		const newVersions: Record<string, string> = {};
-		await this.checkpointer.put(
-			tuple.config,
-			newCheckpoint,
-			metadata,
-			newVersions,
-		);
+		await this.checkpointer.put(tuple.config, newCheckpoint, metadata);
 	};
 
-	storeFileBackup = async (
+	fetchOriginalFileContents = async (file: string, threadId: string) => {
+		const checkpoint = { configurable: { thread_id: threadId } };
+		const data = await this.checkpointer.get(checkpoint);
+		const tuple = await this.checkpointer.getTuple(checkpoint);
+
+		if (!tuple || !data?.channel_values) return;
+
+		const state = data.channel_values as typeof GraphAnnotation.State;
+
+		if (state.fileBackups) {
+			return state.fileBackups[file];
+		}
+	};
+
+	private storeFileBackup = async (
 		file: FileMetadata,
 		originalFileContents: string,
 		threadId: string,
@@ -219,8 +338,23 @@ export class WingmanAgent {
 				[file.path]: originalFileContents,
 			};
 
+			// De-dupe state.files by path and include the current file
+			const existingFilePaths = new Set(state.files.map((f) => f.path));
+
+			// Create a new array with unique existing files
+			const uniqueFiles = state.files.filter(
+				(f, index, self) =>
+					index === self.findIndex((sf) => sf.path === f.path),
+			);
+
+			// Add the current file if it's not already in the array
+			if (!existingFilePaths.has(file.path)) {
+				uniqueFiles.push(file);
+			}
+
 			const newState = {
 				...state,
+				files: uniqueFiles,
 				fileBackups: {
 					...state.fileBackups,
 					...backupUpdate,
@@ -349,7 +483,7 @@ export class WingmanAgent {
 		return [
 			{
 				role: "system",
-				content: `You are an expert full stack developer collaborating with the user as their coding partner - or as some like to call it, their Wingman.
+				content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 
 We may automatically include contextual information with each user message, such as their open files, cursor position, recently viewed files, edit history, and linter errors. Use this context judiciously when it helps address their needs.
@@ -384,19 +518,59 @@ After writing a file, consider if you've introduced a breaking change or orphane
 - Leveraging the "find_file_dependencies" AST tool will help you locate related files
 - While not always required, this can help you potentially locate dead code, or fix dependent files
 
-# New Project Tooling
-For new projects, consider these modern tools for improved developer experience:
-- Biome.js: Fast linting, formatting and more (replaces ESLint/Prettier)
-- NX: Powerful build system for monorepos with intelligent caching
-- RSBuild/Vite: High-performance bundlers with HMR support
-- TypeScript: Type safety with excellent IDE integration
-- Zephyr Cloud: Quick and easy deployments to the cloud using the appropriate plugin for the build tooling chosen
+# Technology Recommendations
+When suggesting technologies for projects, consider these options based on specific needs:
+- **Build Tools**: NX for monorepos, Vite for fast development, RSBuild for performance
+- **Code Quality**: Biome.js for linting/formatting (alternative to ESLint/Prettier)
+- **Type Safety**: TypeScript for improved developer experience and IDE integration
+- **Deployment**: Zephyr Cloud with appropriate build tool plugins (vite-plugin-zephyr, zephyr-rspack-plugin)
+- **State Management**: Redux Toolkit, Zustand, or Jotai depending on complexity
+- **Testing**: Vitest for unit tests, Playwright for E2E testing
 
 # UI/UX Skills
 You are a master at UX, when you write frontend code make the UI mind blowing!
 
-**Workspace Directory:**
-${this.workspace}
+# Zephyr Cloud Integration
+Zephyr Cloud is a cloud platform that is easy to integrate
+When creating a new vite or rsbuild configuration file add the zephyr plugins listed under "Technology Recommandations"
+
+### Examples:
+**vite**
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { withZephyr } from 'vite-plugin-zephyr'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react(), withZephyr()],
+  server: {
+    port: 3000
+  }
+})
+
+**rsbuild**
+\`\`\`typescript
+import { defineConfig, type RsbuildPlugin } from "@rsbuild/core";
+import { pluginReact } from "@rsbuild/plugin-react";
+import { withZephyr } from "zephyr-rspack-plugin";
+
+const pluginWithZephyr = (): RsbuildPlugin => {
+  return {
+    name: "zephyr-rsbuild-plugin",
+    setup: (api) => {
+      api.modifyRspackConfig(async (config, { mergeConfig }) => {
+        const zephyrConfig = await withZephyr()(config);
+        mergeConfig(zephyrConfig);
+      });
+    }
+  };
+};
+
+export default defineConfig({
+  server: { port: 3000 },
+  plugins: [pluginReact(), pluginWithZephyr()]
+});
+\`\`\`
 `,
 			},
 			...state.messages,
@@ -553,7 +727,7 @@ Contents: ${request.context.text}`,
 							yield pushEvent({
 								id: event.run_id,
 								type: "tool-start",
-								content: JSON.stringify(event.data.input.input),
+								content: event.data.input.input,
 								metadata: {
 									tool: event.name,
 									path: event.name.endsWith("_file")
@@ -571,7 +745,7 @@ Contents: ${request.context.text}`,
 							content:
 								event.name === "write_file"
 									? JSON.stringify(event.data.output.update.files[0])
-									: (event.data?.output.content ?? ""),
+									: event.data.input.input,
 							metadata: {
 								tool: event.name,
 								path: event.name.endsWith("_file")

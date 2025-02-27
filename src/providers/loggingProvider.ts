@@ -1,4 +1,4 @@
-import { ILoggingProvider } from "@shared/types/Logger";
+import type { ILoggingProvider } from "@shared/types/Logger";
 import * as vscode from "vscode";
 
 export class VSCodeLoggingProvider implements ILoggingProvider {
@@ -10,20 +10,20 @@ export class VSCodeLoggingProvider implements ILoggingProvider {
 
 	public logInfo(message: string): void {
 		this.dbgChannel.appendLine(
-			`${new Date().toLocaleString()} - [info] ${message}`
+			`${new Date().toLocaleString()} - [info] ${message}`,
 		);
 	}
 
 	public logError(
 		messageOrError: string | Error | unknown,
-		showErrorModal?: boolean
+		showErrorModal?: boolean,
 	): void {
 		const message =
 			typeof messageOrError === "string"
 				? messageOrError
 				: getErrorMessage(messageOrError);
 		this.dbgChannel.appendLine(
-			`${new Date().toLocaleString()} - [error] ${message}`
+			`${new Date().toLocaleString()} - [error] ${message}`,
 		);
 
 		if (showErrorModal) {
@@ -39,11 +39,13 @@ export class VSCodeLoggingProvider implements ILoggingProvider {
 function getErrorMessage(error: Error | unknown): string {
 	if (error instanceof Error) {
 		return error.message;
-	} else if (typeof error === "string") {
-		return error;
-	} else {
-		return "An unknown error occurred";
 	}
+
+	if (typeof error === "string") {
+		return error;
+	}
+
+	return "An unknown error occurred";
 }
 
 const loggingProvider = new VSCodeLoggingProvider();

@@ -1,7 +1,7 @@
 import { OllamaSettingsType } from "@shared/types/Settings";
 import { VscRefresh } from "react-icons/vsc";
 import { InitSettings } from "./App";
-import { vscode } from "./utilities/vscode";
+import { vscode } from "../utilities/vscode";
 
 type OllamaSection = InitSettings["providerSettings"]["Ollama"] & {
 	ollamaModels: string[];

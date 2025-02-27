@@ -1,9 +1,9 @@
-import { AppMessage } from "@shared/types/Message";
+import type { AppMessage } from "@shared/types/Message";
 import { useEffect, useState } from "react";
 import "./App.css";
-import { Thread, WorkspaceSettings } from "@shared/types/Settings";
+import type { Thread, WorkspaceSettings } from "@shared/types/Settings";
 import ThreadVisualization from "./ThreadVisualization";
-import { vscode } from "./utilities/vscode";
+import { vscode } from "../utilities/vscode";
 
 export default function App() {
 	const [threads, setThreads] = useState<Thread[] | undefined>();
@@ -27,11 +27,12 @@ export default function App() {
 		const { command, value } = data;
 
 		switch (command) {
-			case "thread-data":
+			case "thread-data": {
 				const settings = value as WorkspaceSettings;
 				setThreads(settings.threads);
 				setActiveThreadId(settings.activeThreadId);
 				break;
+			}
 		}
 	};
 

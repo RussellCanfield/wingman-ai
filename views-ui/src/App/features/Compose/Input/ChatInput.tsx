@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { FaPlay, FaStopCircle, FaPaperclip } from "react-icons/fa";
-import { vscode } from "../../../utilities/vscode";
-import { AppMessage } from "@shared/types/Message";
-import { FileSearchResult } from "@shared/types/v2/Composer";
+import type { AppMessage } from "@shared/types/Message";
+import type { FileSearchResult } from "@shared/types/v2/Composer";
 import { useAutoFocus } from "../../../hooks/useAutoFocus";
 import { useOnScreen } from "../../../hooks/useOnScreen";
 import { handleAutoResize } from "../../../utilities/utils";
@@ -11,6 +11,7 @@ import { FileChips } from "./components/FileChips";
 import { ImagePreview } from "./components/ImagePreview";
 import { useSettingsContext } from "../../../context/settingsContext";
 import { useComposerContext } from "../../../context/composerContext";
+import { vscode } from "../../../../utilities/vscode";
 
 const MAX_WIDTH = 1024;
 const MAX_HEIGHT = 1024;
@@ -101,28 +102,28 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 		if (isVisible) {
 			chatInputBox.current?.focus();
 		}
-	}, [isVisible]);
+	}, [isVisible, chatInputBox.current]);
 
 	useEffect(() => {
 		if (chatInputBox.current) {
 			const rect = chatInputBox.current.getBoundingClientRect();
 			setInputRect(rect);
 		}
-	}, [inputValue, activeFiles]);
-
-	const handleResponse = (event: MessageEvent<AppMessage>) => {
-		const { data } = event;
-		const { command, value } = data;
-
-		if (command === "get-files-result" && value) {
-			const fileResults = value as FileSearchResult[];
-			setDropdownItems(fileResults);
-			setFocusedDropdownIndex(0);
-			setShowDropdown(fileResults.length > 0);
-		}
-	};
+	}, [chatInputBox.current]);
 
 	useEffect(() => {
+		const handleResponse = (event: MessageEvent<AppMessage>) => {
+			const { data } = event;
+			const { command, value } = data;
+
+			if (command === "get-files-result" && value) {
+				const fileResults = value as FileSearchResult[];
+				setDropdownItems(fileResults);
+				setFocusedDropdownIndex(0);
+				setShowDropdown(fileResults.length > 0);
+			}
+		};
+
 		window.addEventListener("message", handleResponse);
 		window.addEventListener("paste", handlePaste);
 
@@ -314,7 +315,6 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 					ref={chatInputBox}
 					tabIndex={0}
 					rows={1}
-					autoFocus
 					className={textareaClass}
 					onKeyDown={handleUserInput}
 				/>
@@ -327,6 +327,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 				/>
 				<div className={buttonContainerClass}>
 					<button
+						type="button"
 						className={iconButtonClass}
 						onClick={handleImageUpload}
 						title="Attach image"
@@ -335,6 +336,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 					</button>
 					{!loading ? (
 						<button
+							type="button"
 							className={`${iconButtonClass} ${!inputValue.trim() ? 'opacity-50 cursor-not-allowed' : ''} p-2.5`}
 							onClick={() => handleUserInput({ key: "Enter", preventDefault: () => { }, shiftKey: false } as React.KeyboardEvent<HTMLTextAreaElement>)}
 							disabled={!inputValue.trim() && !selectedImage}
@@ -344,6 +346,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 						</button>
 					) : (
 						<button
+							type="button"
 							className={`${iconButtonClass} text-white`}
 							onClick={onChatCancelled}
 							title="Cancel"

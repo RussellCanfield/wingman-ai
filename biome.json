@@ -7,7 +7,10 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"ignore": []
+		"ignore": [
+			"views-ui/src/Common/DiffView/*.ts",
+			"views-ui/src/Common/DiffView/*.tsx"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -19,7 +22,13 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true
+			"recommended": true,
+			"style": {
+				"noNonNullAssertion": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "off"
+			}
 		}
 	},
 	"javascript": {

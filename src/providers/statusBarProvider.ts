@@ -3,7 +3,7 @@ import { eventEmitter } from "../events/eventEmitter";
 
 export class ActivityStatusBar {
 	activityStatusBarItem: vscode.StatusBarItem;
-	isInErrorState: boolean = false;
+	isInErrorState = false;
 
 	public readonly onFatalError: vscode.Event<void> =
 		eventEmitter._onFatalError.event;
@@ -17,10 +17,10 @@ export class ActivityStatusBar {
 	constructor() {
 		this.activityStatusBarItem = vscode.window.createStatusBarItem(
 			vscode.StatusBarAlignment.Right,
-			100
+			100,
 		);
 
-		this.activityStatusBarItem.text = `$(wingman-logo) Wingman`;
+		this.activityStatusBarItem.text = "$(wingman-logo) Wingman";
 		this.activityStatusBarItem.show();
 
 		this.onQueryStart(() => {

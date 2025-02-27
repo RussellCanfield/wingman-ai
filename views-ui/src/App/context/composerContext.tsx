@@ -1,9 +1,10 @@
-import { ComposerMessage, ComposerResponse, FileSearchResult } from "@shared/types/v2/Composer";
-import { AppMessage } from "@shared/types/v2/Message";
-import { AppState, Thread } from "@shared/types/Settings";
-import { AddMessageToThreadEvent, RenameThreadEvent } from '@shared/types/Events';
-import React, { createContext, FC, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
-import { vscode } from "../utilities/vscode";
+import type { ComposerMessage, ComposerResponse, FileSearchResult } from "@shared/types/v2/Composer";
+import type { AppMessage } from "@shared/types/v2/Message";
+import type { AppState, Thread } from "@shared/types/Settings";
+import type { AddMessageToThreadEvent, RenameThreadEvent } from '@shared/types/Events';
+import type React from "react";
+import { createContext, type FC, type PropsWithChildren, useContext, useEffect, useRef, useState } from "react"
+import { vscode } from "../../utilities/vscode";
 
 interface ComposerContextType {
   composerMessages: ComposerMessage[];
@@ -187,7 +188,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     console.log('Values:', values);
 
     switch (node) {
-      case "composer-done":
+      case "composer-done": {
         const newMessage = {
           from: "assistant" as const,
           message: activeMessage?.message ?? "",
@@ -208,6 +209,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         setLoading(false);
         setActiveMessage(undefined);
         break;
+      }
       case "composer-events":
         setLoading(true);
         setActiveMessage((am) => {
@@ -230,7 +232,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       case "compose-response":
         handleComposerEvent(value as ComposerResponse);
         break;
-      case "thread-data":
+      case "thread-data": {
         const workspaceSettings = value as AppState;
         const { threads, activeThreadId } = workspaceSettings;
         console.log(threads, activeThreadId)
@@ -252,6 +254,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           }
         }
         break;
+      }
     }
   };
 

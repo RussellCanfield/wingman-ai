@@ -1,6 +1,6 @@
-import React from "react";
+import type React from "react";
 import { FaX } from "react-icons/fa6";
-import { FileSearchResult } from "@shared/types/v2/Composer";
+import type { FileSearchResult } from "@shared/types/v2/Composer";
 
 interface FileChipsProps {
 	chips: FileSearchResult[];
@@ -26,12 +26,13 @@ export const FileChips: React.FC<FileChipsProps> = ({
 		<div className="flex flex-wrap items-center p-2">
 			{chips.map((chip, index) => (
 				<span
-					key={index}
+					key={chip.path}
 					className={`${chipClasses} rounded-md px-2 py-1 m-1 inline-flex items-center hover:bg-stone-500 hover:border-stone-600 transition-all duration-200 relative group`}
 					data-tooltip={chip.path}
 				>
 					{chip.file}
 					<button
+						type="button"
 						className="ml-1 font-bold text-opacity-70 hover:text-opacity-100"
 						onClick={() => onChipRemove(chip)}
 					>

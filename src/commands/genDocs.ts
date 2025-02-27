@@ -1,7 +1,7 @@
 import vscode from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
 import { loggingProvider } from "../providers/loggingProvider";
-import { AIProvider } from "../service/base";
+import type { AIProvider } from "../service/base";
 import {
 	extractCsharpDocs,
 	extractJsDocs,
@@ -17,7 +17,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 
 	provideCodeActions(
 		document: vscode.TextDocument,
-		range: vscode.Selection | vscode.Range
+		range: vscode.Selection | vscode.Range,
 	): vscode.ProviderResult<(vscode.CodeAction | vscode.Command)[]> {
 		// only provide code actions for the languages that we support
 		if (
@@ -33,16 +33,12 @@ export class GenDocs implements vscode.CodeActionProvider {
 		}
 		const codeAction = new vscode.CodeAction(
 			"✈️ Document using Wingman",
-			vscode.CodeActionKind.QuickFix
+			vscode.CodeActionKind.QuickFix,
 		);
 		codeAction.command = {
 			command: GenDocs.command,
 			title: "✈️ Document using Wingman",
-			arguments: [
-				document,
-				this._aiProvider,
-				vscode.window.activeTextEditor,
-			],
+			arguments: [document, this._aiProvider, vscode.window.activeTextEditor],
 		};
 		return [codeAction];
 	}
@@ -52,7 +48,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 	static generateDocs(
 		document: vscode.TextDocument,
 		aiProvider: AIProvider,
-		editor: vscode.TextEditor
+		editor: vscode.TextEditor,
 	) {
 		if (!editor) {
 			return;
@@ -78,10 +74,10 @@ export class GenDocs implements vscode.CodeActionProvider {
 						editor,
 						position,
 						abort.signal,
-						aiProvider
+						aiProvider,
 					);
 				}
-			}
+			},
 		);
 	}
 
@@ -90,7 +86,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 		editor: vscode.TextEditor,
 		position: vscode.Position,
 		signal: AbortSignal,
-		provider: AIProvider
+		provider: AIProvider,
 	): Promise<boolean> {
 		for (const symbol of symbols) {
 			if (signal.aborted) {
@@ -105,10 +101,11 @@ export class GenDocs implements vscode.CodeActionProvider {
 					editor,
 					position,
 					signal,
-					provider
+					provider,
 				);
 				return false;
-			} else if (
+			}
+			if (
 				(symbol.kind === vscode.SymbolKind.Method ||
 					symbol.kind === vscode.SymbolKind.Function ||
 					isArrowFunction(symbol, editor.document)) &&
@@ -121,22 +118,17 @@ export class GenDocs implements vscode.CodeActionProvider {
 					const result = await provider.genCodeDocs!(
 						text,
 						generateDocPrompFactory(editor.document.languageId),
-						signal
+						signal,
 					);
 					eventEmitter._onQueryComplete.fire();
 					telemetry.sendEvent(EVENT_DOC_GEN);
-					let code = result; //extractFromCodeMd(result); sometimes I'm not getting the full MD so we'll depend on code blocks
+					const code = result; //extractFromCodeMd(result); sometimes I'm not getting the full MD so we'll depend on code blocks
 					if (!code) {
 						loggingProvider.logError(result);
-						vscode.window.showErrorMessage(
-							"Failed to generate docs"
-						);
+						vscode.window.showErrorMessage("Failed to generate docs");
 						return false;
 					}
-					if (
-						editor.document.languageId === "python" &&
-						code.length
-					) {
+					if (editor.document.languageId === "python" && code.length) {
 						GenDocs.genPythonDocs(editor, symbol, code);
 					} else if (isTsRelated(editor.document.languageId)) {
 						GenDocs.genJsDocs(editor, symbol, code);
@@ -153,14 +145,11 @@ export class GenDocs implements vscode.CodeActionProvider {
 	static genPythonDocs(
 		editor: vscode.TextEditor,
 		symbol: vscode.DocumentSymbol,
-		code: string
+		code: string,
 	) {
 		const text = editor.document.getText(symbol.range);
 		const signatureEnd = text.indexOf("\n");
-		const signatureEndPosition = symbol.range.start.translate(
-			0,
-			signatureEnd
-		);
+		const signatureEndPosition = symbol.range.start.translate(0, signatureEnd);
 		const firstLine = editor.document.lineAt(symbol.range.start.line).text;
 		const docs = extractStringDocs(code);
 		// get all the whitespaces for the first line
@@ -183,12 +172,12 @@ export class GenDocs implements vscode.CodeActionProvider {
 	static genJsDocs(
 		editor: vscode.TextEditor,
 		symbol: vscode.DocumentSymbol,
-		code: string
+		code: string,
 	) {
 		// get the space of the first line
 		const firstLine = editor.document.lineAt(symbol.range.start.line).text;
 		const spaceMatch = firstLine.match(/^\s*/gm);
-		const docs = extractJsDocs(code) + "\n";
+		const docs = `${extractJsDocs(code)}\n`;
 		if (spaceMatch?.length && docs.length) {
 			const leadingWhitespace = spaceMatch[0];
 			// need to remove all spaces and tabs from the start of the comment
@@ -198,10 +187,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 				.map((line) => leadingWhitespace + line)
 				.join("\n");
 			editor.edit((editBuilder) => {
-				editBuilder.insert(
-					symbol.range.start,
-					indentedDocs.trimStart()
-				);
+				editBuilder.insert(symbol.range.start, indentedDocs.trimStart());
 			});
 		}
 	}
@@ -209,7 +195,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 	static genCSharpDocs(
 		editor: vscode.TextEditor,
 		symbol: vscode.DocumentSymbol,
-		code: string
+		code: string,
 	) {
 		const docs = extractCsharpDocs(code);
 		const firstLine = editor.document.lineAt(symbol.range.start.line).text;
@@ -224,7 +210,7 @@ export class GenDocs implements vscode.CodeActionProvider {
 			editor.edit((editBuilder) => {
 				editBuilder.insert(
 					symbol.range.start,
-					indentedDocs.trimStart() + "\n" + spaceMatch[0]
+					`${indentedDocs.trimStart()}\n${spaceMatch[0]}`,
 				);
 			});
 		}

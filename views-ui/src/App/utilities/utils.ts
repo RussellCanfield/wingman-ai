@@ -1,7 +1,7 @@
 export const handleAutoResize = (
 	element: HTMLTextAreaElement,
-	reset: boolean = false,
-	maxHeight: number = 128 // Default max height of 128px
+	reset = false,
+	maxHeight = 128, // Default max height of 128px
 ) => {
 	if (!element) return;
 
@@ -16,10 +16,7 @@ export const handleAutoResize = (
 	element.style.height = "auto";
 
 	// Set the height to either the scrollHeight or the minimum height, but not exceeding maxHeight
-	const newHeight = Math.min(
-		Math.max(element.scrollHeight, 42),
-		maxHeight
-	);
+	const newHeight = Math.min(Math.max(element.scrollHeight, 42), maxHeight);
 	element.style.height = `${newHeight}px`;
 
 	// Add overflow-y scrolling if content exceeds maxHeight

@@ -1,27 +1,59 @@
-import { PropsWithChildren } from "react";
-import { FaUser } from "react-icons/fa";
+import type { PropsWithChildren } from "react";
+import { FaUndo, FaUser } from "react-icons/fa";
 import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { vscode } from "../../utilities/vscode";
-import { ComposerMessage } from "@shared/types/v2/Composer";
+import type { ComposerMessage } from "@shared/types/v2/Composer";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
 import { MessageWithMarkdown } from "./components/Markdown";
 import { ChatArtifact } from "./components/File";
-import { FileMetadata } from "@shared/types/Message";
+//import { FileMetadata } from "@shared/types/Message";
 import { FileToolNames } from "./components/types";
 import { ToolOutput } from "./components/ToolOutput";
+import { vscode } from "../../../utilities/vscode";
+import { HiOutlineXMark } from "react-icons/hi2";
+import { GrCheckmark } from "react-icons/gr";
+import type { FileMetadata } from "@shared/types/v2/Message";
+import type { AcceptFileEvent, RejectFileEvent } from "@shared/types/Events";
+import { useComposerContext } from "../../context/composerContext";
+import { getTruncatedPath, showDiffview, undoFile } from "../../utilities/files";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
 	const matches = [];
-	let match;
+	let match: RegExpExecArray | null;
+	// biome-ignore lint/suspicious/noAssignInExpressions: <explanation>
 	while ((match = regex.exec(text)) !== null) {
 		matches.push(match[1]);
 	}
 	return matches.length > 0 ? matches.join("\n") : text;
+}
+
+const acceptFile = (file: FileMetadata, threadId: string) => {
+	if (file) {
+		console.log(file);
+		vscode.postMessage({
+			command: "accept-file",
+			value: {
+				file,
+				threadId
+			} satisfies AcceptFileEvent,
+		});
+	}
+};
+
+const rejectFile = (file: FileMetadata, threadId: string) => {
+	if (file) {
+		vscode.postMessage({
+			command: "reject-file",
+			value: {
+				file,
+				threadId
+			} satisfies RejectFileEvent,
+		});
+	}
 }
 
 const ChatEntry = ({
@@ -33,6 +65,8 @@ const ChatEntry = ({
 	isCurrent
 }: PropsWithChildren<ComposerMessage & { isCurrent?: boolean }>) => {
 	const { isLightTheme } = useSettingsContext();
+	const { activeThread } = useComposerContext();
+
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
 	const sendTerminalCommand = (payload: string) => {
@@ -46,10 +80,12 @@ const ChatEntry = ({
 
 	const fromUser = from === "user";
 
-	const bgClasses = fromUser ? `bg-stone-800 rounded-lg overflow-hidden w-full` : "";
+	const bgClasses = fromUser ? "bg-stone-800 rounded-lg overflow-hidden w-full" : "";
 	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
 	const hasPendingFiles = true; //files?.some(f => !f.accepted && !f.rejected);
+
+	const files = events?.filter(e => e.metadata?.tool === 'write_file').map(t => JSON.parse(t.content) as FileMetadata);
 
 	return (
 		<li
@@ -85,14 +121,14 @@ const ChatEntry = ({
 								return <MessageWithMarkdown from={from} message={e.content} codeTheme={codeTheme} />;
 							}
 							// Show tool-start events (that don't have an end event yet)
-							else if (e.type === "tool-start") {
+							if (e.type === "tool-start") {
 								if (FileToolNames.includes(e.metadata?.tool!)) {
 									return <ChatArtifact loading={true} isLightTheme={isLightTheme} event={e} key={e.id} />;
 								}
 								return <ToolOutput loading={true} isLightTheme={isLightTheme} event={e} key={e.id} />;
 							}
 							// Show tool-end events
-							else if (e.type === "tool-end") {
+							if (e.type === "tool-end") {
 								if (FileToolNames.includes(e.metadata?.tool!)) {
 									return <ChatArtifact loading={false} isLightTheme={isLightTheme} event={e} key={e.id} />;
 								}
@@ -105,7 +141,7 @@ const ChatEntry = ({
 							<div className="p-3">
 								<img
 									src={image.data}
-									alt="Image preview"
+									alt="Attached Preview"
 									className="max-w-full h-auto rounded-lg"
 									style={{ maxHeight: "512px" }}
 								/>
@@ -119,7 +155,7 @@ const ChatEntry = ({
 					</div>
 				</div>
 			</div>
-			{/* {isCurrent && !loading && files && files?.length > 1 && (
+			{isCurrent && !loading && files && files?.length > 1 && (
 				<div className="border-t border-stone-700/50 mt-4 pt-4 pl-[48px] pr-[16px] text-[var(--vscode-input-foreground)]">
 					<p>
 						Summary:
@@ -132,7 +168,14 @@ const ChatEntry = ({
 							return (
 								<div key={f.path} className="flex items-center justify-between gap-4 w-full min-h-[3rem] py-1 hover:bg-stone-800/50">
 									<div className="flex flex-1 min-w-0">
-										<h4 className="m-0 p-3 font-medium truncate flex-1 cursor-pointer" onClick={() => showDiffview(f)}>
+										<h4 className="m-0 p-3 font-medium truncate flex-1 cursor-pointer"
+											onClick={() => showDiffview(f, activeThread?.id!)}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													showDiffview(f, activeThread?.id!);
+												}
+											}}>
 											{truncatedPath}
 										</h4>
 										<div className="flex items-center gap-2 px-3 text-sm whitespace-nowrap">
@@ -151,7 +194,7 @@ const ChatEntry = ({
 													type="button"
 													title="Undo changes"
 													className="p-2"
-													onClick={() => undoFile(f)}
+													onClick={() => undoFile(f, activeThread?.id!)}
 												>
 													<FaUndo size={14} />
 												</button>
@@ -175,7 +218,7 @@ const ChatEntry = ({
 													type="button"
 													title="Reject changes"
 													className="p-3"
-													onClick={() => rejectFile(f)}
+													onClick={() => rejectFile(f, activeThread?.id!)}
 												>
 													<HiOutlineXMark size={18} />
 												</button>
@@ -185,7 +228,7 @@ const ChatEntry = ({
 													type="button"
 													title="Accept changes"
 													className="p-3"
-													onClick={() => mergeIntoFile(f)}
+													onClick={() => acceptFile(f, activeThread?.id!)}
 												>
 													<GrCheckmark size={16} />
 												</button>
@@ -199,20 +242,24 @@ const ChatEntry = ({
 					{hasPendingFiles && (
 						<div className="flex justify-end gap-4 w-full mt-4 border-t border-stone-700/50 pt-4 text-white">
 							<button
-								onClick={() => files.forEach(f => rejectFile(f))}
+								type="button"
+								// biome-ignore lint/complexity/noForEach: <explanation>
+								onClick={() => files.forEach(f => rejectFile(f, activeThread?.id!))}
 								className="px-3 py-2 text-sm rounded-md bg-red-600 hover:bg-red-700 transition-colors"
 							>
 								Reject All
 							</button>
 							<button
-								onClick={() => files.forEach(f => mergeIntoFile(f))}
+								type="button"
+								// biome-ignore lint/complexity/noForEach: <explanation>
+								onClick={() => files.forEach(f => acceptFile(f, activeThread?.id!))}
 								className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 transition-colors"
 							>
 								Accept All
 							</button>
 						</div>
 					)}
-				</div>)} */}
+				</div>)}
 		</li>
 	);
 };

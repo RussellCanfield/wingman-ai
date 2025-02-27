@@ -1,5 +1,4 @@
-import { IndexerSettings } from "./Indexer";
-import { ComposerMessage } from "./v2/Composer";
+import type { ComposerMessage } from "./v2/Composer";
 
 export const defaultMaxTokens = -1;
 
@@ -13,7 +12,6 @@ export interface Thread {
 }
 
 export interface WorkspaceSettings {
-	indexerSettings: IndexerSettings;
 	threads?: Thread[];
 	activeThreadId?: string;
 }
@@ -64,34 +62,18 @@ export const AiProvidersList: string[] = [...AiProviders];
 // Create a type for AiProviders
 export type AiProviders = (typeof AiProviders)[number];
 
-export const EmbeddingProviders = ["Ollama", "OpenAI", "AzureAI"] as const;
-export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
-
-// Create a type for EmbeddingProviders
-export type EmbeddingProviders = (typeof EmbeddingProviders)[number];
-
 export type OllamaSettingsType = BaseServiceSettings & {
 	apiPath: string;
 	modelInfoPath: string;
 };
 
-export type OllamaEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
-	baseUrl: string;
-};
-
-export type OpenAIEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
-	apiKey: string;
-};
-
-export type AzureAIEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
-	apiKey: string;
-	apiVersion: string;
-	instanceName: string;
-};
-
 export type ApiSettingsType = BaseServiceSettings & {
 	apiKey: string;
 };
+
+export type AnthropicSettingsType = {
+	enableReasoning?: boolean;
+} & ApiSettingsType;
 
 export type AzureAISettingsType = Omit<ApiSettingsType, "baseUrl"> & {
 	apiVersion: string;
@@ -119,13 +101,6 @@ export const defaultOllamaSettings: OllamaSettingsType = {
 	modelInfoPath: "/api/show",
 };
 
-export const defaultOllamaEmbeddingSettings: OllamaEmbeddingSettingsType = {
-	embeddingModel: "mxbai-embed-large",
-	baseUrl: "http://localhost:11434",
-	dimensions: "1024",
-	enabled: true,
-};
-
 export const defaultHfSettings: ApiSettingsType = {
 	codeModel: "codellama/CodeLlama-7b-hf",
 	chatModel: "mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -138,22 +113,6 @@ export const defaultOpenAISettings: ApiSettingsType = {
 	codeModel: "gpt-4o-2024-08-06",
 	baseUrl: "https://api.openai.com/v1/chat/completions",
 	apiKey: "",
-};
-
-export const defaultOpenAIEmbeddingSettings: OpenAIEmbeddingSettingsType = {
-	embeddingModel: "text-embedding-ada-002",
-	dimensions: "1536",
-	apiKey: "",
-	enabled: true,
-};
-
-export const defaultAzureAIEmbeddingSettings: AzureAIEmbeddingSettingsType = {
-	embeddingModel: "text-embedding-ada-002",
-	dimensions: "1536",
-	apiKey: "",
-	apiVersion: "",
-	instanceName: "",
-	enabled: true,
 };
 
 export const defaultAnthropicSettings: ApiSettingsType = {
@@ -174,17 +133,11 @@ export const defaultAzureAISettings: AzureAISettingsType = {
 export type Settings = {
 	aiProvider: (typeof AiProviders)[number];
 	interactionSettings: InteractionSettings;
-	embeddingProvider: (typeof EmbeddingProviders)[number];
-	embeddingSettings: {
-		Ollama?: OllamaEmbeddingSettingsType;
-		OpenAI?: OpenAIEmbeddingSettingsType;
-		AzureAI?: AzureAIEmbeddingSettingsType;
-	};
 	providerSettings: {
 		Ollama?: OllamaSettingsType;
 		HuggingFace?: ApiSettingsType;
 		OpenAI?: ApiSettingsType;
-		Anthropic?: ApiSettingsType;
+		Anthropic?: AnthropicSettingsType;
 		AzureAI?: AzureAISettingsType;
 	};
 	validationSettings: {
