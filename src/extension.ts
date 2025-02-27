@@ -23,11 +23,13 @@ import {
 } from "./providers/telemetryProvider";
 import { Workspace } from "./service/workspace";
 import { BindingDownloader } from "./client/bindingDownload";
+import { ThreadViewProvider } from "./providers/threadViewProvider";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
 let chatViewProvider: ChatViewProvider;
 let configViewProvider: ConfigViewProvider;
+let threadViewProvider: ThreadViewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
 	const settings = await LoadSettings();
@@ -140,9 +142,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		workspace.workspacePath,
 		lspClient
 	);
+	threadViewProvider = new ThreadViewProvider(context);
 	statusBarProvider = new ActivityStatusBar();
-
 	configViewProvider = new ConfigViewProvider(context.extensionUri, settings);
+
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ConfigViewProvider.viewType,
@@ -170,11 +173,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	chatViewProvider = new ChatViewProvider(
 		lspClient,
-		modelProvider!,
 		context,
 		diffViewProvider,
+		threadViewProvider,
 		workspace,
-		settings,
 		configViewProvider
 	);
 	context.subscriptions.push(
@@ -251,6 +253,7 @@ export function deactivate() {
 
 	lspClient?.deactivate();
 	diffViewProvider?.dispose();
+	threadViewProvider?.dispose();
 	stopClipboardTracking();
 	loggingProvider.dispose();
 	telemetry.dispose();

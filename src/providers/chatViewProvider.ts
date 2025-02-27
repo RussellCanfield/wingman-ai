@@ -1,13 +1,12 @@
 import * as vscode from "vscode";
 import fs from "node:fs";
 import { eventEmitter } from "../events/eventEmitter";
-import { AIProvider } from "../service/base";
 import {
 	AppMessage,
 	CodeContextDetails,
 	CodeReviewMessage,
 } from "@shared/types/Message";
-import { AppState, Settings, Thread } from "@shared/types/Settings";
+import { AppState, Thread } from "@shared/types/Settings";
 import { AcceptFileEvent, AddMessageToThreadEvent, RenameThreadEvent, RejectFileEvent, UndoFileEvent } from '@shared/types/Events';
 import { IndexerSettings } from "@shared/types/Indexer";
 import {
@@ -32,6 +31,7 @@ import { getGitignorePatterns } from "../server/files/utils";
 import { ConfigViewProvider } from "./configViewProvider";
 import path from "node:path";
 import { FileMetadata } from "@shared/types/v2/Message";
+import { ThreadViewProvider } from "./threadViewProvider";
 
 export type ChatView = "composer" | "indexer";
 
@@ -45,11 +45,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		private readonly _lspClient: LSPClient,
-		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _diffViewProvider: DiffViewProvider,
+		private readonly _threadViewProvider: ThreadViewProvider,
 		private readonly _workspace: Workspace,
-		private readonly _settings: Settings,
 		private readonly _settingsViewProvider: ConfigViewProvider
 	) { }
 
@@ -156,7 +155,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								value: this._workspace.getSettings()
 							});
 							break;
-
+						case "visualize-threads":
+							this._threadViewProvider.visualizeThreads(this._workspace.getSettings());
+							break;
 						case "accept-file":
 							await this.acceptFile(value as AcceptFileEvent);
 							webviewView.webview.postMessage({

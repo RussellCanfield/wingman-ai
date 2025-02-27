@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { TbNeedleThread } from "react-icons/tb";
 import { useComposerContext } from '../../context/composerContext';
 import { Thread } from '@shared/types/Settings';
+import { PiGraph } from "react-icons/pi";
+import { vscode } from '../../utilities/vscode';
 
 export const ThreadManagement: React.FC = () => {
   const { threads, activeThread, createThread, switchThread, deleteThread, renameThread, branchThread } = useComposerContext();
@@ -76,6 +78,12 @@ export const ThreadManagement: React.FC = () => {
     }
   };
 
+  const visualizeThreads = () => {
+    vscode.postMessage({
+      command: 'visualize-threads'
+    })
+  }
+
   const startEditingThread = (thread: Thread, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingThreadId(thread.id);
@@ -104,13 +112,13 @@ export const ThreadManagement: React.FC = () => {
 
   return (
     <div className='flex align-middle items-center gap-2'>
-      <TbNeedleThread size={20} />
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
           aria-label="Manage threads"
         >
+          <TbNeedleThread size={20} />
           <span className="truncate max-w-[150px]">
             {activeThread?.title || 'New Thread'}
           </span>
@@ -254,6 +262,13 @@ export const ThreadManagement: React.FC = () => {
           </div>
         )}
       </div>
+      <button
+        onClick={() => visualizeThreads()}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
+        aria-label="Visualize threads"
+      >
+        <PiGraph size={20} />
+      </button>
     </div>
   );
 };

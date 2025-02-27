@@ -23,12 +23,16 @@
 		"classnames": "^2.3.2",
 		"diff": "^5.1.0",
 		"memoize-one": "^6.0.0",
-		"prop-types": "^15.8.1"
+		"prop-types": "^15.8.1",
+		"reactflow": "11.11.4",
+		"d3-force": "3.0.0",
+		"d3": "7.9.0"
 	},
 	"devDependencies": {
+		"@types/d3": "7.4.3",
 		"@types/react-syntax-highlighter": "15.5.13",
-		"@rsbuild/core": "1.1.13",
-		"@rsbuild/plugin-react": "1.1.0",
+		"@rsbuild/core": "1.2.12",
+		"@rsbuild/plugin-react": "1.1.1",
 		"@types/diff": "6.0.0",
 		"@types/react": "^18.3.5",
 		"@types/react-dom": "^18.3.0",

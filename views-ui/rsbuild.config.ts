@@ -16,6 +16,7 @@ export default ({ env, command, envMode }) => {
 				chat: "./src/App/index.tsx",
 				config: "./src/Config/index.tsx",
 				diff: "./src/Diff/index.tsx",
+				threads: "./src/Threads/index.tsx"
 			},
 		},
 		tools: {
