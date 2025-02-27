@@ -1,5 +1,5 @@
-import { CodeContextDetails } from "../Message";
-import { BaseMessage, FileMetadata } from "./Message";
+import type { CodeContextDetails } from "../Message";
+import type { BaseMessage, FileMetadata } from "./Message";
 
 export type DiffViewCommand = {
 	file: FileMetadata;
@@ -21,7 +21,7 @@ export type ManualStep = {
 export type Dependencies = {
 	response?: string;
 	steps?: ManualStep[];
-}
+};
 
 export type ComposerRole = "assistant" | "user";
 
@@ -29,7 +29,7 @@ export interface ComposerChatMessage {
 	kwargs: {
 		content: string;
 		role: ComposerRole;
-	},
+	};
 	name?: string;
 }
 
@@ -45,7 +45,7 @@ export interface GraphState {
 export type AgentEvents = {
 	events: StreamEvent[];
 	threadId: string;
-}
+};
 
 export type ComposerResponse = {
 	node: ComposerSteps;
@@ -53,17 +53,27 @@ export type ComposerResponse = {
 };
 
 export interface StreamEvent {
-	id: string,
-	type: 'message' | 'tool-start' | 'tool-end';
+	id: string;
+	type: "message" | "tool-start" | "tool-end";
 	content: string;
 	metadata?: {
 		tool?: string;
 		path?: string;
-		action?: 'read' | 'write' | 'modify';
+		action?: "read" | "write" | "modify";
 	};
 }
 
-export type ComposerSteps = "composer-events" | "composer-message-stream" | "composer-message-stream-finish" | "composer-message" | "composer-replace" | "composer-files" | "composer-error" | "composer-done" | "composer-error" | "composer-files-done";
+export type ComposerSteps =
+	| "composer-events"
+	| "composer-message-stream"
+	| "composer-message-stream-finish"
+	| "composer-message"
+	| "composer-replace"
+	| "composer-files"
+	| "composer-error"
+	| "composer-done"
+	| "composer-error"
+	| "composer-files-done";
 
 export interface ComposerMessage {
 	from: ComposerRole;
@@ -88,5 +98,5 @@ export type ComposerRequest = {
 	threadId: string;
 	contextFiles: string[];
 	image?: ComposerImage;
-	context?: CodeContextDetails
+	context?: CodeContextDetails;
 };

@@ -30,7 +30,7 @@ export class CodeGraph {
 		nodes?: CodeGraphNodeMap,
 		edgesExport?: CodeGraphEdgeMap,
 		edgesImport?: CodeGraphEdgeMap,
-		symbolTable?: SymbolTable
+		symbolTable?: SymbolTable,
 	) {
 		if (nodes) {
 			this.nodes = nodes;
@@ -108,7 +108,7 @@ export class CodeGraph {
 		file: string,
 		fileDetails: FileDetails,
 		importEdges?: CodeGraphEdgeMap,
-		exportEdges?: CodeGraphEdgeMap
+		exportEdges?: CodeGraphEdgeMap,
 	) {
 		// Get existing node IDs for this file
 		const existingNodeIds = (
@@ -118,7 +118,7 @@ export class CodeGraph {
 
 		// Find nodes that are no longer present
 		const removedNodeIds = new Set(
-			[...existingNodeIds].filter(x => !fileDetails.nodeIds.has(x))
+			[...existingNodeIds].filter((x) => !fileDetails.nodeIds.has(x)),
 		);
 
 		// Clean up removed nodes and their edges
@@ -146,7 +146,8 @@ export class CodeGraph {
 		if (importEdges) {
 			for (const [nodeId, edges] of importEdges) {
 				const existingEdges = this.edgesImport.get(nodeId) || new Set<string>();
-				edges.forEach(edge => existingEdges.add(edge));
+				// biome-ignore lint/complexity/noForEach: <explanation>
+				edges.forEach((edge) => existingEdges.add(edge));
 				this.edgesImport.set(nodeId, existingEdges);
 			}
 		}
@@ -155,7 +156,8 @@ export class CodeGraph {
 		if (exportEdges) {
 			for (const [nodeId, edges] of exportEdges) {
 				const existingEdges = this.edgesExport.get(nodeId) || new Set<string>();
-				edges.forEach(edge => existingEdges.add(edge));
+				// biome-ignore lint/complexity/noForEach: <explanation>
+				edges.forEach((edge) => existingEdges.add(edge));
 				this.edgesExport.set(nodeId, existingEdges);
 			}
 		}
@@ -225,7 +227,7 @@ export function generateCodeNodeId(location: Location): string {
 export function generateCodeNodeIdFromRelativePath(
 	path: string,
 	line: string,
-	character: string
+	character: string,
 ) {
 	return `${path}-${line}-${character}`;
 }
@@ -233,7 +235,7 @@ export function generateCodeNodeIdFromRelativePath(
 export function generateCodeNodeIdFromParts(
 	uri: string,
 	line: string,
-	character: string
+	character: string,
 ): string {
 	return `${uri}-${line}-${character}`;
 }

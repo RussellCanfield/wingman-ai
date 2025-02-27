@@ -41,23 +41,23 @@ export class LSPFileEventHandler {
     }
 
     private registerEventHandlers() {
-        this.disposables.push(
-            this.connection.workspace.onDidRenameFiles(async (event) => {
-                await this.handleFileRename(event);
-            })
-        );
+        // this.disposables.push(
+        //     this.connection.workspace.onDidRenameFiles(async (event) => {
+        //         await this.handleFileRename(event);
+        //     })
+        // );
 
-        this.disposables.push(
-            this.connection.workspace.onDidDeleteFiles(async (event) => {
-                await this.handleFileDelete(event);
-            })
-        );
+        // this.disposables.push(
+        //     this.connection.workspace.onDidDeleteFiles(async (event) => {
+        //         await this.handleFileDelete(event);
+        //     })
+        // );
 
-        this.disposables.push(
-            this.connection.onDidChangeTextDocument(async (event) => {
-                await this.handleFileChanges(event);
-            })
-        );
+        // this.disposables.push(
+        //     this.connection.onDidChangeTextDocument(async (event) => {
+        //         await this.handleFileChanges(event);
+        //     })
+        // );
     }
 
     private async handleFileRename(event: RenameFilesParams) {

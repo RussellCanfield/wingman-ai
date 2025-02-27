@@ -2,12 +2,12 @@
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
-import {
+import type {
 	createConnection,
 	DocumentSymbol,
 	Location,
 } from "vscode-languageserver/node";
-import { Position } from "vscode-languageserver-textdocument";
+import type { Position } from "vscode-languageserver-textdocument";
 
 export type TypeRequestEvent = {
 	uri: string;
@@ -19,12 +19,12 @@ export interface SymbolRetriever {
 	getDefinition(documentUri: string, position: Position): Promise<Location[]>;
 	getTypeDefinition(
 		documentUri: string,
-		position: Position
+		position: Position,
 	): Promise<Location[]>;
 }
 
 export const createSymbolRetriever = (
-	connection: ReturnType<typeof createConnection>
+	connection: ReturnType<typeof createConnection>,
 ): SymbolRetriever => {
 	return {
 		getSymbols: async (documentUri: string) => {
@@ -33,22 +33,19 @@ export const createSymbolRetriever = (
 					"wingman/provideDocumentSymbols",
 					{
 						uri: documentUri,
-					}
+					},
 				)) || [];
 			return symbols;
 		},
 		getDefinition: async (documentUri: string, position: Position) => {
 			const locations =
-				(await connection.sendRequest<Location[]>(
-					"wingman/provideDefinition",
-					{
-						uri: documentUri,
-						position: {
-							line: position.line,
-							character: position.character,
-						} satisfies Position,
-					} satisfies TypeRequestEvent
-				)) || [];
+				(await connection.sendRequest<Location[]>("wingman/provideDefinition", {
+					uri: documentUri,
+					position: {
+						line: position.line,
+						character: position.character,
+					} satisfies Position,
+				} satisfies TypeRequestEvent)) || [];
 			return locations;
 		},
 		getTypeDefinition: async (documentUri: string, position: Position) => {
@@ -61,7 +58,7 @@ export const createSymbolRetriever = (
 							line: position.line,
 							character: position.character,
 						} satisfies Position,
-					} satisfies TypeRequestEvent
+					} satisfies TypeRequestEvent,
 				)) || [];
 			return locations;
 		},

@@ -1,293 +1,355 @@
 import { v4 as uuidv4 } from "uuid";
 import {
-    MessagesAnnotation,
-    Annotation,
-    StreamMode,
-    BaseCheckpointSaver,
-    CheckpointTuple
+	type MessagesAnnotation,
+	Annotation,
+	type StreamMode,
+	type BaseCheckpointSaver,
+	type CheckpointTuple,
 } from "@langchain/langgraph";
-import { HumanMessage, BaseMessage } from "@langchain/core/messages";
-import { AIProvider } from "../../../service/base";
-import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { HumanMessage, type BaseMessage } from "@langchain/core/messages";
+import type { AIProvider } from "../../../service/base";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { createReadFileTool } from "../tools/read_file";
 import { createListDirectoryTool } from "../tools/list_workspace_files";
 import { createWriteFileTool } from "../tools/write_file";
-import { StructuredTool } from "@langchain/core/tools";
-import { ComposerImage, ComposerRequest, ComposerResponse, StreamEvent } from "@shared/types/v2/Composer";
-import { CodeContextDetails, FileMetadata } from "@shared/types/v2/Message";
+import type { StructuredTool } from "@langchain/core/tools";
+import type {
+	ComposerImage,
+	ComposerRequest,
+	ComposerResponse,
+	StreamEvent,
+} from "@shared/types/v2/Composer";
+import type {
+	CodeContextDetails,
+	FileMetadata,
+} from "@shared/types/v2/Message";
 import path from "node:path";
 import { getTextDocumentFromPath } from "../../../server/files/utils";
-import { CodeParser } from "../../../server/files/parser";
+import type { CodeParser } from "../../../server/files/parser";
 import { createFindFileDependenciesTool } from "../tools/file_dependencies";
 import { loggingProvider } from "../../../server/loggingProvider";
-import { RunnableConfig } from "@langchain/core/runnables";
+import type { RunnableConfig } from "@langchain/core/runnables";
+import { createCommandExecuteTool } from "../tools/cmd_execute";
 
 let controller = new AbortController();
 
 export function cancelComposer() {
-    controller.abort();
+	controller.abort();
 }
 
 const GraphAnnotation = Annotation.Root({
-    messages: Annotation<BaseMessage[]>({
-        reducer: (currentState, updateValue) => {
-            return currentState.concat(updateValue)
-        },
-        default: () => [],
-    }),
-    workspace: Annotation<string>({
-        reducer: (currentState, updateValue) => currentState ?? updateValue,
-        default: () => "Not available"
-    }),
-    image: Annotation<ComposerImage | undefined>({
-        reducer: (currentState, updateValue) => currentState ?? updateValue
-    }),
-    context: Annotation<CodeContextDetails | undefined>({
-        reducer: (currentState, updateValue) => currentState ?? updateValue
-    }),
-    files: Annotation<FileMetadata[]>({
-        reducer: (currentState, updateValue) => {
-            return currentState.concat(updateValue)
-        },
-        default: () => []
-    }),
-    fileBackups: Annotation<Record<string, string> | undefined>({
-        reducer: (currentState, updateValue) => {
-            return { ...(currentState ?? {}), ...(updateValue ?? {}) };
-        },
-        default: () => ({})
-    }),
+	messages: Annotation<BaseMessage[]>({
+		reducer: (currentState, updateValue) => {
+			return currentState.concat(updateValue);
+		},
+		default: () => [],
+	}),
+	workspace: Annotation<string>({
+		reducer: (currentState, updateValue) => currentState ?? updateValue,
+		default: () => "Not available",
+	}),
+	image: Annotation<ComposerImage | undefined>({
+		reducer: (currentState, updateValue) => currentState ?? updateValue,
+	}),
+	context: Annotation<CodeContextDetails | undefined>({
+		reducer: (currentState, updateValue) => currentState ?? updateValue,
+	}),
+	files: Annotation<FileMetadata[]>({
+		reducer: (currentState, updateValue) => {
+			return currentState.concat(updateValue);
+		},
+		default: () => [],
+	}),
+	fileBackups: Annotation<Record<string, string> | undefined>({
+		reducer: (currentState, updateValue) => {
+			return { ...(currentState ?? {}), ...(updateValue ?? {}) };
+		},
+		default: () => ({}),
+	}),
 });
 
 /**
  * WingmanAgent - Autonomous coding assistant
  */
 export class WingmanAgent {
-    private agent: ReturnType<typeof createReactAgent>;
-    private tools: StructuredTool[];
+	private agent: ReturnType<typeof createReactAgent>;
+	private tools: StructuredTool[];
 
-    constructor(
-        private readonly aiProvider: AIProvider,
-        private readonly workspace: string,
-        private readonly checkpointer: BaseCheckpointSaver,
-        private readonly codeParser: CodeParser
-    ) {
-        this.tools = [
-            createReadFileTool(this.workspace),
-            createListDirectoryTool(this.workspace),
-            createWriteFileTool(this.workspace, this.storeFileBackup),
-            createFindFileDependenciesTool(this.workspace, this.codeParser)
-        ]
+	constructor(
+		private readonly aiProvider: AIProvider,
+		private readonly workspace: string,
+		private readonly checkpointer: BaseCheckpointSaver,
+		private readonly codeParser: CodeParser,
+	) {
+		this.tools = [
+			createCommandExecuteTool(workspace),
+			createReadFileTool(this.workspace),
+			createListDirectoryTool(this.workspace),
+			createWriteFileTool(this.workspace, this.storeFileBackup),
+			createFindFileDependenciesTool(this.workspace, this.codeParser),
+		];
 
-        this.agent = createReactAgent({
-            llm: this.aiProvider.getModel(),
-            tools: this.tools,
-            stateSchema: GraphAnnotation,
-            stateModifier: this.stateModifier,
-            checkpointer: this.checkpointer
-        });
-    }
+		this.agent = createReactAgent({
+			llm: this.aiProvider.getModel(),
+			tools: this.tools,
+			stateSchema: GraphAnnotation,
+			stateModifier: this.stateModifier,
+			checkpointer: this.checkpointer,
+		});
+	}
 
-    /**
-     * Creates a new thread branch from an existing thread's state
-     * @param sourceThreadId The source thread ID to branch from
-     * @param sourceCheckpointId Optional specific checkpoint ID to branch from (uses latest if not provided)
-     * @param targetThreadId Optional new thread ID (generates one if not provided)
-     * @returns The new thread ID and checkpoint configuration
-     */
-    async branchThread(
-        sourceThreadId: string,
-        sourceCheckpointId?: string,
-        targetThreadId?: string
-    ): Promise<{ threadId: string, config: RunnableConfig }> {
-        // Generate a new thread ID if not provided
-        const newThreadId = targetThreadId || `${sourceThreadId}-branch-${Date.now()}`;
+	/**
+	 * Creates a new thread branch from an existing thread's state
+	 * @param sourceThreadId The source thread ID to branch from
+	 * @param sourceCheckpointId Optional specific checkpoint ID to branch from (uses latest if not provided)
+	 * @param targetThreadId Optional new thread ID (generates one if not provided)
+	 * @returns The new thread ID and checkpoint configuration
+	 */
+	async branchThread(
+		sourceThreadId: string,
+		sourceCheckpointId?: string,
+		targetThreadId?: string,
+	): Promise<{ threadId: string; config: RunnableConfig }> {
+		// Generate a new thread ID if not provided
+		const newThreadId =
+			targetThreadId || `${sourceThreadId}-branch-${Date.now()}`;
 
-        // Get the source checkpoint tuple
-        const sourceConfig: RunnableConfig = {
-            configurable: {
-                thread_id: sourceThreadId,
-                checkpoint_id: sourceCheckpointId
-            }
-        };
+		// Get the source checkpoint tuple
+		const sourceConfig: RunnableConfig = {
+			configurable: {
+				thread_id: sourceThreadId,
+				checkpoint_id: sourceCheckpointId,
+			},
+		};
 
-        const sourceTuple = await this.checkpointer.getTuple(sourceConfig);
+		const sourceTuple = await this.checkpointer.getTuple(sourceConfig);
 
-        if (!sourceTuple) {
-            throw new Error(`Source thread ${sourceThreadId} not found or has no checkpoints`);
-        }
+		if (!sourceTuple) {
+			throw new Error(
+				`Source thread ${sourceThreadId} not found or has no checkpoints`,
+			);
+		}
 
-        // Create a new checkpoint for the branched thread
-        const newCheckpoint = {
-            ...sourceTuple.checkpoint,
-            id: Date.now().toString(),
-        };
+		// Create a new checkpoint for the branched thread
+		const newCheckpoint = {
+			...sourceTuple.checkpoint,
+			id: Date.now().toString(),
+		};
 
-        // Create metadata that references the source
-        const metadata = {
-            source: "fork" as const,
-            step: 0,
-            writes: {},
-            parents: {
-                [sourceTuple.checkpoint.id]: "branch_source"
-            },
-            branch_source: {
-                thread_id: sourceThreadId,
-                checkpoint_id: sourceTuple.checkpoint.id
-            }
-        };
+		// Create metadata that references the source
+		const metadata = {
+			source: "fork" as const,
+			step: 0,
+			writes: {},
+			parents: {
+				[sourceTuple.checkpoint.id]: "branch_source",
+			},
+			branch_source: {
+				thread_id: sourceThreadId,
+				checkpoint_id: sourceTuple.checkpoint.id,
+			},
+		};
 
-        // Create the new thread config
-        const newConfig: RunnableConfig = {
-            configurable: {
-                thread_id: newThreadId,
-                checkpoint_ns: sourceTuple.config.configurable?.checkpoint_ns
-            }
-        };
+		// Create the new thread config
+		const newConfig: RunnableConfig = {
+			configurable: {
+				thread_id: newThreadId,
+				checkpoint_ns: sourceTuple.config.configurable?.checkpoint_ns,
+			},
+		};
 
-        const newVersions: Record<string, string> = {};
-        const resultConfig = await this.checkpointer.put(
-            newConfig,
-            newCheckpoint,
-            metadata,
-            newVersions
-        );
+		const newVersions: Record<string, string> = {};
+		const resultConfig = await this.checkpointer.put(
+			newConfig,
+			newCheckpoint,
+			metadata,
+			newVersions,
+		);
 
-        return {
-            threadId: newThreadId,
-            config: resultConfig
-        };
-    }
+		return {
+			threadId: newThreadId,
+			config: resultConfig,
+		};
+	}
 
-    private updateGraphState = async (tuple: CheckpointTuple, event: string, state: typeof GraphAnnotation.State) => {
-        const newCheckpoint = {
-            ...tuple.checkpoint,
-            id: Date.now().toString(),
-            channel_values: state
-        };
+	private updateGraphState = async (
+		tuple: CheckpointTuple,
+		event: string,
+		state: typeof GraphAnnotation.State,
+	) => {
+		const newCheckpoint = {
+			...tuple.checkpoint,
+			id: Date.now().toString(),
+			channel_values: state,
+		};
 
-        const metadata = {
-            source: "update" as const,
-            step: (tuple.metadata?.step || 0) + 1,
-            writes: tuple.metadata?.writes || {},
-            parents: {
-                [tuple.config.configurable?.checkpoint_id || ""]: "accept_file"
-            }
-        };
+		const metadata = {
+			source: "update" as const,
+			step: (tuple.metadata?.step || 0) + 1,
+			writes: tuple.metadata?.writes || {},
+			parents: {
+				[tuple.config.configurable?.checkpoint_id || ""]: "accept_file",
+			},
+		};
 
-        const newVersions: Record<string, string> = {};
-        await this.checkpointer.put(
-            tuple.config,
-            newCheckpoint,
-            metadata,
-            newVersions
-        );
-    }
+		const newVersions: Record<string, string> = {};
+		await this.checkpointer.put(
+			tuple.config,
+			newCheckpoint,
+			metadata,
+			newVersions,
+		);
+	};
 
-    storeFileBackup = async (file: FileMetadata, originalFileContents: string, threadId: string) => {
-        const checkpoint = { configurable: { thread_id: threadId } };
-        const data = await this.checkpointer.get(checkpoint);
-        const tuple = await this.checkpointer.getTuple(checkpoint);
+	storeFileBackup = async (
+		file: FileMetadata,
+		originalFileContents: string,
+		threadId: string,
+	) => {
+		const checkpoint = { configurable: { thread_id: threadId } };
+		const data = await this.checkpointer.get(checkpoint);
+		const tuple = await this.checkpointer.getTuple(checkpoint);
 
-        if (!tuple || !data?.channel_values) return;
+		if (!tuple || !data?.channel_values) return;
 
-        const state = data.channel_values as typeof GraphAnnotation.State;
+		const state = data.channel_values as typeof GraphAnnotation.State;
 
-        try {
-            const backupUpdate = {
-                [file.path]: originalFileContents
-            };
+		try {
+			const backupUpdate = {
+				[file.path]: originalFileContents,
+			};
 
-            const newState = {
-                ...state,
-                fileBackups: {
-                    ...state.fileBackups,
-                    ...backupUpdate
-                }
-            };
+			const newState = {
+				...state,
+				fileBackups: {
+					...state.fileBackups,
+					...backupUpdate,
+				},
+			};
 
-            await this.updateGraphState(tuple, "store_file_backup", newState);
-        } catch (error) {
-            loggingProvider.logError(`Failed to store file backup for ${file.path}: ${error}`);
-        }
-    }
+			await this.updateGraphState(tuple, "store_file_backup", newState);
+		} catch (error) {
+			loggingProvider.logError(
+				`Failed to store file backup for ${file.path}: ${error}`,
+			);
+		}
+	};
 
-    acceptFile = async (file: FileMetadata, threadId: string) => {
-        const checkpoint = { configurable: { thread_id: threadId } };
-        const data = await this.checkpointer.get(checkpoint);
-        const tuple = await this.checkpointer.getTuple(checkpoint);
+	acceptFile = async (file: FileMetadata, threadId: string) => {
+		const checkpoint = { configurable: { thread_id: threadId } };
+		const data = await this.checkpointer.get(checkpoint);
+		const tuple = await this.checkpointer.getTuple(checkpoint);
 
-        if (!tuple || !data?.channel_values) return;
+		if (!tuple || !data?.channel_values) return;
 
-        const state = data.channel_values as typeof GraphAnnotation.State;
+		const state = data.channel_values as typeof GraphAnnotation.State;
 
-        const matchingFile = state.files.find(f => f.id === file.id && f.path === file.path);
+		const matchingFile = state.files.find(
+			(f) => f.id === file.id && f.path === file.path,
+		);
 
-        if (!matchingFile) {
-            loggingProvider.logError(`Unable to accept file - file not found! ${file.path} ${file.id}`);
-            return state;
-        }
+		if (!matchingFile) {
+			loggingProvider.logError(
+				`Unable to accept file - file not found! ${file.path} ${file.id}`,
+			);
+			return state;
+		}
 
-        matchingFile.accepted = true;
-        matchingFile.rejected = false;
+		matchingFile.accepted = true;
+		matchingFile.rejected = false;
 
-        await this.updateGraphState(tuple, "accept_file", state);
+		await this.updateGraphState(tuple, "accept_file", state);
 
-        return state;
-    }
+		return state;
+	};
 
-    rejectFile = async (file: FileMetadata, threadId: string) => {
-        const checkpoint = { configurable: { thread_id: threadId } };
-        const data = await this.checkpointer.get(checkpoint);
-        const tuple = await this.checkpointer.getTuple(checkpoint);
+	rejectFile = async (file: FileMetadata, threadId: string) => {
+		const checkpoint = { configurable: { thread_id: threadId } };
+		const data = await this.checkpointer.get(checkpoint);
+		const tuple = await this.checkpointer.getTuple(checkpoint);
 
-        if (!tuple || !data?.channel_values) return;
+		if (!tuple || !data?.channel_values) return;
 
-        const state = data.channel_values as typeof GraphAnnotation.State;
+		const state = data.channel_values as typeof GraphAnnotation.State;
 
-        const matchingFile = state.files.find(f => f.id === file.id && f.path === file.path);
+		const matchingFile = state.files.find(
+			(f) => f.id === file.id && f.path === file.path,
+		);
 
-        if (!matchingFile) {
-            loggingProvider.logError(`Unable to accept file - file not found! ${file.path} ${file.id}`);
-            return state;
-        }
+		if (!matchingFile) {
+			loggingProvider.logError(
+				`Unable to accept file - file not found! ${file.path} ${file.id}`,
+			);
+			return state;
+		}
 
-        matchingFile.accepted = false;
-        matchingFile.rejected = true;
+		matchingFile.accepted = false;
+		matchingFile.rejected = true;
 
-        await this.updateGraphState(tuple, "reject_file", state);
+		await this.updateGraphState(tuple, "reject_file", state);
 
-        return state;
-    }
+		return state;
+	};
 
-    undoFile = async (file: FileMetadata, threadId: string) => {
-        const checkpoint = { configurable: { thread_id: threadId } };
-        const data = await this.checkpointer.get(checkpoint);
-        const tuple = await this.checkpointer.getTuple(checkpoint);
+	undoFile = async (file: FileMetadata, threadId: string) => {
+		const checkpoint = { configurable: { thread_id: threadId } };
+		const data = await this.checkpointer.get(checkpoint);
+		const tuple = await this.checkpointer.getTuple(checkpoint);
 
-        if (!tuple || !data?.channel_values) return;
+		if (!tuple || !data?.channel_values) return;
 
-        const state = data.channel_values as typeof GraphAnnotation.State;
+		const state = data.channel_values as typeof GraphAnnotation.State;
 
-        const matchingFile = state.files.find(f => f.id === file.id && f.path === file.path);
+		const matchingFile = state.files.find(
+			(f) => f.id === file.id && f.path === file.path,
+		);
 
-        if (!matchingFile) {
-            loggingProvider.logError(`Unable to accept file - file not found! ${file.path} ${file.id}`);
-            return state;
-        }
+		if (!matchingFile) {
+			loggingProvider.logError(
+				`Unable to accept file - file not found! ${file.path} ${file.id}`,
+			);
+			return state;
+		}
 
-        matchingFile.accepted = false;
-        matchingFile.rejected = false;
+		matchingFile.accepted = false;
+		matchingFile.rejected = false;
 
-        await this.updateGraphState(tuple, "undo_file", state);
+		await this.updateGraphState(tuple, "undo_file", state);
 
-        return state;
-    }
+		return state;
+	};
 
-    stateModifier = (state: typeof MessagesAnnotation.State) => {
-        return [{
-            role: "system",
-            content: `You are an expert full stack developer collaborating with the user as their coding partner - or as some like to call it, their Wingman.
+	async loadContextFiles(files: string[]) {
+		if (files) {
+			const codeFiles: FileMetadata[] = [];
+
+			for (const file of files) {
+				try {
+					const relativePath = path.relative(this.workspace, file);
+
+					const txtDoc = await getTextDocumentFromPath(
+						path.join(this.workspace, relativePath),
+					);
+					codeFiles.push({
+						id: uuidv4(),
+						path: relativePath,
+						code: txtDoc?.getText(),
+						lastModified: Date.now(),
+					});
+				} catch {}
+			}
+
+			return codeFiles;
+		}
+
+		return [];
+	}
+
+	stateModifier = (state: typeof MessagesAnnotation.State) => {
+		return [
+			{
+				role: "system",
+				content: `You are an expert full stack developer collaborating with the user as their coding partner - or as some like to call it, their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 
 We may automatically include contextual information with each user message, such as their open files, cursor position, recently viewed files, edit history, and linter errors. Use this context judiciously when it helps address their needs.
@@ -322,216 +384,217 @@ After writing a file, consider if you've introduced a breaking change or orphane
 - Leveraging the "find_file_dependencies" AST tool will help you locate related files
 - While not always required, this can help you potentially locate dead code, or fix dependent files
 
+# New Project Tooling
+For new projects, consider these modern tools for improved developer experience:
+- Biome.js: Fast linting, formatting and more (replaces ESLint/Prettier)
+- NX: Powerful build system for monorepos with intelligent caching
+- RSBuild/Vite: High-performance bundlers with HMR support
+- TypeScript: Type safety with excellent IDE integration
+- Zephyr Cloud: Quick and easy deployments to the cloud using the appropriate plugin for the build tooling chosen
+
 # UI/UX Skills
 You are a master at UX, when you write frontend code make the UI mind blowing!
 
 **Workspace Directory:**
 ${this.workspace}
 `,
-        },
-        ...state.messages]
-    };
+			},
+			...state.messages,
+		];
+	};
 
-    /**
-     * Execute a message in a conversation thread
-     */
-    async * execute(request: ComposerRequest) {
-        try {
-            controller = new AbortController();
-            const config = {
-                configurable: { thread_id: request.threadId },
-                signal: controller.signal,
-                streamMode: "custom" as StreamMode,
-                version: "v2" as const,
-            };
-            const contextFiles = await this.loadContextFiles(request.contextFiles);
-            const messageContent: any[] = [];
+	/**
+	 * Execute a message in a conversation thread
+	 */
+	async *execute(request: ComposerRequest) {
+		try {
+			controller = new AbortController();
+			const config = {
+				configurable: { thread_id: request.threadId },
+				signal: controller.signal,
+				streamMode: "custom" as StreamMode,
+				version: "v2" as const,
+				recursionLimit: 100,
+			};
+			const contextFiles = await this.loadContextFiles(request.contextFiles);
+			// biome-ignore lint/suspicious/noExplicitAny: Messages with content
+			const messageContent: any[] = [];
 
-            if (request.image) {
-                messageContent.push({
-                    type: "image_url",
-                    image_url: {
-                        url: request.image,
-                    }
-                });
-            }
+			if (request.image) {
+				messageContent.push({
+					type: "image_url",
+					image_url: {
+						url: request.image,
+					},
+				});
+			}
 
-            if (contextFiles.length > 0) {
-                messageContent.push({
-                    type: "text",
-                    text: `# Context Files
+			if (contextFiles.length > 0) {
+				messageContent.push({
+					type: "text",
+					text: `# Context Files
 The following files may be relevant:
 
-${contextFiles.map(f => `<file>Path: ${f.path}\nContents: ${f.code}</file>`).join('\n\n')}`
-                });
-            }
+${contextFiles.map((f) => `<file>Path: ${f.path}\nContents: ${f.code}</file>`).join("\n\n")}`,
+				});
+			}
 
-            if (request.context?.fromSelection) {
-                messageContent.push({
-                    type: "text",
-                    text: `# Editor Context
+			if (request.context?.fromSelection) {
+				messageContent.push({
+					type: "text",
+					text: `# Editor Context
 Base your guidance on the following file information:
 
 Language: ${request.context.language}
 Filename: ${path.relative(this.workspace, request.context.fileName)}
 Current Line: ${request.context.currentLine}
 Line Range: ${request.context.lineRange}
-Contents: ${request.context.text}`
-                });
-            }
+Contents: ${request.context.text}`,
+				});
+			}
 
-            messageContent.push({
-                type: "text",
-                text: request.input
-            });
+			messageContent.push({
+				type: "text",
+				text: request.input,
+			});
 
-            const messages = [new HumanMessage({ content: messageContent })];
+			const messages = [new HumanMessage({ content: messageContent })];
 
-            const stream = await this.agent.streamEvents({
-                messages,
-                workspace: this.workspace,
-                image: request.image,
-                context: request.context,
-                files: contextFiles,
-                fileBackups: undefined
-            } satisfies typeof GraphAnnotation.State, config);
+			const stream = await this.agent.streamEvents(
+				{
+					messages,
+					workspace: this.workspace,
+					image: request.image,
+					context: request.context,
+					files: contextFiles,
+					fileBackups: undefined,
+				} satisfies typeof GraphAnnotation.State,
+				config,
+			);
 
-            yield* this.handleStreamEvents(stream, request.threadId);
-        } catch (e) {
-            console.error(e);
-            yield {
-                node: "composer-error",
-                values: {
-                    error:
-                        "An error occurred, please try again. If this continues use the clear chat button to start over. If you've attached an the model you are using doesn't support images, try removing it.",
-                },
-            };
-        }
-    }
+			yield* this.handleStreamEvents(stream, request.threadId);
+		} catch (e) {
+			console.error(e);
+			yield {
+				node: "composer-error",
+				values: {
+					error:
+						"An error occurred, please try again. If this continues use the clear chat button to start over. If you've attached an the model you are using doesn't support images, try removing it.",
+				},
+			};
+		}
+	}
 
-    async loadContextFiles(files: string[]) {
-        if (files) {
-            const codeFiles: FileMetadata[] = [];
+	/**
+	 * Handles streaming events from LangChain and dispatches custom events
+	 * @param stream The LangChain event stream
+	 * @param eventName The name of the custom event to dispatch
+	 */
+	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	async *handleStreamEvents(stream: AsyncIterable<any>, threadId: string) {
+		let buffer = "";
+		const events: StreamEvent[] = [];
 
-            for (const file of files) {
-                try {
-                    const relativePath = path.relative(this.workspace, file);
+		const pushEvent = (event: StreamEvent) => {
+			events.push(event);
+			return {
+				node: "composer-events",
+				values: {
+					events,
+					threadId,
+				},
+			} satisfies ComposerResponse;
+		};
 
-                    const txtDoc = await getTextDocumentFromPath(path.join(this.workspace, relativePath));
-                    codeFiles.push({
-                        id: uuidv4(),
-                        path: relativePath,
-                        code: txtDoc?.getText(),
-                        lastModified: Date.now()
-                    });
-                } catch { }
-            }
+		try {
+			for await (const event of stream) {
+				if (!event) continue;
 
-            return codeFiles;
-        }
+				switch (event.event) {
+					case "on_chat_model_stream":
+						if (event.data.chunk?.content) {
+							let text = "";
+							if (Array.isArray(event.data.chunk.content)) {
+								text = event.data.chunk.content[0]?.text || "";
+							} else {
+								text = event.data.chunk.content.toString() || "";
+							}
+							buffer += text;
 
-        return [];
-    }
+							//If we are just streaming text, dont too add many events
+							if (
+								events.length > 0 &&
+								events[events.length - 1].type === "message"
+							) {
+								events[events.length - 1].content = buffer;
+								yield {
+									node: "composer-events",
+									values: {
+										events,
+									},
+								};
+							} else {
+								yield pushEvent({
+									id: event.run_id,
+									type: "message",
+									content: buffer,
+								});
+							}
+						}
+						break;
 
-    /**
-     * Handles streaming events from LangChain and dispatches custom events
-     * @param stream The LangChain event stream
-     * @param eventName The name of the custom event to dispatch
-     */
-    async *handleStreamEvents(stream: AsyncIterable<any>, threadId: string) {
-        let buffer = '';
-        let events: StreamEvent[] = [];
+					case "on_chat_model_end":
+						buffer = "";
+						break;
 
-        const pushEvent = (event: StreamEvent) => {
-            events.push(event);
-            return {
-                node: "composer-events",
-                values: {
-                    events,
-                    threadId
-                }
-            } satisfies ComposerResponse
-        }
+					case "on_tool_start":
+						//Write file is on atomic event
+						if (event.name !== "write_file") {
+							yield pushEvent({
+								id: event.run_id,
+								type: "tool-start",
+								content: JSON.stringify(event.data.input.input),
+								metadata: {
+									tool: event.name,
+									path: event.name.endsWith("_file")
+										? JSON.parse(event.data.input.input).filePath
+										: undefined,
+								},
+							});
+						}
+						break;
 
-        try {
-            for await (const event of stream) {
-                if (!event) continue;
+					case "on_tool_end":
+						yield pushEvent({
+							id: event.run_id,
+							type: "tool-end",
+							content:
+								event.name === "write_file"
+									? JSON.stringify(event.data.output.update.files[0])
+									: (event.data?.output.content ?? ""),
+							metadata: {
+								tool: event.name,
+								path: event.name.endsWith("_file")
+									? JSON.parse(event.data.input.input).filePath
+									: undefined,
+							},
+						});
+						break;
+				}
+			}
 
-                switch (event.event) {
-                    case "on_chat_model_stream":
-                        if (event.data.chunk?.content) {
-                            let text = '';
-                            if (Array.isArray(event.data.chunk.content)) {
-                                text = event.data.chunk.content[0]?.text || '';
-                            } else {
-                                text = event.data.chunk.content.toString() || '';
-                            }
-                            buffer += text;
+			yield {
+				node: "composer-done",
+				values: {
+					events,
+					threadId,
+				},
+			} satisfies ComposerResponse;
+		} catch (e) {
+			console.error(e);
+		}
 
-                            //If we are just streaming text, dont too add many events
-                            if (events.length > 0 && events[events.length - 1].type === 'message') {
-                                events[events.length - 1].content = buffer;
-                                yield {
-                                    node: "composer-events",
-                                    values: {
-                                        events
-                                    }
-                                }
-                            } else {
-                                yield pushEvent({
-                                    id: event.run_id,
-                                    type: 'message',
-                                    content: buffer
-                                });
-                            }
-                        }
-                        break;
-
-                    case "on_chat_model_end":
-                        buffer = '';
-                        break;
-
-                    case "on_tool_start":
-                        //Write file is on atomic event
-                        if (event.name !== 'write_file') {
-                            yield pushEvent({
-                                id: event.run_id,
-                                type: 'tool-start',
-                                content: '',
-                                metadata: {
-                                    tool: event.name,
-                                    path: event.name.endsWith("_file") ? JSON.parse(event.data.input.input).filePath : undefined
-                                }
-                            });
-                        }
-                        break;
-
-                    case "on_tool_end":
-                        yield pushEvent({
-                            id: event.run_id,
-                            type: 'tool-end',
-                            content: event.name === "write_file" ? JSON.stringify(event.data.output.update.files[0]) : event.data?.output.content ?? '',
-                            metadata: {
-                                tool: event.name,
-                                path: event.name.endsWith("_file") ? JSON.parse(event.data.input.input).filePath : undefined
-                            }
-                        });
-                        break;
-                }
-            }
-
-            yield {
-                node: "composer-done",
-                values: {
-                    events,
-                    threadId
-                }
-            } satisfies ComposerResponse
-        } catch (e) {
-            console.error(e);
-        }
-
-        // Return the final state
-        return { buffer, events };
-    }
+		// Return the final state
+		return { buffer, events };
+	}
 }
