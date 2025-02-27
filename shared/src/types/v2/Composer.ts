@@ -1,5 +1,5 @@
 import { CodeContextDetails } from "../Message";
-import { FileMetadata } from "./Message";
+import { BaseMessage, FileMetadata } from "./Message";
 
 export type DiffViewCommand = {
 	file: FileMetadata;
@@ -33,21 +33,23 @@ export interface ComposerChatMessage {
 	name?: string;
 }
 
-export interface PlanExecuteState {
-	messages?: ComposerChatMessage[];
-	files?: FileMetadata[];
-	dependencies?: Dependencies;
-	error?: string;
+export interface GraphState {
+	messages: BaseMessage[];
+	workspace: string;
+	image?: ComposerImage;
+	context?: CodeContextDetails;
+	files: FileMetadata[];
+	fileBackups: Record<string, string>;
 }
 
-export type GraphState = {
+export type AgentEvents = {
 	events: StreamEvent[];
 	threadId: string;
 }
 
 export type ComposerResponse = {
 	node: ComposerSteps;
-	values: GraphState;
+	values: AgentEvents;
 };
 
 export interface StreamEvent {

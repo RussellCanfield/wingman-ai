@@ -21,6 +21,7 @@ interface ComposerContextType {
   switchThread: (threadId: string) => void;
   deleteThread: (threadId: string) => void;
   renameThread: (threadId: string, newTitle: string) => void;
+  branchThread: (threadId: string) => void;
 }
 
 const ComposerContext = createContext<ComposerContextType | undefined>(undefined);
@@ -80,7 +81,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     setActiveThread(newThread);
     setComposerMessages([]);
 
-    // Notify extension about new thread
     vscode.postMessage({
       command: "create-thread",
       value: newThread
@@ -129,6 +129,28 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       value: threadId
     });
   };
+
+  const branchThread = (threadId: string) => {
+    const originalThread = threads.find(t => t.id === threadId);
+    if (!originalThread) return;
+
+    const timestamp = Date.now();
+    const newThread: Thread = {
+      id: crypto.randomUUID(),
+      title: `Branch: ${originalThread.title}`,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      messages: [...originalThread.messages],
+      originatingThreadId: originalThread.id
+    };
+
+    setThreads(prevThreads => [...prevThreads, newThread]);
+    setActiveThread(newThread);
+    vscode.postMessage({
+      command: "branch-thread",
+      value: newThread
+    });
+  }
 
   const renameThread = (threadId: string, newTitle: string) => {
     setThreads(prevThreads => {
@@ -280,6 +302,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       // Thread management
       threads,
       activeThread,
+      branchThread,
       createThread,
       switchThread,
       deleteThread,

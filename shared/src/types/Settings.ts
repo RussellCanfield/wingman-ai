@@ -9,6 +9,7 @@ export interface Thread {
 	createdAt: number;
 	updatedAt: number;
 	messages: ComposerMessage[];
+	originatingThreadId?: string;
 }
 
 export interface WorkspaceSettings {

@@ -13,7 +13,7 @@ import { TypeRequestEvent } from "../server/retriever";
 import { EmbeddingsResponse } from "../server";
 import { Settings } from "@shared/types/Settings";
 import { IndexerSettings } from "@shared/types/Indexer";
-import { ComposerRequest, ComposerResponse, IndexStats } from "@shared/types/v2/Composer";
+import { ComposerRequest, ComposerResponse, GraphState, IndexStats } from "@shared/types/v2/Composer";
 import path from "node:path";
 import ignore from "ignore";
 import { mapLocation, mapSymbol } from "./utils";
@@ -26,8 +26,6 @@ import {
 	telemetry,
 } from "../providers/telemetryProvider";
 import { Workspace } from "../service/workspace";
-import { FileMetadata } from "@shared/types/v2/Message";
-import { PlanExecuteState } from "@shared/types/v2/Composer";
 import { AcceptFileEvent, RejectFileEvent, UndoFileEvent } from "@shared/types/Events";
 
 let client: LanguageClient;
@@ -208,16 +206,20 @@ export class LSPClient {
 		return client.sendRequest("wingman/clearChatHistory", activeThreadId);
 	};
 
-	acceptComposerFile = async ({ file, threadId }: AcceptFileEvent): Promise<PlanExecuteState> => {
+	acceptComposerFile = async ({ file, threadId }: AcceptFileEvent) => {
 		return client.sendRequest("wingman/acceptComposerFile", { file, threadId });
 	}
 
-	rejectComposerFile = async ({ file, threadId }: RejectFileEvent): Promise<PlanExecuteState> => {
+	rejectComposerFile = async ({ file, threadId }: RejectFileEvent) => {
 		return client.sendRequest("wingman/rejectComposerFile", { file, threadId });
 	}
 
-	undoComposerFile = async ({ file, threadId }: UndoFileEvent): Promise<PlanExecuteState> => {
-		return client.sendRequest("wingman/undoComposerFile", file);
+	undoComposerFile = async ({ file, threadId }: UndoFileEvent): Promise<GraphState> => {
+		return client.sendRequest("wingman/undoComposerFile", { file, threadId });
+	}
+
+	branchThread = async ({ threadId, originalThreadId }: { threadId: string, originalThreadId: string }) => {
+		return client.sendRequest("wingman/branchThread", { threadId, originalThreadId });
 	}
 
 	buildFullIndex = async ({

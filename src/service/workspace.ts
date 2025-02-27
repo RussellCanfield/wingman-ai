@@ -76,6 +76,16 @@ export class Workspace {
 		return newThread;
 	}
 
+	async branchThread(newThread: Thread) {
+		const threads = [...(this.settings.threads || []), newThread];
+		await this.save({
+			threads,
+			activeThreadId: newThread.id
+		});
+
+		return newThread;
+	}
+
 	async updateThread(threadId: string, updates: Partial<Thread>): Promise<Thread | null> {
 		const threads = [...(this.settings.threads || [])];
 		const threadIndex = threads.findIndex(t => t.id === threadId);

@@ -4,7 +4,7 @@ import { useComposerContext } from '../../context/composerContext';
 import { Thread } from '@shared/types/Settings';
 
 export const ThreadManagement: React.FC = () => {
-  const { threads, activeThread, createThread, switchThread, deleteThread, renameThread } = useComposerContext();
+  const { threads, activeThread, createThread, switchThread, deleteThread, renameThread, branchThread } = useComposerContext();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [newThreadTitle, setNewThreadTitle] = useState('');
@@ -87,6 +87,12 @@ export const ThreadManagement: React.FC = () => {
     deleteThread(threadId);
   };
 
+  const handleBranchThread = (threadId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    branchThread(threadId);
+    setIsDropdownOpen(false);
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString(undefined, {
       month: 'short',
@@ -166,6 +172,18 @@ export const ThreadManagement: React.FC = () => {
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => handleBranchThread(thread.id, e)}
+                        className="p-1 hover:bg-[var(--vscode-button-hoverBackground)] rounded"
+                        aria-label="Branch thread"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="6" y1="3" x2="6" y2="15"></line>
+                          <circle cx="18" cy="6" r="3"></circle>
+                          <circle cx="6" cy="18" r="3"></circle>
+                          <path d="M18 9a9 9 0 0 1-9 9"></path>
                         </svg>
                       </button>
                       {threads.length > 1 && (

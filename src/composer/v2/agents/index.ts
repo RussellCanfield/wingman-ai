@@ -51,6 +51,12 @@ const GraphAnnotation = Annotation.Root({
         },
         default: () => []
     }),
+    fileBackups: Annotation<Record<string, string> | undefined>({
+        reducer: (currentState, updateValue) => {
+            return { ...(currentState ?? {}), ...(updateValue ?? {}) };
+        },
+        default: () => ({})
+    }),
 });
 
 /**
@@ -69,7 +75,7 @@ export class WingmanAgent {
         this.tools = [
             createReadFileTool(this.workspace),
             createListDirectoryTool(this.workspace),
-            createWriteFileTool(this.workspace),
+            createWriteFileTool(this.workspace, this.storeFileBackup),
             createFindFileDependenciesTool(this.workspace, this.codeParser)
         ]
 
@@ -80,6 +86,77 @@ export class WingmanAgent {
             stateModifier: this.stateModifier,
             checkpointer: this.checkpointer
         });
+    }
+
+    /**
+     * Creates a new thread branch from an existing thread's state
+     * @param sourceThreadId The source thread ID to branch from
+     * @param sourceCheckpointId Optional specific checkpoint ID to branch from (uses latest if not provided)
+     * @param targetThreadId Optional new thread ID (generates one if not provided)
+     * @returns The new thread ID and checkpoint configuration
+     */
+    async branchThread(
+        sourceThreadId: string,
+        sourceCheckpointId?: string,
+        targetThreadId?: string
+    ): Promise<{ threadId: string, config: RunnableConfig }> {
+        // Generate a new thread ID if not provided
+        const newThreadId = targetThreadId || `${sourceThreadId}-branch-${Date.now()}`;
+
+        // Get the source checkpoint tuple
+        const sourceConfig: RunnableConfig = {
+            configurable: {
+                thread_id: sourceThreadId,
+                checkpoint_id: sourceCheckpointId
+            }
+        };
+
+        const sourceTuple = await this.checkpointer.getTuple(sourceConfig);
+
+        if (!sourceTuple) {
+            throw new Error(`Source thread ${sourceThreadId} not found or has no checkpoints`);
+        }
+
+        // Create a new checkpoint for the branched thread
+        const newCheckpoint = {
+            ...sourceTuple.checkpoint,
+            id: Date.now().toString(),
+        };
+
+        // Create metadata that references the source
+        const metadata = {
+            source: "fork" as const,
+            step: 0,
+            writes: {},
+            parents: {
+                [sourceTuple.checkpoint.id]: "branch_source"
+            },
+            branch_source: {
+                thread_id: sourceThreadId,
+                checkpoint_id: sourceTuple.checkpoint.id
+            }
+        };
+
+        // Create the new thread config
+        const newConfig: RunnableConfig = {
+            configurable: {
+                thread_id: newThreadId,
+                checkpoint_ns: sourceTuple.config.configurable?.checkpoint_ns
+            }
+        };
+
+        const newVersions: Record<string, string> = {};
+        const resultConfig = await this.checkpointer.put(
+            newConfig,
+            newCheckpoint,
+            metadata,
+            newVersions
+        );
+
+        return {
+            threadId: newThreadId,
+            config: resultConfig
+        };
     }
 
     private updateGraphState = async (tuple: CheckpointTuple, event: string, state: typeof GraphAnnotation.State) => {
@@ -99,13 +176,40 @@ export class WingmanAgent {
         };
 
         const newVersions: Record<string, string> = {};
-
         await this.checkpointer.put(
             tuple.config,
             newCheckpoint,
             metadata,
             newVersions
         );
+    }
+
+    storeFileBackup = async (file: FileMetadata, originalFileContents: string, threadId: string) => {
+        const checkpoint = { configurable: { thread_id: threadId } };
+        const data = await this.checkpointer.get(checkpoint);
+        const tuple = await this.checkpointer.getTuple(checkpoint);
+
+        if (!tuple || !data?.channel_values) return;
+
+        const state = data.channel_values as typeof GraphAnnotation.State;
+
+        try {
+            const backupUpdate = {
+                [file.path]: originalFileContents
+            };
+
+            const newState = {
+                ...state,
+                fileBackups: {
+                    ...state.fileBackups,
+                    ...backupUpdate
+                }
+            };
+
+            await this.updateGraphState(tuple, "store_file_backup", newState);
+        } catch (error) {
+            loggingProvider.logError(`Failed to store file backup for ${file.path}: ${error}`);
+        }
     }
 
     acceptFile = async (file: FileMetadata, threadId: string) => {
@@ -288,7 +392,8 @@ Contents: ${request.context.text}`
                 workspace: this.workspace,
                 image: request.image,
                 context: request.context,
-                files: contextFiles
+                files: contextFiles,
+                fileBackups: undefined
             } satisfies typeof GraphAnnotation.State, config);
 
             yield* this.handleStreamEvents(stream, request.threadId);

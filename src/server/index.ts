@@ -36,19 +36,16 @@ import {
 	Settings,
 } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
-import { ComposerRequest, IndexStats, PlanExecuteState } from "@shared/types/v2/Composer";
+import { ComposerRequest, IndexStats } from "@shared/types/v2/Composer";
 import { loggingProvider } from "./loggingProvider";
 import { createEmbeddingProvider } from "../service/embeddings/base";
 import { IndexerSettings } from "@shared/types/Indexer";
 import { LSPFileEventHandler } from "./files/eventHandler";
-import { FileMetadata } from "@shared/types/v2/Message";
 import { WebCrawler } from "./web";
-import { promises } from "node:fs";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer/v2/agents";
 import { FileSystemCheckpointer } from "../composer/checkpointer";
 import { AcceptFileEvent, RejectFileEvent, UndoFileEvent } from "@shared/types/Events";
-import { threadId } from "node:worker_threads";
 
 let memory: FileSystemCheckpointer;
 let modelProvider: AIProvider;
@@ -340,37 +337,6 @@ export class LSPServer {
 		}
 	};
 
-	private executeComposer = async (request: ComposerRequest) => {
-		if (!this.composer) {
-			return;
-		}
-
-		const generator = this.composer.execute(
-			request
-		);
-
-		for await (const { node, values } of generator) {
-			if (node === "composer-files-done") {
-				const { files } = values as PlanExecuteState;
-
-				if (files && files.length > 0) {
-					//Add new files to the queue since they don't trigger events
-					const fileUris = files
-						.filter(f => !f.original)
-						.map(f => filePathToUri(path.join(this.workspaceFolders[0], f.path)));
-
-					if (fileUris.length > 0) {
-						this.queue?.enqueue(fileUris); 55
-					}
-				}
-			}
-			await this.connection?.sendRequest("wingman/compose", {
-				node,
-				values,
-			});
-		}
-	}
-
 	private addEvents = async () => {
 		this.connection?.languages.diagnostics.on(async (params) => {
 			const document = this.documents.get(params.textDocument.uri);
@@ -545,6 +511,10 @@ export class LSPServer {
 
 		this.connection?.onRequest("wingman/undoComposerFile", async ({ file, threadId }: UndoFileEvent) => {
 			return this.composer?.undoFile(file, threadId);
+		});
+
+		this.connection?.onRequest("wingman/branchThread", async ({ threadId, originalThreadId }: { threadId: string, originalThreadId: string }) => {
+			return this.composer?.branchThread(originalThreadId, undefined, threadId);
 		});
 
 		this.connection?.onRequest("wingman/webSearch", async (input: string) => {

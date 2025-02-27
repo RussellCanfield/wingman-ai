@@ -128,6 +128,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								command: "thread-data",
 								value: this._workspace.getSettings()
 							});
+						case "branch-thread":
+							await this.branchThread(value as Thread);
+							webviewView.webview.postMessage({
+								command: "thread-data",
+								value: this._workspace.getSettings()
+							});
 							break;
 						case "switch-thread":
 							await this.switchThread(String(value));
@@ -373,9 +379,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async undoFile({ file, threadId }: UndoFileEvent) {
-		const { path: artifactFile, original } = file;
-
+		const { path: artifactFile } = file;
 		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+
+		const graphState = await this._lspClient.undoComposerFile({ file, threadId });
+
+		let original = '';
+		if (graphState.fileBackups && graphState.fileBackups[file.path]) {
+			original = graphState.fileBackups[file.path];
+		}
 
 		const fileUri = vscode.Uri.joinPath(
 			vscode.Uri.parse(this._workspace.workspacePath),
@@ -520,6 +532,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	private async createThread(thread: Thread) {
 		await this._workspace.createThread(thread.title);
+	}
+
+	private async branchThread(thread: Thread) {
+		await this._workspace.branchThread(thread);
+		await this._lspClient.branchThread({
+			threadId: thread.id,
+			originalThreadId: thread.originatingThreadId!
+		});
 	}
 
 	private async addMessageToThread({ threadId, message }: AddMessageToThreadEvent) {
