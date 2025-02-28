@@ -4,15 +4,12 @@ import { eventEmitter } from "../events/eventEmitter";
 import type { AppMessage, CodeContextDetails } from "@shared/types/Message";
 import type { AppState, Thread } from "@shared/types/Settings";
 import type {
-	AcceptFileEvent,
 	AddMessageToThreadEvent,
 	RenameThreadEvent,
-	RejectFileEvent,
-	UndoFileEvent,
+	UpdateComposerFileEvent,
 } from "@shared/types/Events";
 import {
 	addNoneAttributeToLink,
-	extractCodeBlock,
 	getActiveWorkspace,
 	getNonce,
 } from "./utilities";
@@ -163,21 +160,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						);
 						break;
 					case "accept-file":
-						await this.acceptFile(value as AcceptFileEvent);
+						await this.acceptFile(value as UpdateComposerFileEvent);
 						webviewView.webview.postMessage({
 							command: "thread-data",
 							value: this._workspace.getSettings(),
 						});
 						break;
 					case "reject-file":
-						await this.rejectFile(value as RejectFileEvent);
+						await this.rejectFile(value as UpdateComposerFileEvent);
 						webviewView.webview.postMessage({
 							command: "thread-data",
 							value: this._workspace.getSettings(),
 						});
 						break;
 					case "undo-file":
-						await this.undoFile(value as UndoFileEvent);
+						await this.undoFile(value as UpdateComposerFileEvent);
 						webviewView.webview.postMessage({
 							command: "thread-data",
 							value: this._workspace.getSettings(),
@@ -295,64 +292,45 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
-	private async undoFile({ file, threadId }: UndoFileEvent) {
+	private async undoFile({ file, threadId }: UpdateComposerFileEvent) {
 		try {
-			// Get file path and request undo operation
-			const { path: artifactFile, id: fileId } = file;
-			const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
-			const graphState = await this._lspClient.undoComposerFile({
-				file,
-				threadId,
-			});
-
-			// Get file URI for workspace operations
-			const fileUri = vscode.Uri.joinPath(
-				vscode.Uri.parse(this._workspace.workspacePath),
-				relativeFilePath,
-			);
-
-			// Restore original content or delete file
-			const original = graphState.files.find((f) => f.path === file.path);
-			if (original?.original) {
-				await vscode.workspace.fs.writeFile(
-					fileUri,
-					new TextEncoder().encode(original.original),
-				);
-			} else {
-				await vscode.workspace.fs.delete(fileUri);
-			}
-
 			// Update thread metadata
 			const targetThread = await this._workspace.getThreadById(threadId);
 			if (!targetThread) return;
 
-			// Find and update the file event
-			for (const message of targetThread.messages) {
-				if (message.from !== "assistant") continue;
-				if (!message.events?.some((e) => !!e.metadata?.tool)) continue;
+			if (targetThread.graphState) {
+				const graphFile = targetThread.graphState?.files.find(
+					(f) => f.path === file.path,
+				);
 
-				const fileEvent = message.events
-					.filter((e) => e.metadata?.tool === "write_file")
-					.find((e) => {
-						const fileContents = JSON.parse(e.content) as FileMetadata;
-						return fileId === fileContents.id;
+				if (graphFile) {
+					//Revert the code and persist
+					graphFile.code = await this._lspClient.fetchOriginalFileContents({
+						file: graphFile.path,
+						threadId,
 					});
+					const relativeFilePath = vscode.workspace.asRelativePath(
+						graphFile?.path,
+					);
+					// Get file URI for workspace operations
+					const fileUri = vscode.Uri.joinPath(
+						vscode.Uri.parse(this._workspace.workspacePath),
+						relativeFilePath,
+					);
+					await vscode.workspace.fs.writeFile(
+						fileUri,
+						new TextEncoder().encode(file.code),
+					);
 
-				if (fileEvent) {
-					// Reset file status
-					const fileContents = JSON.parse(fileEvent.content) as FileMetadata;
-					fileContents.accepted = false;
-					fileContents.rejected = false;
-					fileEvent.content = JSON.stringify(fileContents);
-
-					// Update thread and notify UI
-					await this._lspClient.undoComposerFile({ file, threadId });
+					await this._lspClient.updateComposerFile({
+						file: graphFile,
+						threadId,
+					});
 					await this._workspace.updateThread(threadId, targetThread);
 					this._webview?.postMessage({
 						command: "thread-data",
 						value: this._workspace.getSettings(),
 					});
-					return;
 				}
 			}
 		} catch (error) {
@@ -361,97 +339,72 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	private async acceptFile({ file, threadId }: AcceptFileEvent): Promise<void> {
+	private async acceptFile({
+		file,
+		threadId,
+	}: UpdateComposerFileEvent): Promise<void> {
 		const targetThread = await this._workspace.getThreadById(threadId);
 		if (!targetThread) return;
 
-		const relativeFilePath = vscode.workspace.asRelativePath(file.path);
-		const fileUri = vscode.Uri.joinPath(
-			vscode.Uri.parse(this._workspace.workspacePath),
-			relativeFilePath,
-		);
-		await vscode.workspace.fs.writeFile(
-			fileUri,
-			new TextEncoder().encode(file.code),
-		);
-
-		// Find the first matching file and update it
-		for (const message of targetThread.messages) {
-			if (message.from !== "assistant") continue;
-
-			const fileEvent = message.events?.find(
-				(event) =>
-					event.metadata?.tool === "write_file" &&
-					JSON.parse(event.content).id === file.id,
+		if (targetThread.graphState) {
+			const graphFile = targetThread.graphState?.files.find(
+				(f) => f.path === file.path,
 			);
 
-			if (fileEvent) {
-				const fileContent = JSON.parse(fileEvent.content) as FileMetadata;
-				fileContent.accepted = true;
-				fileContent.rejected = false;
-				fileEvent.content = JSON.stringify(fileContent);
+			if (graphFile) {
+				const relativeFilePath = vscode.workspace.asRelativePath(file.path);
+				const fileUri = vscode.Uri.joinPath(
+					vscode.Uri.parse(this._workspace.workspacePath),
+					relativeFilePath,
+				);
+				await vscode.workspace.fs.writeFile(
+					fileUri,
+					new TextEncoder().encode(file.code),
+				);
 
-				await this._lspClient.acceptComposerFile({ file, threadId });
+				graphFile.accepted = true;
+				graphFile.rejected = false;
+				await this._lspClient.updateComposerFile({
+					file: graphFile,
+					threadId,
+				});
 				await this._workspace.updateThread(threadId, targetThread);
 				this._webview?.postMessage({
 					command: "thread-data",
 					value: this._workspace.getSettings(),
 				});
-				return;
 			}
 		}
 	}
 
-	private async rejectFile({ file, threadId }: AcceptFileEvent) {
+	private async rejectFile({ file, threadId }: UpdateComposerFileEvent) {
 		try {
-			// Extract and process code content
-			const { path: artifactFile, code: markdown, id: fileId } = file;
-			const code = markdown?.startsWith("```")
-				? extractCodeBlock(markdown)
-				: markdown;
-
-			// Write file to workspace
-			const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
-			const fileUri = vscode.Uri.joinPath(
-				vscode.Uri.parse(this._workspace.workspacePath),
-				relativeFilePath,
-			);
-			await vscode.workspace.fs.writeFile(
-				fileUri,
-				new TextEncoder().encode(code),
-			);
-
 			// Update thread metadata
 			const targetThread = await this._workspace.getThreadById(threadId);
 			if (!targetThread) return;
 
-			// Find the relevant message and file event
-			for (const message of targetThread.messages) {
-				if (message.from !== "assistant") continue;
-				if (!message.events?.some((e) => !!e.metadata?.tool)) continue;
+			if (targetThread.graphState) {
+				const graphFile = targetThread.graphState?.files.find(
+					(f) => f.path === file.path,
+				);
 
-				const fileEvent = message.events
-					.filter((e) => e.metadata?.tool === "write_file")
-					.find((e) => {
-						const fileContents = JSON.parse(e.content) as FileMetadata;
-						return fileId === e.id || fileId === fileContents.id;
+				if (graphFile) {
+					graphFile.accepted = false;
+					graphFile.rejected = true;
+					//Revert graph state to previous version in-memory
+					graphFile.code = await this._lspClient.fetchOriginalFileContents({
+						file: graphFile.path,
+						threadId,
 					});
-
-				if (fileEvent) {
-					// Update file metadata
-					const fileContents = JSON.parse(fileEvent.content) as FileMetadata;
-					fileContents.accepted = false;
-					fileContents.rejected = true;
-					fileEvent.content = JSON.stringify(fileContents);
-
-					// Save changes and notify UI
-					await this._lspClient.rejectComposerFile({ file, threadId });
+					await this._lspClient.updateComposerFile({
+						file: graphFile,
+						threadId,
+					});
 					await this._workspace.updateThread(threadId, targetThread);
 					this._webview?.postMessage({
 						command: "thread-data",
 						value: this._workspace.getSettings(),
 					});
-					return;
 				}
 			}
 		} catch (error) {
@@ -495,14 +448,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		});
 	}
 
-	private async addMessageToThread({
-		threadId,
-		message,
-	}: AddMessageToThreadEvent) {
+	private async addMessageToThread(event: AddMessageToThreadEvent) {
+		const { threadId, message, state } = event;
 		const activeThread = await this._workspace.getThreadById(threadId);
 
 		if (activeThread) {
 			activeThread.messages.push(message);
+			activeThread.graphState = state;
 			await this._workspace.updateThread(threadId, activeThread);
 			return;
 		}

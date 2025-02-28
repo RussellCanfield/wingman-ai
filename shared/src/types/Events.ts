@@ -1,9 +1,10 @@
-import type { ComposerMessage } from "./v2/Composer";
+import type { ComposerMessage, GraphState } from "./v2/Composer";
 import type { FileMetadata } from "./v2/Message";
 
 export interface AddMessageToThreadEvent {
 	threadId: string;
 	message: ComposerMessage;
+	state?: GraphState;
 }
 
 export interface RenameThreadEvent {
@@ -11,17 +12,7 @@ export interface RenameThreadEvent {
 	title: string;
 }
 
-export interface AcceptFileEvent {
-	file: FileMetadata;
-	threadId: string;
-}
-
-export interface RejectFileEvent {
-	file: FileMetadata;
-	threadId: string;
-}
-
-export interface UndoFileEvent {
+export interface UpdateComposerFileEvent {
 	file: FileMetadata;
 	threadId: string;
 }

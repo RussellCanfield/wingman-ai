@@ -16,6 +16,7 @@ import type {
 	ComposerImage,
 	ComposerRequest,
 	ComposerResponse,
+	GraphState,
 	StreamEvent,
 } from "@shared/types/v2/Composer";
 import type {
@@ -30,6 +31,7 @@ import { loggingProvider } from "../../../server/loggingProvider";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { createCommandExecuteTool } from "../tools/cmd_execute";
 import type { PartitionedFileSystemSaver } from "../../checkpointer";
+import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
 let controller = new AbortController();
 
@@ -352,86 +354,31 @@ export class WingmanAgent {
 		}
 	};
 
-	acceptFile = async (file: FileMetadata, threadId: string) => {
+	getGraphState = async (threadId: string) => {
 		const checkpoint = { configurable: { thread_id: threadId } };
 		const data = await this.checkpointer.get(checkpoint);
 		const tuple = await this.checkpointer.getTuple(checkpoint);
+		return { data, tuple };
+	};
+
+	updateFile = async (event: UpdateComposerFileEvent) => {
+		const { file, threadId } = event;
+		const { data, tuple } = await this.getGraphState(threadId);
 
 		if (!tuple || !data?.channel_values) return;
 
 		const state = data.channel_values as typeof GraphAnnotation.State;
-
-		const matchingFile = state.files.find(
-			(f) => f.id === file.id && f.path === file.path,
-		);
+		let matchingFile = state.files.find((f) => f.path === file.path);
 
 		if (!matchingFile) {
 			loggingProvider.logError(
-				`Unable to accept file - file not found! ${file.path} ${file.id}`,
+				`Unable to accept file - file not found! ${file.path}`,
 			);
 			return state;
 		}
 
-		matchingFile.accepted = true;
-		matchingFile.rejected = false;
-
+		matchingFile = { ...event.file };
 		await this.updateGraphState(tuple, "accept_file", state);
-
-		return state;
-	};
-
-	rejectFile = async (file: FileMetadata, threadId: string) => {
-		const checkpoint = { configurable: { thread_id: threadId } };
-		const data = await this.checkpointer.get(checkpoint);
-		const tuple = await this.checkpointer.getTuple(checkpoint);
-
-		if (!tuple || !data?.channel_values) return;
-
-		const state = data.channel_values as typeof GraphAnnotation.State;
-
-		const matchingFile = state.files.find(
-			(f) => f.id === file.id && f.path === file.path,
-		);
-
-		if (!matchingFile) {
-			loggingProvider.logError(
-				`Unable to accept file - file not found! ${file.path} ${file.id}`,
-			);
-			return state;
-		}
-
-		matchingFile.accepted = false;
-		matchingFile.rejected = true;
-
-		await this.updateGraphState(tuple, "reject_file", state);
-
-		return state;
-	};
-
-	undoFile = async (file: FileMetadata, threadId: string) => {
-		const checkpoint = { configurable: { thread_id: threadId } };
-		const data = await this.checkpointer.get(checkpoint);
-		const tuple = await this.checkpointer.getTuple(checkpoint);
-
-		if (!tuple || !data?.channel_values) return;
-
-		const state = data.channel_values as typeof GraphAnnotation.State;
-
-		const matchingFile = state.files.find(
-			(f) => f.id === file.id && f.path === file.path,
-		);
-
-		if (!matchingFile) {
-			loggingProvider.logError(
-				`Unable to accept file - file not found! ${file.path} ${file.id}`,
-			);
-			return state;
-		}
-
-		matchingFile.accepted = false;
-		matchingFile.rejected = false;
-
-		await this.updateGraphState(tuple, "undo_file", state);
 
 		return state;
 	};
@@ -448,7 +395,6 @@ export class WingmanAgent {
 						path.join(this.workspace, relativePath),
 					);
 					codeFiles.push({
-						id: uuidv4(),
 						path: relativePath,
 						code: txtDoc?.getText(),
 						lastModified: Date.now(),
@@ -475,7 +421,7 @@ Use this context judiciously when it helps address their needs.
 **NOTE - When working with files, always use relative paths!**
 
 **Current Working Directory**:
-${this.workspace}
+{workspace}
 
 Guidelines for our interaction:
 1. Keep responses focused and avoid redundancy
@@ -513,7 +459,9 @@ When suggesting technologies for projects, consider these options based on speci
 - **Build Tools**: NX for monorepos, RSBuild for performance, Vite only if you are not familiar with RSBuild
 - **Code Quality**: Biome.js for linting/formatting (alternative to ESLint/Prettier)
 - **Type Safety**: TypeScript for improved developer experience and IDE integration
-- **Deployment**: Zephyr Cloud with appropriate build tool plugins (vite-plugin-zephyr, zephyr-rspack-plugin)
+- **Deployment**: Zephyr Cloud with appropriate build tool plugins 
+	- vite-plugin-zephyr, version 0.0.35
+	- zephyr-rspack-plugin, version 0.0.35
 - **State Management**: Jotai
 - **Testing**: Vitest for unit tests, Playwright for E2E testing
 
@@ -570,7 +518,7 @@ export default defineConfig({
 	/**
 	 * Execute a message in a conversation thread
 	 */
-	async *execute(request: ComposerRequest) {
+	async *execute(request: ComposerRequest): AsyncIterable<ComposerResponse> {
 		try {
 			this.events = [];
 			controller = new AbortController();
@@ -647,11 +595,16 @@ Contents: ${request.context.text}`,
 		} catch (e) {
 			console.error(e);
 			yield {
-				node: "composer-error",
-				values: {
-					error:
-						"An error occurred, please try again. If this continues use the clear chat button to start over. If you've attached an the model you are using doesn't support images, try removing it.",
-				},
+				threadId: request.threadId,
+				step: "composer-done",
+				events: this.events.concat([
+					{
+						id: uuidv4(),
+						type: "message",
+						content:
+							"An error occurred, please try again. If this continues use the clear chat button to start over. If you've attached an the model you are using doesn't support images, try removing it.",
+					},
+				]),
 			};
 		}
 	}
@@ -661,18 +614,29 @@ Contents: ${request.context.text}`,
 	 * @param stream The LangChain event stream
 	 * @param eventName The name of the custom event to dispatch
 	 */
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	async *handleStreamEvents(stream: AsyncIterable<any>, threadId: string) {
+	async *handleStreamEvents(
+		stream: AsyncIterable<any>,
+		threadId: string,
+	): AsyncIterableIterator<ComposerResponse> {
 		let buffer = "";
 
-		const pushEvent = (event: StreamEvent) => {
+		const pushEvent = async (event: StreamEvent) => {
+			let graphState: typeof GraphAnnotation.State | undefined = undefined;
+
+			// Only thrash on tool events - we don't care about state for message events
+			if (event.type === "tool-end" && event.metadata?.tool === "write_file") {
+				const { data, tuple } = await this.getGraphState(threadId);
+				if (tuple && data?.channel_values) {
+					graphState = data.channel_values as typeof GraphAnnotation.State;
+				}
+			}
+
 			this.events.push(event);
 			return {
-				node: "composer-events",
-				values: {
-					events: this.events,
-					threadId,
-				},
+				step: "composer-events",
+				events: this.events,
+				threadId,
+				state: graphState as unknown as GraphState,
 			} satisfies ComposerResponse;
 		};
 
@@ -698,11 +662,10 @@ Contents: ${request.context.text}`,
 							) {
 								this.events[this.events.length - 1].content = buffer;
 								yield {
-									node: "composer-events",
-									values: {
-										events: this.events,
-									},
-								};
+									step: "composer-events",
+									events: this.events,
+									threadId,
+								} satisfies ComposerResponse;
 							} else {
 								yield pushEvent({
 									id: event.run_id,
@@ -738,10 +701,7 @@ Contents: ${request.context.text}`,
 						yield pushEvent({
 							id: event.run_id,
 							type: "tool-end",
-							content:
-								event.name === "write_file"
-									? JSON.stringify(event.data.output.update.files[0])
-									: event.data.input.input,
+							content: event.data.input.input,
 							metadata: {
 								tool: event.name,
 								path: event.name.endsWith("_file")
@@ -754,11 +714,9 @@ Contents: ${request.context.text}`,
 			}
 
 			yield {
-				node: "composer-done",
-				values: {
-					events: this.events,
-					threadId,
-				},
+				step: "composer-done",
+				events: this.events,
+				threadId,
 			} satisfies ComposerResponse;
 		} catch (e) {
 			console.error(e);

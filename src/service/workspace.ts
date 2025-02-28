@@ -4,9 +4,6 @@ import { v4 as uuidv4 } from "uuid";
 import type { ComposerMessage } from "@shared/types/v2/Composer";
 
 const defaultSettings: WorkspaceSettings = {
-	indexerSettings: {
-		indexFilter: "src/**/*.{js,jsx,ts,tsx}",
-	},
 	threads: [],
 };
 

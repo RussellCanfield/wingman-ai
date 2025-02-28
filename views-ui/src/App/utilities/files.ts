@@ -1,11 +1,7 @@
-import type {
-	AcceptFileEvent,
-	RejectFileEvent,
-	UndoFileEvent,
-} from "@shared/types/Events";
 import type { DiffViewCommand } from "@shared/types/v2/Composer";
 import type { FileMetadata } from "@shared/types/v2/Message";
 import { vscode } from "./vscode";
+import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
 export const acceptFile = (file: FileMetadata, threadId: string) => {
 	if (file) {
@@ -15,7 +11,7 @@ export const acceptFile = (file: FileMetadata, threadId: string) => {
 			value: {
 				file,
 				threadId,
-			} satisfies AcceptFileEvent,
+			} satisfies UpdateComposerFileEvent,
 		});
 	}
 };
@@ -27,7 +23,7 @@ export const rejectFile = (file: FileMetadata, threadId: string) => {
 			value: {
 				file,
 				threadId,
-			} satisfies RejectFileEvent,
+			} satisfies UpdateComposerFileEvent,
 		});
 	}
 };
@@ -51,7 +47,7 @@ export const undoFile = (file: FileMetadata, threadId: string) => {
 			value: {
 				file,
 				threadId,
-			} satisfies UndoFileEvent,
+			} satisfies UpdateComposerFileEvent,
 		});
 	}
 };
@@ -62,7 +58,6 @@ export const openFile = (file: FileMetadata) => {
 			command: "open-file",
 			value: {
 				path: file.path,
-				id: file.id,
 			} satisfies FileMetadata,
 		});
 	}

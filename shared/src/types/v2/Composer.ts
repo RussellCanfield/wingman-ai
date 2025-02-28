@@ -41,14 +41,11 @@ export interface GraphState {
 	files: FileMetadata[];
 }
 
-export type AgentEvents = {
+export type ComposerResponse = {
+	step: ComposerSteps;
 	events: StreamEvent[];
 	threadId: string;
-};
-
-export type ComposerResponse = {
-	node: ComposerSteps;
-	values: AgentEvents;
+	state?: GraphState;
 };
 
 export interface StreamEvent {
@@ -77,9 +74,10 @@ export type ComposerSteps =
 export interface ComposerMessage {
 	from: ComposerRole;
 	message: string;
-	loading?: boolean;
+	loading: boolean;
 	image?: ComposerRequest["image"];
 	events?: StreamEvent[];
+	threadId?: string;
 }
 
 export type FileSearchResult = {

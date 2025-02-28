@@ -1,4 +1,4 @@
-import type { ComposerMessage } from "./v2/Composer";
+import type { ComposerMessage, GraphState } from "./v2/Composer";
 
 export const defaultMaxTokens = -1;
 
@@ -9,6 +9,7 @@ export interface Thread {
 	updatedAt: number;
 	messages: ComposerMessage[];
 	originatingThreadId?: string;
+	graphState?: GraphState;
 }
 
 export interface WorkspaceSettings {

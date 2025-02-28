@@ -9,16 +9,13 @@ import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
 import { MessageWithMarkdown } from "./components/Markdown";
 import { ChatArtifact } from "./components/File";
-//import { FileMetadata } from "@shared/types/Message";
 import { FileToolNames } from "./components/types";
 import { ToolOutput } from "./components/ToolOutput";
 import { vscode } from "../../utilities/vscode";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
-import type { FileMetadata } from "@shared/types/v2/Message";
-import type { AcceptFileEvent, RejectFileEvent } from "@shared/types/Events";
 import { useComposerContext } from "../../context/composerContext";
-import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../utilities/files";
+import { acceptFile, getTruncatedPath, openFile, rejectFile, undoFile } from "../../utilities/files";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -40,7 +37,7 @@ const ChatEntry = ({
 	isCurrent
 }: PropsWithChildren<ComposerMessage & { isCurrent?: boolean }>) => {
 	const { isLightTheme } = useSettingsContext();
-	const { activeThread } = useComposerContext();
+	const { activeThread, activeThreadGraphState } = useComposerContext();
 
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
@@ -58,8 +55,8 @@ const ChatEntry = ({
 	const bgClasses = fromUser ? "bg-stone-800 rounded-lg overflow-hidden w-full" : "";
 	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
-	const files = events?.filter(e => e.metadata?.tool === 'write_file').map(t => JSON.parse(t.content) as FileMetadata);
-	const hasPendingFiles = files?.some(f => !f.accepted && !f.rejected);
+	const files = activeThreadGraphState?.files;
+	const hasPendingFiles = files && files.length > 0 && files?.some(f => !f.accepted && !f.rejected);
 
 	return (
 		<li
@@ -97,14 +94,16 @@ const ChatEntry = ({
 							// Show tool-start events (that don't have an end event yet)
 							if (e.type === "tool-start") {
 								if (FileToolNames.includes(e.metadata?.tool!)) {
-									return <ChatArtifact loading={true} isLightTheme={isLightTheme} event={e} key={e.id} />;
+									const file = files?.find(f => f.path === e.metadata?.path);
+									return <ChatArtifact loading={loading} isLightTheme={isLightTheme} file={file} key={e.id} />;
 								}
 								return <ToolOutput loading={true} isLightTheme={isLightTheme} event={e} key={e.id} />;
 							}
 							// Show tool-end events
 							if (e.type === "tool-end") {
 								if (FileToolNames.includes(e.metadata?.tool!)) {
-									return <ChatArtifact loading={false} isLightTheme={isLightTheme} event={e} key={e.id} />;
+									const file = files?.find(f => f.path === e.metadata?.path);
+									return <ChatArtifact loading={loading} isLightTheme={isLightTheme} file={file} key={e.id} />;
 								}
 								return <ToolOutput loading={false} isLightTheme={isLightTheme} event={e} key={e.id} />;
 							}

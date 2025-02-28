@@ -5,33 +5,21 @@ import { GrCheckmark } from "react-icons/gr";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { PiGitDiff } from "react-icons/pi";
 import { Tooltip } from "react-tooltip";
-import type { StreamEvent } from "@shared/types/v2/Composer";
 import { useComposerContext } from "../../../context/composerContext";
 import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../../utilities/files";
 
 export const ChatArtifact = ({
-    event,
+    file,
     loading,
     isLightTheme
 }: {
-    event?: StreamEvent,
+    file?: FileMetadata,
     loading: boolean,
     isLightTheme: boolean
 }) => {
     const { activeThread } = useComposerContext();
 
-    let file: FileMetadata = {
-        path: event?.metadata?.path!,
-        id: crypto.randomUUID()
-    }
-
-    const isEdit = event?.metadata?.tool === 'write_file';
-    if (isEdit) {
-        file = {
-            ...file,
-            ...JSON.parse(event?.content!)
-        }
-    }
+    if (!file) return null;
 
     const diffParts = file.diff?.split(',');
     const truncatedPath = getTruncatedPath(file.path);
@@ -71,7 +59,7 @@ export const ChatArtifact = ({
                             </span>
                         </div>
                     )}
-                    {(isEdit && !file.diff) || loading && (
+                    {!file.diff || loading && (
                         <div className="flex justify-center mr-4">
                             <AiOutlineLoading3Quarters
                                 className="animate-spin text-stone-400"
@@ -79,15 +67,7 @@ export const ChatArtifact = ({
                             />
                         </div>
                     )}
-                    {!isEdit && !loading && (
-                        <div className="flex justify-center mr-4">
-                            <AiOutlineCheckCircle
-                                className="text-green-500"
-                                size={24}
-                            />
-                        </div>
-                    )}
-                    {isEdit && !loading && !file.accepted && !file.rejected && (
+                    {!loading && !file.accepted && !file.rejected && (
                         <div className="flex flex-nowrap gap-1 ml-auto mr-4">
                             {/* Reject Button */}
                             <div className="flex items-center rounded z-10 transition-colors text-red-600 hover:bg-red-600/10 hover:shadow-lg focus:ring focus:ring-red-400">

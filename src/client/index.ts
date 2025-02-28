@@ -27,11 +27,7 @@ import {
 	telemetry,
 } from "../providers/telemetryProvider";
 import type { Workspace } from "../service/workspace";
-import type {
-	AcceptFileEvent,
-	RejectFileEvent,
-	UndoFileEvent,
-} from "@shared/types/Events";
+import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
 let client: LanguageClient;
 
@@ -110,7 +106,7 @@ export class LSPClient {
 		client.onRequest("wingman/compose", (params: ComposerResponse) => {
 			loggingProvider.logInfo(JSON.stringify(params));
 			telemetry.sendEvent(EVENT_COMPOSE_PHASE, {
-				phase: params.node,
+				phase: params.step,
 			});
 			this.composerWebView?.postMessage({
 				command: "compose-response",
@@ -187,12 +183,11 @@ export class LSPClient {
 		return client.sendRequest("wingman/clearChatHistory", activeThreadId);
 	};
 
-	acceptComposerFile = async ({ file, threadId }: AcceptFileEvent) => {
-		return client.sendRequest("wingman/acceptComposerFile", { file, threadId });
-	};
-
-	rejectComposerFile = async ({ file, threadId }: RejectFileEvent) => {
-		return client.sendRequest("wingman/rejectComposerFile", { file, threadId });
+	updateComposerFile = async ({
+		file,
+		threadId,
+	}: UpdateComposerFileEvent): Promise<GraphState> => {
+		return client.sendRequest("wingman/updateComposerFile", { file, threadId });
 	};
 
 	fetchOriginalFileContents = async ({
@@ -203,13 +198,6 @@ export class LSPClient {
 			file,
 			threadId,
 		});
-	};
-
-	undoComposerFile = async ({
-		file,
-		threadId,
-	}: UndoFileEvent): Promise<GraphState> => {
-		return client.sendRequest("wingman/undoComposerFile", { file, threadId });
 	};
 
 	branchThread = async ({

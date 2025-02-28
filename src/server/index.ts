@@ -26,11 +26,7 @@ import { WebCrawler } from "./web";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer/v2/agents";
 import { PartitionedFileSystemSaver } from "../composer/checkpointer";
-import type {
-	AcceptFileEvent,
-	RejectFileEvent,
-	UndoFileEvent,
-} from "@shared/types/Events";
+import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
 let memory: PartitionedFileSystemSaver;
 let modelProvider: AIProvider;
@@ -315,37 +311,19 @@ export class LSPServer {
 					this.codeParser!,
 				);
 				try {
-					for await (const { node, values } of graph.execute(request)) {
-						await this.connection?.sendRequest("wingman/compose", {
-							node,
-							values,
-						});
+					for await (const event of graph.execute(request)) {
+						await this.connection?.sendRequest("wingman/compose", event);
 					}
 				} catch (e) {
 					console.error(e);
 				}
-				//await this.executeComposer(request);
 			},
 		);
 
 		this.connection?.onRequest(
-			"wingman/acceptComposerFile",
-			async ({ file, threadId }: AcceptFileEvent) => {
-				return this.composer?.acceptFile(file, threadId);
-			},
-		);
-
-		this.connection?.onRequest(
-			"wingman/rejectComposerFile",
-			async ({ file, threadId }: RejectFileEvent) => {
-				return this.composer?.rejectFile(file, threadId);
-			},
-		);
-
-		this.connection?.onRequest(
-			"wingman/undoComposerFile",
-			async ({ file, threadId }: UndoFileEvent) => {
-				return this.composer?.undoFile(file, threadId);
+			"wingman/updateComposerFile",
+			async (event: UpdateComposerFileEvent) => {
+				return this.composer?.updateFile(event);
 			},
 		);
 

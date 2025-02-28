@@ -6,7 +6,6 @@ import { z } from "zod";
 import { baseFileSchema } from "./base_file_schema";
 import type { FileMetadata } from "@shared/types/v2/Message";
 import { Command } from "@langchain/langgraph";
-import { v4 as uuidv4 } from "uuid";
 
 export const writeFileSchema = baseFileSchema.extend({
 	contents: z.string().describe("The contents of the file to write"),
@@ -92,7 +91,6 @@ export const createWriteFileTool = (workspace: string) => {
 				}
 
 				const file: FileMetadata = {
-					id: uuidv4(),
 					path: input.filePath,
 					code: input.contents,
 					original: fileContents ?? "",
