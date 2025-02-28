@@ -14,8 +14,13 @@ import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
 import { vscode } from "./utilities/vscode";
 import "./App.css";
 import { ValidationView } from "./ValidationView";
+import type { MCPToolConfig } from "@shared/types/Settings";
+import { MCPConfiguration } from "./McpTools";
 
-export type InitSettings = Settings & { ollamaModels: string[] };
+export type InitSettings = Settings & {
+	ollamaModels: string[];
+	mcpTools?: MCPToolConfig[];
+};
 
 export const App = () => {
 	const [loading, setLoading] = useState(true);
@@ -124,6 +129,13 @@ export const App = () => {
 		setSettings((s) => ({
 			...s!,
 			validationSettings: settings,
+		}));
+	};
+
+	const onMCPToolsChanged = (mcpTools: MCPToolConfig[]) => {
+		setSettings((s) => ({
+			...s!,
+			mcpTools,
 		}));
 	};
 
@@ -238,6 +250,17 @@ export const App = () => {
 					<ValidationView
 						validationSettings={settings.validationSettings}
 						onValidationChanged={onValidationSettingsChanged}
+					/>
+				</section>
+
+				<section className={cardClass}>
+					<div className="absolute top-0 right-0 bg-orange-500 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
+					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
+						MCP Tools
+					</h2>
+					<MCPConfiguration
+						mcpTools={settings.mcpTools || []}
+						onChange={onMCPToolsChanged}
 					/>
 				</section>
 			</div>

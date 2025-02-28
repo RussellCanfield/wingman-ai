@@ -10,13 +10,11 @@ const tooltipInformation = {
 	streaming:
 		"Enabling this setting activates code streaming for code completion, prioritizing faster code completion results over detailed suggestions by providing shorter responses.",
 	codeContextWindow:
-		"Adjust the context window size to determine the amount of context included in code completion. Starting with a lower value (e.g., 128) is recommended, increasing as needed for better performance on more powerful setups.",
+		"Adjust the context window size to determine the amount of context included in code completion. Starting with a lower value (e.g., 512) is recommended, increasing as needed for better performance on more powerful setups.",
 	codeMaxTokens:
-		"Controls the maximum number of tokens returned by code completion. Here we recommend starting low at 128.",
-	chatContextWindow:
-		"Adjust the context window size to determine the amount of context included in chat request. We start this at 4096, depending on the LLM you use it can be increased.",
+		"Controls the maximum number of tokens returned by code completion. Here we recommend starting low at 512.",
 	chatMaxTokens:
-		"Controls the maximum number of tokens returned by the chat request. Here we also start at 4096.",
+		"Controls the maximum number of tokens returned by the LLM request. Default is 8192.",
 };
 
 export type InteractionSettingsConfigProps = {
@@ -179,7 +177,6 @@ export const InteractionSettingsConfig = ({
 			{[
 				"codeContextWindow",
 				"codeMaxTokens",
-				"chatContextWindow",
 				"chatMaxTokens",
 			].map((field) => {
 				const tooltipId = `${field}-tooltip`;

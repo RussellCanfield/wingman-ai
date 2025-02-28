@@ -32,6 +32,7 @@ import type { RunnableConfig } from "@langchain/core/runnables";
 import { createCommandExecuteTool } from "../tools/cmd_execute";
 import type { PartitionedFileSystemSaver } from "../../checkpointer";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
+import { loadWingmanRules } from "../../utils";
 
 let controller = new AbortController();
 
@@ -47,8 +48,16 @@ const GraphAnnotation = Annotation.Root({
 		default: () => [],
 	}),
 	workspace: Annotation<string>({
-		reducer: (currentState, updateValue) => currentState ?? updateValue,
-		default: () => "Not available",
+		reducer: (currentState, updateValue) => {
+			return currentState || updateValue;
+		},
+		default: () => "",
+	}),
+	rules: Annotation<string>({
+		reducer: (currentState, updateValue) => {
+			return currentState || updateValue;
+		},
+		default: () => "",
 	}),
 	image: Annotation<ComposerImage | undefined>({
 		reducer: (currentState, updateValue) => currentState ?? updateValue,
@@ -117,6 +126,7 @@ export class WingmanAgent {
 			llm: this.aiProvider.getModel(),
 			tools: this.tools,
 			stateSchema: GraphAnnotation,
+			//@ts-expect-error
 			stateModifier: this.stateModifier,
 			checkpointer: this.checkpointer,
 		});
@@ -444,7 +454,7 @@ export class WingmanAgent {
 		return [];
 	}
 
-	stateModifier = (state: typeof MessagesAnnotation.State) => {
+	stateModifier = (state: typeof GraphAnnotation.State) => {
 		return [
 			{
 				role: "system",
@@ -457,7 +467,7 @@ Use this context judiciously when it helps address their needs.
 **NOTE - When working with files, always use relative paths!**
 
 **Current Working Directory**:
-{workspace}
+${state.workspace}
 
 Guidelines for our interaction:
 1. Keep responses focused and avoid redundancy
@@ -554,6 +564,8 @@ export default defineConfig({
   plugins: [pluginReact(), pluginWithZephyr()]
 });
 \`\`\`
+
+${state.rules}
 `,
 			},
 			...state.messages,
@@ -624,6 +636,7 @@ Contents: ${request.context.text}`,
 			});
 
 			const messages = [new HumanMessage({ content: messageContent })];
+			const rules = (await loadWingmanRules(this.workspace)) ?? "";
 
 			const stream = await this.agent.streamEvents(
 				{
@@ -632,6 +645,7 @@ Contents: ${request.context.text}`,
 					image: request.image,
 					context: request.context,
 					files: contextFiles,
+					rules,
 				} satisfies typeof GraphAnnotation.State,
 				config,
 			);

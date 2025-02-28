@@ -84,10 +84,10 @@ export type AzureAISettingsType = Omit<ApiSettingsType, "baseUrl"> & {
 export const defaultInteractionSettings: InteractionSettings = {
 	codeCompletionEnabled: true,
 	codeStreaming: false,
-	codeContextWindow: 256,
-	codeMaxTokens: 128,
+	codeContextWindow: 512,
+	codeMaxTokens: 256,
 	chatContextWindow: 4096,
-	chatMaxTokens: 4096,
+	chatMaxTokens: 8192,
 };
 
 export const defaultValidationSettings: ValidationSettings = {
@@ -131,6 +131,15 @@ export const defaultAzureAISettings: AzureAISettingsType = {
 	apiVersion: "2024-06-01",
 };
 
+export type MCPToolConfig = {
+	name: string;
+	description: string;
+	type: "command" | "sse";
+	command?: string;
+	endpoint?: string;
+	version: string;
+};
+
 export type Settings = {
 	aiProvider: (typeof AiProviders)[number];
 	interactionSettings: InteractionSettings;
@@ -141,6 +150,7 @@ export type Settings = {
 		Anthropic?: AnthropicSettingsType;
 		AzureAI?: AzureAISettingsType;
 	};
+	mcpTools?: MCPToolConfig[];
 	validationSettings: {
 		validationCommand?: string;
 		midsceneEnabled?: boolean;

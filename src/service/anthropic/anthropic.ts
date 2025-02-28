@@ -86,10 +86,16 @@ export class Anthropic implements AIStreamProvider {
 		return new ChatAnthropic({
 			apiKey: this.settings?.apiKey,
 			anthropicApiKey: this.settings?.apiKey,
-			model: "claude-3-5-haiku-latest",
+			model: "claude-3-7-sonnet-latest",
 			temperature: 0,
 			maxTokens: this.interactionSettings?.chatMaxTokens,
 			verbose: params?.verbose,
+			thinking: this.settings?.enableReasoning
+				? {
+						budget_tokens: 2048,
+						type: "enabled",
+					}
+				: undefined,
 		});
 	}
 

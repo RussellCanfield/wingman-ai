@@ -215,11 +215,13 @@
 		"vscode-languageclient": "9.0.1",
 		"vscode-languageserver": "9.0.1",
 		"vscode-languageserver-textdocument": "1.0.12",
+		"event-source-polyfill": "1.0.31",
 		"vscode-uri": "3.0.8",
 		"zod": "3.24.1",
 		"zod-to-json-schema": "3.24.1"
 	},
 	"devDependencies": {
+		"@types/event-source-polyfill": "1.0.5",
 		"@ast-grep/cli": "0.29.0",
 		"@biomejs/biome": "1.9.4",
 		"@rsbuild/core": "1.1.13",
