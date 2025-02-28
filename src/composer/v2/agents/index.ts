@@ -91,7 +91,23 @@ export class WingmanAgent {
 	) {
 		this.tools = [
 			createCommandExecuteTool(workspace),
-			createReadFileTool(this.workspace),
+			createReadFileTool(
+				this.workspace,
+				async (file: string, threadId: string) => {
+					// Retrieve file metadata from the graph state
+					try {
+						const { data, tuple } = await this.getGraphState(threadId);
+						const files =
+							(data?.channel_values as typeof GraphAnnotation.State)?.files ||
+							[];
+						return files.find((f) => f.path === file);
+					} catch (e) {
+						loggingProvider.logError(
+							`Unable to retrieve graph state: ${threadId} ${file}`,
+						);
+					}
+				},
+			),
 			createListDirectoryTool(this.workspace),
 			createWriteFileTool(this.workspace),
 			createFindFileDependenciesTool(this.workspace, this.codeParser),
@@ -361,25 +377,45 @@ export class WingmanAgent {
 		return { data, tuple };
 	};
 
-	updateFile = async (event: UpdateComposerFileEvent) => {
+	updateFile = async (
+		event: UpdateComposerFileEvent,
+	): Promise<typeof GraphAnnotation.State | undefined> => {
 		const { file, threadId } = event;
 		const { data, tuple } = await this.getGraphState(threadId);
 
-		if (!tuple || !data?.channel_values) return;
+		if (!tuple || !data?.channel_values) {
+			loggingProvider.logError("Unable to update file - invalid graph state");
+			return undefined;
+		}
 
 		const state = data.channel_values as typeof GraphAnnotation.State;
-		let matchingFile = state.files.find((f) => f.path === file.path);
+		const fileIndex = state.files.findIndex((f) => f.path === file.path);
 
-		if (!matchingFile) {
+		if (fileIndex === -1) {
 			loggingProvider.logError(
-				`Unable to accept file - file not found! ${file.path}`,
+				`Unable to update file - file not found: ${file.path}`,
 			);
 			return state;
 		}
 
-		matchingFile = { ...event.file };
-		await this.updateGraphState(tuple, "accept_file", state);
+		const matchingFile = state.files[fileIndex];
 
+		if (!matchingFile.accepted && !matchingFile.rejected) {
+			loggingProvider.logError(
+				`Unable to update file - file has no acceptance status: ${file.path}`,
+			);
+			return state;
+		}
+
+		if (file.rejected) {
+			// Remove rejected files from the state
+			state.files = state.files.filter((f) => f.path !== file.path);
+		} else {
+			// Update the file with new properties
+			state.files[fileIndex] = { ...matchingFile, ...file };
+		}
+
+		await this.updateGraphState(tuple, "accept_file", state);
 		return state;
 	};
 
@@ -446,6 +482,15 @@ When using the tools at your disposal:
 - Describe your actions in user-friendly terms (e.g., "I'll modify this file" rather than "I'll use the edit_file tool")
 - Use tools only when they add value - rely on your knowledge for general questions
 - If creating a new project, create it within the current directory - do not create a subdirectory!
+
+# Working with Files
+When modifying files:
+1. ALWAYS read the most recent version of a file before editing it
+2. Use the read_file tool to get the current content before making changes
+3. Base your edits on the most recent content, not on your memory of the file
+4. After writing a file, consider the new content as the current state for future operations
+
+This ensures you're working with the latest version and prevents overwriting recent changes.
 
 # Managing Code Changes
 After writing a file, consider if you've introduced a breaking change or orphaned code in the codebase:

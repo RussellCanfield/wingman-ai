@@ -22,6 +22,7 @@ import { BindingDownloader } from "./client/bindingDownload";
 import { ThreadViewProvider } from "./providers/threadViewProvider";
 import type { AIProvider } from "./service/base";
 import { getRecentFileTracker } from "./providers/recentFileTracker";
+import { monitorFileSaves } from "./utils/files";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -206,6 +207,24 @@ export async function activate(context: vscode.ExtensionContext) {
 				providedCodeActionKinds: RefactorProvider.providedCodeActionKinds,
 			},
 		),
+	);
+
+	context.subscriptions.push(
+		//Update the composer's graph state, so that files reflect recent changes
+		//Does not apply if the file is not accepted or rejected
+		monitorFileSaves((doc) => {
+			const settings = workspace.getSettings();
+			if (!settings.activeThreadId) return;
+
+			const filePath = vscode.workspace.asRelativePath(doc.uri);
+			lspClient.updateComposerFile({
+				file: {
+					path: filePath,
+					code: doc.getText(),
+				},
+				threadId: settings.activeThreadId!,
+			});
+		}),
 	);
 
 	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
