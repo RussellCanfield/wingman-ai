@@ -11,7 +11,7 @@ import type {
 } from "@shared/types/Settings";
 import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
-import { vscode } from "../utilities/vscode";
+import { vscode } from "./utilities/vscode";
 import "./App.css";
 import { ValidationView } from "./ValidationView";
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import type { Thread, WorkspaceSettings } from "@shared/types/Settings";
 import ThreadVisualization from "./ThreadVisualization";
-import { vscode } from "../utilities/vscode";
+import { vscode } from "./utilities/vscode";
 
 export default function App() {
 	const [threads, setThreads] = useState<Thread[] | undefined>();

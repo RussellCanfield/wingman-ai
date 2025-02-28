@@ -1,5 +1,6 @@
-import React, { useRef } from "react";
-import { FileSearchResult } from "@shared/types/v2/Composer";
+import type React from "react";
+import { useRef } from "react";
+import type { FileSearchResult } from "@shared/types/v2/Composer";
 
 interface FileDropdownProps {
 	isLightTheme: boolean;
@@ -38,16 +39,16 @@ export const FileDropdown: React.FC<FileDropdownProps> = ({
         text-[var(--vscode-input-foreground)]
     `;
 
-	const truncatePath = (path: string, maxLength: number = 50) => {
+	const truncatePath = (path: string, maxLength = 50) => {
 		if (path.length <= maxLength) return path;
 		const parts = path.split('/');
-		if (parts.length <= 2) return "..." + path.slice(-maxLength);
-		
+		if (parts.length <= 2) return `...${path.slice(-maxLength)}`;
+
 		const fileName = parts.pop() || '';
 		const directory = parts.join('/');
 		const availableLength = maxLength - fileName.length - 4; // 4 for ".../"
-		
-		return "..." + directory.slice(-availableLength) + "/" + fileName;
+
+		return `...${directory.slice(-availableLength)}/${fileName}`;
 	};
 
 	if (!showDropdown || dropdownItems.length === 0) {
@@ -61,9 +62,17 @@ export const FileDropdown: React.FC<FileDropdownProps> = ({
 		>
 			{dropdownItems.map((item, index) => (
 				<div
+					// biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
 					key={index}
 					className={`${dropdownItemClasses} ${index === focusedDropdownIndex ? selectedItemClasses : ''}`}
 					onClick={() => onSelect(item)}
+					onKeyDown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							onSelect(item);
+						}
+					}}
+					aria-selected={index === focusedDropdownIndex}
 				>
 					<div className="font-medium">{item.file}</div>
 					<div className="text-xs text-[var(--vscode-descriptionForeground)]">

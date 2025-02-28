@@ -1,14 +1,16 @@
-import { InitSettings } from "./App";
+import type { InitSettings } from "./App";
 
 export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
 	return (
 		<div className="mt-4">
 			<h3 className="text-md font-bold">Supported Models:</h3>
+			{/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
 			<label>
 				In order for models to make it to Wingman, we thoroughly test
 				them and verify their capabilities. We are unable to load
 				unsupported models.
 			</label>
+			{/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
 			<label>We support the following models:</label>
 			{aiProvider === "Ollama" && <OllamaView />}
 			{aiProvider === "OpenAI" && <OpenAIView />}

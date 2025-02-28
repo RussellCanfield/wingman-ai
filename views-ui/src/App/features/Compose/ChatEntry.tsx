@@ -12,7 +12,7 @@ import { ChatArtifact } from "./components/File";
 //import { FileMetadata } from "@shared/types/Message";
 import { FileToolNames } from "./components/types";
 import { ToolOutput } from "./components/ToolOutput";
-import { vscode } from "../../../utilities/vscode";
+import { vscode } from "../../utilities/vscode";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
 import type { FileMetadata } from "@shared/types/v2/Message";

@@ -5,7 +5,7 @@ import type {
 } from "@shared/types/Events";
 import type { DiffViewCommand } from "@shared/types/v2/Composer";
 import type { FileMetadata } from "@shared/types/v2/Message";
-import { vscode } from "../../utilities/vscode";
+import { vscode } from "./vscode";
 
 export const acceptFile = (file: FileMetadata, threadId: string) => {
 	if (file) {

@@ -1,6 +1,6 @@
-import { PropsWithChildren, useEffect, useMemo, useRef } from "react";
+import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef } from "react";
 import ChatEntry from "./ChatEntry";
-import { ComposerMessage } from "@shared/types/v2/Composer";
+import type { ComposerMessage } from "@shared/types/v2/Composer";
 
 function ChatResponseList({
 	children,
@@ -9,19 +9,20 @@ function ChatResponseList({
 	const ulRef = useRef<HTMLUListElement>(null);
 	const ref = useRef<HTMLDivElement>(null);
 
-	const scrollToBottom = () => {
+	const scrollToBottom = useCallback(() => {
 		if (ref.current) {
 			ref.current.scrollIntoView({ block: "nearest" });
 		}
-	};
+	}, []);
 
 	useEffect(() => {
 		scrollToBottom();
-	}, [messages]);
+	}, [scrollToBottom]);
 
 	const chatHistory = useMemo(() => {
 		return messages.map(({ from, message, events, image }, index) => (
 			<ChatEntry
+				// biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
 				key={index}
 				from={from}
 				loading={false}
@@ -40,7 +41,7 @@ function ChatResponseList({
 		>
 			{chatHistory}
 			{children}
-			<div ref={ref}></div>
+			<div ref={ref} />
 		</ul>
 	);
 }

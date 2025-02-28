@@ -1,7 +1,7 @@
-import { OllamaSettingsType } from "@shared/types/Settings";
+import type { OllamaSettingsType } from "@shared/types/Settings";
 import { VscRefresh } from "react-icons/vsc";
-import { InitSettings } from "./App";
-import { vscode } from "../utilities/vscode";
+import type { InitSettings } from "./App";
+import { vscode } from "./utilities/vscode";
 
 type OllamaSection = InitSettings["providerSettings"]["Ollama"] & {
 	ollamaModels: string[];
@@ -20,14 +20,14 @@ export const OllamaSettingsView = ({
 	const handleChange = (e: any) => {
 		if (!ollamaModels.includes(e.target.value)) return;
 		const clone = { ...paths };
-		clone["codeModel"] = e.target.value;
+		clone.codeModel = e.target.value;
 		onChange(clone);
 	};
 
 	const handleChatChange = (e: any) => {
 		if (!ollamaModels.includes(e.target.value)) return;
 		const clone = { ...paths };
-		clone["chatModel"] = e.target.value;
+		clone.chatModel = e.target.value;
 		onChange(clone);
 	};
 
@@ -83,6 +83,7 @@ export const OllamaSettingsView = ({
 						))}
 					</select>
 					<button
+						type="button"
 						onClick={reloadWindow}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
@@ -128,6 +129,7 @@ export const OllamaSettingsView = ({
 						))}
 					</select>
 					<button
+						type="button"
 						onClick={reloadWindow}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"

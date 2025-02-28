@@ -4,7 +4,7 @@ import type { AppState, Thread } from "@shared/types/Settings";
 import type { AddMessageToThreadEvent, RenameThreadEvent } from '@shared/types/Events';
 import type React from "react";
 import { createContext, type FC, type PropsWithChildren, useContext, useEffect, useRef, useState } from "react"
-import { vscode } from "../../utilities/vscode";
+import { vscode } from "../utilities/vscode";
 
 interface ComposerContextType {
   composerMessages: ComposerMessage[];

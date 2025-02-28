@@ -3,7 +3,7 @@ import { HiLightningBolt } from "react-icons/hi";
 import { useSettingsContext, type View } from "./context/settingsContext";
 import { useComposerContext } from "./context/composerContext";
 import { MdSettings } from "react-icons/md";
-import { vscode } from "../utilities/vscode";
+import { vscode } from "./utilities/vscode";
 
 type ViewNames = {
 	[key in View]: string;

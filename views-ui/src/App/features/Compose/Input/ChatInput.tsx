@@ -11,7 +11,7 @@ import { FileChips } from "./components/FileChips";
 import { ImagePreview } from "./components/ImagePreview";
 import { useSettingsContext } from "../../../context/settingsContext";
 import { useComposerContext } from "../../../context/composerContext";
-import { vscode } from "../../../../utilities/vscode";
+import { vscode } from "../../../utilities/vscode";
 
 const MAX_WIDTH = 1024;
 const MAX_HEIGHT = 1024;

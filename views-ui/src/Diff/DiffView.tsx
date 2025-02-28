@@ -8,7 +8,7 @@ import type { DiffViewCommand } from "@shared/types/v2/Composer";
 import { FaCheckCircle } from "react-icons/fa";
 import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
 import { FaXmark } from "react-icons/fa6";
-import { vscode } from "../utilities/vscode";
+import { vscode } from "./utilities/vscode";
 import type { FileMetadata } from "@shared/types/v2/Message";
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
@@ -107,7 +107,7 @@ export default function DiffView({ diff }: DiffProps) {
 
 			<div className="flex-grow overflow-y-auto">
 				<ReactDiffViewer
-					oldValue={file.original}
+					oldValue={file.original ?? ""}
 					newValue={file.code}
 					styles={newStyles}
 					compareMethod={DiffMethod.WORDS}

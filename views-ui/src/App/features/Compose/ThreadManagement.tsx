@@ -4,7 +4,7 @@ import { TbNeedleThread } from "react-icons/tb";
 import { useComposerContext } from '../../context/composerContext';
 import type { Thread } from '@shared/types/Settings';
 import { PiGraph } from "react-icons/pi";
-import { vscode } from '../../../utilities/vscode';
+import { vscode } from '../../utilities/vscode';
 
 export const /**
 * ThreadManagement component for managing conversation threads.

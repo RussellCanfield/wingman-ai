@@ -19,6 +19,8 @@ export default function App() {
 		const { data } = event;
 		const { command, value } = data;
 
+		console.log(event);
+
 		switch (command) {
 			case "diff-file":
 				setDiff(value as DiffViewCommand);

@@ -1,5 +1,5 @@
-import { ApiSettingsType } from "@shared/types/Settings";
-import { InitSettings } from "./App";
+import type { ApiSettingsType } from "@shared/types/Settings";
+import type { InitSettings } from "./App";
 
 type HFSection = InitSettings["providerSettings"]["HuggingFace"] & {
 	onChange: (ollamaSettings: ApiSettingsType) => void;
