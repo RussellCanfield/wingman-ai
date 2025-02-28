@@ -18,7 +18,7 @@ import { GrCheckmark } from "react-icons/gr";
 import type { FileMetadata } from "@shared/types/v2/Message";
 import type { AcceptFileEvent, RejectFileEvent } from "@shared/types/Events";
 import { useComposerContext } from "../../context/composerContext";
-import { getTruncatedPath, showDiffview, undoFile } from "../../utilities/files";
+import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../utilities/files";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -29,30 +29,6 @@ export function extractCodeBlock(text: string) {
 		matches.push(match[1]);
 	}
 	return matches.length > 0 ? matches.join("\n") : text;
-}
-
-const acceptFile = (file: FileMetadata, threadId: string) => {
-	if (file) {
-		vscode.postMessage({
-			command: "accept-file",
-			value: {
-				file,
-				threadId
-			} satisfies AcceptFileEvent,
-		});
-	}
-};
-
-const rejectFile = (file: FileMetadata, threadId: string) => {
-	if (file) {
-		vscode.postMessage({
-			command: "reject-file",
-			value: {
-				file,
-				threadId
-			} satisfies RejectFileEvent,
-		});
-	}
 }
 
 const ChatEntry = ({
@@ -155,7 +131,7 @@ const ChatEntry = ({
 			</div>
 			{isCurrent && !loading && files && files.length > 0 && (
 				<div className="border-t border-stone-700/50 mt-4 pt-4 pl-[48px] pr-[16px] text-[var(--vscode-input-foreground)]">
-					<p>
+					<p className="mb-2">
 						Summary:
 					</p>
 					<div className="flex flex-col items-center text-sm overflow-y-auto max-h-48">
@@ -164,29 +140,36 @@ const ChatEntry = ({
 							const diffParts = f.diff?.split(',') ?? [0, 0];
 
 							return (
-								<div key={f.path} className="flex items-center justify-between gap-4 w-full min-h-[3rem] py-1 hover:bg-stone-800/50">
+								<div key={f.path} className="flex items-center justify-between gap-4 w-full hover:bg-stone-800/50">
 									<div className="flex flex-1 min-w-0">
-										<h4 className="m-0 p-3 font-medium truncate flex-1 cursor-pointer"
-											onClick={() => showDiffview(f, activeThread?.id!)}
+										<h4
+											className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm group"
+											data-tooltip-id={`${f.path}-tooltip`}
+											data-tooltip-content={f.path}
+											onClick={() => openFile(f)}
 											onKeyDown={(e) => {
 												if (e.key === 'Enter' || e.key === ' ') {
 													e.preventDefault();
-													showDiffview(f, activeThread?.id!);
+													openFile(f);
 												}
-											}}>
+											}}
+											style={{ flex: '0 1 auto', minWidth: '0' }}
+										>
 											{truncatedPath}
 										</h4>
-										<div className="flex items-center gap-2 px-3 text-sm whitespace-nowrap">
-											<span className="flex items-center gap-1 text-green-400">
-												<span>{diffParts[0]}</span>
-											</span>
-											<span className="flex items-center gap-1 text-red-400">
-												<span>{diffParts[1]}</span>
-											</span>
-										</div>
+										{diffParts && (
+											<div className="flex items-center justify-evenly text-sm gap-2 mr-4">
+												<span className="flex items-center text-green-400">
+													<span>{diffParts[0]}</span>
+												</span>
+												<span className="flex items-center text-red-400">
+													<span>{diffParts[1]}</span>
+												</span>
+											</div>
+										)}
 									</div>
 									{(f.rejected || f.accepted) && (
-										<div className="flex items-center gap-3 shrink-0">
+										<div className="flex items-center gap-3 shrink-0 p-3">
 											<div className="flex items-center rounded z-10 hover:bg-stone-800 transition-colors">
 												<button
 													type="button"

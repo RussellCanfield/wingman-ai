@@ -312,11 +312,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			);
 
 			// Restore original content or delete file
-			const original = graphState.fileBackups?.[file.path] || "";
-			if (original) {
+			const original = graphState.files.find((f) => f.path === file.path);
+			if (original?.original) {
 				await vscode.workspace.fs.writeFile(
 					fileUri,
-					new TextEncoder().encode(original),
+					new TextEncoder().encode(original.original),
 				);
 			} else {
 				await vscode.workspace.fs.delete(fileUri);
@@ -328,6 +328,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 			// Find and update the file event
 			for (const message of targetThread.messages) {
+				if (message.from !== "assistant") continue;
 				if (!message.events?.some((e) => !!e.metadata?.tool)) continue;
 
 				const fileEvent = message.events
@@ -345,6 +346,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					fileEvent.content = JSON.stringify(fileContents);
 
 					// Update thread and notify UI
+					await this._lspClient.undoComposerFile({ file, threadId });
 					await this._workspace.updateThread(threadId, targetThread);
 					this._webview?.postMessage({
 						command: "thread-data",
@@ -363,8 +365,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		const targetThread = await this._workspace.getThreadById(threadId);
 		if (!targetThread) return;
 
+		const relativeFilePath = vscode.workspace.asRelativePath(file.path);
+		const fileUri = vscode.Uri.joinPath(
+			vscode.Uri.parse(this._workspace.workspacePath),
+			relativeFilePath,
+		);
+		await vscode.workspace.fs.writeFile(
+			fileUri,
+			new TextEncoder().encode(file.code),
+		);
+
 		// Find the first matching file and update it
 		for (const message of targetThread.messages) {
+			if (message.from !== "assistant") continue;
+
 			const fileEvent = message.events?.find(
 				(event) =>
 					event.metadata?.tool === "write_file" &&
@@ -377,6 +391,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				fileContent.rejected = false;
 				fileEvent.content = JSON.stringify(fileContent);
 
+				await this._lspClient.acceptComposerFile({ file, threadId });
 				await this._workspace.updateThread(threadId, targetThread);
 				this._webview?.postMessage({
 					command: "thread-data",
@@ -412,6 +427,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 			// Find the relevant message and file event
 			for (const message of targetThread.messages) {
+				if (message.from !== "assistant") continue;
 				if (!message.events?.some((e) => !!e.metadata?.tool)) continue;
 
 				const fileEvent = message.events
@@ -429,6 +445,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					fileEvent.content = JSON.stringify(fileContents);
 
 					// Save changes and notify UI
+					await this._lspClient.rejectComposerFile({ file, threadId });
 					await this._workspace.updateThread(threadId, targetThread);
 					this._webview?.postMessage({
 						command: "thread-data",

@@ -39,7 +39,6 @@ export interface GraphState {
 	image?: ComposerImage;
 	context?: CodeContextDetails;
 	files: FileMetadata[];
-	fileBackups: Record<string, string>;
 }
 
 export type AgentEvents = {

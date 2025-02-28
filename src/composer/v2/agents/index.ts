@@ -56,7 +56,18 @@ const GraphAnnotation = Annotation.Root({
 	}),
 	files: Annotation<FileMetadata[]>({
 		reducer: (currentState, updateValue) => {
-			return currentState.concat(updateValue);
+			// Filter out any files that already exist with the same path
+			const newFiles = updateValue.filter(
+				(newFile) =>
+					!currentState.some(
+						(existingFile) => existingFile.path === newFile.path,
+					),
+			);
+
+			// Only concat if there are actually new files to add
+			return newFiles.length > 0
+				? [...currentState, ...newFiles]
+				: currentState;
 		},
 		default: () => [],
 	}),
@@ -68,6 +79,7 @@ const GraphAnnotation = Annotation.Root({
 export class WingmanAgent {
 	private agent: ReturnType<typeof createReactAgent>;
 	private tools: StructuredTool[];
+	private events: StreamEvent[] = [];
 
 	constructor(
 		private readonly aiProvider: AIProvider,
@@ -457,7 +469,13 @@ export class WingmanAgent {
 				content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 
-We may automatically include contextual information with each user message, such as their open files, cursor position, recently viewed files, edit history, and linter errors. Use this context judiciously when it helps address their needs.
+We may automatically include contextual information with each user message, such as their open files, cursor position and recently viewed files.
+Use this context judiciously when it helps address their needs.
+
+**NOTE - When working with files, always use relative paths!**
+
+**Current Working Directory**:
+${this.workspace}
 
 Guidelines for our interaction:
 1. Keep responses focused and avoid redundancy
@@ -554,6 +572,7 @@ export default defineConfig({
 	 */
 	async *execute(request: ComposerRequest) {
 		try {
+			this.events = [];
 			controller = new AbortController();
 			const config = {
 				configurable: { thread_id: request.threadId },
@@ -645,14 +664,13 @@ Contents: ${request.context.text}`,
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	async *handleStreamEvents(stream: AsyncIterable<any>, threadId: string) {
 		let buffer = "";
-		const events: StreamEvent[] = [];
 
 		const pushEvent = (event: StreamEvent) => {
-			events.push(event);
+			this.events.push(event);
 			return {
 				node: "composer-events",
 				values: {
-					events,
+					events: this.events,
 					threadId,
 				},
 			} satisfies ComposerResponse;
@@ -675,14 +693,14 @@ Contents: ${request.context.text}`,
 
 							//If we are just streaming text, dont too add many events
 							if (
-								events.length > 0 &&
-								events[events.length - 1].type === "message"
+								this.events.length > 0 &&
+								this.events[this.events.length - 1].type === "message"
 							) {
-								events[events.length - 1].content = buffer;
+								this.events[this.events.length - 1].content = buffer;
 								yield {
 									node: "composer-events",
 									values: {
-										events,
+										events: this.events,
 									},
 								};
 							} else {
@@ -738,7 +756,7 @@ Contents: ${request.context.text}`,
 			yield {
 				node: "composer-done",
 				values: {
-					events,
+					events: this.events,
 					threadId,
 				},
 			} satisfies ComposerResponse;
@@ -747,6 +765,6 @@ Contents: ${request.context.text}`,
 		}
 
 		// Return the final state
-		return { buffer, events };
+		return { buffer, events: this.events };
 	}
 }
