@@ -1,1 +1,1 @@
-export const FileToolNames = ["read_file", "write_file"];
+export const FileToolNames = ["write_file"];

@@ -1,4 +1,5 @@
 import type { FileMetadata } from "@shared/types/v2/Message";
+import { v4 as uuidv4 } from "uuid";
 import * as vscode from "vscode";
 
 /**
@@ -31,7 +32,7 @@ export class RecentFileTracker {
 				if (editor && editor.document.uri.scheme === "file") {
 					this.addFile({
 						path: editor.document.uri.fsPath,
-						id: editor.document.uri.toString(),
+						id: uuidv4(),
 					});
 				}
 			}),

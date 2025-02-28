@@ -97,6 +97,7 @@ export type ComposerRequest = {
 	input: string;
 	threadId: string;
 	contextFiles: string[];
+	recentFiles?: FileMetadata[];
 	image?: ComposerImage;
 	context?: CodeContextDetails;
 };

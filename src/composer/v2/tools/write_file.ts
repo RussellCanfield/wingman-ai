@@ -75,14 +75,7 @@ const generateDiffFromModifiedCode = async (
 /**
  * Creates a write file tool with the given workspace
  */
-export const createWriteFileTool = (
-	workspace: string,
-	onExistingFileFound: (
-		file: FileMetadata,
-		originalFileContents: string,
-		threadId: string,
-	) => Promise<void>,
-) => {
+export const createWriteFileTool = (workspace: string) => {
 	return tool(
 		async (input, config) => {
 			try {
@@ -102,20 +95,13 @@ export const createWriteFileTool = (
 					id: uuidv4(),
 					path: input.filePath,
 					code: input.contents,
+					original: fileContents ?? "",
 					diff: await generateDiffFromModifiedCode(
 						input.contents,
 						input.filePath,
 						fileContents,
 					),
 				};
-
-				if (fileContents) {
-					await onExistingFileFound(
-						file,
-						fileContents,
-						config.configurable?.thread_id,
-					);
-				}
 
 				return new Command({
 					update: {

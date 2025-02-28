@@ -33,7 +33,6 @@ export function extractCodeBlock(text: string) {
 
 const acceptFile = (file: FileMetadata, threadId: string) => {
 	if (file) {
-		console.log(file);
 		vscode.postMessage({
 			command: "accept-file",
 			value: {
@@ -83,9 +82,8 @@ const ChatEntry = ({
 	const bgClasses = fromUser ? "bg-stone-800 rounded-lg overflow-hidden w-full" : "";
 	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
-	const hasPendingFiles = true; //files?.some(f => !f.accepted && !f.rejected);
-
 	const files = events?.filter(e => e.metadata?.tool === 'write_file').map(t => JSON.parse(t.content) as FileMetadata);
+	const hasPendingFiles = files?.some(f => !f.accepted && !f.rejected);
 
 	return (
 		<li
@@ -155,7 +153,7 @@ const ChatEntry = ({
 					</div>
 				</div>
 			</div>
-			{isCurrent && !loading && files && files?.length > 1 && (
+			{isCurrent && !loading && files && files.length > 0 && (
 				<div className="border-t border-stone-700/50 mt-4 pt-4 pl-[48px] pr-[16px] text-[var(--vscode-input-foreground)]">
 					<p>
 						Summary:

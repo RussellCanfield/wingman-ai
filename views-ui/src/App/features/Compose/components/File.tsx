@@ -33,8 +33,6 @@ export const ChatArtifact = ({
         }
     }
 
-    console.log(file, event?.content)
-
     const diffParts = file.diff?.split(',');
     const truncatedPath = getTruncatedPath(file.path);
 

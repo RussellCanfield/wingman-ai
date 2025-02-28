@@ -29,6 +29,7 @@ import type { ConfigViewProvider } from "./configViewProvider";
 import path from "node:path";
 import type { FileMetadata } from "@shared/types/v2/Message";
 import type { ThreadViewProvider } from "./threadViewProvider";
+import { getRecentFileTracker } from "./recentFileTracker";
 
 export type ChatView = "composer" | "indexer";
 
@@ -253,6 +254,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						await this._lspClient.compose({
 							...(value as ComposerRequest),
 							context: getChatContext(1024),
+							recentFiles: getRecentFileTracker().getRecentFiles(),
 						});
 						break;
 					case "cancel": {
@@ -294,147 +296,149 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async undoFile({ file, threadId }: UndoFileEvent) {
-		const { path: artifactFile } = file;
-		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+		try {
+			// Get file path and request undo operation
+			const { path: artifactFile, id: fileId } = file;
+			const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+			const graphState = await this._lspClient.undoComposerFile({
+				file,
+				threadId,
+			});
 
-		const graphState = await this._lspClient.undoComposerFile({
-			file,
-			threadId,
-		});
-
-		let original = "";
-		if (graphState.fileBackups?.[file.path]) {
-			original = graphState.fileBackups[file.path];
-		}
-
-		const fileUri = vscode.Uri.joinPath(
-			vscode.Uri.parse(this._workspace.workspacePath),
-			relativeFilePath,
-		);
-
-		if (original) {
-			const contentBytes = new TextEncoder().encode(original);
-			await vscode.workspace.fs.writeFile(fileUri, contentBytes);
-		} else {
-			await vscode.workspace.fs.delete(fileUri);
-		}
-
-		const targetThread = await this._workspace.getThreadById(threadId);
-		if (targetThread) {
-			const targetMessage = targetThread.messages.find((m) =>
-				m.events?.some((e) => !!e.metadata?.tool),
+			// Get file URI for workspace operations
+			const fileUri = vscode.Uri.joinPath(
+				vscode.Uri.parse(this._workspace.workspacePath),
+				relativeFilePath,
 			);
-			if (targetMessage) {
-				const filesWritten = targetMessage.events?.filter(
-					(e) => e.metadata?.tool && e.metadata.tool === "write_file",
+
+			// Restore original content or delete file
+			const original = graphState.fileBackups?.[file.path] || "";
+			if (original) {
+				await vscode.workspace.fs.writeFile(
+					fileUri,
+					new TextEncoder().encode(original),
 				);
-				for (const fileWritten of filesWritten ?? []) {
-					const fileContents = JSON.parse(fileWritten.content) as FileMetadata;
-					if (file.id === fileContents.id) {
-						fileContents.accepted = false;
-						fileContents.rejected = false;
-						fileWritten.content = JSON.stringify(fileContents);
-						await this._workspace.updateThread(threadId, { ...targetThread });
-						this._webview?.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
-						return;
-					}
+			} else {
+				await vscode.workspace.fs.delete(fileUri);
+			}
+
+			// Update thread metadata
+			const targetThread = await this._workspace.getThreadById(threadId);
+			if (!targetThread) return;
+
+			// Find and update the file event
+			for (const message of targetThread.messages) {
+				if (!message.events?.some((e) => !!e.metadata?.tool)) continue;
+
+				const fileEvent = message.events
+					.filter((e) => e.metadata?.tool === "write_file")
+					.find((e) => {
+						const fileContents = JSON.parse(e.content) as FileMetadata;
+						return fileId === fileContents.id;
+					});
+
+				if (fileEvent) {
+					// Reset file status
+					const fileContents = JSON.parse(fileEvent.content) as FileMetadata;
+					fileContents.accepted = false;
+					fileContents.rejected = false;
+					fileEvent.content = JSON.stringify(fileContents);
+
+					// Update thread and notify UI
+					await this._workspace.updateThread(threadId, targetThread);
+					this._webview?.postMessage({
+						command: "thread-data",
+						value: this._workspace.getSettings(),
+					});
+					return;
 				}
 			}
+		} catch (error) {
+			console.error("Error undoing file changes:", error);
+			// Consider showing an error notification to the user
 		}
 	}
 
-	private async acceptFile({ file, threadId }: AcceptFileEvent) {
-		const { path: artifactFile, code: markdown } = file;
-
-		const code = markdown?.startsWith("```")
-			? extractCodeBlock(markdown)
-			: markdown;
-		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
-
-		const fileUri = vscode.Uri.joinPath(
-			vscode.Uri.parse(this._workspace.workspacePath),
-			relativeFilePath,
-		);
-
-		// Convert the code string to Uint8Array for writing
-		const contentBytes = new TextEncoder().encode(code);
-
-		// Write the file contents directly
-		await vscode.workspace.fs.writeFile(fileUri, contentBytes);
-
+	private async acceptFile({ file, threadId }: AcceptFileEvent): Promise<void> {
 		const targetThread = await this._workspace.getThreadById(threadId);
-		if (targetThread) {
-			const targetMessage = targetThread.messages.find((m) =>
-				m.events?.some((e) => !!e.metadata?.tool),
+		if (!targetThread) return;
+
+		// Find the first matching file and update it
+		for (const message of targetThread.messages) {
+			const fileEvent = message.events?.find(
+				(event) =>
+					event.metadata?.tool === "write_file" &&
+					JSON.parse(event.content).id === file.id,
 			);
-			if (targetMessage) {
-				const filesWritten = targetMessage.events?.filter(
-					(e) => e.metadata?.tool && e.metadata.tool === "write_file",
-				);
-				for (const fileWritten of filesWritten ?? []) {
-					const fileContent = JSON.parse(fileWritten.content) as FileMetadata;
-					if (file.id === fileContent.id) {
-						fileContent.accepted = true;
-						fileContent.rejected = false;
-						fileWritten.content = JSON.stringify(fileContent);
-						await this._workspace.updateThread(threadId, { ...targetThread });
-						this._webview?.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
-						return;
-					}
-				}
+
+			if (fileEvent) {
+				const fileContent = JSON.parse(fileEvent.content) as FileMetadata;
+				fileContent.accepted = true;
+				fileContent.rejected = false;
+				fileEvent.content = JSON.stringify(fileContent);
+
+				await this._workspace.updateThread(threadId, targetThread);
+				this._webview?.postMessage({
+					command: "thread-data",
+					value: this._workspace.getSettings(),
+				});
+				return;
 			}
 		}
 	}
 
 	private async rejectFile({ file, threadId }: AcceptFileEvent) {
-		const { path: artifactFile, code: markdown } = file;
+		try {
+			// Extract and process code content
+			const { path: artifactFile, code: markdown, id: fileId } = file;
+			const code = markdown?.startsWith("```")
+				? extractCodeBlock(markdown)
+				: markdown;
 
-		const code = markdown?.startsWith("```")
-			? extractCodeBlock(markdown)
-			: markdown;
-		const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
-
-		const fileUri = vscode.Uri.joinPath(
-			vscode.Uri.parse(this._workspace.workspacePath),
-			relativeFilePath,
-		);
-
-		// Convert the code string to Uint8Array for writing
-		const contentBytes = new TextEncoder().encode(code);
-
-		// Write the file contents directly
-		await vscode.workspace.fs.writeFile(fileUri, contentBytes);
-
-		const targetThread = await this._workspace.getThreadById(threadId);
-		if (targetThread) {
-			const targetMessage = targetThread.messages.find((m) =>
-				m.events?.some((e) => !!e.metadata?.tool),
+			// Write file to workspace
+			const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
+			const fileUri = vscode.Uri.joinPath(
+				vscode.Uri.parse(this._workspace.workspacePath),
+				relativeFilePath,
 			);
-			if (targetMessage) {
-				const filesWritten = targetMessage.events?.filter(
-					(e) => e.metadata?.tool && e.metadata.tool === "write_file",
-				);
-				for (const fileWritten of filesWritten ?? []) {
-					const fileContents = JSON.parse(fileWritten.content) as FileMetadata;
-					if (file.id === fileWritten.id) {
-						fileContents.accepted = false;
-						fileContents.rejected = true;
-						fileWritten.content = JSON.stringify(fileContents);
-						await this._workspace.updateThread(threadId, { ...targetThread });
-						this._webview?.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
-						return;
-					}
+			await vscode.workspace.fs.writeFile(
+				fileUri,
+				new TextEncoder().encode(code),
+			);
+
+			// Update thread metadata
+			const targetThread = await this._workspace.getThreadById(threadId);
+			if (!targetThread) return;
+
+			// Find the relevant message and file event
+			for (const message of targetThread.messages) {
+				if (!message.events?.some((e) => !!e.metadata?.tool)) continue;
+
+				const fileEvent = message.events
+					.filter((e) => e.metadata?.tool === "write_file")
+					.find((e) => {
+						const fileContents = JSON.parse(e.content) as FileMetadata;
+						return fileId === e.id || fileId === fileContents.id;
+					});
+
+				if (fileEvent) {
+					// Update file metadata
+					const fileContents = JSON.parse(fileEvent.content) as FileMetadata;
+					fileContents.accepted = false;
+					fileContents.rejected = true;
+					fileEvent.content = JSON.stringify(fileContents);
+
+					// Save changes and notify UI
+					await this._workspace.updateThread(threadId, targetThread);
+					this._webview?.postMessage({
+						command: "thread-data",
+						value: this._workspace.getSettings(),
+					});
+					return;
 				}
 			}
+		} catch (error) {
+			console.error("Error rejecting file:", error);
 		}
 	}
 

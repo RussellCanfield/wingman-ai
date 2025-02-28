@@ -9,6 +9,7 @@ const ToolNames = {
     list_directory: "Searching workspace",
     command_execute: "Executing command",
     find_file_dependencies: "Checking File Dependencies",
+    read_file: "Read File"
 };
 
 export const ToolOutput = ({
@@ -60,6 +61,22 @@ export const ToolOutput = ({
                                     <span className="ml-2 text-sm">{parsedContent.depth}</span>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (event.metadata?.tool === "read_file") {
+                return (
+                    <div className="rounded overflow-hidden border border-[var(--vscode-panel-border)] mb-2">
+                        <div className={`px-3 py-2 ${isLightTheme
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-[#252526] text-[var(--vscode-foreground)]'}`}>
+                            <div className="flex items-center">
+                                <div className="ml-2 overflow-x-auto max-w-full">
+                                    <code className="text-sm font-mono whitespace-pre">{parsedContent.filePath}</code>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );

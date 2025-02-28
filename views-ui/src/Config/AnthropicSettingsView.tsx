@@ -85,7 +85,7 @@ export const AnthropicSettingsView = ({
 							htmlFor="enableReasoning"
 							className="ml-2 text-sm font-medium text-[var(--vscode-editor-foreground)]"
 						>
-							Enable Reasoning
+							Enable Thinking
 						</label>
 					</div>
 					<div className="ml-2 text-xs text-[var(--vscode-descriptionForeground)]">

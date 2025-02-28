@@ -60,12 +60,6 @@ const GraphAnnotation = Annotation.Root({
 		},
 		default: () => [],
 	}),
-	fileBackups: Annotation<Record<string, string> | undefined>({
-		reducer: (currentState, updateValue) => {
-			return { ...(currentState ?? {}), ...(updateValue ?? {}) };
-		},
-		default: () => ({}),
-	}),
 });
 
 /**
@@ -85,7 +79,7 @@ export class WingmanAgent {
 			createCommandExecuteTool(workspace),
 			createReadFileTool(this.workspace),
 			createListDirectoryTool(this.workspace),
-			createWriteFileTool(this.workspace, this.storeFileBackup),
+			createWriteFileTool(this.workspace),
 			createFindFileDependenciesTool(this.workspace, this.codeParser),
 		];
 
@@ -306,66 +300,43 @@ export class WingmanAgent {
 		await this.checkpointer.put(tuple.config, newCheckpoint, metadata);
 	};
 
-	fetchOriginalFileContents = async (file: string, threadId: string) => {
-		const checkpoint = { configurable: { thread_id: threadId } };
-		const data = await this.checkpointer.get(checkpoint);
-		const tuple = await this.checkpointer.getTuple(checkpoint);
-
-		if (!tuple || !data?.channel_values) return;
-
-		const state = data.channel_values as typeof GraphAnnotation.State;
-
-		if (state.fileBackups) {
-			return state.fileBackups[file];
-		}
-	};
-
-	private storeFileBackup = async (
-		file: FileMetadata,
-		originalFileContents: string,
+	fetchOriginalFileContents = async (
+		file: string,
 		threadId: string,
-	) => {
-		const checkpoint = { configurable: { thread_id: threadId } };
-		const data = await this.checkpointer.get(checkpoint);
-		const tuple = await this.checkpointer.getTuple(checkpoint);
-
-		if (!tuple || !data?.channel_values) return;
-
-		const state = data.channel_values as typeof GraphAnnotation.State;
-
+	): Promise<string | undefined> => {
 		try {
-			const backupUpdate = {
-				[file.path]: originalFileContents,
+			// Get the checkpoint configuration
+			const config: RunnableConfig = {
+				configurable: { thread_id: threadId },
 			};
 
-			// De-dupe state.files by path and include the current file
-			const existingFilePaths = new Set(state.files.map((f) => f.path));
-
-			// Create a new array with unique existing files
-			const uniqueFiles = state.files.filter(
-				(f, index, self) =>
-					index === self.findIndex((sf) => sf.path === f.path),
-			);
-
-			// Add the current file if it's not already in the array
-			if (!existingFilePaths.has(file.path)) {
-				uniqueFiles.push(file);
+			// Get the latest checkpoint tuple
+			const tuple = await this.checkpointer.getTuple(config);
+			if (!tuple || !tuple.checkpoint.channel_values) {
+				loggingProvider.logError(
+					`Failed to fetch original file contents - couldn't find checkpoint for thread ${threadId}`,
+				);
+				return undefined;
 			}
 
-			const newState = {
-				...state,
-				files: uniqueFiles,
-				fileBackups: {
-					...state.fileBackups,
-					...backupUpdate,
-				},
-			};
+			// Get the state from the checkpoint
+			const state = tuple.checkpoint
+				.channel_values as typeof GraphAnnotation.State;
 
-			await this.updateGraphState(tuple, "store_file_backup", newState);
+			const stateFile = state.files.find((f) => f.path === file);
+			if (stateFile) {
+				return stateFile.original;
+			}
+
+			loggingProvider.logInfo(
+				`No backup found for ${file} in thread ${threadId}`,
+			);
+			return undefined;
 		} catch (error) {
 			loggingProvider.logError(
-				`Failed to store file backup for ${file.path}: ${error}`,
+				`Error fetching original file contents for ${file}: ${error}`,
 			);
+			return undefined;
 		}
 	};
 
@@ -510,6 +481,7 @@ When using the tools at your disposal:
 - Only reference tools that are currently available
 - Describe your actions in user-friendly terms (e.g., "I'll modify this file" rather than "I'll use the edit_file tool")
 - Use tools only when they add value - rely on your knowledge for general questions
+- If creating a new project, create it within the current directory - do not create a subdirectory!
 
 # Managing Code Changes
 After writing a file, consider if you've introduced a breaking change or orphaned code in the codebase:
@@ -520,11 +492,11 @@ After writing a file, consider if you've introduced a breaking change or orphane
 
 # Technology Recommendations
 When suggesting technologies for projects, consider these options based on specific needs:
-- **Build Tools**: NX for monorepos, Vite for fast development, RSBuild for performance
+- **Build Tools**: NX for monorepos, RSBuild for performance, Vite only if you are not familiar with RSBuild
 - **Code Quality**: Biome.js for linting/formatting (alternative to ESLint/Prettier)
 - **Type Safety**: TypeScript for improved developer experience and IDE integration
 - **Deployment**: Zephyr Cloud with appropriate build tool plugins (vite-plugin-zephyr, zephyr-rspack-plugin)
-- **State Management**: Redux Toolkit, Zustand, or Jotai depending on complexity
+- **State Management**: Jotai
 - **Testing**: Vitest for unit tests, Playwright for E2E testing
 
 # UI/UX Skills
@@ -591,7 +563,6 @@ export default defineConfig({
 				recursionLimit: 100,
 			};
 			const contextFiles = await this.loadContextFiles(request.contextFiles);
-			// biome-ignore lint/suspicious/noExplicitAny: Messages with content
 			const messageContent: any[] = [];
 
 			if (request.image) {
@@ -603,13 +574,21 @@ export default defineConfig({
 				});
 			}
 
+			if (request.recentFiles && request.recentFiles.length > 0) {
+				messageContent.push({
+					type: "text",
+					text: `# Recently Viewed Files
+The user has been active recently in the following files, they may or may not be related to the objective:
+${request.recentFiles.map((f) => f.path).join("\n")}`,
+				});
+			}
+
 			if (contextFiles.length > 0) {
 				messageContent.push({
 					type: "text",
 					text: `# Context Files
-The following files may be relevant:
-
-${contextFiles.map((f) => `<file>Path: ${f.path}\nContents: ${f.code}</file>`).join("\n\n")}`,
+The user has provided these files as additional context, they may be related to your objective:
+${contextFiles.map((f) => `<file>\nPath: ${f.path}\nContents: ${f.code}\n</file>`).join("\n\n")}`,
 				});
 			}
 
@@ -641,7 +620,6 @@ Contents: ${request.context.text}`,
 					image: request.image,
 					context: request.context,
 					files: contextFiles,
-					fileBackups: undefined,
 				} satisfies typeof GraphAnnotation.State,
 				config,
 			);
