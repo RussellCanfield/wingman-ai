@@ -57,10 +57,11 @@ export class Workspace {
 	async createThread(
 		title = "New Thread",
 		messages: ComposerMessage[] = [],
+		id?: string,
 	): Promise<Thread> {
 		const timestamp = Date.now();
 		const newThread: Thread = {
-			id: uuidv4(),
+			id: id || uuidv4(),
 			title,
 			createdAt: timestamp,
 			updatedAt: timestamp,

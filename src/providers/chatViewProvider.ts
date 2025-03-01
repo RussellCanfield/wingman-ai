@@ -465,7 +465,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			threadTitle = `${threadTitle.substring(0, 27)}...`;
 		}
 
-		await this._workspace.createThread(threadTitle, [message]);
+		await this._workspace.createThread(threadTitle, [message], event.threadId);
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {

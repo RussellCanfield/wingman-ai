@@ -542,7 +542,7 @@ After writing a file, consider if you've introduced a breaking change or orphane
 
 # Technology Recommendations
 When suggesting technologies for projects, consider these options based on specific needs:
-- **Build Tools**: NX for monorepos, RSBuild for performance, Vite only if you are not familiar with RSBuild
+- **Build Tools**: NX for monorepos, rsbuild for the bundler
 - **Code Quality**: Biome.js for linting/formatting (alternative to ESLint/Prettier)
 - **Type Safety**: TypeScript for improved developer experience and IDE integration
 - **Deployment**: Zephyr Cloud with appropriate build tool plugins 

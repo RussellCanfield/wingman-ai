@@ -49,9 +49,7 @@ export default function Compose() {
 		image?: File
 	) => {
 		currentMessage = "";
-
 		const threadId = activeThread?.id ?? crypto.randomUUID();
-
 		const payload: ComposerRequest = {
 			input,
 			threadId,

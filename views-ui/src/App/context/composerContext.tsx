@@ -48,6 +48,8 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const threadsRef = useRef<Thread[]>([]);
   const activeThreadRef = useRef<Thread | null>(null);
 
+  console.log(threadGraphStateRef.current);
+
   // Update refs whenever state changes
   useEffect(() => {
     threadsRef.current = threads;

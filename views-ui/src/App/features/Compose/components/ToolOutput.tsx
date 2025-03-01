@@ -7,9 +7,9 @@ import {
 import { getTruncatedPath, openFile } from "../../../utilities/files";
 
 const ToolNames = {
-    list_directory: "Searching: ",
-    command_execute: "Executing: ",
-    find_file_dependencies: "Checking File Dependencies",
+    list_directory: "Searched: ",
+    command_execute: "Executed: ",
+    find_file_dependencies: "Checked Dependencies",
     read_file: "Analyzed: "
 };
 
