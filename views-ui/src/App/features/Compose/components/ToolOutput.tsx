@@ -69,8 +69,8 @@ export const ToolOutput = ({
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-between relative p-3">
                     <h4
-                        className="m-0 text-base truncate"
-                        style={{ flex: "0 1 auto", minWidth: "0" }}
+                        className="m-0 text-base overflow-x-auto whitespace-nowrap"
+                        style={{ flex: "0 1 auto", minWidth: "0", maxWidth: "100%" }}
                     >
                         {displayName} {ToolDetails}
                     </h4>

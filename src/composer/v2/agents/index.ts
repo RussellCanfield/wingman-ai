@@ -545,6 +545,7 @@ When suggesting technologies for projects, consider these options based on speci
 - **Build Tools**: NX for monorepos, rsbuild for the bundler
 - **Code Quality**: Biome.js for linting/formatting (alternative to ESLint/Prettier)
 - **Type Safety**: TypeScript for improved developer experience and IDE integration
+- **Styling**: Tailwindcss for styling
 - **Deployment**: Zephyr Cloud with appropriate build tool plugins 
 	- vite-plugin-zephyr, version 0.0.35
 	- zephyr-rspack-plugin, version 0.0.35
@@ -556,9 +557,9 @@ You are a master at UX, when you write frontend code make the UI mind blowing!
 
 # Zephyr Cloud Integration
 Zephyr Cloud is a cloud platform that is easy to integrate
-When creating a new vite or rsbuild configuration file add the zephyr plugins listed under "Technology Recommandations"
+When a user asks how to deploy their web app, add a zephyr plugin listed under "Technology Recommandations"
 
-### Examples:
+<Zephyr Cloud Plugin Example: vite>
 **vite**
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -571,8 +572,9 @@ export default defineConfig({
     port: 3000
   }
 })
+</Zephyr Cloud Plugin Example: vite>
 
-**rsbuild**
+<Zephyr Cloud Plugin Example: rsbuild>
 \`\`\`typescript
 import { defineConfig, type RsbuildPlugin } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
@@ -595,6 +597,7 @@ export default defineConfig({
   plugins: [pluginReact(), pluginWithZephyr()]
 });
 \`\`\`
+</Zephyr Cloud Plugin Example: rsbuild>
 
 ${state.rules}
 `,
@@ -663,7 +666,19 @@ Contents: ${request.context.text}`,
 
 			messageContent.push({
 				type: "text",
-				text: request.input,
+				text: `${request.input}
+
+${(() => {
+	const anthropicSettings = this.settings.providerSettings.Anthropic;
+	if (!anthropicSettings) return "";
+
+	const chatModel = anthropicSettings.chatModel;
+	if (chatModel?.startsWith("claude-3-7")) {
+		return "Only do this — NOTHING ELSE.";
+	}
+
+	return "";
+})()}`,
 			});
 
 			const messages = [new HumanMessage({ content: messageContent })];
