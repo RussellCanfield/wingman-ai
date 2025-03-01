@@ -5,7 +5,8 @@ import type { ComposerMessage } from "@shared/types/v2/Composer";
 function ChatResponseList({
 	children,
 	messages,
-}: PropsWithChildren & { messages: ComposerMessage[] }) {
+	loading
+}: PropsWithChildren & { messages: ComposerMessage[], loading: boolean }) {
 	const ulRef = useRef<HTMLUListElement>(null);
 	const ref = useRef<HTMLDivElement>(null);
 
@@ -29,10 +30,10 @@ function ChatResponseList({
 				message={message}
 				events={events}
 				image={image}
-				isCurrent={index === messages.length - 1}
+				isCurrent={!loading && index === messages.length - 1}
 			/>
 		));
-	}, [messages]);
+	}, [messages, loading]);
 
 	return (
 		<ul

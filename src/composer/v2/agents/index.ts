@@ -49,13 +49,13 @@ const GraphAnnotation = Annotation.Root({
 	}),
 	workspace: Annotation<string>({
 		reducer: (currentState, updateValue) => {
-			return currentState || updateValue;
+			return updateValue;
 		},
 		default: () => "",
 	}),
 	rules: Annotation<string>({
 		reducer: (currentState, updateValue) => {
-			return currentState || updateValue;
+			return updateValue;
 		},
 		default: () => "",
 	}),

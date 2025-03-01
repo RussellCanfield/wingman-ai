@@ -125,7 +125,7 @@ export default function Compose() {
 				</div>
 			)}
 			{composerMessages.length > 0 && (
-				<ChatResponseList messages={composerMessages}>
+				<ChatResponseList messages={composerMessages} loading={loading}>
 					{loading && (
 						<ChatEntry
 							from="assistant"
