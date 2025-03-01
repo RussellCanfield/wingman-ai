@@ -24,6 +24,7 @@ export const AnthropicView = () => {
 	return (
 		<div className="mt-4">
 			<ul>
+				<li>claude-3-7-sonnet</li>
 				<li>claude-3-5-sonnet</li>
 				<li>claude-3-5-haiku</li>
 				<li>claude-3-haiku</li>
