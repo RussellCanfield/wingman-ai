@@ -10,7 +10,7 @@ const ToolNames = {
     list_directory: "Searching: ",
     command_execute: "Executing: ",
     find_file_dependencies: "Checking File Dependencies",
-    read_file: "Read: "
+    read_file: "Analyzed: "
 };
 
 export const ToolOutput = ({
@@ -19,7 +19,7 @@ export const ToolOutput = ({
     loading,
 }: { event: StreamEvent; isLightTheme: boolean; loading: boolean }) => {
     //@ts-expect-error
-    const displayName = ToolNames[event.metadata?.tool];
+    const displayName = ToolNames[event.metadata?.tool] ?? event.metadata.tool;
 
     const ToolDetails = useMemo(() => {
         if (!event.content) return null;

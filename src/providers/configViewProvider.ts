@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import fs from "node:fs";
 import type { AppMessage } from "@shared/types/Message";
-import type { Settings } from "@shared/types/Settings";
+import type { MCPToolConfig, Settings } from "@shared/types/Settings";
 import { addNoneAttributeToLink } from "./utilities";
 import { SaveSettings } from "../service/settings";
+import { createMCPTool } from "../service/anthropic/mcpTools";
 
 let panel: vscode.WebviewPanel | undefined;
 
@@ -64,6 +65,31 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 							settings: JSON.parse(settings),
 							theme: vscode.window.activeColorTheme.kind,
 						},
+					});
+					break;
+				}
+				case "test-mcp": {
+					let success = false;
+					let tool: ReturnType<typeof createMCPTool> | undefined;
+					try {
+						tool = createMCPTool(value as MCPToolConfig);
+						await tool.connect();
+						const { tools } = await tool.getTools();
+						success = tools.length > 0;
+					} catch (e) {
+						console.log(e);
+					} finally {
+						if (tool) {
+							await tool.close();
+						}
+					}
+
+					settingsPanel.webview.postMessage({
+						command: "tool-verified",
+						value: {
+							...(value as MCPToolConfig),
+							verified: success,
+						} satisfies MCPToolConfig,
 					});
 					break;
 				}

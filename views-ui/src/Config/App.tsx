@@ -48,12 +48,34 @@ export const App = () => {
 				setSettings(settings.settings);
 				setIsLightTheme(settings.theme === 1 || settings.theme === 4)
 				setLoading(false);
-				return;
+				break;
 			}
 			case "settingsSaved":
 				setSaveStatus("saved");
 				setTimeout(() => setSaveStatus("idle"), 2000);
-				return;
+				break;
+			case "tool-verified": {
+				const config = value as MCPToolConfig;
+				setSettings((currentSettings) => {
+					if (!currentSettings) return null;
+
+					const updatedMcpTools = [...(currentSettings.mcpTools || [])];
+					const toolIndex = updatedMcpTools.findIndex(t => t.name === config.name);
+
+					if (toolIndex !== -1) {
+						updatedMcpTools[toolIndex] = {
+							...updatedMcpTools[toolIndex],
+							verified: true
+						};
+					}
+
+					return {
+						...currentSettings,
+						mcpTools: updatedMcpTools
+					};
+				});
+				break;
+			}
 		}
 	};
 
@@ -253,7 +275,7 @@ export const App = () => {
 					/>
 				</section>
 
-				<section className={cardClass}>
+				{settings.aiProvider === 'Anthropic' && (<section className={cardClass}>
 					<div className="absolute top-0 right-0 bg-orange-500 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
 					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
 						MCP Tools
@@ -262,7 +284,7 @@ export const App = () => {
 						mcpTools={settings.mcpTools || []}
 						onChange={onMCPToolsChanged}
 					/>
-				</section>
+				</section>)}
 			</div>
 		</div>
 	);

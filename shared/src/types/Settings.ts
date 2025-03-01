@@ -133,11 +133,10 @@ export const defaultAzureAISettings: AzureAISettingsType = {
 
 export type MCPToolConfig = {
 	name: string;
-	description: string;
 	type: "command" | "sse";
 	command?: string;
 	endpoint?: string;
-	version: string;
+	verified?: boolean;
 };
 
 export type Settings = {

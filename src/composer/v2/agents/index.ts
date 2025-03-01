@@ -11,7 +11,7 @@ import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { createReadFileTool } from "../tools/read_file";
 import { createListDirectoryTool } from "../tools/list_workspace_files";
 import { createWriteFileTool } from "../tools/write_file";
-import type { StructuredTool } from "@langchain/core/tools";
+import type { DynamicTool, StructuredTool } from "@langchain/core/tools";
 import type {
 	ComposerImage,
 	ComposerRequest,
@@ -33,6 +33,9 @@ import { createCommandExecuteTool } from "../tools/cmd_execute";
 import type { PartitionedFileSystemSaver } from "../../checkpointer";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
 import { loadWingmanRules } from "../../utils";
+import type { Settings } from "@shared/types/Settings";
+import { Anthropic } from "../../../service/anthropic/anthropic";
+import { createMCPTool } from "../../../service/anthropic/mcpTools";
 
 let controller = new AbortController();
 
@@ -88,18 +91,46 @@ const GraphAnnotation = Annotation.Root({
  * WingmanAgent - Autonomous coding assistant
  */
 export class WingmanAgent {
-	private agent: ReturnType<typeof createReactAgent>;
-	private tools: StructuredTool[];
+	private agent: ReturnType<typeof createReactAgent> | undefined;
+	private tools: StructuredTool[] = [];
 	private events: StreamEvent[] = [];
+	private mcpClients: ReturnType<typeof createMCPTool>[] = [];
 
 	constructor(
 		private readonly aiProvider: AIProvider,
 		private readonly workspace: string,
+		private readonly settings: Settings,
 		private readonly checkpointer: PartitionedFileSystemSaver,
 		private readonly codeParser: CodeParser,
 	) {
+		if (aiProvider instanceof Anthropic) {
+			for (const mcpTool of settings.mcpTools ?? []) {
+				this.mcpClients.push(createMCPTool(mcpTool));
+			}
+		}
+	}
+
+	async initialize() {
+		const remoteTools: DynamicTool[] = [];
+		for (const mcp of this.mcpClients) {
+			try {
+				await mcp.connect();
+				const tools = await mcp.createTools();
+				remoteTools.push(...tools);
+				loggingProvider.logInfo(
+					`MCP: ${mcp.getName()} added ${tools.length} tools`,
+				);
+			} catch (e) {
+				await mcp.close();
+				loggingProvider.logError(`MCP tool failed: ${e}`);
+			}
+			// } finally {
+			// 	await mcp.close();
+			// }
+		}
+
 		this.tools = [
-			createCommandExecuteTool(workspace),
+			createCommandExecuteTool(this.workspace),
 			createReadFileTool(
 				this.workspace,
 				async (file: string, threadId: string) => {
@@ -120,6 +151,7 @@ export class WingmanAgent {
 			createListDirectoryTool(this.workspace),
 			createWriteFileTool(this.workspace),
 			createFindFileDependenciesTool(this.workspace, this.codeParser),
+			...remoteTools,
 		];
 
 		this.agent = createReactAgent({
@@ -460,7 +492,6 @@ export class WingmanAgent {
 				role: "system",
 				content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
-
 We may automatically include contextual information with each user message, such as their open files, cursor position and recently viewed files.
 Use this context judiciously when it helps address their needs.
 
@@ -638,7 +669,7 @@ Contents: ${request.context.text}`,
 			const messages = [new HumanMessage({ content: messageContent })];
 			const rules = (await loadWingmanRules(this.workspace)) ?? "";
 
-			const stream = await this.agent.streamEvents(
+			const stream = await this.agent!.streamEvents(
 				{
 					messages,
 					workspace: this.workspace,

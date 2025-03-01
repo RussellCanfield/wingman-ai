@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
 import type { MCPToolConfig } from "@shared/types/Settings";
+import { GrTest } from "react-icons/gr";
+import { AiOutlineCheckCircle } from "react-icons/ai";
+import { FaRegTrashCan } from "react-icons/fa6";
+import { vscode } from "./utilities/vscode";
 
 interface MCPConfigProps {
     mcpTools: MCPToolConfig[];
@@ -12,11 +16,9 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
     const [showAddForm, setShowAddForm] = useState(false);
     const [newTool, setNewTool] = useState<Partial<MCPToolConfig>>({
         name: "",
-        description: "",
         type: "command",
         command: "",
         endpoint: "",
-        version: "1.0",
     });
 
     useEffect(() => {
@@ -34,11 +36,9 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
         onChange(updatedTools);
         setNewTool({
             name: "",
-            description: "",
             type: newToolType,
             command: "",
             endpoint: "",
-            version: "1.0",
         });
         setShowAddForm(false);
     };
@@ -54,6 +54,7 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
         updatedTools[index] = {
             ...updatedTools[index],
             [field]: value,
+            verified: false
         };
         setTools(updatedTools);
         onChange(updatedTools);
@@ -66,7 +67,7 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                     MCP Tools Configuration
                 </h3>
                 <p className="text-sm text-[var(--vscode-descriptionForeground)]">
-                    Configure Microsoft Cloud Platform tools that Wingman can use for specialized tasks.
+                    Configure Model Context Protocol tools that Wingman can use.
                 </p>
             </div>
 
@@ -86,13 +87,25 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                                         {tool.type === "command" ? "Command-line Tool" : "SSE Endpoint"}
                                     </p>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleRemoveTool(index)}
-                                    className="text-red-500 hover:text-red-700 text-sm"
-                                >
-                                    Remove
-                                </button>
+                                <div className="flex flex-row gap-4 items-center">
+                                    <button type="button"
+                                        className="p-3 hover:bg-gray-500/50"
+                                        onClick={() => {
+                                            vscode.postMessage({
+                                                command: 'test-mcp',
+                                                value: tool
+                                            })
+                                        }}>
+                                        {tool.verified ? <AiOutlineCheckCircle size={16} className="text-green-500" /> : <GrTest size={16} />}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveTool(index)}
+                                        className="text-red-500 hover:text-red-700 hover:bg-gray-500/50 p-3"
+                                    >
+                                        <FaRegTrashCan size={16} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="space-y-3">
@@ -105,32 +118,6 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                                         type="text"
                                         value={tool.name}
                                         onChange={(e) => handleToolChange(index, "name", e.target.value)}
-                                        className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
-                                    />
-                                </div>
-
-                                <div>
-                                    {/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
-                                    <label className="block text-sm font-medium mb-1">
-                                        Description
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={tool.description}
-                                        onChange={(e) => handleToolChange(index, "description", e.target.value)}
-                                        className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
-                                    />
-                                </div>
-
-                                <div>
-                                    {/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
-                                    <label className="block text-sm font-medium mb-1">
-                                        Version
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={tool.version}
-                                        onChange={(e) => handleToolChange(index, "version", e.target.value)}
                                         className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
                                     />
                                 </div>
@@ -219,35 +206,7 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                                 value={newTool.name}
                                 onChange={(e) => setNewTool({ ...newTool, name: e.target.value })}
                                 className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
-                                placeholder="e.g., Azure Code Analysis"
-                            />
-                        </div>
-
-                        <div>
-                            {/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
-                            <label className="block text-sm font-medium mb-1">
-                                Description
-                            </label>
-                            <input
-                                type="text"
-                                value={newTool.description}
-                                onChange={(e) => setNewTool({ ...newTool, description: e.target.value })}
-                                className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
-                                placeholder="e.g., Analyzes code for Azure best practices"
-                            />
-                        </div>
-
-                        <div>
-                            {/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
-                            <label className="block text-sm font-medium mb-1">
-                                Version
-                            </label>
-                            <input
-                                type="text"
-                                value={newTool.version}
-                                onChange={(e) => setNewTool({ ...newTool, version: e.target.value })}
-                                className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
-                                placeholder="e.g., 1.0"
+                                placeholder="e.g., Figma Integration"
                             />
                         </div>
 
@@ -276,7 +235,7 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                                     value={newTool.endpoint}
                                     onChange={(e) => setNewTool({ ...newTool, endpoint: e.target.value })}
                                     className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
-                                    placeholder="e.g., https://api.example.com/events"
+                                    placeholder="e.g., http://localhost:3001/sse"
                                 />
                             </div>
                         )}

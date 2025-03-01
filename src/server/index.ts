@@ -89,9 +89,11 @@ export class LSPServer {
 		this.composer = new WingmanAgent(
 			modelProvider,
 			this.workspaceFolders[0],
+			settings,
 			memory,
 			this.codeParser,
 		);
+		await this.composer.initialize();
 	};
 
 	private getPersistancePath = () => {
@@ -303,15 +305,8 @@ export class LSPServer {
 		this.connection?.onRequest(
 			"wingman/compose",
 			async ({ request }: { request: ComposerRequest }) => {
-				const graph = new WingmanAgent(
-					modelProvider,
-					this.workspaceFolders[0],
-					memory,
-					// biome-ignore lint/style/noNonNullAssertion: <explanation>
-					this.codeParser!,
-				);
 				try {
-					for await (const event of graph.execute(request)) {
+					for await (const event of this.composer!.execute(request)) {
 						await this.connection?.sendRequest("wingman/compose", event);
 					}
 				} catch (e) {

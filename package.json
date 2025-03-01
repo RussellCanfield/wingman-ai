@@ -218,7 +218,8 @@
 		"event-source-polyfill": "1.0.31",
 		"vscode-uri": "3.0.8",
 		"zod": "3.24.1",
-		"zod-to-json-schema": "3.24.1"
+		"zod-to-json-schema": "3.24.1",
+		"@modelcontextprotocol/sdk": "^1.6.0"
 	},
 	"devDependencies": {
 		"@types/event-source-polyfill": "1.0.5",
