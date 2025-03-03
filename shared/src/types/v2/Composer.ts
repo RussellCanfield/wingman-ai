@@ -45,7 +45,6 @@ export type ComposerResponse = {
 	step: ComposerSteps;
 	events: StreamEvent[];
 	threadId: string;
-	state?: GraphState;
 };
 
 export interface StreamEvent {

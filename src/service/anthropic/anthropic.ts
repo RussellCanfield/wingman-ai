@@ -16,6 +16,8 @@ import {
 import { HaikuModel } from "./models/haiku";
 import { AbortError } from "node-fetch";
 
+const reasoningModels = ["claude-3-7-sonnet"];
+
 export class Anthropic implements AIStreamProvider {
 	decoder = new TextDecoder();
 	chatHistory: BaseMessage[] = [];
@@ -56,46 +58,24 @@ export class Anthropic implements AIStreamProvider {
 	}
 
 	getModel(params?: ModelParams): BaseChatModel {
-		return new ChatAnthropic({
-			apiKey: this.settings?.apiKey,
-			anthropicApiKey: this.settings?.apiKey,
-			model: params?.model ?? this.settings?.chatModel,
-			temperature: 0,
-			maxTokens: this.interactionSettings?.chatMaxTokens,
-			thinking: this.settings?.enableReasoning
-				? {
-						budget_tokens: 2048,
-						type: "enabled",
-					}
-				: undefined,
-		});
-	}
+		const targetModel = params?.model ?? this.settings?.chatModel;
+		const isReasoningModel = reasoningModels.some((reasoningModel) =>
+			targetModel?.startsWith(reasoningModel),
+		);
 
-	getLightweightModel(params?: ModelParams): BaseChatModel {
 		return new ChatAnthropic({
 			apiKey: this.settings?.apiKey,
 			anthropicApiKey: this.settings?.apiKey,
-			model: "claude-3-5-haiku-latest",
-			temperature: 0,
+			model: targetModel,
+			temperature: this.settings?.enableReasoning ? undefined : 0,
 			maxTokens: this.interactionSettings?.chatMaxTokens,
-			...params,
-		});
-	}
-
-	getReasoningModel(params?: ModelParams): BaseChatModel {
-		return new ChatAnthropic({
-			apiKey: this.settings?.apiKey,
-			anthropicApiKey: this.settings?.apiKey,
-			model: "claude-3-7-sonnet-latest",
-			temperature: 0,
-			maxTokens: this.interactionSettings?.chatMaxTokens,
-			verbose: params?.verbose,
-			thinking: this.settings?.enableReasoning
-				? {
-						budget_tokens: 2048,
-						type: "enabled",
-					}
-				: undefined,
+			thinking:
+				this.settings?.enableReasoning && isReasoningModel
+					? {
+							budget_tokens: 2048,
+							type: "enabled",
+						}
+					: undefined,
 		});
 	}
 

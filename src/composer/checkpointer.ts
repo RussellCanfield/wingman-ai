@@ -414,10 +414,23 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 			);
 			record = threadCheckpoints.get(key);
 		} else {
-			// Get latest checkpoint
+			// Get latest checkpoint by sorting correctly
+			// Ensure proper sorting of IDs - assuming they're timestamp-based or sequential
 			const sortedCheckpoints = Array.from(threadCheckpoints.values()).sort(
-				(a, b) => b.checkpoint_id.localeCompare(a.checkpoint_id),
+				(a, b) => {
+					// Try numerical comparison first (for timestamp-based IDs)
+					const numA = Number(a.checkpoint_id);
+					const numB = Number(b.checkpoint_id);
+
+					if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+						return numB - numA; // Descending order
+					}
+
+					// Fall back to string comparison
+					return b.checkpoint_id.localeCompare(a.checkpoint_id);
+				},
 			);
+
 			record = sortedCheckpoints[0];
 		}
 
@@ -617,7 +630,18 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 		}
 
 		// Sort in descending order by checkpoint_id
-		matches.sort((a, b) => b.checkpoint_id.localeCompare(a.checkpoint_id));
+		matches.sort((a, b) => {
+			// Try numerical comparison first (for timestamp-based IDs)
+			const numA = Number(a.checkpoint_id);
+			const numB = Number(b.checkpoint_id);
+
+			if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+				return numB - numA; // Descending order
+			}
+
+			// Fall back to string comparison
+			return b.checkpoint_id.localeCompare(a.checkpoint_id);
+		});
 
 		// Apply limit if specified
 		if (limit !== undefined) {
@@ -822,6 +846,8 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 			this.saveThread(thread_id, checkpoint_ns);
 		}
 
+		// Important: Return the new checkpoint ID in the config
+		// This ensures the state machine knows which checkpoint to use next
 		return {
 			configurable: {
 				thread_id,

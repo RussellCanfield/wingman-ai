@@ -1,8 +1,8 @@
 import type { ComposerMessage } from "@shared/types/v2/Composer";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import React from "react";
 import { memo, type PropsWithChildren } from "react";
 import Markdown from "react-markdown";
-import SyntaxHighlighter from "react-syntax-highlighter";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 
 export const MessageWithMarkdown = ({ message, from, codeTheme }: {
     message: ComposerMessage["message"],
@@ -15,6 +15,7 @@ export const MessageWithMarkdown = ({ message, from, codeTheme }: {
         </div>
     )
 }
+
 
 const CodeContainer = memo(
     ({
@@ -33,46 +34,37 @@ const CodeContainer = memo(
 const renderMarkdown = (
     content: string,
     theme: any,
-    file?: FileMetadata,
-    step?: any
 ) => {
     return (
-        <div className="prose prose-invert max-w-none" key={content}>
-            <Markdown
-                components={{
-                    code(props) {
-                        const { children, className, ...rest } = props;
-                        const languageType = /language-(\w+)/.exec(
-                            className || ""
-                        );
-                        return languageType ? (
-                            //@ts-expect-error
-                            <SyntaxHighlighter
-                                {...rest}
-                                PreTag={CodeContainer}
-                                style={theme}
-                                language={languageType[1]}
-                                wrapLines={true}
-                                wrapLongLines={true}
-                                file={file}
-                                step={step}
-                                className="!bg-editor-bg !p-0"
-                            >
-                                {String(children).replace(/\n$/, "")}
-                            </SyntaxHighlighter>
-                        ) : (
-                            <code
-                                {...rest}
-                                className={`${className} whitespace-pre-wrap bg-editor-bg rounded px-2 py-1`}
-                            >
-                                {children}
-                            </code>
-                        );
-                    },
-                }}
-            >
-                {content}
-            </Markdown>
-        </div>
+        <Markdown
+            // biome-ignore lint/correctness/noChildrenProp: <explanation>
+            children={content}
+            components={{
+                code(props) {
+                    const { children, className, ...rest } = props;
+                    const languageType = /language-(\w+)/.exec(className || "");
+
+                    return languageType ? (
+                        <SyntaxHighlighter
+                            PreTag={CodeContainer}
+                            // biome-ignore lint/correctness/noChildrenProp: <explanation>
+                            children={String(children).replace(/\n$/, "")}
+                            style={theme}
+                            language={languageType[1]}
+                            wrapLines={true}
+                            wrapLongLines={true}
+                            useInlineStyles={true}
+                        />
+                    ) : (
+                        <code
+                            {...rest}
+                            className={`whitespace-pre-wrap ${className} bg-transparent`}
+                        >
+                            {children}
+                        </code>
+                    );
+                },
+            }}
+        />
     );
 };

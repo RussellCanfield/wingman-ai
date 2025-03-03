@@ -60,22 +60,14 @@ export default function DiffView({ diff }: DiffProps) {
 	const acceptDiff = () => {
 		vscode.postMessage({
 			command: "accept-file-changes",
-			value: {
-				id: file.id,
-				path: file.path,
-				code: file?.code,
-			} satisfies FileMetadata,
+			value: file,
 		});
 	};
 
 	const rejectDiff = () => {
 		vscode.postMessage({
 			command: "reject-file-changes",
-			value: {
-				id: file.id,
-				path: file?.path,
-				code: file?.code,
-			} satisfies FileMetadata,
+			value: file,
 		});
 	};
 

@@ -3,6 +3,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { MCPToolConfig } from "@shared/types/Settings";
+import { z } from "zod";
 
 export const createMCPTool = (mcpConfig: MCPToolConfig) => {
 	if (mcpConfig.type === "command") {
@@ -56,11 +57,11 @@ export class McpStdioClient {
 	}
 
 	async connect() {
-		await this.client.connect(this.transport);
+		return this.client.connect(this.transport);
 	}
 
 	async close() {
-		await this.client.close();
+		return this.client.close();
 	}
 
 	async getTools() {
@@ -77,21 +78,31 @@ export class McpStdioClient {
 				//@ts-expect-error
 				tool(
 					async (input) => {
-						console.log(
-							`MCP Remote tool called: ${this.mcpConfig.name}`,
-							input,
-						);
-						return this.client.callTool({
-							name: remoteTool.name,
-							arguments: {
-								...input,
-							},
-						});
+						try {
+							console.log(
+								`MCP Remote tool called: ${this.mcpConfig.name}`,
+								input,
+							);
+							return this.client.callTool({
+								name: remoteTool.name,
+								arguments: {
+									...input,
+								},
+							});
+						} catch (e) {
+							//@ts-expect-error
+							return `Tool failed to execute due to: ${e.message}`;
+						}
 					},
 					{
 						name: remoteTool.name,
 						description: remoteTool.description,
-						schema: remoteTool.inputSchema,
+						schema:
+							//Empty types come back from MCP server as type object, set these as undefined
+							JSON.stringify(remoteTool.inputSchema ?? "") ===
+							'{"type":"object"}'
+								? undefined
+								: remoteTool.inputSchema,
 					},
 				),
 			);
@@ -111,7 +122,6 @@ export class McpSSEClient {
 		}
 
 		this.transport = new SSEClientTransport(new URL(mcpConfig.endpoint));
-
 		this.client = new Client(
 			{
 				name: "wingman-ai-client",
@@ -132,11 +142,11 @@ export class McpSSEClient {
 	}
 
 	async connect() {
-		await this.client.connect(this.transport);
+		return this.client.connect(this.transport);
 	}
 
 	async close() {
-		await this.client.close();
+		return this.client.close();
 	}
 
 	async getTools() {
@@ -153,21 +163,30 @@ export class McpSSEClient {
 				//@ts-expect-error
 				tool(
 					async (input) => {
-						console.log(
-							`MCP Remote tool called: ${this.mcpConfig.name}`,
-							input,
-						);
-						return this.client.callTool({
-							name: remoteTool.name,
-							arguments: {
-								...input,
-							},
-						});
+						try {
+							console.log(
+								`MCP Remote tool called: ${this.mcpConfig.name}`,
+								input,
+							);
+							return this.client.callTool({
+								name: remoteTool.name,
+								arguments: {
+									...input,
+								},
+							});
+						} catch (e) {
+							//@ts-expect-error
+							return `Tool failed to execute due to: ${e.message}`;
+						}
 					},
 					{
 						name: remoteTool.name,
 						description: remoteTool.description,
-						schema: remoteTool.inputSchema,
+						schema: //Empty types come back from MCP server as type object, set these as undefined
+							JSON.stringify(remoteTool.inputSchema ?? "") ===
+							'{"type":"object"}'
+								? undefined
+								: remoteTool.inputSchema,
 					},
 				),
 			);

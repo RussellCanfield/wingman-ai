@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ExtensionContext } from "vscode";
 import {
+	CancellationStrategy,
 	type DocumentSymbol,
 	LanguageClient,
 	type LanguageClientOptions,
@@ -86,6 +87,9 @@ export class LSPClient {
 			outputChannel: vscode.window.createOutputChannel(
 				"Wingman Language Server",
 			),
+			connectionOptions: {
+				maxRestartCount: 3,
+			},
 			initializationOptions: {
 				settings,
 				extensionPath: context.extensionPath,
@@ -190,16 +194,6 @@ export class LSPClient {
 		return client.sendRequest("wingman/updateComposerFile", { file, threadId });
 	};
 
-	fetchOriginalFileContents = async ({
-		file,
-		threadId,
-	}: { file: string; threadId: string }): Promise<string> => {
-		return client.sendRequest("wingman/fetchOriginalFileContents", {
-			file,
-			threadId,
-		});
-	};
-
 	branchThread = async ({
 		threadId,
 		originalThreadId,
@@ -220,6 +214,10 @@ export class LSPClient {
 
 	cancelComposer = async () => {
 		return client.sendRequest("wingman/cancelComposer");
+	};
+
+	updateMCPTools = async () => {
+		return client.sendRequest("wingman/MCPUpdate");
 	};
 
 	deactivate = (): Thenable<void> | undefined => {

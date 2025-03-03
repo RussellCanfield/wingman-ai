@@ -135,15 +135,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	diffViewProvider = new DiffViewProvider(
-		context,
-		modelProvider!,
-		workspace.workspacePath,
-		lspClient,
-	);
+	diffViewProvider = new DiffViewProvider(context, lspClient);
 	threadViewProvider = new ThreadViewProvider(context);
 	statusBarProvider = new ActivityStatusBar();
-	configViewProvider = new ConfigViewProvider(context.extensionUri, settings);
+	configViewProvider = new ConfigViewProvider(
+		context.extensionUri,
+		settings,
+		lspClient,
+	);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -209,6 +208,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		),
 	);
 
+	await workspace.load();
 	context.subscriptions.push(
 		//Update the composer's graph state, so that files reflect recent changes
 		//Does not apply if the file is not accepted or rejected

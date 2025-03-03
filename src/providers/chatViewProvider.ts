@@ -21,12 +21,12 @@ import type {
 } from "@shared/types/v2/Composer";
 import type { DiffViewProvider } from "./diffViewProvider";
 import type { Workspace } from "../service/workspace";
-import { getGitignorePatterns } from "../server/files/utils";
 import type { ConfigViewProvider } from "./configViewProvider";
 import path from "node:path";
 import type { FileMetadata } from "@shared/types/v2/Message";
 import type { ThreadViewProvider } from "./threadViewProvider";
 import { getRecentFileTracker } from "./recentFileTracker";
+import { getGitignorePatterns } from "../server/files/utils";
 
 export type ChatView = "composer" | "indexer";
 
@@ -161,24 +161,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						break;
 					case "accept-file":
 						await this.acceptFile(value as UpdateComposerFileEvent);
-						webviewView.webview.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
 						break;
 					case "reject-file":
 						await this.rejectFile(value as UpdateComposerFileEvent);
-						webviewView.webview.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
 						break;
 					case "undo-file":
 						await this.undoFile(value as UpdateComposerFileEvent);
-						webviewView.webview.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
 						break;
 					case "open-file":
 						await vscode.commands.executeCommand(
@@ -197,10 +185,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						break;
 					case "diff-view": {
 						const { file, threadId } = value as DiffViewCommand;
-						file.original = await this._lspClient.fetchOriginalFileContents({
-							file: file.path,
-							threadId,
-						});
 						this._diffViewProvider.createDiffView({
 							file,
 							onAccept: async (file: FileMetadata, threadId: string) => {
@@ -215,6 +199,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					}
 					case "clear-chat-history":
 						this.clearChatHistory();
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
 						break;
 					case "get-files": {
 						const searchTerm = value as string | undefined;
@@ -298,41 +286,41 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			const targetThread = await this._workspace.getThreadById(threadId);
 			if (!targetThread) return;
 
-			if (targetThread.graphState) {
-				const graphFile = targetThread.graphState?.files.find(
-					(f) => f.path === file.path,
-				);
+			const fileUri = vscode.Uri.joinPath(
+				vscode.Uri.parse(this._workspace.workspacePath),
+				file.path,
+			);
+			file.accepted = false;
+			file.rejected = false;
 
-				if (graphFile) {
-					//Revert the code and persist
-					graphFile.code = await this._lspClient.fetchOriginalFileContents({
-						file: graphFile.path,
-						threadId,
-					});
-					const relativeFilePath = vscode.workspace.asRelativePath(
-						graphFile?.path,
-					);
-					// Get file URI for workspace operations
-					const fileUri = vscode.Uri.joinPath(
-						vscode.Uri.parse(this._workspace.workspacePath),
-						relativeFilePath,
-					);
-					await vscode.workspace.fs.writeFile(
-						fileUri,
-						new TextEncoder().encode(file.code),
-					);
-
-					await this._lspClient.updateComposerFile({
-						file: graphFile,
-						threadId,
-					});
-					await this._workspace.updateThread(threadId, targetThread);
-					this._webview?.postMessage({
-						command: "thread-data",
-						value: this._workspace.getSettings(),
-					});
+			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+				const message = targetThread.messages[i];
+				const events = message.events ?? [];
+				for (let j = events.length - 1; j >= 0; j--) {
+					const event = events[j];
+					if (event.id === file.id) {
+						event.content = JSON.stringify(file);
+						break;
+					}
 				}
 			}
+
+			await Promise.all([
+				vscode.workspace.fs.writeFile(
+					fileUri,
+					new TextEncoder().encode(file.original),
+				),
+				this._lspClient.updateComposerFile({
+					file,
+					threadId,
+				}),
+				this._workspace.updateThread(threadId, targetThread),
+			]);
+
+			this._webview?.postMessage({
+				command: "thread-data",
+				value: this._workspace.getSettings(),
+			});
 		} catch (error) {
 			console.error("Error undoing file changes:", error);
 			// Consider showing an error notification to the user
@@ -346,35 +334,41 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		const targetThread = await this._workspace.getThreadById(threadId);
 		if (!targetThread) return;
 
-		if (targetThread.graphState) {
-			const graphFile = targetThread.graphState?.files.find(
-				(f) => f.path === file.path,
-			);
+		const relativeFilePath = vscode.workspace.asRelativePath(file.path);
+		const fileUri = vscode.Uri.joinPath(
+			vscode.Uri.parse(this._workspace.workspacePath),
+			relativeFilePath,
+		);
+		await vscode.workspace.fs.writeFile(
+			fileUri,
+			new TextEncoder().encode(file.code),
+		);
+		file.accepted = true;
+		file.rejected = false;
 
-			if (graphFile) {
-				const relativeFilePath = vscode.workspace.asRelativePath(file.path);
-				const fileUri = vscode.Uri.joinPath(
-					vscode.Uri.parse(this._workspace.workspacePath),
-					relativeFilePath,
-				);
-				await vscode.workspace.fs.writeFile(
-					fileUri,
-					new TextEncoder().encode(file.code),
-				);
-
-				graphFile.accepted = true;
-				graphFile.rejected = false;
-				await this._lspClient.updateComposerFile({
-					file: graphFile,
-					threadId,
-				});
-				await this._workspace.updateThread(threadId, targetThread);
-				this._webview?.postMessage({
-					command: "thread-data",
-					value: this._workspace.getSettings(),
-				});
+		for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+			const message = targetThread.messages[i];
+			const events = message.events ?? [];
+			for (let j = events.length - 1; j >= 0; j--) {
+				const event = events[j];
+				if (event.id === file.id) {
+					event.content = JSON.stringify(file);
+					break;
+				}
 			}
 		}
+
+		await Promise.all([
+			this._lspClient.updateComposerFile({
+				file,
+				threadId,
+			}),
+			this._workspace.updateThread(threadId, targetThread),
+		]);
+		this._webview?.postMessage({
+			command: "thread-data",
+			value: this._workspace.getSettings(),
+		});
 	}
 
 	private async rejectFile({ file, threadId }: UpdateComposerFileEvent) {
@@ -383,30 +377,32 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			const targetThread = await this._workspace.getThreadById(threadId);
 			if (!targetThread) return;
 
-			if (targetThread.graphState) {
-				const graphFile = targetThread.graphState?.files.find(
-					(f) => f.path === file.path,
-				);
+			file.accepted = false;
+			file.rejected = true;
 
-				if (graphFile) {
-					graphFile.accepted = false;
-					graphFile.rejected = true;
-					//Revert graph state to previous version in-memory
-					graphFile.code = await this._lspClient.fetchOriginalFileContents({
-						file: graphFile.path,
-						threadId,
-					});
-					await this._lspClient.updateComposerFile({
-						file: graphFile,
-						threadId,
-					});
-					await this._workspace.updateThread(threadId, targetThread);
-					this._webview?.postMessage({
-						command: "thread-data",
-						value: this._workspace.getSettings(),
-					});
+			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+				const message = targetThread.messages[i];
+				const events = message.events ?? [];
+				for (let j = events.length - 1; j >= 0; j--) {
+					const event = events[j];
+					if (event.id === file.id) {
+						event.content = JSON.stringify(file);
+						break;
+					}
 				}
 			}
+
+			await Promise.all([
+				this._lspClient.updateComposerFile({
+					file,
+					threadId,
+				}),
+				this._workspace.updateThread(threadId, targetThread),
+			]);
+			this._webview?.postMessage({
+				command: "thread-data",
+				value: this._workspace.getSettings(),
+			});
 		} catch (error) {
 			console.error("Error rejecting file:", error);
 		}
@@ -449,12 +445,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async addMessageToThread(event: AddMessageToThreadEvent) {
-		const { threadId, message, state } = event;
+		const { threadId, message } = event;
 		const activeThread = await this._workspace.getThreadById(threadId);
 
 		if (activeThread) {
 			activeThread.messages.push(message);
-			activeThread.graphState = state;
 			await this._workspace.updateThread(threadId, activeThread);
 			return;
 		}

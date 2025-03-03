@@ -1,7 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
 	content: ["./src/**/*.{html,js,ts,jsx,tsx}"],
-	safelist: ["bg-code-light", "bg-code-dark"],
+	safelist: ["bg-code-light", "bg-code-dark",
+		{ pattern: /language-*/ }, 
+		{ pattern: /react-syntax-highlighter-*/ }
+	  ],
 	theme: {
 		extend: {
 			animation: {

@@ -82,12 +82,13 @@ interface ChatInputProps {
 	onChatSubmitted: (input: string, contextFiles: string[], image?: File) => void;
 	onChatCancelled: () => void;
 	loading: boolean;
+	threadId?: string
 }
 
-const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps) => {
+const ChatInput = ({ loading, onChatSubmitted, onChatCancelled, threadId }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useSettingsContext();
-	const { activeFiles, setActiveFiles } = useComposerContext();
+	const { activeFiles, setActiveFiles, activeMessage } = useComposerContext();
 	const [inputValue, setInputValue] = useState("");
 	const [selectedImage, setSelectedImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -304,7 +305,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 				<textarea
 					placeholder={
 						activeFiles.length === 0
-							? "Ask a question or describe a task, and I'll help you"
+							? "Ask me anything"
 							: ""
 					}
 					value={inputValue}
@@ -325,7 +326,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 					accept="image/*"
 					className="hidden"
 				/>
-				<div className={buttonContainerClass}>
+				{!activeMessage?.threadId || activeMessage?.threadId === threadId && (<div className={buttonContainerClass}>
 					<button
 						type="button"
 						className={iconButtonClass}
@@ -354,7 +355,7 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled }: ChatInputProps
 							<FaStopCircle size={16} />
 						</button>
 					)}
-				</div>
+				</div>)}
 			</div>
 			{showDropdown && filteredDropDownItems.length > 0 && inputRect && (
 				<FileDropdown

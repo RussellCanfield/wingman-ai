@@ -4,7 +4,6 @@ import type { FileMetadata } from "./v2/Message";
 export interface AddMessageToThreadEvent {
 	threadId: string;
 	message: ComposerMessage;
-	state?: GraphState;
 }
 
 export interface RenameThreadEvent {

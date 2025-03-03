@@ -36,8 +36,6 @@ export interface AIProvider {
 		signal: AbortSignal,
 	): Promise<string>;
 	getModel(params?: ModelParams): BaseChatModel;
-	getLightweightModel(params?: ModelParams): BaseChatModel;
-	getReasoningModel(params?: ModelParams): BaseChatModel;
 }
 
 export interface AIStreamProvider extends AIProvider {
@@ -49,7 +47,3 @@ export interface AIStreamProvider extends AIProvider {
 		recentClipboard?: string,
 	): Promise<string>;
 }
-
-export const isOClassModel = (model?: string) => {
-	return model?.startsWith("o") ?? false;
-};

@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import { useMemo, type PropsWithChildren } from "react";
 import { FaUndo, FaUser } from "react-icons/fa";
 import {
 	prism,
@@ -16,6 +16,7 @@ import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
 import { useComposerContext } from "../../context/composerContext";
 import { acceptFile, getTruncatedPath, openFile, rejectFile, undoFile } from "../../utilities/files";
+import type { FileMetadata } from "@shared/types/v2/Message";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -37,7 +38,7 @@ const ChatEntry = ({
 	isCurrent
 }: PropsWithChildren<ComposerMessage & { isCurrent?: boolean }>) => {
 	const { isLightTheme } = useSettingsContext();
-	const { activeThread, activeThreadGraphState } = useComposerContext();
+	const { activeThread } = useComposerContext();
 
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
 
@@ -55,7 +56,13 @@ const ChatEntry = ({
 	const bgClasses = fromUser ? "bg-stone-800 rounded-lg overflow-hidden w-full" : "";
 	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
-	const files = activeThreadGraphState?.files;
+	const files = useMemo(() => {
+		return (events ?? [])
+			.filter(e => e.type === "tool-end" && FileToolNames.includes(e.metadata?.tool!))
+			.map(e => JSON.parse(e.content) satisfies FileMetadata)
+			.filter(Boolean);
+	}, [events]);
+
 	const hasPendingFiles = files && files.length > 0 && files?.some(f => !f.accepted && !f.rejected);
 
 	return (
@@ -73,7 +80,7 @@ const ChatEntry = ({
 						{fromUser && (
 							<MessageWithMarkdown message={message} from={from} codeTheme={codeTheme} key={message} />
 						)}
-						{events?.map(e => {
+						{events?.map((e, i) => {
 							// Check if this tool-start has a matching tool-end
 							const hasEndEvent = e.type === "tool-start" &&
 								events.some(endEvent =>
@@ -97,7 +104,9 @@ const ChatEntry = ({
 									const file = files?.find(f => f.path === e.metadata?.path);
 									return <ChatArtifact loading={loading} isLightTheme={isLightTheme} file={file} key={e.id} />;
 								}
-								return <ToolOutput loading={true} isLightTheme={isLightTheme} event={e} key={e.id} />;
+
+								const toolHasNoEndEvent = i < events.length - 1 && !hasEndEvent;
+								return <ToolOutput loading={!toolHasNoEndEvent} isLightTheme={isLightTheme} event={e} key={e.id} failed={toolHasNoEndEvent} />;
 							}
 							// Show tool-end events
 							if (e.type === "tool-end") {

@@ -201,6 +201,13 @@ export class LSPServer {
 			}
 		});
 
+		this.connection?.onShutdown(() => {
+			loggingProvider.logInfo("LSP Server is shutting down.");
+			if (memory) {
+				memory.cleanup();
+			}
+		});
+
 		if (this.connection) {
 			this.documents.listen(this.connection);
 			this.connection?.listen();
@@ -315,17 +322,14 @@ export class LSPServer {
 			},
 		);
 
+		this.connection?.onRequest("wingman/MCPUpdate", async () => {
+			await this.composer?.initialize();
+		});
+
 		this.connection?.onRequest(
 			"wingman/updateComposerFile",
 			async (event: UpdateComposerFileEvent) => {
 				return this.composer?.updateFile(event);
-			},
-		);
-
-		this.connection?.onRequest(
-			"wingman/fetchOriginalFileContents",
-			async ({ file, threadId }: { file: string; threadId: string }) => {
-				return this.composer?.fetchOriginalFileContents(file, threadId);
 			},
 		);
 

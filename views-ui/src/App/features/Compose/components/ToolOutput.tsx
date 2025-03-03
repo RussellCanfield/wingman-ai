@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import {
     AiOutlineLoading3Quarters,
     AiOutlineCheckCircle,
+    AiOutlineCloseCircle
 } from "react-icons/ai";
 import { getTruncatedPath, openFile } from "../../../utilities/files";
 
@@ -17,7 +18,8 @@ export const ToolOutput = ({
     event,
     isLightTheme,
     loading,
-}: { event: StreamEvent; isLightTheme: boolean; loading: boolean }) => {
+    failed
+}: { event: StreamEvent; isLightTheme: boolean; loading: boolean, failed?: boolean }) => {
     //@ts-expect-error
     const displayName = ToolNames[event.metadata?.tool] ?? event.metadata.tool;
 
@@ -76,16 +78,17 @@ export const ToolOutput = ({
                     </h4>
 
                     <div className="flex items-center ml-3">
-                        {loading ? (
+                        {loading && (
                             <div className="flex justify-center">
                                 <AiOutlineLoading3Quarters
                                     className="animate-spin text-stone-400"
                                     size={20}
                                 />
                             </div>
-                        ) : (
+                        )}
+                        {!loading && (
                             <div className="flex justify-center">
-                                <AiOutlineCheckCircle className="text-green-500" size={20} />
+                                {!failed ? <AiOutlineCheckCircle className="text-gray-400/50" size={20} /> : <AiOutlineCloseCircle className="text-gray-400/50" size={20} />}
                             </div>
                         )}
                     </div>

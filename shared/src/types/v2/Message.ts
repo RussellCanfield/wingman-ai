@@ -72,11 +72,12 @@ export interface BaseMessage {
 }
 
 export interface FileMetadata {
+	id?: string;
 	description?: string;
 	path: string;
 	code?: string;
-	diff?: string;
 	original?: string;
+	diff?: string;
 	language?: string;
 	accepted?: boolean;
 	rejected?: boolean;

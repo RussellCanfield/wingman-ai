@@ -8,17 +8,32 @@ function ChatResponseList({
 	loading
 }: PropsWithChildren & { messages: ComposerMessage[], loading: boolean }) {
 	const ulRef = useRef<HTMLUListElement>(null);
-	const ref = useRef<HTMLDivElement>(null);
+	const bottomRef = useRef<HTMLDivElement>(null);
 
 	const scrollToBottom = useCallback(() => {
-		if (ref.current) {
-			ref.current.scrollIntoView({ block: "nearest" });
-		}
+		// Add a small delay to ensure content is rendered
+		setTimeout(() => {
+			if (bottomRef.current) {
+				bottomRef.current.scrollIntoView({
+					behavior: "smooth",
+					block: "end",
+				});
+			}
+		}, 100);
 	}, []);
 
+	// Scroll on new messages or loading state change
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
 		scrollToBottom();
-	}, [scrollToBottom]);
+	}, [messages.length, loading, scrollToBottom]);
+
+	// Force scroll on initial render
+	useEffect(() => {
+		if (ulRef.current) {
+			ulRef.current.scrollTop = ulRef.current.scrollHeight;
+		}
+	}, []);
 
 	const chatHistory = useMemo(() => {
 		return messages.map(({ from, message, events, image }, index) => (
@@ -39,10 +54,11 @@ function ChatResponseList({
 		<ul
 			ref={ulRef}
 			className="flex-1 overflow-x-hidden overflow-y-auto list-none m-0 p-0 pr-2"
+			style={{ scrollBehavior: 'smooth' }}
 		>
 			{chatHistory}
 			{children}
-			<div ref={ref} />
+			<div ref={bottomRef} style={{ height: '1px', width: '100%' }} />
 		</ul>
 	);
 }

@@ -5,6 +5,7 @@ import { useComposerContext } from '../../context/composerContext';
 import type { Thread } from '@shared/types/Settings';
 import { PiGraph } from "react-icons/pi";
 import { vscode } from '../../utilities/vscode';
+import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 
 export const /**
 * ThreadManagement component for managing conversation threads.
@@ -13,7 +14,7 @@ export const /**
 * @returns {JSX.Element} The rendered ThreadManagement component
 */
   ThreadManagement: React.FC = () => {
-    const { threads, activeThread, createThread, switchThread, deleteThread, renameThread, branchThread } = useComposerContext();
+    const { threads, activeThread, createThread, switchThread, deleteThread, renameThread, branchThread, activeMessage } = useComposerContext();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isCreatingThread, setIsCreatingThread] = useState(false);
     const [newThreadTitle, setNewThreadTitle] = useState('');
@@ -123,9 +124,24 @@ export const /**
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
+            className={`
+    flex items-center gap-2 px-3 py-1.5 rounded-md 
+    hover:bg-[var(--vscode-button-hoverBackground)] 
+    transition-colors relative overflow-hidden
+    ${activeMessage?.loading ? 'animate-pulse' : ''}
+  `}
             aria-label="Manage threads"
           >
+            {activeMessage?.loading && (
+              <div className="absolute inset-0 -z-10">
+                <div className="w-full h-full animate-shimmer bg-gradient-to-r from-transparent via-[rgba(255,255,255,0.1)] to-transparent"
+                  style={{
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 2s infinite linear'
+                  }}
+                />
+              </div>
+            )}
             <TbNeedleThread size={20} />
             <span className="truncate max-w-[150px]">
               {activeThread?.title || 'New Thread'}
@@ -172,6 +188,14 @@ export const /**
                     }}
                   >
                     <div className="flex justify-between items-center">
+                      {activeMessage?.threadId === thread.id && (
+                        <div className="flex justify-center mr-4">
+                          <AiOutlineLoading3Quarters
+                            className="animate-spin text-stone-400"
+                            size={16}
+                          />
+                        </div>
+                      )}
                       {editingThreadId === thread.id ? (
                         <input
                           ref={editThreadInputRef}

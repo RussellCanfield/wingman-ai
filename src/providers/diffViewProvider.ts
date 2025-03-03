@@ -4,12 +4,7 @@ import {
 	extractCodeBlock,
 	replaceTextInDocument,
 } from "./utilities";
-import type {
-	AppMessage,
-	CodeReview,
-	CodeReviewCommand,
-	FileDetails,
-} from "@shared/types/Message";
+import type { AppMessage } from "@shared/types/Message";
 import type { AIProvider } from "../service/base";
 import type { LSPClient } from "../client";
 import type { DiffViewCommand } from "@shared/types/v2/Composer";
@@ -20,8 +15,6 @@ export class DiffViewProvider {
 
 	constructor(
 		private readonly _context: vscode.ExtensionContext,
-		private readonly _aiProvider: AIProvider,
-		private readonly _workspace: string,
 		private readonly _lspClient: LSPClient,
 	) {}
 

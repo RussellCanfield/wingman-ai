@@ -12,12 +12,12 @@ interface ComposerContextType {
   loading: boolean;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   clearActiveMessage: () => void;
+  setActiveMessage: React.Dispatch<React.SetStateAction<ComposerMessage | undefined>>;
   activeMessage: ComposerMessage | undefined;
   activeFiles: FileSearchResult[];
   setActiveFiles: React.Dispatch<React.SetStateAction<FileSearchResult[]>>;
   // Thread management
   threads: Thread[];
-  activeThreadGraphState?: GraphState;
   activeThread: Thread | null;
   createThread: (title: string) => void;
   switchThread: (threadId: string) => void;
@@ -38,7 +38,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const [composerMessages, setComposerMessages] = useState<ComposerMessage[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [activeMessage, setActiveMessage] = useState<ComposerMessage | undefined>();
-  const threadGraphStateRef = useRef(new Map());
   const [chips, setChips] = useState<FileSearchResult[]>([]);
 
   // Thread management state
@@ -47,8 +46,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const threadsRef = useRef<Thread[]>([]);
   const activeThreadRef = useRef<Thread | null>(null);
-
-  console.log(threadGraphStateRef.current);
 
   // Update refs whenever state changes
   useEffect(() => {
@@ -186,13 +183,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const handleComposerEvent = (value: ComposerResponse) => {
-    const { step, events, state, threadId } = value;
-
-    if (state && threadId) {
-      threadGraphStateRef.current.set(threadId, state);
-    }
-
-    console.log('Update:', threadId, state, threadGraphStateRef.current);
+    const { step, events, threadId } = value;
 
     switch (step) {
       case "composer-done": {
@@ -209,19 +200,11 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           newMessage
         ]);
 
-        // Get the latest graph state from our ref
-        const currentThreadState = threadGraphStateRef.current.get(threadId);
-        const modifiedState = currentThreadState ? {
-          ...currentThreadState,
-          messages: []
-        } : undefined;
-
         vscode.postMessage({
           command: "add-message-to-thread",
           value: {
             threadId: threadId,
             message: newMessage,
-            state: modifiedState
           } satisfies AddMessageToThreadEvent
         });
 
@@ -261,8 +244,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         // Handle threads data from extension
         if (threads && Array.isArray(threads)) {
           setThreads(threads);
-
-          console.log(threads);
           // Set active thread if available
           if (activeThreadId && threads.length > 0) {
             const thread = threads.find((t: Thread) => t.id === activeThreadId);
@@ -275,14 +256,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             setActiveThread(threads[0]);
             setComposerMessages(threads[0].messages as ComposerMessage[] || []);
           }
-
-          const newMap = new Map(threadGraphStateRef.current);
-          threadGraphStateRef.current = threads.reduce((acc, thread) => {
-            if (thread.graphState) {
-              acc.set(thread.id, thread.graphState);
-            }
-            return acc;
-          }, newMap);
         }
         break;
       }
@@ -332,7 +305,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       loading, setLoading,
       activeMessage,
       clearActiveMessage,
-      activeThreadGraphState: threadGraphStateRef.current.get(activeThread?.id ?? ''),
+      setActiveMessage,
       activeFiles: chips,
       setActiveFiles: setChips,
       // Thread management

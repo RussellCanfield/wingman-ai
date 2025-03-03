@@ -2,8 +2,9 @@ import { tool } from "@langchain/core/tools";
 import path from "node:path";
 import { z } from "zod";
 import { scanDirectory } from "../../utils";
+import { baseToolSchema } from "./schemas";
 
-const listDirectorySchema = z.object({
+const listDirectorySchema = baseToolSchema.extend({
 	directory: z.string().describe("The directory to list files from"),
 	depth: z
 		.number()
@@ -31,6 +32,7 @@ export const createListDirectoryTool = (workspace: string) => {
 				return JSON.stringify({
 					files,
 					message: `Directory structure for ${input.directory} with depth ${depth}. To avoid redundant filesystem operations, save this result and reference it in your reasoning when you need information about this directory.`,
+					explanation: input.explanation,
 				});
 			} catch (error) {
 				console.error("Error in list_directory tool:", error);

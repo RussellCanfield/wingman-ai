@@ -4,7 +4,8 @@ import type { AppMessage } from "@shared/types/Message";
 import type { MCPToolConfig, Settings } from "@shared/types/Settings";
 import { addNoneAttributeToLink } from "./utilities";
 import { SaveSettings } from "../service/settings";
-import { createMCPTool } from "../service/anthropic/mcpTools";
+import { createMCPTool } from "../composer/v2/tools/mcpTools";
+import type { LSPClient } from "../client";
 
 let panel: vscode.WebviewPanel | undefined;
 
@@ -17,6 +18,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _settings: Settings,
+		private readonly _lspClient: LSPClient,
 	) {}
 
 	private createPanel(): vscode.WebviewPanel {
@@ -70,25 +72,36 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				case "test-mcp": {
 					let success = false;
+					const foundTools: MCPToolConfig["tools"] = [];
 					let tool: ReturnType<typeof createMCPTool> | undefined;
 					try {
 						tool = createMCPTool(value as MCPToolConfig);
 						await tool.connect();
 						const { tools } = await tool.getTools();
 						success = tools.length > 0;
+						if (success) {
+							foundTools.push(...tools.map((t) => ({ name: t.name })));
+						}
 					} catch (e) {
-						console.log(e);
+						console.error(e);
+						if (e instanceof Error) {
+							vscode.window.showErrorMessage(
+								`MCP Tool: ${(value as MCPToolConfig).name} failed validation: ${e.message}`,
+							);
+						}
 					} finally {
 						if (tool) {
 							await tool.close();
 						}
 					}
 
+					await this._lspClient.updateMCPTools();
 					settingsPanel.webview.postMessage({
 						command: "tool-verified",
 						value: {
 							...(value as MCPToolConfig),
 							verified: success,
+							tools: foundTools,
 						} satisfies MCPToolConfig,
 					});
 					break;

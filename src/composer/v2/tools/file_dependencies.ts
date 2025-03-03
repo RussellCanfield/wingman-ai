@@ -1,7 +1,7 @@
 import { tool } from "@langchain/core/tools";
 import fs from "node:fs";
 import path from "node:path";
-import { baseFileSchema } from "./base_file_schema";
+import { baseFileSchema } from "./schemas";
 import type { CodeParser } from "../../../server/files/parser";
 import { getTextDocumentFromPath } from "../../../server/files/utils";
 
@@ -39,6 +39,7 @@ export const createFindFileDependenciesTool = (
 				importEdges: Array.from(importEdges),
 				exportEdges: Array.from(exportEdges),
 				filePath: filePath,
+				explanation: input.explanation,
 			};
 		},
 		{

@@ -1,8 +1,9 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { spawn, type ChildProcess } from "node:child_process";
+import { baseToolSchema } from "./schemas";
 
-export const commandExecuteSchema = z.object({
+export const commandExecuteSchema = baseToolSchema.extend({
 	command: z.string().describe("The command to execute in the terminal"),
 });
 
@@ -111,11 +112,15 @@ export const createCommandExecuteTool = (
 							hasExited = true;
 							clearTimeout(timeout);
 							if (code === 0) {
-								resolve(output || "Command completed successfully");
+								resolve({
+									output: output || "Command completed successfully",
+									explanation: input.explanation,
+								});
 							} else {
-								resolve(
-									`Command failed with exit code: ${code}\nOutput:\n${output}`,
-								);
+								resolve({
+									output: `Command failed with exit code: ${code}\nOutput:\n${output}`,
+									explanation: input.explanation,
+								});
 							}
 						}
 					});
@@ -129,7 +134,7 @@ export const createCommandExecuteTool = (
 		{
 			name: "command_execute",
 			description:
-				"Executes a command in a terminal and reports the output. Cannot execute potentially destructive commands like rm, mv, chmod, sudo, etc. Use for safe operations like running build commands. Commands run with a timeout and in the current workspace context.",
+				"Executes a command in a terminal and reports the output. Cannot execute potentially destructive commands like rm, mv, chmod, sudo, etc. Use for safe operations like running build commands. Do not run a long running command like a dev server, you cannot exit it. Commands run with a timeout and in the current workspace context.",
 			schema: commandExecuteSchema,
 		},
 	);

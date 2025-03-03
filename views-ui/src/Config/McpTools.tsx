@@ -69,6 +69,17 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                 <p className="text-sm text-[var(--vscode-descriptionForeground)]">
                     Configure Model Context Protocol tools that Wingman can use.
                 </p>
+                <p className="text-sm text-[var(--vscode-descriptionForeground)]">
+                    You can find servers
+                    <a
+                        href=" https://github.com/modelcontextprotocol/servers"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-600 underline"
+                    >
+                        here.
+                    </a>{" "}
+                </p>
             </div>
 
             {/* List of existing tools */}
@@ -121,6 +132,24 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                                         className="w-full px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md"
                                     />
                                 </div>
+                                {tool.tools && (
+                                    <div>
+                                        {/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
+                                        <label className="block text-sm font-medium mb-1">
+                                            Tools Available:
+                                        </label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {tool.tools.map((t, index) => (
+                                                <div
+                                                    key={`${t.name}-${index}`}
+                                                    className='p-1 rounded-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)]'
+                                                >
+                                                    {t.name}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {tool.type === "command" ? (
                                     <div>

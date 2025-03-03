@@ -65,7 +65,8 @@ export const App = () => {
 					if (toolIndex !== -1) {
 						updatedMcpTools[toolIndex] = {
 							...updatedMcpTools[toolIndex],
-							verified: true
+							verified: config.verified,
+							tools: config.tools
 						};
 					}
 
@@ -275,7 +276,7 @@ export const App = () => {
 					/>
 				</section>
 
-				{settings.aiProvider === 'Anthropic' && (<section className={cardClass}>
+				<section className={cardClass}>
 					<div className="absolute top-0 right-0 bg-orange-500 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
 					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
 						MCP Tools
@@ -284,7 +285,7 @@ export const App = () => {
 						mcpTools={settings.mcpTools || []}
 						onChange={onMCPToolsChanged}
 					/>
-				</section>)}
+				</section>
 			</div>
 		</div>
 	);

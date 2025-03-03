@@ -3,7 +3,7 @@ import { createPatch } from "diff";
 import fs, { promises } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { baseFileSchema } from "./base_file_schema";
+import { baseFileSchema } from "./schemas";
 import type { FileMetadata } from "@shared/types/v2/Message";
 import { Command } from "@langchain/langgraph";
 
@@ -91,9 +91,10 @@ export const createWriteFileTool = (workspace: string) => {
 				}
 
 				const file: FileMetadata = {
+					id: config.callbacks._parentRunId,
 					path: input.filePath,
 					code: input.contents,
-					original: fileContents ?? "",
+					original: fileContents,
 					diff: await generateDiffFromModifiedCode(
 						input.contents,
 						input.filePath,
@@ -107,7 +108,7 @@ export const createWriteFileTool = (workspace: string) => {
 						messages: [
 							{
 								role: "tool",
-								content: `Successfully wrote ${input.filePath}`,
+								content: `Successfully wrote ${input.filePath} - ${input.explanation}`,
 								tool_call_id: config.toolCall.id,
 							},
 						],

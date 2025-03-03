@@ -1,8 +1,7 @@
 import { tool } from "@langchain/core/tools";
 import fs, { promises } from "node:fs";
 import path from "node:path";
-import { baseFileSchema } from "./base_file_schema";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import { baseFileSchema } from "./schemas";
 
 export const readFileSchema = baseFileSchema.extend({
 	// Additional read-specific properties would go here
@@ -11,36 +10,29 @@ export const readFileSchema = baseFileSchema.extend({
 /**
  * Creates a tool that reads file contents
  */
-export const createReadFileTool = (
-	workspace: string,
-	getFileFromGraph: (
-		path: string,
-		threadId: string,
-	) => Promise<FileMetadata | undefined>,
-) => {
+export const createReadFileTool = (workspace: string) => {
 	return tool(
-		async (input, config) => {
-			const threadId = config.configurable?.thread_id as string;
-
-			const cachedFile = await getFileFromGraph(input.filePath, threadId);
-
-			if (cachedFile) {
-				return cachedFile.code;
-			}
-
+		async (input) => {
 			const filePath = path.isAbsolute(input.filePath)
 				? input.filePath
 				: path.join(workspace, input.filePath);
 
 			if (!fs.existsSync(filePath)) {
-				return "File does not exist (create if required).";
+				return { error: "File does not exist (create if required).", filePath };
 			}
 
-			return (await promises.readFile(filePath)).toString();
+			const content = await promises.readFile(filePath);
+
+			return {
+				content: content.toString(),
+				filePath: path.relative(workspace, input.filePath),
+				explanation: input.explanation,
+			};
 		},
 		{
 			name: "read_file",
-			description: "Reads the contents of a specific file.",
+			description:
+				"Reads the contents of a specific file and includes file path in response.",
 			schema: readFileSchema,
 		},
 	);

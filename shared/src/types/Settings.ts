@@ -9,7 +9,6 @@ export interface Thread {
 	updatedAt: number;
 	messages: ComposerMessage[];
 	originatingThreadId?: string;
-	graphState?: GraphState;
 }
 
 export interface WorkspaceSettings {
@@ -137,6 +136,7 @@ export type MCPToolConfig = {
 	command?: string;
 	endpoint?: string;
 	verified?: boolean;
+	tools?: Array<{ name: string }>;
 };
 
 export type Settings = {
