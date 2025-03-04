@@ -637,10 +637,11 @@ ${(() => {
 	const openAI =
 		this.settings.providerSettings.OpenAI ||
 		this.settings.providerSettings.AzureAI;
+	if (!openAI) return "";
+
+	// Check if the provider is either OpenAI or AzureAI
 	if (
-		!(this.aiProvider instanceof OpenAI) ||
-		!(this.aiProvider instanceof AzureAI) ||
-		!openAI
+		!(this.aiProvider instanceof OpenAI || this.aiProvider instanceof AzureAI)
 	)
 		return "";
 
