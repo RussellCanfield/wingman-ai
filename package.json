@@ -1,8 +1,8 @@
 {
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
-	"description": "Wingman - AI powered coding assistant that works with Anthropic, OpenAI, Azure and Ollama",
-	"version": "0.9.35",
+	"description": "Wingman - AI agentic coding assistant that works with Anthropic, OpenAI, Azure and Ollama",
+	"version": "1.0.0",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [

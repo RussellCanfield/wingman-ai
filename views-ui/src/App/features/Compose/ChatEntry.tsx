@@ -15,8 +15,10 @@ import { vscode } from "../../utilities/vscode";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
 import { useComposerContext } from "../../context/composerContext";
-import { acceptFile, getTruncatedPath, openFile, rejectFile, undoFile } from "../../utilities/files";
+import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../utilities/files";
 import type { FileMetadata } from "@shared/types/v2/Message";
+import { PiGitDiff } from "react-icons/pi";
+import { Tooltip } from "react-tooltip";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -150,6 +152,7 @@ const ChatEntry = ({
 							return (
 								<div key={f.path} className="flex items-center justify-between gap-4 w-full hover:bg-stone-800/50">
 									<div className="flex flex-1 min-w-0">
+										<Tooltip id={`${f.path}-tooltip`} />
 										<h4
 											className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm group"
 											data-tooltip-id={`${f.path}-tooltip`}
@@ -210,6 +213,16 @@ const ChatEntry = ({
 													onClick={() => rejectFile({ files: [f], threadId: activeThread?.id! })}
 												>
 													<HiOutlineXMark size={18} />
+												</button>
+											</div>
+											<div className="flex items-center rounded z-10 transition-colors hover:bg-yellow-500/10 hover:shadow-lg focus:ring focus:ring-yellow-400" style={{ color: '#ffaf38' }}>
+												<button
+													type="button"
+													title="Show diff"
+													className="p-3"
+													onClick={() => showDiffview(f, activeThread!.id)}
+												>
+													<PiGitDiff size={16} />
 												</button>
 											</div>
 											<div className="flex items-center rounded z-10 hover:bg-stone-800 transition-colors text-green-400">

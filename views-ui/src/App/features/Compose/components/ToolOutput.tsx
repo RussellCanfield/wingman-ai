@@ -5,6 +5,7 @@ import {
     AiOutlineCheckCircle,
     AiOutlineCloseCircle
 } from "react-icons/ai";
+import { BsTools } from "react-icons/bs";
 import { getTruncatedPath, openFile } from "../../../utilities/files";
 
 const ToolNames = {
@@ -70,14 +71,16 @@ export const ToolOutput = ({
         >
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-between relative p-3">
-                    <h4
-                        className="m-0 text-base overflow-x-auto whitespace-nowrap"
-                        style={{ flex: "0 1 auto", minWidth: "0", maxWidth: "100%" }}
-                    >
-                        {displayName} {ToolDetails}
-                    </h4>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <BsTools className="text-gray-400/50 flex-shrink-0" size={20} />
+                        <div className="overflow-x-auto max-w-full" style={{ scrollbarWidth: 'thin' }}>
+                            <h4 className="m-0 text-base whitespace-nowrap">
+                                {displayName} {ToolDetails}
+                            </h4>
+                        </div>
+                    </div>
 
-                    <div className="flex items-center ml-3">
+                    <div className="flex items-center ml-3 flex-shrink-0">
                         {loading && (
                             <div className="flex justify-center">
                                 <AiOutlineLoading3Quarters

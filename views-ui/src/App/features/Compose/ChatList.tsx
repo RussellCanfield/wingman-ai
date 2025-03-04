@@ -28,13 +28,6 @@ function ChatResponseList({
 		scrollToBottom();
 	}, [messages.length, loading, scrollToBottom]);
 
-	// Force scroll on initial render
-	useEffect(() => {
-		if (ulRef.current) {
-			ulRef.current.scrollTop = ulRef.current.scrollHeight;
-		}
-	}, []);
-
 	const chatHistory = useMemo(() => {
 		return messages.map(({ from, message, events, image }, index) => (
 			<ChatEntry

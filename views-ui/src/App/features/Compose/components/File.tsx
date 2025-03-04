@@ -33,7 +33,6 @@ export const ChatArtifact = ({
         <div className={`rounded-lg overflow-hidden shadow-lg mb-4 mt-4 ${cssClasses}`}>
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-start relative">
-                    <Tooltip id={`${file.path}-tooltip`} />
                     <h4
                         className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm group"
                         data-tooltip-id={`${file.path}-tooltip`}

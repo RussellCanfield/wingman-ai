@@ -109,6 +109,19 @@ export const /**
       setIsDropdownOpen(false);
     };
 
+    const handleEditInputKeyDown = (e: React.KeyboardEvent) => {
+      e.stopPropagation();
+
+      // Handle specific keys
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSaveThreadTitle();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setEditingThreadId(null);
+      }
+    };
+
     const formatDate = (timestamp: number) => {
       return new Date(timestamp).toLocaleDateString(undefined, {
         month: 'short',
@@ -203,7 +216,7 @@ export const /**
                           value={editingTitle}
                           onChange={(e) => setEditingTitle(e.target.value)}
                           onBlur={handleSaveThreadTitle}
-                          onKeyDown={(e) => handleKeyDown(e, 'edit')}
+                          onKeyDown={handleEditInputKeyDown}
                           className="flex-1 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded px-2 py-1"
                           onClick={(e) => e.stopPropagation()}
                         />

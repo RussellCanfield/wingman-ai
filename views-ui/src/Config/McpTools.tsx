@@ -70,15 +70,23 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                     Configure Model Context Protocol tools that Wingman can use.
                 </p>
                 <p className="text-sm text-[var(--vscode-descriptionForeground)]">
-                    You can find servers
+                    You can find servers{" "}
                     <a
                         href=" https://github.com/modelcontextprotocol/servers"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-500 hover:text-blue-600 underline"
                     >
-                        here.
-                    </a>{" "}
+                        here
+                    </a>
+                    {" "} or <a
+                        href=" https://modelcontextprotocol.io/introduction"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-600 underline"
+                    >
+                        create your own!
+                    </a>
                 </p>
             </div>
 

@@ -8,9 +8,11 @@
 
 <b>
 
-[Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) brings high quality AI assisted coding right to your computer. We support most major AI providers - OpenAI, Anthropic and Ollama which is 100% free and private.
+[Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) brings high quality AI agentic coding right to your computer. We support most major AI providers - OpenAI, Anthropic and Ollama which is 100% free and private.
 
-Wingman has the ability to index your entire codebase and generate local LLM embeddings across your project, get meaningful project related answers quickly. Wingman-AI is the only AI extension on the market that uses a Graph RAG technique, providing the deepest insights into your code.
+Wingman is also supports [Model Context Protocol](https://modelcontextprotocol.io/introduction) tools, allowing you to extend and integrate with a number of servers already available such as Figma or even [your own browser](https://github.com/AgentDeskAI/browser-tools-mcp)!
+
+Have a specific question? Simply highlight text in the editor and Wingman will focus there. Want Wingman to work on it's own? Give it requirements and even attach an image and let it implement complete features for you - even executing commands.
 
 </b>
 
@@ -41,9 +43,11 @@ Wingman has the ability to index your entire codebase and generate local LLM emb
 <h3>Code completion</h3>
 Real-time code suggestions as you type
 <h3>Chat</h3>
-Ask questions about your codebase with an interactive real-time chat
-<h3>Composer</h3>
-Write enhancements, new features and more with cutting edge, self-reviewed and validated code. Composer supports undo, and automatically executing custom validation commands you provide!
+Agent based chat and complete code writing experience
+<h3>MCP Integration</h3>
+Integrate with MCP tools directly in Wingman, giving you the ability to extend its capabilities
+<h3>Threads</h3>
+Start a session, create new ones and even branch off an existing - allowing you to organize flows
 <h3>Document Generation</h3>
 Generate documentation for code with one click
 <h3>Refactor</h3>
@@ -59,11 +63,19 @@ Refactor code quickly with one click
 </p>
 
 <p align="center">
-  <img src="./docs-site/docs/public/Composer_Example.png" width="400" alt="Chat">
+  <img src="./docs-site/docs/public/ChatWithImage.png" width="400" alt="Chat">
 </p>
 
 <p align="center">
-  <img src="./docs-site/docs/public/Indexer.png" width="400" alt="Indexer">
+  <img src="./docs-site/docs/public/SettingsMCP.png" width="400" alt="Indexer">
+</p>
+
+<p align="center">
+  <img src="./docs-site/docs/public/Threads.png" width="400" alt="Indexer">
+</p>
+
+<p align="center">
+  <img src="./docs-site/docs/public/ThreadRelationships.png" width="400" alt="Indexer">
 </p>
 
 ## Release Notes

@@ -13,6 +13,8 @@ If you are running Ollama, make sure Ollama is installed, and started before run
 
 Once you select a provider and configure it, code completion and chat will work as expected. Please visit the other pages in the documentation to see details on configuration sections.
 
+We highly suggest **Anthropic Claude Sonnet 3.7** due to its up to date knowledge and high performance.
+
 ## Providers
 
 We currently support 4 AI providers.
@@ -23,11 +25,7 @@ We currently support 4 AI providers.
 -   Anthropic
 -   AzureAI
 
-While we encourage teams to run **Ollama**, it is a challenge to support advanced features due to most machines having limited compute.
+While we encourage teams to run **Ollama**, it is a challenge to support advanced features such as `tools` and most machines having limited compute.
 Further the models users are running can have varied context lengths and abilities such as reliable output formats.
 
 Currently **Ollama** and **OpenAI** are supported for generating advanced code context about your project. **NOTE** Embedding and query models are separately configured in settings.
-
-## Indexing
-
-Indexing needs to be configured for Wingman to start generating code context, visit the [indexing section]('./indexing') to learn how to configure it.
