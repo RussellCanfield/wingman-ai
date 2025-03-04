@@ -72,16 +72,17 @@ export interface BaseMessage {
 }
 
 export interface FileMetadata {
+	id?: string;
 	description?: string;
 	path: string;
 	code?: string;
-	diff?: string;
 	original?: string;
+	diff?: string;
 	language?: string;
 	accepted?: boolean;
 	rejected?: boolean;
 	lastModified?: number;
-	type?: "CREATE" | "MODIFY" | "ANALYZE"
+	type?: "CREATE" | "MODIFY" | "ANALYZE";
 }
 
 export interface CodeContextDetails {
@@ -98,4 +99,4 @@ export interface CodeContext
 	extends Pick<
 		CodeContextDetails,
 		"fileName" | "lineRange" | "workspaceName"
-	> { }
+	> {}

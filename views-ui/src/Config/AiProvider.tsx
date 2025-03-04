@@ -1,11 +1,11 @@
 import {
-	AiProviders,
+	type AiProviders,
 	AiProvidersList,
-	ApiSettingsType,
-	AzureAISettingsType,
-	OllamaSettingsType,
+	type ApiSettingsType,
+	type AzureAISettingsType,
+	type OllamaSettingsType,
 } from "@shared/types/Settings";
-import { InitSettings } from "./App";
+import type { InitSettings } from "./App";
 import { HFSettingsView } from "./HFSettingsView";
 import { OllamaSettingsView } from "./OllamaSettingsView";
 import { OpenAISettingsView } from "./OpenAISettingsView";

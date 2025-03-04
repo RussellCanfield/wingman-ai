@@ -1,13 +1,11 @@
-import { DiffViewCommand } from "@shared/types/v2/Composer";
-import { AppMessage, CodeReviewCommand } from "@shared/types/Message";
+import type { DiffViewCommand } from "@shared/types/v2/Composer";
+import type { AppMessage } from "@shared/types/Message";
 import { useEffect, useState } from "react";
 import DiffView from "./DiffView";
 import "./App.css";
-import CodeReviewFileByFile from "./CodeReviewFileByFile";
 
 export default function App() {
 	const [diff, setDiff] = useState<DiffViewCommand>();
-	const [review, setCodeReview] = useState<CodeReviewCommand | undefined>();
 
 	useEffect(() => {
 		window.addEventListener("message", handleResponse);
@@ -21,26 +19,18 @@ export default function App() {
 		const { data } = event;
 		const { command, value } = data;
 
+		console.log(event);
+
 		switch (command) {
 			case "diff-file":
 				setDiff(value as DiffViewCommand);
 				break;
-			case "code-review":
-				setCodeReview(value as CodeReviewCommand);
-				break;
 		}
 	};
 
-	if (diff) {
-		return <DiffView diff={diff} />;
-	} else if (review) {
-		return (
-			<CodeReviewFileByFile
-				review={review.review}
-				isDarkTheme={review.isDarkTheme}
-			/>
-		);
-	}
+	if (!diff) return null;
 
-	return null;
+	console.log('Diff:', diff);
+
+	return <DiffView diff={diff} />;
 }

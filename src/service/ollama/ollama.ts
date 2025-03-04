@@ -1,7 +1,7 @@
-import { OllamaAIModel } from "./types";
-import { InteractionSettings, Settings } from "@shared/types/Settings";
+import type { OllamaAIModel } from "./types";
+import type { InteractionSettings, Settings } from "@shared/types/Settings";
 import { asyncIterator } from "../asyncIterator";
-import { AIStreamProvider, ModelParams } from "../base";
+import type { AIStreamProvider, ModelParams } from "../base";
 import { delay } from "../delay";
 import { CodeLlama } from "./models/codellama";
 import { CodeQwen } from "./models/codeqwen";
@@ -10,7 +10,7 @@ import { Deepseek } from "./models/deepseek";
 import { Llama3 } from "./models/llama3";
 import { Magicoder } from "./models/magicoder";
 import { PhindCodeLlama } from "./models/phind-codellama";
-import {
+import type {
 	OllamaRequest,
 	OllamaResponse,
 	OllamaChatMessage,
@@ -18,10 +18,10 @@ import {
 	OllamaChatResponse,
 } from "./types";
 import { truncateChatHistory } from "../utils/contentWindow";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOllama } from "@langchain/ollama";
 import { Qwen } from "./models/qwen";
-import { ILoggingProvider } from "@shared/types/Logger";
+import type { ILoggingProvider } from "@shared/types/Logger";
 import { Phi } from "./models/phi";
 
 export class Ollama implements AIStreamProvider {
@@ -36,7 +36,7 @@ export class Ollama implements AIStreamProvider {
 	constructor(
 		private readonly settings: Settings["providerSettings"]["Ollama"],
 		interactionSettings: InteractionSettings,
-		private readonly loggingProvider: ILoggingProvider
+		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
 			throw new Error("Unable to load Ollama settings.");
@@ -70,7 +70,7 @@ export class Ollama implements AIStreamProvider {
 
 		this.chatHistory.push({
 			role: "assistant",
-			content: input
+			content: input,
 		});
 	}
 
@@ -79,24 +79,7 @@ export class Ollama implements AIStreamProvider {
 			baseUrl: this.settings!.baseUrl,
 			model: this.settings!.chatModel,
 			maxRetries: 2,
-		})
-	}
-
-	getLightweightModel(): BaseChatModel {
-		return new ChatOllama({
-			baseUrl: this.settings!.baseUrl,
-			model: this.settings!.chatModel,
-			maxRetries: 2,
-		})
-	}
-
-	getReasoningModel(params?: ModelParams): BaseChatModel {
-		return new ChatOllama({
-			baseUrl: this.settings!.baseUrl,
-			model: this.settings!.chatModel,
-			temperature: 0,
-			maxRetries: 2,
-		})
+		});
 	}
 
 	invoke(prompt: string) {
@@ -112,17 +95,13 @@ export class Ollama implements AIStreamProvider {
 
 	async validateSettings(): Promise<boolean> {
 		if (
-			!(await this.validateModelExists(
-				this.settings?.chatModel ?? "unknown"
-			))
+			!(await this.validateModelExists(this.settings?.chatModel ?? "unknown"))
 		) {
 			return false;
 		}
 
 		if (
-			!(await this.validateModelExists(
-				this.settings?.codeModel ?? "unknown"
-			))
+			!(await this.validateModelExists(this.settings?.codeModel ?? "unknown"))
 		) {
 			return false;
 		}
@@ -181,15 +160,13 @@ export class Ollama implements AIStreamProvider {
 	public async validateModelExists(modelName: string): Promise<boolean> {
 		try {
 			const response = await fetch(
-				new URL(
-					`${this.settings?.baseUrl}${this.settings?.modelInfoPath}`
-				),
+				new URL(`${this.settings?.baseUrl}${this.settings?.modelInfoPath}`),
 				{
 					method: "POST",
 					body: JSON.stringify({
 						name: modelName,
 					}),
-				}
+				},
 			);
 
 			if (response.status === 200) {
@@ -204,7 +181,7 @@ export class Ollama implements AIStreamProvider {
 
 	private async fetchModelResponse(
 		payload: OllamaRequest,
-		signal: AbortSignal
+		signal: AbortSignal,
 	) {
 		if (signal.aborted) {
 			return undefined;
@@ -215,13 +192,13 @@ export class Ollama implements AIStreamProvider {
 				method: "POST",
 				body: JSON.stringify(payload),
 				signal,
-			}
+			},
 		);
 	}
 
 	private async fetchChatResponse(
 		payload: OllamaChatRequest,
-		signal: AbortSignal
+		signal: AbortSignal,
 	) {
 		if (signal.aborted) {
 			return undefined;
@@ -270,7 +247,7 @@ export class Ollama implements AIStreamProvider {
 
 	private async *generateCode(
 		payload: OllamaRequest,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): AsyncGenerator<string> {
 		const startTime = Date.now();
 		let response: Response | undefined;
@@ -279,10 +256,9 @@ export class Ollama implements AIStreamProvider {
 			response = await this.fetchModelResponse(payload, signal);
 		} catch (error) {
 			this.loggingProvider.logError(
-				`Unable to generate code:, ${error instanceof Error
-					? error.message
-					: JSON.stringify(error)
-				}`
+				`Unable to generate code:, ${
+					error instanceof Error ? error.message : JSON.stringify(error)
+				}`,
 			);
 			return "";
 		}
@@ -295,7 +271,7 @@ export class Ollama implements AIStreamProvider {
 		const executionTime = endTime - startTime;
 
 		this.loggingProvider.logInfo(
-			`Code Time To First Token execution time: ${executionTime} ms`
+			`Code Time To First Token execution time: ${executionTime} ms`,
 		);
 
 		for await (const chunk of asyncIterator(response.body)) {
@@ -308,7 +284,7 @@ export class Ollama implements AIStreamProvider {
 				.replace(/}\n{/gi, "}\u241e{")
 				.split("\u241e");
 			try {
-				let codeLines: string[] = [];
+				const codeLines: string[] = [];
 				for (const json of jsonStrings) {
 					const result = JSON.parse(json) as OllamaResponse;
 					codeLines.push(result.response);
@@ -326,13 +302,13 @@ export class Ollama implements AIStreamProvider {
 		ending: string,
 		signal: AbortSignal,
 		additionalContext?: string,
-		recentClipboard?: string
+		recentClipboard?: string,
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
-			beginning
+			beginning,
 		)
 			.replace("{ending}", ending)
 			.replace(
@@ -343,14 +319,15 @@ ${additionalContext ?? ""}
 
 -----
 
-${recentClipboard
-					? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+${
+	recentClipboard
+		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
   
 ${recentClipboard}
 
 -----`
-					: ""
-				}`
+		: ""
+}`,
 			);
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
@@ -376,10 +353,7 @@ ${recentClipboard}
 		let response: Response | undefined;
 
 		try {
-			response = await this.fetchModelResponse(
-				codeRequestOptions,
-				signal
-			);
+			response = await this.fetchModelResponse(codeRequestOptions, signal);
 		} catch (error) {
 			console.error(error);
 		}
@@ -388,7 +362,7 @@ ${recentClipboard}
 		const executionTime = (endTime - startTime) / 1000;
 
 		this.loggingProvider.logInfo(
-			`Code Completion execution time: ${executionTime} seconds`
+			`Code Completion execution time: ${executionTime} seconds`,
 		);
 
 		if (!response?.body) {
@@ -403,13 +377,13 @@ ${recentClipboard}
 		sentences: string[],
 		codeRequestOptions: OllamaRequest,
 		signal: AbortSignal,
-		status: { done: boolean }
+		status: { done: boolean },
 	) => {
 		const startTime = new Date().getTime();
 		let words: string[] = [];
 		for await (const characters of this.generateCode(
 			codeRequestOptions,
-			signal
+			signal,
 		)) {
 			if (characters.indexOf("\n") > -1) {
 				const splitOnLine = characters.split("\n");
@@ -434,8 +408,8 @@ ${recentClipboard}
 
 		this.loggingProvider.logInfo(
 			`Ollama - Code stream finished in ${executionTime} seconds with contents: ${JSON.stringify(
-				sentences
-			)}`
+				sentences,
+			)}`,
 		);
 	};
 
@@ -443,11 +417,11 @@ ${recentClipboard}
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
 	): Promise<string> {
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
-			beginning
+			beginning,
 		).replace("{ending}", ending);
 		const codeRequestOptions: OllamaRequest = {
 			model: this.settings?.codeModel!,
@@ -466,17 +440,12 @@ ${prompt}`,
 				top_k: 30,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: [
-					"<｜end▁of▁sentence｜>",
-					"<｜EOT｜>",
-					"\\n",
-					"<|eot_id|>",
-				],
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "\\n", "<|eot_id|>"],
 			},
 		};
 
-		let sentences: string[] = [];
-		let requestStatus = { done: false };
+		const sentences: string[] = [];
+		const requestStatus = { done: false };
 		const abortSignal = new AbortController();
 		signal.onabort = () => abortSignal.abort();
 		try {
@@ -484,7 +453,7 @@ ${prompt}`,
 				sentences,
 				codeRequestOptions,
 				abortSignal.signal,
-				requestStatus
+				requestStatus,
 			);
 			const start = Date.now();
 			let now = Date.now();
@@ -512,11 +481,7 @@ ${prompt}`,
 		this.chatHistory = [];
 	}
 
-	public async *chat(
-		prompt: string,
-		ragContent: string,
-		signal: AbortSignal
-	) {
+	public async *chat(prompt: string, ragContent: string, signal: AbortSignal) {
 		const messages: OllamaChatMessage[] = [
 			{
 				role: "user",
@@ -532,13 +497,14 @@ ${prompt}`,
 
 		messages.push({
 			role: "assistant",
-			content: `${ragContent
-				? `Here's some additional information that may help you generate a more accurate response.
+			content: `${
+				ragContent
+					? `Here's some additional information that may help you generate a more accurate response.
 Please determine if this information is relevant and can be used to supplement your response: 
 
 ${ragContent}`
-				: ""
-				}`,
+					: ""
+			}`,
 		});
 
 		messages.push({
@@ -548,7 +514,7 @@ ${ragContent}`
 
 		this.chatHistory.push(
 			messages[messages.length - 2],
-			messages[messages.length - 1]
+			messages[messages.length - 1],
 		);
 
 		const chatPayload: OllamaChatRequest = {
@@ -583,7 +549,7 @@ ${ragContent}`
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("AbortError")
+					!e.message.includes("AbortError"),
 				);
 			}
 		}
@@ -592,7 +558,7 @@ ${ragContent}`
 	public async genCodeDocs(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		if (!this.chatModel?.genDocPrompt) {
 			return "";
@@ -602,8 +568,7 @@ ${ragContent}`
 		if (ragContent) {
 			systemPrompt += ragContent;
 		}
-		const genDocPrompt =
-			"Generate documentation for the following code:\n" + prompt;
+		const genDocPrompt = `Generate documentation for the following code:\n${prompt}`;
 
 		const chatPayload: OllamaRequest = {
 			model: this.settings?.chatModel!,
@@ -637,7 +602,7 @@ ${ragContent}`
 	public async refactor(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		if (!this.chatModel?.refactorPrompt) {
 			return "";
@@ -659,12 +624,7 @@ ${ragContent}`
 				top_k: 20,
 				top_p: 0.2,
 				repeat_penalty: 1.1,
-				stop: [
-					"<｜end▁of▁sentence｜>",
-					"<｜EOT｜>",
-					"</s>",
-					"<|eot_id|>",
-				],
+				stop: ["<｜end▁of▁sentence｜>", "<｜EOT｜>", "</s>", "<|eot_id|>"],
 			},
 		};
 

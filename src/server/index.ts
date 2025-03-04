@@ -2,58 +2,35 @@ import {
 	createConnection,
 	TextDocuments,
 	ProposedFeatures,
-	InitializeParams,
+	type InitializeParams,
 	DidChangeConfigurationNotification,
 	TextDocumentSyncKind,
-	InitializeResult,
+	type InitializeResult,
 	DocumentDiagnosticReportKind,
 	type DocumentDiagnosticReport,
 	DidChangeWorkspaceFoldersNotification,
 } from "vscode-languageserver/node";
+import fs from "node:fs";
+import os from "node:os";
 import { URI } from "vscode-uri";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { Store } from "../store/vector";
-import { CodeGraph } from "./files/graph";
 import { CodeParser } from "./files/parser";
-import { Indexer } from "./files/indexer";
-import { Generator } from "./files/generator";
-import { createSymbolRetriever, SymbolRetriever } from "./retriever";
-import { DocumentQueue } from "./queue";
-import {
-	clearFilterCache,
-	filePathToUri,
-} from "./files/utils";
-import { VectorQuery } from "./query";
-import { ProjectDetailsHandler } from "./project-details";
-import { MemorySaver } from "@langchain/langgraph";
-import { cancelComposer, ComposerGraph } from "../composer/v2/composer";
-import { AIProvider } from "../service/base";
-import {
-	EmbeddingProviders,
-	OllamaEmbeddingSettingsType,
-	OpenAIEmbeddingSettingsType,
-	Settings,
-} from "@shared/types/Settings";
+import { createSymbolRetriever, type SymbolRetriever } from "./retriever";
+import { emptyCheckpoint } from "@langchain/langgraph";
+import type { AIProvider } from "../service/base";
+import type { Settings } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
-import { ComposerRequest, IndexStats, PlanExecuteState } from "@shared/types/v2/Composer";
+import type { ComposerRequest } from "@shared/types/v2/Composer";
 import { loggingProvider } from "./loggingProvider";
-import { createEmbeddingProvider } from "../service/embeddings/base";
-import { IndexerSettings } from "@shared/types/Indexer";
-import { LSPFileEventHandler } from "./files/eventHandler";
-import { FileMetadata } from "@shared/types/v2/Message";
 import { WebCrawler } from "./web";
-import { promises } from "node:fs";
 import path from "node:path";
+import { cancelComposer, WingmanAgent } from "../composer/v2/agents";
+import { PartitionedFileSystemSaver } from "../composer/checkpointer";
+import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
-let config = { configurable: { thread_id: "conversation-num-1" } };
-let memory = new MemorySaver();
+let memory: PartitionedFileSystemSaver;
 let modelProvider: AIProvider;
-let embeddingProvider: EmbeddingProviders;
-let embeddingSettings:
-	| OllamaEmbeddingSettingsType
-	| OpenAIEmbeddingSettingsType;
 let settings: Settings;
-let indexerSettings: IndexerSettings;
 
 export type CustomRange = {
 	start: { line: number; character: number };
@@ -81,18 +58,11 @@ export type EmbeddingsResponse = {
 
 export class LSPServer {
 	workspaceFolders: string[] = [];
-	vectorStore: Store | undefined;
 	codeParser: CodeParser | undefined;
-	symbolRetriever: SymbolRetriever | undefined;
+	symbolRetriever: SymbolRetriever;
 	documentQueue: TextDocument[] = [];
-	codeGraph: CodeGraph | undefined;
 	connection: ReturnType<typeof createConnection> | undefined;
-	queue: DocumentQueue | undefined;
-	indexer: Indexer | undefined;
-	composer: ComposerGraph | undefined;
-	projectDetails: ProjectDetailsHandler | undefined;
-	fileEventHandler: LSPFileEventHandler | undefined;
-	// Create a simple text document manager.
+	composer: WingmanAgent | undefined;
 	documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
 	constructor() {
@@ -107,94 +77,40 @@ export class LSPServer {
 	private postInitialize = async () => {
 		modelProvider = CreateAIProvider(settings, loggingProvider);
 		const workspaceFolder = this.workspaceFolders[0];
-		console.log("Wingman LSP initialized for workspace:", workspaceFolder);
-		this.vectorStore = new Store(
-			workspaceFolder,
-			createEmbeddingProvider(embeddingProvider, embeddingSettings)
-		);
-		const { result, codeGraph } = await this.vectorStore?.initialize();
-		if (!result) {
-			await this.connection?.sendRequest("wingman/failedLoadingStore");
-		}
 
-		this.codeGraph = codeGraph;
-		this.codeParser = new CodeParser(this.symbolRetriever!);
-		const codeGenerator = new Generator(this.codeParser!, modelProvider);
-		this.indexer = new Indexer(
-			workspaceFolder,
-			this.codeParser!,
-			this.codeGraph!,
-			codeGenerator,
-			this.symbolRetriever!,
-			this.vectorStore!,
-			indexerSettings.indexFilter,
-			this.updateFileInComposerGraph,
-			this.removeFileInComposerGraph
+		loggingProvider.logInfo(
+			`Wingman LSP initialized for workspace: ${workspaceFolder}`,
 		);
 
-		this.composer = new ComposerGraph(
-			this.workspaceFolders[0],
-			modelProvider,
-			this.codeGraph!,
-			this.vectorStore!,
-			settings.validationSettings,
-			settings,
-			config,
-			memory
-		)
-
+		this.codeParser = new CodeParser(workspaceFolder, this.symbolRetriever);
 		await this.codeParser.initialize();
 
-		this.queue = new DocumentQueue(this.indexer);
-
-		this.projectDetails = new ProjectDetailsHandler(
+		memory = new PartitionedFileSystemSaver(this.getPersistancePath());
+		this.composer = new WingmanAgent(
+			modelProvider,
 			this.workspaceFolders[0],
-			codeGenerator
+			settings,
+			memory,
+			this.codeParser,
 		);
-		await this.projectDetails.generateProjectDetails();
-
-		if (embeddingSettings.enabled) {
-			await this.vectorStore.createIndex();
-		}
+		await this.composer.initialize();
 	};
 
-	private removeFileInComposerGraph = async (relativeFilePath: string) => {
-		if (!this.composer) {
-			return;
-		}
+	private getPersistancePath = () => {
+		const homeDir = os.homedir();
+		const targetPath = path.join(
+			homeDir,
+			".wingman",
+			path.basename(this.workspaceFolders[0]),
+			"checkpoints",
+		);
 
-		const file: FileMetadata = {
-			path: relativeFilePath
-		}
+		// Ensure the directory exists
+		const dbDir = path.dirname(targetPath);
+		fs.mkdirSync(dbDir, { recursive: true });
 
-		await this.composer.removeFile(file);
-
-		await this.connection?.sendNotification("wingman/index-updated", {
-			exists: (await this.vectorStore?.indexExists()) ?? false,
-			processing: this.indexer?.isSyncing() ?? false,
-			files: Array.from(
-				this.codeGraph?.getSymbolTable().keys() ?? []
-			),
-		} satisfies IndexStats);
-	}
-
-	private updateFileInComposerGraph = async (relativeFilePath: string) => {
-		if (!this.composer) {
-			return;
-		}
-
-		const file: FileMetadata = {
-			path: relativeFilePath,
-			code: await promises.readFile(path.join(this.workspaceFolders[0], relativeFilePath), 'utf-8'),
-			lastModified: Date.now()
-		}
-
-		await this.composer.updateFile(file);
-
-		await this.connection?.sendNotification("wingman/webSearchProgress", {
-			type: "complete"
-		});
-	}
+		return targetPath;
+	};
 
 	private initialize = () => {
 		let hasConfigurationCapability = false;
@@ -203,7 +119,7 @@ export class LSPServer {
 		this.connection?.onInitialize(async (params: InitializeParams) => {
 			if (params.workspaceFolders) {
 				this.workspaceFolders = params.workspaceFolders.map(
-					(folder) => URI.parse(folder.uri).fsPath
+					(folder) => URI.parse(folder.uri).fsPath,
 				);
 			}
 
@@ -215,23 +131,10 @@ export class LSPServer {
 				if (!settings) {
 					throw new Error("Settings not found");
 				}
-
-				embeddingProvider = settings.embeddingProvider;
-
-				if (settings.embeddingProvider === "Ollama") {
-					embeddingSettings = settings.embeddingSettings.Ollama!;
-				} else if (settings.embeddingProvider === "OpenAI") {
-					embeddingSettings = settings.embeddingSettings.OpenAI!;
-				} else if (settings.embeddingProvider === "AzureAI") {
-					embeddingSettings = settings.embeddingSettings.AzureAI!;
-				}
 			}
 
-			indexerSettings =
-				initializationOptions.indexerSettings as IndexerSettings;
-
 			this.connection?.console.log(
-				"Workspace folders: " + this.workspaceFolders.join(", ")
+				`Workspace folders: ${this.workspaceFolders.join(", ")}`,
 			);
 
 			const capabilities = params.capabilities;
@@ -242,8 +145,7 @@ export class LSPServer {
 				capabilities.workspace && !!capabilities.workspace.configuration
 			);
 			hasWorkspaceFolderCapability = !!(
-				capabilities.workspace &&
-				!!capabilities.workspace.workspaceFolders
+				capabilities.workspace && !!capabilities.workspace.workspaceFolders
 			);
 			const result: InitializeResult = {
 				capabilities: {
@@ -252,7 +154,7 @@ export class LSPServer {
 						save: {
 							includeText: true,
 						},
-					}
+					},
 				},
 			};
 			if (hasWorkspaceFolderCapability) {
@@ -263,12 +165,12 @@ export class LSPServer {
 					},
 					fileOperations: {
 						didDelete: {
-							filters: [{ pattern: { glob: "**/*" } }]
+							filters: [{ pattern: { glob: "**/*" } }],
 						},
 						didRename: {
-							filters: [{ pattern: { glob: "**/*" } }]
-						}
-					}
+							filters: [{ pattern: { glob: "**/*" } }],
+						},
+					},
 				};
 			}
 
@@ -280,38 +182,29 @@ export class LSPServer {
 				// Register for all configuration changes.
 				this.connection?.client.register(
 					DidChangeConfigurationNotification.type,
-					undefined
+					undefined,
 				);
 			}
 			if (hasWorkspaceFolderCapability) {
-				this.connection?.workspace.onDidChangeWorkspaceFolders(
-					(_event) => {
-						this.connection?.console.log(
-							"Workspace folder change event received."
-						);
-					}
-				);
+				this.connection?.workspace.onDidChangeWorkspaceFolders((_event) => {
+					this.connection?.console.log(
+						"Workspace folder change event received.",
+					);
+				});
 			}
 
 			try {
 				await this.postInitialize();
-
-				if (this.fileEventHandler) {
-					this.fileEventHandler.dispose();
-				}
-
-				this.fileEventHandler = new LSPFileEventHandler(
-					//@ts-expect-error
-					this.connection,
-					this.workspaceFolders,
-					this.queue,
-					indexerSettings.indexFilter,
-					this.vectorStore
-				);
-
 				await this.addEvents();
 			} catch (e) {
 				console.error(e);
+			}
+		});
+
+		this.connection?.onShutdown(() => {
+			loggingProvider.logInfo("LSP Server is shutting down.");
+			if (memory) {
+				memory.cleanup();
 			}
 		});
 
@@ -321,37 +214,23 @@ export class LSPServer {
 		}
 	};
 
-	private executeComposer = async (request: ComposerRequest) => {
-		if (!this.composer) {
-			return;
-		}
-
-		const generator = this.composer.execute(
-			request
-		);
-
-		for await (const { node, values } of generator) {
-			if (node === "composer-files-done") {
-				const { files } = values as PlanExecuteState;
-
-				if (files && files.length > 0) {
-					//Add new files to the queue since they don't trigger events
-					const fileUris = files
-						.filter(f => !f.original)
-						.map(f => filePathToUri(path.join(this.workspaceFolders[0], f.path)));
-
-					if (fileUris.length > 0) {
-						this.queue?.enqueue(fileUris); 55
-					}
-				}
-			}
-			await this.connection?.sendRequest("wingman/compose", {
-				node,
-				values,
-			});
-		}
-	}
-
+	/**
+	 * Sets up event listeners and request handlers for the language server connection.
+	 *
+	 * This method initializes various event handlers for:
+	 * - Diagnostics reporting
+	 * - Configuration changes
+	 * - Workspace folder management
+	 * - Index management and querying
+	 * - Chat history management
+	 * - Code composition and file operations
+	 * - Web search functionality
+	 * - Embedding retrieval
+	 *
+	 * @private
+	 * @async
+	 * @returns {Promise<void>} A promise that resolves when all event handlers are registered
+	 */
 	private addEvents = async () => {
 		this.connection?.languages.diagnostics.on(async (params) => {
 			const document = this.documents.get(params.textDocument.uri);
@@ -360,17 +239,16 @@ export class LSPServer {
 					kind: DocumentDiagnosticReportKind.Full,
 					items: [],
 				} satisfies DocumentDiagnosticReport;
-			} else {
-				// We don't know the document. We can either try to read it from disk
-				// or we don't report problems for it.
-				this.connection?.console.log(
-					`Document not found: ${params.textDocument.uri}`
-				);
-				return {
-					kind: DocumentDiagnosticReportKind.Full,
-					items: [],
-				} satisfies DocumentDiagnosticReport;
 			}
+			// We don't know the document. We can either try to read it from disk
+			// or we don't report problems for it.
+			this.connection?.console.log(
+				`Document not found: ${params.textDocument.uri}`,
+			);
+			return {
+				kind: DocumentDiagnosticReportKind.Full,
+				items: [],
+			} satisfies DocumentDiagnosticReport;
 		});
 
 		this.connection?.onDidChangeConfiguration((change) => {
@@ -380,159 +258,101 @@ export class LSPServer {
 		this.connection?.onNotification(
 			DidChangeWorkspaceFoldersNotification.type,
 			(params) => {
+				// biome-ignore lint/complexity/noForEach: <explanation>
 				params.event.added.forEach((folder) => {
 					const folderPath = URI.parse(folder.uri).fsPath;
 					if (!this.workspaceFolders.includes(folderPath)) {
 						this.workspaceFolders.push(folderPath);
 						this.connection?.console.log(
-							`Workspace folder added: ${folderPath}`
+							`Workspace folder added: ${folderPath}`,
 						);
 					}
 				});
 
+				// biome-ignore lint/complexity/noForEach: <explanation>
 				params.event.removed.forEach((folder) => {
 					const folderPath = URI.parse(folder.uri).fsPath;
 					const index = this.workspaceFolders.indexOf(folderPath);
 					if (index !== -1) {
 						this.workspaceFolders.splice(index, 1);
 						this.connection?.console.log(
-							`Workspace folder removed: ${folderPath}`
+							`Workspace folder removed: ${folderPath}`,
 						);
 					}
 				});
-			}
-		);
-
-		this.connection?.onRequest("wingman/getIndex", async () => {
-			return {
-				exists: (await this.vectorStore?.indexExists()) ?? false,
-				processing: this.indexer?.isSyncing() ?? false,
-				files: Array.from(
-					this.codeGraph?.getSymbolTable().keys() ?? []
-				),
-			} satisfies IndexStats;
-		});
-
-		this.connection?.onRequest(
-			"wingman/indexerSettings",
-			(indexSettings: IndexerSettings) => {
-				clearFilterCache();
-				indexerSettings = indexSettings;
-
-				if (this.fileEventHandler) {
-					try {
-						this.fileEventHandler.dispose();
-					} catch { }
-				}
-
-				this.fileEventHandler = new LSPFileEventHandler(
-					//@ts-expect-error
-					this.connection,
-					this.workspaceFolders,
-					this.queue,
-					indexerSettings.indexFilter,
-					this.vectorStore
-				);
-
-				this.indexer?.setInclusionFilter(indexSettings.indexFilter);
-				this.indexer?.clearCache();
-			}
+			},
 		);
 
 		this.connection?.onRequest(
-			"wingman/fullIndexBuild",
-			async (request: { files: string[] }) => {
-				try {
-					if (!embeddingSettings?.enabled) {
-						return;
-					}
+			"wingman/clearChatHistory",
+			async (threadId: string) => {
+				const existingThreadData = await memory.get({
+					configurable: { thread_id: threadId },
+				});
 
-					clearFilterCache();
-					const filePaths = request.files.map((file) =>
-						filePathToUri(file)
+				if (existingThreadData) {
+					await memory.put(
+						{ configurable: { thread_id: threadId } },
+						emptyCheckpoint(),
+						{
+							source: "update",
+							step: 0,
+							writes: {},
+							parents: {},
+						},
 					);
-					this.connection?.console.log(
-						`Starting full index build, with ${filePaths || 0
-						} files`
-					);
-
-					await this.vectorStore?.createIndex();
-					await this.indexer?.processDocuments(filePaths, true);
-				} catch (e) {
-					console.error("Full index failed:", e);
 				}
-			}
+			},
 		);
-
-		this.connection?.onRequest("wingman/deleteIndex", async () => {
-			this.connection?.console.log("Received request to delete index");
-			this.vectorStore?.deleteIndex();
-			this.queue?.dispose();
-			await this.postInitialize();
-		});
-
-		this.connection?.onRequest("wingman/clearChatHistory", () => {
-			config = { configurable: { thread_id: "conversation-num-1" } };
-			memory = new MemorySaver();
-
-			this.composer = new ComposerGraph(
-				this.workspaceFolders[0],
-				modelProvider,
-				this.codeGraph!,
-				this.vectorStore!,
-				settings.validationSettings,
-				settings,
-				config,
-				memory
-			)
-		});
 
 		this.connection?.onRequest("wingman/cancelComposer", async () => {
 			cancelComposer();
 		});
 
-		this.connection?.onRequest("wingman/deleteFileFromIndex", async ({ filePath }: { filePath: string }) => {
-			await this.indexer?.deleteFile(filePath);
-		})
-
-		this.connection?.onRequest("wingman/compose", async ({ request }: { request: ComposerRequest }) => {
-			await this.executeComposer(request);
-		}
+		this.connection?.onRequest(
+			"wingman/compose",
+			async ({ request }: { request: ComposerRequest }) => {
+				try {
+					for await (const event of this.composer!.execute(request)) {
+						await this.connection?.sendRequest("wingman/compose", event);
+					}
+				} catch (e) {
+					console.error(e);
+				}
+			},
 		);
 
-		this.connection?.onRequest("wingman/acceptComposerFile", async (file: FileMetadata) => {
-			const graphState = await this.composer?.acceptFile(file);
-
-			const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
-
-			if (allFilesReviewed) {
-				this.executeComposer({
-					input: "",
-					contextFiles: []
-				});
-			}
-
-			return graphState;
+		this.connection?.onRequest("wingman/MCPUpdate", async () => {
+			await this.composer?.initialize();
 		});
 
-		this.connection?.onRequest("wingman/rejectComposerFile", async (file: FileMetadata) => {
-			const graphState = await this.composer?.rejectFile(file);
+		this.connection?.onRequest(
+			"wingman/updateComposerFile",
+			async (event: UpdateComposerFileEvent) => {
+				return this.composer?.updateFile(event);
+			},
+		);
 
-			const allFilesReviewed = graphState?.files?.every(f => f.accepted || f.rejected);
+		this.connection?.onRequest(
+			"wingman/branchThread",
+			async ({
+				threadId,
+				originalThreadId,
+			}: { threadId: string; originalThreadId: string }) => {
+				return this.composer?.branchThread(
+					originalThreadId,
+					undefined,
+					threadId,
+				);
+			},
+		);
 
-			if (allFilesReviewed) {
-				this.executeComposer({
-					input: "",
-					contextFiles: []
-				});
-			}
-
-			return graphState;
-		});
-
-		this.connection?.onRequest("wingman/undoComposerFile", async (file: FileMetadata) => {
-			return this.composer?.undoFile(file);
-		});
+		this.connection?.onRequest(
+			"wingman/deleteThread",
+			async (threadId: string) => {
+				return this.composer?.deleteThread(threadId);
+			},
+		);
 
 		this.connection?.onRequest("wingman/webSearch", async (input: string) => {
 			const crawler = new WebCrawler(modelProvider);
@@ -545,57 +365,20 @@ export class LSPServer {
 				for await (const chunk of generator) {
 					await this.connection?.sendNotification("wingman/webSearchProgress", {
 						type: "progress",
-						content: chunk
+						content: chunk,
 					});
 				}
-
 				// Signal completion
 				await this.connection?.sendNotification("wingman/webSearchProgress", {
-					type: "complete"
+					type: "complete",
 				});
 			} catch (error) {
 				await this.connection?.sendNotification("wingman/webSearchProgress", {
 					type: "error",
-					content: error instanceof Error ? error.message : "Unknown error occurred"
+					content:
+						error instanceof Error ? error.message : "Unknown error occurred",
 				});
 			}
-		});
-
-		this.connection?.onRequest("wingman/getEmbeddings", async (request) => {
-			try {
-				this.connection?.console.log(
-					"Received request for embeddings: " + request.query
-				);
-
-				const relatedDocuments = new VectorQuery();
-				const docs =
-					await relatedDocuments.retrieveDocumentsWithRelatedCode(
-						request.query,
-						this.codeGraph!,
-						this.vectorStore!,
-						this.workspaceFolders[0],
-						3
-					);
-
-				const projectDetails =
-					await this.projectDetails?.retrieveProjectDetails();
-
-				this.connection?.console.log(
-					`Found ${docs?.relatedCodeDocs.length} related documents`
-				);
-
-				return {
-					codeDocs: docs.relatedCodeDocs,
-					projectDetails: projectDetails?.description,
-				};
-			} catch (e) {
-				console.error(e);
-			}
-
-			return {
-				codeDocs: [],
-				projectDetails: "",
-			};
 		});
 	};
 }

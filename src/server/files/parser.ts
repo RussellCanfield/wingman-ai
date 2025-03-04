@@ -5,17 +5,24 @@ import {
 	Range,
 	SymbolKind,
 } from "vscode-languageserver";
-import { TextDocument } from "vscode-languageserver-textdocument";
-import { type SgNode, type js as astGrep } from "@ast-grep/napi";
-import {
-	CodeGraphEdgeMap,
-	type CodeGraphNode,
-	createCodeNode,
-	SkeletonizedCodeGraphNode,
-} from "./graph";
+import type { TextDocument } from "vscode-languageserver-textdocument";
+import type { SgNode, js as astGrep } from "@ast-grep/napi";
 import { filterSystemLibraries, getTextDocumentFromUri } from "./utils";
-import { SymbolRetriever } from "../retriever";
-import { pathToFileURL } from "url";
+import type { SymbolRetriever } from "../retriever";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import path from "node:path";
+
+export type CodeGraphNode = {
+	id: string;
+	location: Location;
+	parentNodeId?: string;
+};
+
+export type SkeletonizedCodeGraphNode = {
+	skeleton: string;
+} & CodeGraphNode;
+
+export type CodeGraphEdgeMap = Map<string, Set<string>>;
 
 async function loadAstGrepBinding() {
 	const { js } = await import("@ast-grep/napi");
@@ -25,15 +32,16 @@ async function loadAstGrepBinding() {
 export class CodeParser {
 	private js: typeof astGrep | undefined;
 
-	constructor(private readonly symbolRetriever: SymbolRetriever) { }
+	constructor(
+		private readonly workspace: string,
+		private readonly symbolRetriever: SymbolRetriever,
+	) {}
 
 	async initialize() {
 		this.js = await loadAstGrepBinding();
 	}
 
-	async getDocumentSymbols(
-		textDocumentUri: string
-	): Promise<DocumentSymbol[]> {
+	async getDocumentSymbols(textDocumentUri: string): Promise<DocumentSymbol[]> {
 		return this.symbolRetriever.getSymbols(textDocumentUri);
 	}
 
@@ -41,14 +49,14 @@ export class CodeParser {
 		const symbolText = textDocument.getText(symbol.range);
 
 		const node = createCodeNode(
-			Location.create(textDocument.uri, symbol.range)
+			Location.create(textDocument.uri, symbol.range),
 		);
 
 		const referencedSymbols = this.findReferencedSymbols(symbolText);
 		const extractedCodeNodes = await this.extractExternalCodeNodes(
 			textDocument,
 			symbol.selectionRange,
-			referencedSymbols
+			referencedSymbols ?? [],
 		);
 
 		return {
@@ -62,7 +70,7 @@ export class CodeParser {
 		parentCodeNode: CodeGraphNode,
 		parentSymbol: DocumentSymbol,
 		importEdges: CodeGraphEdgeMap,
-		exportEdges: CodeGraphEdgeMap
+		exportEdges: CodeGraphEdgeMap,
 	): Promise<CodeGraphNode[]> {
 		const nodes: CodeGraphNode[] = [];
 		if (!parentSymbol.children) {
@@ -74,8 +82,10 @@ export class CodeParser {
 				continue;
 			}
 
-			const { node: childNode, extractedCodeNodes } =
-				await this.processSymbol(textDocument, child);
+			const { node: childNode, extractedCodeNodes } = await this.processSymbol(
+				textDocument,
+				child,
+			);
 
 			childNode.parentNodeId = parentCodeNode.id;
 			nodes.push(childNode);
@@ -85,26 +95,22 @@ export class CodeParser {
 
 				if (childNode.id !== extractedCodeNode.id) {
 					if (importEdges.has(childNode.id)) {
-						importEdges
-							.get(childNode.id)
-							?.add(extractedCodeNode.id);
+						importEdges.get(childNode.id)?.add(extractedCodeNode.id);
 					} else {
 						importEdges.set(
 							childNode.id,
-							new Set<string>().add(extractedCodeNode.id)
+							new Set<string>().add(extractedCodeNode.id),
 						);
 					}
 				}
 
 				if (extractedCodeNode.id !== childNode.id) {
 					if (exportEdges.has(extractedCodeNode.id)) {
-						exportEdges
-							.get(extractedCodeNode.id)
-							?.add(childNode.id);
+						exportEdges.get(extractedCodeNode.id)?.add(childNode.id);
 					} else {
 						exportEdges.set(
 							extractedCodeNode.id,
-							new Set<string>().add(childNode.id)
+							new Set<string>().add(childNode.id),
 						);
 					}
 				}
@@ -119,7 +125,7 @@ export class CodeParser {
 		parentNodeLocation: Location,
 		parentCodeBlock: string,
 		relatedNodeEdgeIds: string[],
-		skeletonNodes: SkeletonizedCodeGraphNode[]
+		skeletonNodes: SkeletonizedCodeGraphNode[],
 	) {
 		let codeBlock = parentCodeBlock;
 		for (const childNodeId of relatedNodeEdgeIds) {
@@ -132,10 +138,9 @@ export class CodeParser {
 			codeBlock = this.replaceLineRange(
 				codeBlock,
 				childNode.location.range.start.line -
-				parentNodeLocation.range.start.line,
-				childNode.location.range.end.line -
-				parentNodeLocation.range.start.line,
-				[childNode.skeleton]
+					parentNodeLocation.range.start.line,
+				childNode.location.range.end.line - parentNodeLocation.range.start.line,
+				[childNode.skeleton],
 			);
 		}
 
@@ -146,7 +151,7 @@ export class CodeParser {
 		input: string,
 		startLine: number,
 		endLine: number,
-		newLines: string[]
+		newLines: string[],
 	): string {
 		const lines = input.split("\n");
 		if (lines.length === 1) {
@@ -160,7 +165,7 @@ export class CodeParser {
 	private async extractExternalCodeNodes(
 		textDocument: TextDocument,
 		symbolDefRange: Range,
-		referencedSymbols: SgNode[]
+		referencedSymbols: SgNode[],
 	): Promise<CodeGraphNode[]> {
 		const matchedSymbols: Map<string, CodeGraphNode> = new Map();
 
@@ -169,7 +174,7 @@ export class CodeParser {
 
 		// Helper function to get text document, with caching
 		const getCachedDocument = async (
-			uri: string
+			uri: string,
 		): Promise<TextDocument | undefined> => {
 			if (!documentCache.has(uri)) {
 				const doc = await getTextDocumentFromUri(uri);
@@ -177,7 +182,7 @@ export class CodeParser {
 					documentCache.set(uri, doc);
 				}
 			}
-			return documentCache.get(uri)!;
+			return documentCache.get(uri);
 		};
 
 		const matchesPromises = referencedSymbols.map(async (refSymbol) => {
@@ -188,16 +193,16 @@ export class CodeParser {
 				const refSymbolRange = refSymbol.range();
 				const symbolPosition = Position.create(
 					symbolDefRange.start.line + refSymbolRange.start.line,
-					symbolDefRange.start.character + refSymbolRange.start.column
+					refSymbolRange.start.column,
 				);
 				const [def, typeDef] = await Promise.all([
 					this.symbolRetriever.getDefinition(
 						textDocument.uri.toString(),
-						symbolPosition
+						symbolPosition,
 					),
 					this.symbolRetriever.getTypeDefinition(
 						textDocument.uri.toString(),
-						symbolPosition
+						symbolPosition,
 					),
 				]);
 				const matches = filterSystemLibraries([
@@ -209,8 +214,8 @@ export class CodeParser {
 						self.findIndex(
 							(t) =>
 								t.uri === loc.uri &&
-								t.range.start.line === loc.range.start.line
-						)
+								t.range.start.line === loc.range.start.line,
+						),
 				);
 				// .filter(
 				// 	(loc) =>
@@ -234,9 +239,8 @@ export class CodeParser {
 			if (
 				Array.from(matchedSymbols.values()).some(
 					(node) =>
-						match.range.start.line >
-						node.location.range.start.line &&
-						match.range.end.line < node.location.range.end.line
+						match.range.start.line > node.location.range.start.line &&
+						match.range.end.line < node.location.range.end.line,
 				)
 			) {
 				continue;
@@ -252,18 +256,16 @@ export class CodeParser {
 					continue;
 				}
 
-				const symbols = await this.symbolRetriever.getSymbols(
-					matchDoc.uri
-				);
+				const symbols = await this.symbolRetriever.getSymbols(matchDoc.uri);
 				const matchedSymbol = symbols.find(
 					(s) =>
 						//This is done explicitly to prevent keywords getting in the way (ex: export)
-						s.selectionRange.start.line === match.range.start.line
+						s.selectionRange.start.line === match.range.start.line,
 				);
 
 				if (matchedSymbol) {
 					const codeNode = createCodeNode(
-						Location.create(match.uri, matchedSymbol.range)
+						Location.create(match.uri, matchedSymbol.range),
 					);
 					if (!matchedSymbols.has(codeNode.id)) {
 						matchedSymbols.set(codeNode.id, codeNode);
@@ -278,7 +280,10 @@ export class CodeParser {
 	}
 
 	private findReferencedSymbols(codeBlock: string) {
-		const ast = this.js?.parse(codeBlock)!;
+		const ast = this.js?.parse(codeBlock);
+
+		if (!ast) return;
+
 		const root = ast.root();
 
 		const stack = [root];
@@ -323,7 +328,10 @@ export class CodeParser {
 	}
 
 	findImportStatements(codeBlock: string): SgNode[] {
-		const ast = this?.js?.parse(codeBlock)!;
+		const ast = this?.js?.parse(codeBlock);
+
+		if (!ast) return [];
+
 		const root = ast.root();
 
 		const importPatterns = [
@@ -363,25 +371,122 @@ export class CodeParser {
 		return Array.from(uniqueImportsMap.values());
 	}
 
+	createNodesFromDocument = async (textDocument: TextDocument) => {
+		const importEdges: CodeGraphEdgeMap = new Map();
+		const exportEdges: CodeGraphEdgeMap = new Map();
+		const nodes: Map<string, CodeGraphNode> = new Map();
+
+		const symbols = await this.symbolRetriever.getSymbols(textDocument.uri);
+
+		const documentText = textDocument.getText();
+
+		if (symbols.length === 0) {
+			// calculate the last line and last character of the document
+			const lastLine = textDocument.lineCount - 1;
+			const lastCharacter = documentText.split("\n")?.pop()?.length || 0;
+
+			const node = createCodeNode(
+				Location.create(
+					textDocument.uri,
+					Range.create(
+						Position.create(0, 0),
+						Position.create(lastLine, lastCharacter),
+					),
+				),
+			);
+
+			nodes.set(node.id, node);
+			return { nodes, importEdges, exportEdges };
+		}
+
+		for (const symbol of symbols) {
+			const { node, extractedCodeNodes } = await this.processSymbol(
+				textDocument,
+				symbol,
+			);
+
+			nodes.set(node.id, node);
+
+			for (const extractedCodeNode of extractedCodeNodes) {
+				nodes.set(extractedCodeNode.id, extractedCodeNode);
+				if (node.id !== extractedCodeNode.id) {
+					const convertedNodeId = this.convertNodeId(node.id);
+					const convertedExtractedId = this.convertNodeId(extractedCodeNode.id);
+
+					if (importEdges.has(convertedNodeId)) {
+						importEdges.get(convertedNodeId)?.add(convertedExtractedId);
+					} else {
+						importEdges.set(
+							convertedNodeId,
+							new Set<string>().add(convertedExtractedId),
+						);
+					}
+
+					if (exportEdges.has(convertedExtractedId)) {
+						exportEdges.get(convertedExtractedId)?.add(convertedNodeId);
+					} else {
+						exportEdges.set(
+							convertedExtractedId,
+							new Set<string>().add(convertedNodeId),
+						);
+					}
+				}
+			}
+
+			const childNodes = await this.processChildSymbols(
+				textDocument,
+				node,
+				symbol,
+				importEdges,
+				exportEdges,
+			);
+
+			for (const childNode of childNodes) {
+				nodes.set(childNode.id, childNode);
+			}
+		}
+
+		return {
+			nodes,
+			importEdges,
+			exportEdges,
+		};
+	};
+
+	convertNodeId(id: string) {
+		return path.relative(this.workspace, fileURLToPath(id));
+	}
+
 	async retrieveCodeByPathAndRange(
 		path: string,
 		startLine: number,
 		startCharacter: number,
 		endLine: number,
-		endCharacter: number
+		endCharacter: number,
 	) {
 		const textDocument = await getTextDocumentFromUri(
-			pathToFileURL(path).toString()
+			pathToFileURL(path).toString(),
 		);
 		const codeBlock = textDocument?.getText(
 			Range.create(
 				Position.create(startLine, startCharacter),
-				Position.create(endLine, endCharacter)
-			)
+				Position.create(endLine, endCharacter),
+			),
 		);
 
 		return codeBlock;
 	}
+}
+
+export function generateCodeNodeId(location: Location): string {
+	return `${location.uri}-${location.range.start.line}-${location.range.start.character}`;
+}
+
+export function createCodeNode(location: Location): CodeGraphNode {
+	return {
+		id: generateCodeNodeId(location),
+		location,
+	};
 }
 
 export const isMethod = (symbol: DocumentSymbol) =>

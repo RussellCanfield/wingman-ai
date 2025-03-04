@@ -1,7 +1,9 @@
-import { FileMetadata } from "./Message";
+import type { CodeContextDetails } from "../Message";
+import type { BaseMessage, FileMetadata } from "./Message";
 
 export type DiffViewCommand = {
 	file: FileMetadata;
+	threadId: string;
 	isDarkTheme?: boolean;
 };
 
@@ -19,7 +21,7 @@ export type ManualStep = {
 export type Dependencies = {
 	response?: string;
 	steps?: ManualStep[];
-}
+};
 
 export type ComposerRole = "assistant" | "user";
 
@@ -27,30 +29,54 @@ export interface ComposerChatMessage {
 	kwargs: {
 		content: string;
 		role: ComposerRole;
-	},
+	};
 	name?: string;
 }
 
-export interface PlanExecuteState {
-	messages?: ComposerChatMessage[];
-	files?: FileMetadata[];
-	dependencies?: Dependencies;
-	error?: string;
+export interface GraphState {
+	messages: BaseMessage[];
+	workspace: string;
+	image?: ComposerImage;
+	context?: CodeContextDetails;
+	files: FileMetadata[];
 }
 
 export type ComposerResponse = {
-	node: ComposerSteps;
-	values: PlanExecuteState;
+	step: ComposerSteps;
+	events: StreamEvent[];
+	threadId: string;
 };
 
-export type ComposerSteps = "composer-message-stream" | "composer-message-stream-finish" | "composer-message" | "composer-replace" | "composer-files" | "composer-error" | "composer-done" | "composer-error" | "composer-files-done";
+export interface StreamEvent {
+	id: string;
+	type: "message" | "tool-start" | "tool-end";
+	content: string;
+	metadata?: {
+		tool?: string;
+		path?: string;
+		action?: "read" | "write" | "modify";
+	};
+}
+
+export type ComposerSteps =
+	| "composer-events"
+	| "composer-message-stream"
+	| "composer-message-stream-finish"
+	| "composer-message"
+	| "composer-replace"
+	| "composer-files"
+	| "composer-error"
+	| "composer-done"
+	| "composer-error"
+	| "composer-files-done";
 
 export interface ComposerMessage {
 	from: ComposerRole;
 	message: string;
-	loading?: boolean;
+	loading: boolean;
 	image?: ComposerRequest["image"];
-	files?: PlanExecuteState["files"];
+	events?: StreamEvent[];
+	threadId?: string;
 }
 
 export type FileSearchResult = {
@@ -65,6 +91,9 @@ export type ComposerImage = {
 
 export type ComposerRequest = {
 	input: string;
+	threadId: string;
 	contextFiles: string[];
+	recentFiles?: FileMetadata[];
 	image?: ComposerImage;
+	context?: CodeContextDetails;
 };

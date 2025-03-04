@@ -1,5 +1,5 @@
-import { ValidationSettings } from "@shared/types/Settings";
-import { InitSettings } from "./App";
+import type { ValidationSettings } from "@shared/types/Settings";
+import type { InitSettings } from "./App";
 
 export type ValidationProps = {
 	validationSettings: InitSettings["validationSettings"];

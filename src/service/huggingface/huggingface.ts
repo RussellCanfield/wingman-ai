@@ -1,14 +1,14 @@
-import { HuggingFaceAIModel } from "@shared/types/Models";
-import { InteractionSettings, Settings } from "@shared/types/Settings";
+import type { HuggingFaceAIModel } from "@shared/types/Models";
+import type { InteractionSettings, Settings } from "@shared/types/Settings";
 import { asyncIterator } from "../asyncIterator";
-import { AIProvider } from "../base";
+import type { AIProvider } from "../base";
 import { CodeLlama } from "./models/codellama";
 import { Mistral } from "./models/mistral";
 import { Mixtral } from "./models/mixtral";
 import { Starcoder2 } from "./models/starcoder2";
-import { AIMessageChunk } from "@langchain/core/messages";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { ILoggingProvider } from "@shared/types/Logger";
+import type { AIMessageChunk } from "@langchain/core/messages";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { ILoggingProvider } from "@shared/types/Logger";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -30,7 +30,7 @@ type HuggingFaceRequest = {
 type HuggingFaceResponse = [
 	{
 		generated_text: string;
-	}
+	},
 ];
 
 type HuggingFaceStreamResponse = {
@@ -41,14 +41,14 @@ type HuggingFaceStreamResponse = {
 
 export class HuggingFace implements AIProvider {
 	decoder = new TextDecoder();
-	chatHistory: string = "";
+	chatHistory = "";
 	chatModel: HuggingFaceAIModel | undefined;
 	codeModel: HuggingFaceAIModel | undefined;
 
 	constructor(
 		private readonly settings: Settings["providerSettings"]["HuggingFace"],
 		private readonly interactionSettings: InteractionSettings,
-		private readonly loggingProvider: ILoggingProvider
+		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
 			throw new Error("Unable to log HuggingFace configuration.");
@@ -60,6 +60,10 @@ export class HuggingFace implements AIProvider {
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
+	}
+
+	addMessageToHistory(input: string): void {
+		this.chatHistory += `\n${input}`;
 	}
 
 	async validateSettings(): Promise<boolean> {
@@ -78,10 +82,6 @@ export class HuggingFace implements AIProvider {
 		throw new Error("Method not implemented.");
 	}
 
-	getLightweightModel(): BaseChatModel {
-		throw new Error("Method not implemented.");
-	}
-
 	invoke(prompt: string): Promise<AIMessageChunk> {
 		throw new Error("Method not implemented.");
 	}
@@ -89,7 +89,8 @@ export class HuggingFace implements AIProvider {
 	private getCodeModel(codeModel: string): HuggingFaceAIModel | undefined {
 		if (codeModel.startsWith("codellama")) {
 			return new CodeLlama();
-		} else if (codeModel.startsWith("bigcode/starcoder2")) {
+		}
+		if (codeModel.startsWith("bigcode/starcoder2")) {
 			return new Starcoder2();
 		}
 	}
@@ -97,7 +98,9 @@ export class HuggingFace implements AIProvider {
 	private getChatModel(chatModel: string): HuggingFaceAIModel | undefined {
 		if (chatModel.startsWith("mistralai/Mistral")) {
 			return new Mistral();
-		} else if (chatModel.startsWith("mistralai/Mixtral")) {
+		}
+
+		if (chatModel.startsWith("mistralai/Mixtral")) {
 			return new Mixtral();
 		}
 	}
@@ -113,7 +116,7 @@ export class HuggingFace implements AIProvider {
 	private async fetchModelResponse(
 		payload: HuggingFaceRequest,
 		modelName: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	) {
 		if (signal.aborted) {
 			return undefined;
@@ -132,27 +135,22 @@ export class HuggingFace implements AIProvider {
 	async *generate(
 		payload: HuggingFaceRequest,
 		modelName: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	) {
 		const startTime = new Date().getTime();
 		let response: Response | undefined;
 
 		try {
-			response = await this.fetchModelResponse(
-				payload,
-				modelName,
-				signal
-			);
+			response = await this.fetchModelResponse(payload, modelName, signal);
 		} catch (error) {
 			return;
-			`HuggingFace - chat request with model: ${modelName} failed with the following error: ${error}`;
 		}
 
 		const endTime = new Date().getTime();
 		const executionTime = (endTime - startTime) / 1000;
 
 		this.loggingProvider.logInfo(
-			`Chat Time To First Token execution time: ${executionTime} ms`
+			`Chat Time To First Token execution time: ${executionTime} ms`,
 		);
 
 		if (!response?.body) {
@@ -185,9 +183,7 @@ export class HuggingFace implements AIProvider {
 
 				// Remove the "data: " prefix and parse the JSON
 				const jsonStr = eventData.replace(/^data:/, "");
-				const parsedData = JSON.parse(
-					jsonStr
-				) as HuggingFaceStreamResponse;
+				const parsedData = JSON.parse(jsonStr) as HuggingFaceStreamResponse;
 
 				// Yield the token text
 				yield parsedData.token.text;
@@ -199,12 +195,12 @@ export class HuggingFace implements AIProvider {
 		beginning: string,
 		ending: string,
 		signal: AbortSignal,
-		additionalContext?: string
+		additionalContext?: string,
 	): Promise<string> {
 		const startTime = new Date().getTime();
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
-			beginning
+			beginning,
 		).replace("{ending}", ending);
 		const codeRequestOptions: HuggingFaceRequest = {
 			inputs: `The following are all the types available. Use these types while considering how to complete the code provided. Do not repeat or use these types in your answer.
@@ -229,12 +225,15 @@ ${prompt}`,
 		};
 
 		if (this.interactionSettings?.codeMaxTokens === -1) {
+			// biome-ignore lint/performance/noDelete: <explanation>
 			delete codeRequestOptions.parameters.max_new_tokens;
 		}
 
-		return `HuggingFace - Code Completion submitting request with body: ${JSON.stringify(
-			codeRequestOptions
-		)}`;
+		this.loggingProvider.logInfo(
+			`HuggingFace - Code Completion submitting request with body: ${JSON.stringify(
+				codeRequestOptions,
+			)}`,
+		);
 
 		let response: Response | undefined;
 
@@ -242,7 +241,7 @@ ${prompt}`,
 			response = await this.fetchModelResponse(
 				codeRequestOptions,
 				this.settings?.codeModel!,
-				signal
+				signal,
 			);
 		} catch (error) {
 			return `HuggingFace - code completion request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
@@ -252,18 +251,17 @@ ${prompt}`,
 		const executionTime = (endTime - startTime) / 1000;
 
 		this.loggingProvider.logInfo(
-			`Code Completion execution time: ${executionTime} seconds`
+			`Code Completion execution time: ${executionTime} seconds`,
 		);
 
 		if (!response || !response?.body) {
 			return "";
 		}
 
-		const huggingFaceResponse =
-			(await response?.json()) as HuggingFaceResponse;
+		const huggingFaceResponse = (await response?.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+				huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
@@ -271,15 +269,11 @@ ${prompt}`,
 		this.chatHistory = "";
 	}
 
-	public async *chat(
-		prompt: string,
-		ragContent: string,
-		signal: AbortSignal
-	) {
+	public async *chat(prompt: string, ragContent: string, signal: AbortSignal) {
 		const chatPayload: HuggingFaceRequest = {
 			inputs: this.chatModel!.ChatPrompt.replace(
 				"{chat_history}",
-				this.chatHistory ?? ""
+				this.chatHistory ?? "",
 			)
 				.replace("{context}", ragContent ?? "")
 				.replace("{question}", prompt ?? "")
@@ -299,6 +293,7 @@ ${prompt}`,
 		};
 
 		if (this.interactionSettings?.chatMaxTokens === -1) {
+			// biome-ignore lint/performance/noDelete: <explanation>
 			delete chatPayload.parameters.max_new_tokens;
 		}
 
@@ -308,7 +303,7 @@ ${prompt}`,
 		for await (const chunk of this.generate(
 			chatPayload,
 			this.settings?.chatModel!,
-			signal
+			signal,
 		)) {
 			yield chunk;
 		}
@@ -317,16 +312,15 @@ ${prompt}`,
 	public async genCodeDocs(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		if (!this.chatModel?.genDocPrompt) return "";
 
-		const genDocPrompt =
-			"Generate documentation for the following code:\n" + prompt;
+		const genDocPrompt = `Generate documentation for the following code:\n${prompt}`;
 
 		const promptInput = this.chatModel!.genDocPrompt.replace(
 			"{context}",
-			ragContent ?? ""
+			ragContent ?? "",
 		)
 			.replace("{code}", genDocPrompt ?? "")
 			.replace(/\t/, "");
@@ -351,29 +345,28 @@ ${prompt}`,
 		const response = await this.fetchModelResponse(
 			chatPayload,
 			this.settings?.chatModel!,
-			signal
+			signal,
 		);
 		if (!response) {
 			return "";
 		}
-		const huggingFaceResponse =
-			(await response.json()) as HuggingFaceResponse;
+		const huggingFaceResponse = (await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+				huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 
 	public async refactor(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		if (!this.chatModel?.refactorPrompt) return "";
 
 		const promptInput = this.chatModel!.refactorPrompt.replace(
 			"{context}",
-			ragContent ?? ""
+			ragContent ?? "",
 		)
 			.replace("{code}", prompt ?? "")
 			.replace(/\t/, "");
@@ -398,16 +391,15 @@ ${prompt}`,
 		const response = await this.fetchModelResponse(
 			chatPayload,
 			this.settings?.chatModel!,
-			signal
+			signal,
 		);
 		if (!response) {
 			return "";
 		}
-		const huggingFaceResponse =
-			(await response.json()) as HuggingFaceResponse;
+		const huggingFaceResponse = (await response.json()) as HuggingFaceResponse;
 		return huggingFaceResponse.length > 0
 			? //temporary fix. Not sure why HF doesn't specify stop tokens
-			huggingFaceResponse[0].generated_text.replace("<EOT>", "")
+				huggingFaceResponse[0].generated_text.replace("<EOT>", "")
 			: "";
 	}
 }

@@ -1,51 +1,34 @@
 import * as vscode from "vscode";
 import fs from "node:fs";
 import { eventEmitter } from "../events/eventEmitter";
-import { AIProvider } from "../service/base";
-import {
-	AppMessage,
-	CodeContext,
-	CodeContextDetails,
-	CodeReviewMessage,
-	CommitMessage,
-	FileMetadata,
-} from "@shared/types/Message";
-import { AppState, Settings } from "@shared/types/Settings";
-import { IndexerSettings } from "@shared/types/Indexer";
-import { loggingProvider } from "./loggingProvider";
+import type { AppMessage, CodeContextDetails } from "@shared/types/Message";
+import type { AppState, Thread } from "@shared/types/Settings";
+import type {
+	AddMessageToThreadEvent,
+	RenameThreadEvent,
+	UpdateComposerFileEvent,
+} from "@shared/types/Events";
 import {
 	addNoneAttributeToLink,
-	extractCodeBlock,
 	getActiveWorkspace,
 	getNonce,
-	getSymbolsFromOpenFiles,
 } from "./utilities";
-import { LSPClient } from "../client/index";
-import {
+import type { LSPClient } from "../client/index";
+import type {
 	ComposerRequest,
 	DiffViewCommand,
 	FileSearchResult,
 } from "@shared/types/v2/Composer";
-import { DiffViewProvider } from "./diffViewProvider";
-import { CustomTimeoutExitCode, WingmanTerminal } from "./terminalProvider";
-import {
-	EVENT_CHAT_SENT,
-	EVENT_COMMIT_MSG,
-	EVENT_REVIEW_FILE_BY_FILE,
-	EVENT_VALIDATE_FAILED,
-	EVENT_VALIDATE_SUCCEEDED,
-	telemetry,
-} from "./telemetryProvider";
-import { Workspace } from "../service/workspace";
-import { getGitignorePatterns } from "../server/files/utils";
-import { CodeReviewer } from "../commands/review/codeReviewer";
-import { ConfigViewProvider } from "./configViewProvider";
+import type { DiffViewProvider } from "./diffViewProvider";
+import type { Workspace } from "../service/workspace";
+import type { ConfigViewProvider } from "./configViewProvider";
 import path from "node:path";
+import type { FileMetadata } from "@shared/types/v2/Message";
+import type { ThreadViewProvider } from "./threadViewProvider";
+import { getRecentFileTracker } from "./recentFileTracker";
+import { getGitignorePatterns } from "../server/files/utils";
 
-let abortController = new AbortController();
-let wingmanTerminal: WingmanTerminal | undefined;
-
-export type ChatView = "chat" | "composer" | "indexer";
+export type ChatView = "composer" | "indexer";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.chatview";
@@ -53,19 +36,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 	private _disposables: vscode.Disposable[] = [];
 	private _webview: vscode.Webview | undefined;
-	private _launchView: ChatView = "chat";
+	private _launchView: ChatView = "composer";
 
 	constructor(
 		private readonly _lspClient: LSPClient,
-		private readonly _aiProvider: AIProvider,
 		private readonly _context: vscode.ExtensionContext,
 		private readonly _diffViewProvider: DiffViewProvider,
+		private readonly _threadViewProvider: ThreadViewProvider,
 		private readonly _workspace: Workspace,
-		private readonly _settings: Settings,
-		private readonly _settingsViewProvider: ConfigViewProvider
-	) { }
+		private readonly _settingsViewProvider: ConfigViewProvider,
+	) {}
 
 	dispose() {
+		// biome-ignore lint/complexity/noForEach: <explanation>
 		this._disposables.forEach((d) => d.dispose());
 		this._disposables = [];
 	}
@@ -92,12 +75,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext,
-		token: vscode.CancellationToken
+		token: vscode.CancellationToken,
 	) {
 		this._webview = webviewView.webview;
 		webviewView.webview.options = {
 			enableScripts: true,
-			localResourceRoots: [vscode.Uri.joinPath(this._context.extensionUri, 'media'), vscode.Uri.joinPath(this._context.extensionUri, 'out')]
+			localResourceRoots: [
+				vscode.Uri.joinPath(this._context.extensionUri, "media"),
+				vscode.Uri.joinPath(this._context.extensionUri, "out"),
+			],
 		};
 
 		webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
@@ -105,658 +91,404 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		this._lspClient.setComposerWebViewReference(webviewView.webview);
 
 		token.onCancellationRequested((e) => {
-			abortController.abort();
+			this._lspClient.cancelComposer();
 			eventEmitter._onQueryComplete.fire();
 		});
 
-		wingmanTerminal = new WingmanTerminal(
-			vscode.workspace.workspaceFolders?.[0].uri.fsPath || ""
+		this._disposables.push(
+			webviewView.webview.onDidReceiveMessage(async (data: AppMessage) => {
+				if (!data) {
+					return;
+				}
+
+				const { command, value } = data;
+
+				this._lspClient.onIndexUpdated((stats) => {
+					webviewView.webview.postMessage({
+						command: "index-status",
+						value: stats,
+					});
+				});
+
+				// TODO - move to a mediator pattern
+				switch (command) {
+					case "add-message-to-thread":
+						await this.addMessageToThread(value as AddMessageToThreadEvent);
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
+						break;
+					case "create-thread":
+						await this.createThread(value as Thread);
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
+						break;
+					case "branch-thread":
+						await this.branchThread(value as Thread);
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
+						break;
+					case "switch-thread":
+						await this.switchThread(String(value));
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
+						break;
+					case "delete-thread":
+						await this.deleteThread(String(value));
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
+						break;
+					case "rename-thread":
+						await this.renameThread(value as RenameThreadEvent);
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
+						break;
+					case "visualize-threads":
+						this._threadViewProvider.visualizeThreads(
+							this._workspace.getSettings(),
+						);
+						break;
+					case "accept-file":
+						await this.acceptFile(value as UpdateComposerFileEvent);
+						break;
+					case "reject-file":
+						await this.rejectFile(value as UpdateComposerFileEvent);
+						break;
+					case "undo-file":
+						await this.undoFile(value as UpdateComposerFileEvent);
+						break;
+					case "open-file":
+						await vscode.commands.executeCommand(
+							"vscode.open",
+							vscode.Uri.file(
+								path.join(
+									this._workspace.workspacePath,
+									(value as FileMetadata).path,
+								),
+							),
+						);
+						break;
+
+					case "openSettings":
+						this._settingsViewProvider.openInPanel();
+						break;
+					case "diff-view": {
+						const { file, threadId } = value as DiffViewCommand;
+						this._diffViewProvider.createDiffView({
+							file,
+							onAccept: async (file: FileMetadata, threadId: string) => {
+								await this.acceptFile({ files: [file], threadId });
+							},
+							onReject: async (file: FileMetadata, threadId: string) => {
+								await this.rejectFile({ files: [file], threadId });
+							},
+							threadId,
+						});
+						break;
+					}
+					case "clear-chat-history":
+						this.clearChatHistory();
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: this._workspace.getSettings(),
+						});
+						break;
+					case "get-files": {
+						const searchTerm = value as string | undefined;
+						if (!searchTerm || searchTerm?.length === 0) {
+							return [];
+						}
+
+						const settings = await this._workspace.load();
+
+						// Find all files in the workspace that match the search term
+						const matchingFiles = await vscode.workspace.findFiles(
+							"**/*",
+							(await getGitignorePatterns(this._workspace.workspacePath)) || "",
+						);
+
+						// Convert to relative paths
+						const filteredFiles: FileSearchResult[] = matchingFiles
+							.filter((f) => f.fsPath.includes(searchTerm))
+							.map((file) => {
+								const path = vscode.workspace.asRelativePath(file.fsPath);
+								return {
+									file: String(path.split("/").pop()),
+									path,
+								} satisfies FileSearchResult;
+							});
+
+						webviewView.webview.postMessage({
+							command: "get-files-result",
+							value: filteredFiles,
+						});
+						break;
+					}
+					case "compose":
+						await this._lspClient.compose({
+							...(value as ComposerRequest),
+							context: getChatContext(1024),
+							recentFiles: getRecentFileTracker().getRecentFiles(),
+						});
+						break;
+					case "cancel": {
+						await this._lspClient.cancelComposer();
+						break;
+					}
+					case "ready": {
+						const settings = await this._workspace.load();
+						const appState: AppState = {
+							workspaceFolder: getActiveWorkspace(),
+							theme: vscode.window.activeColorTheme.kind,
+							threads: settings.threads,
+							activeThreadId: settings.activeThreadId,
+							settings,
+							totalFiles: 0,
+						};
+
+						webviewView.webview.postMessage({
+							command: "init",
+							value: appState,
+						});
+
+						webviewView.webview.postMessage({
+							command: "thread-data",
+							value: settings,
+						});
+						this.showView(this._launchView);
+						break;
+					}
+				}
+			}),
+			vscode.window.onDidChangeActiveColorTheme((theme: vscode.ColorTheme) => {
+				webviewView.webview.postMessage({
+					command: "setTheme",
+					value: theme.kind,
+				});
+			}),
 		);
-		wingmanTerminal.subscribe(async (data, code) => {
-			if (!data) return;
+	}
 
-			if (code === CustomTimeoutExitCode) {
-				loggingProvider.logInfo("Validation command timeout occurred");
-				this._webview?.postMessage({
-					command: "validation-success",
-				});
-				wingmanTerminal?.cancel();
-				return;
+	private async undoFile({ files, threadId }: UpdateComposerFileEvent) {
+		try {
+			// Update thread metadata
+			const targetThread = await this._workspace.getThreadById(threadId);
+			if (!targetThread) return;
+
+			const fileMap = new Map<string, FileMetadata>();
+			for (const file of files) {
+				const fileUri = vscode.Uri.joinPath(
+					vscode.Uri.parse(this._workspace.workspacePath),
+					file.path,
+				);
+				file.accepted = false;
+				file.rejected = false;
+				await vscode.workspace.fs.writeFile(
+					fileUri,
+					new TextEncoder().encode(file.original),
+				);
+				fileMap.set(file.id!, file);
 			}
 
-			loggingProvider.logInfo(`Validation command output:\n\n${data}`);
-			const output = await this._aiProvider.getLightweightModel()
-				.invoke(`You are a senior software engineer.
-Analyze the following command output.
+			let filesFound = 0;
+			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+				if (filesFound === fileMap.size) {
+					break;
+				}
 
-Rules:
-- Determine if the command ran successfully or not.
-- If the command did not run successfully try to succinctly identify what the error may be.
-- Provide a concise summary of the error, if present.
-- The summary should include details required to take action and fix the error(s). This might include files or paths.
-- If there was no exit code, and an error is not obvious, assume it was successful.
-- Return your response in JSON format, do not include markdown or any other text.
-
-Example JSON output format:
-{
-   "success": true|false,
-   "summary": "Command files due to xyz"
-}
-   
------
-
-Command executed:
-${this._settings.validationSettings.validationCommand}
-
-Exit code: 
-${code || "Not available."}
-
-Command output:
-${data}
-`);
-
-			const result = JSON.parse(output.content.toString()) as {
-				success: boolean;
-				summary: string;
-			};
-
-			if (result.success) {
-				telemetry.sendEvent(EVENT_VALIDATE_SUCCEEDED, {
-					command:
-						this._settings.validationSettings.validationCommand ||
-						"",
-				});
-				this._webview?.postMessage({
-					command: "validation-success",
-				});
-				wingmanTerminal?.cancel();
-				return;
+				const message = targetThread.messages[i];
+				const events = message.events ?? [];
+				for (let j = events.length - 1; j >= 0; j--) {
+					const event = events[j];
+					if (fileMap.has(event.id)) {
+						event.content = JSON.stringify(fileMap.get(event.id));
+						filesFound++;
+						if (filesFound === fileMap.size) {
+							break;
+						}
+					}
+				}
 			}
-
-			telemetry.sendEvent(EVENT_VALIDATE_FAILED, {
-				command:
-					this._settings.validationSettings.validationCommand || "",
-			});
 
 			this._webview?.postMessage({
-				command: "validation-failed",
-				value: `Fixing build errors...
-
-Here is a summary of the command output:
-${result.summary}`,
+				command: "thread-data",
+				value: this._workspace.getSettings(),
 			});
-		});
 
-		const codeReviewer = new CodeReviewer(
-			this._workspace.workspacePath,
-			this._aiProvider
-		);
+			await Promise.all([
+				this._lspClient.updateComposerFile({
+					files,
+					threadId,
+				}),
+				this._workspace.updateThread(threadId, targetThread),
+			]);
+		} catch (error) {
+			console.error("Error undoing file changes:", error);
+			// Consider showing an error notification to the user
+		}
+	}
 
-		this._disposables.push(
-			webviewView.webview.onDidReceiveMessage(
-				async (data: AppMessage) => {
-					if (!data) {
-						return;
-					}
+	private async acceptFile({
+		files,
+		threadId,
+	}: UpdateComposerFileEvent): Promise<void> {
+		const targetThread = await this._workspace.getThreadById(threadId);
+		if (!targetThread) return;
 
-					const { command, value } = data;
+		const fileMap = new Map<string, FileMetadata>();
+		for (const file of files) {
+			const relativeFilePath = vscode.workspace.asRelativePath(file.path);
+			const fileUri = vscode.Uri.joinPath(
+				vscode.Uri.parse(this._workspace.workspacePath),
+				relativeFilePath,
+			);
+			await vscode.workspace.fs.writeFile(
+				fileUri,
+				new TextEncoder().encode(file.code),
+			);
+			file.accepted = true;
+			file.rejected = false;
+			fileMap.set(file.id!, file);
+		}
 
-					this._lspClient.onIndexUpdated((stats) => {
-						webviewView.webview.postMessage({
-							command: "index-status",
-							value: stats
-						});
-					})
-
-					// TODO - save me from the insanity of this switch statement :D
-					switch (command) {
-						case "undo-file":
-							webviewView.webview.postMessage({
-								command: "compose-response",
-								value: {
-									node: "composer-replace",
-									values: {
-										...(await this._lspClient.undoComposerFile(value as FileMetadata))
-									}
-								}
-							});
-							break;
-						case "open-file":
-							await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(this._workspace.workspacePath, (value as FileMetadata).path)));
-							break;
-						case "reject-file":
-							webviewView.webview.postMessage({
-								command: "compose-response",
-								value: {
-									node: "composer-replace",
-									values: {
-										...(await this._lspClient.rejectComposerFile(value as FileMetadata))
-									}
-								}
-							});
-							break;
-						case "openSettings":
-							this._settingsViewProvider.openInPanel();
-							break;
-						case "delete-indexed-file":
-							await this._lspClient.deleteFileFromIndex(String(value));
-							break;
-						case "review-files":
-							telemetry.sendEvent(EVENT_REVIEW_FILE_BY_FILE);
-							this._diffViewProvider.createCodeReviewView(
-								(value as CodeReviewMessage).review
-							);
-							break;
-						case "web_search":
-							this.handleWebSearch(value as string, webviewView.webview);
-							break;
-						case "review":
-							const review =
-								await codeReviewer.generateDiffsAndSummary(
-									String(value)
-								);
-
-							telemetry.sendEvent(EVENT_COMMIT_MSG);
-
-							if (!review) {
-								webviewView.webview.postMessage({
-									command: "code-review-failed",
-								});
-								return;
-							}
-
-							webviewView.webview.postMessage({
-								command: "code-review-result",
-								value: {
-									review,
-									type: "code-review",
-								} satisfies CodeReviewMessage,
-							});
-							break;
-						case "commit_msg":
-							const commitReview =
-								await codeReviewer.generateCommitMessage(
-									String(value)
-								);
-
-							telemetry.sendEvent(EVENT_COMMIT_MSG);
-
-							if (!commitReview) {
-								webviewView.webview.postMessage({
-									command: "commit-msg-failed",
-								});
-								return;
-							}
-
-							webviewView.webview.postMessage({
-								command: "commit-msg-result",
-								value: {
-									message: `Please use the following commit message for your staged changes:
-
-\`\`\`plaintext								
-${commitReview}
-\`\`\``,
-									type: "commit-msg",
-									loading: false
-								} satisfies CommitMessage,
-							});
-							break;
-						case "state-update":
-							const appState = value as AppState;
-							const currentSettings = await this._workspace.load();
-							await this._workspace.save({
-								indexerSettings:
-									appState.settings.indexerSettings,
-								chatMessages: appState.settings.chatMessages,
-							});
-
-							if (currentSettings.indexerSettings.indexFilter !== appState.settings.indexerSettings.indexFilter) {
-								const matchingFiles =
-									await vscode.workspace.findFiles(
-										appState.settings.indexerSettings.indexFilter ?? "*",
-										(await getGitignorePatterns(
-											this._workspace.workspacePath
-										)) || ""
-									);
-
-								webviewView.webview.postMessage({
-									command: "available-files",
-									value: matchingFiles?.length ?? 0,
-								});
-							}
-							this._lspClient.setIndexerSettings(
-								appState.settings.indexerSettings
-							);
-							break;
-						case "diff-view":
-							const { file } = value as DiffViewCommand;
-
-							this._diffViewProvider.createDiffView({
-								file,
-								onAccept: async (f: FileMetadata) => {
-									webviewView.webview.postMessage({
-										command: "compose-response",
-										value: {
-											node: "composer-replace",
-											values: {
-												...(await this._lspClient.acceptComposerFile(f))
-											}
-										}
-									});
-
-								},
-								onReject: async (f: FileMetadata) => {
-									webviewView.webview.postMessage({
-										command: "compose-response",
-										value: {
-											node: "composer-replace",
-											values: {
-												...(await this._lspClient.rejectComposerFile(f))
-											}
-										}
-									});
-								}
-							});
-							break;
-						case "validate":
-							if (
-								this._settings.validationSettings
-									?.validationCommand
-							) {
-								loggingProvider.logInfo(
-									`Validating using command: ${this._settings.validationSettings.validationCommand}`
-								);
-								wingmanTerminal?.spawn();
-								wingmanTerminal?.sendCommand(
-									this._settings.validationSettings
-										.validationCommand
-								);
-							}
-							break;
-						case "cancel-validate":
-							wingmanTerminal?.cancel();
-							break;
-						case "clear-chat-history":
-							await this._workspace.save({
-								chatMessages: [],
-							});
-							this._aiProvider.clearChatHistory();
-							await this._lspClient.clearChatHistory();
-							break;
-						case "terminal":
-							// Use value to spawn new terminal with command
-							const terminalCommand = value as string;
-							const terminal = vscode.window.createTerminal({
-								name: "Wingman Command",
-							});
-							terminal.show();
-							terminal.sendText(terminalCommand);
-							break;
-						case "accept-file":
-							const acceptedFile = value as FileMetadata;
-							const { path: artifactFile, code: markdown } = acceptedFile;
-
-							let code = markdown?.startsWith("```")
-								? extractCodeBlock(markdown)
-								: markdown;
-							const relativeFilePath = vscode.workspace.asRelativePath(artifactFile);
-
-							const fileUri = vscode.Uri.joinPath(
-								vscode.Uri.parse(this._workspace.workspacePath),
-								relativeFilePath
-							);
-
-							try {
-								// Convert the code string to Uint8Array for writing
-								const contentBytes = new TextEncoder().encode(code);
-
-								// Write the file contents directly
-								await vscode.workspace.fs.writeFile(fileUri, contentBytes);
-
-								webviewView.webview.postMessage({
-									command: "compose-response",
-									value: {
-										node: "composer-replace",
-										values: {
-											...(await this._lspClient.acceptComposerFile(acceptedFile))
-										}
-									}
-								});
-							} catch (error) {
-								console.error('Failed to write file:', error);
-								throw error;
-							}
-							break;
-						case "get-files":
-							const searchTerm = value as string | undefined;
-							if (!searchTerm || searchTerm?.length === 0) {
-								return [];
-							}
-
-							const settings = await this._workspace.load();
-
-							// Find all files in the workspace that match the search term
-							const matchingFiles =
-								await vscode.workspace.findFiles(
-									settings.indexerSettings.indexFilter,
-									(await getGitignorePatterns(
-										this._workspace.workspacePath
-									)) || ""
-								);
-
-							// Convert to relative paths
-							const filteredFiles: FileSearchResult[] =
-								matchingFiles.filter(f => f.fsPath.includes(searchTerm)).map((file) => {
-									const path =
-										vscode.workspace.asRelativePath(
-											file.fsPath
-										);
-									return {
-										file: path.split("/").pop()!,
-										path,
-									} satisfies FileSearchResult;
-								});
-
-							webviewView.webview.postMessage({
-								command: "get-files-result",
-								value: filteredFiles,
-							});
-							break;
-						case "compose":
-							await this._lspClient.compose(
-								value as ComposerRequest
-							);
-							break;
-						case "delete-index":
-							await this._lspClient.deleteIndex();
-							webviewView.webview.postMessage({
-								command: "index-status",
-								value: {
-									...(await this._lspClient.indexExists())
-								}
-							});
-							break;
-						case "build-index":
-							const { indexFilter, exclusionFilter } =
-								value as IndexerSettings;
-							await this._workspace.save({
-								indexerSettings: {
-									indexFilter,
-									exclusionFilter,
-								},
-							});
-							await this._lspClient.buildFullIndex({
-								indexFilter,
-								exclusionFilter,
-							});
-							break;
-						case "check-index":
-							webviewView.webview.postMessage({
-								command: "index-status",
-								value: {
-									...(await this._lspClient.indexExists())
-								}
-							});
-							break;
-						case "chat": {
-							this.handleChatMessage({ value, webview: webviewView.webview });
-							break;
-						}
-						case "cancel": {
-							abortController.abort();
-							await this._lspClient.cancelComposer();
-							break;
-						}
-						case "clipboard": {
-							vscode.env.clipboard.writeText(value as string);
-							break;
-						}
-						case "copyToFile": {
-							this.sendContentToNewDocument(value as string);
-							break;
-						}
-						case "showContext": {
-							const { fileName, lineRange } =
-								value as CodeContext;
-							const [start, end] = lineRange
-								.split("-")
-								.map(Number);
-							const uri = vscode.Uri.file(fileName);
-							vscode.window.showTextDocument(uri).then(() => {
-								if (!vscode.window.activeTextEditor) {
-									return;
-								}
-
-								vscode.window.activeTextEditor.selection =
-									new vscode.Selection(
-										new vscode.Position(start, 0),
-										new vscode.Position(end, 0)
-									);
-							});
-							break;
-						}
-						case "ready": {
-							const settings = await this._workspace.load();
-
-							const appState: AppState = {
-								workspaceFolder: getActiveWorkspace(),
-								theme: vscode.window.activeColorTheme.kind,
-								settings,
-								totalFiles: 0
-							};
-
-							webviewView.webview.postMessage({
-								command: "init",
-								value: appState,
-							});
-
-							setTimeout(async () => {
-								webviewView.webview.postMessage({
-									command: "index-status",
-									value: {
-										...(await this._lspClient.indexExists())
-									}
-								});
-
-								webviewView.webview.postMessage({
-									command: "available-files",
-									value: (await vscode.workspace.findFiles(
-										settings.indexerSettings.indexFilter ?? "*",
-										(await getGitignorePatterns(
-											this._workspace.workspacePath
-										)) || ""
-									)).length
-								})
-							}, 50);
-							this.showView(this._launchView);
-							break;
-						}
+		let filesFound = 0;
+		for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+			const message = targetThread.messages[i];
+			const events = message.events ?? [];
+			for (let j = events.length - 1; j >= 0; j--) {
+				const event = events[j];
+				if (fileMap.has(event.id)) {
+					event.content = JSON.stringify(fileMap.get(event.id));
+					filesFound++;
+					if (filesFound === fileMap.size) {
+						break;
 					}
 				}
-			),
-			vscode.window.onDidChangeActiveColorTheme(
-				(theme: vscode.ColorTheme) => {
-					webviewView.webview.postMessage({
-						command: "setTheme",
-						value: theme.kind,
-					});
-				}
-			)
-		);
-	}
+			}
+		}
 
-	private async sendContentToNewDocument(content: string) {
-		const newFile = await vscode.workspace.openTextDocument({
-			content,
+		this._webview?.postMessage({
+			command: "thread-data",
+			value: this._workspace.getSettings(),
 		});
-		vscode.window.showTextDocument(newFile);
+
+		await Promise.all([
+			this._lspClient.updateComposerFile({
+				files,
+				threadId,
+			}),
+			this._workspace.updateThread(threadId, targetThread),
+		]);
 	}
 
-	private async handleChatMessage({
-		value,
-		webview,
-	}: Pick<AppMessage, "value"> & { webview: vscode.Webview }) {
-		abortController = new AbortController();
-
-		await this.streamChatResponse(
-			value as string,
-			getChatContext(
-				this._settings.interactionSettings.chatContextWindow
-			),
-			webview
-		);
-	}
-
-	private async streamChatResponse(
-		prompt: string,
-		context: CodeContextDetails | undefined,
-		webview: vscode.Webview
-	) {
-		let ragContext = "";
-
-		const { codeDocs, projectDetails } =
-			await this._lspClient.getEmbeddings(prompt);
-
-		const symbols = await getSymbolsFromOpenFiles();
-
+	private async rejectFile({ files, threadId }: UpdateComposerFileEvent) {
 		try {
-			telemetry.sendEvent(EVENT_CHAT_SENT, {
-				embeddingCount: (codeDocs?.length ?? 0).toString(),
-				aiProvider: this._settings.aiProvider,
-				model: this._settings.providerSettings[
-					this._settings.aiProvider
-				]?.chatModel,
-			});
-		} catch { }
+			// Update thread metadata
+			const targetThread = await this._workspace.getThreadById(threadId);
+			if (!targetThread) return;
 
-		ragContext = `{LANGUAGE_TEMPLATE}
-{FILE_TEMPLATE}
-
-{PROJECT_TEMPLATE}
-
-{CONTEXT_TEMPLATE}
-
-{SYMBOLS_TEMPLATE}
-
-{CURRENT_LINE_TEMPLATE}`;
-
-		ragContext = ragContext.replace(
-			"{LANGUAGE_TEMPLATE}",
-			!context?.language ? "" : `Current language:\n${context?.language}.`
-		);
-
-		ragContext = ragContext.replace(
-			"{FILE_TEMPLATE}",
-			!context?.fileName ? "" : `Current file:\n${context?.fileName}`
-		);
-
-		ragContext =
-			ragContext.replace(
-				"{CONTEXT_TEMPLATE}",
-				!context?.text
-					? ""
-					: context.fromSelection
-						? `The user has selected the following code and wishes you to focus on it:\n${context.text}`
-						: `The user has provided a snippet of code from the file they are working on:\n${context.text}`
-			) + "\n\n=======";
-
-		ragContext = ragContext.replace(
-			"{CURRENT_LINE_TEMPLATE}",
-			!context?.currentLine || context?.fromSelection
-				? ""
-				: `The user is currently working on the following line:\n${context?.currentLine}`
-		);
-
-		if (projectDetails) {
-			ragContext = ragContext.replace(
-				"{PROJECT_TEMPLATE}",
-				!projectDetails
-					? ""
-					: `Here are details about the current project:
-${projectDetails}
-
-=======`
-			);
-		}
-
-		if (codeDocs?.length === 0) {
-			ragContext = ragContext.replace(
-				"{SYMBOLS_TEMPLATE}",
-				`Here are the available types reference by the code in context to use as a reference when answering questions, these may not be related to the code provided:
-
-${symbols}
-
-=======`
-			);
-		} else {
-			ragContext = ragContext.replace(
-				"{SYMBOLS_TEMPLATE}",
-				`Use these code snippets from the current project as a reference when answering questions.
-These code snippets serve as additional context for the user's question:
-
-${codeDocs.join("\n\n----\n")}
-
-=======`
-			);
-		}
-
-		if (context) {
-			const { fileName, lineRange, workspaceName } = context;
-			webview.postMessage({
-				command: "context",
-				value: {
-					fileName,
-					lineRange,
-					workspaceName,
-				} satisfies CodeContext,
-			});
-		}
-
-		eventEmitter._onQueryStart.fire();
-
-		const response = this._aiProvider.chat(
-			prompt,
-			ragContext,
-			abortController.signal
-		);
-
-		for await (const chunk of response) {
-			webview.postMessage({
-				command: "response",
-				value: chunk,
-			});
-		}
-
-		eventEmitter._onQueryComplete.fire();
-
-		webview.postMessage({
-			command: "done",
-			value: null,
-		});
-	}
-
-	private async handleWebSearch(input: string, webview: vscode.Webview) {
-		try {
-			const stream = this._lspClient.streamWebSearch(input);
-
-			let msg = '';
-			for await (const chunk of stream) {
-				msg += chunk;
+			const fileMap = new Map<string, FileMetadata>();
+			for (const file of files) {
+				file.accepted = false;
+				file.rejected = true;
+				fileMap.set(file.id!, file);
 			}
 
-			await this.handleChatMessage({
-				value: `Take the following researched information and help answer my question.
-Question ${input}
+			let filesFound = 0;
+			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+				const message = targetThread.messages[i];
+				const events = message.events ?? [];
+				for (let j = events.length - 1; j >= 0; j--) {
+					const event = events[j];
+					event.content = JSON.stringify(fileMap.get(event.id));
+					filesFound++;
+					if (filesFound === fileMap.size) {
+						break;
+					}
+				}
+			}
 
-Researched Information:
-${msg}`, webview
+			this._webview?.postMessage({
+				command: "thread-data",
+				value: this._workspace.getSettings(),
 			});
+
+			await Promise.all([
+				this._lspClient.updateComposerFile({
+					files,
+					threadId,
+				}),
+				this._workspace.updateThread(threadId, targetThread),
+			]);
 		} catch (error) {
-			webview.postMessage({
-				command: "done",
-				content: error instanceof Error ? error.message : "Search failed"
-			});
+			console.error("Error rejecting file:", error);
 		}
+	}
+
+	private async clearChatHistory() {
+		const settings = this._workspace.getSettings();
+
+		if (settings.activeThreadId) {
+			await this._workspace.updateThread(settings.activeThreadId, {
+				messages: [],
+			});
+			await this._lspClient.clearChatHistory(settings.activeThreadId);
+		}
+	}
+
+	private async deleteThread(threadId: string) {
+		await this._lspClient.deleteThread(threadId);
+		await this._workspace.deleteThread(threadId);
+	}
+
+	private async renameThread({ threadId, title }: RenameThreadEvent) {
+		await this._workspace.updateThread(threadId, { title });
+	}
+
+	private async switchThread(threadId: string) {
+		await this._workspace.switchThread(threadId);
+	}
+
+	private async createThread(thread: Thread) {
+		await this._workspace.createThread(thread.title);
+	}
+
+	private async branchThread(thread: Thread) {
+		await this._workspace.branchThread(thread);
+		await this._lspClient.branchThread({
+			threadId: thread.id,
+			originalThreadId: thread.originatingThreadId,
+		});
+	}
+
+	private async addMessageToThread(event: AddMessageToThreadEvent) {
+		const { threadId, message } = event;
+		const activeThread = await this._workspace.getThreadById(threadId);
+
+		if (activeThread) {
+			activeThread.messages.push(message);
+			await this._workspace.updateThread(threadId, activeThread);
+			return;
+		}
+
+		const words = message.message.split(" ");
+		let threadTitle = words.slice(0, 5).join(" ");
+		if (threadTitle.length > 30) {
+			threadTitle = `${threadTitle.substring(0, 27)}...`;
+		}
+
+		await this._workspace.createThread(threadTitle, [message], event.threadId);
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
@@ -765,24 +497,27 @@ ${msg}`, webview
 				this._context.extensionUri,
 				"out",
 				"views",
-				"chat.html"
-			)
+				"chat.html",
+			),
 		);
 
 		const nonce = getNonce();
 
 		const htmlContent = fs.readFileSync(htmlUri.fsPath, "utf8");
-		const imageUri = getImageUri(webview, this._context, ['media',
-			vscode.window.activeColorTheme.kind === 1 ? 'Logo-black.png' : 'Logo-white.png']);
+		const imageUri = getImageUri(webview, this._context, [
+			"media",
+			vscode.window.activeColorTheme.kind === 1
+				? "Logo-black.png"
+				: "Logo-white.png",
+		]);
 
 		// Replace placeholders in the HTML content
-		const finalHtmlContent = htmlContent.replace(
-			/CSP_NONCE_PLACEHOLDER/g,
-			nonce
-		).replace('LOGO_URL', imageUri.toString());
+		const finalHtmlContent = htmlContent
+			.replace(/CSP_NONCE_PLACEHOLDER/g, nonce)
+			.replace("LOGO_URL", imageUri.toString());
 
 		const prefix = webview.asWebviewUri(
-			vscode.Uri.joinPath(this._context.extensionUri, "out", "views")
+			vscode.Uri.joinPath(this._context.extensionUri, "out", "views"),
 		);
 		const srcHrefRegex = /(src|href)="([^"]+)"/g;
 
@@ -792,15 +527,11 @@ ${msg}`, webview
 			(match, attribute, filename) => {
 				const prefixedFilename = `${prefix}${filename}`;
 				return `${attribute}="${prefixedFilename}"`;
-			}
+			},
 		);
 
 		return addNoneAttributeToLink(updatedHtmlContent, nonce);
 	}
-
-	private log = (value: unknown) => {
-		loggingProvider.logInfo(JSON.stringify(value ?? ""));
-	};
 }
 
 function getChatContext(contextWindow: number): CodeContextDetails | undefined {
@@ -818,7 +549,7 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 			selection.start.line,
 			selection.start.character,
 			selection.end.line,
-			selection.end.character
+			selection.end.character,
 		);
 	} else {
 		const currentLine = selection.active.line;
@@ -827,21 +558,20 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 
 		const halfContext = Math.floor(contextWindow / 2);
 
-		let upperText =
-			upperLine > 0 ? document.lineAt(upperLine - 1).text : "";
+		let upperText = upperLine > 0 ? document.lineAt(upperLine - 1).text : "";
 		let lowerText = document.lineAt(lowerLine).text;
 
 		// Expand context in both directions
 		for (let i = 0; i < halfContext; i++) {
 			if (upperLine > 0) {
 				upperLine--;
-				upperText = document.lineAt(upperLine).text + "\n" + upperText;
+				upperText = `${document.lineAt(upperLine).text}\n${upperText}`;
 				lastDirection = 0;
 			}
 
 			if (lowerLine < document.lineCount - 1) {
 				lowerLine++;
-				lowerText += "\n" + document.lineAt(lowerLine).text;
+				lowerText += `\n${document.lineAt(lowerLine).text}`;
 				lastDirection = 1;
 			}
 
@@ -856,7 +586,7 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 
 		codeContextRange = new vscode.Range(
 			beginningWindowLine.range.start,
-			endWindowLine.range.end
+			endWindowLine.range.end,
 		);
 	}
 
@@ -884,6 +614,12 @@ function getChatContext(contextWindow: number): CodeContextDetails | undefined {
 	};
 }
 
-function getImageUri(webview: vscode.Webview, context: vscode.ExtensionContext, imagePath: string[]) {
-	return webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, ...imagePath));
+function getImageUri(
+	webview: vscode.Webview,
+	context: vscode.ExtensionContext,
+	imagePath: string[],
+) {
+	return webview.asWebviewUri(
+		vscode.Uri.joinPath(context.extensionUri, ...imagePath),
+	);
 }

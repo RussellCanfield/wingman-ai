@@ -2,14 +2,14 @@ import path from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { Location } from "vscode-languageserver";
+import type { Location } from "vscode-languageserver";
 import { URI } from "vscode-uri";
 import { loggingProvider } from "../loggingProvider";
 import { glob } from "tinyglobby";
 
 export const getWorkspaceFolderForDocument = (
 	documentUri: string,
-	workspaceFolders: string[]
+	workspaceFolders: string[],
 ): string | null => {
 	const documentPath = URI.parse(documentUri).fsPath;
 	for (const folder of workspaceFolders) {
@@ -28,7 +28,7 @@ export function filePathToUri(filePath: string): string {
 }
 
 export async function getTextDocumentFromUri(
-	uri: string
+	uri: string,
 ): Promise<TextDocument | undefined> {
 	const filePath = fileURLToPath(uri);
 	try {
@@ -43,7 +43,7 @@ export async function getTextDocumentFromUri(
 }
 
 export async function getTextDocumentFromPath(
-	filePath: string
+	filePath: string,
 ): Promise<TextDocument | undefined> {
 	try {
 		await fs.access(filePath);
@@ -52,7 +52,7 @@ export async function getTextDocumentFromPath(
 			filePathToUri(filePath),
 			"plaintext",
 			1,
-			content
+			content,
 		);
 	} catch (error) {
 		console.error(`File does not exist: ${filePath}`);
@@ -77,18 +77,16 @@ export function convertIdToFilePath(
 	id: string,
 	rangeStartLine: string,
 	rangeStartCharacter: string,
-	directory: string
+	directory: string,
 ) {
 	const startRange = `${rangeStartLine}-${rangeStartCharacter}`;
-	return fileURLToPath(id)
-		.replace(directory, "")
-		.replace(`-${startRange}`, "");
+	return fileURLToPath(id).replace(directory, "").replace(`-${startRange}`, "");
 }
 
 export function convertIdToFileUri(
 	id: string,
 	rangeStartLine: string,
-	rangeStartCharacter: string
+	rangeStartCharacter: string,
 ) {
 	const startRange = `${rangeStartLine}-${rangeStartCharacter}`;
 	return id.replace(`-${startRange}`, "");
@@ -103,7 +101,7 @@ export function clearFilterCache() {
 export async function checkFileMatch(
 	filePath: string,
 	includePatterns: string,
-	excludePatterns?: string
+	excludePatterns?: string,
 ): Promise<boolean> {
 	// Check inclusion
 	const included = await glob(includePatterns, { onlyFiles: true });
@@ -119,7 +117,7 @@ export async function checkFileMatch(
 
 export async function getGitignorePatterns(
 	workspace: string,
-	exclusionFilter?: string
+	exclusionFilter?: string,
 ): Promise<string> {
 	if (cachedGitignorePatterns) {
 		return `{${cachedGitignorePatterns.join(",")}}`;
@@ -174,9 +172,7 @@ export async function getGitignorePatterns(
 		return `{${cachedGitignorePatterns.join(",")}}`;
 	} catch (err) {
 		if (err instanceof Error) {
-			loggingProvider.logError(
-				`Error reading .gitignore file: ${err.message}`
-			);
+			loggingProvider.logError(`Error reading .gitignore file: ${err.message}`);
 		}
 		return "";
 	}

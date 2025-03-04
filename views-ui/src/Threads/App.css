@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+h2 {
+	@apply text-3xl my-4;
+}
+
+h3 {
+	@apply text-2xl my-3;
+}
+
+body {
+	height: 100%;
+}
+
+li {
+	@apply my-2;
+}
+
+#root {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.markdown-container code {
+	background: transparent;
+}

@@ -1,7 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
 	content: ["./src/**/*.{html,js,ts,jsx,tsx}"],
-	safelist: ["bg-code-light", "bg-code-dark"],
+	safelist: ["bg-code-light", "bg-code-dark",
+		{ pattern: /language-*/ }, 
+		{ pattern: /react-syntax-highlighter-*/ }
+	  ],
 	theme: {
 		extend: {
 			animation: {
@@ -19,6 +22,10 @@ module.exports = {
 					'0%': { backgroundPosition: '0% 50%' },
 					'50%': { backgroundPosition: '100% 50%' },
 					'100%': { backgroundPosition: '0% 50%' },
+				},
+				'fadeIn': {
+					'0%': { opacity: '0' },
+					'100%': { opacity: '1' },
 				},
 			},
 		},

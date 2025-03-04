@@ -1,30 +1,33 @@
-import { search, SafeSearchType, SearchResults } from 'duck-duck-scrape';
-import TurndownService from 'turndown';
-import * as cheerio from 'cheerio';
-import fetch from 'node-fetch';
-import { AIProvider } from '../service/base';
+import { search, SafeSearchType, type SearchResults } from "duck-duck-scrape";
+import TurndownService from "turndown";
+import * as cheerio from "cheerio";
+import fetch from "node-fetch";
+import type { AIProvider } from "../service/base";
 
 export class WebCrawler {
-    private turndown: TurndownService;
+	private turndown: TurndownService;
 
-    constructor(private readonly aiProvider: AIProvider) {
-        this.turndown = new TurndownService({
-            headingStyle: 'atx',
-            codeBlockStyle: 'fenced'
-        });
-    }
+	constructor(private readonly aiProvider: AIProvider) {
+		this.turndown = new TurndownService({
+			headingStyle: "atx",
+			codeBlockStyle: "fenced",
+		});
+	}
 
-    getBestMatchUrl = async (input: string, results: SearchResults): Promise<string> => {
-        const searchResultsText = results.results
-            .map((result, index) => (
-                `${index + 1}. Title: ${result.title}
+	getBestMatchUrl = async (
+		input: string,
+		results: SearchResults,
+	): Promise<string> => {
+		const searchResultsText = results.results
+			.map(
+				(result, index) => `${index + 1}. Title: ${result.title}
                 URL: ${result.url}
-                Description: ${result.description}`
-            ))
-            .join('\n\n');
+                Description: ${result.description}`,
+			)
+			.join("\n\n");
 
-        const response = await this.aiProvider.getLightweightModel().invoke(
-            `You are analyzing search results to find the most relevant URL for a user's query.
+		const response = await this.aiProvider.getLightweightModel().invoke(
+			`You are analyzing search results to find the most relevant URL for a user's query.
     
 Query: "${input}"
 
@@ -42,61 +45,64 @@ Selection criteria:
 
 Response format:
 - Return ONLY the URL, no explanation or additional text
-- If no results are relevant, return "none"`
-        );
+- If no results are relevant, return "none"`,
+		);
 
-        const url = response.content.toString().trim();
+		const url = response.content.toString().trim();
 
-        if (!url || url === 'none') {
-            throw new Error('No relevant results found');
-        }
+		if (!url || url === "none") {
+			throw new Error("No relevant results found");
+		}
 
-        // Validate the URL exists in our results to prevent hallucination
-        const matchingResult = results.results.find(r => r.url === url);
-        if (!matchingResult) {
-            return results.results[0].url; // Fallback to first result if model hallucinates
-        }
+		// Validate the URL exists in our results to prevent hallucination
+		const matchingResult = results.results.find((r) => r.url === url);
+		if (!matchingResult) {
+			return results.results[0].url; // Fallback to first result if model hallucinates
+		}
 
-        return url;
-    }
+		return url;
+	};
 
-    searchWeb = (async function* (this: WebCrawler, input: string): AsyncGenerator<string, void, unknown> {
-        try {
-            const searchResults = await search(input, {
-                safeSearch: SafeSearchType.STRICT
-            });
+	searchWeb = async function* (
+		this: WebCrawler,
+		input: string,
+	): AsyncGenerator<string, void, unknown> {
+		try {
+			const searchResults = await search(input, {
+				safeSearch: SafeSearchType.STRICT,
+			});
 
-            if (!searchResults.results.length) {
-                yield "No search results found";
-                return;
-            }
+			if (!searchResults.results.length) {
+				yield "No search results found";
+				return;
+			}
 
-            const bestMatch = await this.getBestMatchUrl(input, searchResults);
+			const bestMatch = await this.getBestMatchUrl(input, searchResults);
 
-            const response = await fetch(bestMatch);
-            const html = await response.text();
+			const response = await fetch(bestMatch);
+			const html = await response.text();
 
-            // Parse HTML
-            const $ = cheerio.load(html);
-            $('script, style, nav, footer, iframe, noscript').remove();
+			// Parse HTML
+			const $ = cheerio.load(html);
+			$("script, style, nav, footer, iframe, noscript").remove();
 
-            const mainContent = $('main, article, .content, #content, .main')
-                .first()
-                .html() || $('body').html();
+			const mainContent =
+				$("main, article, .content, #content, .main").first().html() ||
+				$("body").html();
 
-            if (!mainContent) {
-                yield "Could not extract content from the webpage";
-                return;
-            }
+			if (!mainContent) {
+				yield "Could not extract content from the webpage";
+				return;
+			}
 
-            const markdown = this.turndown.turndown(mainContent);
+			const markdown = this.turndown.turndown(mainContent);
 
-            yield markdown;
-        } catch (error) {
-            if (error instanceof Error) {
-                console.error('Error in web search:', error);
-                yield `Error searching the web: ${error.message}`;
-            }
-        }
-    }).bind(this) as (input: string) => AsyncGenerator<string, void, unknown>;
+			yield markdown;
+		} catch (error) {
+			if (error instanceof Error) {
+				console.error("Error in web search:", error);
+				yield `Error searching the web: ${error.message}`;
+			}
+		}
+	}.bind(this) as (input: string) => AsyncGenerator<string, void, unknown>;
 }

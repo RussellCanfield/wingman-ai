@@ -1,23 +1,14 @@
 # Configuration
 
-[Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) has a built-in configuration window that will persist configuration locally into the vscode settings file in your repository.
-In the future this may move into a specific file that you can **gitignore** separately. You can find the settings page by
-clicking **WINGMAN** in the terminal window.
+[Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) has a built-in configuration window that will persist configuration locally into a settings file on your machine.
 
-![](/Config.png)
+Settings can be accessed from the side panel, or under the `Wingman` option in the terminal pane.
 
-:::note
-Since Wingman leverages WASM, there is limited OS support currently due to the size of the extension. We are working to resolve this. Here are the supported operating systems and architectures:
-
--   Windows x64
--   Windows x64 ARM
--   macOS x64
--   macOS ARM
-:::
+![](/Settings.png)
 
 ## Storage
 
-[Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) only stores data on your machine. In previous extension versions (prior to v0.7.0), configuration used to be stored in your repository. The new storage location contains Wingman configuration, project specific embeddings and more.
+The [Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) storage location is shown below:
 
 **Storage Location:**
 
@@ -35,24 +26,30 @@ We aim to support the best models available. We allow the user to configure sepa
 
 You can use the following models:
 
+-   Claude 3.7 Sonnet
+-   Claude 3.5 Haiku
 -   Claude 3.5 Sonnet
 -   Claude 3 Opus
 
-**Anthropic [prompt caching](https://www.anthropic.com/news/prompt-caching) is used for Composer mode for optimization reasons**
+:::note
+Sonnet 3.7 is a pretty aggressive model, you can enable thinking mode (2048 token budget) or **spark** mode which will remove specific focus constraints on 3.7. Spark mode is the raw model output without the prompt restricting it.
+:::
 
-**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
+**Anthropic [prompt caching](https://www.anthropic.com/news/prompt-caching) is used for optimization reasons**
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent to Anthropic.
 
 ### [OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades)
 
 You can use the following models:
 
+-   o1
+-   o3-mini (medium reasoning)
 -   GPT-4o
 -   GPT-4o-mini
 -   GPT-4-Turbo
--   GPT4
--   GPT-1o
 
-**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent to OpenAI
 
 ### [AzureAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=python-secure#gpt-4o-and-gpt-4-turbo)
 
@@ -60,15 +57,19 @@ You can use the following models:
 
 You can use the following models:
 
+-   o1
+-   o3-mini (medium reasoning)
 -   GPT-4o
 -   GPT-4o-mini
 -   GPT-4-Turbo
 -   GPT4
 -   GPT-1o
 
-**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent Azure OpenAI.
 
 ### [Ollama](https://ollama.com/)
+
+Wingman uses a full agentic flow. You must use an Ollama model that supports tools. If you would like to add a model, please open an issue in [Github](https://github.com/RussellCanfield/wingman-ai).
 
 **NOTE - You can use any quantization for a supported model, you are not limited.**
 
@@ -86,17 +87,12 @@ Supported Models for _Code Completion_:
 
 Supported Models for _Chat_:
 
--   Qwen2.5 Coder Instruct [qwen2.5-coder](https://ollama.com/library/qwen2.5-coder)
--   Deepseek Coder v2-instruct _(tested with: [deepseek-coder-v2:16b-lite-instruct-q4_0](https://ollama.com/library/deepseek-coder-v2:16b-lite-instruct-q4_0))_
--   Deepseek-Instruct _(tested with: [deepseek-coder:6.7b-instruct-q8_0](https://ollama.ai/library/deepseek-coder:6.7b-instruct-q8_0))_
--   Codellama-Instruct _(tested with: [codellama:7b-instruct](https://ollama.ai/library/codellama:7b-instruct))_
--   Phind-CodeLlama - _(tested with: [phind-codellama:34b-v2-q2_K](https://ollama.ai/library/phind-codellama:34b-v2-q2_K))_
--   Magicoder-DS _(tested with [wojtek/magicoder:6.7b-s-ds-q8_0](https://ollama.com/wojtek/magicoder:6.7b-s-ds-q8_0))_
--   Llama3-Instruct _(tested with [llama3:8b-instruct-q6_K](https://ollama.com/library/llama3:8b-instruct-q6_K))_
--   CodeQwen1.5-Code _(tested with [codeqwen:7b-chat-v1.5-q8_0](https://ollama.com/library/codeqwen:7b-code-v1.5-q8_0))_
--   Codestral _(tested with [codestral:22b-v0.1-q5_K_M](https://ollama.com/library/codestral:22b-v0.1-q5_K_M))_
+-   [Qwen2.5 Coder Instruct](https://ollama.com/library/qwen2.5-coder)
+-   [Llama 3.3](https://ollama.com/library/llama3.3)
 
 ### [Hugging Face](https://huggingface.co/)
+
+**NOTE - These are out of date**
 
 Supported Models for _Code Completion_:
 
@@ -112,7 +108,12 @@ Supported Models for _Chat_:
 
 ## Settings
 
-Settings for the extension are broken down into 3 categories.
+Settings for the extension are broken down into 4 categories.
+
+- AI Provider
+- Interaction Settings
+- Validation Command
+- MCP Tools
 
 ### AI Provider
 
@@ -138,26 +139,6 @@ During code completion, this controls the amount of surrounding text passed to t
 
 The maximum amount of tokens the code models can generate during code completion.
 
-#### Chat context window
-
-When using chat, chat will pull code from the current open file around the current cursor position. This controls how many tokens it will include around the cursor. See our features guide for advanced use cases.
-
 #### Chat max tokens
 
 Controls the maximum about of tokens the AI provider will return.
-
-### Embedder Settings
-
-Embedding currently supports Ollama and OpenAI. Choosing a provider mimics many of the general settings for each AI Provider for chat/code.
-
-#### Dimensions
-
-The dimenions that the embedding model outputs in.
-
-#### Enabled
-
-Defaults to true, enabled will create a vector index (if it doesn't exist) when the extension launches and begin indexing files on save.
-
-:::tip
-If enabled is false, documents will not index on save and full index builds will not complete.
-:::

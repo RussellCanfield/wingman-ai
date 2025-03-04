@@ -52,11 +52,13 @@ export type ChatMessage = Message | CodeReviewMessage;
 export interface CommitMessage extends BaseMessage {
 	message: string;
 	type: "commit-msg";
+	threadId?: string;
 }
 
 export interface CodeReviewMessage extends BaseMessage {
 	review: CodeReview;
 	type: "code-review";
+	threadId?: string;
 }
 
 export interface Message extends BaseMessage {
@@ -64,21 +66,13 @@ export interface Message extends BaseMessage {
 	from: "assistant" | "user";
 	message: string;
 	type: "chat";
+	threadId?: string;
 }
 
 export interface BaseMessage {
 	loading?: boolean;
 	type?: MessageType;
-}
-
-export interface FileMetadata {
-	path: string;
-	code?: string;
-	description?: string;
-	plan?: string[];
-	diff?: string;
-	language?: string;
-	lastModified?: number;
+	createdAt?: number;
 }
 
 export interface CodeContextDetails {

@@ -1,19 +1,20 @@
-import { InteractionSettings, Settings } from "@shared/types/Settings";
-import { AIStreamProvider, ModelParams } from "../base";
-import { ILoggingProvider } from "@shared/types/Logger";
-import { AzureAIModel } from "@shared/types/Models";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { InteractionSettings, Settings } from "@shared/types/Settings";
+import type { AIStreamProvider, ModelParams } from "../base";
+import type { ILoggingProvider } from "@shared/types/Logger";
+import type { AzureAIModel } from "@shared/types/Models";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import {
 	AIMessage,
-	BaseMessage,
-	BaseMessageChunk,
+	type BaseMessage,
+	type BaseMessageChunk,
 	HumanMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
 import { AzureChatOpenAI } from "@langchain/openai";
 import { GPTModel } from "../openai/models/gptmodel";
 import { truncateChatHistory } from "../utils/contentWindow";
-import { isOClassModel } from '../base';
+
+const reasoningModels = ["o3-mini"];
 
 export class AzureAI implements AIStreamProvider {
 	chatHistory: BaseMessage[] = [];
@@ -23,7 +24,7 @@ export class AzureAI implements AIStreamProvider {
 	constructor(
 		private readonly settings: Settings["providerSettings"]["AzureAI"],
 		private readonly interactionSettings: InteractionSettings,
-		private readonly loggingProvider: ILoggingProvider
+		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
 			throw new Error("Unable to load AzureAI settings.");
@@ -38,63 +39,21 @@ export class AzureAI implements AIStreamProvider {
 	}
 
 	getModel(params?: ModelParams): BaseChatModel {
-		if (isOClassModel(this.settings?.chatModel) ||
-			isOClassModel(params?.model)) {
-			params = {
-				...(params ?? {}),
-				temperature: undefined
-			};
-		}
+		const targetModel = params?.model ?? this.settings?.chatModel;
+		const isReasoningModel = reasoningModels.some((reasoningModel) =>
+			targetModel?.startsWith(reasoningModel),
+		);
 
 		return new AzureChatOpenAI({
 			apiKey: this.settings?.apiKey,
 			azureOpenAIApiKey: this.settings?.apiKey,
 			azureOpenAIApiInstanceName: this.settings?.instanceName,
 			model: this.settings?.chatModel,
+			azureOpenAIApiDeploymentName: this.settings?.chatModel,
 			openAIApiVersion: this.settings?.apiVersion,
 			deploymentName: this.settings?.chatModel,
-			...(params ?? {})
-		});
-	}
-
-	getLightweightModel(params?: ModelParams): BaseChatModel {
-		if (isOClassModel(this.settings?.chatModel) ||
-			isOClassModel(params?.model)) {
-			params = {
-				...(params ?? {}),
-				temperature: undefined
-			};
-		}
-
-		return new AzureChatOpenAI({
-			apiKey: this.settings?.apiKey,
-			azureOpenAIApiKey: this.settings?.apiKey,
-			azureOpenAIApiInstanceName: this.settings?.instanceName,
-			model: this.settings?.chatModel,
-			openAIApiVersion: this.settings?.apiVersion,
-			deploymentName: this.settings?.chatModel,
-			...(params ?? {})
-		});
-	}
-
-	getReasoningModel(params?: ModelParams): BaseChatModel {
-		if (isOClassModel(this.settings?.chatModel) ||
-			isOClassModel(params?.model)) {
-			params = {
-				...(params ?? {}),
-				temperature: undefined
-			};
-		}
-
-		return new AzureChatOpenAI({
-			apiKey: this.settings?.apiKey,
-			azureOpenAIApiKey: this.settings?.apiKey,
-			azureOpenAIApiInstanceName: this.settings?.instanceName,
-			model: this.settings?.chatModel,
-			openAIApiVersion: this.settings?.apiVersion,
-			deploymentName: this.settings?.chatModel,
-			modelKwargs: this.settings?.chatModel.startsWith("o3") ? { reasoning_effort: "high" } : undefined,
-			...(params ?? {})
+			reasoningEffort: isReasoningModel ? "medium" : undefined,
+			...(params ?? {}),
 		});
 	}
 
@@ -117,9 +76,9 @@ export class AzureAI implements AIStreamProvider {
 			false;
 		return Promise.resolve(
 			isChatModelValid &&
-			isCodeModelValid &&
-			!!this.settings?.instanceName &&
-			!!this.settings?.apiVersion
+				isCodeModelValid &&
+				!!this.settings?.instanceName &&
+				!!this.settings?.apiVersion,
 		);
 	}
 
@@ -142,7 +101,7 @@ export class AzureAI implements AIStreamProvider {
 		ending: string,
 		signal: AbortSignal,
 		additionalContext?: string,
-		recentClipboard?: string
+		recentClipboard?: string,
 	): Promise<string> {
 		// TODO - make this stream
 		return this.codeComplete(
@@ -150,7 +109,7 @@ export class AzureAI implements AIStreamProvider {
 			ending,
 			signal,
 			additionalContext,
-			recentClipboard
+			recentClipboard,
 		);
 	}
 
@@ -163,20 +122,20 @@ export class AzureAI implements AIStreamProvider {
 		ending: string,
 		signal: AbortSignal,
 		additionalContext?: string,
-		recentClipboard?: string
+		recentClipboard?: string,
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
 		const prompt = this.codeModel!.CodeCompletionPrompt.replace(
 			"{beginning}",
-			beginning
+			beginning,
 		).replace("{ending}", ending);
 
 		let response: BaseMessageChunk | undefined;
 		try {
 			response = await this.getModel({
 				temperature: 0.2,
-				model: this.settings?.codeModel
+				model: this.settings?.codeModel,
 			})!.invoke(
 				[
 					new HumanMessage({
@@ -190,25 +149,25 @@ ${additionalContext || ""}
 
 -----
 
-${recentClipboard
-								? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+${
+	recentClipboard
+		? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
 
 ${recentClipboard}
 
 -----`
-								: ""
-							}`)
-					})
+		: ""
+}`,
+						),
+					}),
 				],
 				{
 					signal,
-				}
+				},
 			);
 		} catch (error) {
 			if (error instanceof Error) {
-				this.loggingProvider.logError(
-					`Code Complete failed: ${error.message}`
-				);
+				this.loggingProvider.logError(`Code Complete failed: ${error.message}`);
 			}
 			return "";
 		}
@@ -217,17 +176,13 @@ ${recentClipboard}
 		const executionTime = (endTime - startTime) / 1000;
 
 		this.loggingProvider.logInfo(
-			`Code Complete To First Token execution time: ${executionTime} ms`
+			`Code Complete To First Token execution time: ${executionTime} ms`,
 		);
 
 		return response.content.toString();
 	}
 
-	public async *chat(
-		prompt: string,
-		ragContent: string,
-		signal: AbortSignal
-	) {
+	public async *chat(prompt: string, ragContent: string, signal: AbortSignal) {
 		const messages: BaseMessage[] = [
 			new SystemMessage(this.chatModel!.ChatPrompt),
 		];
@@ -265,13 +220,13 @@ ${prompt}`
 			}
 
 			this.chatHistory.push(
-				new AIMessage(completeMessage || "Ignore this message.")
+				new AIMessage(completeMessage || "Ignore this message."),
 			);
 		} catch (e) {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("AbortError")
+					!e.message.includes("AbortError"),
 				);
 			}
 		}
@@ -282,11 +237,10 @@ ${prompt}`
 	async genCodeDocs(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		const startTime = new Date().getTime();
-		const genDocPrompt =
-			"Generate documentation for the following code:\n" + prompt;
+		const genDocPrompt = `Generate documentation for the following code:\n${prompt}`;
 
 		let systemPrompt = this.chatModel?.genDocPrompt!;
 
@@ -299,16 +253,11 @@ ${prompt}`
 		let response: BaseMessageChunk | undefined;
 		try {
 			response = await this.getModel({
-				temperature: 0.2
-			})?.invoke(
-				[new HumanMessage(systemPrompt)],
-				{ signal }
-			);
+				temperature: 0.2,
+			})?.invoke([new HumanMessage(systemPrompt)], { signal });
 		} catch (error) {
 			if (error instanceof Error) {
-				this.loggingProvider.logError(
-					`GenDocs failed with ${error.message}`
-				);
+				this.loggingProvider.logError(`GenDocs failed with ${error.message}`);
 			}
 			return `AzureAI - Gen Docs request with model ${this.settings?.codeModel} failed with the following error: ${error}`;
 		}
@@ -317,7 +266,7 @@ ${prompt}`
 		const executionTime = (endTime - startTime) / 1000;
 
 		this.loggingProvider.logInfo(
-			`GenDocs Time To First Token execution time: ${executionTime} ms`
+			`GenDocs Time To First Token execution time: ${executionTime} ms`,
 		);
 
 		return response?.content.toString()!;
@@ -326,7 +275,7 @@ ${prompt}`
 	async refactor(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		const startTime = new Date().getTime();
 
@@ -341,7 +290,7 @@ ${prompt}`
 		let response: BaseMessageChunk | undefined;
 		try {
 			response = await this.getModel({
-				temperature: 0.4
+				temperature: 0.4,
 			}).invoke(String(systemPrompt), {
 				signal,
 			});
@@ -353,7 +302,7 @@ ${prompt}`
 		const executionTime = (endTime - startTime) / 1000;
 
 		this.loggingProvider.logInfo(
-			`Refactor Time To First Token execution time: ${executionTime} ms`
+			`Refactor Time To First Token execution time: ${executionTime} ms`,
 		);
 
 		return response.content.toString();

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import TelemetryReporter, {
-	TelemetryEventProperties,
+	type TelemetryEventProperties,
 } from "@vscode/extension-telemetry";
 
 export const EVENT_EXTENSION_LOADED = "EXTENSION_LOADED";
@@ -26,7 +26,7 @@ export const EVENT_BINDINGS_FAILED = "BINDINGS_FAILED";
 export class Telemetry {
 	reporter: TelemetryReporter | undefined;
 
-	private enabled: boolean = false;
+	private enabled = false;
 	private disposables: vscode.Disposable[] = [];
 
 	constructor() {
@@ -41,7 +41,7 @@ export class Telemetry {
 		this.disposables.push(
 			vscode.env.onDidChangeTelemetryEnabled((e) => {
 				this.enabled = e.valueOf();
-			})
+			}),
 		);
 	}
 
@@ -55,7 +55,7 @@ export class Telemetry {
 
 	public sendEvent(
 		eventName: string,
-		eventPropeties?: TelemetryEventProperties
+		eventPropeties?: TelemetryEventProperties,
 	) {
 		if (!this.enabled) return;
 
@@ -64,7 +64,7 @@ export class Telemetry {
 
 	public sendError(
 		eventName: string,
-		eventPropeties?: TelemetryEventProperties
+		eventPropeties?: TelemetryEventProperties,
 	) {
 		if (!this.enabled) return;
 

@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
-import { CodeReview } from "@shared/types/Message";
-import { exec } from "child_process";
-import { promisify } from "util";
+import type { CodeReview } from "@shared/types/Message";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { getGitignorePatterns } from "../server/files/utils";
 import { glob } from "tinyglobby";
 import path from "node:path";
-import { GitCommandEngine, GitDiffOptions } from "./gitCommandEngine";
+import { GitCommandEngine, type GitDiffOptions } from "./gitCommandEngine";
 
 interface DiffOptions {
 	includeStagedChanges?: boolean;
@@ -18,17 +18,13 @@ interface DiffOptions {
 const execAsync = promisify(exec);
 
 export class DiffGenerator extends GitCommandEngine {
-	constructor(workingDirectory: string) {
-		super(workingDirectory);
-	}
-
 	/**
 	 * Gets the base branch name (usually main or master)
 	 * @returns The base branch name
 	 */
 	public async getBaseBranch(): Promise<string> {
 		const upstream = await this.executeGitCommand(
-			"git rev-parse --abbrev-ref @{upstream}"
+			"git rev-parse --abbrev-ref @{upstream}",
 		);
 		return upstream.split("/")[1] || "main";
 	}
@@ -42,12 +38,12 @@ export class DiffGenerator extends GitCommandEngine {
 		try {
 			// Get merge base commit
 			const mergeBase = await this.executeGitCommand(
-				`git merge-base HEAD ${await this.getBaseBranch()}`
+				`git merge-base HEAD ${await this.getBaseBranch()}`,
 			);
 
 			// Get file content at merge base
 			return await this.executeGitCommand(
-				`git show ${mergeBase.trim()}:${filePath}`
+				`git show ${mergeBase.trim()}:${filePath}`,
 			);
 		} catch (error) {
 			console.error("Failed to get original content:", error);
@@ -83,12 +79,14 @@ export class DiffGenerator extends GitCommandEngine {
 		return this.executeGitCommand("git rev-parse --abbrev-ref HEAD");
 	}
 
-	async generateDiffWithLineNumbersAndMap(params: GitDiffOptions = {
-		includeStagedChanges: true,
-		includeUnstagedChanges: true,
-		includeUntrackedFiles: true,
-		includeCommittedChanges: false
-	}): Promise<CodeReview["fileDiffMap"]> {
+	async generateDiffWithLineNumbersAndMap(
+		params: GitDiffOptions = {
+			includeStagedChanges: true,
+			includeUnstagedChanges: true,
+			includeUntrackedFiles: true,
+			includeCommittedChanges: false,
+		},
+	): Promise<CodeReview["fileDiffMap"]> {
 		try {
 			const diffs = await this.getDiff(params);
 
@@ -136,7 +134,7 @@ export class DiffGenerator extends GitCommandEngine {
 						diff: currentDiff.join("\n"),
 					};
 				} else {
-					fileDiffMap[currentFile].diff += "\n" + currentDiff.join("\n");
+					fileDiffMap[currentFile].diff += `\n${currentDiff.join("\n")}`;
 				}
 			}
 		};
@@ -180,10 +178,10 @@ export class DiffGenerator extends GitCommandEngine {
 				if (match) {
 					const [_, oldStart, oldLines, newStart, newLines] = match;
 					currentHunk = {
-						oldStart: parseInt(oldStart, 10),
-						newStart: parseInt(newStart, 10),
-						oldLines: parseInt(oldLines || "1", 10),
-						newLines: parseInt(newLines || "1", 10),
+						oldStart: Number.parseInt(oldStart, 10),
+						newStart: Number.parseInt(newStart, 10),
+						oldLines: Number.parseInt(oldLines || "1", 10),
+						newLines: Number.parseInt(newLines || "1", 10),
 						lines: [line],
 					};
 					currentLineNumber = currentHunk.newStart;
@@ -192,14 +190,14 @@ export class DiffGenerator extends GitCommandEngine {
 				// Process diff lines with line numbers
 				if (line.startsWith("+")) {
 					currentHunk.lines.push(
-						`${currentLineNumber.toString().padStart(5)} ${line}`
+						`${currentLineNumber.toString().padStart(5)} ${line}`,
 					);
 					currentLineNumber++;
 				} else if (line.startsWith("-")) {
 					currentHunk.lines.push(`     ${line}`);
 				} else {
 					currentHunk.lines.push(
-						`${currentLineNumber.toString().padStart(5)} ${line}`
+						`${currentLineNumber.toString().padStart(5)} ${line}`,
 					);
 					currentLineNumber++;
 				}
@@ -219,26 +217,30 @@ export class DiffGenerator extends GitCommandEngine {
 			includeUnstagedChanges = true,
 			includeUntrackedFiles = false,
 			includeCommittedChanges = true,
-			pathSpec = ''
+			pathSpec = "",
 		} = options;
 
-		let diffCommands: string[] = [];
+		const diffCommands: string[] = [];
 
 		try {
 			// First check if git is available
 			try {
-				await this.executeGitCommand('git --version');
+				await this.executeGitCommand("git --version");
 			} catch (error) {
-				vscode.window.showErrorMessage('Git is not available in the current workspace');
-				return '';
+				vscode.window.showErrorMessage(
+					"Git is not available in the current workspace",
+				);
+				return "";
 			}
 
 			// Check if we're in a git repository
 			try {
-				await this.executeGitCommand('git rev-parse --git-dir');
+				await this.executeGitCommand("git rev-parse --git-dir");
 			} catch (error) {
-				vscode.window.showErrorMessage('Current workspace is not a git repository');
-				return '';
+				vscode.window.showErrorMessage(
+					"Current workspace is not a git repository",
+				);
+				return "";
 			}
 
 			// Get the base branch and handle cases where there's no upstream
@@ -247,104 +249,130 @@ export class DiffGenerator extends GitCommandEngine {
 				baseBranch = await this.getBaseBranch();
 			} catch (error) {
 				// No upstream, try to detect main/master branch
-				const branches = await this.executeGitCommand('git branch --format="%(refname:short)"');
-				baseBranch = branches.split('\n').find(b => ['main', 'master'].includes(b)) || 'HEAD~1';
+				const branches = await this.executeGitCommand(
+					'git branch --format="%(refname:short)"',
+				);
+				baseBranch =
+					branches.split("\n").find((b) => ["main", "master"].includes(b)) ||
+					"HEAD~1";
 			}
 
 			// Get merge base, fallback to first commit if no common ancestor
 			let mergeBase: string;
 			try {
-				mergeBase = await this.executeGitCommand(`git merge-base HEAD ${baseBranch}`);
+				mergeBase = await this.executeGitCommand(
+					`git merge-base HEAD ${baseBranch}`,
+				);
 			} catch (error) {
 				try {
 					// Fallback to first commit
-					mergeBase = await this.executeGitCommand('git rev-list --max-parents=0 HEAD');
+					mergeBase = await this.executeGitCommand(
+						"git rev-list --max-parents=0 HEAD",
+					);
 				} catch (innerError) {
 					// If all else fails, use HEAD~1
-					mergeBase = 'HEAD~1';
+					mergeBase = "HEAD~1";
 				}
 			}
 
 			if (includeCommittedChanges) {
 				// Get all changes against base branch including working directory
 				try {
-					const allChanges = await this.executeGitCommand(`git diff ${mergeBase} ${pathSpec}`);
+					const allChanges = await this.executeGitCommand(
+						`git diff ${mergeBase} ${pathSpec}`,
+					);
 					if (allChanges) {
 						diffCommands.push(allChanges);
 					}
 				} catch (error) {
-					console.warn('Failed to get branch changes:', error);
+					console.warn("Failed to get branch changes:", error);
 				}
 			}
 
 			// Get staged changes that aren't committed
 			if (includeStagedChanges) {
 				try {
-					const stagedDiff = await this.executeGitCommand(`git diff --staged ${pathSpec}`);
+					const stagedDiff = await this.executeGitCommand(
+						`git diff --staged ${pathSpec}`,
+					);
 					if (stagedDiff) {
 						diffCommands.push(stagedDiff);
 					}
 				} catch (error) {
-					console.warn('Failed to get staged changes:', error);
+					console.warn("Failed to get staged changes:", error);
 				}
 			}
 
 			// Get unstaged changes in tracked files
 			if (includeUnstagedChanges) {
 				try {
-					const unstagedDiff = await this.executeGitCommand(`git diff ${pathSpec}`);
+					const unstagedDiff = await this.executeGitCommand(
+						`git diff ${pathSpec}`,
+					);
 					if (unstagedDiff) {
 						diffCommands.push(unstagedDiff);
 					}
 				} catch (error) {
-					console.warn('Failed to get unstaged changes:', error);
+					console.warn("Failed to get unstaged changes:", error);
 				}
 			}
 
 			// Get untracked files
 			if (includeUntrackedFiles) {
 				try {
-					const untrackedFiles = await this.executeGitCommand('git ls-files --others --exclude-standard');
+					const untrackedFiles = await this.executeGitCommand(
+						"git ls-files --others --exclude-standard",
+					);
 					if (untrackedFiles) {
-						const files = untrackedFiles.split('\n').filter(Boolean);
+						const files = untrackedFiles.split("\n").filter(Boolean);
 						for (const file of files) {
 							try {
 								// Use fs.readFile instead of git diff for untracked files
 								const absolutePath = path.join(this.cwd, file);
-								const content = await vscode.workspace.fs.readFile(vscode.Uri.file(absolutePath));
-								const fileContent = Buffer.from(content).toString('utf-8');
+								const content = await vscode.workspace.fs.readFile(
+									vscode.Uri.file(absolutePath),
+								);
+								const fileContent = Buffer.from(content).toString("utf-8");
 
 								// Generate diff-like output for untracked files
-								diffCommands.push([
-									`diff --git a/${file} b/${file}`,
-									'new file mode 100644',
-									'index 0000000..0000000',
-									'--- /dev/null',
-									`+++ b/${file}`,
-									'@@ -0,0 +1,' + fileContent.split('\n').length + ' @@',
-									...fileContent.split('\n').map(line => '+' + line)
-								].join('\n'));
+								diffCommands.push(
+									[
+										`diff --git a/${file} b/${file}`,
+										"new file mode 100644",
+										"index 0000000..0000000",
+										"--- /dev/null",
+										`+++ b/${file}`,
+										`@@ -0,0 +1,${fileContent.split("\n").length} @@`,
+										...fileContent.split("\n").map((line) => `+${line}`),
+									].join("\n"),
+								);
 							} catch (error) {
-								console.warn(`Failed to process untracked file ${file}:`, error);
+								console.warn(
+									`Failed to process untracked file ${file}:`,
+									error,
+								);
 							}
 						}
 					}
 				} catch (error) {
-					console.warn('Failed to get untracked files:', error);
+					console.warn("Failed to get untracked files:", error);
 				}
 			}
 
 			// Return combined diffs or empty string
-			const combinedDiff = diffCommands.filter(Boolean).join('\n');
+			const combinedDiff = diffCommands.filter(Boolean).join("\n");
 			if (!combinedDiff) {
-				vscode.window.showInformationMessage('No changes detected in the workspace');
+				vscode.window.showInformationMessage(
+					"No changes detected in the workspace",
+				);
 			}
 			return combinedDiff;
-
 		} catch (error) {
-			console.error('Error generating diff:', error);
-			vscode.window.showErrorMessage('Failed to generate diff. See console for details.');
-			return '';
+			console.error("Error generating diff:", error);
+			vscode.window.showErrorMessage(
+				"Failed to generate diff. See console for details.",
+			);
+			return "";
 		}
 	}
 
@@ -362,9 +390,7 @@ export class DiffGenerator extends GitCommandEngine {
 	 * @returns Array of changed file paths
 	 */
 	public async getChangedFiles(): Promise<string[]> {
-		const output = await this.executeGitCommand(
-			"git diff HEAD --name-only"
-		);
+		const output = await this.executeGitCommand("git diff HEAD --name-only");
 		return output.split("\n").filter((file) => file.length > 0);
 	}
 }

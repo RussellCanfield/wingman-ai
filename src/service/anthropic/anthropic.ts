@@ -1,20 +1,22 @@
-import { AIStreamProvider, ModelParams } from "../base";
-import { InteractionSettings, Settings } from "@shared/types/Settings";
+import type { AIStreamProvider, ModelParams } from "../base";
+import type { InteractionSettings, Settings } from "@shared/types/Settings";
 import { SonnetModel } from "./models/sonnet";
-import { AnthropicModel } from "@shared/types/Models";
+import type { AnthropicModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { ILoggingProvider } from "@shared/types/Logger";
+import type { ILoggingProvider } from "@shared/types/Logger";
 import {
 	AIMessage,
-	BaseMessage,
+	type BaseMessage,
 	ChatMessage,
 	HumanMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
 import { HaikuModel } from "./models/haiku";
 import { AbortError } from "node-fetch";
+
+const reasoningModels = ["claude-3-7-sonnet"];
 
 export class Anthropic implements AIStreamProvider {
 	decoder = new TextDecoder();
@@ -25,7 +27,7 @@ export class Anthropic implements AIStreamProvider {
 	constructor(
 		private readonly settings: Settings["providerSettings"]["Anthropic"],
 		private readonly interactionSettings: InteractionSettings,
-		private readonly loggingProvider: ILoggingProvider
+		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
 			throw new Error("Unable to load Anthropic settings.");
@@ -56,34 +58,24 @@ export class Anthropic implements AIStreamProvider {
 	}
 
 	getModel(params?: ModelParams): BaseChatModel {
-		return new ChatAnthropic({
-			apiKey: this.settings?.apiKey,
-			anthropicApiKey: this.settings?.apiKey,
-			model: params?.model ?? this.settings?.chatModel,
-			temperature: 0,
-			maxTokens: this.interactionSettings?.chatMaxTokens,
-		});
-	}
+		const targetModel = params?.model ?? this.settings?.chatModel;
+		const isReasoningModel = reasoningModels.some((reasoningModel) =>
+			targetModel?.startsWith(reasoningModel),
+		);
 
-	getLightweightModel(params?: ModelParams): BaseChatModel {
 		return new ChatAnthropic({
 			apiKey: this.settings?.apiKey,
 			anthropicApiKey: this.settings?.apiKey,
-			model: "claude-3-5-haiku-latest",
-			temperature: 0,
+			model: targetModel,
+			temperature: this.settings?.enableReasoning ? undefined : 0,
 			maxTokens: this.interactionSettings?.chatMaxTokens,
-			...params
-		});
-	}
-
-	getReasoningModel(params?: ModelParams): BaseChatModel {
-		return new ChatAnthropic({
-			apiKey: this.settings?.apiKey,
-			anthropicApiKey: this.settings?.apiKey,
-			model: "claude-3-5-haiku-latest",
-			temperature: 0,
-			maxTokens: this.interactionSettings?.chatMaxTokens,
-			verbose: params?.verbose
+			thinking:
+				this.settings?.enableReasoning && isReasoningModel
+					? {
+							budget_tokens: 2048,
+							type: "enabled",
+						}
+					: undefined,
 		});
 	}
 
@@ -95,7 +87,7 @@ export class Anthropic implements AIStreamProvider {
 				return new HaikuModel();
 			default:
 				throw new Error(
-					"Invalid code model name, currently code supports Claude 3 model(s)."
+					"Invalid code model name, currently code supports Claude 3 model(s).",
 				);
 		}
 	}
@@ -108,7 +100,7 @@ export class Anthropic implements AIStreamProvider {
 				return new HaikuModel();
 			default:
 				throw new Error(
-					"Invalid chat model name, currently chat supports Claude 3 model(s)."
+					"Invalid chat model name, currently chat supports Claude 3 model(s).",
 				);
 		}
 	}
@@ -118,13 +110,18 @@ export class Anthropic implements AIStreamProvider {
 		ending: string,
 		signal: AbortSignal,
 		additionalContext?: string,
-		recentClipboard?: string
+		recentClipboard?: string,
 	): Promise<string> {
 		try {
-			const response = await this.getModel({ temperature: 0.2, model: this.settings?.codeModel }).invoke([new SystemMessage({
-				content: this.codeModel!.CodeCompletionPrompt.replace(
-					"{context}",
-					`The following are some of the types available in their file. 
+			const response = await this.getModel({
+				temperature: 0.2,
+				model: this.settings?.codeModel,
+			}).invoke(
+				[
+					new SystemMessage({
+						content: this.codeModel!.CodeCompletionPrompt.replace(
+							"{context}",
+							`The following are some of the types available in their file. 
 	Use these types while considering how to complete the code provided. 
 	Do not repeat or use these types in your answer.
 	
@@ -132,24 +129,30 @@ export class Anthropic implements AIStreamProvider {
 	
 	-----
 	
-	${recentClipboard
-						? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
+	${
+		recentClipboard
+			? `The user recently copied these items to their clipboard, use them if they are relevant to the completion:
 	
 	${recentClipboard}
 	
 	-----`
-						: ""}`)
-			}),
-			new HumanMessage({
-				content: `${beginning}[FILL IN THE MIDDLE]${ending}`
-			})], { signal });
+			: ""
+	}`,
+						),
+					}),
+					new HumanMessage({
+						content: `${beginning}[FILL IN THE MIDDLE]${ending}`,
+					}),
+				],
+				{ signal },
+			);
 
 			return response.content.toString();
 		} catch (e) {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Code Complete failed: ${e.message}`,
-					!e.message.includes("AbortError")
+					!e.message.includes("AbortError"),
 				);
 			}
 		}
@@ -157,12 +160,8 @@ export class Anthropic implements AIStreamProvider {
 		return "";
 	}
 
-	public async *chat(
-		prompt: string,
-		ragContent: string,
-		signal: AbortSignal
-	) {
-		let systemPrompt = this.chatModel!.ChatPrompt;
+	public async *chat(prompt: string, ragContent: string, signal: AbortSignal) {
+		const systemPrompt = this.chatModel!.ChatPrompt;
 
 		const messages: BaseMessage[] = [new HumanMessage(systemPrompt)];
 
@@ -194,7 +193,10 @@ export class Anthropic implements AIStreamProvider {
 
 		let completeMessage = "";
 		try {
-			const stream = await this.getModel({ temperature: 0.4 }).stream(messages, { signal })!;
+			const stream = await this.getModel({ temperature: 0.4 }).stream(
+				messages,
+				{ signal },
+			)!;
 			for await (const chunk of stream) {
 				const result = chunk.content.toString();
 				completeMessage += result;
@@ -202,22 +204,24 @@ export class Anthropic implements AIStreamProvider {
 			}
 
 			this.chatHistory.push(
-				new AIMessage(completeMessage || "Ignore this message.")
+				new AIMessage(completeMessage || "Ignore this message."),
 			);
 		} catch (e) {
 			if (e instanceof AbortError) {
-				this.chatHistory.push(new ChatMessage({
-					role: "assistant",
-					content:
-						completeMessage ||
-						"The user has decided they weren't interested in the response",
-				}));
+				this.chatHistory.push(
+					new ChatMessage({
+						role: "assistant",
+						content:
+							completeMessage ||
+							"The user has decided they weren't interested in the response",
+					}),
+				);
 			}
 
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Chat failed: ${e.message}`,
-					!e.message.includes("AbortError")
+					!e.message.includes("AbortError"),
 				);
 			}
 		}
@@ -230,13 +234,12 @@ export class Anthropic implements AIStreamProvider {
 	public async genCodeDocs(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		if (!this.chatModel?.genDocPrompt) return "";
 
 		const startTime = new Date().getTime();
-		const genDocPrompt =
-			"Generate documentation for the following code:\n" + prompt;
+		const genDocPrompt = `Generate documentation for the following code:\n${prompt}`;
 
 		let systemPrompt = this.chatModel?.genDocPrompt;
 
@@ -248,13 +251,16 @@ export class Anthropic implements AIStreamProvider {
 		systemPrompt = systemPrompt.replace(/\t/, "");
 
 		try {
-			const response = await this.getModel({ temperature: 0.4 }).invoke(systemPrompt, { signal })!;
+			const response = await this.getModel({ temperature: 0.4 }).invoke(
+				systemPrompt,
+				{ signal },
+			)!;
 			return response.content.toString();
 		} catch (e) {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`GenCodeDocs failed: ${e.message}`,
-					!e.message.includes("AbortError")
+					!e.message.includes("AbortError"),
 				);
 			}
 		}
@@ -267,21 +273,21 @@ export class Anthropic implements AIStreamProvider {
 		ending: string,
 		signal: AbortSignal,
 		additionalContext?: string,
-		recentClipboard?: string
+		recentClipboard?: string,
 	): Promise<string> {
 		return this.codeComplete(
 			beginning,
 			ending,
 			signal,
 			additionalContext,
-			recentClipboard
+			recentClipboard,
 		);
 	}
 
 	public async refactor(
 		prompt: string,
 		ragContent: string,
-		signal: AbortSignal
+		signal: AbortSignal,
 	): Promise<string> {
 		if (!this.chatModel?.refactorPrompt) return "";
 
@@ -294,13 +300,16 @@ export class Anthropic implements AIStreamProvider {
 		systemPrompt += `\n\n${prompt}`;
 
 		try {
-			const response = await this.getModel({ temperature: 0.4 }).invoke(systemPrompt, { signal })!;
+			const response = await this.getModel({ temperature: 0.4 }).invoke(
+				systemPrompt,
+				{ signal },
+			)!;
 			return response.content.toString();
 		} catch (e) {
 			if (e instanceof Error) {
 				this.loggingProvider.logError(
 					`Refactor failed: ${e.message}`,
-					!e.message.includes("AbortError")
+					!e.message.includes("AbortError"),
 				);
 			}
 		}

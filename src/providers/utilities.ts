@@ -44,27 +44,27 @@ export const supportedLanguages: vscode.DocumentSelector = [
 
 export async function getSymbolsFromOpenFiles() {
 	const openDocuments = vscode.workspace.textDocuments.filter(
-		(d) => d.uri.scheme === "file"
+		(d) => d.uri.scheme === "file",
 	);
 	const types: string[] = [];
 	await Promise.all(
 		openDocuments.map(async (d) => {
 			const symbols = (await vscode.commands.executeCommand(
 				"vscode.executeDocumentSymbolProvider",
-				d.uri
+				d.uri,
 			)) as vscode.DocumentSymbol[];
 
 			if (symbols) {
 				await findMethod(symbols, d, types);
 			}
-		})
+		}),
 	);
 	return types.join("\n");
 }
 
 export function isArrowFunction(
 	symbol: vscode.DocumentSymbol,
-	document: vscode.TextDocument
+	document: vscode.TextDocument,
 ) {
 	const isProperty =
 		symbol.kind === vscode.SymbolKind.Property ||
@@ -91,7 +91,7 @@ async function findMethod(
 	symbols: vscode.DocumentSymbol[],
 	document: vscode.TextDocument,
 	types: string[],
-	currentSymbol?: CustomSymbol
+	currentSymbol?: CustomSymbol,
 ): Promise<void> {
 	for (const symbol of symbols) {
 		if (
@@ -99,13 +99,12 @@ async function findMethod(
 			symbol.kind === vscode.SymbolKind.Interface
 		) {
 			const objName = await getHoverResultsForSymbol(symbol, document);
-			currentSymbol = {
+			const customSymbol = {
 				name: symbol.name,
 				value: objName,
 			};
-			await findMethod(symbol.children, document, types, currentSymbol);
-			types.push(formatSymbolAsString(currentSymbol));
-			currentSymbol = undefined;
+			await findMethod(symbol.children, document, types, customSymbol);
+			types.push(formatSymbolAsString(customSymbol));
 		} else if (
 			symbol.kind === vscode.SymbolKind.Method ||
 			symbol.kind === vscode.SymbolKind.Function ||
@@ -128,40 +127,43 @@ async function findMethod(
 }
 
 function formatSymbolAsString(customSymbol: CustomSymbol): string {
-	let result = extractCodeBlock(customSymbol.value) + "\n";
+	let result = `${extractCodeBlock(customSymbol.value)}\n`;
 	for (const property of customSymbol.properties ?? []) {
-		result += extractCodeBlock(property) + "\n";
+		result += `${extractCodeBlock(property)}\n`;
 	}
 	return result;
 }
 
 async function getHoverResultsForSymbol(
 	symbol: vscode.DocumentSymbol,
-	document: vscode.TextDocument
+	document: vscode.TextDocument,
 ) {
-	let hover = (await vscode.commands.executeCommand(
+	const hover = (await vscode.commands.executeCommand(
 		"vscode.executeHoverProvider",
 		document.uri,
-		symbol.selectionRange.start
+		symbol.selectionRange.start,
 	)) as vscode.Hover[];
 
 	if (hover && hover.length > 0) {
 		return (hover[0].contents[0] as vscode.MarkdownString).value.replace(
 			"(loading...)",
-			""
+			"",
 		);
 	}
 
 	return "";
 }
 
-export function extractCodeBlock(text: string) {
+export function extractCodeBlock(text: string): string {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
-	const matches = [];
-	let match;
+	const matches: string[] = [];
+
+	let match: RegExpExecArray | null;
+	// biome-ignore lint/suspicious/noAssignInExpressions: <explanation>
 	while ((match = regex.exec(text)) !== null) {
 		matches.push(match[1]);
 	}
+
 	return matches.length > 0 ? matches.join("\n") : text;
 }
 
@@ -175,10 +177,9 @@ export function addNoneAttributeToLink(htmlString: string, noneValue: string) {
 		if (match.includes("nonce=")) {
 			// If none attribute already exists, return the original match
 			return match;
-		} else {
-			// Add none attribute before the closing angle bracket
-			return match.replace(/>$/, ` nonce="${noneValue}">`);
 		}
+		// Add none attribute before the closing angle bracket
+		return match.replace(/>$/, ` nonce="${noneValue}">`);
 	};
 
 	// Replace the matched link tag with the modified version
@@ -198,13 +199,13 @@ export function getNonce() {
 export async function replaceTextInDocument(
 	document: vscode.TextDocument,
 	newContent: string,
-	shouldSave = false
+	shouldSave = false,
 ) {
 	// Create a range for the entire document
 	const startPosition = new vscode.Position(0, 0);
 	const endPosition = new vscode.Position(
 		document.lineCount - 1,
-		document.lineAt(document.lineCount - 1).text.length
+		document.lineAt(document.lineCount - 1).text.length,
 	);
 	const range = new vscode.Range(startPosition, endPosition);
 
@@ -224,8 +225,8 @@ export function getActiveWorkspace() {
 	const activeEditor = vscode.window.activeTextEditor;
 	if (activeEditor) {
 		return (
-			vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)
-				?.name ?? defaultWorkspace
+			vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)?.name ??
+			defaultWorkspace
 		);
 	}
 

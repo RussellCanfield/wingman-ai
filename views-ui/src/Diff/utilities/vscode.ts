@@ -16,13 +16,7 @@ class VSCodeAPIWrapper {
 		// Check if the acquireVsCodeApi function exists in the current development
 		// context (i.e. VS Code development window or web browser)
 		if (typeof acquireVsCodeApi === "function") {
-			//@ts-expect-error
-			if (window.vscode) {
-				//@ts-expect-error
-				this.vsCodeApi = window.vscode;
-			} else {
-				this.vsCodeApi = acquireVsCodeApi();
-			}
+			this.vsCodeApi = acquireVsCodeApi();
 		}
 	}
 
@@ -53,6 +47,7 @@ class VSCodeAPIWrapper {
 	public getState(): unknown | undefined {
 		if (this.vsCodeApi) {
 			return this.vsCodeApi.getState();
+			// biome-ignore lint/style/noUselessElse: <explanation>
 		} else {
 			const state = localStorage.getItem("vscodeState");
 			return state ? JSON.parse(state) : undefined;
@@ -73,12 +68,11 @@ class VSCodeAPIWrapper {
 	public setState<T extends unknown | undefined>(newState: T): T {
 		if (this.vsCodeApi) {
 			return this.vsCodeApi.setState(newState);
-		} else {
-			localStorage.setItem("vscodeState", JSON.stringify(newState));
-			return newState;
 		}
+		localStorage.setItem("vscodeState", JSON.stringify(newState));
+		return newState;
 	}
 }
 
-// Exports class singleton to prevent multiple invocations of acquireVsCodeApi.
-export const vscode = new VSCodeAPIWrapper();
+//@ts-expect-error
+export const vscode = window.vscode ?? new VSCodeAPIWrapper();

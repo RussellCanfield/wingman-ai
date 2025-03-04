@@ -1,17 +1,27 @@
-import { IndexerSettings } from "./Indexer";
-import { ChatMessages } from "./Message";
+import type { ComposerMessage, GraphState } from "./v2/Composer";
 
 export const defaultMaxTokens = -1;
 
+export interface Thread {
+	id: string;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+	messages: ComposerMessage[];
+	originatingThreadId?: string;
+}
+
 export interface WorkspaceSettings {
-	indexerSettings: IndexerSettings;
-	chatMessages: ChatMessages;
+	threads?: Thread[];
+	activeThreadId?: string;
 }
 
 export interface AppState {
 	settings: WorkspaceSettings;
 	theme: number;
 	workspaceFolder: string;
+	threads?: Thread[];
+	activeThreadId?: string;
 	totalFiles: number;
 }
 
@@ -52,34 +62,19 @@ export const AiProvidersList: string[] = [...AiProviders];
 // Create a type for AiProviders
 export type AiProviders = (typeof AiProviders)[number];
 
-export const EmbeddingProviders = ["Ollama", "OpenAI", "AzureAI"] as const;
-export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
-
-// Create a type for EmbeddingProviders
-export type EmbeddingProviders = (typeof EmbeddingProviders)[number];
-
 export type OllamaSettingsType = BaseServiceSettings & {
 	apiPath: string;
 	modelInfoPath: string;
 };
 
-export type OllamaEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
-	baseUrl: string;
-};
-
-export type OpenAIEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
-	apiKey: string;
-};
-
-export type AzureAIEmbeddingSettingsType = BaseEmbeddingServiceSettings & {
-	apiKey: string;
-	apiVersion: string;
-	instanceName: string;
-};
-
 export type ApiSettingsType = BaseServiceSettings & {
 	apiKey: string;
 };
+
+export type AnthropicSettingsType = {
+	enableReasoning?: boolean;
+	sparkMode?: boolean;
+} & ApiSettingsType;
 
 export type AzureAISettingsType = Omit<ApiSettingsType, "baseUrl"> & {
 	apiVersion: string;
@@ -89,10 +84,10 @@ export type AzureAISettingsType = Omit<ApiSettingsType, "baseUrl"> & {
 export const defaultInteractionSettings: InteractionSettings = {
 	codeCompletionEnabled: true,
 	codeStreaming: false,
-	codeContextWindow: 256,
-	codeMaxTokens: 128,
+	codeContextWindow: 512,
+	codeMaxTokens: 256,
 	chatContextWindow: 4096,
-	chatMaxTokens: 4096,
+	chatMaxTokens: 8192,
 };
 
 export const defaultValidationSettings: ValidationSettings = {
@@ -105,13 +100,6 @@ export const defaultOllamaSettings: OllamaSettingsType = {
 	baseUrl: "http://localhost:11434",
 	apiPath: "/api/generate",
 	modelInfoPath: "/api/show",
-};
-
-export const defaultOllamaEmbeddingSettings: OllamaEmbeddingSettingsType = {
-	embeddingModel: "mxbai-embed-large",
-	baseUrl: "http://localhost:11434",
-	dimensions: "1024",
-	enabled: true,
 };
 
 export const defaultHfSettings: ApiSettingsType = {
@@ -128,24 +116,8 @@ export const defaultOpenAISettings: ApiSettingsType = {
 	apiKey: "",
 };
 
-export const defaultOpenAIEmbeddingSettings: OpenAIEmbeddingSettingsType = {
-	embeddingModel: "text-embedding-ada-002",
-	dimensions: "1536",
-	apiKey: "",
-	enabled: true,
-};
-
-export const defaultAzureAIEmbeddingSettings: AzureAIEmbeddingSettingsType = {
-	embeddingModel: "text-embedding-ada-002",
-	dimensions: "1536",
-	apiKey: "",
-	apiVersion: "",
-	instanceName: "",
-	enabled: true,
-};
-
 export const defaultAnthropicSettings: ApiSettingsType = {
-	chatModel: "claude-3-5-sonnet-latest",
+	chatModel: "claude-3-7-sonnet-latest",
 	codeModel: "claude-3-5-haiku-latest",
 	baseUrl: "https://api.anthropic.com/v1",
 	apiKey: "",
@@ -159,22 +131,26 @@ export const defaultAzureAISettings: AzureAISettingsType = {
 	apiVersion: "2024-06-01",
 };
 
+export type MCPToolConfig = {
+	name: string;
+	type: "command" | "sse";
+	command?: string;
+	endpoint?: string;
+	verified?: boolean;
+	tools?: Array<{ name: string }>;
+};
+
 export type Settings = {
 	aiProvider: (typeof AiProviders)[number];
 	interactionSettings: InteractionSettings;
-	embeddingProvider: (typeof EmbeddingProviders)[number];
-	embeddingSettings: {
-		Ollama?: OllamaEmbeddingSettingsType;
-		OpenAI?: OpenAIEmbeddingSettingsType;
-		AzureAI?: AzureAIEmbeddingSettingsType;
-	};
 	providerSettings: {
 		Ollama?: OllamaSettingsType;
 		HuggingFace?: ApiSettingsType;
 		OpenAI?: ApiSettingsType;
-		Anthropic?: ApiSettingsType;
+		Anthropic?: AnthropicSettingsType;
 		AzureAI?: AzureAISettingsType;
 	};
+	mcpTools?: MCPToolConfig[];
 	validationSettings: {
 		validationCommand?: string;
 		midsceneEnabled?: boolean;

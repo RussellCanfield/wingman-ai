@@ -1,28 +1,24 @@
 import {
-	CancellationToken,
-	InlineCompletionContext,
+	type CancellationToken,
+	type InlineCompletionContext,
 	InlineCompletionItem,
-	InlineCompletionItemProvider,
-	Position,
-	TextDocument,
+	type InlineCompletionItemProvider,
+	type Position,
+	type TextDocument,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
-import { AIProvider, AIStreamProvider } from "../service/base";
+import type { AIProvider, AIStreamProvider } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
-import { Settings } from "@shared/types/Settings";
+import type { Settings } from "@shared/types/Settings";
 import {
 	extractCodeBlock,
 	getSymbolsFromOpenFiles,
 	supportedLanguages,
 } from "./utilities";
-import { getClipboardHistory } from "./clipboardTracker";
 import NodeCache from "node-cache";
 import { loggingProvider } from "./loggingProvider";
-import {
-	EVENT_CODE_COMPLETE,
-	telemetry,
-} from "./telemetryProvider";
+import { EVENT_CODE_COMPLETE, telemetry } from "./telemetryProvider";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector = supportedLanguages;
@@ -30,7 +26,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 
 	constructor(
 		private readonly _aiProvider: AIProvider | AIStreamProvider,
-		private readonly _settings: Settings
+		private readonly _settings: Settings,
 	) {
 		//this.cacheManager = new CacheManager();
 	}
@@ -39,7 +35,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		document: TextDocument,
 		position: Position,
 		context: InlineCompletionContext,
-		token: CancellationToken
+		token: CancellationToken,
 	) {
 		if (!this._settings.interactionSettings.codeCompletionEnabled) {
 			return [];
@@ -51,7 +47,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		const [prefix, suffix] = getContentWindow(
 			document,
 			position,
-			this._settings.interactionSettings.codeContextWindow
+			this._settings.interactionSettings.codeContextWindow,
 		);
 
 		const types = await getSymbolsFromOpenFiles();
@@ -79,7 +75,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				abort.signal,
 				suffix,
 				this._settings.interactionSettings.codeStreaming,
-				types
+				types,
 			);
 		} catch {
 			return [new InlineCompletionItem("")];
@@ -92,7 +88,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		signal: AbortSignal,
 		suffix: string,
 		streaming: boolean,
-		additionalContext?: string
+		additionalContext?: string,
 	): Promise<InlineCompletionItem[]> {
 		try {
 			eventEmitter._onQueryStart.fire();
@@ -125,20 +121,13 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			if ("codeCompleteStream" in this._aiProvider && streaming) {
 				result = await (
 					this._aiProvider as AIStreamProvider
-				).codeCompleteStream(
-					prefix,
-					suffix,
-					signal,
-					additionalContext,
-					getClipboardHistory().join("\n\n")
-				);
+				).codeCompleteStream(prefix, suffix, signal, additionalContext);
 			} else {
 				result = await this._aiProvider.codeComplete(
 					prefix,
 					suffix,
 					signal,
 					additionalContext,
-					getClipboardHistory().join("\n\n")
 				);
 			}
 
@@ -147,7 +136,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}
 
 			// Get the current line from the prefix
-			const currentLine = prefix.split('\n').pop()?.trim() || '';
+			const currentLine = prefix.split("\n").pop()?.trim() || "";
 
 			// Check if result starts with current line content
 			if (currentLine && result.trim().startsWith(currentLine)) {
@@ -156,7 +145,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			}
 
 			loggingProvider.logInfo(
-				`Code complete: \n${prefix}\n\n${suffix}\n\n${result}`
+				`Code complete: \n${prefix}\n\n${suffix}\n\n${result}`,
 			);
 
 			if (result === "") {
@@ -168,11 +157,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 					language: document.languageId,
 					aiProvider: this._settings.aiProvider,
 					model:
-						this._settings.providerSettings[
-							this._settings.aiProvider
-						]?.codeModel || "Unknown",
+						this._settings.providerSettings[this._settings.aiProvider]
+							?.codeModel || "Unknown",
 				});
-			} catch { }
+			} catch {}
 
 			//this.cacheManager.set(document, prefix, suffix, result);
 			return [new InlineCompletionItem(result)];
@@ -200,11 +188,11 @@ class CacheManager {
 	private generateCacheKey(
 		document: TextDocument,
 		prefix: string,
-		suffix: string
+		suffix: string,
 	): string {
 		return `${document.uri.fsPath}:${prefix.slice(-100)}:${suffix.slice(
 			0,
-			100
+			100,
 		)}`;
 	}
 
@@ -216,20 +204,20 @@ class CacheManager {
 		document: TextDocument,
 		prefix: string,
 		suffix: string,
-		value: string
+		value: string,
 	): void {
 		const key = this.generateCacheKey(document, prefix, suffix);
 		this.cache.set(key, value);
 		this.documentHashes.set(
 			document.uri.fsPath,
-			this.generateDocumentHash(document)
+			this.generateDocumentHash(document),
 		);
 	}
 
 	get(
 		document: TextDocument,
 		prefix: string,
-		suffix: string
+		suffix: string,
 	): string | undefined {
 		const key = this.generateCacheKey(document, prefix, suffix);
 		const cachedHash = this.documentHashes.get(document.uri.fsPath);
@@ -247,6 +235,7 @@ class CacheManager {
 		const keysToDelete = this.cache
 			.keys()
 			.filter((key) => key.startsWith(fsPath));
+		// biome-ignore lint/complexity/noForEach: <explanation>
 		keysToDelete.forEach((key) => this.cache.del(key));
 		this.documentHashes.delete(fsPath);
 	}
