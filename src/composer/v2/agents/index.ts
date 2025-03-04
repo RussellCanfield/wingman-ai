@@ -344,52 +344,57 @@ export class WingmanAgent {
 	updateFile = async (
 		event: UpdateComposerFileEvent,
 	): Promise<GraphStateAnnotation | undefined> => {
-		const { file, threadId } = event;
+		const { files, threadId } = event;
 		const graphState = await this.agent?.getState({
 			configurable: { thread_id: threadId },
 		});
 
 		if (!graphState || !graphState.values) {
-			loggingProvider.logError("Unable to update file - invalid graph state");
+			loggingProvider.logError("Unable to update files - invalid graph state");
 			return undefined;
 		}
 
 		const state = graphState.values as GraphStateAnnotation;
-		const fileIndex = state.files.findIndex((f) => f.path === file.path);
 
-		if (fileIndex === -1) {
-			loggingProvider.logError(
-				`Unable to update file - file not found: ${file.path}`,
-			);
-			return state;
+		// Process each file in the array
+		for (const file of files) {
+			const fileIndex = state.files.findIndex((f) => f.path === file.path);
+
+			if (fileIndex === -1) {
+				loggingProvider.logError(
+					`Unable to update file - file not found: ${file.path}`,
+				);
+				continue; // Skip to the next file instead of returning
+			}
+
+			const matchingFile = state.files[fileIndex];
+
+			// Check if event file has a definitive status
+			const eventFileHasStatus =
+				file.accepted === true || file.rejected === true;
+
+			// If event file doesn't have status, check if matching file has one
+			const matchingFileHasStatus =
+				matchingFile.accepted === true || matchingFile.rejected === true;
+
+			// Only proceed if at least one file has a definitive status
+			if (!eventFileHasStatus && !matchingFileHasStatus) {
+				loggingProvider.logError(
+					`Unable to update file - file has no acceptance status: ${file.path}`,
+				);
+				continue; // Skip to the next file
+			}
+
+			if (file.rejected) {
+				// Remove rejected files from the state
+				state.files = state.files.filter((f) => f.path !== file.path);
+			} else {
+				// Update the file with new properties
+				state.files[fileIndex] = { ...matchingFile, ...file };
+			}
 		}
 
-		const matchingFile = state.files[fileIndex];
-
-		// Check if event file has a definitive status
-		const eventFileHasStatus =
-			event.file.accepted === true || event.file.rejected === true;
-
-		// If event file doesn't have status, check if matching file has one
-		const matchingFileHasStatus =
-			matchingFile.accepted === true || matchingFile.rejected === true;
-
-		// Only proceed if at least one file has a definitive status
-		if (!eventFileHasStatus && !matchingFileHasStatus) {
-			loggingProvider.logError(
-				`Unable to update file - file has no acceptance status: ${file.path}`,
-			);
-			return state;
-		}
-
-		if (file.rejected) {
-			// Remove rejected files from the state
-			state.files = state.files.filter((f) => f.path !== file.path);
-		} else {
-			// Update the file with new properties
-			state.files[fileIndex] = { ...matchingFile, ...file };
-		}
-
+		// Update the state once after processing all files
 		await this.agent?.updateState(
 			{
 				configurable: { thread_id: threadId },
@@ -398,6 +403,7 @@ export class WingmanAgent {
 				...state,
 			},
 		);
+
 		return state;
 	};
 
@@ -590,7 +596,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 				messageContent.push({
 					type: "image_url",
 					image_url: {
-						url: request.image,
+						url: request.image.data,
 					},
 				});
 			}
@@ -618,7 +624,7 @@ ${(() => {
 	if (!(this.aiProvider instanceof Anthropic) || !anthropicSettings) return "";
 
 	const chatModel = anthropicSettings.chatModel;
-	if (chatModel?.startsWith("claude-3-7")) {
+	if (chatModel?.startsWith("claude-3-7") && !anthropicSettings.sparkMode) {
 		return "Only do this — NOTHING ELSE.";
 	}
 

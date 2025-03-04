@@ -1,4 +1,4 @@
-import type { ComposerMessage, GraphState } from "./v2/Composer";
+import type { ComposerMessage } from "./v2/Composer";
 import type { FileMetadata } from "./v2/Message";
 
 export interface AddMessageToThreadEvent {
@@ -12,6 +12,6 @@ export interface RenameThreadEvent {
 }
 
 export interface UpdateComposerFileEvent {
-	file: FileMetadata;
+	files: FileMetadata[];
 	threadId: string;
 }

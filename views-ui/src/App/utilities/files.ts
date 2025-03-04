@@ -3,25 +3,24 @@ import type { FileMetadata } from "@shared/types/v2/Message";
 import { vscode } from "./vscode";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
-export const acceptFile = (file: FileMetadata, threadId: string) => {
-	if (file) {
-		console.log(file);
+export const acceptFile = ({ files, threadId }: UpdateComposerFileEvent) => {
+	if (files) {
 		vscode.postMessage({
 			command: "accept-file",
 			value: {
-				file,
+				files,
 				threadId,
 			} satisfies UpdateComposerFileEvent,
 		});
 	}
 };
 
-export const rejectFile = (file: FileMetadata, threadId: string) => {
-	if (file) {
+export const rejectFile = ({ files, threadId }: UpdateComposerFileEvent) => {
+	if (files) {
 		vscode.postMessage({
 			command: "reject-file",
 			value: {
-				file,
+				files,
 				threadId,
 			} satisfies UpdateComposerFileEvent,
 		});
@@ -40,12 +39,12 @@ export const showDiffview = (file: FileMetadata, threadId: string) => {
 	}
 };
 
-export const undoFile = (file: FileMetadata, threadId: string) => {
-	if (file) {
+export const undoFile = ({ files, threadId }: UpdateComposerFileEvent) => {
+	if (files) {
 		vscode.postMessage({
 			command: "undo-file",
 			value: {
-				file,
+				files,
 				threadId,
 			} satisfies UpdateComposerFileEvent,
 		});

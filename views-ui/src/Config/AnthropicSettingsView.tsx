@@ -14,8 +14,9 @@ export const AnthropicSettingsView = ({
 	apiKey,
 	onChange,
 	enableReasoning = false,
+	sparkMode = false
 }: AnthropicSection) => {
-	const paths = { codeModel, chatModel, baseUrl, apiKey, enableReasoning };
+	const paths = { codeModel, chatModel, baseUrl, apiKey, enableReasoning, sparkMode };
 
 	const [showPassword, setShowPassword] = useState(false);
 
@@ -30,6 +31,12 @@ export const AnthropicSettingsView = ({
 	const handleToggleReasoning = () => {
 		const clone = { ...paths };
 		clone.enableReasoning = !enableReasoning;
+		onChange(clone);
+	};
+
+	const handleToggleSparkMode = () => {
+		const clone = { ...paths };
+		clone.sparkMode = !sparkMode;
 		onChange(clone);
 	};
 
@@ -88,8 +95,31 @@ export const AnthropicSettingsView = ({
 							Enable Thinking
 						</label>
 					</div>
-					<div className="ml-2 text-xs text-[var(--vscode-descriptionForeground)]">
+					<div className="text-xs w-full text-[var(--vscode-descriptionForeground)]">
 						(Improves code generation quality but may increase latency)
+					</div>
+				</div>
+			)}
+
+			{chatModel.startsWith("claude-3-7-sonnet") && (
+				<div className="flex flex-col gap-2 items-center">
+					<div className="w-full">
+						<input
+							id="sparkMode"
+							type="checkbox"
+							checked={sparkMode}
+							onChange={handleToggleSparkMode}
+							className="w-4 h-4 text-blue-600 bg-[var(--vscode-input-background)] border-[var(--vscode-input-border)] rounded focus:ring-[var(--vscode-focusBorder)]"
+						/>
+						<label
+							htmlFor="sparkMode"
+							className="ml-2 text-sm font-medium text-[var(--vscode-editor-foreground)]"
+						>
+							Spark Mode
+						</label>
+					</div>
+					<div className="text-xs w-full text-[var(--vscode-descriptionForeground)]">
+						(Raw unconstrained mode)
 					</div>
 				</div>
 			)}

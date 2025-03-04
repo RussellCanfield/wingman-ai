@@ -2,10 +2,10 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import type { GraphStateAnnotation } from "../../composer/v2/agents";
 import type { baseToolSchema } from "../../composer/v2/tools/schemas";
 import {
+	AIMessage,
 	AIMessageChunk,
 	HumanMessage,
 	type MessageContent,
-	type MessageContentComplex,
 	ToolMessage,
 } from "@langchain/core/messages";
 import { Tiktoken } from "js-tiktoken/lite";
@@ -13,7 +13,15 @@ import { Tiktoken } from "js-tiktoken/lite";
 import o200k_base from "js-tiktoken/ranks/o200k_base";
 import type { z } from "zod";
 
-const tokenThreshold = 8096;
+// The threshold to trigger summarization
+const tokenThreshold = 32000;
+
+/**
+ * Trims messages when they exceed token threshold by summarizing the conversation
+ * @param state Current graph state with messages
+ * @param model LLM to use for summarization
+ * @returns Trimmed message array
+ */
 export async function trimMessages(
 	state: GraphStateAnnotation,
 	model: BaseChatModel,
@@ -25,84 +33,155 @@ export async function trimMessages(
 	let chat = "";
 	for (const message of state.messages) {
 		if (message instanceof HumanMessage) {
-			for (const content of message.content as MessageContentComplex[]) {
-				if (content.type === "text") {
-					chat += `human: ${content.text}`;
+			const content = message.content;
+			if (Array.isArray(content)) {
+				for (const item of content) {
+					if (item.type === "text") {
+						chat += `human: ${item.text}\n\n`;
+					}
 				}
+			} else if (typeof content === "string") {
+				chat += `human: ${content}\n\n`;
 			}
 		} else if (message instanceof ToolMessage) {
 			const msgContent = String(message.content);
-			if (msgContent.startsWith("{")) {
-				const toolInput = JSON.parse(msgContent) as z.infer<
-					typeof baseToolSchema
-				>;
-				chat += `tool_result: ${message.name} - ${toolInput.explanation ?? "ommited"}`;
+			try {
+				if (msgContent.startsWith("{")) {
+					const toolInput = JSON.parse(msgContent) as z.infer<
+						typeof baseToolSchema
+					>;
+					chat += `tool_result: ${message.name} - ${toolInput.explanation ?? "omitted"}\n\n`;
+				} else {
+					chat += `tool_result: ${message.name} - ${msgContent}\n\n`;
+				}
+			} catch (e) {
+				// Handle JSON parsing errors
+				chat += `tool_result: ${message.name} - ${msgContent}\n\n`;
 			}
 		} else if (message instanceof AIMessageChunk) {
-			for (const content of message.content as MessageContentComplex[]) {
-				if (content.type === "tool_use") continue;
-
-				//@ts-expect-error
-				chat += `assistant: ${content.text}`;
+			const content = message.content;
+			if (Array.isArray(content)) {
+				for (const item of content) {
+					if (item.type === "text" && "text" in item) {
+						chat += `assistant: ${item.text}\n\n`;
+					} else if (item.type === "tool_use") {
+						// Skip tool_use in content as we handle it separately below
+					}
+				}
+			} else if (typeof content === "string") {
+				chat += `assistant: ${content}\n\n`;
 			}
 
-			for (const toolUse of message.tool_calls ?? []) {
-				chat += `tool_use: ${toolUse.name}`;
+			if (message.tool_calls && message.tool_calls.length > 0) {
+				for (const toolUse of message.tool_calls) {
+					chat += `tool_use: ${toolUse.name}\n\n`;
+				}
 			}
 		}
 	}
 
-	return [
-		await summarizeConversation(chat, model, state.summary),
-		state.messages[state.messages.length - 1],
-	];
+	// Create a summary and keep the last message
+	const summary = await summarizeConversation(chat, model, state.summary);
+
+	return [summary, state.messages[state.messages.length - 1]];
 }
 
+/**
+ * Calculates the total token count for all messages in the state
+ * @param state Current graph state with messages
+ * @returns Total token count
+ */
 export function getTokenCount(state: GraphStateAnnotation) {
 	const enc = new Tiktoken(o200k_base);
-	const getTokens = (input: string) => {
+
+	/**
+	 * Encodes a string into tokens
+	 * @param input String to encode
+	 * @returns Array of token ids or empty array on error
+	 */
+	const getTokens = (input: string): number[] => {
+		if (typeof input !== "string") return [];
+
 		try {
 			return enc.encode(input);
-		} catch {}
-
-		return 0;
+		} catch (error) {
+			console.error("Token encoding error:", error);
+			return [];
+		}
 	};
 
-	const handleMessageContentTokens = (messageContent: MessageContent) => {
-		let tokens: number[] = [];
+	/**
+	 * Handles token counting for different message content types
+	 * @param messageContent Content from a message
+	 * @returns Total number of tokens
+	 */
+	const handleMessageContentTokens = (
+		messageContent: MessageContent,
+	): number => {
+		let totalTokens = 0;
 
 		if (Array.isArray(messageContent)) {
 			for (const content of messageContent) {
 				if (content.type === "tool_use") continue;
-				//@ts-expect-error
-				tokens = tokens.concat(getTokens(content.text));
+				if (content.type === "text" && "text" in content) {
+					totalTokens += getTokens(content.text).length;
+				}
 			}
-		} else {
+		} else if (typeof messageContent === "string") {
+			totalTokens += getTokens(messageContent).length;
+		} else if (
+			messageContent &&
+			typeof messageContent === "object" &&
+			"text" in messageContent
+		) {
 			//@ts-expect-error
-			tokens = tokens.concat(getTokens(messageContent.text));
+			totalTokens += getTokens(messageContent.text).length;
 		}
 
-		return tokens;
+		return totalTokens;
 	};
 
-	let tokens: number[] = [];
+	let totalTokenCount = 0;
+
 	for (const message of state.messages) {
-		if (message instanceof HumanMessage) {
-			tokens = tokens.concat(handleMessageContentTokens(message.content));
-		} else if (message instanceof ToolMessage) {
-			tokens = tokens.concat(handleMessageContentTokens(message.content));
-		} else if (message instanceof AIMessageChunk) {
-			// type text
-			// tool_calls
-			tokens = tokens.concat(handleMessageContentTokens(message.content));
+		if (
+			message instanceof HumanMessage ||
+			message instanceof ToolMessage ||
+			message instanceof AIMessageChunk ||
+			message instanceof AIMessage
+		) {
+			totalTokenCount += handleMessageContentTokens(message.content);
+
+			// Handle tool calls separately for AIMessageChunk
+			if (message instanceof AIMessageChunk && message.tool_calls) {
+				for (const toolCall of message.tool_calls) {
+					if (toolCall.name) {
+						totalTokenCount += getTokens(toolCall.name).length;
+					}
+					if (toolCall.args) {
+						try {
+							totalTokenCount += getTokens(
+								JSON.stringify(toolCall.args),
+							).length;
+						} catch {}
+					}
+				}
+			}
 		}
 	}
 
-	return tokens.length;
+	return totalTokenCount;
 }
 
+/**
+ * Creates or extends a summary of the conversation
+ * @param conversation Formatted conversation text
+ * @param model LLM to use for summarization
+ * @param originalSummary Optional existing summary to extend
+ * @returns Message containing the summary
+ */
 async function summarizeConversation(
-	summary: string,
+	conversation: string,
 	model: BaseChatModel,
 	originalSummary?: string,
 ) {
@@ -121,7 +200,7 @@ async function summarizeConversation(
 			content: [
 				{
 					type: "text",
-					text: `Conversation Messages:${summary}`,
+					text: `Conversation Messages:\n${conversation}`,
 				},
 			],
 		}),

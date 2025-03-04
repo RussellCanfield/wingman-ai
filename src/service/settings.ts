@@ -48,6 +48,21 @@ function mergeSettings(
 }
 
 export async function SaveSettings(settings: Settings) {
+	//Turn off model specific settings if needed
+	if (
+		settings.aiProvider === "Anthropic" &&
+		settings.providerSettings.Anthropic
+	) {
+		if (
+			!settings.providerSettings.Anthropic.chatModel.startsWith(
+				"claude-3-7-sonnet",
+			)
+		) {
+			settings.providerSettings.Anthropic.enableReasoning = false;
+			settings.providerSettings.Anthropic.sparkMode = false;
+		}
+	}
+
 	await vscode.workspace.fs.writeFile(
 		vscode.Uri.file(`${homedir()}/.wingman/settings.json`),
 		Buffer.from(JSON.stringify(settings, null, 2)),

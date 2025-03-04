@@ -188,10 +188,13 @@ export class LSPClient {
 	};
 
 	updateComposerFile = async ({
-		file,
+		files,
 		threadId,
 	}: UpdateComposerFileEvent): Promise<GraphState> => {
-		return client.sendRequest("wingman/updateComposerFile", { file, threadId });
+		return client.sendRequest("wingman/updateComposerFile", {
+			files,
+			threadId,
+		});
 	};
 
 	branchThread = async ({

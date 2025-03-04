@@ -73,6 +73,7 @@ export type ApiSettingsType = BaseServiceSettings & {
 
 export type AnthropicSettingsType = {
 	enableReasoning?: boolean;
+	sparkMode?: boolean;
 } & ApiSettingsType;
 
 export type AzureAISettingsType = Omit<ApiSettingsType, "baseUrl"> & {
@@ -116,7 +117,7 @@ export const defaultOpenAISettings: ApiSettingsType = {
 };
 
 export const defaultAnthropicSettings: ApiSettingsType = {
-	chatModel: "claude-3-5-sonnet-latest",
+	chatModel: "claude-3-7-sonnet-latest",
 	codeModel: "claude-3-5-haiku-latest",
 	baseUrl: "https://api.anthropic.com/v1",
 	apiKey: "",

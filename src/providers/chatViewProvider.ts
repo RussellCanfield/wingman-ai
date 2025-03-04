@@ -188,10 +188,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						this._diffViewProvider.createDiffView({
 							file,
 							onAccept: async (file: FileMetadata, threadId: string) => {
-								await this.acceptFile({ file, threadId });
+								await this.acceptFile({ files: [file], threadId });
 							},
 							onReject: async (file: FileMetadata, threadId: string) => {
-								await this.rejectFile({ file, threadId });
+								await this.rejectFile({ files: [file], threadId });
 							},
 							threadId,
 						});
@@ -280,47 +280,59 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
-	private async undoFile({ file, threadId }: UpdateComposerFileEvent) {
+	private async undoFile({ files, threadId }: UpdateComposerFileEvent) {
 		try {
 			// Update thread metadata
 			const targetThread = await this._workspace.getThreadById(threadId);
 			if (!targetThread) return;
 
-			const fileUri = vscode.Uri.joinPath(
-				vscode.Uri.parse(this._workspace.workspacePath),
-				file.path,
-			);
-			file.accepted = false;
-			file.rejected = false;
+			const fileMap = new Map<string, FileMetadata>();
+			for (const file of files) {
+				const fileUri = vscode.Uri.joinPath(
+					vscode.Uri.parse(this._workspace.workspacePath),
+					file.path,
+				);
+				file.accepted = false;
+				file.rejected = false;
+				await vscode.workspace.fs.writeFile(
+					fileUri,
+					new TextEncoder().encode(file.original),
+				);
+				fileMap.set(file.id!, file);
+			}
 
+			let filesFound = 0;
 			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+				if (filesFound === fileMap.size) {
+					break;
+				}
+
 				const message = targetThread.messages[i];
 				const events = message.events ?? [];
 				for (let j = events.length - 1; j >= 0; j--) {
 					const event = events[j];
-					if (event.id === file.id) {
-						event.content = JSON.stringify(file);
-						break;
+					if (fileMap.has(event.id)) {
+						event.content = JSON.stringify(fileMap.get(event.id));
+						filesFound++;
+						if (filesFound === fileMap.size) {
+							break;
+						}
 					}
 				}
 			}
-
-			await Promise.all([
-				vscode.workspace.fs.writeFile(
-					fileUri,
-					new TextEncoder().encode(file.original),
-				),
-				this._lspClient.updateComposerFile({
-					file,
-					threadId,
-				}),
-				this._workspace.updateThread(threadId, targetThread),
-			]);
 
 			this._webview?.postMessage({
 				command: "thread-data",
 				value: this._workspace.getSettings(),
 			});
+
+			await Promise.all([
+				this._lspClient.updateComposerFile({
+					files,
+					threadId,
+				}),
+				this._workspace.updateThread(threadId, targetThread),
+			]);
 		} catch (error) {
 			console.error("Error undoing file changes:", error);
 			// Consider showing an error notification to the user
@@ -328,81 +340,97 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async acceptFile({
-		file,
+		files,
 		threadId,
 	}: UpdateComposerFileEvent): Promise<void> {
 		const targetThread = await this._workspace.getThreadById(threadId);
 		if (!targetThread) return;
 
-		const relativeFilePath = vscode.workspace.asRelativePath(file.path);
-		const fileUri = vscode.Uri.joinPath(
-			vscode.Uri.parse(this._workspace.workspacePath),
-			relativeFilePath,
-		);
-		await vscode.workspace.fs.writeFile(
-			fileUri,
-			new TextEncoder().encode(file.code),
-		);
-		file.accepted = true;
-		file.rejected = false;
+		const fileMap = new Map<string, FileMetadata>();
+		for (const file of files) {
+			const relativeFilePath = vscode.workspace.asRelativePath(file.path);
+			const fileUri = vscode.Uri.joinPath(
+				vscode.Uri.parse(this._workspace.workspacePath),
+				relativeFilePath,
+			);
+			await vscode.workspace.fs.writeFile(
+				fileUri,
+				new TextEncoder().encode(file.code),
+			);
+			file.accepted = true;
+			file.rejected = false;
+			fileMap.set(file.id!, file);
+		}
 
+		let filesFound = 0;
 		for (let i = targetThread.messages.length - 1; i >= 0; i--) {
 			const message = targetThread.messages[i];
 			const events = message.events ?? [];
 			for (let j = events.length - 1; j >= 0; j--) {
 				const event = events[j];
-				if (event.id === file.id) {
-					event.content = JSON.stringify(file);
-					break;
+				if (fileMap.has(event.id)) {
+					event.content = JSON.stringify(fileMap.get(event.id));
+					filesFound++;
+					if (filesFound === fileMap.size) {
+						break;
+					}
 				}
 			}
 		}
 
-		await Promise.all([
-			this._lspClient.updateComposerFile({
-				file,
-				threadId,
-			}),
-			this._workspace.updateThread(threadId, targetThread),
-		]);
 		this._webview?.postMessage({
 			command: "thread-data",
 			value: this._workspace.getSettings(),
 		});
+
+		await Promise.all([
+			this._lspClient.updateComposerFile({
+				files,
+				threadId,
+			}),
+			this._workspace.updateThread(threadId, targetThread),
+		]);
 	}
 
-	private async rejectFile({ file, threadId }: UpdateComposerFileEvent) {
+	private async rejectFile({ files, threadId }: UpdateComposerFileEvent) {
 		try {
 			// Update thread metadata
 			const targetThread = await this._workspace.getThreadById(threadId);
 			if (!targetThread) return;
 
-			file.accepted = false;
-			file.rejected = true;
+			const fileMap = new Map<string, FileMetadata>();
+			for (const file of files) {
+				file.accepted = false;
+				file.rejected = true;
+				fileMap.set(file.id!, file);
+			}
 
+			let filesFound = 0;
 			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
 				const message = targetThread.messages[i];
 				const events = message.events ?? [];
 				for (let j = events.length - 1; j >= 0; j--) {
 					const event = events[j];
-					if (event.id === file.id) {
-						event.content = JSON.stringify(file);
+					event.content = JSON.stringify(fileMap.get(event.id));
+					filesFound++;
+					if (filesFound === fileMap.size) {
 						break;
 					}
 				}
 			}
 
-			await Promise.all([
-				this._lspClient.updateComposerFile({
-					file,
-					threadId,
-				}),
-				this._workspace.updateThread(threadId, targetThread),
-			]);
 			this._webview?.postMessage({
 				command: "thread-data",
 				value: this._workspace.getSettings(),
 			});
+
+			await Promise.all([
+				this._lspClient.updateComposerFile({
+					files,
+					threadId,
+				}),
+				this._workspace.updateThread(threadId, targetThread),
+			]);
 		} catch (error) {
 			console.error("Error rejecting file:", error);
 		}

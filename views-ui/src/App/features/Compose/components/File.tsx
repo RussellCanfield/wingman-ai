@@ -75,7 +75,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Reject changes"
                                     className="p-2"
-                                    onClick={() => rejectFile(file, activeThread!.id)}
+                                    onClick={() => rejectFile({ files: [file], threadId: activeThread?.id! })}
                                 >
                                     <HiOutlineXMark size={18} />
                                 </button>
@@ -97,7 +97,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Accept changes"
                                     className="p-2"
-                                    onClick={() => acceptFile(file, activeThread!.id)}
+                                    onClick={() => acceptFile({ files: [file], threadId: activeThread?.id! })}
                                 >
                                     <GrCheckmark size={16} />
                                 </button>
@@ -112,7 +112,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Undo changes"
                                     className="p-2"
-                                    onClick={() => undoFile(file, activeThread!.id)}
+                                    onClick={() => undoFile({ files: [file], threadId: activeThread?.id! })}
                                 >
                                     <FaUndo size={14} />
                                 </button>

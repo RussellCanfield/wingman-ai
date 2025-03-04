@@ -183,7 +183,7 @@ const ChatEntry = ({
 													type="button"
 													title="Undo changes"
 													className="p-2"
-													onClick={() => undoFile(f, activeThread?.id!)}
+													onClick={() => undoFile({ files: [f], threadId: activeThread?.id! })}
 												>
 													<FaUndo size={14} />
 												</button>
@@ -207,7 +207,7 @@ const ChatEntry = ({
 													type="button"
 													title="Reject changes"
 													className="p-3"
-													onClick={() => rejectFile(f, activeThread?.id!)}
+													onClick={() => rejectFile({ files: [f], threadId: activeThread?.id! })}
 												>
 													<HiOutlineXMark size={18} />
 												</button>
@@ -217,7 +217,7 @@ const ChatEntry = ({
 													type="button"
 													title="Accept changes"
 													className="p-3"
-													onClick={() => acceptFile(f, activeThread?.id!)}
+													onClick={() => acceptFile({ files: [f], threadId: activeThread?.id! })}
 												>
 													<GrCheckmark size={16} />
 												</button>
@@ -232,16 +232,14 @@ const ChatEntry = ({
 						<div className="flex justify-end gap-4 w-full mt-4 border-t border-stone-700/50 pt-4 text-white">
 							<button
 								type="button"
-								// biome-ignore lint/complexity/noForEach: <explanation>
-								onClick={() => files.forEach(f => rejectFile(f, activeThread?.id!))}
+								onClick={() => rejectFile({ files, threadId: activeThread?.id! })}
 								className="px-3 py-2 text-sm rounded-md bg-red-600 hover:bg-red-700 transition-colors"
 							>
 								Reject All
 							</button>
 							<button
 								type="button"
-								// biome-ignore lint/complexity/noForEach: <explanation>
-								onClick={() => files.forEach(f => acceptFile(f, activeThread?.id!))}
+								onClick={() => acceptFile({ files, threadId: activeThread?.id! })}
 								className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 transition-colors"
 							>
 								Accept All
