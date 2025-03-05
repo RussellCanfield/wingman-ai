@@ -42,6 +42,9 @@ export const OpenAISettingsView = ({
 					data-name="codeModel"
 					title="OpenAI Code Model"
 				/>
+				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
+					Used for autocomplete code generation (e.g., gpt-4o)
+				</p>
 			</div>
 
 			<div className="flex flex-col">
@@ -60,6 +63,9 @@ export const OpenAISettingsView = ({
 					data-name="chatModel"
 					title="OpenAI Chat Model"
 				/>
+				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
+					Used for the Chat Agent experience (e.g., gpt-4o)
+				</p>
 			</div>
 
 			<div className="flex flex-col">

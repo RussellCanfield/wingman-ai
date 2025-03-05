@@ -58,6 +58,9 @@ export const AnthropicSettingsView = ({
 					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 					title="Anthropic Code Model"
 				/>
+				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
+					Used for autocomplete code generation (e.g., claude-3-5-haiku-latest)
+				</p>
 			</div>
 
 			<div className="flex flex-col">
@@ -76,6 +79,9 @@ export const AnthropicSettingsView = ({
 					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 					title="Anthropic Chat Model"
 				/>
+				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
+					Used for the Chat Agent experience (e.g., claude-3-7-sonnet-latest)
+				</p>
 			</div>
 
 			{chatModel.startsWith("claude-3-7-sonnet") && (

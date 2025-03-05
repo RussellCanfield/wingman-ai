@@ -35,6 +35,9 @@ export const HFSettingsView = ({
 					data-name="codeModel"
 					title="HF Code Model"
 				/>
+				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
+					Used for autocomplete code generation
+				</p>
 			</div>
 
 			<div className="flex flex-col">
@@ -50,6 +53,9 @@ export const HFSettingsView = ({
 					data-name="chatModel"
 					title="HF Chat Model"
 				/>
+				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
+					Used for the Chat Agent experience
+				</p>
 			</div>
 
 			<div className="flex flex-col">

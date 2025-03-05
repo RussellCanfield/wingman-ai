@@ -139,10 +139,9 @@ export class WingmanAgent {
 
 		this.tools = [
 			createCommandExecuteTool(this.workspace),
-			createReadFileTool(this.workspace),
+			createReadFileTool(this.workspace, this.codeParser),
 			createListDirectoryTool(this.workspace),
 			createWriteFileTool(this.workspace),
-			createFindFileDependenciesTool(this.workspace, this.codeParser),
 			...remoteTools,
 		];
 
@@ -444,6 +443,8 @@ Your mission is to tackle whatever coding challenge they present - whether it's 
 In most cases the user expects you to work autonomously, use the tools and answer your own questions. 
 Only provide code examples if you are explicitly asked.
 
+**CRITICAL - Always get file paths correct, they will always be relative to the current working directory**
+
 **Current Working Directory**:
 ${state.workspace}
 
@@ -465,12 +466,11 @@ If you need more context to properly address the user's request:
 
 # Working with Tools
 When using the tools at your disposal:
-- First explain to the user why you're using a particular approach
+- First explain to the user why you're using a particular tool, do not mention the tool name directly
 - Follow the exact schema required for each tool
 - Only reference tools that are currently available
 - Describe your actions in user-friendly terms (e.g., "I'll modify this file" rather than "I'll use the edit_file tool")
-- Use tools only when they add value - rely on your knowledge for general questions
-- If creating a new project, create it within the current directory - do not create a subdirectory!
+- Use tools only when required - rely on your knowledge for general questions
 
 # Working with Files
 When modifying or creating files:
@@ -480,16 +480,13 @@ When modifying or creating files:
 5. After writing a file, consider the new content as the current state for future operations
 6. **File paths must always be correct! Always use paths relative to the current working directory**
 
-**CRITICAL - Always get file paths correct, they will always be relative to the current working directory**
-
 This ensures you're working with the latest version and prevents overwriting recent changes.
 
 # Managing Code Changes
-After writing a file, consider if you've introduced a breaking change or orphaned code in the codebase:
-- Changing method signatures or return types (e.g., modifying a shared interface)
-- Changing module exports within a file
-- Leveraging the "find_file_dependencies" AST tool will help you locate related files
-- While not always required, this can help you potentially locate dead code, or fix dependent files
+When modifying code:
+- If creating a new project, create it within the current directory - do not create a subdirectory!
+- Use the read_tool details to help identify if there is a file that can be removed - it will report imports and exports for the entire file
+- Always fully integrate changes, you are a 10x engineer and you always create fully integrated and working solutions
 
 # Technology Recommendations
 When suggesting technologies for projects, consider these options based on specific needs:

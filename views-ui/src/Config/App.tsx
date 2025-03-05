@@ -199,7 +199,7 @@ export const App = () => {
 					<h1 className="text-2xl font-bold mb-2 text-[var(--vscode-foreground)]">
 						Wingman Settings
 					</h1>
-					<p className="text-[var(--vscode-descriptionForeground)] max-w-2xl">
+					<p className="text-[var(--vscode-descriptionForeground)]">
 						Configure your AI assistant to match your workflow. Visit{" "}
 						<a
 							href="https://wingman.squadron-ai.com/"
@@ -211,7 +211,32 @@ export const App = () => {
 						</a>{" "}
 						for more information about configuration options.
 					</p>
+
+					<div className="mt-4 p-4 rounded-lg border-l-4 border-green-300 bg-green-600 transition-colors duration-300">
+						<div className="flex items-start gap-2">
+							{/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
+							<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 border-green-600 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+								<path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+							</svg>
+							<div>
+								<h3 className="font-semibold text-base text-gray-100">Remember!</h3>
+								<p className="text-gray-100 text-sm">
+									You can create custom rules similar to other editors, create ".wingmanrules" in your project root to customize AI behavior.{" "}
+									<a
+										href="https://github.com/PatrickJS/awesome-cursorrules"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-white font-medium underline"
+									>
+										Check out some examples.
+									</a>
+								</p>
+							</div>
+						</div>
+					</div>
 				</div>
+			</div>
+			<div className="flex flex-col md:flex-row justify-end items-end md:items-center mb-8 gap-4">
 				<button
 					type="button"
 					onClick={saveSettings}
@@ -240,7 +265,6 @@ export const App = () => {
 					)}
 				</button>
 			</div>
-
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 				<section className={cardClass}>
 					<div className="absolute top-0 right-0 bg-blue-600 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
