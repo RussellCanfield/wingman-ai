@@ -484,7 +484,8 @@ When modifying or creating files:
 This ensures you're working with the latest version and prevents overwriting recent changes.
 
 # Research
-When the user asks you to research a topic, or the user appears stuck, then ask if you can research for them:
+When the user asks you to research a topic, or the user appears to be stuck, then ask if you can research for them:
+- Always ask before you do research! This is an expensive operation, and you should rely on your own knowledge before doing so or unless explicitly asked
 - Use the research tool to perform research, never send actual code to this tool
 
 # Managing Code Changes

@@ -16,7 +16,7 @@ export default ({ env, command, envMode }) => {
 			},
 			define: {
 				"process.env.PUBLIC_TELEMETRY_CONNECTIONSTRING": JSON.stringify(
-					process.env.TELEMETRY_CONNECTIONSTRING
+					process.env.TELEMETRY_CONNECTIONSTRING,
 				),
 				...publicVars,
 			},
@@ -27,16 +27,12 @@ export default ({ env, command, envMode }) => {
 					...config.output,
 					libraryTarget: "commonjs2",
 					devtoolModuleFilenameTemplate: (info) => {
-						const {
-							absoluteResourcePath,
-							namespace,
-							resourcePath,
-						} = info;
+						const { absoluteResourcePath, namespace, resourcePath } = info;
 
 						if (path.isAbsolute(absoluteResourcePath)) {
 							return path.relative(
 								path.join(__dirname, "out"),
-								absoluteResourcePath
+								absoluteResourcePath,
 							);
 						}
 
