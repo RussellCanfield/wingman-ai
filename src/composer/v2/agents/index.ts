@@ -22,7 +22,6 @@ import type {
 	FileMetadata,
 } from "@shared/types/v2/Message";
 import path from "node:path";
-import { createFindFileDependenciesTool } from "../tools/file_dependencies";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { createCommandExecuteTool } from "../tools/cmd_execute";
 import type { PartitionedFileSystemSaver } from "../../checkpointer";
@@ -37,6 +36,7 @@ import { Anthropic } from "../../../service/anthropic/anthropic";
 import { OpenAI } from "../../../service/openai/openai";
 import { AzureAI } from "../../../service/azure/azure";
 import { trimMessages } from "../../../service/utils/chatHistory";
+import { createResearchTool } from "../tools/research";
 
 let controller = new AbortController();
 
@@ -142,6 +142,7 @@ export class WingmanAgent {
 			createReadFileTool(this.workspace, this.codeParser),
 			createListDirectoryTool(this.workspace),
 			createWriteFileTool(this.workspace),
+			createResearchTool(this.workspace, this.aiProvider),
 			...remoteTools,
 		];
 
@@ -482,6 +483,10 @@ When modifying or creating files:
 
 This ensures you're working with the latest version and prevents overwriting recent changes.
 
+# Research
+When the user asks you to research a topic, or the user appears stuck, then ask if you can research for them:
+- Use the research tool to perform research, never send actual code to this tool
+
 # Managing Code Changes
 When modifying code:
 - If creating a new project, create it within the current directory - do not create a subdirectory!
@@ -712,7 +717,12 @@ ${(() => {
 
 			switch (event.event) {
 				case "on_chat_model_stream":
-					if (event.data.chunk?.content) {
+					if (
+						event.data.chunk?.content &&
+						//Do not stream intermediate tool response
+						//The underlying "ChatModel" reference is singleton
+						event.metadata.langgraph_node !== "tools"
+					) {
 						let text = "";
 						if (Array.isArray(event.data.chunk.content)) {
 							text = event.data.chunk.content[0]?.text || "";

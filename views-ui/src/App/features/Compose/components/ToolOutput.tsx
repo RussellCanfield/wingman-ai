@@ -12,7 +12,8 @@ const ToolNames = {
     list_directory: "Searched: ",
     command_execute: "Executed: ",
     find_file_dependencies: "Checked Dependencies",
-    read_file: "Analyzed: "
+    read_file: "Analyzed: ",
+    research: "Researching..."
 };
 
 export const ToolOutput = ({

@@ -204,6 +204,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							value: this._workspace.getSettings(),
 						});
 						break;
+					case "clipboard": {
+						vscode.env.clipboard.writeText(value as string);
+						break;
+					}
 					case "get-files": {
 						const searchTerm = value as string | undefined;
 						if (!searchTerm || searchTerm?.length === 0) {
@@ -364,6 +368,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 		let filesFound = 0;
 		for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+			if (filesFound === fileMap.size) {
+				break;
+			}
+
 			const message = targetThread.messages[i];
 			const events = message.events ?? [];
 			for (let j = events.length - 1; j >= 0; j--) {
@@ -407,14 +415,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 			let filesFound = 0;
 			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+				if (filesFound === fileMap.size) {
+					break;
+				}
+
 				const message = targetThread.messages[i];
 				const events = message.events ?? [];
 				for (let j = events.length - 1; j >= 0; j--) {
 					const event = events[j];
-					event.content = JSON.stringify(fileMap.get(event.id));
-					filesFound++;
-					if (filesFound === fileMap.size) {
-						break;
+					if (fileMap.has(event.id)) {
+						event.content = JSON.stringify(fileMap.get(event.id));
+						filesFound++;
+						if (filesFound === fileMap.size) {
+							break;
+						}
 					}
 				}
 			}
