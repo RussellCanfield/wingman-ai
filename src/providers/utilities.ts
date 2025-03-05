@@ -19,7 +19,9 @@ export const supportedLanguages: vscode.DocumentSelector = [
 	{ scheme: "file", language: "scss" },
 	{ scheme: "file", language: "html" },
 	{ scheme: "file", language: "json" },
+	{ scheme: "file", language: "jsonc" },
 	{ scheme: "file", language: "vue" },
+	{ scheme: "file", language: "vue-html" },
 	{ scheme: "file", language: "shellscript" },
 	{ scheme: "file", language: "sh" },
 	{ scheme: "file", language: "bash" },
@@ -40,6 +42,9 @@ export const supportedLanguages: vscode.DocumentSelector = [
 	{ scheme: "file", language: "c" },
 	{ scheme: "file", language: "cpp" },
 	{ scheme: "file", language: "perl" },
+	{ scheme: "file", language: "razor" },
+	{ scheme: "file", language: "bat" },
+	{ scheme: "file", language: "plaintext" },
 ];
 
 export async function getSymbolsFromOpenFiles() {

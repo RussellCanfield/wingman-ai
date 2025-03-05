@@ -218,10 +218,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
 			const filePath = vscode.workspace.asRelativePath(doc.uri);
 			lspClient.updateComposerFile({
-				file: {
-					path: filePath,
-					code: doc.getText(),
-				},
+				files: [
+					{
+						path: filePath,
+						code: doc.getText(),
+					},
+				],
 				threadId: settings.activeThreadId!,
 			});
 		}),
