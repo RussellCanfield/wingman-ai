@@ -2,13 +2,14 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { FaPlay, FaStopCircle, FaPaperclip } from "react-icons/fa";
 import type { AppMessage } from "@shared/types/Message";
-import type { FileSearchResult } from "@shared/types/Composer";
+import type { FileDiagnostic, FileSearchResult } from "@shared/types/Composer";
 import { useAutoFocus } from "../../../hooks/useAutoFocus";
 import { useOnScreen } from "../../../hooks/useOnScreen";
 import { handleAutoResize } from "../../../utilities/utils";
 import { FileDropdown } from "./components/FileDropdown";
 import { FileChips } from "./components/FileChips";
 import { ImagePreview } from "./components/ImagePreview";
+import { CollapsibleSection } from "./components/CollapsibleSection";
 import { useSettingsContext } from "../../../context/settingsContext";
 import { useComposerContext } from "../../../context/composerContext";
 import { vscode } from "../../../utilities/vscode";
@@ -82,10 +83,19 @@ interface ChatInputProps {
 	onChatSubmitted: (input: string, contextFiles: string[], image?: File) => void;
 	onChatCancelled: () => void;
 	loading: boolean;
-	threadId?: string
+	threadId?: string;
+	suggestionItems?: FileDiagnostic[];
+	suggestionTitle?: string;
 }
 
-const ChatInput = ({ loading, onChatSubmitted, onChatCancelled, threadId }: ChatInputProps) => {
+const ChatInput = ({
+	loading,
+	onChatSubmitted,
+	onChatCancelled,
+	threadId,
+	suggestionItems = [],
+	suggestionTitle = "Diagnostics"
+}: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useSettingsContext();
 	const { activeFiles, setActiveFiles, activeMessage } = useComposerContext();
@@ -288,8 +298,17 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled, threadId }: Chat
 		}
 	`;
 
+	const shouldShowButtons = !activeMessage || !activeMessage.threadId || activeMessage.threadId === threadId;
+
 	return (
 		<div className="flex-basis-50 py-3 flex flex-col items-stretch" ref={ref}>
+			{suggestionItems.length > 0 && (
+				<CollapsibleSection
+					items={suggestionItems}
+					title={suggestionTitle}
+					isLightTheme={isLightTheme}
+				/>
+			)}
 			<div className={inputContainerClass}>
 				{imagePreview && (
 					<ImagePreview
@@ -326,36 +345,38 @@ const ChatInput = ({ loading, onChatSubmitted, onChatCancelled, threadId }: Chat
 					accept="image/*"
 					className="hidden"
 				/>
-				{!activeMessage?.threadId || activeMessage?.threadId === threadId && (<div className={buttonContainerClass}>
-					<button
-						type="button"
-						className={iconButtonClass}
-						onClick={handleImageUpload}
-						title="Attach image"
-					>
-						<FaPaperclip size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
-					</button>
-					{!loading ? (
+				{shouldShowButtons && (
+					<div className={buttonContainerClass}>
 						<button
 							type="button"
-							className={`${iconButtonClass} ${!inputValue.trim() ? 'opacity-50 cursor-not-allowed' : ''} p-2.5`}
-							onClick={() => handleUserInput({ key: "Enter", preventDefault: () => { }, shiftKey: false } as React.KeyboardEvent<HTMLTextAreaElement>)}
-							disabled={!inputValue.trim() && !selectedImage}
-							title="Send message"
+							className={iconButtonClass}
+							onClick={handleImageUpload}
+							title="Attach image"
 						>
-							<FaPlay size={16} />
+							<FaPaperclip size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
 						</button>
-					) : (
-						<button
-							type="button"
-							className={`${iconButtonClass} text-white`}
-							onClick={onChatCancelled}
-							title="Cancel"
-						>
-							<FaStopCircle size={16} />
-						</button>
-					)}
-				</div>)}
+						{!loading ? (
+							<button
+								type="button"
+								className={`${iconButtonClass} ${!inputValue.trim() ? 'opacity-50 cursor-not-allowed' : ''} p-2.5`}
+								onClick={() => handleUserInput({ key: "Enter", preventDefault: () => { }, shiftKey: false } as React.KeyboardEvent<HTMLTextAreaElement>)}
+								disabled={!inputValue.trim() && !selectedImage}
+								title="Send message"
+							>
+								<FaPlay size={16} />
+							</button>
+						) : (
+							<button
+								type="button"
+								className={`${iconButtonClass} text-white`}
+								onClick={onChatCancelled}
+								title="Cancel"
+							>
+								<FaStopCircle size={16} />
+							</button>
+						)}
+					</div>
+				)}
 			</div>
 			{showDropdown && filteredDropDownItems.length > 0 && inputRect && (
 				<FileDropdown

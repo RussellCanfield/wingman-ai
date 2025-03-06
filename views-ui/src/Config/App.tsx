@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AppMessage } from "@shared/types/Message";
 import type {
 	AiProviders,
@@ -19,7 +19,6 @@ import { MCPConfiguration } from "./McpTools";
 
 export type InitSettings = Settings & {
 	ollamaModels: string[];
-	mcpTools?: MCPToolConfig[];
 };
 
 export const App = () => {
@@ -39,6 +38,14 @@ export const App = () => {
 		};
 	}, []);
 
+	const saveSettings = (updatedSettings: Settings) => {
+		setSaveStatus("saving");
+		vscode.postMessage({
+			command: "saveSettings",
+			value: updatedSettings,
+		});
+	};
+
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { command, value } = event.data;
 
@@ -56,10 +63,10 @@ export const App = () => {
 				break;
 			case "tool-verified": {
 				const config = value as MCPToolConfig;
-				setSettings((currentSettings) => {
-					if (!currentSettings) return null;
+				setSettings(prevSettings => {
+					if (!prevSettings) return null;
 
-					const updatedMcpTools = [...(currentSettings.mcpTools || [])];
+					const updatedMcpTools = [...(prevSettings.mcpTools || [])];
 					const toolIndex = updatedMcpTools.findIndex(t => t.name === config.name);
 
 					if (toolIndex !== -1) {
@@ -70,10 +77,15 @@ export const App = () => {
 						};
 					}
 
-					return {
-						...currentSettings,
+					const settings: InitSettings = {
+						...prevSettings,
 						mcpTools: updatedMcpTools
 					};
+
+					saveSettings(settings);
+
+					//node /Users/russellcanfield/Projects/mcp/webflow-mcp-server/dist/index.js
+					return settings;
 				});
 				break;
 			}
@@ -162,14 +174,6 @@ export const App = () => {
 		}));
 	};
 
-	const saveSettings = () => {
-		setSaveStatus("saving");
-		vscode.postMessage({
-			command: "saveSettings",
-			value: settings,
-		});
-	};
-
 	const cardClass = `
     relative flex flex-col p-6 rounded-xl
     ${isLightTheme
@@ -239,7 +243,7 @@ export const App = () => {
 			<div className="flex flex-col md:flex-row justify-end items-end md:items-center mb-8 gap-4">
 				<button
 					type="button"
-					onClick={saveSettings}
+					onClick={() => saveSettings(settings)}
 					disabled={saveStatus === "saving"}
 					className={buttonClass}
 				>

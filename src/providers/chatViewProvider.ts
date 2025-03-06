@@ -103,13 +103,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 				const { command, value } = data;
 
-				this._lspClient.onIndexUpdated((stats) => {
-					webviewView.webview.postMessage({
-						command: "index-status",
-						value: stats,
-					});
-				});
-
 				// TODO - move to a mediator pattern
 				switch (command) {
 					case "add-message-to-thread":

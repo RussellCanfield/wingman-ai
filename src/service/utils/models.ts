@@ -11,13 +11,13 @@ export function CreateAIProvider(
 	settings: Settings,
 	loggingProvider: ILoggingProvider,
 ): AIProvider {
-	// if (settings.aiProvider === "HuggingFace") {
-	// 	return new HuggingFace(
-	// 		settings.providerSettings.HuggingFace,
-	// 		settings.interactionSettings,
-	// 		loggingProvider,
-	// 	);
-	// }
+	if (settings.aiProvider === "HuggingFace") {
+		return new HuggingFace(
+			settings.providerSettings.HuggingFace,
+			settings.interactionSettings,
+			loggingProvider,
+		);
+	}
 
 	if (settings.aiProvider === "OpenAI") {
 		return new OpenAI(

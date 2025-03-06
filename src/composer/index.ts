@@ -34,6 +34,9 @@ import { AzureAI } from "../service/azure/azure";
 import { trimMessages } from "../service/utils/chatHistory";
 import { createResearchTool } from "./tools/research";
 import { loadWingmanRules } from "./utils";
+import type { DiagnosticRetriever } from "../server/retriever";
+import { wingmanSettings } from "../service/settings";
+import { CreateAIProvider } from "../service/utils/models";
 
 let controller = new AbortController();
 
@@ -108,23 +111,24 @@ export class WingmanAgent {
 	private agent: ReturnType<typeof createReactAgent> | undefined;
 	private tools: StructuredTool[] = [];
 	private events: StreamEvent[] = [];
+	private remoteTools: DynamicTool[] = [];
 
 	constructor(
-		private readonly aiProvider: AIProvider,
 		private readonly workspace: string,
-		private readonly settings: Settings,
 		private readonly checkpointer: PartitionedFileSystemSaver,
 		private readonly codeParser: CodeParser,
+		private readonly diagnosticsRetriever: DiagnosticRetriever,
 	) {}
 
 	async initialize() {
-		const remoteTools: DynamicTool[] = [];
-		for (const mcpTool of this.settings.mcpTools ?? []) {
+		const settings = await wingmanSettings.LoadSettings();
+		this.remoteTools = [];
+		for (const mcpTool of settings.mcpTools ?? []) {
 			const mcp = createMCPTool(mcpTool);
 			try {
 				await mcp.connect();
 				const tools = await mcp.createTools();
-				remoteTools.push(...tools);
+				this.remoteTools.push(...tools);
 				loggingProvider.logInfo(
 					`MCP: ${mcp.getName()} added ${tools.length} tools`,
 				);
@@ -133,24 +137,6 @@ export class WingmanAgent {
 				loggingProvider.logError(`MCP tool: ${mcp.getName()} - failed: ${e}`);
 			}
 		}
-
-		this.tools = [
-			createCommandExecuteTool(this.workspace),
-			createReadFileTool(this.workspace, this.codeParser),
-			createListDirectoryTool(this.workspace),
-			createWriteFileTool(this.workspace),
-			createResearchTool(this.workspace, this.aiProvider),
-			...remoteTools,
-		];
-
-		this.agent = createReactAgent({
-			llm: this.aiProvider.getModel(),
-			tools: this.tools,
-			stateSchema: GraphAnnotation,
-			//@ts-expect-error
-			prompt: this.preparePrompt,
-			checkpointer: this.checkpointer,
-		});
 	}
 
 	/**
@@ -433,6 +419,8 @@ export class WingmanAgent {
 		state: GraphStateAnnotation,
 		config: RunnableConfig,
 	) => {
+		const settings = await wingmanSettings.LoadSettings();
+
 		return [
 			{
 				role: "system",
@@ -498,15 +486,15 @@ When suggesting technologies for projects, consider these options based on speci
 - **Type Safety**: TypeScript for improved developer experience and IDE integration
 - **Styling**: Tailwindcss for styling
 - **Deployment**: Zephyr Cloud with appropriate build tool plugins 
-	- vite-plugin-zephyr, version 0.0.35
-	- zephyr-rspack-plugin, version 0.0.35
+	- vite-plugin-zephyr, version 0.0.36
+	- zephyr-rspack-plugin, version 0.0.36
 - **State Management**: Jotai
 - **Testing**: Vitest for unit tests, Playwright for E2E testing
 
 # UI/UX Skills
 You are a master at UX, when you write frontend code make the UI mind blowing!
 
-${this.settings.validationSettings?.validationCommand ? `# Validating changes\nThe user has provided this command to execute in order to validate changes: ${this.settings.validationSettings.validationCommand}` : ""}
+${settings.validationSettings?.validationCommand ? `# Validating changes\nThe user has provided this command to execute in order to validate changes: ${settings.validationSettings.validationCommand}` : ""}
 
 # Zephyr Cloud Integration
 Zephyr Cloud is a cloud platform that is easy to integrate
@@ -585,6 +573,27 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 			this.events = [];
 			controller?.abort();
 			controller = new AbortController();
+
+			const settings = await wingmanSettings.LoadSettings();
+			const aiProvider = CreateAIProvider(settings, loggingProvider);
+			this.tools = [
+				createCommandExecuteTool(this.workspace),
+				createReadFileTool(this.workspace, this.codeParser),
+				createListDirectoryTool(this.workspace),
+				createWriteFileTool(this.workspace),
+				createResearchTool(this.workspace, aiProvider),
+				...this.remoteTools,
+			];
+
+			this.agent = createReactAgent({
+				llm: aiProvider.getModel(),
+				tools: this.tools,
+				stateSchema: GraphAnnotation,
+				//@ts-expect-error
+				prompt: this.preparePrompt,
+				checkpointer: this.checkpointer,
+			});
+
 			const config = {
 				configurable: { thread_id: request.threadId },
 				signal: controller.signal,
@@ -623,8 +632,8 @@ Contents: ${request.context.text}`,
 				text: `${request.input}
 
 ${(() => {
-	const anthropicSettings = this.settings.providerSettings.Anthropic;
-	if (!(this.aiProvider instanceof Anthropic) || !anthropicSettings) return "";
+	const anthropicSettings = settings.providerSettings.Anthropic;
+	if (!(aiProvider instanceof Anthropic) || !anthropicSettings) return "";
 
 	const chatModel = anthropicSettings.chatModel;
 	if (chatModel?.startsWith("claude-3-7") && !anthropicSettings.sparkMode) {
@@ -636,14 +645,11 @@ ${(() => {
 
 ${(() => {
 	const openAI =
-		this.settings.providerSettings.OpenAI ||
-		this.settings.providerSettings.AzureAI;
+		settings.providerSettings.OpenAI || settings.providerSettings.AzureAI;
 	if (!openAI) return "";
 
 	// Check if the provider is either OpenAI or AzureAI
-	if (
-		!(this.aiProvider instanceof OpenAI || this.aiProvider instanceof AzureAI)
-	)
+	if (!(aiProvider instanceof OpenAI || aiProvider instanceof AzureAI))
 		return "";
 
 	const chatModel = openAI.chatModel;
@@ -792,15 +798,16 @@ ${(() => {
 		const state = await this.agent?.getState({
 			configurable: { thread_id: threadId },
 		});
+		const graphState = state?.values as GraphStateAnnotation;
+
+		const settings = await wingmanSettings.LoadSettings();
+		const aiProvider = CreateAIProvider(settings, loggingProvider);
 		const trimmedMessages = await trimMessages(
-			state?.values,
-			this.aiProvider.getModel(),
+			graphState,
+			aiProvider.getModel(),
 		);
 
-		if (
-			trimmedMessages.length !==
-			(state?.values as GraphStateAnnotation).messages.length
-		) {
+		if (trimmedMessages.length !== graphState.messages.length) {
 			await this.agent?.updateState(
 				{ configurable: { thread_id: threadId } },
 				{
@@ -809,10 +816,16 @@ ${(() => {
 			);
 		}
 
+		const diagnosticResults =
+			await this.diagnosticsRetriever.getFileDiagnostics(
+				graphState.files.map((f) => f.path),
+			);
+
 		yield {
 			step: "composer-done",
 			events: this.events,
 			threadId,
+			diagnostics: diagnosticResults,
 		} satisfies ComposerResponse;
 	}
 }

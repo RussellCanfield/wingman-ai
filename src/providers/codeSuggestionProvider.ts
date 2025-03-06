@@ -19,17 +19,11 @@ import {
 import NodeCache from "node-cache";
 import { loggingProvider } from "./loggingProvider";
 import { EVENT_CODE_COMPLETE, telemetry } from "./telemetryProvider";
+import { wingmanSettings } from "../service/settings";
+import { CreateAIProvider } from "../service/utils/models";
 
 export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 	public static readonly selector = supportedLanguages;
-	//private cacheManager: CacheManager;
-
-	constructor(
-		private readonly _aiProvider: AIProvider | AIStreamProvider,
-		private readonly _settings: Settings,
-	) {
-		//this.cacheManager = new CacheManager();
-	}
 
 	async provideInlineCompletionItems(
 		document: TextDocument,
@@ -37,7 +31,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		context: InlineCompletionContext,
 		token: CancellationToken,
 	) {
-		if (!this._settings.interactionSettings.codeCompletionEnabled) {
+		const settings = await wingmanSettings.LoadSettings();
+		if (!settings.interactionSettings.codeCompletionEnabled) {
 			return [];
 		}
 
@@ -47,7 +42,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		const [prefix, suffix] = getContentWindow(
 			document,
 			position,
-			this._settings.interactionSettings.codeContextWindow,
+			settings.interactionSettings.codeContextWindow,
 		);
 
 		const types = await getSymbolsFromOpenFiles();
@@ -74,7 +69,8 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				prefix,
 				abort.signal,
 				suffix,
-				this._settings.interactionSettings.codeStreaming,
+				settings.interactionSettings.codeStreaming,
+				settings,
 				types,
 			);
 		} catch {
@@ -88,6 +84,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		signal: AbortSignal,
 		suffix: string,
 		streaming: boolean,
+		settings: Settings,
 		additionalContext?: string,
 	): Promise<InlineCompletionItem[]> {
 		try {
@@ -118,12 +115,17 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 
 			let result: string;
 
-			if ("codeCompleteStream" in this._aiProvider && streaming) {
-				result = await (
-					this._aiProvider as AIStreamProvider
-				).codeCompleteStream(prefix, suffix, signal, additionalContext);
+			const aiProvider = CreateAIProvider(settings, loggingProvider);
+
+			if ("codeCompleteStream" in aiProvider && streaming) {
+				result = await (aiProvider as AIStreamProvider).codeCompleteStream(
+					prefix,
+					suffix,
+					signal,
+					additionalContext,
+				);
 			} else {
-				result = await this._aiProvider.codeComplete(
+				result = await aiProvider.codeComplete(
 					prefix,
 					suffix,
 					signal,
@@ -155,10 +157,10 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			try {
 				telemetry.sendEvent(EVENT_CODE_COMPLETE, {
 					language: document.languageId,
-					aiProvider: this._settings.aiProvider,
+					aiProvider: settings.aiProvider,
 					model:
-						this._settings.providerSettings[this._settings.aiProvider]
-							?.codeModel || "Unknown",
+						settings.providerSettings[settings.aiProvider]?.codeModel ||
+						"Unknown",
 				});
 			} catch {}
 

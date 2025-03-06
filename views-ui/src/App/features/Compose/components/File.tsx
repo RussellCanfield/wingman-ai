@@ -4,7 +4,7 @@ import { FaUndo } from "react-icons/fa";
 import { GrCheckmark } from "react-icons/gr";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { PiGitDiff } from "react-icons/pi";
-import { Tooltip } from "react-tooltip";
+import { FaRegFileLines } from "react-icons/fa6";
 import { useComposerContext } from "../../../context/composerContext";
 import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../../utilities/files";
 
@@ -33,6 +33,7 @@ export const ChatArtifact = ({
         <div className={`rounded-lg overflow-hidden shadow-lg mb-4 mt-4 ${cssClasses}`}>
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-start relative">
+                    <FaRegFileLines size={20} className="ml-3" />
                     <h4
                         className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm group"
                         data-tooltip-id={`${file.path}-tooltip`}

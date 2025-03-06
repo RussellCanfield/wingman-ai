@@ -23,7 +23,7 @@ export const FileChips: React.FC<FileChipsProps> = ({
 	}
 
 	return (
-		<div className="flex flex-wrap items-center p-2">
+		<div className="flex flex-wrap items-center">
 			{chips.map((chip, index) => (
 				<span
 					key={chip.path}

@@ -29,6 +29,7 @@ export type ComposerResponse = {
 	step: ComposerSteps;
 	events: StreamEvent[];
 	threadId: string;
+	diagnostics?: FileDiagnostic[];
 };
 
 export type DiagnosticRange = {
@@ -61,9 +62,7 @@ export interface StreamEvent {
 
 export type ComposerSteps =
 	| "composer-events"
-	| "composer-message-stream"
-	| "composer-message-stream-finish"
-	| "composer-message"
+	| "composer-diagnostics"
 	| "composer-error"
 	| "composer-done";
 

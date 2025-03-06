@@ -25,7 +25,6 @@ import {
 	EVENT_COMPOSE_STARTED,
 	telemetry,
 } from "../providers/telemetryProvider";
-import type { Workspace } from "../service/workspace";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
 let client: LanguageClient;
@@ -37,7 +36,6 @@ export class LSPClient {
 	activate = async (
 		context: ExtensionContext,
 		settings: Settings | undefined,
-		workspace: Workspace,
 	) => {
 		this.settings = settings;
 		const serverModule = vscode.Uri.joinPath(
@@ -68,7 +66,6 @@ export class LSPClient {
 				maxRestartCount: 3,
 			},
 			initializationOptions: {
-				settings,
 				extensionPath: context.extensionPath,
 				storagePath: context.globalStorageUri.fsPath,
 			},
@@ -259,8 +256,8 @@ export class LSPClient {
 		return client.sendRequest("wingman/cancelComposer");
 	};
 
-	updateMCPTools = async () => {
-		return client.sendRequest("wingman/MCPUpdate");
+	updateSettings = async () => {
+		return client.sendRequest("wingman/updateSettings");
 	};
 
 	deactivate = (): Thenable<void> | undefined => {

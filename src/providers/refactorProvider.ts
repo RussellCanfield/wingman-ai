@@ -7,22 +7,21 @@ import {
 } from "./utilities";
 import { eventEmitter } from "../events/eventEmitter";
 import { EVENT_REFACTOR, telemetry } from "./telemetryProvider";
+import { wingmanSettings } from "../service/settings";
+import { CreateAIProvider } from "../service/utils/models";
+import { loggingProvider } from "./loggingProvider";
 
 // biome-ignore lint/style/useConst: <explanation>
 let abortController = new AbortController();
 
 export class RefactorProvider implements vscode.CodeActionProvider {
 	public static readonly command = "wingmanai.refactorcode";
-
 	public static readonly selector = supportedLanguages;
-
 	public static readonly providedCodeActionKinds = [
 		vscode.CodeActionKind.Refactor,
 	];
 
-	constructor(private readonly _aiProvider: AIProvider) {}
-
-	provideCodeActions(
+	async provideCodeActions(
 		document: vscode.TextDocument,
 		range: vscode.Range | vscode.Selection,
 		context: vscode.CodeActionContext,
@@ -43,7 +42,7 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 			arguments: [
 				document,
 				range,
-				this._aiProvider,
+				CreateAIProvider(await wingmanSettings.LoadSettings(), loggingProvider),
 				vscode.window.activeTextEditor,
 			],
 		};

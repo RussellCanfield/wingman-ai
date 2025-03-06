@@ -10,7 +10,7 @@ import lspClient from "./client/index";
 import { CreateAIProvider } from "./service/utils/models";
 import { loggingProvider } from "./providers/loggingProvider";
 import { eventEmitter } from "./events/eventEmitter";
-import { LoadSettings } from "./service/settings";
+import { wingmanSettings } from "./service/settings";
 import { DiffViewProvider } from "./providers/diffViewProvider";
 import {
 	EVENT_AI_PROVIDER_VALIDATION_FAILED,
@@ -29,9 +29,10 @@ let diffViewProvider: DiffViewProvider;
 let chatViewProvider: ChatViewProvider;
 let configViewProvider: ConfigViewProvider;
 let threadViewProvider: ThreadViewProvider;
+let codeSuggestionDispoable: vscode.Disposable;
 
 export async function activate(context: vscode.ExtensionContext) {
-	const settings = await LoadSettings();
+	const settings = await wingmanSettings.LoadSettings();
 	if (
 		!vscode.workspace.workspaceFolders ||
 		vscode.workspace.workspaceFolders.length === 0
@@ -40,6 +41,17 @@ export async function activate(context: vscode.ExtensionContext) {
 			"Wingman requires an open workspace to function.",
 		);
 		return;
+	}
+
+	if (wingmanSettings.isDefault) {
+		const result = await vscode.window.showErrorMessage(
+			"Wingman has not yet been configured.",
+			"Open Settings",
+		);
+
+		if (result === "Open Settings") {
+			vscode.commands.executeCommand(ConfigViewProvider.showConfigCommand);
+		}
 	}
 
 	try {
@@ -95,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.workspaceFolders?.[0].uri.fsPath,
 	);
 
-	await lspClient.activate(context, settings, workspace);
+	await lspClient.activate(context, settings);
 
 	try {
 		telemetry.sendEvent(EVENT_EXTENSION_LOADED, {
@@ -138,11 +150,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	diffViewProvider = new DiffViewProvider(context, lspClient);
 	threadViewProvider = new ThreadViewProvider(context);
 	statusBarProvider = new ActivityStatusBar();
-	configViewProvider = new ConfigViewProvider(
-		context.extensionUri,
-		settings,
-		lspClient,
-	);
+	configViewProvider = new ConfigViewProvider(context.extensionUri, lspClient);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -190,18 +198,36 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	if (settings.interactionSettings!.codeCompletionEnabled) {
-		context.subscriptions.push(
+		codeSuggestionDispoable =
 			vscode.languages.registerInlineCompletionItemProvider(
 				CodeSuggestionProvider.selector,
-				new CodeSuggestionProvider(modelProvider!, settings),
-			),
-		);
+				new CodeSuggestionProvider(),
+			);
+		context.subscriptions.push(codeSuggestionDispoable);
 	}
+	wingmanSettings.registerOnChangeHandler((settings) => {
+		if (settings.interactionSettings!.codeCompletionEnabled) {
+			codeSuggestionDispoable =
+				vscode.languages.registerInlineCompletionItemProvider(
+					CodeSuggestionProvider.selector,
+					new CodeSuggestionProvider(),
+				);
+			context.subscriptions.push(codeSuggestionDispoable);
+		} else {
+			const index = context.subscriptions.findIndex(
+				(subscription) => subscription === codeSuggestionDispoable,
+			);
+
+			if (index !== -1) {
+				context.subscriptions.splice(index, 1)[0].dispose();
+			}
+		}
+	});
 
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
 			RefactorProvider.selector,
-			new RefactorProvider(modelProvider!),
+			new RefactorProvider(),
 			{
 				providedCodeActionKinds: RefactorProvider.providedCodeActionKinds,
 			},
@@ -229,44 +255,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	);
 
-	const diagnosticsListener = vscode.languages.onDidChangeDiagnostics(
-		(event) => {
-			for (const uri of event.uris) {
-				// Get all diagnostics for this file
-				const allDiagnostics = vscode.languages.getDiagnostics(uri);
-
-				// Filter for the specific types you're interested in
-				const importIssues = allDiagnostics.filter(
-					(diag) =>
-						diag.message.includes("import") ||
-						diag.message.includes("Cannot find module"),
-				);
-
-				const lintingErrors = allDiagnostics.filter(
-					(diag) =>
-						// Filter for your specific linting errors of interest
-						diag.source === "eslint" ||
-						diag.source === "tslint" ||
-						diag.source === "biome",
-				);
-
-				// Now you can track or process these filtered diagnostics
-				console.log(
-					`File ${uri.toString()} has ${importIssues.length} import issues and ${lintingErrors.length} linting errors`,
-				);
-
-				// You can also add your own diagnostics if needed
-				// myDiagnostics.set(uri, [...yourCustomDiagnostics]);
-			}
-		},
-	);
-
-	context.subscriptions.push(diagnosticsListener);
-
-	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
-		modelProvider!,
-		settings,
-	);
+	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider();
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			HotKeyCodeSuggestionProvider.command,

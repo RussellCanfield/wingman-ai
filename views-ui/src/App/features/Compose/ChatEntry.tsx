@@ -19,6 +19,7 @@ import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoF
 import type { FileMetadata } from "@shared/types/Message";
 import { PiGitDiff } from "react-icons/pi";
 import { Tooltip } from "react-tooltip";
+import { FaRegFileLines } from "react-icons/fa6";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -151,8 +152,9 @@ const ChatEntry = ({
 
 							return (
 								<div key={f.path} className="flex items-center justify-between gap-4 w-full hover:bg-stone-800/50">
-									<div className="flex flex-1 min-w-0">
+									<div className="flex flex-1 min-w-0 items-center">
 										<Tooltip id={`${f.path}-tooltip`} />
+										<FaRegFileLines size={20} className="ml-3" />
 										<h4
 											className="m-0 p-3 font-medium truncate cursor-pointer hover:underline transition-all text-sm group"
 											data-tooltip-id={`${f.path}-tooltip`}

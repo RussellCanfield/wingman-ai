@@ -8,14 +8,13 @@ import type { AIProvider, AIStreamProvider } from "../service/base";
 import { getContentWindow } from "../service/utils/contentWindow";
 import type { Settings } from "@shared/types/Settings";
 import { EVENT_CODE_COMPLETE_HOTKEY, telemetry } from "./telemetryProvider";
+import { wingmanSettings } from "../service/settings";
+import { CreateAIProvider } from "../service/utils/models";
+import { loggingProvider } from "./loggingProvider";
 
 export class HotKeyCodeSuggestionProvider
 	implements vscode.CompletionItemProvider
 {
-	constructor(
-		private readonly _aiProvider: AIProvider | AIStreamProvider,
-		private readonly _settings: Settings,
-	) {}
 	static provider: HotKeyCodeSuggestionProvider | null = null;
 	async provideCompletionItems(
 		document: vscode.TextDocument,
@@ -39,10 +38,13 @@ export class HotKeyCodeSuggestionProvider
 			return [];
 		}
 
+		const settings = await wingmanSettings.LoadSettings();
+		const aiProvider = CreateAIProvider(settings, loggingProvider);
+
 		const [prefix, suffix] = getContentWindow(
 			document,
 			position,
-			this._settings.interactionSettings.codeContextWindow,
+			settings.interactionSettings.codeContextWindow,
 		);
 		//get the biginning of the last line in prefix
 		const lastLineStart = prefix.lastIndexOf("\n");
@@ -53,13 +55,13 @@ export class HotKeyCodeSuggestionProvider
 			try {
 				telemetry.sendEvent(EVENT_CODE_COMPLETE_HOTKEY, {
 					language: document.languageId,
-					aiProvider: this._settings.aiProvider,
+					aiProvider: settings.aiProvider,
 					model:
-						this._settings.providerSettings[this._settings.aiProvider]
-							?.codeModel || "Unknown",
+						settings.providerSettings[settings.aiProvider]?.codeModel ||
+						"Unknown",
 				});
 			} catch {}
-			const response = await this._aiProvider.codeComplete(
+			const response = await aiProvider.codeComplete(
 				prefix,
 				suffix,
 				abort.signal,

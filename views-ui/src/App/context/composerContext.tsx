@@ -1,4 +1,4 @@
-import type { ComposerMessage, ComposerResponse, FileSearchResult, GraphState } from "@shared/types/Composer";
+import type { ComposerMessage, ComposerResponse, FileDiagnostic, FileSearchResult, GraphState } from "@shared/types/Composer";
 import type { AppMessage } from "@shared/types/Message";
 import type { AppState, Thread } from "@shared/types/Settings";
 import type { AddMessageToThreadEvent, RenameThreadEvent } from '@shared/types/Events';
@@ -19,6 +19,7 @@ interface ComposerContextType {
   // Thread management
   threads: Thread[];
   activeThread: Thread | null;
+  fileDiagnostics: FileDiagnostic[];
   createThread: (title: string) => void;
   switchThread: (threadId: string) => void;
   deleteThread: (threadId: string) => void;
@@ -39,6 +40,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [activeMessage, setActiveMessage] = useState<ComposerMessage | undefined>();
   const [chips, setChips] = useState<FileSearchResult[]>([]);
+  const [fileDiagnostics, setFileDiagnostics] = useState<FileDiagnostic[]>([]);
 
   // Thread management state
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -183,7 +185,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const handleComposerEvent = (value: ComposerResponse) => {
-    const { step, events, threadId } = value;
+    const { step, events, threadId, diagnostics } = value;
 
     switch (step) {
       case "composer-done": {
@@ -195,6 +197,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           loading: false
         };
 
+        setFileDiagnostics(diagnostics ?? []);
         setComposerMessages(prevMessages => [
           ...prevMessages,
           newMessage
@@ -308,6 +311,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       setActiveMessage,
       activeFiles: chips,
       setActiveFiles: setChips,
+      fileDiagnostics: fileDiagnostics ?? [],
       // Thread management
       threads,
       activeThread,

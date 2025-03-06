@@ -22,20 +22,13 @@ import {
 	type SymbolRetriever,
 } from "./retriever";
 import { emptyCheckpoint } from "@langchain/langgraph";
-import type { AIProvider } from "../service/base";
-import type { Settings } from "@shared/types/Settings";
-import { CreateAIProvider } from "../service/utils/models";
 import type { ComposerRequest } from "@shared/types/Composer";
 import { loggingProvider } from "./loggingProvider";
-import { WebCrawler } from "./web";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer";
 import { PartitionedFileSystemSaver } from "../composer/checkpointer";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
-
-let memory: PartitionedFileSystemSaver;
-let modelProvider: AIProvider;
-let settings: Settings;
+import { wingmanSettings } from "../service/settings";
 
 export type CustomRange = {
 	start: { line: number; character: number };
@@ -70,6 +63,7 @@ export class LSPServer {
 	connection: ReturnType<typeof createConnection> | undefined;
 	composer: WingmanAgent | undefined;
 	documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
+	checkPointer: PartitionedFileSystemSaver | undefined;
 
 	constructor() {
 		// Create a connection for the server, using Node's IPC as a transport.
@@ -82,7 +76,6 @@ export class LSPServer {
 	}
 
 	private postInitialize = async () => {
-		modelProvider = CreateAIProvider(settings, loggingProvider);
 		const workspaceFolder = this.workspaceFolders[0];
 
 		loggingProvider.logInfo(
@@ -92,13 +85,15 @@ export class LSPServer {
 		this.codeParser = new CodeParser(workspaceFolder, this.symbolRetriever);
 		await this.codeParser.initialize();
 
-		memory = new PartitionedFileSystemSaver(this.getPersistancePath());
+		this.checkPointer = new PartitionedFileSystemSaver(
+			this.getPersistancePath(),
+		);
+
 		this.composer = new WingmanAgent(
-			modelProvider,
 			this.workspaceFolders[0],
-			settings,
-			memory,
+			this.checkPointer,
 			this.codeParser,
+			this.diagnosticsRetriever,
 		);
 		await this.composer.initialize();
 	};
@@ -119,7 +114,7 @@ export class LSPServer {
 		return targetPath;
 	};
 
-	private initialize = () => {
+	private initialize = async () => {
 		let hasConfigurationCapability = false;
 		let hasWorkspaceFolderCapability = false;
 
@@ -128,16 +123,6 @@ export class LSPServer {
 				this.workspaceFolders = params.workspaceFolders.map(
 					(folder) => URI.parse(folder.uri).fsPath,
 				);
-			}
-
-			const initializationOptions = params.initializationOptions;
-
-			if (initializationOptions) {
-				settings = initializationOptions.settings as Settings;
-
-				if (!settings) {
-					throw new Error("Settings not found");
-				}
 			}
 
 			this.connection?.console.log(
@@ -210,8 +195,8 @@ export class LSPServer {
 
 		this.connection?.onShutdown(() => {
 			loggingProvider.logInfo("LSP Server is shutting down.");
-			if (memory) {
-				memory.cleanup();
+			if (this.checkPointer) {
+				this.checkPointer.cleanup();
 			}
 		});
 
@@ -293,12 +278,14 @@ export class LSPServer {
 		this.connection?.onRequest(
 			"wingman/clearChatHistory",
 			async (threadId: string) => {
-				const existingThreadData = await memory.get({
+				if (!this.checkPointer) return;
+
+				const existingThreadData = await this.checkPointer.get({
 					configurable: { thread_id: threadId },
 				});
 
 				if (existingThreadData) {
-					await memory.put(
+					await this.checkPointer.put(
 						{ configurable: { thread_id: threadId } },
 						emptyCheckpoint(),
 						{
@@ -329,7 +316,8 @@ export class LSPServer {
 			},
 		);
 
-		this.connection?.onRequest("wingman/MCPUpdate", async () => {
+		this.connection?.onRequest("wingman/updateSettings", async () => {
+			await wingmanSettings.LoadSettings(true);
 			await this.composer?.initialize();
 		});
 
@@ -360,33 +348,6 @@ export class LSPServer {
 				return this.composer?.deleteThread(threadId);
 			},
 		);
-
-		this.connection?.onRequest("wingman/webSearch", async (input: string) => {
-			const crawler = new WebCrawler(modelProvider);
-
-			try {
-				// Start the generator
-				const generator = crawler.searchWeb(input);
-
-				// Stream each chunk back to the client
-				for await (const chunk of generator) {
-					await this.connection?.sendNotification("wingman/webSearchProgress", {
-						type: "progress",
-						content: chunk,
-					});
-				}
-				// Signal completion
-				await this.connection?.sendNotification("wingman/webSearchProgress", {
-					type: "complete",
-				});
-			} catch (error) {
-				await this.connection?.sendNotification("wingman/webSearchProgress", {
-					type: "error",
-					content:
-						error instanceof Error ? error.message : "Unknown error occurred",
-				});
-			}
-		});
 	};
 }
 

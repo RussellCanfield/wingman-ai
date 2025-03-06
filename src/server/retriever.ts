@@ -36,7 +36,7 @@ export const createDiagnosticsRetriever = (
 			const diagnostics =
 				(await connection.sendRequest<FileDiagnostic[]>(
 					"wingman/provideFileDiagnostics",
-					{ filePaths },
+					filePaths,
 				)) || [];
 			return diagnostics;
 		},

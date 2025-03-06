@@ -3,7 +3,7 @@ import fs from "node:fs";
 import type { AppMessage } from "@shared/types/Message";
 import type { MCPToolConfig, Settings } from "@shared/types/Settings";
 import { addNoneAttributeToLink } from "./utilities";
-import { SaveSettings } from "../service/settings";
+import { wingmanSettings } from "../service/settings";
 import { createMCPTool } from "../composer/tools/mcpTools";
 import type { LSPClient } from "../client";
 
@@ -17,7 +17,6 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
-		private readonly _settings: Settings,
 		private readonly _lspClient: LSPClient,
 	) {}
 
@@ -95,7 +94,6 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						}
 					}
 
-					await this._lspClient.updateMCPTools();
 					settingsPanel.webview.postMessage({
 						command: "tool-verified",
 						value: {
@@ -107,7 +105,11 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					break;
 				}
 				case "saveSettings":
-					SaveSettings(value as Settings);
+					wingmanSettings.SaveSettings(value as Settings);
+					await this._lspClient.updateSettings();
+					settingsPanel.webview.postMessage({
+						command: "settingsSaved",
+					});
 					break;
 				case "reloadWindow":
 					await vscode.commands.executeCommand("workbench.action.reloadWindow");
@@ -146,7 +148,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private init = async (value: unknown): Promise<string> => {
-		const settings = structuredClone(this._settings);
+		const initSettings = await wingmanSettings.LoadSettings();
+		const settings = structuredClone(initSettings);
 
 		try {
 			const modelsResponse = await fetch(
