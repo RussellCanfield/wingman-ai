@@ -1,4 +1,4 @@
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { FileMetadata } from "@shared/types/Message";
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
 import { FaUndo } from "react-icons/fa";
 import { GrCheckmark } from "react-icons/gr";

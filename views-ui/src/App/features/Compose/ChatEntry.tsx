@@ -4,7 +4,7 @@ import {
 	prism,
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
-import type { ComposerMessage } from "@shared/types/v2/Composer";
+import type { ComposerMessage } from "@shared/types/Composer";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
 import { MessageWithMarkdown } from "./components/Markdown";
@@ -16,7 +16,7 @@ import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
 import { useComposerContext } from "../../context/composerContext";
 import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../utilities/files";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { FileMetadata } from "@shared/types/Message";
 import { PiGitDiff } from "react-icons/pi";
 import { Tooltip } from "react-tooltip";
 

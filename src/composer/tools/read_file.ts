@@ -2,8 +2,8 @@ import { tool } from "@langchain/core/tools";
 import fs, { promises } from "node:fs";
 import path from "node:path";
 import { baseFileSchema } from "./schemas";
-import type { CodeParser } from "../../../server/files/parser";
-import { getTextDocumentFromPath } from "../../../server/files/utils";
+import type { CodeParser } from "../../server/files/parser";
+import { getTextDocumentFromPath } from "../../server/files/utils";
 
 export const readFileSchema = baseFileSchema.extend({
 	// Additional read-specific properties would go here

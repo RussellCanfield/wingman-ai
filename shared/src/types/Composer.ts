@@ -1,26 +1,10 @@
-import type { CodeContextDetails } from "../Message";
-import type { BaseMessage, FileMetadata } from "./Message";
+import type { CodeContextDetails } from "./Message";
+import type { FileMetadata } from "./Message";
 
 export type DiffViewCommand = {
 	file: FileMetadata;
 	threadId: string;
 	isDarkTheme?: boolean;
-};
-
-export type IndexStats = {
-	exists: boolean;
-	processing: boolean;
-	files: string[];
-};
-
-export type ManualStep = {
-	description: string;
-	command?: string;
-};
-
-export type Dependencies = {
-	response?: string;
-	steps?: ManualStep[];
 };
 
 export type ComposerRole = "assistant" | "user";
@@ -34,7 +18,7 @@ export interface ComposerChatMessage {
 }
 
 export interface GraphState {
-	messages: BaseMessage[];
+	messages: ComposerMessage[];
 	workspace: string;
 	image?: ComposerImage;
 	context?: CodeContextDetails;
@@ -45,6 +29,23 @@ export type ComposerResponse = {
 	step: ComposerSteps;
 	events: StreamEvent[];
 	threadId: string;
+};
+
+export type DiagnosticRange = {
+	line: number;
+	character: number;
+};
+
+export type DiagnosticResult = {
+	start: DiagnosticRange;
+	end: DiagnosticRange;
+	message: string;
+};
+
+export type FileDiagnostic = {
+	path: string;
+	importErrors: DiagnosticResult[];
+	lintErrors: DiagnosticResult[];
 };
 
 export interface StreamEvent {
@@ -63,12 +64,8 @@ export type ComposerSteps =
 	| "composer-message-stream"
 	| "composer-message-stream-finish"
 	| "composer-message"
-	| "composer-replace"
-	| "composer-files"
 	| "composer-error"
-	| "composer-done"
-	| "composer-error"
-	| "composer-files-done";
+	| "composer-done";
 
 export interface ComposerMessage {
 	from: ComposerRole;

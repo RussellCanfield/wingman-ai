@@ -7,8 +7,8 @@ import {
 import type { AppMessage } from "@shared/types/Message";
 import type { AIProvider } from "../service/base";
 import type { LSPClient } from "../client";
-import type { DiffViewCommand } from "@shared/types/v2/Composer";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { DiffViewCommand } from "@shared/types/Composer";
+import type { FileMetadata } from "@shared/types/Message";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();

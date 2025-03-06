@@ -229,6 +229,40 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	);
 
+	const diagnosticsListener = vscode.languages.onDidChangeDiagnostics(
+		(event) => {
+			for (const uri of event.uris) {
+				// Get all diagnostics for this file
+				const allDiagnostics = vscode.languages.getDiagnostics(uri);
+
+				// Filter for the specific types you're interested in
+				const importIssues = allDiagnostics.filter(
+					(diag) =>
+						diag.message.includes("import") ||
+						diag.message.includes("Cannot find module"),
+				);
+
+				const lintingErrors = allDiagnostics.filter(
+					(diag) =>
+						// Filter for your specific linting errors of interest
+						diag.source === "eslint" ||
+						diag.source === "tslint" ||
+						diag.source === "biome",
+				);
+
+				// Now you can track or process these filtered diagnostics
+				console.log(
+					`File ${uri.toString()} has ${importIssues.length} import issues and ${lintingErrors.length} linting errors`,
+				);
+
+				// You can also add your own diagnostics if needed
+				// myDiagnostics.set(uri, [...yourCustomDiagnostics]);
+			}
+		},
+	);
+
+	context.subscriptions.push(diagnosticsListener);
+
 	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider(
 		modelProvider!,
 		settings,

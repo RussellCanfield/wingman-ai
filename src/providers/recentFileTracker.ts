@@ -1,4 +1,4 @@
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { FileMetadata } from "@shared/types/Message";
 import { v4 as uuidv4 } from "uuid";
 import * as vscode from "vscode";
 

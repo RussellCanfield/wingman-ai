@@ -2,7 +2,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { FaPlay, FaStopCircle, FaPaperclip } from "react-icons/fa";
 import type { AppMessage } from "@shared/types/Message";
-import type { FileSearchResult } from "@shared/types/v2/Composer";
+import type { FileSearchResult } from "@shared/types/Composer";
 import { useAutoFocus } from "../../../hooks/useAutoFocus";
 import { useOnScreen } from "../../../hooks/useOnScreen";
 import { handleAutoResize } from "../../../utilities/utils";

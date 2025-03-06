@@ -1,4 +1,4 @@
-import type { StreamEvent } from "@shared/types/v2/Composer";
+import type { StreamEvent } from "@shared/types/Composer";
 import { useMemo } from "react";
 import {
     AiOutlineLoading3Quarters,
@@ -75,7 +75,7 @@ export const ToolOutput = ({
                     <div className="flex items-center gap-2 overflow-hidden">
                         <BsTools className="text-gray-400/50 flex-shrink-0" size={20} />
                         <div className="overflow-x-auto max-w-full" style={{ scrollbarWidth: 'thin' }}>
-                            <h4 className="m-0 text-base whitespace-nowrap">
+                            <h4 className="m-0 text-base whitespace-nowrap text-gray-400/50">
                                 {displayName} {ToolDetails}
                             </h4>
                         </div>

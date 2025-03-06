@@ -3,76 +3,17 @@ export interface AppMessage {
 	value: unknown;
 }
 
-export type FileModification = {
-	appliedAt: number;
-	offset: number;
-};
-
-export interface FileReviewDetails {
-	file: string;
-	diff?: string;
-	original?: string;
-	current?: string;
-	comments?: CodeReviewComment[];
-	modifications?: FileModification[];
-}
-
-export interface FileDetails {
-	diff: string;
-	file: string;
-}
-
-export type CodeCommentAction = undefined | "remove" | "replace";
-
-export interface CodeReviewComment {
-	startLine: number;
-	endLine: number;
-	action?: CodeCommentAction;
-	body: string;
+export interface FileMetadata {
+	id?: string;
+	description?: string;
+	path: string;
 	code?: string;
+	original?: string;
+	diff?: string;
+	language?: string;
 	accepted?: boolean;
 	rejected?: boolean;
-}
-
-export interface CodeReview {
-	summary: string;
-	fileDiffMap?: Record<string, FileReviewDetails>;
-}
-
-export interface CodeReviewCommand {
-	review: CodeReview;
-	isDarkTheme: boolean;
-}
-
-export type MessageType = "chat" | "code-review" | "commit-msg";
-
-export type ChatMessages = Array<Message | CodeReviewMessage | CommitMessage>;
-export type ChatMessage = Message | CodeReviewMessage;
-
-export interface CommitMessage extends BaseMessage {
-	message: string;
-	type: "commit-msg";
-	threadId?: string;
-}
-
-export interface CodeReviewMessage extends BaseMessage {
-	review: CodeReview;
-	type: "code-review";
-	threadId?: string;
-}
-
-export interface Message extends BaseMessage {
-	context?: CodeContext;
-	from: "assistant" | "user";
-	message: string;
-	type: "chat";
-	threadId?: string;
-}
-
-export interface BaseMessage {
-	loading?: boolean;
-	type?: MessageType;
-	createdAt?: number;
+	lastModified?: number;
 }
 
 export interface CodeContextDetails {
@@ -89,4 +30,4 @@ export interface CodeContext
 	extends Pick<
 		CodeContextDetails,
 		"fileName" | "lineRange" | "workspaceName"
-	> { }
+	> {}

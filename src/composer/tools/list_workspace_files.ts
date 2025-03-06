@@ -1,7 +1,7 @@
 import { tool } from "@langchain/core/tools";
 import path from "node:path";
 import { z } from "zod";
-import { scanDirectory } from "../../utils";
+import { scanDirectory } from "../utils";
 import { baseToolSchema } from "./schemas";
 
 const listDirectorySchema = baseToolSchema.extend({

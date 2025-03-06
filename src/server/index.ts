@@ -15,16 +15,21 @@ import os from "node:os";
 import { URI } from "vscode-uri";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { CodeParser } from "./files/parser";
-import { createSymbolRetriever, type SymbolRetriever } from "./retriever";
+import {
+	createDiagnosticsRetriever,
+	createSymbolRetriever,
+	type DiagnosticRetriever,
+	type SymbolRetriever,
+} from "./retriever";
 import { emptyCheckpoint } from "@langchain/langgraph";
 import type { AIProvider } from "../service/base";
 import type { Settings } from "@shared/types/Settings";
 import { CreateAIProvider } from "../service/utils/models";
-import type { ComposerRequest } from "@shared/types/v2/Composer";
+import type { ComposerRequest } from "@shared/types/Composer";
 import { loggingProvider } from "./loggingProvider";
 import { WebCrawler } from "./web";
 import path from "node:path";
-import { cancelComposer, WingmanAgent } from "../composer/v2/agents";
+import { cancelComposer, WingmanAgent } from "../composer";
 import { PartitionedFileSystemSaver } from "../composer/checkpointer";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
@@ -60,6 +65,7 @@ export class LSPServer {
 	workspaceFolders: string[] = [];
 	codeParser: CodeParser | undefined;
 	symbolRetriever: SymbolRetriever;
+	diagnosticsRetriever: DiagnosticRetriever;
 	documentQueue: TextDocument[] = [];
 	connection: ReturnType<typeof createConnection> | undefined;
 	composer: WingmanAgent | undefined;
@@ -70,6 +76,7 @@ export class LSPServer {
 		// Also include all preview / proposed LSP features.
 		this.connection = createConnection(ProposedFeatures.all);
 		this.symbolRetriever = createSymbolRetriever(this.connection);
+		this.diagnosticsRetriever = createDiagnosticsRetriever(this.connection);
 
 		this.initialize();
 	}

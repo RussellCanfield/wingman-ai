@@ -1,7 +1,7 @@
 import type { Thread, WorkspaceSettings } from "@shared/types/Settings";
 import type { ExtensionContext } from "vscode";
 import { v4 as uuidv4 } from "uuid";
-import type { ComposerMessage } from "@shared/types/v2/Composer";
+import type { ComposerMessage } from "@shared/types/Composer";
 
 const defaultSettings: WorkspaceSettings = {
 	threads: [],

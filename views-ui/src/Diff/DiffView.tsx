@@ -4,12 +4,12 @@ import {
 	vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { memo, type PropsWithChildren } from "react";
-import type { DiffViewCommand } from "@shared/types/v2/Composer";
+import type { DiffViewCommand } from "@shared/types/Composer";
 import { FaCheckCircle } from "react-icons/fa";
 import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
 import { FaXmark } from "react-icons/fa6";
 import { vscode } from "./utilities/vscode";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { FileMetadata } from "@shared/types/Message";
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	return (

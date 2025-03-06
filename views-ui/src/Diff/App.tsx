@@ -1,4 +1,4 @@
-import type { DiffViewCommand } from "@shared/types/v2/Composer";
+import type { DiffViewCommand } from "@shared/types/Composer";
 import type { AppMessage } from "@shared/types/Message";
 import { useEffect, useState } from "react";
 import DiffView from "./DiffView";

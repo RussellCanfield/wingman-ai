@@ -345,7 +345,18 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 			// Data is stored in a file
 			if (fs.existsSync(data)) {
 				const fileData = fs.readFileSync(data);
-				return is_binary ? fileData : fileData.toString("utf8");
+				// Try to detect if this is a JSON string to avoid binary misinterpretation
+				if (!is_binary) {
+					try {
+						// Test if it's valid JSON by parsing
+						JSON.parse(fileData.toString("utf8"));
+						return fileData.toString("utf8");
+					} catch (e) {
+						// If parsing fails, treat as binary
+						return fileData;
+					}
+				}
+				return fileData; // Return as buffer for binary data
 			}
 			throw new Error(`File not found: ${data}`);
 		}
@@ -512,46 +523,55 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 			}
 		}
 
-		// Deserialize checkpoint and add pending_sends
-		const deserializedCheckpoint = this.deserializeData(
-			record.checkpoint,
-			record.is_binary,
-			record.is_file,
-		);
-		const checkpointObj = {
-			...(await this.serde.loadsTyped(
+		try {
+			// Deserialize checkpoint and add pending_sends
+			const deserializedCheckpoint = this.deserializeData(
+				record.checkpoint,
+				record.is_binary,
+				record.is_file,
+			);
+			const checkpointObj = {
+				...(await this.serde.loadsTyped(
+					record.type ?? "json",
+					deserializedCheckpoint,
+				)),
+				pending_sends: pendingSends,
+			} as Checkpoint;
+
+			// Deserialize metadata
+			const deserializedMetadata = this.deserializeData(
+				record.metadata,
+				record.is_binary,
+			);
+			const metadataObj = (await this.serde.loadsTyped(
 				record.type ?? "json",
-				deserializedCheckpoint,
-			)),
-			pending_sends: pendingSends,
-		} as Checkpoint;
+				deserializedMetadata,
+			)) as CheckpointMetadata;
 
-		// Deserialize metadata
-		const deserializedMetadata = this.deserializeData(
-			record.metadata,
-			record.is_binary,
-		);
-		const metadataObj = (await this.serde.loadsTyped(
-			record.type ?? "json",
-			deserializedMetadata,
-		)) as CheckpointMetadata;
-
-		// Construct the checkpoint tuple
-		return {
-			checkpoint: checkpointObj,
-			config: finalConfig,
-			metadata: metadataObj,
-			parentConfig: record.parent_checkpoint_id
-				? {
-						configurable: {
-							thread_id: record.thread_id,
-							checkpoint_ns: record.checkpoint_ns,
-							checkpoint_id: record.parent_checkpoint_id,
-						},
-					}
-				: undefined,
-			pendingWrites,
-		};
+			// Construct the checkpoint tuple
+			return {
+				checkpoint: checkpointObj,
+				config: finalConfig,
+				metadata: metadataObj,
+				parentConfig: record.parent_checkpoint_id
+					? {
+							configurable: {
+								thread_id: record.thread_id,
+								checkpoint_ns: record.checkpoint_ns,
+								checkpoint_id: record.parent_checkpoint_id,
+							},
+						}
+					: undefined,
+				pendingWrites,
+			};
+		} catch (error) {
+			console.error("Error deserializing checkpoint data:", error);
+			console.error("Record type:", record.type);
+			console.error("Is binary:", record.is_binary);
+			console.error("Is file:", record.is_file);
+			// Either return undefined or rethrow with more context
+			return undefined;
+		}
 	}
 
 	/**

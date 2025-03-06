@@ -1,5 +1,5 @@
-import type { DiffViewCommand } from "@shared/types/v2/Composer";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { DiffViewCommand } from "@shared/types/Composer";
+import type { FileMetadata } from "@shared/types/Message";
 import { vscode } from "./vscode";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
 

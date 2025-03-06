@@ -1,7 +1,7 @@
 import type {
 	ComposerMessage,
 	ComposerRequest,
-} from "@shared/types/v2/Composer";
+} from "@shared/types/Composer";
 import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./Input/ChatInput";
 import { ErrorBoundary } from 'react-error-boundary';

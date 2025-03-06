@@ -5,38 +5,35 @@ import {
 	RemoveMessage,
 	type BaseMessage,
 } from "@langchain/core/messages";
-import type { AIProvider } from "../../../service/base";
+import type { AIProvider } from "../service/base";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { createReadFileTool } from "../tools/read_file";
-import { createListDirectoryTool } from "../tools/list_workspace_files";
-import { createWriteFileTool } from "../tools/write_file";
+import { createReadFileTool } from "./tools/read_file";
+import { createListDirectoryTool } from "./tools/list_workspace_files";
+import { createWriteFileTool } from "./tools/write_file";
 import type { DynamicTool, StructuredTool } from "@langchain/core/tools";
 import type {
 	ComposerImage,
 	ComposerRequest,
 	ComposerResponse,
 	StreamEvent,
-} from "@shared/types/v2/Composer";
-import type {
-	CodeContextDetails,
-	FileMetadata,
-} from "@shared/types/v2/Message";
+} from "@shared/types/Composer";
+import type { CodeContextDetails, FileMetadata } from "@shared/types/Message";
 import path from "node:path";
 import type { RunnableConfig } from "@langchain/core/runnables";
-import { createCommandExecuteTool } from "../tools/cmd_execute";
-import type { PartitionedFileSystemSaver } from "../../checkpointer";
+import { createCommandExecuteTool } from "./tools/cmd_execute";
+import type { PartitionedFileSystemSaver } from "./checkpointer";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
-import { loadWingmanRules } from "../../utils";
 import type { Settings } from "@shared/types/Settings";
-import { createMCPTool } from "../tools/mcpTools";
-import { loggingProvider } from "../../../server/loggingProvider";
-import type { CodeParser } from "../../../server/files/parser";
-import { getTextDocumentFromPath } from "../../../server/files/utils";
-import { Anthropic } from "../../../service/anthropic/anthropic";
-import { OpenAI } from "../../../service/openai/openai";
-import { AzureAI } from "../../../service/azure/azure";
-import { trimMessages } from "../../../service/utils/chatHistory";
-import { createResearchTool } from "../tools/research";
+import { createMCPTool } from "./tools/mcpTools";
+import { loggingProvider } from "../server/loggingProvider";
+import type { CodeParser } from "../server/files/parser";
+import { getTextDocumentFromPath } from "../server/files/utils";
+import { Anthropic } from "../service/anthropic/anthropic";
+import { OpenAI } from "../service/openai/openai";
+import { AzureAI } from "../service/azure/azure";
+import { trimMessages } from "../service/utils/chatHistory";
+import { createResearchTool } from "./tools/research";
+import { loadWingmanRules } from "./utils";
 
 let controller = new AbortController();
 
@@ -685,7 +682,7 @@ ${(() => {
 						{
 							id: uuidv4(),
 							type: "message",
-							content: `An error occurred, please try again. If this continues use the clear chat button to start over.\n\nReason: ${e.message}.`,
+							content: `An error occurred, please try again. If this continues use the clear chat button to start over or try deleting the thread.\n\nReason: ${e.message}.`,
 						},
 					]),
 				};

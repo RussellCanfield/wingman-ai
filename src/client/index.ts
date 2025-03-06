@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import type { ExtensionContext } from "vscode";
 import {
-	CancellationStrategy,
 	type DocumentSymbol,
 	LanguageClient,
 	type LanguageClientOptions,
@@ -15,11 +14,10 @@ import type { Settings } from "@shared/types/Settings";
 import type {
 	ComposerRequest,
 	ComposerResponse,
+	FileDiagnostic,
 	GraphState,
-	IndexStats,
-} from "@shared/types/v2/Composer";
+} from "@shared/types/Composer";
 import path from "node:path";
-import ignore from "ignore";
 import { mapLocation, mapSymbol } from "./utils";
 import { loggingProvider } from "../providers/loggingProvider";
 import {
@@ -32,30 +30,9 @@ import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
 let client: LanguageClient;
 
-export type IndexUpdateEvent = IndexStats;
-
-export class IndexEventMediator {
-	private listeners: Set<(stats: IndexUpdateEvent) => void> = new Set();
-
-	subscribe(callback: (stats: IndexUpdateEvent) => void): () => void {
-		this.listeners.add(callback);
-		return () => this.listeners.delete(callback);
-	}
-
-	notify(stats: IndexUpdateEvent): void {
-		// biome-ignore lint/complexity/noForEach: <explanation>
-		this.listeners.forEach((listener) => listener(stats));
-	}
-}
-
 export class LSPClient {
 	composerWebView: vscode.Webview | undefined;
 	settings: Settings | undefined;
-	private indexMediator = new IndexEventMediator();
-
-	onIndexUpdated(callback: (stats: IndexUpdateEvent) => void): () => void {
-		return this.indexMediator.subscribe(callback);
-	}
 
 	activate = async (
 		context: ExtensionContext,
@@ -162,6 +139,69 @@ export class LSPClient {
 				return locations?.map((l) => mapLocation(l)) || [];
 			},
 		);
+
+		client.onRequest(
+			"wingman/provideFileDiagnostics",
+			async (filePaths: string[]) => {
+				const fileUrls = filePaths.map((p) => {
+					return path.isAbsolute(p)
+						? vscode.Uri.parse(p)
+						: vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, p);
+				});
+
+				const fileDiagnostics: FileDiagnostic[] = [];
+				for (const uri of fileUrls) {
+					// Get all diagnostics for this file
+					const allDiagnostics = vscode.languages.getDiagnostics(uri);
+
+					// Filter for the specific types you're interested in
+					const importIssues = allDiagnostics.filter(
+						(diag) =>
+							diag.message.includes("import") ||
+							diag.message.includes("Cannot find module"),
+					);
+
+					const lintingErrors = allDiagnostics.filter(
+						(diag) =>
+							// Filter for your specific linting errors of interest
+							diag.source === "eslint" || diag.source === "tslint",
+					);
+
+					// Now you can track or process these filtered diagnostics
+					console.log(
+						`File ${uri.toString()} has ${importIssues.length} import issues and ${lintingErrors.length} linting errors`,
+					);
+
+					fileDiagnostics.push({
+						path: vscode.workspace.asRelativePath(uri),
+						importErrors: importIssues.map((f) => ({
+							message: f.message,
+							start: {
+								line: f.range.start.line,
+								character: f.range.start.character,
+							},
+							end: {
+								line: f.range.end.line,
+								character: f.range.end.character,
+							},
+						})),
+						lintErrors: lintingErrors.map((f) => ({
+							message: f.message,
+							start: {
+								line: f.range.start.line,
+								character: f.range.start.character,
+							},
+							end: {
+								line: f.range.end.line,
+								character: f.range.end.character,
+							},
+						})),
+					});
+				}
+
+				return fileDiagnostics;
+			},
+		);
 	};
 
 	setComposerWebViewReference = (webview: vscode.Webview) => {
@@ -229,112 +269,6 @@ export class LSPClient {
 		}
 		return client.stop();
 	};
-
-	public async *streamWebSearch(
-		input: string,
-	): AsyncGenerator<string | undefined, void, unknown> {
-		// Create a queue to store incoming chunks
-		const messageQueue: string[] = [];
-		let isComplete = false;
-		let error: Error | null = null;
-
-		const completed = new Promise<void>((resolve, reject) => {
-			// Store the disposable from the notification listener
-			const disposable = client.onNotification(
-				"wingman/webSearchProgress",
-				(params: {
-					type: "progress" | "complete" | "error";
-					content?: string;
-				}) => {
-					if (params.type === "progress" && params.content) {
-						messageQueue.push(params.content);
-					} else if (params.type === "error") {
-						error = new Error(params.content);
-						isComplete = true;
-						reject(error);
-					} else if (params.type === "complete") {
-						isComplete = true;
-						resolve();
-					}
-				},
-			);
-
-			client.sendRequest("wingman/webSearch", input).catch((err) => {
-				error = err;
-				isComplete = true;
-				reject(err);
-			});
-
-			// Clean up the listener when the promise settles
-			Promise.resolve(completed).finally(() => {
-				disposable.dispose();
-			});
-		});
-
-		// Process the queue until completion
-		while (!isComplete || messageQueue.length > 0) {
-			if (messageQueue.length > 0) {
-				yield messageQueue.shift();
-			} else {
-				await new Promise((resolve) => setTimeout(resolve, 50));
-			}
-		}
-
-		if (error) {
-			throw error;
-		}
-
-		await completed;
-	}
-}
-
-async function getGitignorePatterns(exclusionFilter?: string) {
-	const workspaceFolders = vscode.workspace.workspaceFolders;
-	if (!workspaceFolders) {
-		return "";
-	}
-
-	const gitignorePath = vscode.Uri.file(
-		path.join(workspaceFolders[0].uri.fsPath, ".gitignore"),
-	);
-
-	try {
-		const gitignoreContent = await vscode.workspace.fs.readFile(gitignorePath);
-		const gitignoreLines = gitignoreContent.toString().split("\n");
-		const ig = ignore().add(gitignoreLines);
-
-		// Use the ignore instance to filter and process patterns
-		const gitIgnorePatterns = gitignoreLines
-			.filter((line) => line && !line.startsWith("#"))
-			.map((pattern) => {
-				// Remove leading slash if present
-				const normalizedPattern = pattern.replace(/^\//, "");
-
-				// Verify if the pattern is valid using the ignore instance
-				if (ig.ignores(normalizedPattern.replace(/^!/, ""))) {
-					if (normalizedPattern.startsWith("!")) {
-						return `!**/${normalizedPattern.slice(1)}`;
-					}
-					return `**/${normalizedPattern}`;
-				}
-				return null;
-			})
-			.filter((pattern): pattern is string => pattern !== null);
-
-		let combinedExclusionFilter: string | undefined;
-		if (exclusionFilter) {
-			combinedExclusionFilter = `{${exclusionFilter},${gitIgnorePatterns.join(",")}}`;
-		} else if (gitIgnorePatterns.length > 0) {
-			combinedExclusionFilter = `{${gitIgnorePatterns.join(",")}}`;
-		}
-
-		return combinedExclusionFilter;
-	} catch (err) {
-		if (err instanceof Error) {
-			loggingProvider.logError(`Error reading .gitignore file: ${err.message}`);
-		}
-		return "";
-	}
 }
 
 const lspClient = new LSPClient();

@@ -1,6 +1,6 @@
 import type React from "react";
 import { useRef } from "react";
-import type { FileSearchResult } from "@shared/types/v2/Composer";
+import type { FileSearchResult } from "@shared/types/Composer";
 
 interface FileDropdownProps {
 	isLightTheme: boolean;

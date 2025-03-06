@@ -1,6 +1,6 @@
 import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef } from "react";
 import ChatEntry from "./ChatEntry";
-import type { ComposerMessage } from "@shared/types/v2/Composer";
+import type { ComposerMessage } from "@shared/types/Composer";
 
 function ChatResponseList({
 	children,

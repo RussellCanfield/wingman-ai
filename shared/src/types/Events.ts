@@ -1,5 +1,5 @@
-import type { ComposerMessage } from "./v2/Composer";
-import type { FileMetadata } from "./v2/Message";
+import type { ComposerMessage } from "./Composer";
+import type { FileMetadata } from "./Message";
 
 export interface AddMessageToThreadEvent {
 	threadId: string;

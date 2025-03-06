@@ -4,7 +4,7 @@ import fs, { promises } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { baseFileSchema } from "./schemas";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { FileMetadata } from "@shared/types/Message";
 import { Command } from "@langchain/langgraph";
 
 export const writeFileSchema = baseFileSchema.extend({

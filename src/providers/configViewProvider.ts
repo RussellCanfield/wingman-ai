@@ -4,7 +4,7 @@ import type { AppMessage } from "@shared/types/Message";
 import type { MCPToolConfig, Settings } from "@shared/types/Settings";
 import { addNoneAttributeToLink } from "./utilities";
 import { SaveSettings } from "../service/settings";
-import { createMCPTool } from "../composer/v2/tools/mcpTools";
+import { createMCPTool } from "../composer/tools/mcpTools";
 import type { LSPClient } from "../client";
 
 let panel: vscode.WebviewPanel | undefined;

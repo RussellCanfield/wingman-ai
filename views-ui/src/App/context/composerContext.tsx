@@ -1,5 +1,5 @@
-import type { ComposerMessage, ComposerResponse, FileSearchResult, GraphState } from "@shared/types/v2/Composer";
-import type { AppMessage } from "@shared/types/v2/Message";
+import type { ComposerMessage, ComposerResponse, FileSearchResult, GraphState } from "@shared/types/Composer";
+import type { AppMessage } from "@shared/types/Message";
 import type { AppState, Thread } from "@shared/types/Settings";
 import type { AddMessageToThreadEvent, RenameThreadEvent } from '@shared/types/Events';
 import type React from "react";

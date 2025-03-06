@@ -1,4 +1,4 @@
-import type { ComposerMessage } from "@shared/types/v2/Composer";
+import type { ComposerMessage } from "@shared/types/Composer";
 import { useCallback, useState } from "react";
 import { memo, type PropsWithChildren } from "react";
 import Markdown from "react-markdown";

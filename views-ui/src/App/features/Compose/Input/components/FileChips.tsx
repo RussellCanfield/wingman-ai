@@ -1,6 +1,6 @@
 import type React from "react";
 import { FaX } from "react-icons/fa6";
-import type { FileSearchResult } from "@shared/types/v2/Composer";
+import type { FileSearchResult } from "@shared/types/Composer";
 
 interface FileChipsProps {
 	chips: FileSearchResult[];

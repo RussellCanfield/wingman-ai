@@ -18,12 +18,12 @@ import type {
 	ComposerRequest,
 	DiffViewCommand,
 	FileSearchResult,
-} from "@shared/types/v2/Composer";
+} from "@shared/types/Composer";
 import type { DiffViewProvider } from "./diffViewProvider";
 import type { Workspace } from "../service/workspace";
 import type { ConfigViewProvider } from "./configViewProvider";
 import path from "node:path";
-import type { FileMetadata } from "@shared/types/v2/Message";
+import type { FileMetadata } from "@shared/types/Message";
 import type { ThreadViewProvider } from "./threadViewProvider";
 import { getRecentFileTracker } from "./recentFileTracker";
 import { getGitignorePatterns } from "../server/files/utils";

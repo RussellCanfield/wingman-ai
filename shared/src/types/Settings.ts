@@ -1,4 +1,4 @@
-import type { ComposerMessage, GraphState } from "./v2/Composer";
+import type { ComposerMessage } from "./Composer";
 
 export const defaultMaxTokens = -1;
 

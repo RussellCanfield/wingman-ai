@@ -3,7 +3,6 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { MCPToolConfig } from "@shared/types/Settings";
-import { z } from "zod";
 
 export const createMCPTool = (mcpConfig: MCPToolConfig) => {
 	if (mcpConfig.type === "command") {
