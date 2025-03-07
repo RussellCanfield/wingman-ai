@@ -164,7 +164,10 @@ export class LSPClient {
 					const lintingErrors = allDiagnostics.filter(
 						(diag) =>
 							// Filter for your specific linting errors of interest
-							diag.source === "eslint" || diag.source === "tslint",
+							diag.source === "eslint" ||
+							diag.source === "tslint" ||
+							diag.source === "biome" ||
+							diag.source === "ts",
 					);
 
 					if (lintingErrors.length === 0 && importIssues.length === 0) continue;

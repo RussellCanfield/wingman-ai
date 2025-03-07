@@ -1,8 +1,10 @@
 import { v4 as uuidv4 } from "uuid";
 import { Annotation, type CheckpointTuple } from "@langchain/langgraph";
 import {
+	AIMessageChunk,
 	HumanMessage,
 	RemoveMessage,
+	ToolMessage,
 	type BaseMessage,
 } from "@langchain/core/messages";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
@@ -417,7 +419,9 @@ export class WingmanAgent {
 		state: GraphStateAnnotation,
 		config: RunnableConfig,
 	) => {
-		const settings = await wingmanSettings.LoadSettings(this.workspace);
+		// Find interrupted tool calls that weren't properly completed
+		// This is required otherwise LLM providers will fail with "invalid chains"
+		const { processedMessages } = this.detectAbortedToolCalls(state);
 
 		return [
 			{
@@ -560,13 +564,110 @@ This may or may not be relavant, the user has provided files to use as context:
 <context_files>
 ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
 </context_files>
-`}
-`,
+`}`,
 				cache_control: { type: "ephemeral" },
 			},
-			...state.messages,
+			...processedMessages,
 		];
 	};
+
+	/**
+	 * Detects aborted tool calls in the conversation history and adds appropriate stub messages
+	 *
+	 * @param state The current graph state containing message history
+	 * @returns Object containing pending tool uses and processed messages with stubs added
+	 */
+	detectAbortedToolCalls(state: GraphStateAnnotation): {
+		pendingToolUses: AIMessageChunk[];
+		processedMessages: BaseMessage[];
+	} {
+		const pendingToolUses: AIMessageChunk[] = [];
+		const processedMessages: BaseMessage[] = [];
+
+		// Helper function to check if an AI message has tool calls
+		const hasToolCalls = (message: BaseMessage): boolean => {
+			return (
+				(message instanceof AIMessageChunk &&
+					message.tool_calls &&
+					message.tool_calls.length > 0) ??
+				false
+			);
+		};
+
+		// Helper function to check if a message is a tool response
+		const isToolResponse = (message: BaseMessage): boolean => {
+			//@ts-expect-error
+			return message instanceof ToolMessage || message.role === "tool";
+		};
+
+		// Process messages to maintain the correct sequence
+		for (let i = 0; i < state.messages.length; i++) {
+			const currentMessage = state.messages[i];
+
+			// Add current message to processed messages
+			processedMessages.push(currentMessage);
+
+			// Handle AI messages with tool calls
+			if (hasToolCalls(currentMessage)) {
+				const aiMessage = currentMessage as AIMessageChunk;
+				const expectedToolCallCount = aiMessage.tool_calls!.length;
+
+				// Count how many tool messages follow this AI message
+				let actualToolMessageCount = 0;
+				let nextIndex = i + 1;
+
+				while (
+					nextIndex < state.messages.length &&
+					isToolResponse(state.messages[nextIndex])
+				) {
+					actualToolMessageCount++;
+					nextIndex++;
+				}
+
+				// If we're missing tool messages
+				if (actualToolMessageCount < expectedToolCallCount) {
+					// Add this message to pending tool uses
+					pendingToolUses.push(aiMessage);
+
+					// Create a set of tool call IDs that already have responses
+					const respondedToolCallIds = new Set<string>();
+					for (let j = i + 1; j < i + 1 + actualToolMessageCount; j++) {
+						const toolMessage = state.messages[j];
+						// Get tool_call_id from either ToolMessage instance or message with role="tool"
+						const toolCallId =
+							toolMessage instanceof ToolMessage
+								? toolMessage.tool_call_id
+								: (toolMessage as any).tool_call_id;
+
+						if (toolCallId) {
+							respondedToolCallIds.add(toolCallId);
+						}
+					}
+
+					// Add stub messages for tool calls that don't have responses
+					for (const toolCall of aiMessage.tool_calls!) {
+						if (toolCall.id && !respondedToolCallIds.has(toolCall.id)) {
+							const stubToolMessage = new ToolMessage({
+								tool_call_id: toolCall.id,
+								name: toolCall.name,
+								content: "Tool call was aborted",
+							});
+
+							// Insert the stub message right after the last actual tool message,
+							// or after the AI message if there are no actual tool messages
+							const insertPosition = i + 1 + actualToolMessageCount;
+							processedMessages.splice(insertPosition, 0, stubToolMessage);
+
+							// Increment the count to maintain correct positioning for subsequent stubs
+							actualToolMessageCount++;
+						}
+					}
+				}
+			}
+		}
+
+		return { pendingToolUses, processedMessages };
+	}
 
 	/**
 	 * Execute a message in a conversation thread
@@ -630,38 +731,33 @@ Contents: ${request.context.text}`,
 				});
 			}
 
+			let input = request.input;
+
+			if (
+				aiProvider instanceof Anthropic &&
+				settings.providerSettings.Anthropic &&
+				settings.providerSettings.Anthropic.chatModel?.startsWith(
+					"claude-3-7",
+				) &&
+				!settings.providerSettings.Anthropic.sparkMode
+			) {
+				input += "\nOnly do this — NOTHING ELSE.";
+			}
+
+			if (
+				(aiProvider instanceof OpenAI || aiProvider instanceof AzureAI) &&
+				(settings.providerSettings.OpenAI ||
+					settings.providerSettings.AzureAI) &&
+				(settings.providerSettings.OpenAI?.chatModel?.startsWith("o3") ||
+					settings.providerSettings.AzureAI?.chatModel?.startsWith("o3"))
+			) {
+				input +=
+					"\nFunction calling: Always execute the required function calls before you respond.";
+			}
+
 			messageContent.push({
 				type: "text",
-				text: `${request.input}
-
-${(() => {
-	const anthropicSettings = settings.providerSettings.Anthropic;
-	if (!(aiProvider instanceof Anthropic) || !anthropicSettings) return "";
-
-	const chatModel = anthropicSettings.chatModel;
-	if (chatModel?.startsWith("claude-3-7") && !anthropicSettings.sparkMode) {
-		return "Only do this — NOTHING ELSE.";
-	}
-
-	return "";
-})()}
-
-${(() => {
-	const openAI =
-		settings.providerSettings.OpenAI || settings.providerSettings.AzureAI;
-	if (!openAI) return "";
-
-	// Check if the provider is either OpenAI or AzureAI
-	if (!(aiProvider instanceof OpenAI || aiProvider instanceof AzureAI))
-		return "";
-
-	const chatModel = openAI.chatModel;
-	if (chatModel?.startsWith("o3")) {
-		return "Function calling: Always execute the required function calls before you respond.";
-	}
-
-	return "";
-})()}`,
+				text: input,
 			});
 
 			const messages = [new HumanMessage({ content: messageContent })];
@@ -764,6 +860,7 @@ ${(() => {
 					break;
 
 				case "on_tool_start":
+					console.log(`Tool Start: ${event.name}`);
 					//Write file is on atomic event
 					if (event.name !== "write_file") {
 						yield pushEvent({
@@ -781,6 +878,7 @@ ${(() => {
 					break;
 
 				case "on_tool_end":
+					console.log(`Tool End: ${event.name}`);
 					yield pushEvent({
 						id: event.run_id,
 						type: "tool-end",
