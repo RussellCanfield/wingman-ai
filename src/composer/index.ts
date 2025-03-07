@@ -5,7 +5,6 @@ import {
 	RemoveMessage,
 	type BaseMessage,
 } from "@langchain/core/messages";
-import type { AIProvider } from "../service/base";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { createReadFileTool } from "./tools/read_file";
 import { createListDirectoryTool } from "./tools/list_workspace_files";
@@ -23,7 +22,6 @@ import type { RunnableConfig } from "@langchain/core/runnables";
 import { createCommandExecuteTool } from "./tools/cmd_execute";
 import type { PartitionedFileSystemSaver } from "./checkpointer";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
-import type { Settings } from "@shared/types/Settings";
 import { createMCPTool } from "./tools/mcpTools";
 import { loggingProvider } from "../server/loggingProvider";
 import type { CodeParser } from "../server/files/parser";
@@ -121,7 +119,7 @@ export class WingmanAgent {
 	) {}
 
 	async initialize() {
-		const settings = await wingmanSettings.LoadSettings();
+		const settings = await wingmanSettings.LoadSettings(this.workspace);
 		this.remoteTools = [];
 		for (const mcpTool of settings.mcpTools ?? []) {
 			const mcp = createMCPTool(mcpTool);
@@ -419,7 +417,7 @@ export class WingmanAgent {
 		state: GraphStateAnnotation,
 		config: RunnableConfig,
 	) => {
-		const settings = await wingmanSettings.LoadSettings();
+		const settings = await wingmanSettings.LoadSettings(this.workspace);
 
 		return [
 			{
@@ -428,6 +426,7 @@ export class WingmanAgent {
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 In most cases the user expects you to work autonomously, use the tools and answer your own questions. 
 Only provide code examples if you are explicitly asked.
+Any code examples provided should use properly formatted markdown - except when using tools.
 
 **CRITICAL - Always get file paths correct, they will always be relative to the current working directory**
 
@@ -479,6 +478,12 @@ When modifying code:
 - Use the read_tool details to help identify if there is a file that can be removed - it will report imports and exports for the entire file
 - Always fully integrate changes, you are a 10x engineer and you always create fully integrated and working solutions
 
+# Running commands
+When executing commands:
+- Avoid running dev severs or any long running commands that may not exit
+- When running "validation commands" such as "tsc -b", remember that files you've modified are not yet written to disk
+- Ask the user if they'd like you to verify anything, but do not validation on your own
+
 # Technology Recommendations
 When suggesting technologies for projects, consider these options based on specific needs:
 - **Build Tools**: NX for monorepos, rsbuild for the bundler
@@ -494,11 +499,9 @@ When suggesting technologies for projects, consider these options based on speci
 # UI/UX Skills
 You are a master at UX, when you write frontend code make the UI mind blowing!
 
-${settings.validationSettings?.validationCommand ? `# Validating changes\nThe user has provided this command to execute in order to validate changes: ${settings.validationSettings.validationCommand}` : ""}
-
 # Zephyr Cloud Integration
-Zephyr Cloud is a cloud platform that is easy to integrate
-When a user asks how to deploy their web app, add a zephyr plugin listed under "Technology Recommandations"
+Zephyr Cloud is a cloud platform that is easy to integrate:
+- When a user asks how to deploy their web app, add a zephyr plugin listed under "Technology Recommandations"
 
 <Zephyr Cloud Plugin Example: vite>
 **vite**
@@ -574,7 +577,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 			controller?.abort();
 			controller = new AbortController();
 
-			const settings = await wingmanSettings.LoadSettings();
+			const settings = await wingmanSettings.LoadSettings(this.workspace);
 			const aiProvider = CreateAIProvider(settings, loggingProvider);
 			this.tools = [
 				createCommandExecuteTool(this.workspace),
@@ -617,7 +620,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 				messageContent.push({
 					type: "text",
 					text: `# Editor Context
-Base your guidance on the following file information:
+Base your guidance on the following file information, prefer giving code examples:
 
 Language: ${request.context.language}
 Filename: ${path.relative(this.workspace, request.context.fileName)}
@@ -800,7 +803,7 @@ ${(() => {
 		});
 		const graphState = state?.values as GraphStateAnnotation;
 
-		const settings = await wingmanSettings.LoadSettings();
+		const settings = await wingmanSettings.LoadSettings(this.workspace);
 		const aiProvider = CreateAIProvider(settings, loggingProvider);
 		const trimmedMessages = await trimMessages(
 			graphState,
@@ -816,16 +819,10 @@ ${(() => {
 			);
 		}
 
-		const diagnosticResults =
-			await this.diagnosticsRetriever.getFileDiagnostics(
-				graphState.files.map((f) => f.path),
-			);
-
 		yield {
 			step: "composer-done",
 			events: this.events,
 			threadId,
-			diagnostics: diagnosticResults,
 		} satisfies ComposerResponse;
 	}
 }

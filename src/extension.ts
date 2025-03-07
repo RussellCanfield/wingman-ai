@@ -32,7 +32,6 @@ let threadViewProvider: ThreadViewProvider;
 let codeSuggestionDispoable: vscode.Disposable;
 
 export async function activate(context: vscode.ExtensionContext) {
-	const settings = await wingmanSettings.LoadSettings();
 	if (
 		!vscode.workspace.workspaceFolders ||
 		vscode.workspace.workspaceFolders.length === 0
@@ -42,6 +41,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		);
 		return;
 	}
+
+	const settings = await wingmanSettings.LoadSettings(
+		vscode.workspace.workspaceFolders[0].name,
+	);
 
 	if (wingmanSettings.isDefault) {
 		const result = await vscode.window.showErrorMessage(
@@ -150,7 +153,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	diffViewProvider = new DiffViewProvider(context, lspClient);
 	threadViewProvider = new ThreadViewProvider(context);
 	statusBarProvider = new ActivityStatusBar();
-	configViewProvider = new ConfigViewProvider(context.extensionUri, lspClient);
+	configViewProvider = new ConfigViewProvider(
+		context.extensionUri,
+		workspace.workspaceFolder,
+		lspClient,
+	);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -206,6 +213,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(codeSuggestionDispoable);
 	}
 	wingmanSettings.registerOnChangeHandler((settings) => {
+		if (chatViewProvider) {
+			chatViewProvider.updateSettingsOnUI();
+		}
+
 		if (settings.interactionSettings!.codeCompletionEnabled) {
 			codeSuggestionDispoable =
 				vscode.languages.registerInlineCompletionItemProvider(

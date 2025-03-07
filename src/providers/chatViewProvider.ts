@@ -5,6 +5,7 @@ import type { AppMessage, CodeContextDetails } from "@shared/types/Message";
 import type { AppState, Thread } from "@shared/types/Settings";
 import type {
 	AddMessageToThreadEvent,
+	FixDiagnosticsEvent,
 	RenameThreadEvent,
 	UpdateComposerFileEvent,
 } from "@shared/types/Events";
@@ -17,6 +18,7 @@ import type { LSPClient } from "../client/index";
 import type {
 	ComposerRequest,
 	DiffViewCommand,
+	FileDiagnostic,
 	FileSearchResult,
 } from "@shared/types/Composer";
 import type { DiffViewProvider } from "./diffViewProvider";
@@ -27,6 +29,7 @@ import type { FileMetadata } from "@shared/types/Message";
 import type { ThreadViewProvider } from "./threadViewProvider";
 import { getRecentFileTracker } from "./recentFileTracker";
 import { getGitignorePatterns } from "../server/files/utils";
+import { wingmanSettings } from "../service/settings";
 
 export type ChatView = "composer" | "indexer";
 
@@ -72,6 +75,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		});
 	}
 
+	async updateSettingsOnUI() {
+		if (this._webview) {
+			this._webview.postMessage({
+				command: "settings",
+				value: await wingmanSettings.LoadSettings(),
+			});
+		}
+	}
+
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext,
@@ -105,6 +117,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 				// TODO - move to a mediator pattern
 				switch (command) {
+					case "fix-diagnostics": {
+						const event = value as FixDiagnosticsEvent;
+						if (!event.diagnostics?.length) return;
+						this._lspClient.fixDiagnostics(event);
+						break;
+					}
 					case "add-message-to-thread":
 						await this.addMessageToThread(value as AddMessageToThreadEvent);
 						webviewView.webview.postMessage({
@@ -257,6 +275,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						webviewView.webview.postMessage({
 							command: "init",
 							value: appState,
+						});
+
+						webviewView.webview.postMessage({
+							command: "settings",
+							value: await wingmanSettings.LoadSettings(),
 						});
 
 						webviewView.webview.postMessage({

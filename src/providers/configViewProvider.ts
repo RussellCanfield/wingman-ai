@@ -17,6 +17,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
+		private readonly workspace: string,
 		private readonly _lspClient: LSPClient,
 	) {}
 
@@ -105,7 +106,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					break;
 				}
 				case "saveSettings":
-					wingmanSettings.SaveSettings(value as Settings);
+					wingmanSettings.SaveSettings(value as Settings, this.workspace);
 					await this._lspClient.updateSettings();
 					settingsPanel.webview.postMessage({
 						command: "settingsSaved",
@@ -148,7 +149,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private init = async (value: unknown): Promise<string> => {
-		const initSettings = await wingmanSettings.LoadSettings();
+		const initSettings = await wingmanSettings.LoadSettings(this.workspace);
 		const settings = structuredClone(initSettings);
 
 		try {

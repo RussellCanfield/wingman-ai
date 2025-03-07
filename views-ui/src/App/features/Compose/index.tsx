@@ -160,35 +160,7 @@ export default function Compose() {
 					threadId={activeThread?.id}
 					onChatSubmitted={handleChatSubmitted}
 					onChatCancelled={cancelAIResponse}
-					suggestionItems={[{
-						path: 'blah.tsx',
-						importErrors: [{
-							message: 'crap happens',
-							start: {
-								line: 1,
-								character: 1
-							},
-							end: {
-								line: 1,
-								character: 2
-							}
-						}],
-						lintErrors: []
-					}, {
-						path: 'other.tsx',
-						importErrors: [{
-							message: 'sometimes too often',
-							start: {
-								line: 1,
-								character: 1
-							},
-							end: {
-								line: 1,
-								character: 2
-							}
-						}],
-						lintErrors: []
-					}]}
+					suggestionItems={fileDiagnostics}
 				/>
 			</ErrorBoundary>
 		</main>

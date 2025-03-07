@@ -5,6 +5,11 @@ import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { BsExclamationTriangle } from "react-icons/bs";
 import { FaRegFileLines } from "react-icons/fa6";
 import { getTruncatedPath } from "../../../../utilities/files";
+import { MdOutlineAutoFixNormal } from "react-icons/md";
+import { useSettingsContext } from "../../../../context/settingsContext";
+import { vscode } from "../../../../utilities/vscode";
+import { useComposerContext } from "../../../../context/composerContext";
+import type { FixDiagnosticsEvent } from "@shared/types/Events";
 
 interface CollapsibleSectionProps {
     items: FileDiagnostic[];
@@ -23,6 +28,8 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
     isLightTheme,
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const { activeThread } = useComposerContext();
+    const { settings } = useSettingsContext();
 
     const toggleExpand = () => {
         setIsExpanded(!isExpanded);
@@ -80,6 +87,35 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
         return results;
     }, [items]);
 
+    const fixDiagnostics = () => {
+        if (!activeThread?.id) return;
+
+        vscode.postMessage({
+            command: "fix-diagnostics",
+            value: {
+                diagnostics: items,
+                threadId: activeThread?.id
+            } satisfies FixDiagnosticsEvent
+        })
+    }
+
+    const autoFixComponent = settings?.validationSettings?.automaticallyFixDiagnostics ?
+        (<div className="flex items-center justify-end gap-2 mr-4 text-sm">
+            <MdOutlineAutoFixNormal size={16} className="text-green-600/50" />
+            <p className="text-green-600/50">Auto Fix - Enabled</p>
+        </div>) : (
+            <div className="flex items-center justify-end gap-2 mr-4 text-sm">
+                <button
+                    type="button"
+                    onClick={fixDiagnostics}
+                    className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 transition-colors flex items-center gap-2"
+                >
+                    <MdOutlineAutoFixNormal size={16} />
+                    Fix
+                </button>
+            </div>
+        );
+
     return (
         <div className={containerClass}>
             {/* biome-ignore lint/a11y/useKeyWithClickEvents: <explanation> */}
@@ -106,6 +142,9 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
                                 <span className="text-gray-400/50">{item.message}</span>
                             </li>
                         ))}
+                        <li key="setting">
+                            {autoFixComponent}
+                        </li>
                     </ul>
                 ) : (
                     <div className={`${itemClass} text-center italic opacity-70`}>

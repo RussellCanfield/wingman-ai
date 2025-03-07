@@ -72,7 +72,7 @@ export class Anthropic implements AIStreamProvider {
 			thinking:
 				this.settings?.enableReasoning && isReasoningModel
 					? {
-							budget_tokens: 2048,
+							budget_tokens: 8096,
 							type: "enabled",
 						}
 					: undefined,

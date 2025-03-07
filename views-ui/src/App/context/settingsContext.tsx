@@ -1,13 +1,14 @@
 import type React from "react";
 import { createContext, useContext, useState, useEffect, type FC, type PropsWithChildren } from "react"
 import type { AppMessage } from "@shared/types/Message";
-import type { AppState } from "@shared/types/Settings";
+import type { Settings, AppState } from "@shared/types/Settings";
 
 export type View = "composer";
 
 interface SettingsContextType {
   view: View;
   setView: React.Dispatch<React.SetStateAction<View>>;
+  settings?: Settings;
   isLightTheme: boolean;
 }
 
@@ -23,6 +24,7 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
   const [theme, setTheme] = useState(1);
   const [view, setView] = useState<View>("composer");
   const [appState, setAppState] = useState<AppState | null>();
+  const [settings, setSettings] = useState<Settings | undefined>();
 
   useEffect(() => {
     const handleResponse = (event: MessageEvent<AppMessage>) => {
@@ -33,6 +35,11 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
 
           setAppState(storedAppState);
           setTheme(storedAppState?.theme ?? 1);
+          break;
+        }
+        case "settings": {
+          console.log('Settings:', value);
+          setSettings(value as Settings);
           break;
         }
         case "setTheme":
@@ -53,6 +60,7 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
       value={{
         view,
         setView,
+        settings,
         isLightTheme: theme === 1,
       }}
     >

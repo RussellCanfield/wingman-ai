@@ -27,7 +27,10 @@ import { loggingProvider } from "./loggingProvider";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer";
 import { PartitionedFileSystemSaver } from "../composer/checkpointer";
-import type { UpdateComposerFileEvent } from "@shared/types/Events";
+import type {
+	FixDiagnosticsEvent,
+	UpdateComposerFileEvent,
+} from "@shared/types/Events";
 import { wingmanSettings } from "../service/settings";
 
 export type CustomRange = {
@@ -112,6 +115,48 @@ export class LSPServer {
 		fs.mkdirSync(dbDir, { recursive: true });
 
 		return targetPath;
+	};
+
+	private compose = async (request: ComposerRequest) => {
+		try {
+			for await (const event of this.composer!.execute(request)) {
+				await this.connection?.sendRequest("wingman/compose", event);
+			}
+		} catch (e) {
+			console.error(e);
+		}
+	};
+
+	private fixDiagnostics = async (event: FixDiagnosticsEvent, attempt = 0) => {
+		const { threadId, diagnostics } = event;
+
+		if (diagnostics?.length === 0) return;
+
+		const aboslutePaths = diagnostics.map((d) => {
+			if (path.isAbsolute(this.workspaceFolders[0])) return d.path;
+
+			return path.join(this.workspaceFolders[0], d.path);
+		});
+
+		const input = diagnostics
+			.map((d) => {
+				return `<file_with_error>
+Path: ${path.relative(this.workspaceFolders[0], d.path)}
+${d.importErrors?.length > 0 ? d.importErrors.map((e) => `Import Error:${e.message}\nLine: ${e.start.line + 1}\nCharacter: ${e.start.character}`).join("\n") : ""}
+${d.lintErrors?.length > 0 ? d.lintErrors.map((e) => `Linting Error: ${e.message}\nLine: ${e.start.line + 1}\nCharacter: ${e.start.character}`).join("\n") : ""}
+</file_with_error>`;
+			})
+			.join("\n");
+
+		return this.compose({
+			input: `The following files have import or linting errors, fix them all without making any breaking changes.
+Each error type details the message, line it occurs on and character it starts at.
+
+${input}`,
+			contextFiles: aboslutePaths,
+			recentFiles: [],
+			threadId,
+		});
 	};
 
 	private initialize = async () => {
@@ -306,25 +351,53 @@ export class LSPServer {
 		this.connection?.onRequest(
 			"wingman/compose",
 			async ({ request }: { request: ComposerRequest }) => {
-				try {
-					for await (const event of this.composer!.execute(request)) {
-						await this.connection?.sendRequest("wingman/compose", event);
-					}
-				} catch (e) {
-					console.error(e);
-				}
+				return this.compose(request);
+			},
+		);
+
+		this.connection?.onRequest(
+			"wingman/fixDiagnostics",
+			async (event: FixDiagnosticsEvent) => {
+				return this.fixDiagnostics(event);
 			},
 		);
 
 		this.connection?.onRequest("wingman/updateSettings", async () => {
-			await wingmanSettings.LoadSettings(true);
+			await wingmanSettings.LoadSettings(this.workspaceFolders[0], true);
 			await this.composer?.initialize();
 		});
 
 		this.connection?.onRequest(
 			"wingman/updateComposerFile",
 			async (event: UpdateComposerFileEvent) => {
-				return this.composer?.updateFile(event);
+				const state = await this.composer?.updateFile(event);
+
+				const settings = await wingmanSettings.LoadSettings(
+					this.workspaceFolders[0],
+				);
+				if (settings.validationSettings.automaticallyFixDiagnostics) {
+					const allFilesFinal = state?.files.every(
+						(f) => f.accepted || f.rejected,
+					);
+
+					if (!allFilesFinal) return state;
+
+					const diagnostics =
+						await this.diagnosticsRetriever.getFileDiagnostics(
+							state?.files.map((f) => f.path) ?? [],
+						);
+					if (diagnostics && diagnostics.length > 0) {
+						await this.fixDiagnostics(
+							{
+								diagnostics: diagnostics,
+								threadId: event.threadId,
+							},
+							1,
+						);
+					}
+				}
+
+				return state;
 			},
 		);
 

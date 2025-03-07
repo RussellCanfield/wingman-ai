@@ -1,6 +1,4 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import type { GraphStateAnnotation } from "../../composer/v2/agents";
-import type { baseToolSchema } from "../../composer/v2/tools/schemas";
 import {
 	AIMessage,
 	AIMessageChunk,
@@ -12,9 +10,13 @@ import { Tiktoken } from "js-tiktoken/lite";
 //@ts-expect-error
 import o200k_base from "js-tiktoken/ranks/o200k_base";
 import type { z } from "zod";
+import type { GraphStateAnnotation } from "../../composer";
+import type { baseToolSchema } from "../../composer/tools/schemas";
 
 // The threshold to trigger summarization
 const tokenThreshold = 32000;
+// Buffer to stay safely under the limit
+const safetyBuffer = 1000;
 
 /**
  * Trims messages when they exceed token threshold by summarizing the conversation
@@ -28,7 +30,7 @@ export async function trimMessages(
 ) {
 	const currentTokenCount = getTokenCount(state);
 
-	if (currentTokenCount <= tokenThreshold) return state.messages;
+	if (currentTokenCount <= tokenThreshold - safetyBuffer) return state.messages;
 
 	let chat = "";
 	for (const message of state.messages) {
@@ -38,6 +40,8 @@ export async function trimMessages(
 				for (const item of content) {
 					if (item.type === "text") {
 						chat += `human: ${item.text}\n\n`;
+					} else if (item.type === "image_url") {
+						chat += `human: ${item.image_url.url}\n\n`;
 					}
 				}
 			} else if (typeof content === "string") {
@@ -58,7 +62,10 @@ export async function trimMessages(
 				// Handle JSON parsing errors
 				chat += `tool_result: ${message.name} - ${msgContent}\n\n`;
 			}
-		} else if (message instanceof AIMessageChunk) {
+		} else if (
+			message instanceof AIMessageChunk ||
+			message instanceof AIMessage
+		) {
 			const content = message.content;
 			if (Array.isArray(content)) {
 				for (const item of content) {
@@ -122,9 +129,28 @@ export function getTokenCount(state: GraphStateAnnotation) {
 
 		if (Array.isArray(messageContent)) {
 			for (const content of messageContent) {
-				if (content.type === "tool_use") continue;
+				if (content.type === "tool_use") {
+					// Count tool_use name and arguments
+					if (content.tool_use?.name) {
+						totalTokens += getTokens(content.tool_use.name).length;
+					}
+					if (content.tool_use?.args) {
+						try {
+							totalTokens += getTokens(
+								JSON.stringify(content.tool_use.args),
+							).length;
+						} catch (e) {
+							// Handle JSON stringification errors
+							console.error("Error stringifying tool args:", e);
+						}
+					}
+					continue;
+				}
 				if (content.type === "text" && "text" in content) {
 					totalTokens += getTokens(content.text).length;
+				} else if (content.type === "image_url" && "image_url" in content) {
+					// Count a fixed number of tokens for image URLs (this is an approximation)
+					totalTokens += content.image_url.url ? 85 : 0; // Approximate token count for image embedding
 				}
 			}
 		} else if (typeof messageContent === "string") {
@@ -143,7 +169,24 @@ export function getTokenCount(state: GraphStateAnnotation) {
 
 	let totalTokenCount = 0;
 
+	// Add tokens for each message, including role tokens
 	for (const message of state.messages) {
+		// Add token count for role prefixes (estimate based on common models)
+		if (message instanceof HumanMessage) {
+			totalTokenCount += 4; // Approximate tokens for "user: "
+		} else if (
+			message instanceof AIMessage ||
+			message instanceof AIMessageChunk
+		) {
+			totalTokenCount += 4; // Approximate tokens for "assistant: "
+		} else if (message instanceof ToolMessage) {
+			totalTokenCount += 4; // Approximate tokens for "tool: "
+		} else {
+			// For any other message type, add a default number
+			totalTokenCount += 4;
+		}
+
+		// Handle message content
 		if (
 			message instanceof HumanMessage ||
 			message instanceof ToolMessage ||
@@ -152,8 +195,11 @@ export function getTokenCount(state: GraphStateAnnotation) {
 		) {
 			totalTokenCount += handleMessageContentTokens(message.content);
 
-			// Handle tool calls separately for AIMessageChunk
-			if (message instanceof AIMessageChunk && message.tool_calls) {
+			// Handle tool calls for both AIMessage and AIMessageChunk
+			if (
+				(message instanceof AIMessageChunk || message instanceof AIMessage) &&
+				message.tool_calls
+			) {
 				for (const toolCall of message.tool_calls) {
 					if (toolCall.name) {
 						totalTokenCount += getTokens(toolCall.name).length;
@@ -163,11 +209,23 @@ export function getTokenCount(state: GraphStateAnnotation) {
 							totalTokenCount += getTokens(
 								JSON.stringify(toolCall.args),
 							).length;
-						} catch {}
+						} catch (e) {
+							// Add a default count when JSON stringify fails
+							console.error("Error stringifying tool args:", e);
+							totalTokenCount += 10; // Add a minimum token count as fallback
+						}
 					}
 				}
 			}
 		}
+	}
+
+	// Add a small overhead for formatting
+	totalTokenCount += state.messages.length * 2;
+
+	// Add tokens for summary if it exists
+	if (state.summary) {
+		totalTokenCount += getTokens(state.summary).length;
 	}
 
 	return totalTokenCount;

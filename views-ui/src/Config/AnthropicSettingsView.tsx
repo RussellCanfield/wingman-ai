@@ -121,7 +121,7 @@ export const AnthropicSettingsView = ({
 							htmlFor="sparkMode"
 							className="ml-2 text-sm font-medium text-[var(--vscode-editor-foreground)]"
 						>
-							Spark Mode
+							Raw Mode
 						</label>
 					</div>
 					<div className="text-xs w-full text-[var(--vscode-descriptionForeground)]">

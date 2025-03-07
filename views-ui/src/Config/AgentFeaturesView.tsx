@@ -1,15 +1,15 @@
 import type { ValidationSettings } from "@shared/types/Settings";
 import type { InitSettings } from "./App";
 
-export type ValidationProps = {
+export type AgentFeatureViewProps = {
 	validationSettings: InitSettings["validationSettings"];
 	onValidationChanged: (validationSettings: ValidationSettings) => void;
 };
 
-export const ValidationView = ({
+export const AgentFeaturesView = ({
 	validationSettings,
 	onValidationChanged,
-}: ValidationProps) => {
+}: AgentFeatureViewProps) => {
 	const paths = { ...validationSettings };
 
 	const handleChangeInput = (e: any) => {
@@ -21,25 +21,25 @@ export const ValidationView = ({
 	};
 
 	return (
-		<div className="container mx-auto p-4">
+		<div className="container mx-auto mb-8">
 			<div className="flex flex-col gap-4">
-				<div className="flex flex-col">
-					<label
-						htmlFor="validationCommand"
-						className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
-					>
-						Validation Command:
-					</label>
+				<div className="flex flex-row items-center gap-2">
 					<input
-						id="validationCommand"
-						type="text"
+						id="automaticallyFixDiagnostics"
+						type="checkbox"
 						className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						onChange={handleChangeInput}
 						placeholder="npm run typecheck"
-						value={paths.validationCommand}
-						data-name="validationCommand"
-						title="Validation Command"
+						checked={paths.automaticallyFixDiagnostics}
+						data-name="automaticallyFixDiagnostics"
+						title="Automatically Fix Errors"
 					/>
+					<label
+						htmlFor="automaticallyFixDiagnostics"
+						className="text-sm font-medium text-[var(--vscode-foreground)]"
+					>
+						Automatically Fix Import/Lint Errors
+					</label>
 				</div>
 			</div>
 		</div>

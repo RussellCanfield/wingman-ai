@@ -25,7 +25,10 @@ import {
 	EVENT_COMPOSE_STARTED,
 	telemetry,
 } from "../providers/telemetryProvider";
-import type { UpdateComposerFileEvent } from "@shared/types/Events";
+import type {
+	FixDiagnosticsEvent,
+	UpdateComposerFileEvent,
+} from "@shared/types/Events";
 
 let client: LanguageClient;
 
@@ -164,10 +167,7 @@ export class LSPClient {
 							diag.source === "eslint" || diag.source === "tslint",
 					);
 
-					// Now you can track or process these filtered diagnostics
-					console.log(
-						`File ${uri.toString()} has ${importIssues.length} import issues and ${lintingErrors.length} linting errors`,
-					);
+					if (lintingErrors.length === 0 && importIssues.length === 0) continue;
 
 					fileDiagnostics.push({
 						path: vscode.workspace.asRelativePath(uri),
@@ -218,6 +218,13 @@ export class LSPClient {
 		return client.sendRequest<ComposerResponse>("wingman/compose", {
 			request,
 		});
+	};
+
+	fixDiagnostics = async (event: FixDiagnosticsEvent) => {
+		return client.sendRequest<ComposerResponse>(
+			"wingman/fixDiagnostics",
+			event,
+		);
 	};
 
 	clearChatHistory = async (activeThreadId: string) => {

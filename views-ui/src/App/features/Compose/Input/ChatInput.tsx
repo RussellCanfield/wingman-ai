@@ -302,7 +302,7 @@ const ChatInput = ({
 
 	return (
 		<div className="flex-basis-50 py-3 flex flex-col items-stretch" ref={ref}>
-			{suggestionItems.length > 0 && (
+			{!loading && suggestionItems.length > 0 && (
 				<CollapsibleSection
 					items={suggestionItems}
 					title={suggestionTitle}

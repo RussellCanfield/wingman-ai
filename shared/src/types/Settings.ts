@@ -38,7 +38,8 @@ export interface BaseEmbeddingServiceSettings {
 }
 
 export interface ValidationSettings {
-	validationCommand?: string;
+	midsceneEnabled?: boolean;
+	automaticallyFixDiagnostics?: boolean;
 }
 
 export interface InteractionSettings {
@@ -91,7 +92,8 @@ export const defaultInteractionSettings: InteractionSettings = {
 };
 
 export const defaultValidationSettings: ValidationSettings = {
-	validationCommand: "",
+	midsceneEnabled: false,
+	automaticallyFixDiagnostics: false,
 };
 
 export const defaultOllamaSettings: OllamaSettingsType = {
@@ -151,8 +153,5 @@ export type Settings = {
 		AzureAI?: AzureAISettingsType;
 	};
 	mcpTools?: MCPToolConfig[];
-	validationSettings: {
-		validationCommand?: string;
-		midsceneEnabled?: boolean;
-	};
+	validationSettings: ValidationSettings;
 };

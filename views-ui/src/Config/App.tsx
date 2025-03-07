@@ -13,7 +13,7 @@ import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
 import { vscode } from "./utilities/vscode";
 import "./App.css";
-import { ValidationView } from "./ValidationView";
+import { AgentFeaturesView } from "./AgentFeaturesView";
 import type { MCPToolConfig } from "@shared/types/Settings";
 import { MCPConfiguration } from "./McpTools";
 
@@ -296,19 +296,12 @@ export const App = () => {
 				<section className={cardClass}>
 					<div className="absolute top-0 right-0 bg-purple-600 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
 					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
-						Validation
+						Agent Features
 					</h2>
-					<ValidationView
+					<AgentFeaturesView
 						validationSettings={settings.validationSettings}
 						onValidationChanged={onValidationSettingsChanged}
 					/>
-				</section>
-
-				<section className={cardClass}>
-					<div className="absolute top-0 right-0 bg-orange-500 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
-					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
-						MCP Tools
-					</h2>
 					<MCPConfiguration
 						mcpTools={settings.mcpTools || []}
 						onChange={onMCPToolsChanged}

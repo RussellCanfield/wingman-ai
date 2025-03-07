@@ -30,6 +30,7 @@ export type ComposerResponse = {
 	events: StreamEvent[];
 	threadId: string;
 	diagnostics?: FileDiagnostic[];
+	tryAttempt?: number;
 };
 
 export type DiagnosticRange = {

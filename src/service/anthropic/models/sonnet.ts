@@ -1,4 +1,4 @@
-import { AnthropicModel } from "@shared/types/Models";
+import type { AnthropicModel } from "@shared/types/Models";
 import {
 	commonChatPrompt,
 	commonDocPrompt,

@@ -99,7 +99,7 @@ export const InteractionSettingsConfig = ({
 	};
 
 	return (
-		<div className="container mx-auto p-4">
+		<div className="container mx-auto">
 			<div className="mb-4">
 				<div className="flex items-center mb-2">
 					<label htmlFor="code-completion" className="block mr-2">
