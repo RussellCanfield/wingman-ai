@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { BsExclamationTriangle } from "react-icons/bs";
 import { FaRegFileLines } from "react-icons/fa6";
-import { getTruncatedPath } from "../../../../utilities/files";
+import { getTruncatedPath, openFile } from "../../../../utilities/files";
 import { MdOutlineAutoFixNormal } from "react-icons/md";
 import { useSettingsContext } from "../../../../context/settingsContext";
 import { vscode } from "../../../../utilities/vscode";
@@ -138,7 +138,10 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
                         {displayItems.map((item, index) => (
                             <li key={item.file} className={itemClass}>
                                 <FaRegFileLines size={16} />
-                                <span>{getTruncatedPath(item.file)}</span>
+                                {/* biome-ignore lint/a11y/useKeyWithClickEvents: <explanation> */}
+                                <span className="cursor-pointer hover:underline transition-all" onClick={() => openFile({
+                                    path: item.file
+                                })}>{getTruncatedPath(item.file)}</span>
                                 <span className="text-gray-400/50">{item.message}</span>
                             </li>
                         ))}

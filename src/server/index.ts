@@ -96,7 +96,6 @@ export class LSPServer {
 			this.workspaceFolders[0],
 			this.checkPointer,
 			this.codeParser,
-			this.diagnosticsRetriever,
 		);
 		await this.composer.initialize();
 	};
@@ -127,7 +126,7 @@ export class LSPServer {
 		}
 	};
 
-	private fixDiagnostics = async (event: FixDiagnosticsEvent, attempt = 0) => {
+	private fixDiagnostics = async (event: FixDiagnosticsEvent) => {
 		const { threadId, diagnostics } = event;
 
 		if (diagnostics?.length === 0) return;
@@ -375,25 +374,22 @@ ${input}`,
 				const settings = await wingmanSettings.LoadSettings(
 					this.workspaceFolders[0],
 				);
+				const allFilesFinal = state?.files.every(
+					(f) => f.accepted || f.rejected,
+				);
+
+				if (!allFilesFinal) return state;
+
+				const diagnostics = await this.diagnosticsRetriever.getFileDiagnostics(
+					state?.files.map((f) => f.path) ?? [],
+				);
+
 				if (settings.validationSettings.automaticallyFixDiagnostics) {
-					const allFilesFinal = state?.files.every(
-						(f) => f.accepted || f.rejected,
-					);
-
-					if (!allFilesFinal) return state;
-
-					const diagnostics =
-						await this.diagnosticsRetriever.getFileDiagnostics(
-							state?.files.map((f) => f.path) ?? [],
-						);
 					if (diagnostics && diagnostics.length > 0) {
-						await this.fixDiagnostics(
-							{
-								diagnostics: diagnostics,
-								threadId: event.threadId,
-							},
-							1,
-						);
+						await this.fixDiagnostics({
+							diagnostics: diagnostics,
+							threadId: event.threadId,
+						});
 					}
 				}
 

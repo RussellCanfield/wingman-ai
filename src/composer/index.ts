@@ -117,7 +117,6 @@ export class WingmanAgent {
 		private readonly workspace: string,
 		private readonly checkpointer: PartitionedFileSystemSaver,
 		private readonly codeParser: CodeParser,
-		private readonly diagnosticsRetriever: DiagnosticRetriever,
 	) {}
 
 	async initialize() {

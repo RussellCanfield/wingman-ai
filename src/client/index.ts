@@ -199,6 +199,13 @@ export class LSPClient {
 					});
 				}
 
+				if (this.composerWebView) {
+					this.composerWebView.postMessage({
+						command: "diagnostics",
+						value: fileDiagnostics,
+					});
+				}
+
 				return fileDiagnostics;
 			},
 		);

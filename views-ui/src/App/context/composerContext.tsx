@@ -197,7 +197,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           loading: false
         };
 
-        setFileDiagnostics(diagnostics ?? []);
         setComposerMessages(prevMessages => [
           ...prevMessages,
           newMessage
@@ -260,6 +259,10 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
             setComposerMessages(threads[0].messages as ComposerMessage[] || []);
           }
         }
+        break;
+      }
+      case "diagnostics": {
+        setFileDiagnostics(value as FileDiagnostic[] ?? []);
         break;
       }
     }

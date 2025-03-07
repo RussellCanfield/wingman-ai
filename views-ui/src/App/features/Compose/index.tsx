@@ -10,7 +10,6 @@ import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
 import type { AddMessageToThreadEvent } from "@shared/types/Events";
 import { vscode } from "../../utilities/vscode";
-import { useMemo } from "react";
 
 let currentMessage = "";
 
