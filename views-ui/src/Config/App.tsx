@@ -8,6 +8,7 @@ import type {
 	OllamaSettingsType,
 	Settings,
 	AgentSettings,
+	xAISettingsType,
 } from "@shared/types/Settings";
 import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
@@ -152,6 +153,9 @@ export const App = () => {
 		} else if (settings.aiProvider === "AzureAI") {
 			updatedProviderSettings.AzureAI =
 				aiProviderSettings as AzureAISettingsType;
+		} else if (settings.aiProvider === "xAI") {
+			updatedProviderSettings.xAI =
+				aiProviderSettings as xAISettingsType;
 		}
 
 		setSettings((s) => ({

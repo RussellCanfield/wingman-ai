@@ -6,6 +6,7 @@ import type { Settings } from "@shared/types/Settings";
 import type { AIProvider } from "../base";
 import type { ILoggingProvider } from "@shared/types/Logger";
 import { AzureAI } from "../azure/azure";
+import { xAI } from "../xai";
 
 export function CreateAIProvider(
 	settings: Settings,
@@ -38,6 +39,14 @@ export function CreateAIProvider(
 	if (settings.aiProvider === "AzureAI") {
 		return new AzureAI(
 			settings.providerSettings.AzureAI,
+			settings.interactionSettings,
+			loggingProvider,
+		);
+	}
+
+	if (settings.aiProvider === "xAI") {
+		return new xAI(
+			settings.providerSettings.xAI,
 			settings.interactionSettings,
 			loggingProvider,
 		);

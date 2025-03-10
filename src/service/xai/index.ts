@@ -61,9 +61,7 @@ export class xAI implements AIStreamProvider {
 			this.settings?.chatModel?.startsWith("grok") || false;
 		const isCodeModelValid =
 			this.settings?.codeModel?.startsWith("grok") || false;
-		return Promise.resolve(
-			isChatModelValid &&
-				isCodeModelValid
+		return Promise.resolve(isChatModelValid && isCodeModelValid);
 	}
 
 	private getCodeModel(codeModel: string): AzureAIModel | undefined {

@@ -1,4 +1,4 @@
-import { ReadableStream } from "node:stream/web";
+import type { ReadableStream } from "node:stream/web";
 
 export async function* asyncIterator(body: ReadableStream<Uint8Array>) {
 	const reader = body.getReader();

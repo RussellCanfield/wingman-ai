@@ -18,6 +18,7 @@ export const XAISettingsView = ({
 
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
+		console.log(e, field);
 		const clone = { ...paths };
 		//@ts-ignore
 		clone[field] = e.target.value;
