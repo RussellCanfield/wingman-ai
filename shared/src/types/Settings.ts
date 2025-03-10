@@ -96,9 +96,10 @@ export const defaultInteractionSettings: InteractionSettings = {
 	chatMaxTokens: 8192,
 };
 
-export const defaultValidationSettings: AgentSettings = {
+export const defaultAgentSettings: AgentSettings = {
 	midsceneEnabled: false,
 	automaticallyFixDiagnostics: false,
+	vibeMode: true,
 };
 
 export const defaultxAISettings: xAISettingsType = {

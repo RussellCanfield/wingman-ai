@@ -5,7 +5,7 @@ import {
 	defaultInteractionSettings,
 	defaultOllamaSettings,
 	defaultOpenAISettings,
-	defaultValidationSettings,
+	defaultAgentSettings,
 	defaultxAISettings,
 	type Settings,
 } from "@shared/types/Settings";
@@ -24,7 +24,7 @@ export const defaultSettings: Settings = {
 		AzureAI: defaultAzureAISettings,
 		xAI: defaultxAISettings,
 	},
-	agentSettings: defaultValidationSettings,
+	agentSettings: defaultAgentSettings,
 };
 
 export class WingmanSettings {
