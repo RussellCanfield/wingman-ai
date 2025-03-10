@@ -99,12 +99,12 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
         })
     }
 
-    const autoFixComponent = settings?.validationSettings?.automaticallyFixDiagnostics ?
-        (<div className="flex items-center justify-end gap-2 mr-4 text-sm">
+    const autoFixComponent = settings?.agentSettings?.automaticallyFixDiagnostics ?
+        (<div className="flex items-center justify-end gap-2 mr-4 text-sm p-4">
             <MdOutlineAutoFixNormal size={16} className="text-green-600/50" />
             <p className="text-green-600/50">Auto Fix - Enabled</p>
         </div>) : (
-            <div className="flex items-center justify-end gap-2 mr-4 text-sm">
+            <div className="flex items-center justify-end gap-2 mr-4 text-sm p-4">
                 <button
                     type="button"
                     onClick={fixDiagnostics}
@@ -134,21 +134,21 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             </div>
             <div className={contentClass}>
                 {displayItems.length > 0 ? (
-                    <ul>
-                        {displayItems.map((item, index) => (
-                            <li key={item.file} className={itemClass}>
-                                <FaRegFileLines size={16} />
-                                {/* biome-ignore lint/a11y/useKeyWithClickEvents: <explanation> */}
-                                <span className="cursor-pointer hover:underline transition-all" onClick={() => openFile({
-                                    path: item.file
-                                })}>{getTruncatedPath(item.file)}</span>
-                                <span className="text-gray-400/50">{item.message}</span>
-                            </li>
-                        ))}
-                        <li key="setting">
-                            {autoFixComponent}
-                        </li>
-                    </ul>
+                    <>
+                        <ul>
+                            {displayItems.map((item, index) => (
+                                <li key={item.file} className={itemClass}>
+                                    <FaRegFileLines size={16} />
+                                    {/* biome-ignore lint/a11y/useKeyWithClickEvents: <explanation> */}
+                                    <span className="cursor-pointer hover:underline transition-all" onClick={() => openFile({
+                                        path: item.file
+                                    })}>{getTruncatedPath(item.file)}</span>
+                                    <span className="text-gray-400/50">{item.message}</span>
+                                </li>
+                            ))}
+                        </ul>
+                        {autoFixComponent}
+                    </>
                 ) : (
                     <div className={`${itemClass} text-center italic opacity-70`}>
                         No items to display

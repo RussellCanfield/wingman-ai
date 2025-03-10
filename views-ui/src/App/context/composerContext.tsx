@@ -185,7 +185,9 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const handleComposerEvent = (value: ComposerResponse) => {
-    const { step, events, threadId, diagnostics } = value;
+    const { step, events, threadId, canResume } = value;
+
+    console.log(step, events)
 
     switch (step) {
       case "composer-done": {
@@ -207,6 +209,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           value: {
             threadId: threadId,
             message: newMessage,
+            canResume
           } satisfies AddMessageToThreadEvent
         });
 
@@ -214,20 +217,20 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         setActiveMessage(undefined);
         break;
       }
-      case "composer-events":
-        if (!loading) {
-          setLoading(true);
-        }
+      case "composer-events": {
+        setLoading(true);
         setActiveMessage((am) => {
           return {
             from: "assistant",
             message: am?.message || "",
             events,
             threadId,
-            loading: true
+            loading: true,
+            canResume
           }
         });
         break;
+      }
     }
   };
 

@@ -29,9 +29,11 @@ import { cancelComposer, WingmanAgent } from "../composer";
 import { PartitionedFileSystemSaver } from "../composer/checkpointer";
 import type {
 	FixDiagnosticsEvent,
+	UpdateCommandEvent,
 	UpdateComposerFileEvent,
 } from "@shared/types/Events";
 import { wingmanSettings } from "../service/settings";
+import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
 
 export type CustomRange = {
 	start: { line: number; character: number };
@@ -116,10 +118,44 @@ export class LSPServer {
 		return targetPath;
 	};
 
-	private compose = async (request: ComposerRequest) => {
+	private compose = async (
+		request: ComposerRequest,
+		files?: FileMetadata[],
+		command?: CommandMetadata,
+	) => {
 		try {
-			for await (const event of this.composer!.execute(request)) {
+			for await (const event of this.composer!.execute(
+				request,
+				files,
+				command,
+			)) {
 				await this.connection?.sendRequest("wingman/compose", event);
+
+				if (event.step === "composer-done" && !event.canResume) {
+					const state = await this.composer?.getState(request.threadId);
+					const settings = await wingmanSettings.LoadSettings(
+						this.workspaceFolders[0],
+					);
+					const allFilesFinal = state?.files.every(
+						(f) => f.accepted || f.rejected,
+					);
+
+					if (!allFilesFinal) return state;
+
+					const diagnostics =
+						await this.diagnosticsRetriever.getFileDiagnostics(
+							state?.files.map((f) => f.path) ?? [],
+						);
+
+					if (settings.agentSettings.automaticallyFixDiagnostics) {
+						if (diagnostics && diagnostics.length > 0) {
+							await this.fixDiagnostics({
+								diagnostics: diagnostics,
+								threadId: event.threadId,
+							});
+						}
+					}
+				}
 			}
 		} catch (e) {
 			console.error(e);
@@ -369,31 +405,41 @@ ${input}`,
 		this.connection?.onRequest(
 			"wingman/updateComposerFile",
 			async (event: UpdateComposerFileEvent) => {
-				const state = await this.composer?.updateFile(event);
-
-				const settings = await wingmanSettings.LoadSettings(
-					this.workspaceFolders[0],
-				);
-				const allFilesFinal = state?.files.every(
+				const fromUserAction = event.files.every(
 					(f) => f.accepted || f.rejected,
 				);
 
-				if (!allFilesFinal) return state;
-
-				const diagnostics = await this.diagnosticsRetriever.getFileDiagnostics(
-					state?.files.map((f) => f.path) ?? [],
-				);
-
-				if (settings.validationSettings.automaticallyFixDiagnostics) {
-					if (diagnostics && diagnostics.length > 0) {
-						await this.fixDiagnostics({
-							diagnostics: diagnostics,
-							threadId: event.threadId,
-						});
-					}
+				if (!fromUserAction) {
+					return await this.composer?.updateFile(event);
 				}
 
-				return state;
+				if (event.files.every((f) => f.rejected)) {
+					return await this.composer?.updateFile(event);
+				}
+
+				await this.compose(
+					{
+						input: "",
+						threadId: event.threadId,
+						contextFiles: [],
+					},
+					event.files,
+				);
+			},
+		);
+
+		this.connection?.onRequest(
+			"wingman/updateCommand",
+			async (event: UpdateCommandEvent) => {
+				await this.compose(
+					{
+						input: "",
+						threadId: event.threadId,
+						contextFiles: [],
+					},
+					undefined,
+					event.command,
+				);
 			},
 		);
 

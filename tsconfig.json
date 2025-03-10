@@ -19,6 +19,6 @@
 		"./node_modules/vscode/vscode.d.ts",
 		"./node_modules/vscode/lib/*"
 	],
-	"exclude": ["node_modules", ".vscode-test", "docs-site", "docs"],
+	"exclude": ["node_modules", ".vscode-test", "docs-site", "docs", "scripts", "media", "views-ui/node_modules"],
 	"references": [{ "path": "./shared" }]
 }

@@ -59,7 +59,7 @@ export const ChatArtifact = ({
                             </span>
                         </div>
                     )}
-                    {!file.diff || loading && (
+                    {loading && !file.accepted && !file.rejected && (
                         <div className="flex justify-center mr-4">
                             <AiOutlineLoading3Quarters
                                 className="animate-spin text-stone-400"

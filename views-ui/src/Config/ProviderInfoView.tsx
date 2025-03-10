@@ -6,19 +6,28 @@ export const ProviderInfoView = ({ aiProvider }: InitSettings) => {
 			<h3 className="text-md font-bold">Supported Models:</h3>
 			{/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
 			<label>
-				In order for models to make it to Wingman, we thoroughly test
-				them and verify their capabilities. We are unable to load
-				unsupported models.
+				In order for models to be supported by Wingman, they must
+				support tool calling capabilities. We support the following models:
 			</label>
-			{/* biome-ignore lint/a11y/noLabelWithoutControl: <explanation> */}
-			<label>We support the following models:</label>
 			{aiProvider === "Ollama" && <OllamaView />}
 			{aiProvider === "OpenAI" && <OpenAIView />}
 			{aiProvider === "Anthropic" && <AnthropicView />}
 			{aiProvider === "AzureAI" && <OpenAIView />}
+			{aiProvider === "xAI" && <XAIView />}
 		</div>
 	);
 };
+
+export const XAIView = () => {
+	return (
+		<div className="mt-4">
+			<ul>
+				<li>grok-beta</li>
+				<li>grok-2</li>
+			</ul>
+		</div>
+	);
+}
 
 export const AnthropicView = () => {
 	return (

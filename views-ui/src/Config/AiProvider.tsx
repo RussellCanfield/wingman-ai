@@ -12,6 +12,7 @@ import { OpenAISettingsView } from "./OpenAISettingsView";
 import { AnthropicSettingsView } from "./AnthropicSettingsView";
 import { ProviderInfoView } from "./ProviderInfoView";
 import { AzureAISettingsView } from "./AzureAISettingsView";
+import { XAISettingsView } from './xAISettingsView';
 
 export type AiProviderProps = {
 	settings: InitSettings;
@@ -27,7 +28,7 @@ export const AiProvider = ({
 	onProviderSettingsChanged,
 }: AiProviderProps) => {
 	const { aiProvider, providerSettings, ollamaModels } = settings;
-	const { Ollama, HuggingFace, OpenAI, Anthropic, AzureAI } =
+	const { Ollama, HuggingFace, OpenAI, Anthropic, AzureAI, xAI } =
 		providerSettings;
 
 	const handleProviderChange = (e: any) => {
@@ -90,6 +91,13 @@ export const AiProvider = ({
 				//@ts-expect-error
 				<AzureAISettingsView
 					{...AzureAI}
+					onChange={onProviderSettingsChanged}
+				/>
+			)}
+			{aiProvider === "xAI" && (
+				//@ts-expect-error
+				<XAISettingsView
+					{...xAI}
 					onChange={onProviderSettingsChanged}
 				/>
 			)}

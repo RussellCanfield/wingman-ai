@@ -16,6 +16,16 @@ export interface FileMetadata {
 	lastModified?: number;
 }
 
+export interface CommandMetadata {
+	id?: string;
+	command: string;
+	result?: string;
+	accepted?: boolean;
+	rejected?: boolean;
+	success?: boolean;
+	failed?: boolean;
+}
+
 export interface CodeContextDetails {
 	lineRange: string;
 	fileName: string;

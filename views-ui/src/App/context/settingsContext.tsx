@@ -38,7 +38,6 @@ export const SettingsProvider: FC<PropsWithChildren> = ({ children }) => {
           break;
         }
         case "settings": {
-          console.log('Settings:', value);
           setSettings(value as Settings);
           break;
         }

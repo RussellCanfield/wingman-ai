@@ -27,6 +27,7 @@ import {
 } from "../providers/telemetryProvider";
 import type {
 	FixDiagnosticsEvent,
+	UpdateCommandEvent,
 	UpdateComposerFileEvent,
 } from "@shared/types/Events";
 
@@ -247,6 +248,16 @@ export class LSPClient {
 	}: UpdateComposerFileEvent): Promise<GraphState> => {
 		return client.sendRequest("wingman/updateComposerFile", {
 			files,
+			threadId,
+		});
+	};
+
+	updateCommand = async ({
+		command,
+		threadId,
+	}: UpdateCommandEvent): Promise<GraphState> => {
+		return client.sendRequest("wingman/updateCommand", {
+			command,
 			threadId,
 		});
 	};

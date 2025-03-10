@@ -10,7 +10,6 @@ import { getTruncatedPath, openFile } from "../../../utilities/files";
 
 const ToolNames = {
     list_directory: "Searched: ",
-    command_execute: "Executed: ",
     find_file_dependencies: "Checked Dependencies",
     read_file: "Analyzed: ",
     research: "Researching..."
@@ -30,10 +29,6 @@ export const ToolOutput = ({
 
         try {
             const parsedContent = JSON.parse(event.content);
-
-            if (event.metadata?.tool === 'command_execute' && parsedContent.command) {
-                return parsedContent.command;
-            }
 
             if (event.metadata?.tool === "list_directory") {
                 return parsedContent.directory;

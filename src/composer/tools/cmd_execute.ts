@@ -2,12 +2,12 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { spawn, type ChildProcess } from "node:child_process";
 import { baseToolSchema } from "./schemas";
+import { Command } from "@langchain/langgraph";
+import type { CommandMetadata } from "@shared/types/Message";
 
 export const commandExecuteSchema = baseToolSchema.extend({
 	command: z.string().describe("The command to execute in the terminal"),
 });
-
-type CommandExecuteInput = z.infer<typeof commandExecuteSchema>;
 
 const BLOCKED_COMMANDS = [
 	"rm",
@@ -37,21 +37,49 @@ export const createCommandExecuteTool = (
 	timeoutInMilliseconds = 60000,
 ) => {
 	return tool(
-		async (input: CommandExecuteInput) => {
+		async (input, config) => {
 			return new Promise((resolve, reject) => {
 				try {
 					const commandLower = input.command.toLowerCase();
 
+					// More precise check for blocked commands
 					if (
-						BLOCKED_COMMANDS.some(
-							(cmd) =>
-								commandLower.includes(cmd) ||
-								commandLower.includes(`/${cmd}`) ||
-								commandLower.includes(`\\${cmd}`),
-						)
+						BLOCKED_COMMANDS.some((cmd) => {
+							// Check for exact command match or command with arguments
+							const parts = commandLower.split(/\s+/);
+							return (
+								parts[0] === cmd ||
+								// Check for command as part of a path (like /rm or \rm)
+								commandLower.includes(`/${cmd} `) ||
+								commandLower.includes(`\\${cmd} `) ||
+								// Check for command with arguments
+								parts.some((part) => part === cmd)
+							);
+						})
 					) {
 						resolve(
-							"Command rejected: Contains potentially destructive operations",
+							new Command({
+								update: {
+									commands: [
+										{
+											id: config.callbacks._parentRunId!,
+											command: input.command,
+											result: `Command: "${input.command}" rejected, contains potentially destructive operations`,
+											failed: true,
+											success: false,
+											accepted: true,
+											rejected: false,
+										},
+									],
+									messages: [
+										{
+											role: "tool",
+											content: `Command: "${input.command}" rejected, contains potentially destructive operations`,
+											tool_call_id: config.toolCall.id,
+										},
+									],
+								},
+							}),
 						);
 						return;
 					}
@@ -61,7 +89,30 @@ export const createCommandExecuteTool = (
 						commandLower.includes(".bat") ||
 						commandLower.includes(".cmd")
 					) {
-						resolve("Command rejected: Script execution not allowed");
+						resolve(
+							new Command({
+								update: {
+									commands: [
+										{
+											id: config.callbacks._parentRunId!,
+											command: input.command,
+											result: `Command: "${input.command}" blocked`,
+											failed: true,
+											success: false,
+											accepted: true,
+											rejected: false,
+										},
+									],
+									messages: [
+										{
+											role: "tool",
+											content: `Command: "${input.command}" rejected, script execution not allowed`,
+											tool_call_id: config.toolCall.id,
+										},
+									],
+								},
+							}),
+						);
 						return;
 					}
 
@@ -87,7 +138,31 @@ export const createCommandExecuteTool = (
 							} catch (e) {
 								// Ignore kill errors
 							}
-							resolve("Command timed out after 60 seconds");
+							resolve(
+								new Command({
+									update: {
+										commands: [
+											{
+												id: config.callbacks._parentRunId!,
+												command: input.command,
+												result: `Command: "${input.command}" timed out after 60 seconds`,
+												failed: true,
+												success: false,
+												accepted: true,
+												rejected: false,
+											},
+										],
+										messages: [
+											{
+												id: config.callbacks._parentRunId!,
+												role: "tool",
+												content: `Command: "${input.command}" timed out after 60 seconds`,
+												tool_call_id: config.toolCall.id,
+											},
+										],
+									},
+								}),
+							);
 						}
 					}, timeoutInMilliseconds);
 
@@ -103,7 +178,30 @@ export const createCommandExecuteTool = (
 						if (!hasExited) {
 							hasExited = true;
 							clearTimeout(timeout);
-							resolve(`Command failed: ${err.message}\nOutput:\n${output}`);
+							resolve(
+								new Command({
+									update: {
+										commands: [
+											{
+												id: config.callbacks._parentRunId!,
+												command: input.command,
+												result: err.message,
+												failed: true,
+												success: false,
+												accepted: true,
+												rejected: false,
+											},
+										] satisfies CommandMetadata[],
+										messages: [
+											{
+												role: "tool",
+												content: `Command: "${input.command}" failed, error: ${err.message}`,
+												tool_call_id: config.toolCall.id,
+											},
+										],
+									},
+								}),
+							);
 						}
 					});
 
@@ -112,22 +210,85 @@ export const createCommandExecuteTool = (
 							hasExited = true;
 							clearTimeout(timeout);
 							if (code === 0) {
-								resolve({
-									output: output || "Command completed successfully",
-									explanation: input.explanation,
-								});
+								resolve(
+									new Command({
+										update: {
+											commands: [
+												{
+													id: config.callbacks._parentRunId!,
+													command: input.command,
+													result: output,
+													failed: false,
+													success: true,
+													accepted: true,
+													rejected: false,
+												},
+											] satisfies CommandMetadata[],
+											messages: [
+												{
+													role: "tool",
+													content: `Command: "${input.command}" ran successfully`,
+													tool_call_id: config.toolCall.id,
+												},
+											],
+										},
+									}),
+								);
 							} else {
-								resolve({
-									output: `Command failed with exit code: ${code}\nOutput:\n${output}`,
-									explanation: input.explanation,
-								});
+								resolve(
+									new Command({
+										update: {
+											commands: [
+												{
+													id: config.callbacks._parentRunId!,
+													command: input.command,
+													result: output,
+													failed: true,
+													success: false,
+													accepted: true,
+													rejected: false,
+												},
+											] satisfies CommandMetadata[],
+											messages: [
+												{
+													role: "tool",
+													content: `Command: "${input.command}" failed, output: ${output}`,
+													tool_call_id: config.toolCall.id,
+												},
+											],
+										},
+									}),
+								);
 							}
 						}
 					});
 				} catch (error) {
 					const errorMessage =
 						error instanceof Error ? error.message : "Unknown error occurred";
-					resolve(`Failed to execute command: ${errorMessage}`);
+					resolve(
+						new Command({
+							update: {
+								commands: [
+									{
+										id: config.callbacks._parentRunId!,
+										command: input.command,
+										result: errorMessage,
+										failed: true,
+										success: false,
+										accepted: true,
+										rejected: false,
+									},
+								] satisfies CommandMetadata[],
+								messages: [
+									{
+										role: "tool",
+										content: `Command: "${input.command}" failed, error: ${errorMessage}`,
+										tool_call_id: config.toolCall.id,
+									},
+								],
+							},
+						}),
+					);
 				}
 			});
 		},

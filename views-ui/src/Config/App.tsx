@@ -7,7 +7,7 @@ import type {
 	InteractionSettings,
 	OllamaSettingsType,
 	Settings,
-	ValidationSettings,
+	AgentSettings,
 } from "@shared/types/Settings";
 import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
@@ -160,10 +160,10 @@ export const App = () => {
 		}));
 	};
 
-	const onValidationSettingsChanged = (settings: ValidationSettings) => {
+	const onValidationSettingsChanged = (settings: AgentSettings) => {
 		setSettings((s) => ({
 			...s!,
-			validationSettings: settings,
+			agentSettings: settings,
 		}));
 	};
 
@@ -299,7 +299,7 @@ export const App = () => {
 						Agent Features
 					</h2>
 					<AgentFeaturesView
-						validationSettings={settings.validationSettings}
+						validationSettings={settings.agentSettings}
 						onValidationChanged={onValidationSettingsChanged}
 					/>
 					<MCPConfiguration

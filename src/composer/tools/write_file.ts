@@ -71,36 +71,53 @@ const generateDiffFromModifiedCode = async (
 	}
 };
 
+export const generateFileMetadata = async (
+	workspace: string,
+	id: string,
+	input: z.infer<typeof writeFileSchema>,
+) => {
+	let fileContents = "";
+	const filePath = path.join(workspace, input.filePath);
+	if (fs.existsSync(filePath)) {
+		try {
+			fileContents = await promises.readFile(filePath, {
+				encoding: "utf-8",
+			});
+		} catch (e) {
+			console.warn(`Failed to read file ${filePath}:`, e);
+		}
+	}
+
+	return {
+		id,
+		path: input.filePath,
+		code: input.contents,
+		original: fileContents,
+		diff: await generateDiffFromModifiedCode(
+			input.contents,
+			input.filePath,
+			fileContents,
+		),
+	} satisfies FileMetadata;
+};
+
 /**
  * Creates a write file tool with the given workspace
  */
-export const createWriteFileTool = (workspace: string) => {
+export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 	return tool(
 		async (input, config) => {
 			try {
-				let fileContents = "";
-				const filePath = path.join(workspace, input.filePath);
-				if (fs.existsSync(filePath)) {
-					try {
-						fileContents = await promises.readFile(filePath, {
-							encoding: "utf-8",
-						});
-					} catch (e) {
-						console.warn(`Failed to read file ${filePath}:`, e);
-					}
-				}
+				const file: FileMetadata = await generateFileMetadata(
+					workspace,
+					config.callbacks._parentRunId,
+					input,
+				);
 
-				const file: FileMetadata = {
-					id: config.callbacks._parentRunId,
-					path: input.filePath,
-					code: input.contents,
-					original: fileContents,
-					diff: await generateDiffFromModifiedCode(
-						input.contents,
-						input.filePath,
-						fileContents,
-					),
-				};
+				if (autoCommit) {
+					file.accepted = true;
+					await promises.writeFile(path.join(workspace, file.path), file.code!);
+				}
 
 				return new Command({
 					update: {

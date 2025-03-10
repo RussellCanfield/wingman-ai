@@ -9,6 +9,7 @@ export interface Thread {
 	updatedAt: number;
 	messages: ComposerMessage[];
 	originatingThreadId?: string;
+	canResume?: boolean;
 }
 
 export interface WorkspaceSettings {
@@ -37,8 +38,9 @@ export interface BaseEmbeddingServiceSettings {
 	enabled: boolean;
 }
 
-export interface ValidationSettings {
+export interface AgentSettings {
 	midsceneEnabled?: boolean;
+	vibeMode?: boolean;
 	automaticallyFixDiagnostics?: boolean;
 }
 
@@ -57,6 +59,7 @@ export const AiProviders = [
 	"OpenAI",
 	"Anthropic",
 	"AzureAI",
+	"xAI",
 ] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
@@ -67,6 +70,8 @@ export type OllamaSettingsType = BaseServiceSettings & {
 	apiPath: string;
 	modelInfoPath: string;
 };
+
+export type xAISettingsType = ApiSettingsType;
 
 export type ApiSettingsType = BaseServiceSettings & {
 	apiKey: string;
@@ -91,9 +96,16 @@ export const defaultInteractionSettings: InteractionSettings = {
 	chatMaxTokens: 8192,
 };
 
-export const defaultValidationSettings: ValidationSettings = {
+export const defaultValidationSettings: AgentSettings = {
 	midsceneEnabled: false,
 	automaticallyFixDiagnostics: false,
+};
+
+export const defaultxAISettings: xAISettingsType = {
+	codeModel: "grok-beta",
+	chatModel: "grok-beta",
+	baseUrl: "https://api.x.ai/v1",
+	apiKey: "",
 };
 
 export const defaultOllamaSettings: OllamaSettingsType = {
@@ -151,7 +163,8 @@ export type Settings = {
 		OpenAI?: ApiSettingsType;
 		Anthropic?: AnthropicSettingsType;
 		AzureAI?: AzureAISettingsType;
+		xAI?: xAISettingsType;
 	};
 	mcpTools?: MCPToolConfig[];
-	validationSettings: ValidationSettings;
+	agentSettings: AgentSettings;
 };

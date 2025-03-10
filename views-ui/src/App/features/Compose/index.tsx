@@ -10,8 +10,8 @@ import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
 import type { AddMessageToThreadEvent } from "@shared/types/Events";
 import { vscode } from "../../utilities/vscode";
-
-let currentMessage = "";
+import { useSettingsContext } from "../../context/settingsContext";
+import { useMemo } from "react";
 
 const getFileExtension = (fileName: string): string => {
 	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
@@ -27,6 +27,7 @@ const getBase64FromFile = (file: File): Promise<string> => {
 };
 
 export default function Compose() {
+	const { isLightTheme } = useSettingsContext();
 	const {
 		composerMessages,
 		setComposerMessages,
@@ -51,7 +52,6 @@ export default function Compose() {
 		contextFiles: string[],
 		image?: File
 	) => {
-		currentMessage = "";
 		const threadId = activeThread?.id ?? crypto.randomUUID();
 		const payload: ComposerRequest = {
 			input,
@@ -99,6 +99,19 @@ export default function Compose() {
 		setLoading(true);
 	};
 
+	const ActiveMessage = useMemo(() => {
+		return (
+			<ChatEntry
+				from="assistant"
+				message={activeMessage?.message || ""}
+				events={activeMessage?.events}
+				loading={loading}
+				isCurrent={true}
+				canResume={activeMessage?.canResume}
+			/>
+		)
+	}, [activeMessage?.events, loading, activeMessage?.message, activeMessage?.canResume]);
+
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			<div className="flex items-center justify-between p-2 pt-0 border-b border-[var(--vscode-panel-border)]">
@@ -144,18 +157,12 @@ export default function Compose() {
 				{composerMessages.length > 0 && (
 					<ChatResponseList messages={composerMessages} loading={loading}>
 						{loading && (!activeMessage?.threadId || activeThread?.id === activeMessage?.threadId) && (
-							<ChatEntry
-								from="assistant"
-								message={activeMessage?.message || ""}
-								events={activeMessage?.events}
-								loading={true}
-								isCurrent={true}
-							/>
+							ActiveMessage
 						)}
 					</ChatResponseList>
 				)}
 				<ChatInput
-					loading={loading}
+					loading={loading || ((activeMessage?.canResume || activeThread?.canResume) ?? false)}
 					threadId={activeThread?.id}
 					onChatSubmitted={handleChatSubmitted}
 					onChatCancelled={cancelAIResponse}

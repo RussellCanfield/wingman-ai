@@ -6,6 +6,7 @@ import {
 	defaultOllamaSettings,
 	defaultOpenAISettings,
 	defaultValidationSettings,
+	defaultxAISettings,
 	type Settings,
 } from "@shared/types/Settings";
 import { homedir } from "node:os";
@@ -21,8 +22,9 @@ export const defaultSettings: Settings = {
 		Anthropic: defaultAnthropicSettings,
 		OpenAI: defaultOpenAISettings,
 		AzureAI: defaultAzureAISettings,
+		xAI: defaultxAISettings,
 	},
-	validationSettings: defaultValidationSettings,
+	agentSettings: defaultValidationSettings,
 };
 
 export class WingmanSettings {
@@ -50,9 +52,9 @@ export class WingmanSettings {
 				...defaults.providerSettings,
 				...loaded.providerSettings,
 			},
-			validationSettings: {
-				...defaults.validationSettings,
-				...loaded.validationSettings,
+			agentSettings: {
+				...defaults.agentSettings,
+				...loaded.agentSettings,
 			},
 		};
 	}

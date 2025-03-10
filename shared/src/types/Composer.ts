@@ -1,4 +1,4 @@
-import type { CodeContextDetails } from "./Message";
+import type { CodeContextDetails, CommandMetadata } from "./Message";
 import type { FileMetadata } from "./Message";
 
 export type DiffViewCommand = {
@@ -23,6 +23,7 @@ export interface GraphState {
 	image?: ComposerImage;
 	context?: CodeContextDetails;
 	files: FileMetadata[];
+	commands: CommandMetadata[];
 }
 
 export type ComposerResponse = {
@@ -30,7 +31,7 @@ export type ComposerResponse = {
 	events: StreamEvent[];
 	threadId: string;
 	diagnostics?: FileDiagnostic[];
-	tryAttempt?: number;
+	canResume?: boolean;
 };
 
 export type DiagnosticRange = {
@@ -57,7 +58,7 @@ export interface StreamEvent {
 	metadata?: {
 		tool?: string;
 		path?: string;
-		action?: "read" | "write" | "modify";
+		command?: string;
 	};
 }
 
@@ -74,6 +75,7 @@ export interface ComposerMessage {
 	image?: ComposerRequest["image"];
 	events?: StreamEvent[];
 	threadId?: string;
+	canResume?: boolean;
 }
 
 export type FileSearchResult = {

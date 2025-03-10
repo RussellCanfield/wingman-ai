@@ -7,6 +7,7 @@ import type {
 	AddMessageToThreadEvent,
 	FixDiagnosticsEvent,
 	RenameThreadEvent,
+	UpdateCommandEvent,
 	UpdateComposerFileEvent,
 } from "@shared/types/Events";
 import {
@@ -18,7 +19,6 @@ import type { LSPClient } from "../client/index";
 import type {
 	ComposerRequest,
 	DiffViewCommand,
-	FileDiagnostic,
 	FileSearchResult,
 } from "@shared/types/Composer";
 import type { DiffViewProvider } from "./diffViewProvider";
@@ -190,6 +190,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 									(value as FileMetadata).path,
 								),
 							),
+						);
+						break;
+					case "accept-command":
+						await this.acceptOrRejectCommand(value as UpdateCommandEvent, true);
+						break;
+					case "reject-command":
+						await this.acceptOrRejectCommand(
+							value as UpdateCommandEvent,
+							false,
+							true,
 						);
 						break;
 
@@ -470,6 +480,49 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
+	private async acceptOrRejectCommand(
+		{ command, threadId }: UpdateCommandEvent,
+		accepted = false,
+		rejected = false,
+	): Promise<void> {
+		const targetThread = await this._workspace.getThreadById(threadId);
+		if (!targetThread) return;
+
+		command.accepted = accepted;
+		command.rejected = rejected;
+
+		let commandFound = false;
+		for (let i = targetThread.messages.length - 1; i >= 0; i--) {
+			if (commandFound) {
+				break;
+			}
+
+			const message = targetThread.messages[i];
+			const events = message.events ?? [];
+			for (let j = events.length - 1; j >= 0; j--) {
+				const event = events[j];
+				if (command.id === event.id) {
+					event.content = JSON.stringify(command);
+					commandFound = true;
+					break;
+				}
+			}
+		}
+
+		this._webview?.postMessage({
+			command: "thread-data",
+			value: this._workspace.getSettings(),
+		});
+
+		await Promise.all([
+			this._lspClient.updateCommand({
+				command,
+				threadId,
+			}),
+			this._workspace.updateThread(threadId, targetThread),
+		]);
+	}
+
 	private async clearChatHistory() {
 		const settings = this._workspace.getSettings();
 
@@ -507,11 +560,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async addMessageToThread(event: AddMessageToThreadEvent) {
-		const { threadId, message } = event;
+		const { threadId, message, canResume } = event;
 		const activeThread = await this._workspace.getThreadById(threadId);
 
 		if (activeThread) {
 			activeThread.messages.push(message);
+			activeThread.canResume = canResume;
 			await this._workspace.updateThread(threadId, activeThread);
 			return;
 		}

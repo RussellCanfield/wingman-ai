@@ -10,28 +10,27 @@ import {
 	HumanMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
-import { AzureChatOpenAI } from "@langchain/openai";
+import { ChatXAI } from "@langchain/xai";
 import { GPTModel } from "../openai/models/gptmodel";
 import { truncateChatHistory } from "../utils/contentWindow";
+import { GrokModel } from "./models/grokmodel";
 
-const reasoningModels = ["o3-mini"];
-
-export class AzureAI implements AIStreamProvider {
+export class xAI implements AIStreamProvider {
 	chatHistory: BaseMessage[] = [];
-	chatModel: AzureAIModel | undefined;
-	codeModel: AzureAIModel | undefined;
+	chatModel: GrokModel | undefined;
+	codeModel: GrokModel | undefined;
 
 	constructor(
-		private readonly settings: Settings["providerSettings"]["AzureAI"],
+		private readonly settings: Settings["providerSettings"]["xAI"],
 		private readonly interactionSettings: InteractionSettings,
 		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
-			throw new Error("Unable to load AzureAI settings.");
+			throw new Error("Unable to load xAI settings.");
 		}
 
 		if (!this.settings?.apiKey.trim()) {
-			throw new Error("AzureAI API key is required.");
+			throw new Error("xAI API key is required.");
 		}
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
@@ -40,19 +39,11 @@ export class AzureAI implements AIStreamProvider {
 
 	getModel(params?: ModelParams): BaseChatModel {
 		const targetModel = params?.model ?? this.settings?.chatModel;
-		const isReasoningModel = reasoningModels.some((reasoningModel) =>
-			targetModel?.startsWith(reasoningModel),
-		);
 
-		return new AzureChatOpenAI({
+		//@ts-expect-error
+		return new ChatXAI({
 			apiKey: this.settings?.apiKey,
-			azureOpenAIApiKey: this.settings?.apiKey,
-			azureOpenAIApiInstanceName: this.settings?.instanceName,
 			model: targetModel,
-			azureOpenAIApiDeploymentName: targetModel,
-			openAIApiVersion: this.settings?.apiVersion,
-			deploymentName: targetModel,
-			reasoningEffort: isReasoningModel ? "medium" : undefined,
 			...(params ?? {}),
 		});
 	}
@@ -67,31 +58,24 @@ export class AzureAI implements AIStreamProvider {
 
 	validateSettings(): Promise<boolean> {
 		const isChatModelValid =
-			this.settings?.chatModel?.startsWith("gpt-4") ||
-			this.settings?.chatModel?.startsWith("o") ||
-			false;
+			this.settings?.chatModel?.startsWith("grok") || false;
 		const isCodeModelValid =
-			this.settings?.codeModel?.startsWith("gpt-4") ||
-			this.settings?.codeModel?.startsWith("o") ||
-			false;
+			this.settings?.codeModel?.startsWith("grok") || false;
 		return Promise.resolve(
 			isChatModelValid &&
-				isCodeModelValid &&
-				!!this.settings?.instanceName &&
-				!!this.settings?.apiVersion,
-		);
+				isCodeModelValid
 	}
 
 	private getCodeModel(codeModel: string): AzureAIModel | undefined {
 		switch (true) {
-			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o"):
-				return new GPTModel();
+			case codeModel.startsWith("grok"):
+				return new GrokModel();
 		}
 	}
 
 	private getChatModel(chatModel: string): AzureAIModel | undefined {
 		switch (true) {
-			case chatModel.startsWith("gpt-4") || chatModel.startsWith("o"):
+			case chatModel.startsWith("grok"):
 				return new GPTModel();
 		}
 	}

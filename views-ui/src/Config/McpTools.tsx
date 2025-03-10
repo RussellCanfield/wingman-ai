@@ -72,7 +72,7 @@ export const MCPConfiguration = ({ mcpTools = [], onChange }: MCPConfigProps) =>
                 <p className="text-sm text-[var(--vscode-descriptionForeground)]">
                     You can find servers{" "}
                     <a
-                        href=" https://github.com/modelcontextprotocol/servers"
+                        href=" https://www.pulsemcp.com/"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-500 hover:text-blue-600 underline"

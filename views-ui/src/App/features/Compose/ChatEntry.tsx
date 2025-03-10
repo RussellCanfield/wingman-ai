@@ -9,17 +9,17 @@ import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
 import { MessageWithMarkdown } from "./components/Markdown";
 import { ChatArtifact } from "./components/File";
-import { FileToolNames } from "./components/types";
 import { ToolOutput } from "./components/ToolOutput";
-import { vscode } from "../../utilities/vscode";
 import { HiOutlineXMark } from "react-icons/hi2";
 import { GrCheckmark } from "react-icons/gr";
 import { useComposerContext } from "../../context/composerContext";
 import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../utilities/files";
-import type { FileMetadata } from "@shared/types/Message";
+import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
 import { PiGitDiff } from "react-icons/pi";
 import { Tooltip } from "react-tooltip";
 import { FaRegFileLines } from "react-icons/fa6";
+import { FiClock } from 'react-icons/fi';
+import { CommandExecuteOutput } from "./components/CommandExecuteOutput";
 
 export function extractCodeBlock(text: string) {
 	const regex = /```.*?\n([\s\S]*?)\n```/g;
@@ -38,33 +38,49 @@ const ChatEntry = ({
 	events,
 	loading,
 	image,
-	isCurrent
+	isCurrent,
+	canResume
 }: PropsWithChildren<ComposerMessage & { isCurrent?: boolean }>) => {
 	const { isLightTheme } = useSettingsContext();
 	const { activeThread } = useComposerContext();
 
 	const codeTheme = isLightTheme ? prism : vscDarkPlus;
-
-	const sendTerminalCommand = (payload: string) => {
-		if (payload) {
-			vscode.postMessage({
-				command: "terminal",
-				value: payload,
-			});
-		}
-	};
-
 	const fromUser = from === "user";
 
 	const bgClasses = fromUser ? "bg-stone-800 rounded-lg overflow-hidden w-full" : "";
 	const textColor = fromUser ? "text-gray-200" : "text-[var(--vscode-input-foreground)]";
 
-	const files = useMemo(() => {
-		return (events ?? [])
-			.filter(e => e.type === "tool-end" && FileToolNames.includes(e.metadata?.tool!))
-			.map(e => JSON.parse(e.content) satisfies FileMetadata)
-			.filter(Boolean);
+	const { files, commands } = useMemo(() => {
+		const filesMap = new Map<string, FileMetadata>();
+		const commandsMap = new Map<string, CommandMetadata>();
+
+		// biome-ignore lint/complexity/noForEach: <explanation>
+		(events ?? []).forEach(e => {
+			if (!e.metadata?.tool || !e.content) return;
+
+			try {
+				const content = JSON.parse(e.content);
+				if (!content) return;
+
+				if (e.metadata.tool === "write_file" && content.path) {
+					// Only keep the latest file with the same path
+					filesMap.set(content.path, content as FileMetadata);
+				} else if (e.metadata.tool === "command_execute" && content.command) {
+					// Only keep the latest command with the same command string
+					commandsMap.set(content.command, content as CommandMetadata);
+				}
+			} catch (error) {
+				// Handle JSON parse errors silently
+				console.debug("Failed to parse event content", error);
+			}
+		});
+
+		return {
+			files: Array.from(filesMap.values()),
+			commands: Array.from(commandsMap.values())
+		};
 	}, [events]);
+
 
 	const hasPendingFiles = files && files.length > 0 && files?.some(f => !f.accepted && !f.rejected);
 
@@ -85,16 +101,17 @@ const ChatEntry = ({
 						)}
 						{events?.map((e, i) => {
 							// Check if this tool-start has a matching tool-end
-							const hasEndEvent = e.type === "tool-start" &&
-								events.some(endEvent =>
+							const matchingEndEvent = e.type === "tool-start"
+								? events.find(endEvent =>
 									endEvent.type === "tool-end" &&
 									endEvent.metadata?.tool === e.metadata?.tool &&
 									endEvent.id === e.id
-								);
+								)
+								: undefined;
 
 							// For tool-start events that have a matching end event, skip rendering
 							// as we'll render the tool-end event instead
-							if (e.type === "tool-start" && hasEndEvent) {
+							if (e.type === "tool-start" && matchingEndEvent) {
 								return null;
 							}
 
@@ -103,19 +120,26 @@ const ChatEntry = ({
 							}
 							// Show tool-start events (that don't have an end event yet)
 							if (e.type === "tool-start") {
-								if (FileToolNames.includes(e.metadata?.tool!)) {
+								if (e.metadata?.tool === "write_file") {
 									const file = files?.find(f => f.path === e.metadata?.path);
-									return <ChatArtifact loading={loading} isLightTheme={isLightTheme} file={file} key={e.id} />;
+									return <ChatArtifact loading={loading && !canResume} isLightTheme={isLightTheme} file={file} key={e.id} />;
 								}
-
-								const toolHasNoEndEvent = i < events.length - 1 && !hasEndEvent;
+								if (e.metadata?.tool === "command_execute") {
+									const command = commands.find(c => c.command === e.metadata?.command);
+									return <CommandExecuteOutput command={command} isLightTheme={isLightTheme} loading={loading && !canResume} key={e.id} />
+								}
+								const toolHasNoEndEvent = i < events.length - 1 && !matchingEndEvent;
 								return <ToolOutput loading={!toolHasNoEndEvent} isLightTheme={isLightTheme} event={e} key={e.id} failed={toolHasNoEndEvent} />;
 							}
 							// Show tool-end events
 							if (e.type === "tool-end") {
-								if (FileToolNames.includes(e.metadata?.tool!)) {
-									const file = files?.find(f => f.path === e.metadata?.path);
+								if (e.metadata?.tool === "write_file") {
+									const file = JSON.parse(e?.content!) as FileMetadata;
 									return <ChatArtifact loading={loading} isLightTheme={isLightTheme} file={file} key={e.id} />;
+								}
+								if (e.metadata?.tool === "command_execute") {
+									const command = JSON.parse(e?.content!) as CommandMetadata;
+									return <CommandExecuteOutput command={command} isLightTheme={isLightTheme} loading={loading} key={e.id} />
 								}
 								return <ToolOutput loading={false} isLightTheme={isLightTheme} event={e} key={e.id} />;
 							}
@@ -132,15 +156,20 @@ const ChatEntry = ({
 								/>
 							</div>
 						)}
-						{from === 'assistant' && loading && (
+						{loading && !canResume && (
 							<div className="mt-4 flex justify-center items-center">
 								<SkeletonLoader isDarkTheme={!isLightTheme} />
+							</div>
+						)}
+						{from === "assistant" && canResume && (
+							<div className="mt-4 flex justify-center items-center gap-2 text-gray-400/50">
+								<FiClock className="border-amber-200 text-amber-700" /> Paused - pending approval
 							</div>
 						)}
 					</div>
 				</div>
 			</div>
-			{isCurrent && !loading && files && files.length > 0 && (
+			{isCurrent && !loading && !canResume && files && files.length > 0 && (
 				<div className="border-t border-stone-700/50 mt-4 pt-4 pl-[48px] pr-[16px] text-[var(--vscode-input-foreground)]">
 					<p className="mb-2">
 						Summary:

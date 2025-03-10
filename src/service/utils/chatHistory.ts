@@ -88,7 +88,7 @@ export async function trimMessages(
 	}
 
 	// Create a summary and keep the last message
-	const summary = await summarizeConversation(chat, model, state.summary);
+	const summary = await summarizeConversation(chat, model);
 
 	return [summary, state.messages[state.messages.length - 1]];
 }
@@ -150,7 +150,9 @@ export function getTokenCount(state: GraphStateAnnotation) {
 					totalTokens += getTokens(content.text).length;
 				} else if (content.type === "image_url" && "image_url" in content) {
 					// Count a fixed number of tokens for image URLs (this is an approximation)
-					totalTokens += content.image_url.url ? 85 : 0; // Approximate token count for image embedding
+					totalTokens += content.image_url.url
+						? content.image_url.url.length
+						: 0; // Approximate token count for image embedding
 				}
 			}
 		} else if (typeof messageContent === "string") {
@@ -221,12 +223,7 @@ export function getTokenCount(state: GraphStateAnnotation) {
 	}
 
 	// Add a small overhead for formatting
-	totalTokenCount += state.messages.length * 2;
-
-	// Add tokens for summary if it exists
-	if (state.summary) {
-		totalTokenCount += getTokens(state.summary).length;
-	}
+	totalTokenCount += state.messages.length * 3;
 
 	return totalTokenCount;
 }
