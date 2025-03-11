@@ -2,6 +2,10 @@ import type { ComposerMessage } from "./Composer";
 
 export const defaultMaxTokens = -1;
 
+export type IndexFile = {
+	lastModified: number;
+};
+
 export interface Thread {
 	id: string;
 	title: string;
@@ -32,12 +36,6 @@ interface BaseServiceSettings {
 	baseUrl: string;
 }
 
-export interface BaseEmbeddingServiceSettings {
-	embeddingModel: string;
-	dimensions: string;
-	enabled: boolean;
-}
-
 export interface AgentSettings {
 	midsceneEnabled?: boolean;
 	vibeMode?: boolean;
@@ -63,8 +61,16 @@ export const AiProviders = [
 ] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
+export const EmbeddingProviders = ["Ollama", "OpenAI", "AzureAI"] as const;
+export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
+
 // Create a type for AiProviders
 export type AiProviders = (typeof AiProviders)[number];
+export type EmbeddingProviders = (typeof EmbeddingProviders)[number];
+
+export type ApiSettingsType = BaseServiceSettings & {
+	apiKey: string;
+};
 
 export type OllamaSettingsType = BaseServiceSettings & {
 	apiPath: string;
@@ -72,10 +78,6 @@ export type OllamaSettingsType = BaseServiceSettings & {
 };
 
 export type xAISettingsType = ApiSettingsType;
-
-export type ApiSettingsType = BaseServiceSettings & {
-	apiKey: string;
-};
 
 export type AnthropicSettingsType = {
 	enableReasoning?: boolean;
@@ -168,4 +170,31 @@ export type Settings = {
 	};
 	mcpTools?: MCPToolConfig[];
 	agentSettings: AgentSettings;
+	embeddingProvider: (typeof EmbeddingProviders)[number];
+	embeddingSettings: {
+		General: {
+			enabled: boolean;
+			globPattern: string;
+		};
+		Ollama?: Omit<OllamaSettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
+		OpenAI?: Omit<ApiSettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
+		AzureAI?: Omit<AzureAISettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
+	};
 };
+
+export type EmbeddingSettingsType =
+	| Settings["embeddingSettings"]["Ollama"]
+	| Settings["embeddingSettings"]["AzureAI"]
+	| Settings["embeddingSettings"]["OpenAI"];

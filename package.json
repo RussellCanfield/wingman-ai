@@ -189,8 +189,13 @@
 		"copy": "node ./scripts/build.js",
 		"test": "vitest"
 	},
+	"overrides": {
+		"@langchain/community": {
+			"@lancedb/lancedb": "0.18.0"
+		}
+	},
 	"dependencies": {
-		"@ast-grep/napi": "0.29.0",
+		"@ast-grep/napi": "0.36.1",
 		"@langchain/xai": "0.0.2",
 		"@langchain/anthropic": "0.3.15",
 		"@langchain/community": "0.3.34",
@@ -215,17 +220,18 @@
 		"tinyglobby": "0.2.10",
 		"tree-sitter": "0.22.4",
 		"turndown": "7.2.0",
-		"vectra": "0.9.0",
+		"hnswlib-node": "3.0.0",
 		"vscode-languageclient": "9.0.1",
 		"vscode-languageserver": "9.0.1",
 		"vscode-languageserver-textdocument": "1.0.12",
 		"vscode-uri": "3.0.8",
 		"zod": "3.24.1",
 		"zod-to-json-schema": "3.24.1",
-		"speech-recorder": "2.1.0"
+		"@lancedb/lancedb": "0.18.0",
+		"apache-arrow": "19.0.1"
 	},
 	"devDependencies": {
-		"@ast-grep/cli": "0.29.0",
+		"@ast-grep/cli": "0.36.1",
 		"@biomejs/biome": "1.9.4",
 		"@rsbuild/core": "1.1.13",
 		"@rsbuild/plugin-react": "1.1.0",

@@ -34,6 +34,14 @@ import type {
 } from "@shared/types/Events";
 import { wingmanSettings } from "../service/settings";
 import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
+import type { IndexFile } from "@shared/types/Settings";
+import { VectorStore } from "./files/vector";
+import type { Embeddings } from "@langchain/core/embeddings";
+import {
+	CreateAIProvider,
+	CreateEmbeddingProvider,
+} from "../service/utils/models";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 export type CustomRange = {
 	start: { line: number; character: number };
@@ -69,6 +77,9 @@ export class LSPServer {
 	composer: WingmanAgent | undefined;
 	documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 	checkPointer: PartitionedFileSystemSaver | undefined;
+	vectorStore: VectorStore | undefined;
+	embedder: Embeddings | undefined;
+	summaryModel: BaseChatModel | undefined;
 
 	constructor() {
 		// Create a connection for the server, using Node's IPC as a transport.
@@ -91,18 +102,38 @@ export class LSPServer {
 		await this.codeParser.initialize();
 
 		this.checkPointer = new PartitionedFileSystemSaver(
-			this.getPersistancePath(),
+			this.getPersistancePath("checkpoints"),
 		);
+
+		const settings = await wingmanSettings.LoadSettings(
+			this.workspaceFolders[0],
+		);
+
+		if (settings.embeddingSettings[settings.embeddingProvider]?.dimensions!) {
+			this.vectorStore = new VectorStore(
+				settings,
+				this.workspaceFolders[0],
+				this.getPersistancePath("embeddings"),
+			);
+		}
 
 		this.composer = new WingmanAgent(
 			this.workspaceFolders[0],
 			this.checkPointer,
 			this.codeParser,
+			this.vectorStore,
 		);
 		await this.composer.initialize();
+
+		const provider = CreateAIProvider(settings, loggingProvider);
+		this.embedder = CreateEmbeddingProvider(
+			settings,
+			loggingProvider,
+		).getEmbedder();
+		this.summaryModel = provider.getLightweightModel();
 	};
 
-	private getPersistancePath = () => {
+	private getPersistancePath = (folder: string) => {
 		const homeDir = os.homedir();
 		const targetPath = path.join(
 			homeDir,
@@ -398,9 +429,60 @@ ${input}`,
 		);
 
 		this.connection?.onRequest("wingman/updateSettings", async () => {
-			await wingmanSettings.LoadSettings(this.workspaceFolders[0], true);
+			const settings = await wingmanSettings.LoadSettings(
+				this.workspaceFolders[0],
+				true,
+			);
 			await this.composer?.initialize();
+
+			const provider = CreateAIProvider(settings, loggingProvider);
+			this.embedder = CreateEmbeddingProvider(
+				settings,
+				loggingProvider,
+			).getEmbedder();
+			this.summaryModel = provider.getLightweightModel();
+
+			if (this.vectorStore) {
+				const stats = await this.vectorStore.getStats();
+				const embeddingSettings =
+					settings.embeddingSettings[settings.embeddingProvider];
+				if (
+					embeddingSettings &&
+					settings.embeddingSettings.General.enabled &&
+					stats.dimensions !== embeddingSettings?.dimensions
+				) {
+					this.vectorStore.removeIndex();
+					this.vectorStore = new VectorStore(
+						settings,
+						this.workspaceFolders[0],
+						this.getPersistancePath("embeddings"),
+					);
+				}
+			} else {
+				this.vectorStore = new VectorStore(
+					settings,
+					this.workspaceFolders[0],
+					this.getPersistancePath("embeddings"),
+				);
+			}
 		});
+
+		this.connection?.onRequest(
+			"wingman/indexFiles",
+			async (indexFiles: [string, IndexFile][]) => {
+				if (!this.vectorStore || !this.embedder || !this.summaryModel) return;
+
+				for (const [filePath, metadata] of indexFiles) {
+					if (!fs.existsSync(filePath)) continue;
+
+					const fileContents = (
+						await fs.promises.readFile(filePath)
+					).toString();
+
+					this.vectorStore.upsert(filePath, fileContents, metadata);
+				}
+			},
+		);
 
 		this.connection?.onRequest(
 			"wingman/updateComposerFile",

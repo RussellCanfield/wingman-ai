@@ -9,6 +9,7 @@ import { Starcoder2 } from "./models/starcoder2";
 import type { AIMessageChunk } from "@langchain/core/messages";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { ILoggingProvider } from "@shared/types/Logger";
+import type { Embeddings } from "@langchain/core/embeddings";
 
 type HuggingFaceRequest = {
 	inputs: string;
@@ -60,6 +61,10 @@ export class HuggingFace implements AIProvider {
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
+	}
+
+	getEmbedder(): Embeddings {
+		throw new Error("Not Implemented");
 	}
 
 	addMessageToHistory(input: string): void {

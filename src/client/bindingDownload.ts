@@ -9,12 +9,29 @@ import {
 } from "../providers/telemetryProvider";
 import { getPlatformIdentifier } from "./utils";
 
+export interface BindingConfig {
+	name: string;
+	version: string;
+	packagePrefix: string;
+}
+
 export class BindingDownloader {
 	private readonly storageDir: string;
 	private readonly extensionDir: string;
 	private readonly maxRetries = 3;
 	private readonly retryDelay = 1000;
-	private readonly bindingVersion = "0.29.0";
+	private readonly bindings: BindingConfig[] = [
+		{
+			name: "ast-grep",
+			version: "0.36.1",
+			packagePrefix: "@ast-grep/napi",
+		},
+		{
+			name: "lancedb",
+			version: "0.18.0",
+			packagePrefix: "@lancedb/lancedb",
+		},
+	];
 
 	constructor(
 		context: vscode.ExtensionContext,
@@ -23,8 +40,7 @@ export class BindingDownloader {
 		this.extensionDir = context.extensionPath;
 		this.storageDir = path.join(
 			context.globalStorageUri.fsPath,
-			"ast-grep-bindings",
-			this.bindingVersion,
+			"native-bindings",
 		);
 
 		if (!fs.existsSync(this.storageDir)) {
@@ -32,29 +48,44 @@ export class BindingDownloader {
 		}
 	}
 
-	private async getNapiPackageName(): Promise<string> {
-		const platformId = await getPlatformIdentifier();
-		const packageName = `@ast-grep/napi-${platformId}`;
+	private getBindingStorageDir(binding: BindingConfig): string {
+		const dir = path.join(this.storageDir, binding.name, binding.version);
+		if (!fs.existsSync(dir)) {
+			fs.mkdirSync(dir, { recursive: true });
+		}
+		return dir;
+	}
 
-		this.logger.logInfo(`Using native binding package: ${packageName}`);
+	private async getNapiPackageName(binding: BindingConfig): Promise<string> {
+		const platformId = await getPlatformIdentifier();
+		const packageName = `${binding.packagePrefix}-${platformId}`;
+
+		this.logger.logInfo(
+			`Using native binding package for ${binding.name}: ${packageName}`,
+		);
 
 		return packageName;
 	}
 
-	private async getStoredBindingPath(): Promise<string> {
-		const pkg = await this.getNapiPackageName();
-		return path.join(this.storageDir, `${pkg.split("/").pop()}.node`);
+	private async getStoredBindingPath(binding: BindingConfig): Promise<string> {
+		const pkg = await this.getNapiPackageName(binding);
+		return path.join(
+			this.getBindingStorageDir(binding),
+			`${pkg.split("/").pop()}.node`,
+		);
 	}
 
-	private getTempExtractPath(): string {
-		return path.join(this.storageDir, "extract");
+	private getTempExtractPath(binding: BindingConfig): string {
+		return path.join(this.getBindingStorageDir(binding), "extract");
 	}
 
-	private async getTargetBindingPath(): Promise<string> {
+	private async getTargetBindingPath(binding: BindingConfig): Promise<string> {
 		const platformId = await getPlatformIdentifier();
-		const filename = `ast-grep-napi.${platformId}.node`;
+		const filename = `${binding.name}.${platformId}.node`;
 
-		this.logger.logInfo(`Generated target filename: ${filename}`);
+		this.logger.logInfo(
+			`Generated target filename for ${binding.name}: ${filename}`,
+		);
 
 		return path.join(this.extensionDir, "out", filename);
 	}
@@ -84,14 +115,14 @@ export class BindingDownloader {
 		throw lastError;
 	}
 
-	private async downloadBinding(): Promise<void> {
-		const pkg = await this.getNapiPackageName();
+	private async downloadBinding(binding: BindingConfig): Promise<void> {
+		const pkg = await this.getNapiPackageName(binding);
 		const url = `https://registry.npmjs.org/${pkg}/-/${pkg
 			.split("/")
-			.pop()}-${this.bindingVersion}.tgz`;
+			.pop()}-${binding.version}.tgz`;
 
 		this.logger.logInfo(
-			`Downloading binding for ${process.platform}-${process.arch}`,
+			`Downloading ${binding.name} binding for ${process.platform}-${process.arch}`,
 		);
 		this.logger.logInfo(`URL: ${url}`);
 
@@ -99,7 +130,7 @@ export class BindingDownloader {
 			const response = await vscode.window.withProgress(
 				{
 					location: vscode.ProgressLocation.Notification,
-					title: "Downloading AST-grep bindings...",
+					title: `Downloading ${binding.name} bindings...`,
 					cancellable: false,
 				},
 				async () => {
@@ -117,7 +148,7 @@ export class BindingDownloader {
 			);
 
 			const buffer = await response.arrayBuffer();
-			const extractDir = this.getTempExtractPath();
+			const extractDir = this.getTempExtractPath(binding);
 
 			// Ensure extract directory exists and is empty
 			if (fs.existsSync(extractDir)) {
@@ -142,33 +173,55 @@ export class BindingDownloader {
 			for (const file of files) {
 				if (file.endsWith(".node")) {
 					const srcPath = path.join(packageDir, file);
-					const destPath = await this.getStoredBindingPath();
+					const destPath = await this.getStoredBindingPath(binding);
 					await this.retryOperation(async () => {
 						fs.copyFileSync(srcPath, destPath);
 					}, "File copy failed");
-					this.logger.logInfo(`Cached binding to ${destPath}`);
+					this.logger.logInfo(`Cached ${binding.name} binding to ${destPath}`);
 				}
 			}
 
 			// Keep the extracted files for future use
-			this.logger.logInfo("Preserving extracted files for future use");
+			this.logger.logInfo(
+				`Preserving extracted ${binding.name} files for future use`,
+			);
 		} catch (error) {
 			this.logger.logError(error, true);
-			vscode.window.showErrorMessage("Failed to download AST-grep bindings");
+			vscode.window.showErrorMessage(
+				`Failed to download ${binding.name} bindings`,
+			);
 			throw error;
 		}
 	}
 
 	async ensureBindings(): Promise<void> {
-		const pkg = await this.getNapiPackageName();
-		const storedPath = await this.getStoredBindingPath();
-		const targetPath = await this.getTargetBindingPath();
+		const results = await Promise.allSettled(
+			this.bindings.map((binding) => this.ensureBinding(binding)),
+		);
+
+		// Check for failures
+		const failures = results
+			.map((result, index) => ({ result, binding: this.bindings[index] }))
+			.filter((item) => item.result.status === "rejected");
+
+		if (failures.length > 0) {
+			const bindingNames = failures.map((item) => item.binding.name).join(", ");
+			throw new Error(`Failed to ensure bindings for: ${bindingNames}`);
+		}
+	}
+
+	async ensureBinding(binding: BindingConfig): Promise<void> {
+		const pkg = await this.getNapiPackageName(binding);
+		const storedPath = await this.getStoredBindingPath(binding);
+		const targetPath = await this.getTargetBindingPath(binding);
 
 		try {
 			// Check if binding exists in storage
 			if (!fs.existsSync(storedPath)) {
-				this.logger.logInfo("Binding not found in cache, downloading...");
-				await this.downloadBinding();
+				this.logger.logInfo(
+					`${binding.name} binding not found in cache, downloading...`,
+				);
+				await this.downloadBinding(binding);
 			}
 
 			// Ensure target directory exists
@@ -182,13 +235,16 @@ export class BindingDownloader {
 				await this.retryOperation(async () => {
 					fs.copyFileSync(storedPath, targetPath);
 				}, "Installation copy failed");
-				this.logger.logInfo(`Installed binding to ${targetPath}`);
+				this.logger.logInfo(
+					`Installed ${binding.name} binding to ${targetPath}`,
+				);
 			} else {
-				this.logger.logInfo("Binding already installed.");
+				this.logger.logInfo(`${binding.name} binding already installed.`);
 			}
 		} catch (error) {
 			telemetry.sendError(EVENT_BINDINGS_FAILED, {
 				pkg,
+				binding: binding.name,
 			});
 			this.logger.logError(error, true);
 			throw error;

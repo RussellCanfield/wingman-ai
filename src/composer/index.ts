@@ -50,6 +50,8 @@ import { wingmanSettings } from "../service/settings";
 import { CreateAIProvider } from "../service/utils/models";
 import type { Settings } from "@shared/types/Settings";
 import type { AIProvider } from "../service/base";
+import type { VectorStore } from "../server/files/vector";
+import { createSemanticSearchTool } from "./tools/semantic_search";
 
 let controller = new AbortController();
 
@@ -137,6 +139,7 @@ export class WingmanAgent {
 		private readonly workspace: string,
 		private readonly checkpointer: PartitionedFileSystemSaver,
 		private readonly codeParser: CodeParser,
+		private readonly vectorStore?: VectorStore,
 	) {}
 
 	async initialize() {
@@ -158,6 +161,36 @@ export class WingmanAgent {
 		}
 
 		this.aiProvider = CreateAIProvider(this.settings, loggingProvider);
+
+		this.tools = [
+			createCommandExecuteTool(this.workspace),
+			createReadFileTool(this.workspace, this.codeParser),
+			createListDirectoryTool(this.workspace),
+			createWriteFileTool(
+				this.workspace,
+				this.settings?.agentSettings.vibeMode,
+			),
+			createResearchTool(this.workspace, this.aiProvider!),
+			...this.remoteTools,
+		];
+
+		if (this.vectorStore) {
+			this.tools.push(
+				createSemanticSearchTool(this.settings, this.vectorStore),
+			);
+		}
+
+		const toolNode = new ToolNode(this.tools);
+		//@ts-expect-error
+		this.workflow = new StateGraph(GraphAnnotation)
+			.addNode("agent", this.callModel)
+			.addEdge("__start__", "agent")
+			.addNode("tools", toolNode)
+			.addEdge("tools", "agent")
+			.addNode("review", this.humanReviewNode, {
+				ends: ["agent", "tools"],
+			})
+			.addConditionalEdges("agent", this.shouldContinue);
 	}
 
 	/**
@@ -848,18 +881,6 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 			controller?.abort();
 			controller = new AbortController();
 
-			this.tools = [
-				createCommandExecuteTool(this.workspace),
-				createReadFileTool(this.workspace, this.codeParser),
-				createListDirectoryTool(this.workspace),
-				createWriteFileTool(
-					this.workspace,
-					this.settings?.agentSettings.vibeMode,
-				),
-				createResearchTool(this.workspace, this.aiProvider!),
-				...this.remoteTools,
-			];
-
 			const config = {
 				configurable: { thread_id: request.threadId },
 				signal: controller.signal,
@@ -870,18 +891,6 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 			const contextFiles = await this.loadContextFiles(request.contextFiles);
 			const messages = this.buildUserMessages(request);
 			const rules = (await loadWingmanRules(this.workspace)) ?? "";
-
-			const toolNode = new ToolNode(this.tools);
-			//@ts-expect-error
-			this.workflow = new StateGraph(GraphAnnotation)
-				.addNode("agent", this.callModel)
-				.addEdge("__start__", "agent")
-				.addNode("tools", toolNode)
-				.addEdge("tools", "agent")
-				.addNode("review", this.humanReviewNode, {
-					ends: ["agent", "tools"],
-				})
-				.addConditionalEdges("agent", this.shouldContinue);
 
 			const app = this.workflow!.compile({ checkpointer: this.checkpointer });
 

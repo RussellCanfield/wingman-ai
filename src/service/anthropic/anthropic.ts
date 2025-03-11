@@ -15,6 +15,7 @@ import {
 } from "@langchain/core/messages";
 import { HaikuModel } from "./models/haiku";
 import { AbortError } from "node-fetch";
+import type { Embeddings } from "@langchain/core/embeddings";
 
 const reasoningModels = ["claude-3-7-sonnet"];
 
@@ -76,6 +77,19 @@ export class Anthropic implements AIStreamProvider {
 							type: "enabled",
 						}
 					: undefined,
+		});
+	}
+
+	getEmbedder(): Embeddings {
+		throw new Error("Embeddings not supported");
+	}
+
+	getLightweightModel() {
+		return new ChatAnthropic({
+			apiKey: this.settings?.apiKey,
+			anthropicApiKey: this.settings?.apiKey,
+			model: "claude-3-5-haiku-latest",
+			temperature: 0,
 		});
 	}
 

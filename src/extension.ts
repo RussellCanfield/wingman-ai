@@ -42,21 +42,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
-	const settings = await wingmanSettings.LoadSettings(
-		vscode.workspace.workspaceFolders[0].name,
-	);
-
-	if (wingmanSettings.isDefault) {
-		const result = await vscode.window.showErrorMessage(
-			"Wingman has not yet been configured.",
-			"Open Settings",
-		);
-
-		if (result === "Open Settings") {
-			vscode.commands.executeCommand(ConfigViewProvider.showConfigCommand);
-		}
-	}
-
 	try {
 		let progressResolve: (() => void) | undefined;
 		const PROGRESS_DELAY = 3000;
@@ -71,7 +56,7 @@ export async function activate(context: vscode.ExtensionContext) {
 						cancellable: false,
 					},
 					async (progress) => {
-						progress.report({ message: "Checking AST-grep bindings..." });
+						progress.report({ message: "Checking bindings..." });
 						return new Promise<void>((res) => {
 							progressResolve = res;
 						});
@@ -86,7 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			};
 		});
 
-		// This is required to download WASM bindings for AST-grep
+		// This is required to download WASM bindings
 		const bindingDownloader = new BindingDownloader(context, loggingProvider);
 		await bindingDownloader.ensureBindings();
 
@@ -99,7 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		await progressPromise;
 	} catch (error) {
 		vscode.window.showErrorMessage(
-			"Failed to initialize AST-grep bindings. Some features may not work correctly.",
+			"Failed to initialize bindings. Some features may not work correctly.",
 		);
 		loggingProvider.logError(error, true);
 	}
@@ -109,6 +94,42 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.workspaceFolders?.[0].name,
 		vscode.workspace.workspaceFolders?.[0].uri.fsPath,
 	);
+
+	configViewProvider = new ConfigViewProvider(
+		context.extensionUri,
+		workspace.workspaceFolder,
+		lspClient,
+	);
+
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			ConfigViewProvider.viewType,
+			configViewProvider,
+		),
+	);
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			ConfigViewProvider.showConfigCommand,
+			async () => {
+				configViewProvider.openInPanel();
+			},
+		),
+	);
+
+	const settings = await wingmanSettings.LoadSettings(
+		vscode.workspace.workspaceFolders[0].name,
+	);
+
+	if (wingmanSettings.isDefault) {
+		const result = await vscode.window.showErrorMessage(
+			"Wingman has not yet been configured.",
+			"Open Settings",
+		);
+
+		if (result === "Open Settings") {
+			vscode.commands.executeCommand(ConfigViewProvider.showConfigCommand);
+		}
+	}
 
 	await lspClient.activate(context, settings);
 
@@ -153,18 +174,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	diffViewProvider = new DiffViewProvider(context, lspClient);
 	threadViewProvider = new ThreadViewProvider(context);
 	statusBarProvider = new ActivityStatusBar();
-	configViewProvider = new ConfigViewProvider(
-		context.extensionUri,
-		workspace.workspaceFolder,
-		lspClient,
-	);
-
-	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(
-			ConfigViewProvider.viewType,
-			configViewProvider,
-		),
-	);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(GenDocs.command, GenDocs.generateDocs),
@@ -282,15 +291,6 @@ export async function activate(context: vscode.ExtensionContext) {
 				await vscode.commands.executeCommand(
 					`${ChatViewProvider.viewType}.focus`,
 				);
-			},
-		),
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			ConfigViewProvider.showConfigCommand,
-			async () => {
-				configViewProvider.openInPanel();
 			},
 		),
 	);

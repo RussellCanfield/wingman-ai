@@ -1,5 +1,6 @@
 import type { AIModel } from "@shared/types/Models";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { Embeddings } from "@langchain/core/embeddings";
 
 export type ModelParams = {
 	temperature?: number;
@@ -36,6 +37,8 @@ export interface AIProvider {
 		signal: AbortSignal,
 	): Promise<string>;
 	getModel(params?: ModelParams): BaseChatModel;
+	getEmbedder(): Embeddings;
+	getLightweightModel(): BaseChatModel;
 }
 
 export interface AIStreamProvider extends AIProvider {

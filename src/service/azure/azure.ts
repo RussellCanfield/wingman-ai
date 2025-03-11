@@ -10,9 +10,10 @@ import {
 	HumanMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
-import { AzureChatOpenAI } from "@langchain/openai";
+import { AzureChatOpenAI, AzureOpenAIEmbeddings } from "@langchain/openai";
 import { GPTModel } from "../openai/models/gptmodel";
 import { truncateChatHistory } from "../utils/contentWindow";
+import type { Embeddings } from "@langchain/core/embeddings";
 
 const reasoningModels = ["o3-mini"];
 
@@ -24,18 +25,34 @@ export class AzureAI implements AIStreamProvider {
 	constructor(
 		private readonly settings: Settings["providerSettings"]["AzureAI"],
 		private readonly interactionSettings: InteractionSettings,
+		private readonly embeddingSettings: Settings["embeddingSettings"]["AzureAI"],
 		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
 			throw new Error("Unable to load AzureAI settings.");
 		}
 
-		if (!this.settings?.apiKey.trim()) {
+		if (
+			!this.settings?.apiKey.trim() &&
+			!this.embeddingSettings?.apiKey.trim()
+		) {
 			throw new Error("AzureAI API key is required.");
 		}
 
-		this.chatModel = this.getChatModel(this.settings.chatModel);
-		this.codeModel = this.getCodeModel(this.settings.codeModel);
+		this.chatModel = this.getChatModel(this.settings!.chatModel);
+		this.codeModel = this.getCodeModel(this.settings!.codeModel);
+	}
+
+	getEmbedder(): Embeddings {
+		return new AzureOpenAIEmbeddings({
+			apiKey: this.embeddingSettings?.apiKey,
+			azureOpenAIApiKey: this.embeddingSettings?.apiKey,
+			azureOpenAIApiInstanceName: this.embeddingSettings?.instanceName,
+			model: this.embeddingSettings?.model,
+			azureOpenAIApiDeploymentName: this.embeddingSettings?.model,
+			openAIApiVersion: this.settings?.apiVersion,
+			deploymentName: this.embeddingSettings?.model,
+		});
 	}
 
 	getModel(params?: ModelParams): BaseChatModel {
@@ -54,6 +71,18 @@ export class AzureAI implements AIStreamProvider {
 			deploymentName: targetModel,
 			reasoningEffort: isReasoningModel ? "medium" : undefined,
 			...(params ?? {}),
+		});
+	}
+
+	getLightweightModel() {
+		return new AzureChatOpenAI({
+			apiKey: this.embeddingSettings?.apiKey,
+			azureOpenAIApiKey: this.embeddingSettings?.apiKey,
+			azureOpenAIApiInstanceName: this.embeddingSettings?.instanceName,
+			model: this.embeddingSettings?.summaryModel,
+			azureOpenAIApiDeploymentName: this.embeddingSettings?.summaryModel,
+			openAIApiVersion: this.embeddingSettings?.apiVersion,
+			deploymentName: this.embeddingSettings?.summaryModel,
 		});
 	}
 
