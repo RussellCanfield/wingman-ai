@@ -1,6 +1,6 @@
 # Code Completion
 
-The AI will look for natural pauses in typing to decide when to offer code suggestions (keep in mind the speed is limited by your machine). The code completion feature will also analyze comments you type and generate suggestions based on that context.
+Wingman-AI will look for natural pauses in typing to decide when to offer code suggestions (keep in mind the speed is limited by your machine). The code completion feature will also analyze comments you type and generate suggestions based on that context.
 
 You can fine tune the amount of context code complete has by using the settings window.
 
