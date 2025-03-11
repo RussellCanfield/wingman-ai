@@ -4,11 +4,18 @@
 
 By default, Wingman will track files you've had open and provide that to the Agent.
 
-If you highlight text in an editor window, it will send that to the Agent as well for more focused questions.
+If you highlight text in an editor window, it will send that to the Agent for a more focused questions.
 
 :::note
 Want a code example? Just ask for one!
 :::
+
+## Hot keys
+
+Quickly open wingman with these shortcuts:
+
+MacOS: Cmd + i
+Windows: Control + i
 
 ![](/Chat.png)
 
