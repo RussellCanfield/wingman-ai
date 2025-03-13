@@ -65,6 +65,8 @@ export class VectorStore {
 		uri: string,
 		options?: Partial<ConnectionOptions>,
 	) => Promise<Connection>;
+	private indexCreated = false;
+	private pendingVectors = 0;
 
 	/**
 	 * Creates a new vector store
@@ -89,14 +91,12 @@ export class VectorStore {
 		this.numDimensions = embeddingSettings?.dimensions!;
 		this.storageDirectory =
 			storageDirectory || path.join(process.cwd(), ".lancedb");
-
-		this.initialize();
 	}
 
 	/**
 	 * Initialize LanceDB connection and table
 	 */
-	private async initialize() {
+	async initialize() {
 		try {
 			this.connect = await loadLanceDB();
 
@@ -106,38 +106,64 @@ export class VectorStore {
 			// Check if the table exists
 			const tableExists = await this.tableExists();
 
-			if (tableExists) {
-				// Open existing table
-				this.table = await this.connection.openTable(this.tableName);
+			try {
+				if (tableExists) {
+					this.table = await this.connection.openTable(this.tableName);
 
-				// Load existing files to track current entries
-				await this.loadCurrentEntries();
-			} else {
-				// Create schema for the table
-				const schema = new Schema([
-					new Field("filePath", new arrow.Utf8()),
-					new Field("summary", new arrow.Utf8()),
-					new Field(
-						"vector",
-						new arrow.FixedSizeList(
-							typeof this.numDimensions === "number"
-								? this.numDimensions
-								: Number.parseInt(this.numDimensions),
-							new Field("item", new arrow.Float32(), true),
-						),
-					),
-					new Field("lastModified", new arrow.Int64(), true),
-				]);
+					// Check if index exists
+					try {
+						const indexStats = await this.table.indexStats(this.indexName);
+						this.indexCreated = !!indexStats;
+					} catch (e) {
+						console.log(
+							"Could not determine index status, assuming not created",
+						);
+						this.indexCreated = false;
+					}
 
-				// Create new table with the schema
-				this.table = await this.connection.createTable(this.tableName, [], {
-					schema,
-				});
-
-				await this.table.createIndex(this.indexName);
+					// Load existing files to track current entries
+					await this.loadCurrentEntries();
+					return;
+				}
+			} catch (e) {
+				console.error("Failed to load table", e);
 			}
 
-			console.log("LanceDB Vector Store initialized");
+			try {
+				await this.removeIndex();
+			} catch (e) {
+				console.error("Failed to clean up old tables", e);
+			}
+
+			console.log("Creating table without index (lazy initialization)");
+
+			// Create schema for the table
+			const schema = new Schema([
+				new Field("filePath", new arrow.Utf8()),
+				new Field("summary", new arrow.Utf8()),
+				new Field(
+					"vector",
+					new arrow.FixedSizeList(
+						typeof this.numDimensions === "number"
+							? this.numDimensions
+							: Number.parseInt(this.numDimensions),
+						new Field("item", new arrow.Float32(), true),
+					),
+				),
+				new Field("lastModified", new arrow.Int64(), true),
+			]);
+
+			// Create new table with the schema but no index yet
+			this.table = await this.connection.createTable(
+				this.tableName,
+				[], // Start with an empty table
+				{
+					schema,
+				},
+			);
+
+			this.indexCreated = false;
+			console.log("LanceDB Vector Store initialized (without index)");
 		} catch (error) {
 			console.error("Failed to initialize LanceDB:", error);
 			throw error;
@@ -150,6 +176,7 @@ export class VectorStore {
 	private async tableExists(): Promise<boolean> {
 		try {
 			const tables = await this.connection!.tableNames();
+			console.log("Available tables:", tables);
 			return tables.includes(this.tableName);
 		} catch (error) {
 			return false;
@@ -164,7 +191,7 @@ export class VectorStore {
 			// Reset tracking data
 			this.currentFilePaths.clear();
 
-			// Query all entries
+			// Query all entries - using column name without quotes
 			for await (const batch of this.table!.query().select(["filePath"])) {
 				for (const item of batch.toArray()) {
 					const row = item as unknown as { filePath: string };
@@ -172,9 +199,29 @@ export class VectorStore {
 				}
 			}
 
+			this.pendingVectors = this.currentFilePaths.size;
 			console.log(`Loaded ${this.currentFilePaths.size} entries`);
 		} catch (error) {
 			console.error("Failed to load current entries:", error);
+		}
+	}
+
+	/**
+	 * Create the vector index when we have enough vectors
+	 * This is called after adding vectors to ensure we have enough data
+	 */
+	private async createIndexIfNeeded() {
+		// Only try to create the index if we haven't already and we have enough vectors
+		if (!this.indexCreated && this.pendingVectors >= 256) {
+			try {
+				console.log(`Creating index with ${this.pendingVectors} vectors`);
+				await this.table!.createIndex(this.indexName);
+				this.indexCreated = true;
+				console.log("Vector index created successfully");
+			} catch (error) {
+				console.error("Failed to create index:", error);
+				// Don't set indexCreated to true if it failed
+			}
 		}
 	}
 
@@ -186,7 +233,7 @@ export class VectorStore {
 
 		if (this.currentFilePaths.has(filePath)) {
 			const existingData = await this.table!.query()
-				.where(`filePath = '${filePath}'`)
+				.where(`"filePath" = '${filePath}'`)
 				.select(["lastModified"])
 				.toArray();
 
@@ -264,6 +311,10 @@ export class VectorStore {
 			]);
 
 			this.currentFilePaths.add(filePath);
+			this.pendingVectors++;
+
+			// Try to create the index if we've reached the threshold
+			await this.createIndexIfNeeded();
 		}
 
 		return filePath;
@@ -281,6 +332,7 @@ export class VectorStore {
 			// Delete the file from the table
 			await this.table!.delete(`filePath = '${filePath}'`);
 			this.currentFilePaths.delete(filePath);
+			this.pendingVectors--;
 			return true;
 		}
 
@@ -327,8 +379,8 @@ export class VectorStore {
 		if (effectiveK === 0) return [];
 
 		try {
-			// LanceDB handles vector similarity search efficiently
-			const results = await this.table!.search(queryVector)
+			// If we don't have an index yet, use brute force search
+			const results = await this.table!.search(queryVector, "vector")
 				.limit(effectiveK)
 				.toArray();
 
@@ -372,14 +424,23 @@ export class VectorStore {
 	 * Remove the database
 	 */
 	public async removeIndex() {
-		await this.ensureInitialized();
-
 		if (!this.connection) return;
 
 		try {
 			// Drop the table if it exists
 			const tableNames = await this.connection!.tableNames();
 			if (tableNames.includes(this.tableName)) {
+				this.table = await this.connection!.openTable(this.tableName);
+
+				// Only try to drop the index if it was created
+				if (this.indexCreated) {
+					try {
+						await this.table.dropIndex(this.indexName);
+					} catch (e) {
+						console.log("Index may not exist, continuing with table removal");
+					}
+				}
+
 				await this.connection!.dropTable(this.tableName);
 				console.log("Removing index table:", this.tableName);
 			}
@@ -387,6 +448,8 @@ export class VectorStore {
 			// Reset state
 			this.table = null;
 			this.currentFilePaths.clear();
+			this.indexCreated = false;
+			this.pendingVectors = 0;
 		} catch (error) {
 			console.error("Failed to remove index:", error);
 		}
@@ -402,12 +465,14 @@ export class VectorStore {
 			return {
 				totalVectors: this.currentFilePaths.size,
 				dimensions: this.numDimensions,
+				indexCreated: this.indexCreated,
 			};
 		} catch (error) {
 			console.error("Failed to get stats:", error);
 			return {
 				totalVectors: this.currentFilePaths.size,
 				dimensions: this.numDimensions,
+				indexCreated: this.indexCreated,
 			};
 		}
 	}

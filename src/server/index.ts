@@ -34,7 +34,7 @@ import type {
 } from "@shared/types/Events";
 import { wingmanSettings } from "../service/settings";
 import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
-import type { IndexFile } from "@shared/types/Settings";
+import type { IndexFile, Thread } from "@shared/types/Settings";
 import { VectorStore } from "./files/vector";
 import type { Embeddings } from "@langchain/core/embeddings";
 import {
@@ -115,6 +115,7 @@ export class LSPServer {
 				this.workspaceFolders[0],
 				this.getPersistancePath("embeddings"),
 			);
+			await this.vectorStore.initialize();
 		}
 
 		this.composer = new WingmanAgent(
@@ -457,6 +458,7 @@ ${input}`,
 						this.workspaceFolders[0],
 						this.getPersistancePath("embeddings"),
 					);
+					await this.vectorStore.initialize();
 				}
 			} else {
 				this.vectorStore = new VectorStore(
@@ -464,6 +466,7 @@ ${input}`,
 					this.workspaceFolders[0],
 					this.getPersistancePath("embeddings"),
 				);
+				await this.vectorStore.initialize();
 			}
 		});
 
@@ -495,9 +498,9 @@ ${input}`,
 					return await this.composer?.updateFile(event);
 				}
 
-				if (event.files.every((f) => f.rejected)) {
-					return await this.composer?.updateFile(event);
-				}
+				// if (event.files.every((f) => f.rejected)) {
+				// 	await this.composer?.updateFile(event);
+				// }
 
 				await this.compose(
 					{
@@ -522,6 +525,13 @@ ${input}`,
 					undefined,
 					event.command,
 				);
+			},
+		);
+
+		this.connection?.onRequest(
+			"wingman/createThread",
+			async (thread: Thread) => {
+				return this.composer?.createThread(thread);
 			},
 		);
 
