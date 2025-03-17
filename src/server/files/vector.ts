@@ -15,9 +15,10 @@ export interface VectorMetadata {
 }
 
 export interface SearchResult {
-	filePath: string;
+	file_path: string;
 	summary: string;
 	similarity: number;
+	last_modified?: number;
 	metadata: VectorMetadata;
 }
 
@@ -139,7 +140,7 @@ export class VectorStore {
 
 			// Create schema for the table
 			const schema = new Schema([
-				new Field("filePath", new arrow.Utf8()),
+				new Field("file_path", new arrow.Utf8()),
 				new Field("summary", new arrow.Utf8()),
 				new Field(
 					"vector",
@@ -150,7 +151,7 @@ export class VectorStore {
 						new Field("item", new arrow.Float32(), true),
 					),
 				),
-				new Field("lastModified", new arrow.Int64(), true),
+				new Field("last_modified", new arrow.Int64(), true),
 			]);
 
 			// Create new table with the schema but no index yet
@@ -192,10 +193,10 @@ export class VectorStore {
 			this.currentFilePaths.clear();
 
 			// Query all entries - using column name without quotes
-			for await (const batch of this.table!.query().select(["filePath"])) {
+			for await (const batch of this.table!.query().select(["file_path"])) {
 				for (const item of batch.toArray()) {
-					const row = item as unknown as { filePath: string };
-					this.currentFilePaths.add(row.filePath);
+					const row = item as unknown as { file_path: string };
+					this.currentFilePaths.add(row.file_path);
 				}
 			}
 
@@ -233,13 +234,13 @@ export class VectorStore {
 
 		if (this.currentFilePaths.has(filePath)) {
 			const existingData = await this.table!.query()
-				.where(`"filePath" = '${filePath}'`)
-				.select(["lastModified"])
+				.where(`file_path = '${filePath}'`)
+				.select(["last_modified"])
 				.toArray();
 
 			if (
 				existingData.length > 0 &&
-				existingData[0].lastModified === metadata.lastModified
+				existingData[0].last_modified === metadata.lastModified
 			) {
 				console.log(`File: ${filePath} hasn't changed, skipping indexing`);
 				return false;
@@ -274,47 +275,50 @@ export class VectorStore {
 
 		if (!shouldUpdate) return filePath;
 
-		const summary = (
-			await this.summaryModel.invoke(
-				buildSummarizationQuery(
-					fileContents,
-					path.relative(this.workspace, filePath),
-				),
-			)
-		).content.toString();
-		const vector = await this.embedder.embedQuery(summary);
+		try {
+			const summary = (
+				await this.summaryModel.invoke(
+					buildSummarizationQuery(
+						fileContents,
+						path.relative(this.workspace, filePath),
+					),
+				)
+			).content.toString();
+			const vector = await this.embedder.embedQuery(summary);
 
-		if (this.currentFilePaths.has(filePath)) {
-			console.log(`Index - Updating file: ${filePath}`);
+			if (this.currentFilePaths.has(filePath)) {
+				console.log(`Index - Updating file: ${filePath}`);
 
-			// Update existing file
-			await this.table!.update({
-				where: `filePath = '${filePath}'`,
-				values: {
-					summary,
-					vector: vector,
-					lastModified: fullMetadata.lastModified!,
-				},
-			});
-		} else {
-			console.log(`Index - Adding file: ${filePath}`);
+				// Update existing file
+				await this.table!.update({
+					where: `file_path = '${filePath}'`,
+					values: {
+						summary,
+						vector: vector,
+						last_modified: fullMetadata.lastModified!,
+					},
+				});
+			} else {
+				console.log(`Index - Adding file: ${filePath}`);
 
-			// New file, add it
-			await this.table!.add([
-				{
-					filePath,
-					vector,
-					summary,
-					lastModified: fullMetadata.lastModified,
-					...metadata,
-				},
-			]);
+				// New file, add it
+				await this.table!.add([
+					{
+						file_path: filePath,
+						vector,
+						summary,
+						last_modified: fullMetadata.lastModified,
+					},
+				]);
 
-			this.currentFilePaths.add(filePath);
-			this.pendingVectors++;
+				this.currentFilePaths.add(filePath);
+				this.pendingVectors++;
 
-			// Try to create the index if we've reached the threshold
-			await this.createIndexIfNeeded();
+				// Try to create the index if we've reached the threshold
+				await this.createIndexIfNeeded();
+			}
+		} catch (e) {
+			console.log("Upsert Error: ", e);
 		}
 
 		return filePath;
@@ -330,7 +334,7 @@ export class VectorStore {
 
 		if (this.currentFilePaths.has(filePath)) {
 			// Delete the file from the table
-			await this.table!.delete(`filePath = '${filePath}'`);
+			await this.table!.delete(`file_path = '${filePath}'`);
 			this.currentFilePaths.delete(filePath);
 			this.pendingVectors--;
 			return true;
@@ -350,7 +354,7 @@ export class VectorStore {
 
 		if (this.currentFilePaths.has(oldPath)) {
 			await this.table!.update({
-				where: `filePath = '${oldPath}'`,
+				where: `file_path = '${oldPath}'`,
 				values: { filePath: newPath },
 			});
 
@@ -397,8 +401,9 @@ export class VectorStore {
 				}
 
 				return {
-					filePath: item.filePath,
+					file_path: item.filePath,
 					summary: item.summary,
+					last_modified: item.last_modified,
 					similarity: 1 - item._distance, // Convert distance to similarity
 					metadata,
 				};

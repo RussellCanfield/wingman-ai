@@ -53,6 +53,12 @@ export default ({ env, command, envMode }) => {
 			},
 		},
 		output: {
+			copy: [
+				{
+					from: "./audio/ui-notification.mp3",
+					to: "audio",
+				},
+			],
 			cleanDistPath: false,
 			minify: isProd,
 			target: "node",

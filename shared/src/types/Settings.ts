@@ -1,4 +1,4 @@
-import type { ComposerMessage } from "./Composer";
+import type { ComposerState } from "./Composer";
 
 export const defaultMaxTokens = -1;
 
@@ -6,18 +6,8 @@ export type IndexFile = {
 	lastModified: number;
 };
 
-export interface Thread {
-	id: string;
-	title: string;
-	createdAt: number;
-	updatedAt: number;
-	messages: ComposerMessage[];
-	originatingThreadId?: string;
-	canResume?: boolean;
-}
-
 export interface WorkspaceSettings {
-	threads?: Thread[];
+	threadIds?: string[];
 	activeThreadId?: string;
 }
 
@@ -25,9 +15,9 @@ export interface AppState {
 	settings: WorkspaceSettings;
 	theme: number;
 	workspaceFolder: string;
-	threads?: Thread[];
-	activeThreadId?: string;
 	totalFiles: number;
+	threads?: ComposerState[];
+	activeThreadId?: string;
 }
 
 interface BaseServiceSettings {
@@ -40,6 +30,7 @@ export interface AgentSettings {
 	midsceneEnabled?: boolean;
 	vibeMode?: boolean;
 	automaticallyFixDiagnostics?: boolean;
+	playAudioAlert?: boolean;
 }
 
 export interface InteractionSettings {
@@ -102,6 +93,7 @@ export const defaultAgentSettings: AgentSettings = {
 	midsceneEnabled: false,
 	automaticallyFixDiagnostics: false,
 	vibeMode: true,
+	playAudioAlert: false,
 };
 
 export const defaultxAISettings: xAISettingsType = {

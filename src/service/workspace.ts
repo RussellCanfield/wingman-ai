@@ -1,10 +1,9 @@
-import type { Thread, WorkspaceSettings } from "@shared/types/Settings";
+import type { WorkspaceSettings } from "@shared/types/Settings";
 import type { ExtensionContext } from "vscode";
-import { v4 as uuidv4 } from "uuid";
-import type { ComposerMessage } from "@shared/types/Composer";
 
 const defaultSettings: WorkspaceSettings = {
-	threads: [],
+	threadIds: [],
+	activeThreadId: undefined,
 };
 
 export class Workspace {
@@ -21,6 +20,10 @@ export class Workspace {
 
 	getSettings() {
 		return this.settings;
+	}
+
+	async clear() {
+		await this.context.workspaceState.update("settings", defaultSettings);
 	}
 
 	async save(data: Partial<WorkspaceSettings>) {
@@ -42,9 +45,8 @@ export class Workspace {
 					"settings",
 				)) ?? defaultSettings;
 
-			// Initialize threads array if it doesn't exist
-			if (!this.settings.threads) {
-				this.settings.threads = [];
+			if (!this.settings.threadIds) {
+				this.settings.threadIds = [];
 			}
 		} catch (error) {
 			console.error("Error loading workspace settings:", error);
@@ -54,146 +56,26 @@ export class Workspace {
 	}
 
 	// Thread management methods
-	async createThread(
-		title = "New Thread",
-		messages: ComposerMessage[] = [],
-		id?: string,
-	): Promise<Thread> {
-		const timestamp = Date.now();
-		const newThread: Thread = {
-			id: id || uuidv4(),
-			title,
-			createdAt: timestamp,
-			updatedAt: timestamp,
-			messages,
-		};
-
-		const threads = [...(this.settings.threads || []), newThread];
+	async createThread(id: string) {
+		const threadIds = [...(this.settings.threadIds ?? []), id];
 		await this.save({
-			threads,
-			activeThreadId: newThread.id,
+			threadIds,
+			activeThreadId: id,
 		});
-
-		return newThread;
-	}
-
-	async branchThread(newThread: Thread) {
-		const threads = [...(this.settings.threads || []), newThread];
-		await this.save({
-			threads,
-			activeThreadId: newThread.id,
-		});
-
-		return newThread;
-	}
-
-	async updateThread(
-		threadId: string,
-		updates: Partial<Thread>,
-	): Promise<Thread | null> {
-		const threads = [...(this.settings.threads || [])];
-		const threadIndex = threads.findIndex((t) => t.id === threadId);
-
-		if (threadIndex === -1) {
-			return null;
-		}
-
-		const updatedThread = {
-			...threads[threadIndex],
-			...updates,
-			updatedAt: Date.now(),
-		};
-
-		threads[threadIndex] = updatedThread;
-		await this.save({ threads });
-
-		return updatedThread;
 	}
 
 	async deleteThread(threadId: string): Promise<boolean> {
-		const threads = [...(this.settings.threads || [])];
-		const threadIndex = threads.findIndex((t) => t.id === threadId);
-
-		if (threadIndex === -1) {
-			return false;
-		}
-
-		threads.splice(threadIndex, 1);
-
-		// If we're deleting the active thread, set activeThreadId to the first available thread or undefined
-		let activeThreadId = this.settings.activeThreadId;
-		if (activeThreadId === threadId) {
-			activeThreadId = threads.length > 0 ? threads[0].id : undefined;
-		}
-
-		// Orphan branched threads
-		const childThreads = threads.filter(
-			(t) => t.originatingThreadId === threadId,
-		);
-		for (const childThread of childThreads) {
-			childThread.originatingThreadId = undefined;
-		}
+		const threadIds = [...(this.settings.threadIds || [])];
+		const remainingThreadIds = threadIds.filter((i) => i !== threadId);
 
 		await this.save({
-			threads,
-			activeThreadId,
+			threadIds: remainingThreadIds,
 		});
 
 		return true;
 	}
 
-	async switchThread(threadId: string): Promise<Thread | null> {
-		const threads = this.settings.threads || [];
-		const thread = threads.find((t) => t.id === threadId);
-
-		if (!thread) {
-			return null;
-		}
-
-		await this.save({ activeThreadId: threadId });
-		return thread;
-	}
-
-	async getActiveThread(): Promise<Thread | null> {
-		const { activeThreadId, threads } = this.settings;
-
-		if (!activeThreadId || !threads || threads.length === 0) {
-			return null;
-		}
-
-		return threads.find((t) => t.id === activeThreadId) || null;
-	}
-
-	async getAllThreads(): Promise<Thread[]> {
-		return this.settings.threads || [];
-	}
-
-	async getThreadById(threadId: string): Promise<Thread | null> {
-		const threads = this.settings.threads || [];
-		return threads.find((t) => t.id === threadId) || null;
-	}
-
-	async addMessageToThread(
-		threadId: string,
-		message: ComposerMessage,
-	): Promise<boolean> {
-		const threads = [...(this.settings.threads || [])];
-		const threadIndex = threads.findIndex((t) => t.id === threadId);
-
-		if (threadIndex === -1) {
-			return false;
-		}
-
-		const thread = threads[threadIndex];
-		const updatedThread = {
-			...thread,
-			messages: [...thread.messages, message],
-			updatedAt: Date.now(),
-		};
-
-		threads[threadIndex] = updatedThread;
-		await this.save({ threads });
-
-		return true;
+	async switchThread(id: string) {
+		await this.save({ activeThreadId: id });
 	}
 }

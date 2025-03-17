@@ -5,10 +5,10 @@ import {
 	replaceTextInDocument,
 } from "./utilities";
 import type { AppMessage } from "@shared/types/Message";
-import type { AIProvider } from "../service/base";
 import type { LSPClient } from "../client";
 import type { DiffViewCommand } from "@shared/types/Composer";
 import type { FileMetadata } from "@shared/types/Message";
+import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
 export class DiffViewProvider {
 	panels: Map<string, vscode.WebviewPanel> = new Map();
@@ -18,14 +18,30 @@ export class DiffViewProvider {
 		private readonly _lspClient: LSPClient,
 	) {}
 
+	/**
+	 * Creates a diff view panel for comparing file changes.
+	 *
+	 * This method creates a webview panel that displays differences between file versions.
+	 * If a panel for the specified file already exists, it will be brought to focus instead
+	 * of creating a new one.
+	 *
+	 * @param {Object} params - The parameters for creating the diff view
+	 * @param {Object} params.file - The file metadata for which to show the diff
+	 * @param {string} params.threadId - The ID of the thread associated with these changes
+	 * @param {string} params.toolId - The ID of the tool that generated the changes
+	 * @param {Function} params.onAccept - Callback function triggered when changes are accepted
+	 * @param {Function} params.onReject - Callback function triggered when changes are rejected
+	 * @returns {Promise<void>}
+	 */
 	async createDiffView({
 		file,
 		threadId,
+		toolId,
 		onAccept,
 		onReject,
 	}: DiffViewCommand & {
-		onAccept: (file: FileMetadata, threadId: string) => void;
-		onReject: (file: FileMetadata, threadId: string) => void;
+		onAccept: (event: UpdateComposerFileEvent) => void;
+		onReject: (event: UpdateComposerFileEvent) => void;
 	}) {
 		if (this.panels.has(file.path)) {
 			const existingPanel = this.panels.get(file.path);
@@ -66,6 +82,7 @@ export class DiffViewProvider {
 							isDarkTheme: vscode.window.activeColorTheme.kind !== 1,
 							file,
 							threadId,
+							toolId,
 						} satisfies DiffViewCommand,
 					});
 					break;
@@ -75,10 +92,10 @@ export class DiffViewProvider {
 						file.path,
 						value as FileMetadata,
 					);
-					onAccept(value as FileMetadata, threadId);
+					onAccept({ files: [value as FileMetadata], threadId, toolId });
 					break;
 				case "reject-file-changes":
-					onReject(value as FileMetadata, threadId);
+					onReject({ files: [value as FileMetadata], threadId, toolId });
 					if (currentPanel) {
 						currentPanel.dispose();
 						this.panels.delete(file.path);

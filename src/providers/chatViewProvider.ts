@@ -2,9 +2,8 @@ import * as vscode from "vscode";
 import fs from "node:fs";
 import { eventEmitter } from "../events/eventEmitter";
 import type { AppMessage, CodeContextDetails } from "@shared/types/Message";
-import type { AppState, Thread } from "@shared/types/Settings";
+import type { AppState } from "@shared/types/Settings";
 import type {
-	AddMessageToThreadEvent,
 	FixDiagnosticsEvent,
 	RenameThreadEvent,
 	UpdateCommandEvent,
@@ -18,6 +17,9 @@ import {
 import type { LSPClient } from "../client/index";
 import type {
 	ComposerRequest,
+	ComposerState,
+	ComposerThread,
+	ComposerThreadEvent,
 	DiffViewCommand,
 	FileSearchResult,
 } from "@shared/types/Composer";
@@ -125,48 +127,69 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						this._lspClient.fixDiagnostics(event);
 						break;
 					}
-					case "add-message-to-thread":
-						await this.addMessageToThread(value as AddMessageToThreadEvent);
+					case "create-thread": {
+						const thread = value as ComposerThread;
+						await this._lspClient.createThread(thread);
+						await this._workspace.createThread(thread.id);
 						webviewView.webview.postMessage({
 							command: "thread-data",
-							value: this._workspace.getSettings(),
+							value: {
+								state: await this._lspClient.loadThread(thread.id),
+								activeThreadId: thread.id,
+							} satisfies ComposerThreadEvent,
 						});
 						break;
-					case "create-thread":
-						await this.createThread(value as Thread);
+					}
+					case "branch-thread": {
+						const thread = value as ComposerThread;
+						await this._workspace.createThread(thread.id);
+						await this._lspClient.createThread(thread);
+
+						await this._lspClient.branchThread({
+							threadId: thread.id,
+							originalThreadId: thread.parentThreadId,
+						});
 						webviewView.webview.postMessage({
 							command: "thread-data",
-							value: this._workspace.getSettings(),
+							value: {
+								state: await this._lspClient.loadThread(thread.id),
+								activeThreadId: thread.id,
+							} satisfies ComposerThreadEvent,
 						});
 						break;
-					case "branch-thread":
-						await this.branchThread(value as Thread);
+					}
+					case "switch-thread": {
+						const id = String(value);
+						await this._workspace.switchThread(id);
 						webviewView.webview.postMessage({
 							command: "thread-data",
-							value: this._workspace.getSettings(),
+							value: {
+								state: await this._lspClient.loadThread(id),
+								activeThreadId: id,
+							} satisfies ComposerThreadEvent,
 						});
 						break;
-					case "switch-thread":
-						await this.switchThread(String(value));
+					}
+					case "delete-thread": {
+						await this._workspace.deleteThread(String(value));
+						await this._lspClient.deleteThread(String(value));
+						break;
+					}
+					case "rename-thread": {
+						const event = value as RenameThreadEvent;
+						await this._lspClient.updateThread({
+							id: event.threadId,
+							title: event.title,
+						});
 						webviewView.webview.postMessage({
 							command: "thread-data",
-							value: this._workspace.getSettings(),
+							value: {
+								state: await this._lspClient.loadThread(event.threadId),
+								activeThreadId: (await this._workspace.load()).activeThreadId!,
+							} satisfies ComposerThreadEvent,
 						});
 						break;
-					case "delete-thread":
-						await this.deleteThread(String(value));
-						webviewView.webview.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
-						break;
-					case "rename-thread":
-						await this.renameThread(value as RenameThreadEvent);
-						webviewView.webview.postMessage({
-							command: "thread-data",
-							value: this._workspace.getSettings(),
-						});
-						break;
+					}
 					case "visualize-threads":
 						this._threadViewProvider.visualizeThreads(
 							this._workspace.getSettings(),
@@ -207,26 +230,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						this._settingsViewProvider.openInPanel();
 						break;
 					case "diff-view": {
-						const { file, threadId } = value as DiffViewCommand;
+						const { file, threadId, toolId } = value as DiffViewCommand;
 						this._diffViewProvider.createDiffView({
 							file,
-							onAccept: async (file: FileMetadata, threadId: string) => {
-								await this.acceptFile({ files: [file], threadId });
+							onAccept: async (event: UpdateComposerFileEvent) => {
+								await this.acceptFile(event);
 							},
-							onReject: async (file: FileMetadata, threadId: string) => {
-								await this.rejectFile({ files: [file], threadId });
+							onReject: async (event: UpdateComposerFileEvent) => {
+								await this.rejectFile(event);
 							},
 							threadId,
+							toolId,
 						});
 						break;
 					}
-					case "clear-chat-history":
-						this.clearChatHistory();
+					case "clear-chat-history": {
+						await this.clearChatHistory();
+						const settings = await this._workspace.load();
 						webviewView.webview.postMessage({
 							command: "thread-data",
-							value: this._workspace.getSettings(),
+							value: {
+								state: await this._lspClient.loadThread(
+									settings.activeThreadId!,
+								),
+								activeThreadId: settings.activeThreadId!,
+							} satisfies ComposerThreadEvent,
 						});
 						break;
+					}
 					case "clipboard": {
 						vscode.env.clipboard.writeText(value as string);
 						break;
@@ -237,11 +268,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							return [];
 						}
 
-						const settings = await this._workspace.load();
+						const settings = await wingmanSettings.LoadSettings(
+							this._workspace.workspaceFolder,
+						);
 
 						// Find all files in the workspace that match the search term
 						const matchingFiles = await vscode.workspace.findFiles(
-							"**/*",
+							settings.embeddingSettings.General.globPattern ?? "**/*",
 							(await getGitignorePatterns(this._workspace.workspacePath)) || "",
 						);
 
@@ -262,26 +295,56 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						});
 						break;
 					}
-					case "compose":
+					case "compose": {
+						const request = value as ComposerRequest;
 						await this._lspClient.compose({
-							...(value as ComposerRequest),
+							...request,
 							context: getChatContext(1024),
 							recentFiles: getRecentFileTracker().getRecentFiles(),
 						});
 						break;
+					}
 					case "cancel": {
 						await this._lspClient.cancelComposer();
 						break;
 					}
 					case "ready": {
 						const settings = await this._workspace.load();
+
+						let threadPromises: Promise<ComposerState | null>[] = [];
+						let resolvedThreads: ComposerState[] = [];
+						if (settings.threadIds?.length) {
+							// Use Promise.allSettled instead of Promise.all
+							threadPromises = settings.threadIds.map((threadId) =>
+								this._lspClient.loadThread(threadId).catch((error) => {
+									console.error(`Failed to load thread ${threadId}:`, error);
+									// Return null or a default/error state instead of throwing
+									return null;
+								}),
+							);
+
+							// Process the results, filtering out failed loads
+							const settledResults = await Promise.all(threadPromises);
+							resolvedThreads = settledResults.filter(
+								(thread): thread is ComposerState => thread !== null,
+							);
+
+							// Optionally log how many threads failed to load
+							const failedCount =
+								settledResults.length - resolvedThreads.length;
+							if (failedCount > 0) {
+								console.warn(`${failedCount} thread(s) failed to load`);
+								// You could also notify the user via the webview
+							}
+						}
+
 						const appState: AppState = {
 							workspaceFolder: getActiveWorkspace(),
 							theme: vscode.window.activeColorTheme.kind,
-							threads: settings.threads,
-							activeThreadId: settings.activeThreadId,
 							settings,
 							totalFiles: 0,
+							threads: resolvedThreads,
+							activeThreadId: settings.activeThreadId,
 						};
 
 						webviewView.webview.postMessage({
@@ -294,11 +357,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							value: await wingmanSettings.LoadSettings(
 								this._workspace.workspaceFolder,
 							),
-						});
-
-						webviewView.webview.postMessage({
-							command: "thread-data",
-							value: settings,
 						});
 						this.showView(this._launchView);
 						break;
@@ -314,12 +372,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
-	private async undoFile({ files, threadId }: UpdateComposerFileEvent) {
+	private async undoFile({ files, threadId, toolId }: UpdateComposerFileEvent) {
 		try {
-			// Update thread metadata
-			const targetThread = await this._workspace.getThreadById(threadId);
-			if (!targetThread) return;
-
 			const fileMap = new Map<string, FileMetadata>();
 			for (const file of files) {
 				const fileUri = vscode.Uri.joinPath(
@@ -334,39 +388,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				);
 				fileMap.set(file.id!, file);
 			}
-
-			let filesFound = 0;
-			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
-				if (filesFound === fileMap.size) {
-					break;
-				}
-
-				const message = targetThread.messages[i];
-				const events = message.events ?? [];
-				for (let j = events.length - 1; j >= 0; j--) {
-					const event = events[j];
-					if (fileMap.has(event.id)) {
-						event.content = JSON.stringify(fileMap.get(event.id));
-						filesFound++;
-						if (filesFound === fileMap.size) {
-							break;
-						}
-					}
-				}
-			}
-
-			this._webview?.postMessage({
-				command: "thread-data",
-				value: this._workspace.getSettings(),
+			await this._lspClient.updateComposerFile({
+				files,
+				threadId,
+				toolId,
 			});
-
-			await Promise.all([
-				this._lspClient.updateComposerFile({
-					files,
-					threadId,
-				}),
-				this._workspace.updateThread(threadId, targetThread),
-			]);
+			await this._webview?.postMessage({
+				command: "thread-data",
+				value: {
+					state: await this._lspClient.loadThread(threadId),
+					activeThreadId: threadId,
+				} satisfies ComposerThreadEvent,
+			});
 		} catch (error) {
 			console.error("Error undoing file changes:", error);
 			// Consider showing an error notification to the user
@@ -376,10 +409,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	private async acceptFile({
 		files,
 		threadId,
+		toolId,
 	}: UpdateComposerFileEvent): Promise<void> {
-		const targetThread = await this._workspace.getThreadById(threadId);
-		if (!targetThread) return;
-
 		const fileMap = new Map<string, FileMetadata>();
 		for (const file of files) {
 			const relativeFilePath = vscode.workspace.asRelativePath(file.path);
@@ -395,47 +426,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			file.rejected = false;
 			fileMap.set(file.id!, file);
 		}
-
-		let filesFound = 0;
-		for (let i = targetThread.messages.length - 1; i >= 0; i--) {
-			if (filesFound === fileMap.size) {
-				break;
-			}
-
-			const message = targetThread.messages[i];
-			const events = message.events ?? [];
-			for (let j = events.length - 1; j >= 0; j--) {
-				const event = events[j];
-				if (fileMap.has(event.id)) {
-					event.content = JSON.stringify(fileMap.get(event.id));
-					filesFound++;
-					if (filesFound === fileMap.size) {
-						break;
-					}
-				}
-			}
-		}
-
-		this._webview?.postMessage({
-			command: "thread-data",
-			value: this._workspace.getSettings(),
+		const resumed = await this._lspClient.updateComposerFile({
+			files,
+			threadId,
+			toolId,
 		});
-
-		await Promise.all([
-			this._lspClient.updateComposerFile({
-				files,
-				threadId,
-			}),
-			this._workspace.updateThread(threadId, targetThread),
-		]);
+		if (!resumed) {
+			await this._webview?.postMessage({
+				command: "thread-data",
+				value: {
+					state: await this._lspClient.loadThread(threadId),
+					activeThreadId: threadId,
+				} satisfies ComposerThreadEvent,
+			});
+		}
 	}
 
-	private async rejectFile({ files, threadId }: UpdateComposerFileEvent) {
+	private async rejectFile({
+		files,
+		threadId,
+		toolId,
+	}: UpdateComposerFileEvent) {
 		try {
-			// Update thread metadata
-			const targetThread = await this._workspace.getThreadById(threadId);
-			if (!targetThread) return;
-
 			const fileMap = new Map<string, FileMetadata>();
 			for (const file of files) {
 				file.accepted = false;
@@ -443,38 +455,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				fileMap.set(file.id!, file);
 			}
 
-			let filesFound = 0;
-			for (let i = targetThread.messages.length - 1; i >= 0; i--) {
-				if (filesFound === fileMap.size) {
-					break;
-				}
-
-				const message = targetThread.messages[i];
-				const events = message.events ?? [];
-				for (let j = events.length - 1; j >= 0; j--) {
-					const event = events[j];
-					if (fileMap.has(event.id)) {
-						event.content = JSON.stringify(fileMap.get(event.id));
-						filesFound++;
-						if (filesFound === fileMap.size) {
-							break;
-						}
-					}
-				}
-			}
-
-			this._webview?.postMessage({
-				command: "thread-data",
-				value: this._workspace.getSettings(),
+			const resumed = await this._lspClient.updateComposerFile({
+				files,
+				threadId,
+				toolId,
 			});
-
-			await Promise.all([
-				this._lspClient.updateComposerFile({
-					files,
-					threadId,
-				}),
-				this._workspace.updateThread(threadId, targetThread),
-			]);
+			if (!resumed) {
+				await this._webview?.postMessage({
+					command: "thread-data",
+					value: {
+						state: await this._lspClient.loadThread(threadId),
+						activeThreadId: threadId,
+					} satisfies ComposerThreadEvent,
+				});
+			}
 		} catch (error) {
 			console.error("Error rejecting file:", error);
 		}
@@ -485,98 +479,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		accepted = false,
 		rejected = false,
 	): Promise<void> {
-		const targetThread = await this._workspace.getThreadById(threadId);
-		if (!targetThread) return;
-
 		command.accepted = accepted;
 		command.rejected = rejected;
 
-		let commandFound = false;
-		for (let i = targetThread.messages.length - 1; i >= 0; i--) {
-			if (commandFound) {
-				break;
-			}
-
-			const message = targetThread.messages[i];
-			const events = message.events ?? [];
-			for (let j = events.length - 1; j >= 0; j--) {
-				const event = events[j];
-				if (command.id === event.id) {
-					event.content = JSON.stringify(command);
-					commandFound = true;
-					break;
-				}
-			}
-		}
-
-		this._webview?.postMessage({
-			command: "thread-data",
-			value: this._workspace.getSettings(),
+		const resumed = await this._lspClient.updateCommand({
+			command,
+			threadId,
 		});
-
-		await Promise.all([
-			this._lspClient.updateCommand({
-				command,
-				threadId,
-			}),
-			this._workspace.updateThread(threadId, targetThread),
-		]);
+		if (!resumed) {
+			await this._webview?.postMessage({
+				command: "thread-data",
+				value: {
+					state: await this._lspClient.loadThread(threadId),
+					activeThreadId: threadId,
+				} satisfies ComposerThreadEvent,
+			});
+		}
 	}
 
 	private async clearChatHistory() {
 		const settings = this._workspace.getSettings();
 
 		if (settings.activeThreadId) {
-			await this._workspace.updateThread(settings.activeThreadId, {
-				messages: [],
-			});
 			await this._lspClient.clearChatHistory(settings.activeThreadId);
 		}
-	}
-
-	private async deleteThread(threadId: string) {
-		await this._lspClient.deleteThread(threadId);
-		await this._workspace.deleteThread(threadId);
-	}
-
-	private async renameThread({ threadId, title }: RenameThreadEvent) {
-		await this._workspace.updateThread(threadId, { title });
-	}
-
-	private async switchThread(threadId: string) {
-		await this._workspace.switchThread(threadId);
-	}
-
-	private async createThread(thread: Thread) {
-		await this._workspace.createThread(thread.title);
-	}
-
-	private async branchThread(thread: Thread) {
-		await this._workspace.branchThread(thread);
-		await this._lspClient.branchThread({
-			threadId: thread.id,
-			originalThreadId: thread.originatingThreadId,
-		});
-	}
-
-	private async addMessageToThread(event: AddMessageToThreadEvent) {
-		const { threadId, message, canResume } = event;
-		const activeThread = await this._workspace.getThreadById(threadId);
-
-		if (activeThread) {
-			activeThread.messages.push(message);
-			activeThread.canResume = canResume;
-			await this._workspace.updateThread(threadId, activeThread);
-			return;
-		}
-
-		const words = message.message.split(" ");
-		let threadTitle = words.slice(0, 5).join(" ");
-		if (threadTitle.length > 30) {
-			threadTitle = `${threadTitle.substring(0, 27)}...`;
-		}
-
-		await this._workspace.createThread(threadTitle, [message], event.threadId);
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {

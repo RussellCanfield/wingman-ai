@@ -10,27 +10,34 @@ import type { CommandMetadata } from "@shared/types/Message";
 import { vscode } from "../../../utilities/vscode";
 import { useComposerContext } from "../../../context/composerContext";
 import type { UpdateCommandEvent } from "@shared/types/Events";
+import type { ToolMessage } from "@shared/types/Composer";
 
 interface CommandExecuteOutputProps {
-    command: CommandMetadata | undefined;
+    messages: ToolMessage[];
     isLightTheme: boolean;
-    loading: boolean;
-    failed?: boolean;
     onAccept?: (command: string) => void;
     onReject?: (command: string) => void;
 }
 
 export const CommandExecuteOutput = ({
-    command,
+    messages,
     isLightTheme,
-    loading,
 }: CommandExecuteOutputProps) => {
     const { activeThread } = useComposerContext();
     const [isResultExpanded, setIsResultExpanded] = useState(false);
 
-    if (!command) return null;
+    if (!messages) return null;
 
-    console.log("Command:", command)
+    let command: CommandMetadata | undefined;
+
+    if (messages.length === 1) {
+        command = {
+            id: messages[0].id,
+            command: String((messages[0].content as Record<string, unknown>).command)
+        };
+    } else {
+        command = messages[1].metadata?.command as unknown as CommandMetadata;
+    }
 
     const handleAccept = () => {
         vscode.postMessage({
@@ -69,7 +76,7 @@ export const CommandExecuteOutput = ({
 
     return (
         <div
-            className={`rounded-lg overflow-hidden shadow-lg mb-4 mt-4 ${cssClasses}`}
+            className={`rounded-lg overflow-hidden shadow-lg ${cssClasses}`}
         >
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-between relative p-3">
@@ -124,7 +131,7 @@ export const CommandExecuteOutput = ({
                 )}
 
                 {/* Action buttons moved underneath */}
-                {!command.success && !command.failed && !command.accepted && !command.rejected && (
+                {messages.length === 1 && !command.success && !command.failed && !command.accepted && !command.rejected && (
                     <div className={`px-4 py-3 flex justify-end gap-2 ${isLightTheme ? 'bg-gray-50' : 'bg-[#252525]'} border-t ${isLightTheme ? 'border-gray-200' : 'border-gray-700'}`}>
                         <button
                             type="button"

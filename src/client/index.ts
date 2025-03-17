@@ -15,7 +15,8 @@ import type {
 	ComposerRequest,
 	ComposerResponse,
 	FileDiagnostic,
-	GraphState,
+	ComposerState,
+	ComposerThread,
 } from "@shared/types/Composer";
 import path from "node:path";
 import { mapLocation, mapSymbol } from "./utils";
@@ -35,6 +36,7 @@ import { wingmanSettings } from "../service/settings";
 import { generateWorkspaceGlobPatterns } from "../providers/globProvider";
 import { CreateAIProvider } from "../service/utils/models";
 import type { MessageContentText } from "@langchain/core/messages";
+import * as sound from "sound-play";
 
 let client: LanguageClient;
 
@@ -148,12 +150,30 @@ export class LSPClient {
 			}
 		}
 
-		client.onRequest("wingman/compose", (params: ComposerResponse) => {
+		client.onRequest("wingman/compose", async (params: ComposerResponse) => {
 			loggingProvider.logInfo(JSON.stringify(params));
 			telemetry.sendEvent(EVENT_COMPOSE_PHASE, {
-				phase: params.step,
+				phase: params.event,
 			});
-			this.composerWebView?.postMessage({
+
+			const settings = await wingmanSettings.LoadSettings(
+				vscode.workspace.workspaceFolders![0].name,
+			);
+			if (
+				settings.agentSettings.playAudioAlert &&
+				(params.event === "composer-done" ||
+					params.event === "composer-error" ||
+					params.state.canResume)
+			) {
+				try {
+					const filePath = `${context.extensionPath}/audio/ui-notification.mp3`;
+					sound.play(filePath);
+				} catch (e) {
+					console.error("Failed to play sound", e);
+				}
+			}
+
+			await this.composerWebView?.postMessage({
 				command: "compose-response",
 				value: params,
 			});
@@ -330,20 +350,16 @@ export class LSPClient {
 		return client.sendRequest("wingman/clearChatHistory", activeThreadId);
 	};
 
-	updateComposerFile = async ({
-		files,
-		threadId,
-	}: UpdateComposerFileEvent): Promise<GraphState> => {
-		return client.sendRequest("wingman/updateComposerFile", {
-			files,
-			threadId,
-		});
+	updateComposerFile = async (
+		event: UpdateComposerFileEvent,
+	): Promise<ComposerState> => {
+		return client.sendRequest("wingman/updateComposerFile", event);
 	};
 
 	updateCommand = async ({
 		command,
 		threadId,
-	}: UpdateCommandEvent): Promise<GraphState> => {
+	}: UpdateCommandEvent): Promise<ComposerState> => {
 		return client.sendRequest("wingman/updateCommand", {
 			command,
 			threadId,
@@ -360,8 +376,20 @@ export class LSPClient {
 		});
 	};
 
+	loadThread = async (threadId: string): Promise<ComposerState> => {
+		return client.sendRequest("wingman/getThreadById", threadId);
+	};
+
+	createThread = async (thread: ComposerThread) => {
+		return client.sendRequest("wingman/createThread", thread);
+	};
+
 	deleteThread = async (threadId: string) => {
 		return client.sendRequest("wingman/deleteThread", threadId);
+	};
+
+	updateThread = async (thread: Partial<ComposerThread>) => {
+		return client.sendRequest("wingman/updateThread", thread);
 	};
 
 	deleteIndex = async () => {

@@ -2,11 +2,15 @@ import * as vscode from "vscode";
 import { addNoneAttributeToLink } from "./utilities";
 import type { AppMessage } from "@shared/types/Message";
 import type { WorkspaceSettings } from "@shared/types/Settings";
+import type { LSPClient } from "../client";
 
 export class ThreadViewProvider {
 	private panel: vscode.WebviewPanel | undefined;
 
-	constructor(private readonly _context: vscode.ExtensionContext) {}
+	constructor(
+		private readonly _context: vscode.ExtensionContext,
+		private readonly _lspClient: LSPClient,
+	) {}
 
 	async visualizeThreads(settings: WorkspaceSettings) {
 		if (this.panel) {
@@ -27,6 +31,12 @@ export class ThreadViewProvider {
 			this.panel.webview,
 		);
 
+		const states = await Promise.all(
+			settings.threadIds?.map((threadId) => {
+				return this._lspClient.loadThread(threadId);
+			}) ?? [],
+		);
+
 		this.panel.webview.onDidReceiveMessage(async (message: AppMessage) => {
 			if (!message) return;
 
@@ -37,7 +47,7 @@ export class ThreadViewProvider {
 					this.panel?.webview.postMessage({
 						command: "thread-data",
 						value: {
-							threads: settings.threads,
+							states,
 							activeThreadId: settings.activeThreadId,
 						},
 					});

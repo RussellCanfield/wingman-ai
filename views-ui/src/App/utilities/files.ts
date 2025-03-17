@@ -3,50 +3,38 @@ import type { FileMetadata } from "@shared/types/Message";
 import { vscode } from "./vscode";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
 
-export const acceptFile = ({ files, threadId }: UpdateComposerFileEvent) => {
-	if (files) {
+export const acceptFile = (event: UpdateComposerFileEvent) => {
+	if (event) {
 		vscode.postMessage({
 			command: "accept-file",
-			value: {
-				files,
-				threadId,
-			} satisfies UpdateComposerFileEvent,
+			value: event,
 		});
 	}
 };
 
-export const rejectFile = ({ files, threadId }: UpdateComposerFileEvent) => {
-	if (files) {
+export const rejectFile = (event: UpdateComposerFileEvent) => {
+	if (event) {
 		vscode.postMessage({
 			command: "reject-file",
-			value: {
-				files,
-				threadId,
-			} satisfies UpdateComposerFileEvent,
+			value: event,
 		});
 	}
 };
 
-export const showDiffview = (file: FileMetadata, threadId: string) => {
-	if (file) {
+export const showDiffview = (event: DiffViewCommand) => {
+	if (event) {
 		vscode.postMessage({
 			command: "diff-view",
-			value: {
-				file,
-				threadId,
-			} satisfies DiffViewCommand,
+			value: event,
 		});
 	}
 };
 
-export const undoFile = ({ files, threadId }: UpdateComposerFileEvent) => {
-	if (files) {
+export const undoFile = (event: UpdateComposerFileEvent) => {
+	if (event) {
 		vscode.postMessage({
 			command: "undo-file",
-			value: {
-				files,
-				threadId,
-			} satisfies UpdateComposerFileEvent,
+			value: event,
 		});
 	}
 };
@@ -63,6 +51,8 @@ export const openFile = (file: FileMetadata) => {
 };
 
 export const getTruncatedPath = (path: string) => {
+	if (path.indexOf("/") === -1) return path;
+
 	const parts = path.split("/");
 	const fileName = parts.pop() ?? "";
 	const lastFolder = parts.pop();

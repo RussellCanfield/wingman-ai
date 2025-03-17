@@ -19,8 +19,7 @@ export default function Toolbar() {
 		view,
 		setView,
 	} = useSettingsContext();
-	const { activeThread } = useComposerContext();
-	const { setComposerMessages } = useComposerContext();
+	const { activeThread, setComposerStates, setActiveComposerState } = useComposerContext();
 
 	const buttonBaseClasses = "rounded transition-colors duration-300 p-2";
 	const buttonActiveClasses = isLightTheme
@@ -58,10 +57,25 @@ export default function Toolbar() {
 				type="button"
 				className={`${buttonBaseClasses} ${buttonInactiveClasses}`}
 				onClick={() => {
+					if (!activeThread) return;
+
 					vscode.postMessage({
 						command: "clear-chat-history",
 					});
-					setComposerMessages([]);
+					setComposerStates(states => {
+						const stateIndex = states.findIndex(s => s.threadId === activeThread.id);
+
+						if (stateIndex === -1) return [...states];
+
+						states[stateIndex].messages = [];
+						return [...states];
+					});
+					setActiveComposerState(state => {
+						if (!state) return;
+
+						state.messages = [];
+						return { ...state };
+					})
 				}}
 				title="Clear chat history"
 			>

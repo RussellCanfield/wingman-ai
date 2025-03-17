@@ -1,17 +1,13 @@
-import type {
-	ComposerMessage,
-	ComposerRequest,
+import {
+	UserMessage,
+	type ComposerRequest,
 } from "@shared/types/Composer";
-import ChatEntry from "./ChatEntry";
 import { ChatInput } from "./Input/ChatInput";
 import { ErrorBoundary } from 'react-error-boundary';
-import ChatResponseList from "./ChatList";
+import ChatThreadList from "./ChatThreadList";
 import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
-import type { AddMessageToThreadEvent } from "@shared/types/Events";
 import { vscode } from "../../utilities/vscode";
-import { useSettingsContext } from "../../context/settingsContext";
-import { useMemo } from "react";
 
 const getFileExtension = (fileName: string): string => {
 	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
@@ -27,15 +23,13 @@ const getBase64FromFile = (file: File): Promise<string> => {
 };
 
 export default function Compose() {
-	const { isLightTheme } = useSettingsContext();
 	const {
-		composerMessages,
-		setComposerMessages,
+		createThread,
 		loading,
 		setLoading,
 		clearActiveMessage,
-		setActiveMessage,
-		activeMessage,
+		setActiveComposerState,
+		activeComposerState,
 		activeThread,
 		fileDiagnostics
 	} = useComposerContext();
@@ -52,10 +46,11 @@ export default function Compose() {
 		contextFiles: string[],
 		image?: File
 	) => {
-		const threadId = activeThread?.id ?? crypto.randomUUID();
+		const thread = activeThread ?? createThread(input);
+
 		const payload: ComposerRequest = {
 			input,
-			threadId,
+			threadId: thread.id,
 			contextFiles,
 		};
 
@@ -66,58 +61,35 @@ export default function Compose() {
 			};
 		}
 
-		const message: ComposerMessage = {
-			from: "user",
-			message: input,
-			loading: false,
-			image: payload.image,
-		};
-
 		vscode.postMessage({
 			command: "compose",
 			value: payload,
 		});
 
-		vscode.postMessage({
-			command: "add-message-to-thread",
-			value: { threadId, message } satisfies AddMessageToThreadEvent
+
+		setActiveComposerState(state => {
+			if (state) {
+				state.messages.push(new UserMessage(crypto.randomUUID(), input, payload.image));
+			} else {
+				state = {
+					messages: [new UserMessage(crypto.randomUUID(), input, payload.image)],
+					threadId: thread.id,
+					title: thread.title,
+					createdAt: thread.createdAt
+				};
+			}
+			return state;
 		});
-
-		setComposerMessages((messages) => [
-			...messages,
-			message
-		]);
-
-		setActiveMessage(() => ({
-			from: "assistant",
-			message: "",
-			events: [],
-			threadId,
-			loading: true
-		} satisfies ComposerMessage))
 
 		setLoading(true);
 	};
 
-	const ActiveMessage = useMemo(() => {
-		return (
-			<ChatEntry
-				from="assistant"
-				message={activeMessage?.message || ""}
-				events={activeMessage?.events}
-				loading={loading}
-				isCurrent={true}
-				canResume={activeMessage?.canResume}
-			/>
-		)
-	}, [activeMessage?.events, loading, activeMessage?.message, activeMessage?.canResume]);
-
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			<div className="flex items-center justify-between p-2 pt-0 border-b border-[var(--vscode-panel-border)]">
-				<ThreadManagement />
+				<ThreadManagement loading={loading} />
 			</div>
-			<ErrorBoundary resetKeys={composerMessages} fallback={<div className="flex items-center justify-center h-full p-4 bg-[var(--vscode-input-background)] rounded-md">
+			<ErrorBoundary resetKeys={[activeComposerState ?? 0]} fallback={<div className="flex items-center justify-center h-full p-4 bg-[var(--vscode-input-background)] rounded-md">
 				<div className="text-center max-w-lg p-6">
 					<h2 className="text-xl font-semibold mb-3">Oops, something went wrong!</h2>
 					<p className="mb-4">
@@ -125,7 +97,7 @@ export default function Compose() {
 					</p>
 				</div>
 			</div>}>
-				{composerMessages.length === 0 && (
+				{!activeComposerState?.messages.length && (
 					<div className="flex items-center justify-center h-full p-4">
 						<div className="text-center max-w-2xl p-8 bg-[var(--vscode-input-background)] rounded-2xl border border-slate-700/30 shadow-2xl backdrop-blur-md mx-auto transition-all duration-300 hover:border-slate-700/50">
 							<div
@@ -154,15 +126,9 @@ export default function Compose() {
 						</div>
 					</div>
 				)}
-				{composerMessages.length > 0 && (
-					<ChatResponseList messages={composerMessages} loading={loading}>
-						{loading && (!activeMessage?.threadId || activeThread?.id === activeMessage?.threadId) && (
-							ActiveMessage
-						)}
-					</ChatResponseList>
-				)}
+				<ChatThreadList loading={loading} />
 				<ChatInput
-					loading={loading || ((activeMessage?.canResume || activeThread?.canResume) ?? false)}
+					loading={loading}
 					threadId={activeThread?.id}
 					onChatSubmitted={handleChatSubmitted}
 					onChatCancelled={cancelAIResponse}

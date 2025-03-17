@@ -21,8 +21,7 @@ import {
 	type DiagnosticRetriever,
 	type SymbolRetriever,
 } from "./retriever";
-import { emptyCheckpoint } from "@langchain/langgraph";
-import type { ComposerRequest } from "@shared/types/Composer";
+import type { ComposerRequest, ComposerThread } from "@shared/types/Composer";
 import { loggingProvider } from "./loggingProvider";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer";
@@ -34,7 +33,7 @@ import type {
 } from "@shared/types/Events";
 import { wingmanSettings } from "../service/settings";
 import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
-import type { IndexFile, Thread } from "@shared/types/Settings";
+import type { IndexFile } from "@shared/types/Settings";
 import { VectorStore } from "./files/vector";
 import type { Embeddings } from "@langchain/core/embeddings";
 import {
@@ -140,7 +139,7 @@ export class LSPServer {
 			homeDir,
 			".wingman",
 			path.basename(this.workspaceFolders[0]),
-			"checkpoints",
+			folder,
 		);
 
 		// Ensure the directory exists
@@ -161,37 +160,43 @@ export class LSPServer {
 				files,
 				command,
 			)) {
+				if (event.event === "no-op") {
+					return false;
+				}
+
 				await this.connection?.sendRequest("wingman/compose", event);
 
-				if (event.step === "composer-done" && !event.canResume) {
-					const state = await this.composer?.getState(request.threadId);
-					const settings = await wingmanSettings.LoadSettings(
-						this.workspaceFolders[0],
-					);
-					const allFilesFinal = state?.files.every(
-						(f) => f.accepted || f.rejected,
-					);
+				// if (event.event === "composer-done" && !event.state.canResume) {
+				// 	const state = await this.composer?.getState(request.threadId);
+				// 	const settings = await wingmanSettings.LoadSettings(
+				// 		this.workspaceFolders[0],
+				// 	);
+				// 	const allFilesFinal = state?.files.every(
+				// 		(f) => f.accepted || f.rejected,
+				// 	);
 
-					if (!allFilesFinal) return state;
+				// 	if (!allFilesFinal) return state;
 
-					const diagnostics =
-						await this.diagnosticsRetriever.getFileDiagnostics(
-							state?.files.map((f) => f.path) ?? [],
-						);
+				// 	const diagnostics =
+				// 		await this.diagnosticsRetriever.getFileDiagnostics(
+				// 			state?.files.map((f) => f.path) ?? [],
+				// 		);
 
-					if (settings.agentSettings.automaticallyFixDiagnostics) {
-						if (diagnostics && diagnostics.length > 0) {
-							await this.fixDiagnostics({
-								diagnostics: diagnostics,
-								threadId: event.threadId,
-							});
-						}
-					}
-				}
+				// 	if (settings.agentSettings.automaticallyFixDiagnostics) {
+				// 		if (diagnostics && diagnostics.length > 0) {
+				// 			await this.fixDiagnostics({
+				// 				diagnostics: diagnostics,
+				// 				threadId: event.state.threadId,
+				// 			});
+				// 		}
+				// 	}
+				// }
 			}
 		} catch (e) {
 			console.error(e);
 		}
+
+		return true;
 	};
 
 	private fixDiagnostics = async (event: FixDiagnosticsEvent) => {
@@ -242,6 +247,9 @@ ${input}`,
 			);
 
 			const capabilities = params.capabilities;
+
+			await this.postInitialize();
+			await this.addEvents();
 
 			// Does the client support the `workspace/configuration` request?
 			// If not, we fall back using global settings.
@@ -390,24 +398,10 @@ ${input}`,
 		this.connection?.onRequest(
 			"wingman/clearChatHistory",
 			async (threadId: string) => {
-				if (!this.checkPointer) return;
-
-				const existingThreadData = await this.checkPointer.get({
-					configurable: { thread_id: threadId },
+				return this.composer?.updateThread({
+					thread: { id: threadId },
+					messages: [],
 				});
-
-				if (existingThreadData) {
-					await this.checkPointer.put(
-						{ configurable: { thread_id: threadId } },
-						emptyCheckpoint(),
-						{
-							source: "update",
-							step: 0,
-							writes: {},
-							parents: {},
-						},
-					);
-				}
 			},
 		);
 
@@ -471,6 +465,13 @@ ${input}`,
 		});
 
 		this.connection?.onRequest(
+			"wingman/getThreadById",
+			async (threadId: string) => {
+				return this.composer?.getState(threadId);
+			},
+		);
+
+		this.connection?.onRequest(
 			"wingman/indexFiles",
 			async (indexFiles: [string, IndexFile][]) => {
 				if (!this.vectorStore || !this.embedder || !this.summaryModel) return;
@@ -494,15 +495,7 @@ ${input}`,
 					(f) => f.accepted || f.rejected,
 				);
 
-				if (!fromUserAction) {
-					return await this.composer?.updateFile(event);
-				}
-
-				// if (event.files.every((f) => f.rejected)) {
-				// 	await this.composer?.updateFile(event);
-				// }
-
-				await this.compose(
+				const resumed = await this.compose(
 					{
 						input: "",
 						threadId: event.threadId,
@@ -510,13 +503,19 @@ ${input}`,
 					},
 					event.files,
 				);
+
+				if (!fromUserAction || !resumed) {
+					await this.composer?.updateFile(event);
+				}
+
+				return resumed;
 			},
 		);
 
 		this.connection?.onRequest(
 			"wingman/updateCommand",
 			async (event: UpdateCommandEvent) => {
-				await this.compose(
+				const resumed = await this.compose(
 					{
 						input: "",
 						threadId: event.threadId,
@@ -525,13 +524,22 @@ ${input}`,
 					undefined,
 					event.command,
 				);
+
+				return resumed;
 			},
 		);
 
 		this.connection?.onRequest(
 			"wingman/createThread",
-			async (thread: Thread) => {
+			async (thread: ComposerThread) => {
 				return this.composer?.createThread(thread);
+			},
+		);
+
+		this.connection?.onRequest(
+			"wingman/updateThread",
+			async (thread: ComposerThread) => {
+				return this.composer?.updateThread({ thread });
 			},
 		);
 

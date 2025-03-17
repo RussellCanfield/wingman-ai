@@ -106,7 +106,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					break;
 				}
 				case "saveSettings":
-					wingmanSettings.SaveSettings(value as Settings, this.workspace);
+					await wingmanSettings.SaveSettings(value as Settings, this.workspace);
 					await this._lspClient.updateSettings();
 					settingsPanel.webview.postMessage({
 						command: "settingsSaved",

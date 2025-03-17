@@ -7,7 +7,7 @@ export const baseToolSchema = z.object({
 });
 
 export const baseFileSchema = baseToolSchema.extend({
-	filePath: z
+	path: z
 		.string()
 		.describe("The relative path of the file relative to the workspace"),
 });

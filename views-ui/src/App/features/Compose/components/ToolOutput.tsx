@@ -1,9 +1,8 @@
-import type { StreamEvent } from "@shared/types/Composer";
+import type { ToolMessage } from "@shared/types/Composer";
 import { useMemo } from "react";
 import {
     AiOutlineLoading3Quarters,
     AiOutlineCheckCircle,
-    AiOutlineCloseCircle
 } from "react-icons/ai";
 import { BsTools } from "react-icons/bs";
 import { getTruncatedPath, openFile } from "../../../utilities/files";
@@ -12,49 +11,61 @@ const ToolNames = {
     list_directory: "Searched: ",
     find_file_dependencies: "Checked Dependencies",
     read_file: "Analyzed: ",
-    research: "Researching..."
+    research: "Researching...",
+    semantic_search: "Semantic search..."
 };
 
+export interface ToolOutputProps {
+    messages: ToolMessage[];
+    isLightTheme: boolean;
+}
+
 export const ToolOutput = ({
-    event,
+    messages,
     isLightTheme,
-    loading,
-    failed
-}: { event: StreamEvent; isLightTheme: boolean; loading: boolean, failed?: boolean }) => {
+}: ToolOutputProps) => {
     //@ts-expect-error
-    const displayName = ToolNames[event.metadata?.tool] ?? event.metadata.tool;
+    const displayName = ToolNames[messages[0].name] ?? messages[0].name;
+    const toolIsLoading = messages.length === 1;
 
     const ToolDetails = useMemo(() => {
-        if (!event.content) return null;
+        if (!messages) return null;
 
         try {
-            const parsedContent = JSON.parse(event.content);
+            const toolName = messages[0].name;
 
-            if (event.metadata?.tool === "list_directory") {
-                return parsedContent.directory;
+            if (toolName === "list_directory") {
+                let content = messages[0].content;
+                content = typeof (content) === "string" ? JSON.parse(content) : content;
+                //@ts-expect-error
+                return content.directory;
             }
 
-            if (event.metadata?.tool === "read_file") {
+            if (toolName === "read_file") {
+                let content = toolIsLoading ? messages[0].content : JSON.parse(String(messages[1].content));
+                content = typeof (content) === "string" ? JSON.parse(content) : content;
                 return <span
                     className="cursor-pointer hover:underline transition-all"
                     onClick={() => openFile({
-                        path: parsedContent.filePath
+                        path: content.path
                     })}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
                             openFile({
-                                path: parsedContent.filePath
+                                path: content.path
                             });
                         }
-                    }}>{getTruncatedPath(parsedContent.filePath)}</span>
+                    }}>{getTruncatedPath(content.path)}</span>
             }
         } catch (error) {
             console.error("Failed to parse tool content:", error);
         }
 
+        console.log('fall through:', messages);
+
         return null;
-    }, [event]);
+    }, [messages, messages[0].name, messages[0].content, toolIsLoading]);
 
     const cssClasses = `${isLightTheme
         ? "bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]"
@@ -63,7 +74,7 @@ export const ToolOutput = ({
 
     return (
         <div
-            className={`rounded-lg overflow-hidden shadow-lg mb-4 mt-4 ${cssClasses}`}
+            className={`rounded-lg overflow-hidden shadow-lg ${cssClasses}`}
         >
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-between relative p-3">
@@ -77,7 +88,7 @@ export const ToolOutput = ({
                     </div>
 
                     <div className="flex items-center ml-3 flex-shrink-0">
-                        {loading && (
+                        {toolIsLoading && (
                             <div className="flex justify-center">
                                 <AiOutlineLoading3Quarters
                                     className="animate-spin text-stone-400"
@@ -85,9 +96,9 @@ export const ToolOutput = ({
                                 />
                             </div>
                         )}
-                        {!loading && (
+                        {!toolIsLoading && (
                             <div className="flex justify-center">
-                                {!failed ? <AiOutlineCheckCircle className="text-gray-400/50" size={20} /> : <AiOutlineCloseCircle className="text-gray-400/50" size={20} />}
+                                <AiOutlineCheckCircle className="text-gray-400/50" size={20} />
                             </div>
                         )}
                     </div>

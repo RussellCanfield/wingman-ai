@@ -22,7 +22,6 @@ import { BindingDownloader } from "./client/bindingDownload";
 import { ThreadViewProvider } from "./providers/threadViewProvider";
 import type { AIProvider } from "./service/base";
 import { getRecentFileTracker } from "./providers/recentFileTracker";
-import { monitorFileSaves } from "./utils/files";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -172,7 +171,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	diffViewProvider = new DiffViewProvider(context, lspClient);
-	threadViewProvider = new ThreadViewProvider(context);
+	threadViewProvider = new ThreadViewProvider(context, lspClient);
 	statusBarProvider = new ActivityStatusBar();
 
 	context.subscriptions.push(
@@ -255,25 +254,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	await workspace.load();
-	context.subscriptions.push(
-		//Update the composer's graph state, so that files reflect recent changes
-		//Does not apply if the file is not accepted or rejected
-		monitorFileSaves((doc) => {
-			const settings = workspace.getSettings();
-			if (!settings.activeThreadId) return;
-
-			const filePath = vscode.workspace.asRelativePath(doc.uri);
-			lspClient.updateComposerFile({
-				files: [
-					{
-						path: filePath,
-						code: doc.getText(),
-					},
-				],
-				threadId: settings.activeThreadId!,
-			});
-		}),
-	);
 
 	HotKeyCodeSuggestionProvider.provider = new HotKeyCodeSuggestionProvider();
 	context.subscriptions.push(

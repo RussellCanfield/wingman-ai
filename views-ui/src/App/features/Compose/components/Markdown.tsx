@@ -1,4 +1,7 @@
-import type { ComposerMessage } from "@shared/types/Composer";
+import {
+    prism,
+    vscDarkPlus,
+} from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useCallback, useState } from "react";
 import { memo, type PropsWithChildren } from "react";
 import Markdown from "react-markdown";
@@ -12,13 +15,14 @@ function LinkRenderer(props: any) {
         rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 underline">{props.children}</a>;
 }
 
-export const MessageWithMarkdown = ({ message, from, codeTheme }: {
-    message: ComposerMessage["message"],
-    from: ComposerMessage["from"],
-    codeTheme: any
+export const MessageWithMarkdown = ({ message, fromUser, isLightTheme }: {
+    message: string,
+    fromUser: boolean
+    isLightTheme: boolean
 }) => {
+    const codeTheme = isLightTheme ? prism : vscDarkPlus;
     return (
-        <div className={`${from === 'user' ? 'p-3' : ''}`}>
+        <div className={`${fromUser ? 'p-3' : ''}`}>
             {message !== "" && renderMarkdown(message, codeTheme)}
         </div>
     )
@@ -29,8 +33,6 @@ const CodeContainer = memo(
     (props: PropsWithChildren) => {
         const [toolboxVisible, setToolboxVisible] = useState(false);
         const { isLightTheme } = useSettingsContext();
-
-        console.log(props)
 
         /**
              * Copies Markdown content to the clipboard.

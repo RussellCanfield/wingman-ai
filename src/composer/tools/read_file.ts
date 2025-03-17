@@ -17,10 +17,10 @@ export const createReadFileTool = (
 	codeParser: CodeParser,
 ) => {
 	return tool(
-		async (input) => {
-			const filePath = path.isAbsolute(input.filePath)
-				? input.filePath
-				: path.join(workspace, input.filePath);
+		async (input, config) => {
+			const filePath = path.isAbsolute(input.path)
+				? input.path
+				: path.join(workspace, input.path);
 
 			if (!fs.existsSync(filePath)) {
 				return "File does not exist (create if required).";
@@ -36,8 +36,9 @@ export const createReadFileTool = (
 				await codeParser.createNodesFromDocument(textDocument);
 
 			return {
+				id: config.toolCall.id,
 				content: textDocument.getText(),
-				filePath: path.relative(workspace, input.filePath),
+				path: path.relative(workspace, input.path),
 				explanation: input.explanation,
 				importedBy: importEdges,
 				exportedTo: exportEdges,

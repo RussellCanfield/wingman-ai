@@ -1,11 +1,5 @@
-import type { ComposerMessage, FileDiagnostic } from "./Composer";
+import type { FileDiagnostic } from "./Composer";
 import type { CommandMetadata, FileMetadata } from "./Message";
-
-export interface AddMessageToThreadEvent {
-	threadId: string;
-	message: ComposerMessage;
-	canResume?: boolean;
-}
 
 export interface RenameThreadEvent {
 	threadId: string;
@@ -15,6 +9,7 @@ export interface RenameThreadEvent {
 export interface UpdateComposerFileEvent {
 	files: FileMetadata[];
 	threadId: string;
+	toolId: string;
 }
 
 export interface FixDiagnosticsEvent {

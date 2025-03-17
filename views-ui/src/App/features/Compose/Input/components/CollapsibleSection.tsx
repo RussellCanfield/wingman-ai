@@ -90,6 +90,8 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
     const fixDiagnostics = () => {
         if (!activeThread?.id) return;
 
+        toggleExpand();
+
         vscode.postMessage({
             command: "fix-diagnostics",
             value: {
