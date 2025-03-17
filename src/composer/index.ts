@@ -26,11 +26,7 @@ import {
 	generateFileMetadata,
 	type writeFileSchema,
 } from "./tools/write_file";
-import {
-	Tool,
-	type DynamicTool,
-	type StructuredTool,
-} from "@langchain/core/tools";
+import type { DynamicTool, StructuredTool } from "@langchain/core/tools";
 import type {
 	ComposerThread,
 	ComposerImage,
@@ -1086,29 +1082,54 @@ ${request.context.text}`,
 					if (
 						event.metadata.langgraph_node === "review" &&
 						event.data.output.update &&
-						event.data.output.update.messages[0] instanceof ToolMessage
+						event.data.output.update.messages
 					) {
-						const msg = event.data.output.update.messages[0] as ToolMessage;
+						if (event.data.output.update.messages[0] instanceof ToolMessage) {
+							const msg = event.data.output.update.messages[0] as ToolMessage;
 
-						//rejected commands are not yielded out as they do not hit the tool node event
-						if (
-							//@ts-expect-error
-							msg.additional_kwargs.command?.rejected ||
-							//@ts-expect-error
-							msg.additional_kwargs.file?.rejected
+							//rejected commands are not yielded out as they do not hit the tool node event
+							if (
+								//@ts-expect-error
+								msg.additional_kwargs.command?.rejected ||
+								//@ts-expect-error
+								msg.additional_kwargs.file?.rejected
+							) {
+								msg.id = event.run_id;
+								yield {
+									event: "composer-message",
+									state: await transformState(
+										{
+											...graphState,
+											messages: [msg],
+										},
+										threadId,
+										this.workspace,
+									),
+								} satisfies ComposerStreamingResponse;
+							}
+						} else if (
+							event.data.output.update.messages[0] instanceof AIMessageChunk
 						) {
-							msg.id = event.run_id;
-							yield {
-								event: "composer-message",
-								state: await transformState(
-									{
-										...graphState,
-										messages: [msg],
-									},
-									threadId,
-									this.workspace,
-								),
-							} satisfies ComposerStreamingResponse;
+							const msg = event.data.output.update
+								.messages[0] as AIMessageChunk;
+
+							// In this case, send an update to tell that the command tool is in a loading state
+							const cmdTool = msg.tool_calls?.find(
+								(t) => t.name === "command_execute",
+							);
+							if (cmdTool) {
+								yield {
+									event: "composer-message",
+									state: await transformState(
+										{
+											...graphState,
+											messages: [msg],
+										},
+										threadId,
+										this.workspace,
+									),
+								} satisfies ComposerStreamingResponse;
+							}
 						}
 					}
 					break;

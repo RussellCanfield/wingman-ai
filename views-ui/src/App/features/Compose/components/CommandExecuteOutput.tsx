@@ -31,10 +31,18 @@ export const CommandExecuteOutput = ({
     let command: CommandMetadata | undefined;
 
     if (messages.length === 1) {
-        command = {
-            id: messages[0].id,
-            command: String((messages[0].content as Record<string, unknown>).command)
-        };
+        if ((messages[0].content as Record<string, unknown>).accepted) {
+            command = {
+                id: messages[0].id,
+                //@ts-expect-error
+                ...(messages[0].content as Record<string, unknown>) as CommandMetadata
+            }
+        } else {
+            command = {
+                id: messages[0].id,
+                command: String((messages[0].content as Record<string, unknown>).command)
+            };
+        }
     } else {
         command = messages[1].metadata?.command as unknown as CommandMetadata;
     }
@@ -74,6 +82,9 @@ export const CommandExecuteOutput = ({
 
     const commandLoading = command.accepted && command.success === undefined && command.result === undefined;
 
+    // Determine if we should show the action buttons
+    const shouldShowButtons = !command.accepted && !command.rejected && !command.success && !command.failed;
+
     return (
         <div
             className={`rounded-lg overflow-hidden shadow-lg ${cssClasses}`}
@@ -101,7 +112,7 @@ export const CommandExecuteOutput = ({
                         </div>
                     </div>
                     <div className="flex items-center ml-3">
-                        {(command.success || command.failed || command.rejected) && (
+                        {((command.success || command.failed) && command.result || command.rejected) && (
                             <span className={`ml-2 mr-1 flex items-center ${command.success ? "text-green-500" : "text-red-500"}`}>
                                 {command.success ? (
                                     <AiOutlineCheckCircle className="text-gray-400/50" size={20} />
@@ -131,7 +142,7 @@ export const CommandExecuteOutput = ({
                 )}
 
                 {/* Action buttons moved underneath */}
-                {messages.length === 1 && !command.success && !command.failed && !command.accepted && !command.rejected && (
+                {shouldShowButtons && (
                     <div className={`px-4 py-3 flex justify-end gap-2 ${isLightTheme ? 'bg-gray-50' : 'bg-[#252525]'} border-t ${isLightTheme ? 'border-gray-200' : 'border-gray-700'}`}>
                         <button
                             type="button"

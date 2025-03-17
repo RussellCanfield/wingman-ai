@@ -74,17 +74,18 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 
 				// Add tool calls if present
 				if (message.tool_calls?.length) {
-					const toolCall = message.tool_calls[0];
-					results.push(
-						new ToolMessage(
-							message.id!,
-							toolCall.name,
-							toolCall.id!,
-							toolCall.args,
-							"start",
-							message.additional_kwargs,
-						),
-					);
+					for (const toolCall of message.tool_calls) {
+						results.push(
+							new ToolMessage(
+								message.id!,
+								toolCall.name,
+								toolCall.id!,
+								toolCall.args,
+								"start",
+								message.additional_kwargs,
+							),
+						);
+					}
 				}
 			}
 

@@ -21,7 +21,11 @@ import {
 	type DiagnosticRetriever,
 	type SymbolRetriever,
 } from "./retriever";
-import type { ComposerRequest, ComposerThread } from "@shared/types/Composer";
+import {
+	ToolMessage,
+	type ComposerRequest,
+	type ComposerThread,
+} from "@shared/types/Composer";
 import { loggingProvider } from "./loggingProvider";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer";
@@ -155,7 +159,9 @@ export class LSPServer {
 		command?: CommandMetadata,
 	) => {
 		try {
-			for await (const event of this.composer!.execute(
+			if (!this.composer) return false;
+
+			for await (const event of this.composer.execute(
 				request,
 				files,
 				command,
@@ -166,31 +172,43 @@ export class LSPServer {
 
 				await this.connection?.sendRequest("wingman/compose", event);
 
-				// if (event.event === "composer-done" && !event.state.canResume) {
-				// 	const state = await this.composer?.getState(request.threadId);
-				// 	const settings = await wingmanSettings.LoadSettings(
-				// 		this.workspaceFolders[0],
-				// 	);
-				// 	const allFilesFinal = state?.files.every(
-				// 		(f) => f.accepted || f.rejected,
-				// 	);
+				if (
+					event.event === "composer-done" &&
+					!event.state.canResume &&
+					event.state.messages
+				) {
+					try {
+						const toolMessages = event.state.messages.filter(
+							(m) => m instanceof ToolMessage && m.metadata && m.metadata.file,
+						) as ToolMessage[];
+						const files = toolMessages.map(
+							(m) => m.metadata!.file as FileMetadata,
+						);
 
-				// 	if (!allFilesFinal) return state;
+						if (!files) return true;
 
-				// 	const diagnostics =
-				// 		await this.diagnosticsRetriever.getFileDiagnostics(
-				// 			state?.files.map((f) => f.path) ?? [],
-				// 		);
+						const diagnostics =
+							await this.diagnosticsRetriever.getFileDiagnostics(
+								files.map((f) => f.path) ?? [],
+							);
 
-				// 	if (settings.agentSettings.automaticallyFixDiagnostics) {
-				// 		if (diagnostics && diagnostics.length > 0) {
-				// 			await this.fixDiagnostics({
-				// 				diagnostics: diagnostics,
-				// 				threadId: event.state.threadId,
-				// 			});
-				// 		}
-				// 	}
-				// }
+						const settings = await wingmanSettings.LoadSettings(
+							this.workspaceFolders[0],
+						);
+						if (
+							settings.agentSettings.automaticallyFixDiagnostics &&
+							diagnostics &&
+							diagnostics.length
+						) {
+							await this.fixDiagnostics({
+								diagnostics: diagnostics,
+								threadId: event.state.threadId,
+							});
+						}
+					} catch (e) {
+						console.error(e);
+					}
+				}
 			}
 		} catch (e) {
 			console.error(e);

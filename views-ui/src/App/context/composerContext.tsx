@@ -243,10 +243,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           return updatedStates;
         });
 
-        // if (activeThreadRef?.current && state.threadId === activeThreadRef.current.id && activeComposerState) {
-        //   setActiveComposerState({ ...state });
-        // }
-
         setLoading(false);
         break;
       }
@@ -357,8 +353,7 @@ const reconcileMessages = (prev: ComposerState, state: ComposerState) => {
     // Find any existing message with the same ID, regardless of type
     const matchingMessage = prev?.messages.find(m =>
       m.id === message.id &&
-      m.role === message.role &&
-      !(message instanceof ToolMessage));
+      m.role === message.role);
 
     if (!matchingMessage) {
       // If no matching message found, add the new message
