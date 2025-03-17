@@ -63,10 +63,7 @@ import type { Settings } from "@shared/types/Settings";
 import type { AIProvider } from "../service/base";
 import type { VectorStore } from "../server/files/vector";
 import { createSemanticSearchTool } from "./tools/semantic_search";
-import {
-	cleanupProcesses,
-	createBackgroundProcessTool,
-} from "./tools/background_process";
+import { cleanupProcesses } from "./tools/background_process";
 import { transformState } from "./transformer";
 import type { z } from "zod";
 import { randomUUID } from "node:crypto";
@@ -188,7 +185,7 @@ export class WingmanAgent {
 		this.aiProvider = CreateAIProvider(this.settings, loggingProvider);
 
 		this.tools = [
-			createBackgroundProcessTool(this.workspace),
+			//createBackgroundProcessTool(this.workspace),
 			createCommandExecuteTool(this.workspace),
 			createReadFileTool(this.workspace, this.codeParser),
 			createListDirectoryTool(this.workspace),
@@ -642,10 +639,11 @@ export class WingmanAgent {
 	callModel = async (state: GraphStateAnnotation) => {
 		//@ts-expect-error
 		const model = this.aiProvider?.getModel().bindTools(this.tools);
-		const response = await model!.invoke([
-			{
-				role: "system",
-				content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
+		const response = await model!.invoke(
+			[
+				{
+					role: "system",
+					content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 In most cases the user expects you to work autonomously, use the tools and answer your own questions. 
 Only provide code examples if you are explicitly asked.
@@ -666,6 +664,7 @@ Guidelines for our interaction:
 7. When unexpected results occur, focus on solutions rather than apologies
 8. At the end of the interaction give a short and concise summary of the changes you've made
 9. If the user isn't explicitly asking you to change something, ask permission before making changes or give an example
+10. Always keep summaries of changes short and concise, state the most important details
 
 # Information Gathering
 If you need more context to properly address the user's request:
@@ -686,10 +685,11 @@ When using the tools at your disposal:
 
 # Working with Files
 When modifying or creating files:
-1. Use the read_file tool to get the current content before making changes
+1. The semantic search tool - if available, is the most efficient way to discover general features and code concepts
+2. Use the read_file tool to get the current content before making changes
    - This ensures you're working with the latest version and prevents overwriting recent changes
    - File exports and imports are not always relevant, determine if you need to use them
-2. Base your edits on the most recent content, not on your memory of the file
+3. Base your edits on the most recent content, not on your memory of the file
 4. Always use the write_file tool after you have the most recent content for a file
 5. After writing a file, consider the new content as the current state for future operations
 6. **File paths must always be correct! Always use paths relative to the current working directory**
@@ -712,6 +712,7 @@ When the user asks you to research a topic, or the user appears to be stuck, the
 When executing commands:
 - Avoid running dev severs or any long running commands that may not exit, such as: "tsc -b"
 - Ask the user if they'd like you to verify anything, but do not validation on your own
+**CRITICAL - DO NOT RUN DEV SERVER COMMANDS! THE COMMAND WILL TIMEOUT AND CRASH THE PROGRAM**
 
 # Technology Recommendations
 When suggesting technologies for projects, consider these options based on specific needs:
@@ -726,9 +727,23 @@ You are a master at UX, when you write frontend code make the UI mind blowing!
 
 # Tailwindcss Integration
 - When using CLIs to create projects such as vite, you will get tailwind v4.x as a dependency
-- Here are integration instructions for tailwind v4.x:
-1. npm install tailwindcss @tailwindcss/postcss postcss
-2. postcss.config.mjs
+- Below are instructions for migrating a project, and ensuring new projects are setup properly:
+
+## Tailwind v3 to v4 Migration
+1. Start with the migration tool:
+	- Run the command: "npx @tailwindcss/upgrade"
+	- For most projects, the upgrade tool will automate the entire migration process including updating your dependencies, migrating your configuration file to CSS, and handling any changes to your template files.
+	- The upgrade tool requires Node.js 20 or higher, so ensure your environment is updated before running it.
+
+## Tailwind v4 new project guide
+1. Install dependencies
+	- npm install tailwindcss @tailwindcss/postcss postcss
+	or with vite
+	- npm install tailwindcss @tailwindcss/vite
+
+2. Configure Tailwind Plugin
+
+**postcss.config.mjs**
 <file>
 export default {
   plugins: {
@@ -736,7 +751,20 @@ export default {
   }
 }
 </file>
-3. @import "tailwindcss";
+
+**vite.config.ts**
+<file>
+import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
+export default defineConfig({
+  plugins: [
+    tailwindcss(),
+  ],
+})
+</file>
+
+3. Import css utilities in main css file
+@import "tailwindcss";
 
 # Additional Context
 Additional user context may be attached and include contextual information such as their open files, cursor position, higlighted code and recently viewed files.
@@ -757,10 +785,15 @@ This may or may not be relavant, the user has provided files to use as context:
 ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
 </context_files>
 `}`,
-				cache_control: { type: "ephemeral" },
+					cache_control: { type: "ephemeral" },
+				},
+				...this.trimMessages(state.messages),
+			],
+			{
+				// Wait a maximum of 3 minutes
+				timeout: 180000,
 			},
-			...this.trimMessages(state.messages),
-		]);
+		);
 
 		return { messages: [response] };
 	};
@@ -796,7 +829,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 							new ToolMessage({
 								id: randomUUID(),
 								content:
-									"User requested changes: The command is not quite correct, ask how to proceed",
+									"User requested changes: The command are not correct, ask the user how to proceed",
 								tool_call_id: lastMessage.tool_calls[0].id!,
 								name: "command_execute",
 								additional_kwargs: {
@@ -840,7 +873,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 							new ToolMessage({
 								id: randomUUID(),
 								content:
-									"User requested changes: The file updates are not quite correct, ask how to proceed",
+									"User requested changes: The file updates are not correct, ask the user how to proceed",
 								name: "write_file",
 								tool_call_id: lastMessage.tool_calls[0].id!,
 								additional_kwargs: {
@@ -982,14 +1015,15 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 		if (request.context?.fromSelection) {
 			messageContent.push({
 				type: "text",
-				text: `# Editor Context
-Base your guidance on the following file information, prefer giving code examples:
+				text: `# User Provided Code Context
+Base your guidance on the following information, prefer giving code examples and not editing the file directly unless explicitly asked:
 
 Language: ${request.context.language}
-Filename: ${path.relative(this.workspace, request.context.fileName)}
+File Path: ${path.relative(this.workspace, request.context.fileName)}
 Current Line: ${request.context.currentLine}
 Line Range: ${request.context.lineRange}
-Contents: ${request.context.text}`,
+Contents: 
+${request.context.text}`,
 			});
 		}
 

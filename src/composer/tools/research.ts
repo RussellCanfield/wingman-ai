@@ -3,6 +3,7 @@ import { z } from "zod";
 import { baseToolSchema } from "./schemas";
 import type { AIProvider } from "../../service/base";
 import { WebCrawler } from "../../server/web";
+import { ToolMessage } from "@langchain/core/messages";
 
 export const researchSchema = baseToolSchema.extend({
 	query: z
@@ -26,7 +27,7 @@ export const createResearchTool = (
 	const crawler = new WebCrawler(aiProvider);
 
 	return tool(
-		async (input) => {
+		async (input, config) => {
 			const { query, maxDepth } = input;
 
 			// Validate that the query is not code
@@ -51,8 +52,11 @@ export const createResearchTool = (
 				// Perform deep research
 				const researchResults = await crawler.deepResearch(query);
 
-				// Return the results with a clear header and footer
-				return `# Research Results: ${query}\n\n${researchResults}\n\n---\nResearch complete.`;
+				return new ToolMessage({
+					id: config.callbacks._parentRunId,
+					content: `# Research Results: ${query}\n\n${researchResults}\n\n---\nResearch complete.`,
+					tool_call_id: config.toolCall.id,
+				});
 			} catch (error) {
 				if (error instanceof Error) {
 					return `Error performing research: ${error.message}`;

@@ -5,6 +5,7 @@ import type { VectorStore } from "../../server/files/vector";
 import type { Settings } from "@shared/types/Settings";
 import { CreateEmbeddingProvider } from "../../service/utils/models";
 import { loggingProvider } from "../../server/loggingProvider";
+import { ToolMessage } from "@langchain/core/messages";
 
 export const semanticSearchSchema = baseToolSchema.extend({
 	query: z
@@ -24,24 +25,28 @@ export const createSemanticSearchTool = (
 	const provider = CreateEmbeddingProvider(settings, loggingProvider);
 
 	return tool(
-		async (input) => {
+		async (input, config) => {
 			const results = await vectorStore.search(
 				await provider.getEmbedder().embedQuery(input.query),
 				5,
 			);
 
-			return JSON.stringify(
-				results.map((r) => ({
-					filePath: r.filePath,
-					description: r.summary,
-					similarity: r.similarity,
-				})) ?? [],
-			);
+			return new ToolMessage({
+				id: config.callbacks._parentRunId,
+				content: JSON.stringify(
+					results.map((r) => ({
+						filePath: r.file_path,
+						description: r.summary,
+						similarity: r.similarity,
+					})) ?? [],
+				),
+				tool_call_id: config.toolCall.id,
+			});
 		},
 		{
 			name: "semantic_search",
 			description:
-				"Searches the codebase using semantic understanding to find relevant files. Returns up to 5 matching files with their paths, descriptions, and similarity scores. Use this to discover code implementing specific features or concepts.",
+				"Searches the codebase using semantic understanding to find relevant files. Returns up to 5 matching files with their paths, descriptions, and similarity scores. Use this to discover code implementing specific features or concepts. This can be more efficient than reading directories and individual files to discover integration points.",
 			schema: semanticSearchSchema,
 		},
 	);

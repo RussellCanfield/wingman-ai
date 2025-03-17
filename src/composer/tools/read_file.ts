@@ -4,6 +4,7 @@ import path from "node:path";
 import { baseFileSchema } from "./schemas";
 import type { CodeParser } from "../../server/files/parser";
 import { getTextDocumentFromPath } from "../../server/files/utils";
+import { ToolMessage } from "@langchain/core/messages";
 
 export const readFileSchema = baseFileSchema.extend({
 	// Additional read-specific properties would go here
@@ -35,14 +36,18 @@ export const createReadFileTool = (
 			const { importEdges, exportEdges } =
 				await codeParser.createNodesFromDocument(textDocument);
 
-			return {
-				id: config.toolCall.id,
-				content: textDocument.getText(),
-				path: path.relative(workspace, input.path),
-				explanation: input.explanation,
-				importedBy: importEdges,
-				exportedTo: exportEdges,
-			};
+			return new ToolMessage({
+				id: config.callbacks._parentRunId,
+				content: JSON.stringify({
+					id: config.toolCall.id,
+					content: textDocument.getText(),
+					path: path.relative(workspace, input.path),
+					explanation: input.explanation,
+					importedBy: importEdges,
+					exportedTo: exportEdges,
+				}),
+				tool_call_id: config.toolCall.id,
+			});
 		},
 		{
 			name: "read_file",
