@@ -970,9 +970,30 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 		} catch (e) {
 			console.error(e);
 			if (e instanceof Error) {
-				const graph = await app.getState(config);
-
+				const graph = await app.getState({
+					configurable: { thread_id: request.threadId },
+				});
 				const graphState = graph.values as GraphStateAnnotation;
+
+				if (graphState?.messages?.length > 0) {
+					const lastMessage =
+						graphState.messages[graphState.messages.length - 1];
+
+					if (
+						lastMessage instanceof AIMessageChunk &&
+						lastMessage.tool_calls &&
+						lastMessage.tool_calls.length > 0
+					)
+						await app.updateState(
+							{
+								configurable: { thread_id: request.threadId },
+							},
+							{
+								messages: [new RemoveMessage({ id: lastMessage.id! })],
+							},
+						);
+				}
+
 				yield {
 					event: "composer-error",
 					state: await transformState(

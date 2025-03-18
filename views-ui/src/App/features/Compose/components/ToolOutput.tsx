@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import {
     AiOutlineLoading3Quarters,
     AiOutlineCheckCircle,
+    AiOutlineCloseCircle,
 } from "react-icons/ai";
 import { BsTools } from "react-icons/bs";
 import { getTruncatedPath, openFile } from "../../../utilities/files";
@@ -18,11 +19,13 @@ const ToolNames = {
 export interface ToolOutputProps {
     messages: ToolMessage[];
     isLightTheme: boolean;
+    loading: boolean;
 }
 
 export const ToolOutput = ({
     messages,
     isLightTheme,
+    loading
 }: ToolOutputProps) => {
     //@ts-expect-error
     const displayName = ToolNames[messages[0].name] ?? messages[0].name;
@@ -62,8 +65,6 @@ export const ToolOutput = ({
             console.error("Failed to parse tool content:", error);
         }
 
-        console.log('fall through:', messages);
-
         return null;
     }, [messages, messages[0].name, messages[0].content, toolIsLoading]);
 
@@ -88,12 +89,17 @@ export const ToolOutput = ({
                     </div>
 
                     <div className="flex items-center ml-3 flex-shrink-0">
-                        {toolIsLoading && (
+                        {toolIsLoading && loading && (
                             <div className="flex justify-center">
                                 <AiOutlineLoading3Quarters
                                     className="animate-spin text-stone-400"
                                     size={20}
                                 />
+                            </div>
+                        )}
+                        {toolIsLoading && !loading && (
+                            <div className="flex justify-center">
+                                <AiOutlineCloseCircle className="text-gray-400/50" size={20} />
                             </div>
                         )}
                         {!toolIsLoading && (

@@ -319,7 +319,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const clearActiveMessage = () => {
-    setActiveComposerState(undefined);
     setLoading(false);
   }
 

@@ -42,7 +42,7 @@ function ChatThreadList({
 			className="flex-1 overflow-x-hidden overflow-y-auto list-none m-0 p-0 pr-2"
 			style={{ scrollBehavior: 'smooth' }}
 		>
-			<ChatThread state={state} loading={loading} isCurrent={false} />
+			<ChatThread state={state} loading={loading} />
 			{children}
 			<div ref={bottomRef} style={{ height: '1px', width: '100%' }} />
 		</ul>

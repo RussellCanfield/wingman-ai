@@ -23,14 +23,12 @@ export function extractCodeBlock(text: string) {
 
 interface ChatThreadProps {
 	state: ComposerState,
-	isCurrent?: boolean,
-	loading?: boolean
+	loading: boolean
 }
 
 export const ChatThread = ({
 	state,
-	loading,
-	isCurrent,
+	loading = false,
 }: ChatThreadProps) => {
 	const { isLightTheme } = useSettingsContext();
 	const { toolMap } = useTools(state);
@@ -39,7 +37,7 @@ export const ChatThread = ({
 
 	const renderedTools = new Set<string>();
 	return (<>
-		{state.messages.map(message => {
+		{state.messages.map((message, i) => {
 			const fromUser = message.role === "user";
 			if (fromUser || message.role === "assistant") {
 				return (
@@ -51,6 +49,7 @@ export const ChatThread = ({
 
 			const toolMessage = message as ToolMessage;
 			const toolEvents = toolMap.get(toolMessage.toolCallId);
+			const isLast = i === state.messages.length - 1;
 
 			if (!toolEvents) {
 				console.warn(`No tool events found for toolCallId: ${toolMessage.toolCallId}`);
@@ -76,7 +75,7 @@ export const ChatThread = ({
 			if (!renderedTools.has(toolMessage.toolCallId)) {
 				renderedTools.add(toolMessage.toolCallId);
 				return <ChatEntry key={toolMessage.toolCallId} fromUser={false}>
-					<ToolOutput isLightTheme={isLightTheme} messages={toolEvents} />
+					<ToolOutput isLightTheme={isLightTheme} messages={toolEvents} loading={isLast && loading} />
 				</ChatEntry>
 			}
 
