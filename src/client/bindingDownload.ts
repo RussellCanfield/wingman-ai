@@ -13,6 +13,8 @@ export interface BindingConfig {
 	name: string;
 	version: string;
 	packagePrefix: string;
+	// Add a property to control the output filename format
+	usePackagePrefixInFilename?: boolean;
 }
 
 export class BindingDownloader {
@@ -22,9 +24,10 @@ export class BindingDownloader {
 	private readonly retryDelay = 1000;
 	private readonly bindings: BindingConfig[] = [
 		{
-			name: "ast-grep",
+			name: "ast-grep-napi",
 			version: "0.36.1",
 			packagePrefix: "@ast-grep/napi",
+			usePackagePrefixInFilename: false,
 		},
 		{
 			name: "lancedb",
@@ -81,7 +84,16 @@ export class BindingDownloader {
 
 	private async getTargetBindingPath(binding: BindingConfig): Promise<string> {
 		const platformId = await getPlatformIdentifier();
-		const filename = `${binding.name}.${platformId}.node`;
+		let filename: string;
+
+		if (binding.usePackagePrefixInFilename) {
+			// Use the package prefix in the filename (e.g., ast-grep-napi.darwin-arm64.node)
+			const prefix = binding.packagePrefix.split("/").pop();
+			filename = `${prefix}.${platformId}.node`;
+		} else {
+			// Use the original naming convention (e.g., ast-grep.darwin-arm64.node)
+			filename = `${binding.name}.${platformId}.node`;
+		}
 
 		this.logger.logInfo(
 			`Generated target filename for ${binding.name}: ${filename}`,
