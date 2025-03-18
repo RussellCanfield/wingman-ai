@@ -416,6 +416,22 @@ export class VectorStore {
 		}
 	}
 
+	async getIndexedFiles(): Promise<string[]> {
+		const files = await this.table!.query().select(["file_path"]).toArray();
+
+		if (files?.length) {
+			return files.map((f) => path.relative(this.workspace, f.file_path));
+		}
+
+		return [];
+	}
+
+	async resync() {
+		await this.ensureInitialized();
+		await this.removeIndex();
+		await this.initialize();
+	}
+
 	/**
 	 * Ensure the database connection and table are initialized
 	 */

@@ -400,6 +400,14 @@ export class LSPClient {
 		return client.sendRequest("wingman/cancelComposer");
 	};
 
+	getIndexedFiles = async (): Promise<string[]> => {
+		return client.sendRequest("wingman/getIndexedFiles");
+	};
+
+	resyncIndex = async () => {
+		return client.sendRequest("wingman/resyncIndex");
+	};
+
 	updateSettings = async () => {
 		const settings = await wingmanSettings.LoadSettings(
 			vscode.workspace.workspaceFolders![0].name,

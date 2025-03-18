@@ -74,7 +74,7 @@ export const OpenAISettingsView = ({
 					htmlFor="dimensions"
 					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
 				>
-					Dimenions:
+					Dimensions:
 				</label>
 				<input
 					id="dimensions"

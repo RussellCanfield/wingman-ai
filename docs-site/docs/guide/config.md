@@ -6,7 +6,7 @@ Settings can be accessed from the side panel, or under the `Wingman` option in t
 
 ![](/Settings.png)
 
-## Storage
+# Storage
 
 The [Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) storage location is shown below:
 
@@ -18,11 +18,11 @@ The [Wingman](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-m
 
 /Users/username/.wingman
 
-## Supported Models
+# Supported Models
 
 We aim to support the best models available. We allow the user to configure separate models for chat and code completion, this is especially helpful when running AI models locally. Here is a list of which models we support for each provider:
 
-### [Anthropic](https://docs.anthropic.com/en/docs/welcome)
+## [Anthropic](https://docs.anthropic.com/en/docs/welcome)
 
 You can use the following models:
 
@@ -39,7 +39,7 @@ Sonnet 3.7 is a pretty aggressive model, you can enable thinking mode (2048 toke
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent to Anthropic.
 
-### [OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades)
+## [OpenAI](https://platform.openai.com/docs/models/continuous-model-upgrades)
 
 You can use the following models:
 
@@ -51,7 +51,7 @@ You can use the following models:
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent to OpenAI
 
-### [AzureAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=python-secure#gpt-4o-and-gpt-4-turbo)
+## [AzureAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=python-secure#gpt-4o-and-gpt-4-turbo)
 
 **NOTE** - AzureAI has general latency due to content filters on models by default. This can cause delays in responses and may require additional configuration to disable content filters.
 
@@ -67,7 +67,7 @@ You can use the following models:
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent Azure OpenAI.
 
-### [Ollama](https://ollama.com/)
+## [Ollama](https://ollama.com/)
 
 Wingman uses a full agentic flow. You must use an Ollama model that supports tools. If you would like to add a model, please open an issue in [Github](https://github.com/RussellCanfield/wingman-ai).
 
@@ -90,7 +90,7 @@ Supported Models for _Chat_:
 -   [Qwen2.5 Coder Instruct](https://ollama.com/library/qwen2.5-coder)
 -   [Llama 3.3](https://ollama.com/library/llama3.3)
 
-### [Hugging Face](https://huggingface.co/)
+## [Hugging Face](https://huggingface.co/)
 
 **NOTE - These are out of date**
 
@@ -106,39 +106,54 @@ Supported Models for _Chat_:
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent.
 
-## Settings
+# Settings
 
 Settings for the extension are broken down into 4 categories.
 
 - AI Provider
 - Interaction Settings
-- Validation Command
-- MCP Tools
+- Agent Features
 
-### AI Provider
+## AI Provider
 
 Provider settings will include which model to use, endpoints and the API key to use. These will save per provider allowing you to switch on the fly.
 
-### Extension Settings
+## Interaction Settings
 
 General extension settings are persisted separately from the AI provider, here is a breakdown of the general settings:
 
-#### Code completion enabled
+### Code completion enabled
 
 Code completion can run automatically triggered by line returns, spaces and tabs. Or can by hotkeying the "Wingman: Code Complete" command.
 
-#### Code streaming
+### Code streaming
 
 This is an experimental version of code complete that attempts to return results faster, allowing the user to see incremental changes as they accept.
 
-#### Code context window
+### Code context window
 
 During code completion, this controls the amount of surrounding text passed to the AI provider, giving better auto completion results.
 
-#### Code max tokens
+### Code max tokens
 
 The maximum amount of tokens the code models can generate during code completion.
 
-#### Chat max tokens
+### Chat max tokens
 
 Controls the maximum about of tokens the AI provider will return.
+
+## Agent Features
+
+Agent Features are general features for the overall experience.
+
+### Vibe Mode
+
+Automatically accept commands and proposed file changes. When off, you will be prompted to accept each command and file change - you can view the diff before accepting. If you reject, you will be asked what modifications you'd like to make.
+
+### Auto Fix
+
+Automatically fix Linting/Import errors for any file modified by Wingman.
+
+### Audio Alert
+
+Emits an audio cue when the session has completed, or when in manual mode, emits an audio cue for each command or file you need to accept or reject.

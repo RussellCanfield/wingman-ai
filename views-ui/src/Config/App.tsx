@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppMessage } from "@shared/types/Message";
 import type {
 	AiProviders,
@@ -28,6 +28,7 @@ export type InitSettings = Settings & {
 export const App = () => {
 	const [loading, setLoading] = useState(true);
 	const [settings, setSettings] = useState<InitSettings | null>(null);
+	const [indexedFiles, setIndexedFiles] = useState<string[] | undefined>([]);
 	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 	const [isLightTheme, setIsLightTheme] = useState(false);
 
@@ -55,10 +56,15 @@ export const App = () => {
 
 		switch (command) {
 			case "init": {
-				const settings = value as { settings: InitSettings, theme: number };
+				const settings = value as { settings: InitSettings, theme: number, indexedFiles: string[] };
 				setSettings(settings.settings);
 				setIsLightTheme(settings.theme === 1 || settings.theme === 4)
+				setIndexedFiles(settings.indexedFiles);
 				setLoading(false);
+				break;
+			}
+			case "files": {
+				setIndexedFiles(value as string[]);
 				break;
 			}
 			case "settingsSaved":
@@ -352,6 +358,7 @@ export const App = () => {
 					</h2>
 					<EmbeddingProvider
 						settings={settings}
+						indexedFiles={indexedFiles}
 						onProviderChanged={onEmbeddingAiProviderChanged}
 						onProviderSettingsChanged={onEmbeddingAiProviderSettingsChanged}
 					/>

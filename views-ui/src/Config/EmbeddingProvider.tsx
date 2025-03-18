@@ -9,9 +9,12 @@ import { OllamaSettingsView } from "./EmbeddingOllamaSettingsView";
 import { OpenAISettingsView } from "./EmbeddingOpenAISettingsView";
 import { AzureAISettingsView } from "./EmbeddingAzureAISettingsView";
 import { VscSync } from "react-icons/vsc";
+import { IndexedFilesProgress } from "./IndexedFilesProgress";
+import { vscode } from "./utilities/vscode";
 
 export type EmbeddingProviderProps = {
 	settings: InitSettings;
+	indexedFiles?: string[];
 	onProviderChanged: (provider: EmbeddingProviders) => void;
 	onProviderSettingsChanged: (
 		settings: EmbeddingSettingsType
@@ -20,6 +23,7 @@ export type EmbeddingProviderProps = {
 
 export const EmbeddingProvider = ({
 	settings,
+	indexedFiles,
 	onProviderChanged,
 	onProviderSettingsChanged,
 }: EmbeddingProviderProps) => {
@@ -121,6 +125,9 @@ export const EmbeddingProvider = ({
 					<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
 						Filters files for indexing
 					</p>
+				</div>
+				<div className="flex flex-col">
+					<IndexedFilesProgress indexedFiles={indexedFiles} />
 				</div>
 			</div>
 			<hr className="my-4 border-t border-[var(--vscode-editor-foreground)]" />

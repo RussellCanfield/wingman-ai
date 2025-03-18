@@ -506,6 +506,18 @@ ${input}`,
 			},
 		);
 
+		this.connection?.onRequest("wingman/getIndexedFiles", async () => {
+			if (!this.vectorStore) return;
+
+			return this.vectorStore.getIndexedFiles();
+		});
+
+		this.connection?.onRequest("wingman/resyncIndex", async () => {
+			if (!this.vectorStore) return;
+
+			return this.vectorStore.resync();
+		});
+
 		this.connection?.onRequest(
 			"wingman/updateComposerFile",
 			async (event: UpdateComposerFileEvent) => {
