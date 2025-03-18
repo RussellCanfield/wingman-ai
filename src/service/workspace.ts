@@ -47,6 +47,7 @@ export class Workspace {
 
 			if (!this.settings.threadIds) {
 				this.settings.threadIds = [];
+				this.settings.activeThreadId = undefined;
 			}
 		} catch (error) {
 			console.error("Error loading workspace settings:", error);
