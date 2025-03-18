@@ -59,12 +59,12 @@ export const App = () => {
 				const settings = value as { settings: InitSettings, theme: number, indexedFiles: string[] };
 				setSettings(settings.settings);
 				setIsLightTheme(settings.theme === 1 || settings.theme === 4)
-				setIndexedFiles(settings.indexedFiles);
+				setIndexedFiles(settings.indexedFiles ?? []);
 				setLoading(false);
 				break;
 			}
 			case "files": {
-				setIndexedFiles(value as string[]);
+				setIndexedFiles((value as string[]) ?? []);
 				break;
 			}
 			case "settingsSaved":
