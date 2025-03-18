@@ -178,7 +178,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const handleComposerEvent = (value: ComposerResponse) => {
     const { event, state } = value;
 
-    //console.log(event, state);
+    console.log(event, activeThreadRef.current?.id, state);
 
     switch (event) {
       case "composer-message": {

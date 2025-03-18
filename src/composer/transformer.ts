@@ -14,7 +14,6 @@ import {
 	type MessageContentText,
 	AIMessageChunk,
 } from "@langchain/core/messages";
-import { wingmanSettings } from "../service/settings";
 
 /**
  * Transforms a GraphStateAnnotation into a ComposerState
@@ -25,11 +24,7 @@ export const transformState = async (
 	workspace: string,
 	canResume?: boolean,
 ): Promise<ComposerState> => {
-	const settings = await wingmanSettings.LoadSettings(workspace);
 	const messages = mapMessages(state.messages);
-
-	// Determine if the conversation can be resumed
-	const lastMessage = messages[messages.length - 1];
 
 	return {
 		messages,
@@ -71,21 +66,21 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 						results.push(new AssistantMessage(message.id!, content.text));
 					}
 				}
+			}
 
-				// Add tool calls if present
-				if (message.tool_calls?.length) {
-					for (const toolCall of message.tool_calls) {
-						results.push(
-							new ToolMessage(
-								message.id!,
-								toolCall.name,
-								toolCall.id!,
-								toolCall.args,
-								"start",
-								message.additional_kwargs,
-							),
-						);
-					}
+			// Add tool calls if present
+			if (message.tool_calls?.length) {
+				for (const toolCall of message.tool_calls) {
+					results.push(
+						new ToolMessage(
+							message.id!,
+							toolCall.name,
+							toolCall.id!,
+							toolCall.args,
+							"start",
+							message.additional_kwargs,
+						),
+					);
 				}
 			}
 

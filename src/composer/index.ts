@@ -660,7 +660,6 @@ Guidelines for our interaction:
 7. When unexpected results occur, focus on solutions rather than apologies
 8. At the end of the interaction give a short and concise summary of the changes you've made
 9. If the user isn't explicitly asking you to change something, ask permission before making changes or give an example
-10. Always keep summaries of changes short and concise, state the most important details
 
 # Information Gathering
 If you need more context to properly address the user's request:
@@ -843,6 +842,10 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 					(t) => t.name === "command_execute",
 				);
 				if (cmdTool) {
+					lastMessage.additional_kwargs = {
+						...lastMessage.additional_kwargs,
+						command: cmd,
+					};
 					cmdTool.args = {
 						...cmdTool.args,
 						...cmd,
@@ -887,6 +890,10 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 					(t) => t.name === "write_file",
 				);
 				if (fileTool) {
+					lastMessage.additional_kwargs = {
+						...lastMessage.additional_kwargs,
+						file: files[0],
+					};
 					fileTool.args = {
 						...fileTool.args,
 						...files[0],
@@ -1198,6 +1205,7 @@ ${request.context.text}`,
 
 						try {
 							if (!currentMessage.tool_calls?.length) break;
+
 							const toolCall = currentMessage.tool_calls[0];
 
 							if (toolCall.name === "write_file") {
@@ -1214,6 +1222,7 @@ ${request.context.text}`,
 									{
 										messages: [outputMessage],
 									},
+									"agent",
 								);
 							}
 
@@ -1242,23 +1251,22 @@ ${request.context.text}`,
 					const currentMessage = event.data.chunk as AIMessageChunk;
 
 					// Skip processing if conditions aren't met or if we're in the tools node
+					if (!currentMessage || event.metadata.langgraph_node === "tools") {
+						break;
+					}
+
+					let content: string | undefined;
 					if (
-						!currentMessage ||
-						!Array.isArray(currentMessage.content) ||
-						currentMessage.content.length === 0 ||
-						event.metadata.langgraph_node === "tools"
+						Array.isArray(currentMessage.content) &&
+						currentMessage.content.length > 0 &&
+						currentMessage.content[0].type === "text"
 					) {
-						break;
+						content = currentMessage.content[0].text;
+					} else if (typeof currentMessage.content === "string") {
+						content = currentMessage.content.toString();
 					}
 
-					const contentItem = currentMessage.content[0];
-
-					// Only process text or tool_use content types
-					if (!contentItem.type || contentItem.type !== "text") {
-						break;
-					}
-
-					const text = contentItem.text || "";
+					const text = content || "";
 
 					// Handle message accumulation
 					if (
@@ -1308,7 +1316,7 @@ ${request.context.text}`,
 			configurable: { thread_id: threadId },
 		});
 
-		await cleanupProcesses();
+		//await cleanupProcesses();
 
 		yield {
 			event: "composer-done",
