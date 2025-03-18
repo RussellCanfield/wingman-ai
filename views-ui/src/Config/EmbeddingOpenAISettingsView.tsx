@@ -116,12 +116,12 @@ export const OpenAISettingsView = ({
 					<input
 						id="apiKey"
 						type={showPassword ? "text" : "password"}
-						className={`w-full px-3 pr-12 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] ${apiKey.toLowerCase() === "add me" ? "border-red-500" : ""
+						className={`w-full px-3 pr-12 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] ${(apiKey ?? "").toLowerCase() === "add me" ? "border-red-500" : ""
 							}`}
 						onChange={handleChangeInput}
 						value={apiKey}
 						data-name="apiKey"
-						title={apiKey.toLowerCase() === "add me" ? "Please add your OpenAI API key" : "OpenAI api key"}
+						title={(apiKey ?? "").toLowerCase() === "add me" ? "Please add your OpenAI API key" : "OpenAI api key"}
 					/>
 					<button
 						type="button"
