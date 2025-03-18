@@ -1,56 +1,7 @@
-import {
-	defaultAnthropicSettings,
-	defaultAzureAISettings,
-	defaultHfSettings,
-	defaultInteractionSettings,
-	defaultOllamaSettings,
-	defaultOpenAISettings,
-	defaultAgentSettings,
-	defaultxAISettings,
-	type Settings,
-} from "@shared/types/Settings";
+import { defaultSettings, type Settings } from "@shared/types/Settings";
 import { homedir } from "node:os";
 import fs, { promises } from "node:fs";
 import path from "node:path";
-
-export const defaultSettings: Settings = {
-	aiProvider: "Anthropic",
-	interactionSettings: defaultInteractionSettings,
-	providerSettings: {
-		Ollama: defaultOllamaSettings,
-		HuggingFace: defaultHfSettings,
-		Anthropic: defaultAnthropicSettings,
-		OpenAI: defaultOpenAISettings,
-		AzureAI: defaultAzureAISettings,
-		xAI: defaultxAISettings,
-	},
-	embeddingProvider: "OpenAI",
-	embeddingSettings: {
-		General: {
-			enabled: true,
-			globPattern: "",
-		},
-		Ollama: {
-			...defaultOllamaSettings,
-			model: "nomic-embed-text",
-			summaryModel: "",
-			dimensions: 768,
-		},
-		OpenAI: {
-			...defaultOpenAISettings,
-			model: "text-embedding-3-small",
-			summaryModel: "gpt-4o-mini",
-			dimensions: 1536,
-		},
-		AzureAI: {
-			...defaultAzureAISettings,
-			model: "text-embedding-3-small",
-			summaryModel: "gpt-4o-mini",
-			dimensions: 1536,
-		},
-	},
-	agentSettings: defaultAgentSettings,
-};
 
 export class WingmanSettings {
 	private settings?: Settings;
@@ -94,10 +45,18 @@ export class WingmanSettings {
 		this.isDefault = false;
 		const mcpTools = [...(settings.mcpTools ?? [])];
 		settings.mcpTools = undefined;
+
+		await promises.mkdir(path.dirname(this.path), { recursive: true });
+
 		await promises.writeFile(
 			this.path,
 			Buffer.from(JSON.stringify(settings, null, 2)),
 		);
+
+		await promises.mkdir(path.join(homedir(), ".wingman", workspace), {
+			recursive: true,
+		});
+
 		await promises.writeFile(
 			path.join(homedir(), ".wingman", workspace, "mcpTools.json"),
 			JSON.stringify(mcpTools ?? []),

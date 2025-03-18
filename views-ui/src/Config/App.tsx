@@ -61,8 +61,6 @@ export const App = () => {
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { command, value } = event.data;
 
-		console.log(command, value);
-
 		switch (command) {
 			case "init": {
 				const settings = value as { settings: InitSettings, theme: number, indexedFiles: string[] };
@@ -107,7 +105,6 @@ export const App = () => {
 
 					saveSettings(settings);
 
-					//node /Users/russellcanfield/Projects/mcp/webflow-mcp-server/dist/index.js
 					return settings;
 				});
 				break;

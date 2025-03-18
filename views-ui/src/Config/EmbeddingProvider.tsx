@@ -1,8 +1,8 @@
 import {
+	defaultSettings,
 	type EmbeddingProviders,
 	EmbeddingProvidersList,
 	type EmbeddingSettingsType,
-	Settings,
 } from "@shared/types/Settings";
 import type { InitSettings } from "./App";
 import { OllamaSettingsView } from "./EmbeddingOllamaSettingsView";
@@ -10,7 +10,6 @@ import { OpenAISettingsView } from "./EmbeddingOpenAISettingsView";
 import { AzureAISettingsView } from "./EmbeddingAzureAISettingsView";
 import { VscSync } from "react-icons/vsc";
 import { IndexedFilesProgress } from "./IndexedFilesProgress";
-import { vscode } from "./utilities/vscode";
 
 export type EmbeddingProviderProps = {
 	settings: InitSettings;
@@ -46,15 +45,45 @@ export const EmbeddingProvider = ({
 	};
 
 	const copyProviderSettings = () => {
-		const updatedSettings = { ...providerSettings[embeddingProvider] } as EmbeddingSettingsType;
-		//@ts-expect-error
-		// biome-ignore lint/performance/noDelete: <explanation>
-		delete updatedSettings.chatModel;
-		//@ts-expect-error
-		// biome-ignore lint/performance/noDelete: <explanation>
-		delete updatedSettings.codeModel;
+		// Get the current provider settings
+		const currentProviderSettings = { ...providerSettings[embeddingProvider] };
+
+		// Create a new object with the appropriate structure for embedding settings
+		let updatedSettings: any = {};
+
+		if (embeddingProvider === "Ollama") {
+			updatedSettings = {
+				...defaultSettings.embeddingSettings.Ollama
+			};
+		} else if (embeddingProvider === "OpenAI") {
+			updatedSettings = {
+				//@ts-expect-error
+				baseUrl: currentProviderSettings.baseUrl || "https://api.openai.com/v1/chat/completions",
+				//@ts-expect-error
+				apiKey: currentProviderSettings.apiKey || "",
+				model: "text-embedding-3-small",
+				summaryModel: "gpt-4o-mini",
+				dimensions: 1536
+			};
+		} else if (embeddingProvider === "AzureAI") {
+			updatedSettings = {
+				//@ts-expect-error
+				instanceName: currentProviderSettings.instanceName || "",
+				//@ts-expect-error
+				apiKey: currentProviderSettings.apiKey || "",
+				//@ts-expect-error
+				apiVersion: currentProviderSettings.apiVersion || "2024-06-01",
+				model: "text-embedding-ada-002",
+				//@ts-expect-error
+				summaryModel: currentProviderSettings.chatModel || "",
+				dimensions: 1536
+			};
+		}
+
+		// Update the settings
 		onProviderSettingsChanged(updatedSettings);
 	}
+
 
 	return (
 		<div className="container mx-auto">
@@ -89,22 +118,27 @@ export const EmbeddingProvider = ({
 				</div>
 			</div>
 			<div className="flex flex-col items-start gap-4">
-				<div className="flex items-center gap-2">
-					<input
-						id="enabled"
-						type="checkbox"
-						className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
-						onChange={handleChangeInput}
-						checked={embeddingSettings.General.enabled}
-						data-name="enabled"
-						title="Enable Embedding"
-					/>
-					<label
-						htmlFor="enabled"
-						className="text-sm font-medium text-[var(--vscode-foreground)]"
-					>
-						Enabled
-					</label>
+				<div className="flex flex-col items-center gap-2">
+					<div className="flex gap-2 w-full">
+						<input
+							id="enabled"
+							type="checkbox"
+							className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+							onChange={handleChangeInput}
+							checked={embeddingSettings.General.enabled}
+							data-name="enabled"
+							title="Enable Embedding"
+						/>
+						<label
+							htmlFor="enabled"
+							className="text-sm font-medium text-[var(--vscode-foreground)]"
+						>
+							Enabled
+						</label>
+					</div>
+					<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
+						Enables indexing files and semantic search tools
+					</p>
 				</div>
 				<div className="flex flex-col">
 					<label

@@ -190,3 +190,42 @@ export type EmbeddingSettingsType =
 	| Settings["embeddingSettings"]["Ollama"]
 	| Settings["embeddingSettings"]["AzureAI"]
 	| Settings["embeddingSettings"]["OpenAI"];
+
+export const defaultSettings: Settings = {
+	aiProvider: "Anthropic",
+	interactionSettings: defaultInteractionSettings,
+	providerSettings: {
+		Ollama: defaultOllamaSettings,
+		HuggingFace: defaultHfSettings,
+		Anthropic: defaultAnthropicSettings,
+		OpenAI: defaultOpenAISettings,
+		AzureAI: defaultAzureAISettings,
+		xAI: defaultxAISettings,
+	},
+	embeddingProvider: "OpenAI",
+	embeddingSettings: {
+		General: {
+			enabled: true,
+			globPattern: "",
+		},
+		Ollama: {
+			...defaultOllamaSettings,
+			model: "nomic-embed-text",
+			summaryModel: "",
+			dimensions: 768,
+		},
+		OpenAI: {
+			...defaultOpenAISettings,
+			model: "text-embedding-3-small",
+			summaryModel: "gpt-4o-mini",
+			dimensions: 1536,
+		},
+		AzureAI: {
+			...defaultAzureAISettings,
+			model: "text-embedding-3-small",
+			summaryModel: "gpt-4o-mini",
+			dimensions: 1536,
+		},
+	},
+	agentSettings: defaultAgentSettings,
+};

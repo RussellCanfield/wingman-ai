@@ -112,7 +112,10 @@ export class LSPServer {
 			this.workspaceFolders[0],
 		);
 
-		if (settings.embeddingSettings[settings.embeddingProvider]?.dimensions!) {
+		if (
+			settings.embeddingSettings[settings.embeddingProvider]?.dimensions! &&
+			settings.embeddingSettings.General.enabled
+		) {
 			this.vectorStore = new VectorStore(
 				settings,
 				this.workspaceFolders[0],
@@ -131,11 +134,14 @@ export class LSPServer {
 
 		try {
 			const provider = CreateAIProvider(settings, loggingProvider);
-			this.embedder = CreateEmbeddingProvider(
-				settings,
-				loggingProvider,
-			).getEmbedder();
-			this.summaryModel = provider.getLightweightModel();
+
+			if (settings.embeddingSettings.General.enabled) {
+				this.embedder = CreateEmbeddingProvider(
+					settings,
+					loggingProvider,
+				).getEmbedder();
+				this.summaryModel = provider.getLightweightModel();
+			}
 		} catch (e) {
 			console.error(e);
 		}
@@ -453,11 +459,14 @@ ${input}`,
 			await this.composer?.initialize();
 
 			const provider = CreateAIProvider(settings, loggingProvider);
-			this.embedder = CreateEmbeddingProvider(
-				settings,
-				loggingProvider,
-			).getEmbedder();
-			this.summaryModel = provider.getLightweightModel();
+
+			if (settings.embeddingSettings.General.enabled) {
+				this.embedder = CreateEmbeddingProvider(
+					settings,
+					loggingProvider,
+				).getEmbedder();
+				this.summaryModel = provider.getLightweightModel();
+			}
 
 			if (this.vectorStore) {
 				const stats = await this.vectorStore.getStats();
@@ -476,7 +485,10 @@ ${input}`,
 					);
 					await this.vectorStore.initialize();
 				}
-			} else {
+			} else if (
+				!this.vectorStore &&
+				settings.embeddingSettings.General.enabled
+			) {
 				this.vectorStore = new VectorStore(
 					settings,
 					this.workspaceFolders[0],

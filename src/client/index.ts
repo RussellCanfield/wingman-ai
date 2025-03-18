@@ -360,15 +360,17 @@ export class LSPClient {
 				);
 			}
 
-			aiProvider = CreateEmbeddingProvider(settings, loggingProvider);
+			if (settings.embeddingSettings.General.enabled) {
+				aiProvider = CreateEmbeddingProvider(settings, loggingProvider);
 
-			if (!(await aiProvider.validateSettings())) {
-				telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
-					aiProvider: settings.aiProvider,
-				});
-				throw new Error(
-					`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
-				);
+				if (!(await aiProvider.validateSettings())) {
+					telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
+						aiProvider: settings.aiProvider,
+					});
+					throw new Error(
+						`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
+					);
+				}
 			}
 			return true;
 		} catch (e) {
