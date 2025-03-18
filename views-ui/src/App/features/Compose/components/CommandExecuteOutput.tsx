@@ -44,7 +44,7 @@ export const CommandExecuteOutput = ({
             };
         }
     } else {
-        command = messages[1].metadata?.command as unknown as CommandMetadata;
+        command = messages[messages.length - 1].metadata?.command as unknown as CommandMetadata;
     }
 
     const handleAccept = () => {
@@ -112,7 +112,7 @@ export const CommandExecuteOutput = ({
                         </div>
                     </div>
                     <div className="flex items-center ml-3">
-                        {((command.success || command.failed) && command.result || command.rejected) && (
+                        {(command.success || command.failed) && (
                             <span className={`ml-2 mr-1 flex items-center ${command.success ? "text-green-500" : "text-red-500"}`}>
                                 {command.success ? (
                                     <AiOutlineCheckCircle className="text-gray-400/50" size={20} />
