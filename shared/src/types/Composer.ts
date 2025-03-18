@@ -5,33 +5,39 @@ export type DiffViewCommand = {
 	file: FileMetadata;
 	threadId: string;
 	isDarkTheme?: boolean;
+	toolId: string;
 };
 
-export type ComposerRole = "assistant" | "user";
-
-export interface ComposerChatMessage {
-	kwargs: {
-		content: string;
-		role: ComposerRole;
-	};
-	name?: string;
+export interface ComposerState {
+	title: string;
+	createdAt: number;
+	parentThreadId?: string;
+	messages: ComposerMessage[];
+	canResume?: boolean;
+	threadId: string;
 }
 
-export interface GraphState {
-	messages: ComposerMessage[];
-	workspace: string;
-	image?: ComposerImage;
-	context?: CodeContextDetails;
-	files: FileMetadata[];
-	commands: CommandMetadata[];
+export interface ComposerThread {
+	id: string;
+	title: string;
+	createdAt: number;
+	parentThreadId?: string;
+}
+
+export interface ComposerThreadEvent {
+	state: ComposerState;
+	activeThreadId: string;
 }
 
 export type ComposerResponse = {
-	step: ComposerSteps;
-	events: StreamEvent[];
-	threadId: string;
+	event: ComposerEvent;
+	state: ComposerState;
 	diagnostics?: FileDiagnostic[];
-	canResume?: boolean;
+};
+
+export type ComposerStreamingResponse = {
+	event: ComposerEvent;
+	state: Pick<ComposerState, "messages" | "threadId">;
 };
 
 export type DiagnosticRange = {
@@ -51,32 +57,73 @@ export type FileDiagnostic = {
 	lintErrors: DiagnosticResult[];
 };
 
-export interface StreamEvent {
-	id: string;
-	type: "message" | "tool-start" | "tool-end";
-	content: string;
-	metadata?: {
-		tool?: string;
-		path?: string;
-		command?: string;
-	};
-}
-
-export type ComposerSteps =
+export type ComposerEvent =
+	| "composer-message"
 	| "composer-events"
 	| "composer-diagnostics"
 	| "composer-error"
-	| "composer-done";
+	| "composer-done"
+	| "no-op";
 
-export interface ComposerMessage {
-	from: ComposerRole;
-	message: string;
-	loading: boolean;
-	image?: ComposerRequest["image"];
-	events?: StreamEvent[];
-	threadId?: string;
-	canResume?: boolean;
+export class BaseMessage {
+	id: string;
+	role: "tool" | "assistant" | "user";
 }
+
+export class ToolMessage extends BaseMessage {
+	name: string;
+	toolCallId: string;
+	content: string | Record<string, unknown>;
+	type: "start" | "end";
+	metadata?: Record<string, unknown>;
+
+	constructor(
+		id: string,
+		name: string,
+		toolCallId: string,
+		content: Record<string, unknown>,
+		type: "start" | "end",
+		metadata?: Record<string, unknown>,
+	) {
+		super();
+
+		this.id = id;
+		this.name = name;
+		this.role = "tool";
+		this.toolCallId = toolCallId;
+		this.content = content;
+		this.metadata = metadata;
+		this.type = type;
+		this.role = "tool";
+	}
+}
+
+export class AssistantMessage extends BaseMessage {
+	content: string;
+
+	constructor(id: string, input: string) {
+		super();
+
+		this.id = id;
+		this.content = input;
+		this.role = "assistant";
+	}
+}
+
+export class UserMessage extends BaseMessage {
+	content: string;
+	image?: ComposerImage;
+
+	constructor(id: string, input: string, image?: ComposerImage) {
+		super();
+
+		this.id = id;
+		this.content = input;
+		this.role = "user";
+	}
+}
+
+export type ComposerMessage = UserMessage | AssistantMessage | ToolMessage;
 
 export type FileSearchResult = {
 	file: string;

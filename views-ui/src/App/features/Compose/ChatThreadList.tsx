@@ -1,12 +1,12 @@
 import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef } from "react";
-import ChatEntry from "./ChatEntry";
-import type { ComposerMessage } from "@shared/types/Composer";
+import { ChatThread } from "./ChatThreadEntry";
+import { useComposerContext } from "../../context/composerContext";
 
-function ChatResponseList({
+function ChatThreadList({
 	children,
-	messages,
 	loading
-}: PropsWithChildren & { messages: ComposerMessage[], loading: boolean }) {
+}: PropsWithChildren & { loading: boolean }) {
+	const { activeComposerState, activeThread, composerStates } = useComposerContext();
 	const ulRef = useRef<HTMLUListElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -26,22 +26,15 @@ function ChatResponseList({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
 		scrollToBottom();
-	}, [messages.length, loading, scrollToBottom]);
+	}, [activeComposerState, loading, scrollToBottom]);
 
-	const chatHistory = useMemo(() => {
-		return messages.map(({ from, message, events, image }, index) => (
-			<ChatEntry
-				// biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
-				key={index}
-				from={from}
-				loading={false}
-				message={message}
-				events={events}
-				image={image}
-				isCurrent={!loading && index === messages.length - 1}
-			/>
-		));
-	}, [messages, loading]);
+	const state = useMemo(() => {
+		if (!activeThread || !activeComposerState) return null;
+
+		return activeThread.id === activeComposerState.threadId ? activeComposerState : composerStates.find(s => s.threadId === activeThread.id);
+	}, [activeComposerState, activeThread, composerStates]);
+
+	if (!state) return null;
 
 	return (
 		<ul
@@ -49,11 +42,11 @@ function ChatResponseList({
 			className="flex-1 overflow-x-hidden overflow-y-auto list-none m-0 p-0 pr-2"
 			style={{ scrollBehavior: 'smooth' }}
 		>
-			{chatHistory}
+			<ChatThread state={state} loading={loading} />
 			{children}
 			<div ref={bottomRef} style={{ height: '1px', width: '100%' }} />
 		</ul>
 	);
 }
 
-export default ChatResponseList;
+export default ChatThreadList;

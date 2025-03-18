@@ -21,8 +21,11 @@ import {
 	type DiagnosticRetriever,
 	type SymbolRetriever,
 } from "./retriever";
-import { emptyCheckpoint } from "@langchain/langgraph";
-import type { ComposerRequest } from "@shared/types/Composer";
+import {
+	ToolMessage,
+	type ComposerRequest,
+	type ComposerThread,
+} from "@shared/types/Composer";
 import { loggingProvider } from "./loggingProvider";
 import path from "node:path";
 import { cancelComposer, WingmanAgent } from "../composer";
@@ -34,6 +37,14 @@ import type {
 } from "@shared/types/Events";
 import { wingmanSettings } from "../service/settings";
 import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
+import type { IndexFile } from "@shared/types/Settings";
+import { VectorStore } from "./files/vector";
+import type { Embeddings } from "@langchain/core/embeddings";
+import {
+	CreateAIProvider,
+	CreateEmbeddingProvider,
+} from "../service/utils/models";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 export type CustomRange = {
 	start: { line: number; character: number };
@@ -69,6 +80,9 @@ export class LSPServer {
 	composer: WingmanAgent | undefined;
 	documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 	checkPointer: PartitionedFileSystemSaver | undefined;
+	vectorStore: VectorStore | undefined;
+	embedder: Embeddings | undefined;
+	summaryModel: BaseChatModel | undefined;
 
 	constructor() {
 		// Create a connection for the server, using Node's IPC as a transport.
@@ -91,24 +105,45 @@ export class LSPServer {
 		await this.codeParser.initialize();
 
 		this.checkPointer = new PartitionedFileSystemSaver(
-			this.getPersistancePath(),
+			this.getPersistancePath("checkpoints"),
 		);
+
+		const settings = await wingmanSettings.LoadSettings(
+			this.workspaceFolders[0],
+		);
+
+		if (settings.embeddingSettings[settings.embeddingProvider]?.dimensions!) {
+			this.vectorStore = new VectorStore(
+				settings,
+				this.workspaceFolders[0],
+				this.getPersistancePath("embeddings"),
+			);
+			await this.vectorStore.initialize();
+		}
 
 		this.composer = new WingmanAgent(
 			this.workspaceFolders[0],
 			this.checkPointer,
 			this.codeParser,
+			this.vectorStore,
 		);
 		await this.composer.initialize();
+
+		const provider = CreateAIProvider(settings, loggingProvider);
+		this.embedder = CreateEmbeddingProvider(
+			settings,
+			loggingProvider,
+		).getEmbedder();
+		this.summaryModel = provider.getLightweightModel();
 	};
 
-	private getPersistancePath = () => {
+	private getPersistancePath = (folder: string) => {
 		const homeDir = os.homedir();
 		const targetPath = path.join(
 			homeDir,
 			".wingman",
 			path.basename(this.workspaceFolders[0]),
-			"checkpoints",
+			folder,
 		);
 
 		// Ensure the directory exists
@@ -124,42 +159,62 @@ export class LSPServer {
 		command?: CommandMetadata,
 	) => {
 		try {
-			for await (const event of this.composer!.execute(
+			if (!this.composer) return false;
+
+			for await (const event of this.composer.execute(
 				request,
 				files,
 				command,
 			)) {
+				if (event.event === "no-op") {
+					return false;
+				}
+
 				await this.connection?.sendRequest("wingman/compose", event);
 
-				if (event.step === "composer-done" && !event.canResume) {
-					const state = await this.composer?.getState(request.threadId);
-					const settings = await wingmanSettings.LoadSettings(
-						this.workspaceFolders[0],
-					);
-					const allFilesFinal = state?.files.every(
-						(f) => f.accepted || f.rejected,
-					);
-
-					if (!allFilesFinal) return state;
-
-					const diagnostics =
-						await this.diagnosticsRetriever.getFileDiagnostics(
-							state?.files.map((f) => f.path) ?? [],
+				if (
+					event.event === "composer-done" &&
+					!event.state.canResume &&
+					event.state.messages
+				) {
+					try {
+						const toolMessages = event.state.messages.filter(
+							(m) => m instanceof ToolMessage && m.metadata && m.metadata.file,
+						) as ToolMessage[];
+						const files = toolMessages.map(
+							(m) => m.metadata!.file as FileMetadata,
 						);
 
-					if (settings.agentSettings.automaticallyFixDiagnostics) {
-						if (diagnostics && diagnostics.length > 0) {
+						if (!files) return true;
+
+						const diagnostics =
+							await this.diagnosticsRetriever.getFileDiagnostics(
+								files.map((f) => f.path) ?? [],
+							);
+
+						const settings = await wingmanSettings.LoadSettings(
+							this.workspaceFolders[0],
+						);
+						if (
+							settings.agentSettings.automaticallyFixDiagnostics &&
+							diagnostics &&
+							diagnostics.length
+						) {
 							await this.fixDiagnostics({
 								diagnostics: diagnostics,
-								threadId: event.threadId,
+								threadId: event.state.threadId,
 							});
 						}
+					} catch (e) {
+						console.error(e);
 					}
 				}
 			}
 		} catch (e) {
 			console.error(e);
 		}
+
+		return true;
 	};
 
 	private fixDiagnostics = async (event: FixDiagnosticsEvent) => {
@@ -210,6 +265,9 @@ ${input}`,
 			);
 
 			const capabilities = params.capabilities;
+
+			await this.postInitialize();
+			await this.addEvents();
 
 			// Does the client support the `workspace/configuration` request?
 			// If not, we fall back using global settings.
@@ -358,24 +416,10 @@ ${input}`,
 		this.connection?.onRequest(
 			"wingman/clearChatHistory",
 			async (threadId: string) => {
-				if (!this.checkPointer) return;
-
-				const existingThreadData = await this.checkPointer.get({
-					configurable: { thread_id: threadId },
+				return this.composer?.updateThread({
+					thread: { id: threadId },
+					messages: [],
 				});
-
-				if (existingThreadData) {
-					await this.checkPointer.put(
-						{ configurable: { thread_id: threadId } },
-						emptyCheckpoint(),
-						{
-							source: "update",
-							step: 0,
-							writes: {},
-							parents: {},
-						},
-					);
-				}
 			},
 		);
 
@@ -398,8 +442,80 @@ ${input}`,
 		);
 
 		this.connection?.onRequest("wingman/updateSettings", async () => {
-			await wingmanSettings.LoadSettings(this.workspaceFolders[0], true);
+			const settings = await wingmanSettings.LoadSettings(
+				this.workspaceFolders[0],
+				true,
+			);
 			await this.composer?.initialize();
+
+			const provider = CreateAIProvider(settings, loggingProvider);
+			this.embedder = CreateEmbeddingProvider(
+				settings,
+				loggingProvider,
+			).getEmbedder();
+			this.summaryModel = provider.getLightweightModel();
+
+			if (this.vectorStore) {
+				const stats = await this.vectorStore.getStats();
+				const embeddingSettings =
+					settings.embeddingSettings[settings.embeddingProvider];
+				if (
+					embeddingSettings &&
+					settings.embeddingSettings.General.enabled &&
+					stats.dimensions !== embeddingSettings?.dimensions
+				) {
+					this.vectorStore.removeIndex();
+					this.vectorStore = new VectorStore(
+						settings,
+						this.workspaceFolders[0],
+						this.getPersistancePath("embeddings"),
+					);
+					await this.vectorStore.initialize();
+				}
+			} else {
+				this.vectorStore = new VectorStore(
+					settings,
+					this.workspaceFolders[0],
+					this.getPersistancePath("embeddings"),
+				);
+				await this.vectorStore.initialize();
+			}
+		});
+
+		this.connection?.onRequest(
+			"wingman/getThreadById",
+			async (threadId: string) => {
+				return this.composer?.getState(threadId);
+			},
+		);
+
+		this.connection?.onRequest(
+			"wingman/indexFiles",
+			async (indexFiles: [string, IndexFile][]) => {
+				if (!this.vectorStore || !this.embedder || !this.summaryModel) return;
+
+				for (const [filePath, metadata] of indexFiles) {
+					if (!fs.existsSync(filePath)) continue;
+
+					const fileContents = (
+						await fs.promises.readFile(filePath)
+					).toString();
+
+					this.vectorStore.upsert(filePath, fileContents, metadata);
+				}
+			},
+		);
+
+		this.connection?.onRequest("wingman/getIndexedFiles", async () => {
+			if (!this.vectorStore) return;
+
+			return this.vectorStore.getIndexedFiles();
+		});
+
+		this.connection?.onRequest("wingman/resyncIndex", async () => {
+			if (!this.vectorStore) return;
+
+			return this.vectorStore.resync();
 		});
 
 		this.connection?.onRequest(
@@ -409,15 +525,7 @@ ${input}`,
 					(f) => f.accepted || f.rejected,
 				);
 
-				if (!fromUserAction) {
-					return await this.composer?.updateFile(event);
-				}
-
-				if (event.files.every((f) => f.rejected)) {
-					return await this.composer?.updateFile(event);
-				}
-
-				await this.compose(
+				const resumed = await this.compose(
 					{
 						input: "",
 						threadId: event.threadId,
@@ -425,13 +533,19 @@ ${input}`,
 					},
 					event.files,
 				);
+
+				if (!fromUserAction || !resumed) {
+					await this.composer?.updateFile(event);
+				}
+
+				return resumed;
 			},
 		);
 
 		this.connection?.onRequest(
 			"wingman/updateCommand",
 			async (event: UpdateCommandEvent) => {
-				await this.compose(
+				const resumed = await this.compose(
 					{
 						input: "",
 						threadId: event.threadId,
@@ -440,6 +554,22 @@ ${input}`,
 					undefined,
 					event.command,
 				);
+
+				return resumed;
+			},
+		);
+
+		this.connection?.onRequest(
+			"wingman/createThread",
+			async (thread: ComposerThread) => {
+				return this.composer?.createThread(thread);
+			},
+		);
+
+		this.connection?.onRequest(
+			"wingman/updateThread",
+			async (thread: ComposerThread) => {
+				return this.composer?.updateThread({ thread });
 			},
 		);
 

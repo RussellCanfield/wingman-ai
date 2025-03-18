@@ -13,6 +13,7 @@ export function CreateAIProvider(
 	loggingProvider: ILoggingProvider,
 ): AIProvider {
 	if (settings.aiProvider === "HuggingFace") {
+		//@ts-expect-error
 		return new HuggingFace(
 			settings.providerSettings.HuggingFace,
 			settings.interactionSettings,
@@ -24,6 +25,7 @@ export function CreateAIProvider(
 		return new OpenAI(
 			settings.providerSettings.OpenAI,
 			settings.interactionSettings,
+			settings.embeddingSettings.OpenAI,
 			loggingProvider,
 		);
 	}
@@ -40,6 +42,7 @@ export function CreateAIProvider(
 		return new AzureAI(
 			settings.providerSettings.AzureAI,
 			settings.interactionSettings,
+			settings.embeddingSettings.AzureAI,
 			loggingProvider,
 		);
 	}
@@ -55,6 +58,37 @@ export function CreateAIProvider(
 	return new Ollama(
 		settings.providerSettings.Ollama,
 		settings.interactionSettings,
+		settings.embeddingSettings.Ollama,
+		loggingProvider,
+	);
+}
+
+export function CreateEmbeddingProvider(
+	settings: Settings,
+	loggingProvider: ILoggingProvider,
+): AIProvider {
+	if (settings.embeddingProvider === "OpenAI") {
+		return new OpenAI(
+			settings.providerSettings.OpenAI,
+			settings.interactionSettings,
+			settings.embeddingSettings.OpenAI,
+			loggingProvider,
+		);
+	}
+
+	if (settings.embeddingProvider === "AzureAI") {
+		return new AzureAI(
+			settings.providerSettings.AzureAI,
+			settings.interactionSettings,
+			settings.embeddingSettings.AzureAI,
+			loggingProvider,
+		);
+	}
+
+	return new Ollama(
+		settings.providerSettings.Ollama,
+		settings.interactionSettings,
+		settings.embeddingSettings.Ollama,
 		loggingProvider,
 	);
 }

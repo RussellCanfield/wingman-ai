@@ -6,6 +6,7 @@ import { z } from "zod";
 import { baseFileSchema } from "./schemas";
 import type { FileMetadata } from "@shared/types/Message";
 import { Command } from "@langchain/langgraph";
+import { ToolMessage } from "@langchain/core/messages";
 
 export const writeFileSchema = baseFileSchema.extend({
 	contents: z.string().describe("The contents of the file to write"),
@@ -77,7 +78,7 @@ export const generateFileMetadata = async (
 	input: z.infer<typeof writeFileSchema>,
 ) => {
 	let fileContents = "";
-	const filePath = path.join(workspace, input.filePath);
+	const filePath = path.join(workspace, input.path);
 	if (fs.existsSync(filePath)) {
 		try {
 			fileContents = await promises.readFile(filePath, {
@@ -90,12 +91,12 @@ export const generateFileMetadata = async (
 
 	return {
 		id,
-		path: input.filePath,
+		path: input.path,
 		code: input.contents,
 		original: fileContents,
 		diff: await generateDiffFromModifiedCode(
 			input.contents,
-			input.filePath,
+			input.path,
 			fileContents,
 		),
 	} satisfies FileMetadata;
@@ -117,17 +118,29 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 				if (autoCommit) {
 					file.accepted = true;
 					await promises.writeFile(path.join(workspace, file.path), file.code!);
+				} else {
+					// In manual mode, the args are supplemented with "pre-run" data points, restore those if present.
+					if (config.toolCall) {
+						file.accepted = config.toolCall.args.accepted;
+						file.rejected = config.toolCall.args.rejected;
+						file.diff = config.toolCall.args.diff;
+						file.original = config.toolCall.args.original;
+					}
 				}
 
 				return new Command({
 					update: {
 						files: [file],
 						messages: [
-							{
-								role: "tool",
-								content: `Successfully wrote ${input.filePath} - ${input.explanation}`,
+							new ToolMessage({
+								id: config.callbacks._parentRunId,
+								content: `Successfully wrote ${input.path} - ${input.explanation}`,
 								tool_call_id: config.toolCall.id,
-							},
+								name: "write_file",
+								additional_kwargs: {
+									file: file,
+								},
+							}),
 						],
 					},
 				});

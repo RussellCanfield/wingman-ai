@@ -54,14 +54,61 @@ export default ({ env, command, envMode }) => {
 		},
 		output: {
 			copy: [
-				{ from: "./node_modules/gpt-3-encoder/encoder.json" },
-				{ from: "./node_modules/gpt-3-encoder/vocab.bpe" },
+				{
+					from: "./audio/ui-notification.mp3",
+					to: "audio",
+				},
 			],
 			cleanDistPath: false,
 			minify: isProd,
 			target: "node",
 			externals: {
 				vscode: "commonjs vscode",
+				"./lancedb.darwin-arm64.node": "commonjs ./lancedb.darwin-arm64.node",
+				"./lancedb.darwin-x64.node": "commonjs ./lancedb.darwin-x64.node",
+				"./lancedb.darwin-universal.node":
+					"commonjs ./lancedb.darwin-universal.node",
+
+				// Linux (GNU)
+				"./lancedb.linux-x64-gnu.node": "commonjs ./lancedb.linux-x64-gnu.node",
+				"./lancedb.linux-arm64-gnu.node":
+					"commonjs ./lancedb.linux-arm64-gnu.node",
+
+				// Linux (musl)
+				"./lancedb.linux-x64-musl.node":
+					"commonjs ./lancedb.linux-x64-musl.node",
+				"./lancedb.linux-arm64-musl.node":
+					"commonjs ./lancedb.linux-arm64-musl.node",
+
+				// Windows
+				"./lancedb.win32-x64-msvc.node":
+					"commonjs ./lancedb.win32-x64-msvc.node",
+				"./lancedb.win32-arm64-msvc.node":
+					"commonjs ./lancedb.win32-arm64-msvc.node",
+
+				// macOS
+				"./ast-grep.darwin-arm64.node": "commonjs ./ast-grep.darwin-arm64.node",
+				"./ast-grep.darwin-x64.node": "commonjs ./ast-grep.darwin-x64.node",
+				"./ast-grep.darwin-universal.node":
+					"commonjs ./ast-grep.darwin-universal.node",
+
+				// Linux (GNU)
+				"./ast-grep.linux-x64-gnu.node":
+					"commonjs ./ast-grep.linux-x64-gnu.node",
+				"./ast-grep.linux-arm64-gnu.node":
+					"commonjs ./ast-grep.linux-arm64-gnu.node",
+
+				// Linux (musl)
+				"./ast-grep.linux-x64-musl.node":
+					"commonjs ./ast-grep.linux-x64-musl.node",
+				"./ast-grep.linux-arm64-musl.node":
+					"commonjs ./ast-grep.linux-arm64-musl.node",
+
+				// Windows
+				"./ast-grep.win32-x64-msvc.node":
+					"commonjs ./ast-grep.win32-x64-msvc.node",
+				"./ast-grep.win32-arm64-msvc.node":
+					"commonjs ./ast-grep.win32-arm64-msvc.node",
 			},
 			distPath: {
 				root: "out",

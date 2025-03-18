@@ -1,5 +1,4 @@
 import type { FileMetadata } from "@shared/types/Message";
-import { AiOutlineLoading3Quarters } from "react-icons/ai";
 import { FaUndo } from "react-icons/fa";
 import { GrCheckmark } from "react-icons/gr";
 import { HiOutlineXMark } from "react-icons/hi2";
@@ -7,17 +6,23 @@ import { PiGitDiff } from "react-icons/pi";
 import { FaRegFileLines } from "react-icons/fa6";
 import { useComposerContext } from "../../../context/composerContext";
 import { acceptFile, getTruncatedPath, openFile, rejectFile, showDiffview, undoFile } from "../../../utilities/files";
+import type { ToolMessage } from "@shared/types/Composer";
 
-export const ChatArtifact = ({
-    file,
-    loading,
+export const WriteFileOutput = ({
+    messages,
     isLightTheme
 }: {
-    file?: FileMetadata,
-    loading: boolean,
+    messages: ToolMessage[],
     isLightTheme: boolean
 }) => {
     const { activeThread } = useComposerContext();
+
+    let file: FileMetadata | undefined;
+    if (messages.length === 1) {
+        file = messages[0].metadata?.file as unknown as FileMetadata;
+    } else {
+        file = messages[1].metadata?.file as unknown as FileMetadata;
+    }
 
     if (!file) return null;
 
@@ -30,7 +35,7 @@ export const ChatArtifact = ({
         }`
 
     return (
-        <div className={`rounded-lg overflow-hidden shadow-lg mb-4 mt-4 ${cssClasses}`}>
+        <div className={`rounded-lg overflow-hidden shadow-lg ${cssClasses}`}>
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-start relative">
                     <FaRegFileLines size={20} className="ml-3" />
@@ -59,15 +64,7 @@ export const ChatArtifact = ({
                             </span>
                         </div>
                     )}
-                    {loading && !file.accepted && !file.rejected && (
-                        <div className="flex justify-center mr-4">
-                            <AiOutlineLoading3Quarters
-                                className="animate-spin text-stone-400"
-                                size={24}
-                            />
-                        </div>
-                    )}
-                    {!loading && !file.accepted && !file.rejected && (
+                    {!file.accepted && !file.rejected && (
                         <div className="flex flex-nowrap gap-1 ml-auto mr-4">
                             {/* Reject Button */}
                             <div className="flex items-center rounded z-10 transition-colors text-red-600 hover:bg-red-600/10 hover:shadow-lg focus:ring focus:ring-red-400">
@@ -75,7 +72,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Reject changes"
                                     className="p-2"
-                                    onClick={() => rejectFile({ files: [file], threadId: activeThread?.id! })}
+                                    onClick={() => rejectFile({ files: [file], threadId: activeThread?.id!, toolId: messages[0]?.toolCallId! })}
                                 >
                                     <HiOutlineXMark size={18} />
                                 </button>
@@ -86,7 +83,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Show diff"
                                     className="p-2"
-                                    onClick={() => showDiffview(file, activeThread!.id)}
+                                    onClick={() => showDiffview({ file, threadId: activeThread!.id, toolId: messages[0]?.toolCallId! })}
                                 >
                                     <PiGitDiff size={16} />
                                 </button>
@@ -97,7 +94,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Accept changes"
                                     className="p-2"
-                                    onClick={() => acceptFile({ files: [file], threadId: activeThread?.id! })}
+                                    onClick={() => acceptFile({ files: [file], threadId: activeThread?.id!, toolId: messages[0]?.toolCallId! })}
                                 >
                                     <GrCheckmark size={16} />
                                 </button>
@@ -112,7 +109,7 @@ export const ChatArtifact = ({
                                     type="button"
                                     title="Undo changes"
                                     className="p-2"
-                                    onClick={() => undoFile({ files: [file], threadId: activeThread?.id! })}
+                                    onClick={() => undoFile({ files: [file], threadId: activeThread?.id!, toolId: messages[0]?.toolCallId! })}
                                 >
                                     <FaUndo size={14} />
                                 </button>

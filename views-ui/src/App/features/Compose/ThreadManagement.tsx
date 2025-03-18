@@ -2,10 +2,10 @@ import type React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { TbNeedleThread } from "react-icons/tb";
 import { useComposerContext } from '../../context/composerContext';
-import type { Thread } from '@shared/types/Settings';
 import { PiGraph } from "react-icons/pi";
 import { vscode } from '../../utilities/vscode';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
+import type { ComposerThread } from '@shared/types/Composer';
 
 export const /**
 * ThreadManagement component for managing conversation threads.
@@ -13,8 +13,8 @@ export const /**
 * 
 * @returns {JSX.Element} The rendered ThreadManagement component
 */
-  ThreadManagement: React.FC = () => {
-    const { threads, activeThread, createThread, switchThread, deleteThread, renameThread, branchThread, activeMessage } = useComposerContext();
+  ThreadManagement = ({ loading }: { loading: boolean }) => {
+    const { threads, activeThread, createThread, switchThread, deleteThread, renameThread, branchThread, activeComposerState } = useComposerContext();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isCreatingThread, setIsCreatingThread] = useState(false);
     const [newThreadTitle, setNewThreadTitle] = useState('');
@@ -92,7 +92,7 @@ export const /**
       })
     }
 
-    const startEditingThread = (thread: Thread, e: React.MouseEvent) => {
+    const startEditingThread = (thread: ComposerThread, e: React.MouseEvent) => {
       e.stopPropagation();
       setEditingThreadId(thread.id);
       setEditingTitle(thread.title);
@@ -141,11 +141,11 @@ export const /**
     flex items-center gap-2 px-3 py-1.5 rounded-md 
     hover:bg-[var(--vscode-button-hoverBackground)] 
     transition-colors relative overflow-hidden
-    ${activeMessage?.loading ? 'animate-pulse' : ''}
+    ${loading ? 'animate-pulse' : ''}
   `}
             aria-label="Manage threads"
           >
-            {activeMessage?.loading && (
+            {loading && (
               <div className="absolute inset-0 -z-10">
                 <div className="w-full h-full animate-shimmer bg-gradient-to-r from-transparent via-[rgba(255,255,255,0.1)] to-transparent"
                   style={{
@@ -201,7 +201,7 @@ export const /**
                     }}
                   >
                     <div className="flex justify-between items-center">
-                      {activeMessage?.threadId === thread.id && (
+                      {activeComposerState?.threadId === thread.id && loading && (
                         <div className="flex justify-center mr-4">
                           <AiOutlineLoading3Quarters
                             className="animate-spin text-stone-400"
@@ -268,7 +268,7 @@ export const /**
                       </div>
                     </div>
                     <div className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
-                      {formatDate(thread.updatedAt)}
+                      {formatDate(thread.createdAt)}
                     </div>
                   </div>
                 ))}

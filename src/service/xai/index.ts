@@ -14,6 +14,7 @@ import { ChatXAI } from "@langchain/xai";
 import { GPTModel } from "../openai/models/gptmodel";
 import { truncateChatHistory } from "../utils/contentWindow";
 import { GrokModel } from "./models/grokmodel";
+import type { Embeddings } from "@langchain/core/embeddings";
 
 export class xAI implements AIStreamProvider {
 	chatHistory: BaseMessage[] = [];
@@ -35,6 +36,18 @@ export class xAI implements AIStreamProvider {
 
 		this.chatModel = this.getChatModel(this.settings.chatModel);
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
+	}
+
+	getLightweightModel(): BaseChatModel {
+		return new ChatXAI({
+			apiKey: this.settings?.apiKey,
+			model: this.settings?.chatModel,
+			...(params ?? {}),
+		});
+	}
+
+	getEmbedder(): Embeddings {
+		return;
 	}
 
 	getModel(params?: ModelParams): BaseChatModel {

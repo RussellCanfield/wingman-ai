@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
 /**
  * Removes all files with .node extension from the specified directory
@@ -22,6 +22,7 @@ function removeNodeBindings() {
             return;
         }
 
+        // biome-ignore lint/complexity/noForEach: <explanation>
         nodeFiles.forEach(file => {
             const filePath = path.join(outDir, file);
             fs.unlinkSync(filePath);

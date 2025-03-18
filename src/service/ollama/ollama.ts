@@ -19,10 +19,11 @@ import type {
 } from "./types";
 import { truncateChatHistory } from "../utils/contentWindow";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { ChatOllama } from "@langchain/ollama";
+import { ChatOllama, OllamaEmbeddings } from "@langchain/ollama";
 import { Qwen } from "./models/qwen";
 import type { ILoggingProvider } from "@shared/types/Logger";
 import { Phi } from "./models/phi";
+import type { Embeddings } from "@langchain/core/embeddings";
 
 export class Ollama implements AIStreamProvider {
 	decoder = new TextDecoder();
@@ -36,6 +37,7 @@ export class Ollama implements AIStreamProvider {
 	constructor(
 		private readonly settings: Settings["providerSettings"]["Ollama"],
 		interactionSettings: InteractionSettings,
+		private readonly embeddingSettings: Settings["embeddingSettings"]["Ollama"],
 		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
@@ -63,6 +65,14 @@ export class Ollama implements AIStreamProvider {
 		});
 	}
 
+	getEmbedder(): Embeddings {
+		return new OllamaEmbeddings({
+			baseUrl: this.embeddingSettings!.baseUrl,
+			model: this.embeddingSettings!.model,
+			maxRetries: 2,
+		});
+	}
+
 	addMessageToHistory(input: string): void {
 		if (!this.chatHistory) {
 			this.chatHistory = [];
@@ -78,6 +88,14 @@ export class Ollama implements AIStreamProvider {
 		return new ChatOllama({
 			baseUrl: this.settings!.baseUrl,
 			model: this.settings!.chatModel,
+			maxRetries: 2,
+		});
+	}
+
+	getLightweightModel(): BaseChatModel {
+		return new ChatOllama({
+			baseUrl: this.embeddingSettings!.baseUrl,
+			model: this.embeddingSettings!.summaryModel,
 			maxRetries: 2,
 		});
 	}

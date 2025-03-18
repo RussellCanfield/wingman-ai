@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppMessage } from "@shared/types/Message";
 import type {
 	AiProviders,
@@ -9,6 +9,8 @@ import type {
 	Settings,
 	AgentSettings,
 	xAISettingsType,
+	EmbeddingProviders,
+	EmbeddingSettingsType,
 } from "@shared/types/Settings";
 import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
@@ -17,6 +19,7 @@ import "./App.css";
 import { AgentFeaturesView } from "./AgentFeaturesView";
 import type { MCPToolConfig } from "@shared/types/Settings";
 import { MCPConfiguration } from "./McpTools";
+import { EmbeddingProvider } from "./EmbeddingProvider";
 
 export type InitSettings = Settings & {
 	ollamaModels: string[];
@@ -25,6 +28,7 @@ export type InitSettings = Settings & {
 export const App = () => {
 	const [loading, setLoading] = useState(true);
 	const [settings, setSettings] = useState<InitSettings | null>(null);
+	const [indexedFiles, setIndexedFiles] = useState<string[] | undefined>([]);
 	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 	const [isLightTheme, setIsLightTheme] = useState(false);
 
@@ -52,10 +56,15 @@ export const App = () => {
 
 		switch (command) {
 			case "init": {
-				const settings = value as { settings: InitSettings, theme: number };
+				const settings = value as { settings: InitSettings, theme: number, indexedFiles: string[] };
 				setSettings(settings.settings);
 				setIsLightTheme(settings.theme === 1 || settings.theme === 4)
+				setIndexedFiles(settings.indexedFiles);
 				setLoading(false);
+				break;
+			}
+			case "files": {
+				setIndexedFiles(value as string[]);
 				break;
 			}
 			case "settingsSaved":
@@ -129,6 +138,13 @@ export const App = () => {
 		}));
 	};
 
+	const onEmbeddingAiProviderChanged = (provider: EmbeddingProviders) => {
+		setSettings((s) => ({
+			...s!,
+			embeddingProvider: provider,
+		}));
+	};
+
 	const onAiProviderSettingsChanged = (
 		aiProviderSettings:
 			| OllamaSettingsType
@@ -161,6 +177,29 @@ export const App = () => {
 		setSettings((s) => ({
 			...s!,
 			providerSettings: updatedProviderSettings,
+		}));
+	};
+
+	const onEmbeddingAiProviderSettingsChanged = (
+		aiProviderSettings: EmbeddingSettingsType
+	) => {
+		const currentProviderSettings = settings.embeddingSettings;
+		const updatedProviderSettings = { ...currentProviderSettings };
+
+		if (settings.embeddingProvider === "Ollama") {
+			updatedProviderSettings.Ollama =
+				aiProviderSettings as Settings["embeddingSettings"]["Ollama"];
+		} else if (settings.embeddingProvider === "OpenAI") {
+			updatedProviderSettings.OpenAI =
+				aiProviderSettings as Settings["embeddingSettings"]["OpenAI"];
+		} else if (settings.embeddingProvider === "AzureAI") {
+			updatedProviderSettings.AzureAI =
+				aiProviderSettings as Settings["embeddingSettings"]["AzureAI"];
+		}
+
+		setSettings((s) => ({
+			...s!,
+			embeddingSettings: updatedProviderSettings,
 		}));
 	};
 
@@ -309,6 +348,19 @@ export const App = () => {
 					<MCPConfiguration
 						mcpTools={settings.mcpTools || []}
 						onChange={onMCPToolsChanged}
+					/>
+				</section>
+
+				<section className={`${cardClass} flex-2`}>
+					<div className="absolute top-0 right-0 bg-green-600 w-2 h-2 rounded-full m-2 transform scale-0 group-hover:scale-100 transition-transform" />
+					<h2 className="text-lg font-semibold mb-4 pb-2 border-b border-[var(--vscode-editorWidget-border)]">
+						Embeddings Provider
+					</h2>
+					<EmbeddingProvider
+						settings={settings}
+						indexedFiles={indexedFiles}
+						onProviderChanged={onEmbeddingAiProviderChanged}
+						onProviderSettingsChanged={onEmbeddingAiProviderSettingsChanged}
 					/>
 				</section>
 			</div>

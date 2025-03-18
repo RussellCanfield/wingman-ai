@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { scanDirectory } from "../utils";
 import { baseToolSchema } from "./schemas";
+import { ToolMessage } from "@langchain/core/messages";
 
 const listDirectorySchema = baseToolSchema.extend({
 	directory: z.string().describe("The directory to list files from"),
@@ -17,7 +18,7 @@ const listDirectorySchema = baseToolSchema.extend({
  */
 export const createListDirectoryTool = (workspace: string) => {
 	return tool(
-		async (input) => {
+		async (input, config) => {
 			try {
 				const dirPath = path.isAbsolute(input.directory)
 					? input.directory
@@ -28,11 +29,14 @@ export const createListDirectoryTool = (workspace: string) => {
 
 				const files = await scanDirectory(dirPath, depth);
 
-				// Return the files with guidance for the AI
-				return JSON.stringify({
-					files,
-					message: `Directory structure for ${input.directory} with depth ${depth}. To avoid redundant filesystem operations, save this result and reference it in your reasoning when you need information about this directory.`,
-					explanation: input.explanation,
+				return new ToolMessage({
+					id: config.callbacks._parentRunId,
+					content: JSON.stringify({
+						files,
+						message: `Directory structure for ${input.directory} with depth ${depth}. To avoid redundant filesystem operations, save this result and reference it in your reasoning when you need information about this directory.`,
+						explanation: input.explanation,
+					}),
+					tool_call_id: config.toolCall.id,
 				});
 			} catch (error) {
 				console.error("Error in list_directory tool:", error);

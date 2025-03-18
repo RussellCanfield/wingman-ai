@@ -1,19 +1,13 @@
-import type { ComposerMessage } from "./Composer";
+import type { ComposerState } from "./Composer";
 
 export const defaultMaxTokens = -1;
 
-export interface Thread {
-	id: string;
-	title: string;
-	createdAt: number;
-	updatedAt: number;
-	messages: ComposerMessage[];
-	originatingThreadId?: string;
-	canResume?: boolean;
-}
+export type IndexFile = {
+	lastModified: number;
+};
 
 export interface WorkspaceSettings {
-	threads?: Thread[];
+	threadIds?: string[];
 	activeThreadId?: string;
 }
 
@@ -21,9 +15,9 @@ export interface AppState {
 	settings: WorkspaceSettings;
 	theme: number;
 	workspaceFolder: string;
-	threads?: Thread[];
-	activeThreadId?: string;
 	totalFiles: number;
+	threads?: ComposerState[];
+	activeThreadId?: string;
 }
 
 interface BaseServiceSettings {
@@ -32,16 +26,11 @@ interface BaseServiceSettings {
 	baseUrl: string;
 }
 
-export interface BaseEmbeddingServiceSettings {
-	embeddingModel: string;
-	dimensions: string;
-	enabled: boolean;
-}
-
 export interface AgentSettings {
 	midsceneEnabled?: boolean;
 	vibeMode?: boolean;
 	automaticallyFixDiagnostics?: boolean;
+	playAudioAlert?: boolean;
 }
 
 export interface InteractionSettings {
@@ -63,8 +52,16 @@ export const AiProviders = [
 ] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
+export const EmbeddingProviders = ["Ollama", "OpenAI", "AzureAI"] as const;
+export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
+
 // Create a type for AiProviders
 export type AiProviders = (typeof AiProviders)[number];
+export type EmbeddingProviders = (typeof EmbeddingProviders)[number];
+
+export type ApiSettingsType = BaseServiceSettings & {
+	apiKey: string;
+};
 
 export type OllamaSettingsType = BaseServiceSettings & {
 	apiPath: string;
@@ -72,10 +69,6 @@ export type OllamaSettingsType = BaseServiceSettings & {
 };
 
 export type xAISettingsType = ApiSettingsType;
-
-export type ApiSettingsType = BaseServiceSettings & {
-	apiKey: string;
-};
 
 export type AnthropicSettingsType = {
 	enableReasoning?: boolean;
@@ -100,6 +93,7 @@ export const defaultAgentSettings: AgentSettings = {
 	midsceneEnabled: false,
 	automaticallyFixDiagnostics: false,
 	vibeMode: true,
+	playAudioAlert: false,
 };
 
 export const defaultxAISettings: xAISettingsType = {
@@ -168,4 +162,31 @@ export type Settings = {
 	};
 	mcpTools?: MCPToolConfig[];
 	agentSettings: AgentSettings;
+	embeddingProvider: (typeof EmbeddingProviders)[number];
+	embeddingSettings: {
+		General: {
+			enabled: boolean;
+			globPattern: string;
+		};
+		Ollama?: Omit<OllamaSettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
+		OpenAI?: Omit<ApiSettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
+		AzureAI?: Omit<AzureAISettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
+	};
 };
+
+export type EmbeddingSettingsType =
+	| Settings["embeddingSettings"]["Ollama"]
+	| Settings["embeddingSettings"]["AzureAI"]
+	| Settings["embeddingSettings"]["OpenAI"];

@@ -13,18 +13,18 @@ import ReactFlow, {
     Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import type { Thread } from '@shared/types/Settings';
 import './ThreadVisualization.css';
 import * as d3Force from 'd3-force';
+import type { ComposerThread } from '@shared/types/Composer';
 
 interface ThreadNodeData {
-    thread: Thread;
+    thread: ComposerThread;
     isActive: boolean;
 }
 
 const ThreadNode: React.FC<{ data: ThreadNodeData }> = ({ data }) => {
     const { thread, isActive } = data;
-    const date = new Date(thread.updatedAt).toLocaleDateString(undefined, {
+    const date = new Date(thread.createdAt).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
     });
@@ -58,7 +58,7 @@ const nodeTypes = {
 };
 
 interface ThreadVisualizationProps {
-    threads: Thread[];
+    threads: ComposerThread[];
     activeThreadId?: string;
     onThreadSelect?: (threadId: string) => void;
     onClose?: () => void;
@@ -70,6 +70,7 @@ const ThreadVisualization: React.FC<ThreadVisualizationProps> = ({
     onThreadSelect,
     onClose,
 }) => {
+    console.log(threads, activeThreadId);
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [initialized, setInitialized] = useState(false);
@@ -93,18 +94,16 @@ const ThreadVisualization: React.FC<ThreadVisualizationProps> = ({
             },
         }));
 
-        console.log("Threads:", threads);
-
         // Create edges - with additional validation
         const flowEdges: Edge[] = threads
-            .filter(t => !!t.originatingThreadId)
+            .filter(t => !!t.parentThreadId)
             .map(thread => {
                 // Log each edge creation for debugging
-                console.log(`Creating edge from ${thread.originatingThreadId} to ${thread.id}`);
+                console.log(`Creating edge from ${thread.parentThreadId} to ${thread.id}`);
 
                 return {
-                    id: `edge-${thread.originatingThreadId}-${thread.id}`,
-                    source: thread.originatingThreadId!,
+                    id: `edge-${thread.parentThreadId}-${thread.id}`,
+                    source: thread.parentThreadId!,
                     target: thread.id,
                     type: 'smoothstep',
                     sourceHandle: 'source',

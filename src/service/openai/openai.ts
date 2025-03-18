@@ -3,7 +3,7 @@ import { GPTModel } from "./models/gptmodel";
 import type { OpenAIModel } from "@shared/types/Models";
 import { truncateChatHistory } from "../utils/contentWindow";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import type { AIStreamProvider, ModelParams } from "../base";
 import type { ILoggingProvider } from "@shared/types/Logger";
 import {
@@ -12,6 +12,7 @@ import {
 	SystemMessage,
 } from "@langchain/core/messages";
 import { AbortError } from "node-fetch";
+import type { Embeddings } from "@langchain/core/embeddings";
 
 const reasoningModels = ["o3-mini"];
 
@@ -24,18 +25,30 @@ export class OpenAI implements AIStreamProvider {
 	constructor(
 		private readonly settings: Settings["providerSettings"]["OpenAI"],
 		private readonly interactionSettings: InteractionSettings,
+		private readonly embeddingSettings: Settings["embeddingSettings"]["OpenAI"],
 		private readonly loggingProvider: ILoggingProvider,
 	) {
 		if (!settings) {
 			throw new Error("Unable to load OpenAI settings.");
 		}
 
-		if (!this.settings?.apiKey.trim()) {
+		if (
+			!this.settings?.apiKey.trim() &&
+			!this.embeddingSettings?.apiKey.trim()
+		) {
 			throw new Error("OpenAI API key is required.");
 		}
 
-		this.chatModel = this.getChatModel(this.settings.chatModel);
-		this.codeModel = this.getCodeModel(this.settings.codeModel);
+		this.chatModel = this.getChatModel(this.settings!.chatModel);
+		this.codeModel = this.getCodeModel(this.settings!.codeModel);
+	}
+
+	getEmbedder(): Embeddings {
+		return new OpenAIEmbeddings({
+			apiKey: this.embeddingSettings?.apiKey,
+			model: this.embeddingSettings?.model,
+			openAIApiKey: this.embeddingSettings?.apiKey,
+		});
 	}
 
 	addMessageToHistory(input: string): void {
@@ -49,6 +62,14 @@ export class OpenAI implements AIStreamProvider {
 				content: input,
 			}),
 		);
+	}
+
+	getLightweightModel(): BaseChatModel {
+		return new ChatOpenAI({
+			apiKey: this.embeddingSettings?.apiKey,
+			model: this.embeddingSettings?.summaryModel,
+			openAIApiKey: this.embeddingSettings?.apiKey,
+		});
 	}
 
 	getModel(params?: ModelParams): BaseChatModel {

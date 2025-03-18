@@ -24,6 +24,31 @@ export const defaultSettings: Settings = {
 		AzureAI: defaultAzureAISettings,
 		xAI: defaultxAISettings,
 	},
+	embeddingProvider: "OpenAI",
+	embeddingSettings: {
+		General: {
+			enabled: true,
+			globPattern: "",
+		},
+		Ollama: {
+			...defaultOllamaSettings,
+			model: "nomic-embed-text",
+			summaryModel: "",
+			dimensions: 768,
+		},
+		OpenAI: {
+			...defaultOpenAISettings,
+			model: "text-embedding-3-small",
+			summaryModel: "gpt-4o-mini",
+			dimensions: 1536,
+		},
+		AzureAI: {
+			...defaultAzureAISettings,
+			model: "text-embedding-3-small",
+			summaryModel: "gpt-4o-mini",
+			dimensions: 1536,
+		},
+	},
 	agentSettings: defaultAgentSettings,
 };
 
@@ -120,6 +145,12 @@ export class WingmanSettings {
 
 			this.settings = { ...defaultSettings };
 			this.isDefault = true;
+		}
+
+		if (!this.settings.embeddingSettings.General) {
+			this.settings.embeddingSettings.General = {
+				...defaultSettings.embeddingSettings.General,
+			};
 		}
 
 		return this.settings;

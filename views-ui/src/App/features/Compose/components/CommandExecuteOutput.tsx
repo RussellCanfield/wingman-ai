@@ -10,27 +10,42 @@ import type { CommandMetadata } from "@shared/types/Message";
 import { vscode } from "../../../utilities/vscode";
 import { useComposerContext } from "../../../context/composerContext";
 import type { UpdateCommandEvent } from "@shared/types/Events";
+import type { ToolMessage } from "@shared/types/Composer";
 
 interface CommandExecuteOutputProps {
-    command: CommandMetadata | undefined;
+    messages: ToolMessage[];
     isLightTheme: boolean;
-    loading: boolean;
-    failed?: boolean;
     onAccept?: (command: string) => void;
     onReject?: (command: string) => void;
 }
 
 export const CommandExecuteOutput = ({
-    command,
+    messages,
     isLightTheme,
-    loading,
 }: CommandExecuteOutputProps) => {
     const { activeThread } = useComposerContext();
     const [isResultExpanded, setIsResultExpanded] = useState(false);
 
-    if (!command) return null;
+    if (!messages) return null;
 
-    console.log("Command:", command)
+    let command: CommandMetadata | undefined;
+
+    if (messages.length === 1) {
+        if ((messages[0].content as Record<string, unknown>).accepted) {
+            command = {
+                id: messages[0].id,
+                //@ts-expect-error
+                ...(messages[0].content as Record<string, unknown>) as CommandMetadata
+            }
+        } else {
+            command = {
+                id: messages[0].id,
+                command: String((messages[0].content as Record<string, unknown>).command)
+            };
+        }
+    } else {
+        command = messages[1].metadata?.command as unknown as CommandMetadata;
+    }
 
     const handleAccept = () => {
         vscode.postMessage({
@@ -67,9 +82,12 @@ export const CommandExecuteOutput = ({
 
     const commandLoading = command.accepted && command.success === undefined && command.result === undefined;
 
+    // Determine if we should show the action buttons
+    const shouldShowButtons = !command.accepted && !command.rejected && !command.success && !command.failed;
+
     return (
         <div
-            className={`rounded-lg overflow-hidden shadow-lg mb-4 mt-4 ${cssClasses}`}
+            className={`rounded-lg overflow-hidden shadow-lg ${cssClasses}`}
         >
             <div className="text-[var(--vscode-input-foreground)] flex flex-col">
                 <div className="flex items-center justify-between relative p-3">
@@ -94,7 +112,7 @@ export const CommandExecuteOutput = ({
                         </div>
                     </div>
                     <div className="flex items-center ml-3">
-                        {(command.success || command.failed || command.rejected) && (
+                        {((command.success || command.failed) && command.result || command.rejected) && (
                             <span className={`ml-2 mr-1 flex items-center ${command.success ? "text-green-500" : "text-red-500"}`}>
                                 {command.success ? (
                                     <AiOutlineCheckCircle className="text-gray-400/50" size={20} />
@@ -124,7 +142,7 @@ export const CommandExecuteOutput = ({
                 )}
 
                 {/* Action buttons moved underneath */}
-                {!command.success && !command.failed && !command.accepted && !command.rejected && (
+                {shouldShowButtons && (
                     <div className={`px-4 py-3 flex justify-end gap-2 ${isLightTheme ? 'bg-gray-50' : 'bg-[#252525]'} border-t ${isLightTheme ? 'border-gray-200' : 'border-gray-700'}`}>
                         <button
                             type="button"

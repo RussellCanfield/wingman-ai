@@ -1,26 +1,25 @@
-import type { ComposerMessage, ComposerResponse, FileDiagnostic, FileSearchResult, GraphState } from "@shared/types/Composer";
+import { type ComposerResponse, type FileDiagnostic, type FileSearchResult, type ComposerThread, type ComposerState, type ComposerThreadEvent, AssistantMessage, ToolMessage } from "@shared/types/Composer";
 import type { AppMessage } from "@shared/types/Message";
-import type { AppState, Thread } from "@shared/types/Settings";
-import type { AddMessageToThreadEvent, RenameThreadEvent } from '@shared/types/Events';
+import type { RenameThreadEvent } from '@shared/types/Events';
 import type React from "react";
 import { createContext, type FC, type PropsWithChildren, useContext, useEffect, useRef, useState } from "react"
 import { vscode } from "../utilities/vscode";
+import type { AppState } from "@shared/types/Settings";
 
 interface ComposerContextType {
-  composerMessages: ComposerMessage[];
-  setComposerMessages: React.Dispatch<React.SetStateAction<ComposerMessage[]>>;
+  composerStates: ComposerState[];
+  setComposerStates: React.Dispatch<React.SetStateAction<ComposerState[]>>;
   loading: boolean;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   clearActiveMessage: () => void;
-  setActiveMessage: React.Dispatch<React.SetStateAction<ComposerMessage | undefined>>;
-  activeMessage: ComposerMessage | undefined;
+  setActiveComposerState: React.Dispatch<React.SetStateAction<ComposerState | undefined>>;
+  activeComposerState: ComposerState | undefined;
   activeFiles: FileSearchResult[];
   setActiveFiles: React.Dispatch<React.SetStateAction<FileSearchResult[]>>;
-  // Thread management
-  threads: Thread[];
-  activeThread: Thread | null;
+  threads: ComposerThread[];
+  activeThread: ComposerThread | null;
   fileDiagnostics: FileDiagnostic[];
-  createThread: (title: string) => void;
+  createThread: (title: string) => ComposerThread;
   switchThread: (threadId: string) => void;
   deleteThread: (threadId: string) => void;
   renameThread: (threadId: string, newTitle: string) => void;
@@ -36,23 +35,17 @@ export const useComposerContext = () => {
 };
 
 export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
-  const [composerMessages, setComposerMessages] = useState<ComposerMessage[]>([]);
+  const [composerStates, setComposerStates] = useState<ComposerState[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [activeMessage, setActiveMessage] = useState<ComposerMessage | undefined>();
+  const [activeComposerState, setActiveComposerState] = useState<ComposerState | undefined>();
   const [chips, setChips] = useState<FileSearchResult[]>([]);
   const [fileDiagnostics, setFileDiagnostics] = useState<FileDiagnostic[]>([]);
 
   // Thread management state
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [activeThread, setActiveThread] = useState<Thread | null>(null);
+  const [threads, setThreads] = useState<ComposerThread[]>([]);
+  const [activeThread, setActiveThread] = useState<ComposerThread | null>(null);
 
-  const threadsRef = useRef<Thread[]>([]);
-  const activeThreadRef = useRef<Thread | null>(null);
-
-  // Update refs whenever state changes
-  useEffect(() => {
-    threadsRef.current = threads;
-  }, [threads]);
+  const activeThreadRef = useRef<ComposerThread | null>(null);
 
   useEffect(() => {
     activeThreadRef.current = activeThread;
@@ -66,39 +59,36 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    if (composerMessages.length === 0) {
+    if (composerStates.length === 0 && !activeComposerState) {
       setLoading(false);
     }
-  }, [composerMessages]);
+  }, [composerStates, activeComposerState]);
 
   const createThread = (title: string) => {
     const timestamp = Date.now();
-    const newThread: Thread = {
+    const newThread: ComposerThread = {
       id: crypto.randomUUID(),
       title,
       createdAt: timestamp,
-      updatedAt: timestamp,
-      messages: []
     };
 
     setThreads(prevThreads => [...prevThreads, newThread]);
     setActiveThread(newThread);
-    setComposerMessages([]);
+    activeThreadRef.current = newThread;
 
     vscode.postMessage({
       command: "create-thread",
       value: newThread
     });
+
+    return newThread;
   };
 
   const switchThread = (threadId: string) => {
     const thread = threads.find(t => t.id === threadId);
     if (thread) {
       setActiveThread(thread);
-
-      // Load messages for this thread
-      const threadMessages = thread.messages as ComposerMessage[];
-      setComposerMessages(threadMessages || []);
+      activeThreadRef.current = thread;
 
       // Notify extension about thread switch
       vscode.postMessage({
@@ -109,7 +99,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const deleteThread = (threadId: string) => {
-    // Don't delete if it's the only thread
+    // // Don't delete if it's the only thread
     if (threads.length <= 1) {
       return;
     }
@@ -118,10 +108,11 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       const updatedThreads = prevThreads.filter(t => t.id !== threadId);
 
       // If we're deleting the active thread, switch to another one
-      if (activeThread?.id === threadId && updatedThreads.length > 0) {
+      if (activeThread?.id === threadId && updatedThreads.length > 0 && composerStates.length > 0) {
         const newActiveThread = updatedThreads[0];
         setActiveThread(newActiveThread);
-        setComposerMessages(newActiveThread.messages as ComposerMessage[] || []);
+        activeThreadRef.current = newActiveThread;
+        setActiveComposerState(composerStates[0]);
       }
 
       return updatedThreads;
@@ -139,17 +130,16 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     if (!originalThread) return;
 
     const timestamp = Date.now();
-    const newThread: Thread = {
+    const newThread: ComposerThread = {
       id: crypto.randomUUID(),
       title: `Branch: ${originalThread.title}`,
       createdAt: timestamp,
-      updatedAt: timestamp,
-      messages: [...originalThread.messages],
-      originatingThreadId: originalThread.id
+      parentThreadId: originalThread.id
     };
 
     setThreads(prevThreads => [...prevThreads, newThread]);
     setActiveThread(newThread);
+    activeThreadRef.current = newThread;
     vscode.postMessage({
       command: "branch-thread",
       value: newThread
@@ -169,6 +159,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           // Update active thread if it's the one being renamed
           if (activeThread?.id === threadId) {
             setActiveThread(updatedThread);
+            activeThreadRef.current = updatedThread;
           }
 
           return updatedThread;
@@ -185,50 +176,74 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const handleComposerEvent = (value: ComposerResponse) => {
-    const { step, events, threadId, canResume } = value;
+    const { event, state } = value;
 
-    console.log(step, events)
+    //console.log(event, state);
 
-    switch (step) {
-      case "composer-done": {
-        const newMessage = {
-          from: "assistant" as const,
-          message: activeMessage?.message ?? "",
-          events,
-          threadId: activeThread?.id,
-          loading: false
-        };
+    switch (event) {
+      case "composer-message": {
+        setLoading(true);
 
-        setComposerMessages(prevMessages => [
-          ...prevMessages,
-          newMessage
-        ]);
+        if (activeThreadRef.current?.id === state.threadId) {
+          setActiveComposerState(prev => {
+            if (!prev) return prev;
+            return reconcileMessages(prev, state);
+          });
+        }
 
-        vscode.postMessage({
-          command: "add-message-to-thread",
-          value: {
-            threadId: threadId,
-            message: newMessage,
-            canResume
-          } satisfies AddMessageToThreadEvent
+        setComposerStates(states => {
+          const stateIndex = states.findIndex(s => s.threadId === state.threadId);
+
+          if (stateIndex === -1) return [...states];
+
+          const updatedStates = [...states];
+          updatedStates[stateIndex] = reconcileMessages(updatedStates[stateIndex], state)
+
+          return updatedStates
+        });
+
+        break;
+      }
+      case "composer-error": {
+        if (activeThreadRef.current?.id === state.threadId) {
+          setActiveComposerState(prev => {
+            if (!prev) return prev;
+            return reconcileMessages(prev, state);
+          });
+        }
+
+        setComposerStates(states => {
+          const stateIndex = states.findIndex(s => s.threadId === state.threadId);
+
+          if (stateIndex === -1) return [...states];
+
+          const updatedStates = [...states];
+          updatedStates[stateIndex] = reconcileMessages(updatedStates[stateIndex], state)
+
+          return updatedStates
         });
 
         setLoading(false);
-        setActiveMessage(undefined);
         break;
       }
-      case "composer-events": {
-        setLoading(true);
-        setActiveMessage((am) => {
-          return {
-            from: "assistant",
-            message: am?.message || "",
-            events,
-            threadId,
-            loading: true,
-            canResume
+      case "composer-done": {
+        setComposerStates(states => {
+          const stateIndex = states.findIndex(s => s.threadId === state.threadId);
+
+          if (stateIndex === -1) return [...states];
+
+          const updatedStates = [...states];
+
+          if (stateIndex === -1) {
+            updatedStates.push(state);
+          } else {
+            updatedStates[stateIndex] = state;
           }
+
+          return updatedStates;
         });
+
+        setLoading(false);
         break;
       }
     }
@@ -239,29 +254,61 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     const { command, value } = data;
 
     switch (command) {
+      case "init": {
+        const { threads, activeThreadId } = value as AppState;
+
+        if (!threads) return;
+
+        const stateThreads = threads.map(state => ({
+          id: state.threadId,
+          title: state.title,
+          createdAt: state.createdAt,
+          parentThreadId: state.parentThreadId
+        } satisfies ComposerThread));
+
+        setThreads(stateThreads);
+        setComposerStates(threads);
+
+        if (activeThreadId) {
+          activeThreadRef.current = stateThreads.find(t => t.id === activeThreadId) ?? null;
+          setActiveThread(activeThreadRef.current)
+          setActiveComposerState(threads.find(t => t.threadId === activeThreadId));
+        }
+        break;
+      }
       case "compose-response":
         handleComposerEvent(value as ComposerResponse);
         break;
       case "thread-data": {
-        const workspaceSettings = value as AppState;
-        const { threads, activeThreadId } = workspaceSettings;
+        const { state, activeThreadId } = value as ComposerThreadEvent;
 
-        // Handle threads data from extension
-        if (threads && Array.isArray(threads)) {
-          setThreads(threads);
-          // Set active thread if available
-          if (activeThreadId && threads.length > 0) {
-            const thread = threads.find((t: Thread) => t.id === activeThreadId);
-            if (thread) {
-              setActiveThread(thread);
-              setComposerMessages(thread.messages as ComposerMessage[] || []);
-            }
-          } else if (threads.length > 0) {
-            // Default to first thread if no active thread is specified
-            setActiveThread(threads[0]);
-            setComposerMessages(threads[0].messages as ComposerMessage[] || []);
-          }
+        if (!state) return;
+
+        const composerThread: ComposerThread = {
+          id: state.threadId,
+          title: state.title,
+          createdAt: state.createdAt,
+          parentThreadId: state.parentThreadId
+        };
+
+        setThreads(threads => {
+          const threadIndex = threads.findIndex(t => t.id === state.threadId);
+          threads[threadIndex] = composerThread
+          return [...threads];
+        })
+
+        setComposerStates(states => {
+          const stateIndex = states.findIndex(t => t.threadId === state.threadId);
+          states[stateIndex] = state;
+          return [...states];
+        });
+
+        if (!activeComposerState || (activeComposerState && activeComposerState.threadId === activeThreadRef.current?.id)) {
+          setActiveComposerState(state);
+          activeThreadRef.current = composerThread;
+          setActiveThread(composerThread)
         }
+
         break;
       }
       case "diagnostics": {
@@ -272,49 +319,17 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const clearActiveMessage = () => {
-    const cancelledMessage = {
-      from: "assistant" as const,
-      message: activeMessage?.message ?? "",
-      threadId: activeThread?.id,
-      loading: false
-    };
-
-    setComposerMessages((currentMessages) => {
-      return [
-        ...currentMessages,
-        cancelledMessage
-      ];
-    });
-
-    // Update thread with cancelled message
-    if (activeThread) {
-      setThreads(prevThreads => {
-        return prevThreads.map(thread => {
-          if (thread.id === activeThread.id) {
-            return {
-              ...thread,
-              messages: [...thread.messages, cancelledMessage],
-              updatedAt: Date.now()
-            };
-          }
-          return thread;
-        });
-      });
-
-    }
-
-    setActiveMessage(undefined);
     setLoading(false);
   }
 
   return (
     <ComposerContext.Provider value={{
-      composerMessages,
-      setComposerMessages,
+      composerStates,
+      setComposerStates: setComposerStates,
       loading, setLoading,
-      activeMessage,
+      activeComposerState,
       clearActiveMessage,
-      setActiveMessage,
+      setActiveComposerState,
       activeFiles: chips,
       setActiveFiles: setChips,
       fileDiagnostics: fileDiagnostics ?? [],
@@ -330,4 +345,28 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       {children}
     </ComposerContext.Provider>
   );
+};
+
+const reconcileMessages = (prev: ComposerState, state: ComposerState) => {
+  for (const message of state.messages) {
+    // Find any existing message with the same ID, regardless of type
+    const matchingMessage = prev?.messages.find(m =>
+      m.id === message.id &&
+      m.role === message.role);
+
+    if (!matchingMessage) {
+      // If no matching message found, add the new message
+      // Always add tool messages, and also add non-tool messages
+      prev?.messages.push(message);
+    } else if (matchingMessage.role === message.role) {
+      // Only update content if the roles match (tool updates tool, assistant updates assistant)
+      // This prevents a tool message from overwriting an assistant message with the same ID
+      matchingMessage.content = message.content;
+    }
+  }
+
+  return {
+    ...state,
+    messages: [...(prev?.messages ?? [])]
+  }
 };

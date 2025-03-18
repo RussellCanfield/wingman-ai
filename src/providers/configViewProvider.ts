@@ -61,12 +61,22 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			switch (command) {
 				case "init": {
 					const settings = await this.init(value);
+					const indexedFiles = await this._lspClient.getIndexedFiles();
 					settingsPanel.webview.postMessage({
 						command,
 						value: {
 							settings: JSON.parse(settings),
 							theme: vscode.window.activeColorTheme.kind,
+							indexedFiles,
 						},
+					});
+					break;
+				}
+				case "resync": {
+					await this._lspClient.resyncIndex();
+					settingsPanel.webview.postMessage({
+						command: "files",
+						value: await this._lspClient.getIndexedFiles(),
 					});
 					break;
 				}
@@ -106,7 +116,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					break;
 				}
 				case "saveSettings":
-					wingmanSettings.SaveSettings(value as Settings, this.workspace);
+					await wingmanSettings.SaveSettings(value as Settings, this.workspace);
 					await this._lspClient.updateSettings();
 					settingsPanel.webview.postMessage({
 						command: "settingsSaved",
