@@ -129,12 +129,16 @@ export class LSPServer {
 		);
 		await this.composer.initialize();
 
-		const provider = CreateAIProvider(settings, loggingProvider);
-		this.embedder = CreateEmbeddingProvider(
-			settings,
-			loggingProvider,
-		).getEmbedder();
-		this.summaryModel = provider.getLightweightModel();
+		try {
+			const provider = CreateAIProvider(settings, loggingProvider);
+			this.embedder = CreateEmbeddingProvider(
+				settings,
+				loggingProvider,
+			).getEmbedder();
+			this.summaryModel = provider.getLightweightModel();
+		} catch (e) {
+			console.error(e);
+		}
 	};
 
 	private getPersistancePath = (folder: string) => {

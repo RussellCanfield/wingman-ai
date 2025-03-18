@@ -22,6 +22,7 @@ import path from "node:path";
 import { mapLocation, mapSymbol } from "./utils";
 import { loggingProvider } from "../providers/loggingProvider";
 import {
+	EVENT_AI_PROVIDER_VALIDATION_FAILED,
 	EVENT_COMPOSE_PHASE,
 	EVENT_COMPOSE_STARTED,
 	telemetry,
@@ -34,7 +35,10 @@ import type {
 import { WingmanFileWatcher } from "../providers/fileWatcher";
 import { wingmanSettings } from "../service/settings";
 import { generateWorkspaceGlobPatterns } from "../providers/globProvider";
-import { CreateAIProvider } from "../service/utils/models";
+import {
+	CreateAIProvider,
+	CreateEmbeddingProvider,
+} from "../service/utils/models";
 import type { MessageContentText } from "@langchain/core/messages";
 import * as sound from "sound-play";
 
@@ -337,6 +341,40 @@ export class LSPClient {
 		return client.sendRequest<ComposerResponse>("wingman/compose", {
 			request,
 		});
+	};
+
+	isRunning = () => client.isRunning();
+
+	validate = async (workspace: string) => {
+		const settings = await wingmanSettings.LoadSettings(workspace);
+
+		try {
+			let aiProvider = CreateAIProvider(settings, loggingProvider);
+
+			if (!(await aiProvider.validateSettings())) {
+				telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
+					aiProvider: settings.aiProvider,
+				});
+				throw new Error(
+					`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
+				);
+			}
+
+			aiProvider = CreateEmbeddingProvider(settings, loggingProvider);
+
+			if (!(await aiProvider.validateSettings())) {
+				telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
+					aiProvider: settings.aiProvider,
+				});
+				throw new Error(
+					`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
+				);
+			}
+			return true;
+		} catch (e) {
+			console.error(e);
+			return false;
+		}
 	};
 
 	fixDiagnostics = async (event: FixDiagnosticsEvent) => {

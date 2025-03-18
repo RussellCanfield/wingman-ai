@@ -82,10 +82,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		// Wait for any pending progress to close
 		await progressPromise;
 	} catch (error) {
-		vscode.window.showErrorMessage(
-			"Failed to initialize bindings. Some features may not work correctly.",
-		);
 		loggingProvider.logError(error, true);
+		throw error;
 	}
 
 	const workspace = new Workspace(
@@ -98,6 +96,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.extensionUri,
 		workspace.workspaceFolder,
 		lspClient,
+		context,
 	);
 
 	context.subscriptions.push(
@@ -126,11 +125,11 @@ export async function activate(context: vscode.ExtensionContext) {
 		);
 
 		if (result === "Open Settings") {
-			vscode.commands.executeCommand(ConfigViewProvider.showConfigCommand);
+			await vscode.commands.executeCommand(
+				ConfigViewProvider.showConfigCommand,
+			);
 		}
 	}
-
-	await lspClient.activate(context, settings);
 
 	try {
 		telemetry.sendEvent(EVENT_EXTENSION_LOADED, {
@@ -142,9 +141,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	let modelProvider: AIProvider;
 	try {
-		modelProvider = CreateAIProvider(settings, loggingProvider);
-
-		if (!(await modelProvider.validateSettings())) {
+		if (
+			!(await lspClient.validate(vscode.workspace.workspaceFolders?.[0].name))
+		) {
 			telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
 				aiProvider: settings.aiProvider,
 			});
@@ -152,6 +151,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
 			);
 		}
+		await lspClient.activate(context, settings);
 	} catch (error) {
 		if (error instanceof Error) {
 			telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
@@ -163,7 +163,9 @@ export async function activate(context: vscode.ExtensionContext) {
 			);
 
 			if (result === "Open Settings") {
-				vscode.commands.executeCommand(ConfigViewProvider.showConfigCommand);
+				await vscode.commands.executeCommand(
+					ConfigViewProvider.showConfigCommand,
+				);
 			}
 			loggingProvider.logInfo(error.message);
 			eventEmitter._onFatalError.fire();

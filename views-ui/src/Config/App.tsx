@@ -29,7 +29,7 @@ export const App = () => {
 	const [loading, setLoading] = useState(true);
 	const [settings, setSettings] = useState<InitSettings | null>(null);
 	const [indexedFiles, setIndexedFiles] = useState<string[] | undefined>([]);
-	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 	const [isLightTheme, setIsLightTheme] = useState(false);
 
 	useEffect(() => {
@@ -43,6 +43,13 @@ export const App = () => {
 		};
 	}, []);
 
+	useEffect(() => {
+		// Reset error status after a timeout
+		if (saveStatus === "error") {
+			setTimeout(() => setSaveStatus("idle"), 3000);
+		}
+	}, [saveStatus]);
+
 	const saveSettings = (updatedSettings: Settings) => {
 		setSaveStatus("saving");
 		vscode.postMessage({
@@ -54,6 +61,8 @@ export const App = () => {
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { command, value } = event.data;
 
+		console.log(command, value);
+
 		switch (command) {
 			case "init": {
 				const settings = value as { settings: InitSettings, theme: number, indexedFiles: string[] };
@@ -61,6 +70,10 @@ export const App = () => {
 				setIsLightTheme(settings.theme === 1 || settings.theme === 4)
 				setIndexedFiles(settings.indexedFiles ?? []);
 				setLoading(false);
+				break;
+			}
+			case "save-failed": {
+				setSaveStatus("error");
 				break;
 			}
 			case "files": {
@@ -232,7 +245,9 @@ export const App = () => {
 			? "bg-blue-500 cursor-wait"
 			: saveStatus === "saved"
 				? "bg-green-600 hover:bg-green-700"
-				: "bg-blue-600 hover:bg-blue-700"
+				: saveStatus === "error"
+					? "bg-red-600 hover:bg-red-700"
+					: "bg-blue-600 hover:bg-blue-700"
 		}
     text-white py-2 px-6 rounded-md shadow-md 
     transition duration-300 ease-in-out 
@@ -284,6 +299,17 @@ export const App = () => {
 				</div>
 			</div>
 			<div className="flex flex-col md:flex-row justify-end items-end md:items-center mb-8 gap-4">
+				{saveStatus === "error" && (
+					<div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded-md shadow-sm">
+						<div className="flex items-center">
+							{/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
+							<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+								<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+							</svg>
+							<span className="font-medium">Failed to save settings. Please try again.</span>
+						</div>
+					</div>
+				)}
 				<button
 					type="button"
 					onClick={() => saveSettings(settings)}
@@ -306,6 +332,14 @@ export const App = () => {
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
 							</svg>
 							Saved!
+						</>
+					) : saveStatus === "error" ? (
+						<>
+							{/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
+							<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+							</svg>
+							Try Again
 						</>
 					) : (
 						"Save Settings"

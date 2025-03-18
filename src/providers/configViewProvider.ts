@@ -19,6 +19,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		private readonly _extensionUri: vscode.Uri,
 		private readonly workspace: string,
 		private readonly _lspClient: LSPClient,
+		private readonly context: vscode.ExtensionContext,
 	) {}
 
 	private createPanel(): vscode.WebviewPanel {
@@ -61,7 +62,13 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			switch (command) {
 				case "init": {
 					const settings = await this.init(value);
-					const indexedFiles = await this._lspClient.getIndexedFiles();
+					let indexedFiles: string[] = [];
+
+					try {
+						indexedFiles = await this._lspClient.getIndexedFiles();
+					} catch (e) {
+						console.error(e);
+					}
 					settingsPanel.webview.postMessage({
 						command,
 						value: {
@@ -73,7 +80,11 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					break;
 				}
 				case "resync": {
-					await this._lspClient.resyncIndex();
+					try {
+						await this._lspClient.resyncIndex();
+					} catch (e) {
+						console.error(e);
+					}
 					settingsPanel.webview.postMessage({
 						command: "files",
 						value: await this._lspClient.getIndexedFiles(),
@@ -117,7 +128,40 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				}
 				case "saveSettings":
 					await wingmanSettings.SaveSettings(value as Settings, this.workspace);
-					await this._lspClient.updateSettings();
+					try {
+						const result = await this._lspClient.validate(this.workspace);
+
+						if (!result) {
+							throw new Error(
+								"Failed to validate settings for your AI Provider(s). Please confirm your settings are correct",
+							);
+						}
+						if (!this._lspClient.isRunning()) {
+							await this._lspClient.activate(
+								this.context,
+								await wingmanSettings.LoadSettings(this.workspace),
+							);
+						}
+
+						await this._lspClient.updateSettings();
+					} catch (e) {
+						if (e instanceof Error) {
+							await settingsPanel.webview.postMessage({
+								command: "save-failed",
+							});
+							const result = await vscode.window.showErrorMessage(
+								e.message,
+								"Open Settings",
+							);
+
+							if (result === "Open Settings") {
+								await vscode.commands.executeCommand(
+									ConfigViewProvider.showConfigCommand,
+								);
+							}
+							break;
+						}
+					}
 					settingsPanel.webview.postMessage({
 						command: "settingsSaved",
 					});

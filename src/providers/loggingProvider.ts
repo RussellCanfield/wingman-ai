@@ -26,9 +26,9 @@ export class VSCodeLoggingProvider implements ILoggingProvider {
 			`${new Date().toLocaleString()} - [error] ${message}`,
 		);
 
-		if (showErrorModal) {
-			vscode.window.showErrorMessage(message);
-		}
+		// if (showErrorModal) {
+		// 	vscode.window.showErrorMessage(message);
+		// }
 	}
 
 	public dispose() {
