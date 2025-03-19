@@ -47,7 +47,7 @@ export class ThreadViewProvider {
 					this.panel?.webview.postMessage({
 						command: "thread-data",
 						value: {
-							states,
+							states: states?.filter((s) => !!s.title),
 							activeThreadId: settings.activeThreadId,
 						},
 					});

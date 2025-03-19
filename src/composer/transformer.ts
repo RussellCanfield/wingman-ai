@@ -25,7 +25,7 @@ export const transformState = async (
 	workspace: string,
 	canResume?: boolean,
 ): Promise<ComposerState> => {
-	const messages = mapMessages(state.messages);
+	const messages = !state.messages ? [] : mapMessages(state.messages);
 
 	return {
 		messages,
