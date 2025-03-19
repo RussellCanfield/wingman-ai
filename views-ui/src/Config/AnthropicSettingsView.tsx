@@ -162,9 +162,9 @@ export const AnthropicSettingsView = ({
 						onChange={handleChangeInput}
 						value={apiKey}
 						data-name="apiKey"
-						className={`w-full px-3 pr-12 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] ${(apiKey ?? "").toLowerCase() === "add me" ? "border-red-500" : ""
+						className={`w-full px-3 pr-12 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] ${!apiKey ? "border-red-500" : ""
 							}`}
-						title={(apiKey ?? "").toLowerCase() === "add me" ? "Please add your Anthropic API key" : "Anthropic api key"}
+						title={!apiKey ? "Please add your Anthropic API key" : "Anthropic api key"}
 					/>
 					<button
 						type="button"

@@ -343,7 +343,7 @@ export class LSPClient {
 		});
 	};
 
-	isRunning = () => client.isRunning();
+	isRunning = () => client?.isRunning() ?? false;
 
 	validate = async (workspace: string) => {
 		const settings = await wingmanSettings.LoadSettings(workspace);
