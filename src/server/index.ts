@@ -184,10 +184,14 @@ export class LSPServer {
 
 				await this.connection?.sendRequest("wingman/compose", event);
 
+				const settings = await wingmanSettings.LoadSettings(
+					this.workspaceFolders[0],
+				);
 				if (
 					event.event === "composer-done" &&
 					!event.state.canResume &&
-					event.state.messages
+					event.state.messages &&
+					settings.agentSettings.automaticallyFixDiagnostics
 				) {
 					try {
 						const toolMessages = event.state.messages.filter(
