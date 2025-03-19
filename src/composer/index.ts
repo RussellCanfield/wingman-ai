@@ -920,6 +920,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 		request: ComposerRequest,
 		resumedFromFiles?: FileMetadata[],
 		resumedFromCommand?: CommandMetadata,
+		temp = false,
 	): AsyncIterable<ComposerResponse> {
 		controller?.abort();
 		controller = new AbortController();
@@ -945,7 +946,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 
 		try {
 			const contextFiles = await this.loadContextFiles(request.contextFiles);
-			const messages = this.buildUserMessages(request);
+			const messages = this.buildUserMessages(request, temp);
 			const rules = (await loadWingmanRules(this.workspace)) ?? "";
 
 			let input = {
@@ -1022,8 +1023,8 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 		}
 	}
 
-	buildUserMessages = (request: ComposerRequest) => {
-		const messageContent: any[] = [];
+	buildUserMessages = (request: ComposerRequest, temp = false) => {
+		const messageContent: MessageContentComplex[] = [];
 
 		if (!request.input) return [];
 
@@ -1084,7 +1085,14 @@ ${request.context.text}`,
 			text: request.input,
 		});
 
-		return [new HumanMessage({ content: messageContent })];
+		return [
+			new HumanMessage({
+				content: messageContent,
+				additional_kwargs: {
+					temp,
+				},
+			}),
+		];
 	};
 
 	/**

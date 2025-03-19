@@ -268,13 +268,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							return [];
 						}
 
-						const settings = await wingmanSettings.LoadSettings(
-							this._workspace.workspaceFolder,
-						);
-
 						// Find all files in the workspace that match the search term
 						const matchingFiles = await vscode.workspace.findFiles(
-							settings.embeddingSettings.General.globPattern ?? "**/*",
+							"**/*",
 							(await getGitignorePatterns(this._workspace.workspacePath)) || "",
 						);
 

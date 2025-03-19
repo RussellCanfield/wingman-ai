@@ -43,7 +43,7 @@ export const transformState = async (
 const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 	return messages.flatMap((message): ComposerMessage[] => {
 		// Handle HumanMessage
-		if (message instanceof HumanMessage) {
+		if (message instanceof HumanMessage && !message.additional_kwargs.temp) {
 			const imageMsg = (message.content as MessageContentComplex[]).find(
 				(c) => c.type === "image_url",
 			) as MessageContentImageUrl | undefined;

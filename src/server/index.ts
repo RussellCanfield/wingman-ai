@@ -167,6 +167,7 @@ export class LSPServer {
 		request: ComposerRequest,
 		files?: FileMetadata[],
 		command?: CommandMetadata,
+		temp?: boolean,
 	) => {
 		try {
 			if (!this.composer) return false;
@@ -175,6 +176,7 @@ export class LSPServer {
 				request,
 				files,
 				command,
+				temp,
 			)) {
 				if (event.event === "no-op") {
 					return false;
@@ -248,15 +250,20 @@ ${d.lintErrors?.length > 0 ? d.lintErrors.map((e) => `Linting Error: ${e.message
 			})
 			.join("\n");
 
-		return this.compose({
-			input: `The following files have import or linting errors, fix them all without making any breaking changes.
+		return this.compose(
+			{
+				input: `The following files have import or linting errors, fix them all without making any breaking changes.
 Each error type details the message, line it occurs on and character it starts at.
 
 ${input}`,
-			contextFiles: aboslutePaths,
-			recentFiles: [],
-			threadId,
-		});
+				contextFiles: aboslutePaths,
+				recentFiles: [],
+				threadId,
+			},
+			undefined,
+			undefined,
+			true,
+		);
 	};
 
 	private initialize = async () => {
