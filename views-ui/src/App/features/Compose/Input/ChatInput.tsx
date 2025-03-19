@@ -98,7 +98,7 @@ const ChatInput = ({
 }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
 	const { isLightTheme } = useSettingsContext();
-	const { activeFiles, setActiveFiles, activeMessage } = useComposerContext();
+	const { activeFiles, setActiveFiles, activeComposerState } = useComposerContext();
 	const [inputValue, setInputValue] = useState("");
 	const [selectedImage, setSelectedImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -298,7 +298,7 @@ const ChatInput = ({
 		}
 	`;
 
-	const shouldShowButtons = !activeMessage || !activeMessage.threadId || activeMessage.threadId === threadId;
+	const shouldShowButtons = !activeComposerState || !activeComposerState.threadId || activeComposerState.threadId === threadId;
 
 	return (
 		<div className="flex-basis-50 py-3 flex flex-col items-stretch" ref={ref}>

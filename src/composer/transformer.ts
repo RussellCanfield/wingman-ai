@@ -13,6 +13,7 @@ import {
 	type BaseMessage,
 	type MessageContentText,
 	AIMessageChunk,
+	type MessageContentImageUrl,
 } from "@langchain/core/messages";
 
 /**
@@ -43,9 +44,24 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 	return messages.flatMap((message): ComposerMessage[] => {
 		// Handle HumanMessage
 		if (message instanceof HumanMessage) {
+			const imageMsg = (message.content as MessageContentComplex[]).find(
+				(c) => c.type === "image_url",
+			) as MessageContentImageUrl | undefined;
 			const messageContent = message.content as MessageContentText[];
 			const lastContent = messageContent[messageContent.length - 1];
-			return [new UserMessage(message.id!, lastContent.text)];
+			return [
+				new UserMessage(
+					message.id!,
+					lastContent.text,
+					imageMsg
+						? {
+								//@ts-expect-error
+								data: imageMsg.image_url.url,
+								ext: "image/jpeg",
+							}
+						: undefined,
+				),
+			];
 		}
 
 		// Handle AIMessageChunk

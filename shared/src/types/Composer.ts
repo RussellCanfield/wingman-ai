@@ -120,6 +120,7 @@ export class UserMessage extends BaseMessage {
 		this.id = id;
 		this.content = input;
 		this.role = "user";
+		this.image = image;
 	}
 }
 
