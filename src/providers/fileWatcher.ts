@@ -19,6 +19,7 @@ export class WingmanFileWatcher {
 	private inclusionFilter: string | undefined;
 	private gitignoreMap: Map<string, Ignore> = new Map();
 	private gitignoreWatcher: vscode.FileSystemWatcher | undefined;
+	private progressTask: vscode.CancellationTokenSource | null = null;
 
 	// Default ignore patterns to use if no .gitignore is found
 	private readonly defaultIgnorePatterns = [
@@ -123,6 +124,11 @@ export class WingmanFileWatcher {
 		}
 		if (this.gitHeadWatcher) {
 			this.gitHeadWatcher.dispose();
+		}
+		// Cancel any ongoing progress
+		if (this.progressTask) {
+			this.progressTask.cancel();
+			this.progressTask = null;
 		}
 	}
 
@@ -432,7 +438,7 @@ export class WingmanFileWatcher {
 			for (const folder of event.added) {
 				// Load gitignore files for the new folder
 				this.updateGitignoreForFolder(folder.uri.fsPath);
-				await this.indexFolder(folder.uri.fsPath);
+				this.queueFolderForIndexing(folder.uri.fsPath);
 			}
 
 			// Remove files and patterns from removed folders
@@ -496,33 +502,27 @@ export class WingmanFileWatcher {
 		}
 
 		// Debounce to avoid multiple re-indexing if HEAD changes multiple times quickly
-		this.branchSwitchDebounceTimer = setTimeout(async () => {
+		this.branchSwitchDebounceTimer = setTimeout(() => {
 			if (this.isReindexing) return;
 
 			console.log(
 				`Git branch switch detected in ${folderPath}, re-indexing...`,
 			);
-			this.isReindexing = true;
 
-			try {
-				// Clear existing file index for this folder
-				this.clearFolderFromIndex(folderPath);
+			// Display notification to user
+			vscode.window.showInformationMessage(
+				"Git branch switched - Wingman is re-indexing your files",
+			);
 
-				// Re-read gitignore files as they might have changed
-				this.updateGitignoreForFolder(folderPath);
+			// Clear existing file index for this folder
+			this.clearFolderFromIndex(folderPath);
 
-				// Re-index the folder
-				await this.indexFolder(folderPath);
+			// Re-read gitignore files as they might have changed
+			this.updateGitignoreForFolder(folderPath);
 
-				console.log(
-					`Re-indexing completed after branch switch in ${folderPath}`,
-				);
-			} catch (error) {
-				console.error("Error re-indexing after branch switch:", error);
-			} finally {
-				this.isReindexing = false;
-			}
-		}, 10000); // Wait for 10 seconds to ensure all file changes are completed
+			// Re-index the folder
+			this.queueFolderForIndexing(folderPath);
+		}, 2000); // Reduced from 10s to 2s for faster response
 	}
 
 	/**
@@ -576,40 +576,26 @@ export class WingmanFileWatcher {
 	}
 
 	/**
-	 * Index all eligible files in a folder
+	 * Queue a folder for indexing with non-blocking approach
 	 */
-	private async indexFolder(folderPath: string): Promise<void> {
-		try {
-			const files = await this.findEligibleFiles(folderPath);
+	private queueFolderForIndexing(folderPath: string): void {
+		// Find eligible files and queue them for indexing
+		this.findEligibleFiles(folderPath).then((files) => {
 			console.log(`Found ${files.length} eligible files in ${folderPath}`);
 
-			// Process files in batches to avoid overwhelming the system
+			// Queue files in smaller batches to avoid overwhelming the system
 			const batchSize = 50;
 			for (let i = 0; i < files.length; i += batchSize) {
 				const batch = files.slice(i, i + batchSize);
-				const filesToProcess = new Map<string, IndexFile>();
-
-				// Update our local index
 				for (const filePath of batch) {
-					try {
-						const stats = fs.statSync(filePath);
-						this.fileIndex.set(filePath, {
-							lastModified: stats.mtime.getTime(),
-						});
-						filesToProcess.set(filePath, {
-							lastModified: stats.mtime.getTime(),
-						});
-					} catch (error) {
-						// File might have been deleted during processing
-						console.log(`Could not update index for ${filePath}: ${error}`);
-					}
+					this.queueFileForIndexing(filePath);
 				}
-
-				await this.lspClient.indexFiles(filesToProcess);
 			}
-		} catch (error) {
-			console.error(`Error indexing folder ${folderPath}:`, error);
-		}
+
+			if (this.isReindexing) {
+				this.isReindexing = false;
+			}
+		});
 	}
 
 	/**
@@ -653,22 +639,95 @@ export class WingmanFileWatcher {
 	}
 
 	/**
-	 * Initial indexing of the entire workspace
+	 * Initial indexing of the entire workspace with progress indication
 	 */
 	public async initialIndexing(): Promise<void> {
 		const workspaceFolders = vscode.workspace.workspaceFolders;
 		if (!workspaceFolders) return;
 
-		console.log("Starting initial indexing of workspace...");
-
-		// First, load all gitignore files
+		// Load gitignore files (lightweight operation) first
 		await this.loadAllGitignoreFiles();
 
-		// Then index each folder
-		for (const folder of workspaceFolders) {
-			await this.indexFolder(folder.uri.fsPath);
+		// Create a cancellation token for the progress UI
+		if (this.progressTask) {
+			this.progressTask.cancel();
 		}
-		console.log("Initial indexing completed");
+		this.progressTask = new vscode.CancellationTokenSource();
+
+		// Show non-blocking progress
+		vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: "Wingman: Indexing workspace files",
+				cancellable: true,
+			},
+			async (progress, token) => {
+				token.onCancellationRequested(() => {
+					console.log("User cancelled the indexing operation");
+					if (this.progressTask) {
+						this.progressTask.cancel();
+					}
+				});
+
+				// Start indexing in a non-blocking manner
+				this.startProgressiveIndexing(workspaceFolders, progress);
+
+				// Wait until indexing is done or cancelled
+				return new Promise<void>((resolve) => {
+					const checkCompletionInterval = setInterval(() => {
+						if (!this.isReindexing || token.isCancellationRequested) {
+							clearInterval(checkCompletionInterval);
+							resolve();
+						}
+					}, 500);
+				});
+			},
+		);
+	}
+
+	/**
+	 * Start progressive indexing without blocking the UI
+	 */
+	private async startProgressiveIndexing(
+		workspaceFolders: readonly vscode.WorkspaceFolder[],
+		progress: vscode.Progress<{ message?: string; increment?: number }>,
+	): Promise<void> {
+		console.log("Starting initial indexing of workspace...");
+		this.isReindexing = true;
+
+		const totalFolders = workspaceFolders.length;
+		let processedFolders = 0;
+
+		// Process each folder in the workspace
+		for (const folder of workspaceFolders) {
+			if (this.progressTask?.token.isCancellationRequested) {
+				console.log("Indexing was cancelled");
+				this.isReindexing = false;
+				return;
+			}
+
+			const folderName = folder.name;
+			const folderPath = folder.uri.fsPath;
+
+			progress.report({
+				message: `Scanning ${folderName} (${processedFolders + 1}/${totalFolders})`,
+				increment: 100 / totalFolders,
+			});
+
+			// Queue this folder for indexing in a non-blocking way
+			this.queueFolderForIndexing(folderPath);
+
+			processedFolders++;
+		}
+
+		// Final update
+		progress.report({ message: "Finishing up indexing..." });
+
+		// Mark indexing as complete
+		setTimeout(() => {
+			console.log("Initial indexing completed");
+			this.isReindexing = false;
+		}, 1000);
 	}
 
 	/**
@@ -682,7 +741,7 @@ export class WingmanFileWatcher {
 		this.setupGitignoreWatchers();
 		this.setupWorkspaceWatcher();
 
-		// Then do initial indexing
+		// Then do initial indexing in a non-blocking way
 		await this.initialIndexing();
 	}
 }

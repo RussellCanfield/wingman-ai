@@ -1110,16 +1110,13 @@ ${request.context.text}`,
 			configurable: { thread_id: threadId },
 		});
 		const graphState = state.values as GraphStateAnnotation;
+		const settings = await wingmanSettings.LoadSettings(this.workspace);
 		this.messages = [];
 
 		for await (const event of stream) {
 			switch (event.event) {
 				case "on_chain_end": {
-					if (
-						event.metadata.langgraph_node === "review" &&
-						event.data.output.update &&
-						event.data.output.update.messages
-					) {
+					if (event.data.output.update?.messages) {
 						if (event.data.output.update.messages[0] instanceof ToolMessage) {
 							const msg = event.data.output.update.messages[0] as ToolMessage;
 
@@ -1232,6 +1229,14 @@ ${request.context.text}`,
 									},
 									"agent",
 								);
+							} else if (
+								toolCall.name === "command_execute" &&
+								settings.agentSettings.vibeMode
+							) {
+								toolCall.args = {
+									...toolCall.args,
+									accepted: true,
+								};
 							}
 
 							if (!outputMessage) break;
