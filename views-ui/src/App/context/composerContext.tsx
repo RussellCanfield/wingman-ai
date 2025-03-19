@@ -243,6 +243,17 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           return updatedStates;
         });
 
+        if (activeThreadRef.current && activeThreadRef.current.id === state.threadId) {
+          setActiveComposerState(prev => ({
+            title: state.title,
+            createdAt: state.createdAt,
+            messages: state.messages,
+            threadId: state.threadId,
+            ...prev,
+            canResume: state.canResume
+          }))
+        }
+
         setLoading(false);
         break;
       }

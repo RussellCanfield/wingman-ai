@@ -824,7 +824,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 							new ToolMessage({
 								id: randomUUID(),
 								content:
-									"User requested changes: The command are not correct, ask the user how to proceed",
+									"User rejected changes: The command are not correct, ask the user how to proceed",
 								tool_call_id: lastMessage.tool_calls[0].id!,
 								name: "command_execute",
 								additional_kwargs: {
@@ -872,7 +872,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 							new ToolMessage({
 								id: randomUUID(),
 								content:
-									"User requested changes: The file updates are not correct, ask the user how to proceed",
+									"User rejected changes: The file updates are not correct, ask the user how to proceed",
 								name: "write_file",
 								tool_call_id: lastMessage.tool_calls[0].id!,
 								additional_kwargs: {
