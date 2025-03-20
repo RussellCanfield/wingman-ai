@@ -161,7 +161,9 @@ export class WingmanAgent {
 	) {}
 
 	async initialize() {
-		this.settings = await wingmanSettings.LoadSettings(this.workspace);
+		this.settings = await wingmanSettings.LoadSettings(
+			path.basename(this.workspace),
+		);
 		this.remoteTools = [];
 		for (const mcpTool of this.settings.mcpTools ?? []) {
 			const mcp = createMCPTool(mcpTool);
@@ -1110,7 +1112,9 @@ ${request.context.text}`,
 			configurable: { thread_id: threadId },
 		});
 		const graphState = state.values as GraphStateAnnotation;
-		const settings = await wingmanSettings.LoadSettings(this.workspace);
+		const settings = await wingmanSettings.LoadSettings(
+			path.basename(this.workspace),
+		);
 		this.messages = [];
 
 		for await (const event of stream) {

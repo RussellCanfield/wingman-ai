@@ -19,7 +19,7 @@ interface ComposerContextType {
   threads: ComposerThread[];
   activeThread: ComposerThread | null;
   fileDiagnostics: FileDiagnostic[];
-  createThread: (title: string) => ComposerThread;
+  createThread: (title: string, fromMessage?: boolean) => ComposerThread;
   switchThread: (threadId: string) => void;
   deleteThread: (threadId: string) => void;
   renameThread: (threadId: string, newTitle: string) => void;
@@ -64,12 +64,13 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     }
   }, [composerStates, activeComposerState]);
 
-  const createThread = (title: string) => {
+  const createThread = (title: string, fromMessage = false) => {
     const timestamp = Date.now();
     const newThread: ComposerThread = {
       id: crypto.randomUUID(),
       title,
       createdAt: timestamp,
+      fromMessage
     };
 
     setThreads(prevThreads => [...prevThreads, newThread]);

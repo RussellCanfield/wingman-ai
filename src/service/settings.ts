@@ -64,6 +64,10 @@ export class WingmanSettings {
 
 		this.settings = settings;
 
+		if (this.settings) {
+			this.settings.mcpTools = mcpTools;
+		}
+
 		if (this.onSettingsChanged) {
 			this.onSettingsChanged(this.settings);
 		}

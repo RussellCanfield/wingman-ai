@@ -109,7 +109,7 @@ export class LSPServer {
 		);
 
 		const settings = await wingmanSettings.LoadSettings(
-			this.workspaceFolders[0],
+			path.basename(this.workspaceFolders[0]),
 		);
 
 		if (
@@ -185,7 +185,7 @@ export class LSPServer {
 				await this.connection?.sendRequest("wingman/compose", event);
 
 				const settings = await wingmanSettings.LoadSettings(
-					this.workspaceFolders[0],
+					path.basename(this.workspaceFolders[0]),
 				);
 				if (
 					event.event === "composer-done" &&
@@ -209,7 +209,7 @@ export class LSPServer {
 							);
 
 						const settings = await wingmanSettings.LoadSettings(
-							this.workspaceFolders[0],
+							path.basename(this.workspaceFolders[0]),
 						);
 						if (
 							settings.agentSettings.automaticallyFixDiagnostics &&
@@ -464,7 +464,7 @@ ${input}`,
 
 		this.connection?.onRequest("wingman/updateSettings", async () => {
 			const settings = await wingmanSettings.LoadSettings(
-				this.workspaceFolders[0],
+				path.basename(this.workspaceFolders[0]),
 				true,
 			);
 			await this.composer?.initialize();

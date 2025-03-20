@@ -22,6 +22,7 @@ export interface ComposerThread {
 	title: string;
 	createdAt: number;
 	parentThreadId?: string;
+	fromMessage?: boolean;
 }
 
 export interface ComposerThreadEvent {

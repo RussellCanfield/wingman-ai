@@ -46,7 +46,7 @@ export default function Compose() {
 		contextFiles: string[],
 		image?: File
 	) => {
-		const thread = activeThread ?? createThread(input);
+		const thread = activeThread ?? createThread(input, true);
 
 		const payload: ComposerRequest = {
 			input,
@@ -65,7 +65,6 @@ export default function Compose() {
 			command: "compose",
 			value: payload,
 		});
-
 
 		setActiveComposerState(state => {
 			if (state) {
