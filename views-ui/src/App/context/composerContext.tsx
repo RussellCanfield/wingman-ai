@@ -10,6 +10,7 @@ interface ComposerContextType {
   composerStates: ComposerState[];
   setComposerStates: React.Dispatch<React.SetStateAction<ComposerState[]>>;
   loading: boolean;
+  initialized: boolean;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   clearActiveMessage: () => void;
   setActiveComposerState: React.Dispatch<React.SetStateAction<ComposerState | undefined>>;
@@ -40,6 +41,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const [activeComposerState, setActiveComposerState] = useState<ComposerState | undefined>();
   const [chips, setChips] = useState<FileSearchResult[]>([]);
   const [fileDiagnostics, setFileDiagnostics] = useState<FileDiagnostic[]>([]);
+  const [initialized, setInitialized] = useState<boolean>(false);
 
   // Thread management state
   const [threads, setThreads] = useState<ComposerThread[]>([]);
@@ -286,6 +288,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           setActiveThread(activeThreadRef.current)
           setActiveComposerState(threads.find(t => t.threadId === activeThreadId));
         }
+        setInitialized(true);
         break;
       }
       case "compose-response":
@@ -345,6 +348,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       activeFiles: chips,
       setActiveFiles: setChips,
       fileDiagnostics: fileDiagnostics ?? [],
+      initialized,
       // Thread management
       threads,
       activeThread,

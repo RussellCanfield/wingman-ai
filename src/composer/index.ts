@@ -152,6 +152,7 @@ export class WingmanAgent {
 	private aiProvider: AIProvider | undefined;
 	private workflow: StateGraph<GraphStateAnnotation> | undefined;
 	private messages: GraphStateAnnotation["messages"] = [];
+	initialized = false;
 
 	constructor(
 		private readonly workspace: string,
@@ -220,6 +221,8 @@ export class WingmanAgent {
 				END,
 			])
 			.addEdge("tools", "agent");
+
+		this.initialized = true;
 	}
 
 	/**

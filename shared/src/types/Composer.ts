@@ -6,6 +6,7 @@ export type DiffViewCommand = {
 	threadId: string;
 	isDarkTheme?: boolean;
 	toolId: string;
+	showRevert?: boolean;
 };
 
 export interface ComposerState {

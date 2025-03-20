@@ -8,6 +8,8 @@ import ChatThreadList from "./ChatThreadList";
 import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
 import { vscode } from "../../utilities/vscode";
+import { SkeletonLoader } from "../../SkeletonLoader";
+import { useSettingsContext } from "../../context/settingsContext";
 
 const getFileExtension = (fileName: string): string => {
 	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
@@ -31,8 +33,10 @@ export default function Compose() {
 		setActiveComposerState,
 		activeComposerState,
 		activeThread,
-		fileDiagnostics
+		fileDiagnostics,
+		initialized
 	} = useComposerContext();
+	const { isLightTheme } = useSettingsContext();
 
 	const cancelAIResponse = () => {
 		clearActiveMessage();
@@ -125,14 +129,22 @@ export default function Compose() {
 						</div>
 					</div>
 				)}
-				<ChatThreadList loading={loading} />
-				<ChatInput
-					loading={loading}
-					threadId={activeThread?.id}
-					onChatSubmitted={handleChatSubmitted}
-					onChatCancelled={cancelAIResponse}
-					suggestionItems={fileDiagnostics}
-				/>
+				{!initialized && (
+					<div className="mb-8 flex justify-center items-center">
+						<SkeletonLoader isDarkTheme={true} />
+					</div>
+				)}
+				{initialized && (
+					<>
+						<ChatThreadList loading={loading} />
+						<ChatInput
+							loading={loading}
+							threadId={activeThread?.id}
+							onChatSubmitted={handleChatSubmitted}
+							onChatCancelled={cancelAIResponse}
+							suggestionItems={fileDiagnostics}
+						/>
+					</>)}
 			</ErrorBoundary>
 		</main>
 	);

@@ -4,6 +4,7 @@ import {
 	extractCodeBlock,
 	replaceTextInDocument,
 } from "./utilities";
+import fs from "node:fs";
 import type { AppMessage } from "@shared/types/Message";
 import type { LSPClient } from "../client";
 import type { DiffViewCommand } from "@shared/types/Composer";
@@ -75,17 +76,37 @@ export class DiffViewProvider {
 			const { command, value } = message;
 
 			switch (command) {
-				case "webviewLoaded":
+				case "webviewLoaded": {
+					let showRevert = false;
+					const diffFile = { ...file };
+					if (file.accepted) {
+						const fileUri = vscode.Uri.joinPath(
+							vscode.Uri.parse(
+								vscode.workspace.workspaceFolders![0].uri.fsPath,
+							),
+							file.path,
+						);
+						if (fs.existsSync(fileUri.fsPath)) {
+							diffFile.code = diffFile.original;
+							diffFile.original = (
+								await vscode.workspace.fs.readFile(fileUri)
+							).toString();
+							showRevert = true;
+						}
+					}
+
 					currentPanel.webview.postMessage({
 						command: "diff-file",
 						value: {
 							isDarkTheme: vscode.window.activeColorTheme.kind !== 1,
-							file,
+							file: diffFile,
 							threadId,
 							toolId,
+							showRevert,
 						} satisfies DiffViewCommand,
 					});
 					break;
+				}
 				case "accept-file-changes":
 					await this.acceptFileChanges(
 						currentPanel,

@@ -512,6 +512,19 @@ ${input}`,
 		this.connection?.onRequest(
 			"wingman/getThreadById",
 			async (threadId: string) => {
+				// Race condition against LSP starting up and the client side retrieving history for chat panel
+				if (!this.composer?.initialized) {
+					const waitForInitialization = async () => {
+						for (let attempt = 0; attempt < 20; attempt++) {
+							await new Promise((resolve) => setTimeout(resolve, 250));
+							if (this.composer?.initialized) {
+								break;
+							}
+						}
+					};
+					await waitForInitialization();
+					return this.composer?.getState(threadId);
+				}
 				return this.composer?.getState(threadId);
 			},
 		);

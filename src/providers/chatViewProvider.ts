@@ -378,6 +378,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					vscode.Uri.parse(this._workspace.workspacePath),
 					file.path,
 				);
+
 				file.accepted = false;
 				file.rejected = false;
 				await vscode.workspace.fs.writeFile(

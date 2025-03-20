@@ -76,7 +76,7 @@ export default function DiffView({ diff }: DiffProps) {
 			<div className="sticky top-0 bg-[var(--vscode-editorWidget-background)] border-b border-[var(--vscode-widget-shadow)] p-4 flex justify-between items-center z-10">
 				<p className="text-white font-semibold truncate">{file.path}</p>
 				<div className="flex gap-4">
-					<button
+					{!diff.showRevert && (<button
 						type="button"
 						className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
 						title="Reject changes"
@@ -84,7 +84,7 @@ export default function DiffView({ diff }: DiffProps) {
 					>
 						<FaXmark className="mr-2" />
 						<span>Reject</span>
-					</button>
+					</button>)}
 					<button
 						type="button"
 						className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center transition duration-300 ease-in-out"
@@ -92,7 +92,7 @@ export default function DiffView({ diff }: DiffProps) {
 						onClick={() => acceptDiff()}
 					>
 						<FaCheckCircle className="mr-2" />
-						<span>Accept</span>
+						<span>{diff.showRevert ? 'Revert' : 'Accept'}</span>
 					</button>
 				</div>
 			</div>
