@@ -292,11 +292,22 @@ export class WingmanAgent {
 		);
 
 		const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
+
+		const { values }: { values: GraphStateAnnotation } = await graph.getState({
+			configurable: { thread_id: sourceThreadId },
+		});
+
 		await graph.updateState(
 			{
 				configurable: { thread_id: newThreadId },
 			},
 			{
+				messages: values.messages,
+				files: values.files,
+				commands: values.commands,
+				contextFiles: values.contextFiles,
+				image: values.image,
+				rules: values.rules,
 				parentThreadId: sourceThreadId,
 			} satisfies Partial<GraphStateAnnotation>,
 		);
