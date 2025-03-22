@@ -63,6 +63,7 @@ import { cleanupProcesses } from "./tools/background_process";
 import { transformState } from "./transformer";
 import type { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { createThinkingTool } from "./tools/think";
 
 let controller = new AbortController();
 
@@ -167,6 +168,7 @@ export class WingmanAgent {
 
 		this.tools = [
 			//createBackgroundProcessTool(this.workspace),
+			createThinkingTool(),
 			createCommandExecuteTool(this.workspace),
 			createReadFileTool(this.workspace, this.codeParser),
 			createListDirectoryTool(this.workspace),
