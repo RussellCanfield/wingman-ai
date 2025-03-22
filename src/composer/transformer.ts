@@ -70,7 +70,14 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 
 			// Handle simple content (string)
 			if (!Array.isArray(message.content)) {
-				results.push(new AssistantMessage(message.id!, message.content));
+				results.push(
+					new AssistantMessage(
+						message.id!,
+						message.content,
+						message.usage_metadata?.input_tokens,
+						message.usage_metadata?.output_tokens,
+					),
+				);
 			}
 			// Handle complex content (array)
 			else {
@@ -79,7 +86,14 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 				// Add text content
 				for (const content of messageContent) {
 					if (content.type === "text") {
-						results.push(new AssistantMessage(message.id!, content.text));
+						results.push(
+							new AssistantMessage(
+								message.id!,
+								content.text,
+								message.usage_metadata?.input_tokens,
+								message.usage_metadata?.output_tokens,
+							),
+						);
 					}
 				}
 			}

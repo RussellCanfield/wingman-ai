@@ -70,6 +70,8 @@ export type ComposerEvent =
 export class BaseMessage {
 	id: string;
 	role: "tool" | "assistant" | "user";
+	inputTokens?: number;
+	outputTokens?: number;
 }
 
 export class ToolMessage extends BaseMessage {
@@ -103,12 +105,19 @@ export class ToolMessage extends BaseMessage {
 export class AssistantMessage extends BaseMessage {
 	content: string;
 
-	constructor(id: string, input: string) {
+	constructor(
+		id: string,
+		input: string,
+		inputTokens?: number,
+		outputTokens?: number,
+	) {
 		super();
 
 		this.id = id;
 		this.content = input;
 		this.role = "assistant";
+		this.inputTokens = inputTokens;
+		this.outputTokens = outputTokens;
 	}
 }
 

@@ -98,24 +98,6 @@ const GraphAnnotation = Annotation.Root({
 		reducer: (currentState, updateValue) => updateValue,
 		default: () => "",
 	}),
-	rules: Annotation<string>({
-		reducer: (currentState, updateValue) => updateValue,
-		default: () => "",
-	}),
-	image: Annotation<ComposerImage | undefined>({
-		reducer: (currentState, updateValue) => updateValue,
-	}),
-	context: Annotation<CodeContextDetails | undefined>({
-		reducer: (currentState, updateValue) => updateValue,
-	}),
-	contextFiles: Annotation<FileMetadata[]>({
-		reducer: (currentState, updateValue) => updateValue,
-		default: () => [],
-	}),
-	recentFiles: Annotation<FileMetadata[]>({
-		reducer: (currentState, updateValue) => updateValue,
-		default: () => [],
-	}),
 	commands: Annotation<CommandMetadata[]>({
 		reducer: (currentState, updateValue) => {
 			const updatePaths = new Set(updateValue.map((command) => command.id));
@@ -305,9 +287,6 @@ export class WingmanAgent {
 				messages: values.messages,
 				files: values.files,
 				commands: values.commands,
-				contextFiles: values.contextFiles,
-				image: values.image,
-				rules: values.rules,
 				parentThreadId: sourceThreadId,
 			} satisfies Partial<GraphStateAnnotation>,
 		);
@@ -561,7 +540,7 @@ export class WingmanAgent {
 	};
 
 	async loadContextFiles(files: string[]) {
-		if (files) {
+		if (files?.length) {
 			const codeFiles: FileMetadata[] = [];
 
 			for (const file of files) {
@@ -661,10 +640,7 @@ In most cases the user expects you to work autonomously, use the tools and answe
 Only provide code examples if you are explicitly asked.
 Any code examples provided should use github flavored markdown with the proper language - except when using tools.
 
-**CRITICAL - Always get file paths correct, they will always be relative to the current working directory**
-
-**Current Working Directory**:
-${state.workspace}
+**CRITICAL - Always use file paths relative to the current working directory**
 
 Guidelines for our interaction:
 1. Keep responses focused and avoid redundancy
@@ -779,23 +755,7 @@ export default defineConfig({
 
 # Additional Context
 Additional user context may be attached and include contextual information such as their open files, cursor position, higlighted code and recently viewed files.
-Use this context judiciously when it helps address their needs.
-
-${state.rules}
-
-${`# Recently Viewed Files
-This may or may not be relavant, here are recently viewed files:
-
-<recent_files>
-${state.recentFiles.map((f) => f.path).join("\n")}
-</recent_files>`}
-
-${`# Context Files
-This may or may not be relavant, the user has provided files to use as context:
-<context_files>
-${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
-</context_files>
-`}`,
+Use this context judiciously when it helps address their needs.`,
 					cache_control: { type: "ephemeral" },
 				},
 				...this.trimMessages(state.messages),
@@ -961,18 +921,11 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 		}
 
 		try {
-			const contextFiles = await this.loadContextFiles(request.contextFiles);
-			const messages = this.buildUserMessages(request, temp);
-			const rules = (await loadWingmanRules(this.workspace)) ?? "";
+			const messages = await this.buildUserMessages(request, temp);
 
 			let input = {
 				messages,
 				workspace: this.workspace,
-				image: request.image,
-				context: request.context,
-				contextFiles,
-				recentFiles: request.recentFiles,
-				rules,
 			};
 
 			if (resumedFromFiles && resumedFromFiles.length > 0) {
@@ -1039,7 +992,7 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 		}
 	}
 
-	buildUserMessages = (request: ComposerRequest, temp = false) => {
+	buildUserMessages = async (request: ComposerRequest, temp = false) => {
 		const messageContent: MessageContentComplex[] = [];
 
 		if (!request.input) return [];
@@ -1050,6 +1003,40 @@ ${state.contextFiles.map((f) => `<file>\nPath: ${path.relative(this.workspace, f
 				image_url: {
 					url: request.image.data,
 				},
+			});
+		}
+
+		const rules = (await loadWingmanRules(this.workspace)) ?? "";
+		if (rules || request.recentFiles || request.contextFiles) {
+			const contextFiles = await this.loadContextFiles(
+				request.contextFiles ?? [],
+			);
+
+			messageContent.push({
+				type: "text",
+				text: `${rules}
+
+${
+	!request.recentFiles?.length
+		? ""
+		: `# Recently Viewed Files
+This may or may not be relavant, here are recently viewed files:
+
+<recent_files>
+${request.recentFiles?.map((f) => f.path).join("\n")}
+</recent_files>`
+}
+
+${
+	!request.contextFiles?.length
+		? ""
+		: `# Context Files
+This may or may not be relavant, the user has provided files to use as context:
+<context_files>
+${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
+</context_files>
+`
+}`,
 			});
 		}
 
@@ -1304,12 +1291,15 @@ ${request.context.text}`,
 						!(this.messages[this.messages.length - 1] instanceof AIMessageChunk)
 					) {
 						// The normal message Id isn't available in this event, use the run_id
-						this.messages.push(
-							new AIMessageChunk({
-								content: [{ type: "text", text }],
-								id: event.run_id,
-							}),
-						);
+						this.messages.push(currentMessage);
+
+						if (
+							(Array.isArray(currentMessage.content) &&
+								currentMessage.content.length === 0) ||
+							!currentMessage.content
+						) {
+							break;
+						}
 					} else {
 						// Append to existing message if it's not a tool_use type
 						const lastMessage = this.messages[
@@ -1318,6 +1308,10 @@ ${request.context.text}`,
 						const lastContent = (
 							lastMessage.content as MessageContentComplex[]
 						)[0];
+						if (!lastContent) {
+							break;
+						}
+						lastMessage.usage_metadata = currentMessage.usage_metadata;
 						(lastContent as MessageContentText).text += text;
 					}
 

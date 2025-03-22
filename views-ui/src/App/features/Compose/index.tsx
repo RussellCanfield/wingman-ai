@@ -1,15 +1,14 @@
-import {
-	UserMessage,
-	type ComposerRequest,
+import type {
+	ComposerRequest,
 } from "@shared/types/Composer";
 import { ChatInput } from "./Input/ChatInput";
 import { ErrorBoundary } from 'react-error-boundary';
 import ChatThreadList from "./ChatThreadList";
 import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
-import { vscode } from "../../utilities/vscode";
 import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
+import { VscArrowDown, VscArrowUp } from "react-icons/vsc";
 
 const getFileExtension = (fileName: string): string => {
 	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
@@ -28,9 +27,10 @@ export default function Compose() {
 	const {
 		createThread,
 		loading,
-		setLoading,
+		inputTokens,
+		outputTokens,
+		sendComposerRequest,
 		clearActiveMessage,
-		setActiveComposerState,
 		activeComposerState,
 		activeThread,
 		fileDiagnostics,
@@ -40,9 +40,6 @@ export default function Compose() {
 
 	const cancelAIResponse = () => {
 		clearActiveMessage();
-		vscode.postMessage({
-			command: "cancel",
-		});
 	};
 
 	const handleChatSubmitted = async (
@@ -65,27 +62,13 @@ export default function Compose() {
 			};
 		}
 
-		vscode.postMessage({
-			command: "compose",
-			value: payload,
-		});
-
-		setActiveComposerState(state => {
-			if (state) {
-				state.messages.push(new UserMessage(crypto.randomUUID(), input, payload.image));
-			} else {
-				state = {
-					messages: [new UserMessage(crypto.randomUUID(), input, payload.image)],
-					threadId: thread.id,
-					title: thread.title,
-					createdAt: thread.createdAt
-				};
-			}
-			return state;
-		});
-
-		setLoading(true);
+		sendComposerRequest(payload, thread);
 	};
+
+	const cssClasses = `${isLightTheme
+		? "bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]"
+		: "bg-[#1e1e1e] shadow-[0_2px_4px_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25),0_12px_24px_rgba(0,0,0,0.25)]"
+		}`;
 
 	return (
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
@@ -137,6 +120,22 @@ export default function Compose() {
 				{initialized && (
 					<>
 						<ChatThreadList loading={loading} />
+						{inputTokens > 0 && outputTokens > 0 && (
+							<div className="mt-4 flex justify-center items-center gap-3 text-gray-400/70 text-sm">
+								<div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${cssClasses}`}>
+									<span className="font-medium text-xs uppercase tracking-wider">Usage</span>
+									<span className="flex items-center text-blue-400/90">
+										<VscArrowUp className="mr-1" size={12} /> {inputTokens.toLocaleString()}
+									</span>
+									<span className="flex items-center text-green-400/90">
+										<VscArrowDown className="mr-1" size={12} /> {outputTokens.toLocaleString()}
+									</span>
+									<span className="text-gray-300/80 font-medium">
+										Total: {(inputTokens + outputTokens).toLocaleString()}
+									</span>
+								</div>
+							</div>
+						)}
 						<ChatInput
 							loading={loading}
 							threadId={activeThread?.id}

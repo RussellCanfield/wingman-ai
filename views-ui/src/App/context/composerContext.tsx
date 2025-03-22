@@ -1,4 +1,4 @@
-import { type ComposerResponse, type FileDiagnostic, type FileSearchResult, type ComposerThread, type ComposerState, type ComposerThreadEvent, AssistantMessage, ToolMessage } from "@shared/types/Composer";
+import { type ComposerResponse, type FileDiagnostic, type FileSearchResult, type ComposerThread, type ComposerState, type ComposerThreadEvent, AssistantMessage, ToolMessage, type ComposerRequest, UserMessage } from "@shared/types/Composer";
 import type { AppMessage } from "@shared/types/Message";
 import type { RenameThreadEvent } from '@shared/types/Events';
 import type React from "react";
@@ -11,6 +11,9 @@ interface ComposerContextType {
   setComposerStates: React.Dispatch<React.SetStateAction<ComposerState[]>>;
   loading: boolean;
   initialized: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  sendComposerRequest: (request: ComposerRequest, thread: ComposerThread) => void;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   clearActiveMessage: () => void;
   setActiveComposerState: React.Dispatch<React.SetStateAction<ComposerState | undefined>>;
@@ -42,6 +45,8 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   const [chips, setChips] = useState<FileSearchResult[]>([]);
   const [fileDiagnostics, setFileDiagnostics] = useState<FileDiagnostic[]>([]);
   const [initialized, setInitialized] = useState<boolean>(false);
+  const [inputTokens, setInputTokens] = useState<number>(0);
+  const [outputTokens, setOutputTokens] = useState<number>(0);
 
   // Thread management state
   const [threads, setThreads] = useState<ComposerThread[]>([]);
@@ -190,7 +195,14 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         if (activeThreadRef.current?.id === state.threadId) {
           setActiveComposerState(prev => {
             if (!prev) return prev;
-            return reconcileMessages(prev, state);
+            const mergedState = mergeState(prev, state);
+            setInputTokens(currentTotal => {
+              return currentTotal + mergedState.inputTokens
+            });
+            setOutputTokens(currentTotal => {
+              return currentTotal + mergedState.outputTokens
+            });
+            return mergedState;
           });
         }
 
@@ -200,7 +212,10 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           if (stateIndex === -1) return [...states];
 
           const updatedStates = [...states];
-          updatedStates[stateIndex] = reconcileMessages(updatedStates[stateIndex], state)
+          const mergedState = mergeState(updatedStates[stateIndex], state);
+          setInputTokens(currentTotal => currentTotal + mergedState.inputTokens);
+          setOutputTokens(currentTotal => currentTotal + mergedState.outputTokens);
+          updatedStates[stateIndex] = mergedState;
 
           return updatedStates
         });
@@ -211,7 +226,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
         if (activeThreadRef.current?.id === state.threadId) {
           setActiveComposerState(prev => {
             if (!prev) return prev;
-            return reconcileMessages(prev, state);
+            return mergeState(prev, state);
           });
         }
 
@@ -221,7 +236,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
           if (stateIndex === -1) return [...states];
 
           const updatedStates = [...states];
-          updatedStates[stateIndex] = reconcileMessages(updatedStates[stateIndex], state)
+          updatedStates[stateIndex] = mergeState(updatedStates[stateIndex], state)
 
           return updatedStates
         });
@@ -335,13 +350,44 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const clearActiveMessage = () => {
     setLoading(false);
+    setInputTokens(0);
+    setOutputTokens(0);
+    vscode.postMessage({
+      command: "cancel",
+    });
+  }
+
+  const sendComposerRequest = (request: ComposerRequest, thread: ComposerThread) => {
+    vscode.postMessage({
+      command: "compose",
+      value: request,
+    });
+
+    setActiveComposerState(state => {
+      if (state) {
+        state.messages.push(new UserMessage(crypto.randomUUID(), request.input, request.image));
+      } else {
+        state = {
+          messages: [new UserMessage(crypto.randomUUID(), request.input, request.image)],
+          threadId: thread.id,
+          title: thread.title,
+          createdAt: thread.createdAt
+        };
+      }
+      return state;
+    });
+    setInputTokens(0);
+    setOutputTokens(0);
+    setLoading(true);
   }
 
   return (
     <ComposerContext.Provider value={{
       composerStates,
+      sendComposerRequest,
       setComposerStates: setComposerStates,
       loading, setLoading,
+      inputTokens, outputTokens,
       activeComposerState,
       clearActiveMessage,
       setActiveComposerState,
@@ -363,12 +409,19 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
   );
 };
 
-const reconcileMessages = (prev: ComposerState, state: ComposerState) => {
+const mergeState = (prev: ComposerState, state: ComposerState) => {
+  let inputTokens = 0;
+  let outputTokens = 0;
   for (const message of state.messages) {
     // Find any existing message with the same ID, regardless of type
     const matchingMessage = prev?.messages.find(m =>
       m.id === message.id &&
       m.role === message.role);
+
+    if (message.role === "assistant") {
+      inputTokens += message.inputTokens ?? 0;
+      outputTokens += message.outputTokens ?? 0;
+    }
 
     if (!matchingMessage) {
       // If no matching message found, add the new message
@@ -383,6 +436,8 @@ const reconcileMessages = (prev: ComposerState, state: ComposerState) => {
 
   return {
     ...state,
-    messages: [...(prev?.messages ?? [])]
+    messages: [...(prev?.messages ?? [])],
+    inputTokens,
+    outputTokens
   }
 };

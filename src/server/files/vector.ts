@@ -30,21 +30,19 @@ async function loadLanceDB() {
 export const buildSummarizationQuery = (
 	code: string,
 	filePath: string,
-) => `Summarize the provided code with key details: 
-- Core purpose and functionality 
-- Primary classes/interfaces and their relationships 
-- Key methods and their specific roles 
-- Data structures, algorithms, and design patterns employed 
-- Notable configuration options and parameters 
-- Relevant technical domains (e.g., "vector-database", "authentication", "image-processing") 
+) => `Analyze this code file and provide:
 
-Keep it concise, technical, and unique to the code. 
-Use searchable terminology. 
-Avoid boilerplate or standard patterns unless critical. 
-Include: list of symbol names, list of integration points (e.g., auth, routing, layout), file name + 1 sentence summary of the role the file plays.
+1. FILE SUMMARY: [filename] - [one-sentence role description]
+2. CORE PURPOSE: [1-2 sentences on what this code accomplishes]
+3. KEY COMPONENTS:
+   - Classes/Interfaces: [names and primary responsibilities]
+   - Functions/Methods: [critical methods with their purposes]
+   - Data Structures: [important structures, algorithms, patterns]
+4. TECHNICAL DOMAINS: [comma-separated relevant domains e.g., "authentication", "state-management"]
+5. INTEGRATION POINTS: [external systems, libraries, or components this code connects with]
+6. SYMBOL INDEX: [complete list of exported/public symbols]
 
-**DO NOT USE MARKDOWN, USE PLAIN TEXT**
-**DO NOT INCLUDE ADDITIONAL TEXT**
+FORMAT: Plain text only. No markdown. No introductory or concluding text.
 
 File:
 ${filePath}
@@ -68,6 +66,7 @@ export class VectorStore {
 	) => Promise<Connection>;
 	private indexCreated = false;
 	private pendingVectors = 0;
+	private initialized = false;
 
 	/**
 	 * Creates a new vector store
@@ -99,6 +98,8 @@ export class VectorStore {
 	 */
 	async initialize() {
 		try {
+			if (this.initialized) return;
+
 			this.connect = await loadLanceDB();
 
 			// Connect to LanceDB (creates directory if it doesn't exist)
@@ -169,6 +170,8 @@ export class VectorStore {
 			console.error("Failed to initialize LanceDB:", error);
 			throw error;
 		}
+
+		this.initialized = true;
 	}
 
 	/**
@@ -240,7 +243,7 @@ export class VectorStore {
 
 			if (
 				existingData.length > 0 &&
-				existingData[0].last_modified === metadata.lastModified
+				Number(existingData[0].last_modified) === metadata.lastModified
 			) {
 				console.log(`File: ${filePath} hasn't changed, skipping indexing`);
 				return false;
@@ -401,7 +404,7 @@ export class VectorStore {
 				}
 
 				return {
-					file_path: item.filePath,
+					file_path: item.file_path,
 					summary: item.summary,
 					last_modified: item.last_modified,
 					similarity: 1 - item._distance, // Convert distance to similarity

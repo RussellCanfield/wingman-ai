@@ -13,7 +13,8 @@ const ToolNames = {
     find_file_dependencies: "Checked Dependencies",
     read_file: "Analyzed: ",
     research: "Researching...",
-    semantic_search: "Semantic search..."
+    semantic_search: "Semantic search...",
+    think: "Thinking..."
 };
 
 export interface ToolOutputProps {

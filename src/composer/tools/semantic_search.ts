@@ -46,7 +46,7 @@ export const createSemanticSearchTool = (
 		{
 			name: "semantic_search",
 			description:
-				"Searches the codebase using semantic understanding to find relevant files. Returns up to 5 matching files with their paths, descriptions, and similarity scores. Use this to discover code implementing specific features or concepts. This can be more efficient than reading directories and individual files to discover integration points.",
+				"Quickly find relevant files across the entire codebase without knowing file locations. Ideal as your first search step when looking for implementation details, features, or understanding how code is organized. Simply describe what you're looking for in natural language, and get back the most relevant files with descriptions and paths. Use this before browsing directories for maximum efficiency.",
 			schema: semanticSearchSchema,
 		},
 	);

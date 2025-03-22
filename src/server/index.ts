@@ -208,9 +208,6 @@ export class LSPServer {
 								files.map((f) => f.path) ?? [],
 							);
 
-						const settings = await wingmanSettings.LoadSettings(
-							path.basename(this.workspaceFolders[0]),
-						);
 						if (
 							settings.agentSettings.automaticallyFixDiagnostics &&
 							diagnostics &&
