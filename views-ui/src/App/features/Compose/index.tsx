@@ -6,9 +6,9 @@ import { ErrorBoundary } from 'react-error-boundary';
 import ChatThreadList from "./ChatThreadList";
 import { useComposerContext } from "../../context/composerContext";
 import ThreadManagement from "./ThreadManagement";
-import { SkeletonLoader } from "../../SkeletonLoader";
 import { useSettingsContext } from "../../context/settingsContext";
 import { VscArrowDown, VscArrowUp } from "react-icons/vsc";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
 
 const getFileExtension = (fileName: string): string => {
 	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
@@ -95,26 +95,40 @@ export default function Compose() {
 							<h1 className="text-2xl font-semibold mb-6 bg-gradient-to-r from-blue-500 via-gray-300 to-blue-900 bg-clip-text text-transparent animate-gradient">
 								Welcome to Wingman-AI
 							</h1>
-							<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
-								Start exploring your codebase, ask questions about your project, or get AI-assisted coding help.
-								<br />
-								<br />
-								Wingman has your back!
-							</span>
-							<div className="inline-block mt-6 px-4 py-2 rounded-lg bg-slate-700/20 border border-slate-700/40">
-								<section className="flex flex-col items-center gap-2 text-sm">
-									<span className="text-blue-400">Pro tip:</span>
-									<div>
-										Type <kbd className="px-2 py-0.5 rounded bg-slate-700/30">@</kbd> to reference a file directly, or highlight text in your editor
+							{!initialized && (
+								<div className="relative py-4">
+									<div className="absolute inset-0 bg-gradient-to-r from-blue-400/10 to-purple-500/10 rounded-xl blur-xl" />
+									<div className="relative flex items-center justify-center space-x-3 p-3">
+										<div className="h-8 w-8 flex items-center justify-center">
+											<AiOutlineLoading3Quarters
+												size={24}
+												className="text-blue-400 animate-spin"
+											/>
+										</div>
+										<p className="text-sm font-medium bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
+											Preparing your AI assistant
+										</p>
 									</div>
-								</section>
-							</div>
+								</div>
+							)}
+							{initialized && (
+								<>
+									<span className="text-[var(--vscode-input-foreground)] leading-relaxed">
+										Start exploring your codebase, ask questions about your project, or get AI-assisted coding help.
+										<br />
+										<br />
+										Wingman has your back!
+									</span>
+									<div className="inline-block mt-6 px-4 py-2 rounded-lg bg-slate-700/20 border border-slate-700/40">
+										<section className="flex flex-col items-center gap-2 text-sm">
+											<span className="text-blue-400">Pro tip:</span>
+											<div>
+												Type <kbd className="px-2 py-0.5 rounded bg-slate-700/30">@</kbd> to reference a file directly, or highlight text in your editor
+											</div>
+										</section>
+									</div>
+								</>)}
 						</div>
-					</div>
-				)}
-				{!initialized && (
-					<div className="mb-8 flex justify-center items-center">
-						<SkeletonLoader isDarkTheme={true} />
 					</div>
 				)}
 				{initialized && (

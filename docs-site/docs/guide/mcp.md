@@ -1,6 +1,6 @@
 # Model Context Protocol
 
-[Model Context Protocol] is supported! MCP enables seamless integration between AI models and application contexts, providing a standardized interface for dynamic model interactions, configuration management, and context-aware reasoning across different platforms and development environments.
+[Model Context Protocol](https://modelcontextprotocol.io/introduction) is supported! MCP enables seamless integration between AI models and application contexts, providing a standardized interface for dynamic model interactions, configuration management, and context-aware reasoning across different platforms and development environments.
 
 ![](/SettingsMCP.png)
 
@@ -10,10 +10,11 @@ MCP servers run locally using a command line, or a self hosted web server.
 
 ## Adding a server
 
-You can add either a `command` or `sse` MCP tool to Wingman, and validate the tool right in the settings screen. You'll be able to see which tools it detected for each MCP server.
-
-When you chat with Wingman it will automatically use the latest tools that you have **saved*.
+Our MCP integration is based on [LangChain's MCP adapter](https://github.com/langchain-ai/langchainjs-mcp-adapters?tab=readme-ov-file#configuration-via-json) implementation, offering compreshensive configuration options such as leveraging environment variables, HTTP headers and more!.
 
 :::note
-Remember to click the save button at the top!
+Wingman looks inside your project's `.wingman/mcp.json` file for MCP server configurations, these are no longer added through the IDE extension.
+Simply modify the file, and open settings again - or click the refresh button in the MCP settings section to get a list of servers and tools.
+
+If they do not appear, the integration likely isn't configured properly. Check the `Output` tab in the `Terminal` section of your extension for logs under `Wingman`
 :::

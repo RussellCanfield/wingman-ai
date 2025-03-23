@@ -108,9 +108,7 @@ export class LSPServer {
 			this.getPersistancePath("checkpoints"),
 		);
 
-		const settings = await wingmanSettings.LoadSettings(
-			path.basename(this.workspaceFolders[0]),
-		);
+		const settings = await wingmanSettings.loadSettings();
 
 		if (
 			settings.embeddingSettings[settings.embeddingProvider]?.dimensions! &&
@@ -184,9 +182,7 @@ export class LSPServer {
 
 				await this.connection?.sendRequest("wingman/compose", event);
 
-				const settings = await wingmanSettings.LoadSettings(
-					path.basename(this.workspaceFolders[0]),
-				);
+				const settings = await wingmanSettings.loadSettings();
 				if (
 					event.event === "composer-done" &&
 					!event.state.canResume &&
@@ -460,10 +456,7 @@ ${input}`,
 		);
 
 		this.connection?.onRequest("wingman/updateSettings", async () => {
-			const settings = await wingmanSettings.LoadSettings(
-				path.basename(this.workspaceFolders[0]),
-				true,
-			);
+			const settings = await wingmanSettings.loadSettings(true);
 			await this.composer?.initialize();
 
 			const provider = CreateAIProvider(settings, loggingProvider);

@@ -104,9 +104,7 @@ export class LSPClient {
 					vscode.workspace.workspaceFolders![0].uri.fsPath,
 				)
 					.then(async (msg) => {
-						const settings = await wingmanSettings.LoadSettings(
-							vscode.workspace.workspaceFolders![0].name,
-						);
+						const settings = await wingmanSettings.loadSettings();
 						const textContent = Array.isArray(msg.content)
 							? (
 									msg.content.find(
@@ -115,19 +113,16 @@ export class LSPClient {
 								).text
 							: msg.content.toString();
 
-						await wingmanSettings.SaveSettings(
-							{
-								...settings,
-								embeddingSettings: {
-									...settings.embeddingSettings,
-									General: {
-										enabled: settings.embeddingSettings.General.enabled,
-										globPattern: textContent,
-									},
+						await wingmanSettings.saveSettings({
+							...settings,
+							embeddingSettings: {
+								...settings.embeddingSettings,
+								General: {
+									enabled: settings.embeddingSettings.General.enabled,
+									globPattern: textContent,
 								},
 							},
-							vscode.workspace.workspaceFolders![0].name,
-						);
+						});
 
 						if (
 							settings!.embeddingSettings[settings!.embeddingProvider]
@@ -160,9 +155,7 @@ export class LSPClient {
 				phase: params.event,
 			});
 
-			const settings = await wingmanSettings.LoadSettings(
-				vscode.workspace.workspaceFolders![0].name,
-			);
+			const settings = await wingmanSettings.loadSettings();
 			if (
 				settings.agentSettings.playAudioAlert &&
 				(params.event === "composer-done" ||
@@ -300,9 +293,7 @@ export class LSPClient {
 	};
 
 	indexFiles = async (indexFiles: Map<string, IndexFile>) => {
-		const settings = await wingmanSettings.LoadSettings(
-			vscode.workspace.workspaceFolders![0].name,
-		);
+		const settings = await wingmanSettings.loadSettings();
 
 		if (settings.embeddingSettings.General.enabled) {
 			if (!this.fileWatcher) {
@@ -346,7 +337,7 @@ export class LSPClient {
 	isRunning = () => client?.isRunning() ?? false;
 
 	validate = async (workspace: string) => {
-		const settings = await wingmanSettings.LoadSettings(workspace);
+		const settings = await wingmanSettings.loadSettings();
 
 		try {
 			let aiProvider = CreateAIProvider(settings, loggingProvider);
@@ -449,9 +440,7 @@ export class LSPClient {
 	};
 
 	updateSettings = async () => {
-		const settings = await wingmanSettings.LoadSettings(
-			vscode.workspace.workspaceFolders![0].name,
-		);
+		const settings = await wingmanSettings.loadSettings();
 		try {
 			if (
 				settings.embeddingSettings.General.enabled &&
@@ -462,9 +451,7 @@ export class LSPClient {
 					vscode.workspace.workspaceFolders![0].uri.fsPath,
 				)
 					.then(async (msg) => {
-						const settings = await wingmanSettings.LoadSettings(
-							vscode.workspace.workspaceFolders![0].name,
-						);
+						const settings = await wingmanSettings.loadSettings();
 						const textContent = Array.isArray(msg.content)
 							? (
 									msg.content.find(
@@ -473,19 +460,16 @@ export class LSPClient {
 								).text
 							: msg.content.toString();
 
-						await wingmanSettings.SaveSettings(
-							{
-								...settings,
-								embeddingSettings: {
-									...settings.embeddingSettings,
-									General: {
-										enabled: settings.embeddingSettings.General.enabled,
-										globPattern: textContent,
-									},
+						await wingmanSettings.saveSettings({
+							...settings,
+							embeddingSettings: {
+								...settings.embeddingSettings,
+								General: {
+									enabled: settings.embeddingSettings.General.enabled,
+									globPattern: textContent,
 								},
 							},
-							vscode.workspace.workspaceFolders![0].name,
-						);
+						});
 
 						if (
 							settings!.embeddingSettings[settings!.embeddingProvider]

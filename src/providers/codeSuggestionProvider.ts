@@ -31,7 +31,7 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		context: InlineCompletionContext,
 		token: CancellationToken,
 	) {
-		const settings = await wingmanSettings.LoadSettings();
+		const settings = await wingmanSettings.loadSettings();
 		if (!settings.interactionSettings.codeCompletionEnabled) {
 			return [];
 		}

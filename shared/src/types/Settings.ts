@@ -11,6 +11,10 @@ export interface WorkspaceSettings {
 	activeThreadId?: string;
 }
 
+export interface MCPTool {
+	name: string;
+}
+
 export interface AppState {
 	settings: WorkspaceSettings;
 	theme: number;
@@ -140,15 +144,6 @@ export const defaultAzureAISettings: AzureAISettingsType = {
 	apiVersion: "2024-06-01",
 };
 
-export type MCPToolConfig = {
-	name: string;
-	type: "command" | "sse";
-	command?: string;
-	endpoint?: string;
-	verified?: boolean;
-	tools?: Array<{ name: string }>;
-};
-
 export type Settings = {
 	aiProvider: (typeof AiProviders)[number];
 	interactionSettings: InteractionSettings;
@@ -160,7 +155,6 @@ export type Settings = {
 		AzureAI?: AzureAISettingsType;
 		xAI?: xAISettingsType;
 	};
-	mcpTools?: MCPToolConfig[];
 	agentSettings: AgentSettings;
 	embeddingProvider: (typeof EmbeddingProviders)[number];
 	embeddingSettings: {

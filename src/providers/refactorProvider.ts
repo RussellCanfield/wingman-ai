@@ -42,7 +42,7 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 			arguments: [
 				document,
 				range,
-				CreateAIProvider(await wingmanSettings.LoadSettings(), loggingProvider),
+				CreateAIProvider(await wingmanSettings.loadSettings(), loggingProvider),
 				vscode.window.activeTextEditor,
 			],
 		};

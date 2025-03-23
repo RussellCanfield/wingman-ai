@@ -114,7 +114,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		),
 	);
 
-	const settings = await wingmanSettings.LoadSettings(
+	const settings = await wingmanSettings.loadSettings(
 		vscode.workspace.workspaceFolders[0].name,
 	);
 

@@ -17,6 +17,7 @@ import {
 	ToolMessage,
 	RemoveMessage,
 	type MessageContentText,
+	MessageContent,
 } from "@langchain/core/messages";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { createReadFileTool } from "./tools/read_file";
@@ -26,25 +27,22 @@ import {
 	generateFileMetadata,
 	type writeFileSchema,
 } from "./tools/write_file";
-import type { DynamicTool, StructuredTool } from "@langchain/core/tools";
+import type {
+	StructuredTool,
+	StructuredToolInterface,
+} from "@langchain/core/tools";
 import type {
 	ComposerThread,
-	ComposerImage,
 	ComposerRequest,
 	ComposerResponse,
 	ComposerStreamingResponse,
 } from "@shared/types/Composer";
-import type {
-	CodeContextDetails,
-	CommandMetadata,
-	FileMetadata,
-} from "@shared/types/Message";
+import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
 import path from "node:path";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { createCommandExecuteTool } from "./tools/cmd_execute";
 import type { PartitionedFileSystemSaver } from "./checkpointer";
 import type { UpdateComposerFileEvent } from "@shared/types/Events";
-import { createMCPTool } from "./tools/mcpTools";
 import { loggingProvider } from "../server/loggingProvider";
 import type { CodeParser } from "../server/files/parser";
 import { getTextDocumentFromPath } from "../server/files/utils";
@@ -64,6 +62,7 @@ import { transformState } from "./transformer";
 import type { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createThinkingTool } from "./tools/think";
+import { MCPAdapter } from "./tools/mcpAdapter";
 
 let controller = new AbortController();
 
@@ -129,12 +128,13 @@ const GraphAnnotation = Annotation.Root({
  * WingmanAgent - Autonomous coding assistant
  */
 export class WingmanAgent {
-	private tools: StructuredTool[] = [];
-	private remoteTools: DynamicTool[] = [];
+	private tools: Array<StructuredTool | StructuredToolInterface> = [];
 	private settings: Settings | undefined;
 	private aiProvider: AIProvider | undefined;
 	private workflow: StateGraph<GraphStateAnnotation> | undefined;
 	private messages: GraphStateAnnotation["messages"] = [];
+	private mcpAdapter: MCPAdapter;
+
 	initialized = false;
 
 	constructor(
@@ -142,26 +142,24 @@ export class WingmanAgent {
 		private readonly checkpointer: PartitionedFileSystemSaver,
 		private readonly codeParser: CodeParser,
 		private readonly vectorStore?: VectorStore,
-	) {}
+	) {
+		this.mcpAdapter = new MCPAdapter(this.workspace);
+	}
 
 	async initialize() {
-		this.settings = await wingmanSettings.LoadSettings(
-			path.basename(this.workspace),
-		);
-		this.remoteTools = [];
-		for (const mcpTool of this.settings.mcpTools ?? []) {
-			const mcp = createMCPTool(mcpTool);
-			try {
-				await mcp.connect();
-				const tools = await mcp.createTools();
-				this.remoteTools.push(...tools);
+		this.settings = await wingmanSettings.loadSettings();
+		const remoteTools: StructuredToolInterface[] = [];
+
+		try {
+			const mcpTools = await this.mcpAdapter.initialize();
+			for (const [server, tools] of mcpTools ?? []) {
+				remoteTools.push(...tools);
 				loggingProvider.logInfo(
-					`MCP: ${mcp.getName()} added ${tools.length} tools`,
+					`MCP server: ${server} added ${tools.length} tools`,
 				);
-			} catch (e) {
-				await mcp.close();
-				loggingProvider.logError(`MCP tool: ${mcp.getName()} - failed: ${e}`);
 			}
+		} catch (e) {
+			await this.mcpAdapter.close();
 		}
 
 		this.aiProvider = CreateAIProvider(this.settings, loggingProvider);
@@ -177,7 +175,7 @@ export class WingmanAgent {
 				this.settings?.agentSettings.vibeMode,
 			),
 			createResearchTool(this.workspace, this.aiProvider!),
-			...this.remoteTools,
+			...remoteTools,
 		];
 
 		if (this.vectorStore) {
@@ -1115,9 +1113,7 @@ ${request.context.text}`,
 			configurable: { thread_id: threadId },
 		});
 		const graphState = state.values as GraphStateAnnotation;
-		const settings = await wingmanSettings.LoadSettings(
-			path.basename(this.workspace),
-		);
+		const settings = await wingmanSettings.loadSettings();
 		this.messages = [];
 
 		for await (const event of stream) {
@@ -1289,37 +1285,39 @@ ${request.context.text}`,
 					const text = content || "";
 
 					// Handle message accumulation
-					if (
-						!(this.messages[this.messages.length - 1] instanceof AIMessageChunk)
-					) {
+					const lastMessage = this.messages[this.messages.length - 1];
+					if (!(lastMessage instanceof AIMessageChunk)) {
 						// The normal message Id isn't available in this event, use the run_id
 						this.messages.push(currentMessage);
-
-						if (
-							(Array.isArray(currentMessage.content) &&
-								currentMessage.content.length === 0) ||
-							!currentMessage.content
-						) {
-							break;
-						}
 					} else {
-						// Append to existing message if it's not a tool_use type
-						const lastMessage = this.messages[
-							this.messages.length - 1
-						] as AIMessageChunk;
-						const lastContent = (
-							lastMessage.content as MessageContentComplex[]
-						)[0];
-						if (!lastContent) {
-							break;
+						if (typeof lastMessage.content === "string") {
+							lastMessage.content += text;
+						}
+						if (Array.isArray(lastMessage.content)) {
+							if (
+								!lastMessage.content?.length ||
+								lastMessage.content.length !== currentMessage.content.length
+							) {
+								lastMessage.content =
+									currentMessage.content as MessageContentComplex[];
+							}
+
+							const lastContent = lastMessage.content.find(
+								(c) => c.type === "text",
+							) as MessageContentText;
+
+							if (lastContent) {
+								lastContent.text += text;
+							}
 						}
 						lastMessage.usage_metadata = currentMessage.usage_metadata;
-						(lastContent as MessageContentText).text += text;
 					}
 
-					//@ts-expect-error
-					if (this.messages[this.messages.length - 1].content[0].text === "")
+					if (!lastMessage) {
 						break;
+					}
+
+					lastMessage.id = event.run_id;
 
 					// Yield updated state
 					yield {

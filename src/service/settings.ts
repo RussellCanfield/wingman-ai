@@ -41,10 +41,8 @@ export class WingmanSettings {
 		this.onSettingsChanged = handler;
 	}
 
-	async SaveSettings(settings: Settings, workspace: string) {
+	async saveSettings(settings: Settings) {
 		this.isDefault = false;
-		const mcpTools = [...(settings.mcpTools ?? [])];
-		settings.mcpTools = undefined;
 
 		await promises.mkdir(path.dirname(this.path), { recursive: true });
 
@@ -53,52 +51,20 @@ export class WingmanSettings {
 			Buffer.from(JSON.stringify(settings, null, 2)),
 		);
 
-		await promises.mkdir(path.join(homedir(), ".wingman", workspace), {
-			recursive: true,
-		});
-
-		await promises.writeFile(
-			path.join(homedir(), ".wingman", workspace, "mcpTools.json"),
-			JSON.stringify(mcpTools ?? []),
-		);
-
 		this.settings = settings;
-
-		if (this.settings) {
-			this.settings.mcpTools = mcpTools;
-		}
 
 		if (this.onSettingsChanged) {
 			this.onSettingsChanged(this.settings);
 		}
 	}
 
-	async LoadSettings(workspace: string, force = false): Promise<Settings> {
+	async loadSettings(force = false): Promise<Settings> {
 		if (this.settings && !force) return this.settings;
 
 		try {
 			const fileContents = (await promises.readFile(this.path)).toString();
 			const loadedSettings = JSON.parse(fileContents.toString());
 			this.settings = this.mergeSettings(defaultSettings, loadedSettings);
-
-			const toolsPath = path.join(
-				homedir(),
-				".wingman",
-				workspace,
-				"mcpTools.json",
-			);
-			if (fs.existsSync(toolsPath)) {
-				const toolsContent = (await promises.readFile(toolsPath)).toString();
-				const loadedTools = JSON.parse(toolsContent.toString());
-				this.settings.mcpTools = loadedTools;
-			} else {
-				if (this.settings.mcpTools && this.settings.mcpTools.length > 0) {
-					await promises.writeFile(
-						path.join(homedir(), ".wingman", workspace, "mcpTools.json"),
-						JSON.stringify(this.settings.mcpTools),
-					);
-				}
-			}
 		} catch (e) {
 			if (e instanceof Error) {
 				console.error(

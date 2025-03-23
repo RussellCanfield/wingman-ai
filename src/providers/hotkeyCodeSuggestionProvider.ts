@@ -38,7 +38,7 @@ export class HotKeyCodeSuggestionProvider
 			return [];
 		}
 
-		const settings = await wingmanSettings.LoadSettings();
+		const settings = await wingmanSettings.loadSettings();
 		const aiProvider = CreateAIProvider(settings, loggingProvider);
 
 		const [prefix, suffix] = getContentWindow(

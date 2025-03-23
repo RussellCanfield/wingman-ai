@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"displayName": "Wingman-AI",
 	"description": "Wingman - AI agentic coding assistant that works with Anthropic, OpenAI, Azure and Ollama",
-	"version": "1.3.13",
+	"version": "1.3.14",
 	"publisher": "WingMan",
 	"license": "MIT",
 	"workspaces": [
@@ -191,19 +191,20 @@
 	},
 	"overrides": {
 		"@langchain/community": {
-			"@lancedb/lancedb": "0.18.0"
+			"@lancedb/lancedb": "0.18.1"
 		}
 	},
 	"dependencies": {
 		"@ast-grep/napi": "0.36.1",
-		"@lancedb/lancedb": "0.18.0",
+		"@lancedb/lancedb": "0.18.1",
 		"@langchain/anthropic": "0.3.15",
-		"@langchain/community": "0.3.34",
+		"@langchain/community": "0.3.36",
 		"@langchain/core": "0.3.42",
-		"@langchain/langgraph": "0.2.55",
+		"@langchain/langgraph": "0.2.57",
 		"@langchain/ollama": "0.2.0",
-		"@langchain/openai": "0.4.4",
+		"@langchain/openai": "0.4.7",
 		"@langchain/xai": "0.0.2",
+		"@langchain/mcp-adapters": "0.3.3",
 		"@modelcontextprotocol/sdk": "^1.6.1",
 		"@vscode/extension-telemetry": "^0.9.8",
 		"apache-arrow": "18.1.0",
@@ -211,7 +212,6 @@
 		"detect-libc": "2.0.3",
 		"duck-duck-scrape": "2.2.7",
 		"event-source-polyfill": "1.0.31",
-		"hnswlib-node": "3.0.0",
 		"ignore": "5.2.0",
 		"json5": "2.2.3",
 		"langchain": "0.3.19",
@@ -228,7 +228,9 @@
 		"vscode-languageserver-textdocument": "1.0.12",
 		"vscode-uri": "3.0.8",
 		"zod": "3.24.1",
-		"zod-to-json-schema": "3.24.1"
+		"zod-to-json-schema": "3.24.1",
+		"eventsource": "3.0.5",
+		"extended-eventsource": "2.1.0"
 	},
 	"devDependencies": {
 		"@ast-grep/cli": "0.36.1",

@@ -11,13 +11,13 @@ import type {
 	xAISettingsType,
 	EmbeddingProviders,
 	EmbeddingSettingsType,
+	MCPTool,
 } from "@shared/types/Settings";
 import { AiProvider } from "./AiProvider";
 import { InteractionSettingsConfig } from "./InteractionSettingsConfig";
 import { vscode } from "./utilities/vscode";
 import "./App.css";
 import { AgentFeaturesView } from "./AgentFeaturesView";
-import type { MCPToolConfig } from "@shared/types/Settings";
 import { MCPConfiguration } from "./McpTools";
 import { EmbeddingProvider } from "./EmbeddingProvider";
 
@@ -31,6 +31,7 @@ export const App = () => {
 	const [indexedFiles, setIndexedFiles] = useState<string[] | undefined>([]);
 	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 	const [isLightTheme, setIsLightTheme] = useState(false);
+	const [mcpTools, setMCPTools] = useState<Map<string, MCPTool[]>>(new Map());
 
 	useEffect(() => {
 		vscode.postMessage({
@@ -63,11 +64,12 @@ export const App = () => {
 
 		switch (command) {
 			case "init": {
-				const settings = value as { settings: InitSettings, theme: number, indexedFiles: string[] };
+				const settings = value as { settings: InitSettings, theme: number, indexedFiles: string[], tools: [string, MCPTool[]][] };
 				setSettings(settings.settings);
 				setIsLightTheme(settings.theme === 1 || settings.theme === 4)
 				setIndexedFiles(settings.indexedFiles ?? []);
 				setLoading(false);
+				setMCPTools(new Map(settings.tools));
 				break;
 			}
 			case "save-failed": {
@@ -82,31 +84,10 @@ export const App = () => {
 				setSaveStatus("saved");
 				setTimeout(() => setSaveStatus("idle"), 2000);
 				break;
-			case "tool-verified": {
-				const config = value as MCPToolConfig;
-				setSettings(prevSettings => {
-					if (!prevSettings) return null;
-
-					const updatedMcpTools = [...(prevSettings.mcpTools || [])];
-					const toolIndex = updatedMcpTools.findIndex(t => t.name === config.name);
-
-					if (toolIndex !== -1) {
-						updatedMcpTools[toolIndex] = {
-							...updatedMcpTools[toolIndex],
-							verified: config.verified,
-							tools: config.tools
-						};
-					}
-
-					const settings: InitSettings = {
-						...prevSettings,
-						mcpTools: updatedMcpTools
-					};
-
-					saveSettings(settings);
-
-					return settings;
-				});
+			case "tools": {
+				const tools = value as [string, MCPTool[]][];
+				console.log("Tools:", tools);
+				setMCPTools(new Map(tools));
 				break;
 			}
 		}
@@ -217,13 +198,6 @@ export const App = () => {
 		setSettings((s) => ({
 			...s!,
 			agentSettings: settings,
-		}));
-	};
-
-	const onMCPToolsChanged = (mcpTools: MCPToolConfig[]) => {
-		setSettings((s) => ({
-			...s!,
-			mcpTools,
 		}));
 	};
 
@@ -377,8 +351,7 @@ export const App = () => {
 						onValidationChanged={onValidationSettingsChanged}
 					/>
 					<MCPConfiguration
-						mcpTools={settings.mcpTools || []}
-						onChange={onMCPToolsChanged}
+						mcpTools={mcpTools || []}
 					/>
 				</section>
 

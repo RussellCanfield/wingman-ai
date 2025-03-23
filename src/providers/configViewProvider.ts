@@ -1,17 +1,20 @@
 import * as vscode from "vscode";
 import fs from "node:fs";
 import type { AppMessage } from "@shared/types/Message";
-import type { MCPToolConfig, Settings } from "@shared/types/Settings";
+import type { MCPTool, Settings } from "@shared/types/Settings";
 import { addNoneAttributeToLink } from "./utilities";
 import { wingmanSettings } from "../service/settings";
-import { createMCPTool } from "../composer/tools/mcpTools";
 import type { LSPClient } from "../client";
+import { MCPAdapter } from "../composer/tools/mcpAdapter";
+import path from "node:path";
 
 let panel: vscode.WebviewPanel | undefined;
 
 export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = "wingman.configview";
 	public static readonly showConfigCommand = "wingmanai.openconfig";
+
+	private _mcpAdapter: MCPAdapter;
 	private _view?: vscode.WebviewView;
 	private _disposables: vscode.Disposable[] = [];
 
@@ -20,7 +23,13 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		private readonly workspace: string,
 		private readonly _lspClient: LSPClient,
 		private readonly context: vscode.ExtensionContext,
-	) {}
+	) {
+		this._mcpAdapter = new MCPAdapter(
+			vscode.workspace.workspaceFolders
+				? vscode.workspace.workspaceFolders[0].uri.fsPath
+				: this.workspace,
+		);
+	}
 
 	private createPanel(): vscode.WebviewPanel {
 		panel = vscode.window.createWebviewPanel(
@@ -49,6 +58,9 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			if (this._view) {
 				this._view.webview.postMessage({ command: "panelClosed" });
 			}
+			if (this._mcpAdapter) {
+				this._mcpAdapter.close();
+			}
 		});
 
 		// Handle messages from the panel
@@ -69,12 +81,15 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					} catch (e) {
 						console.error(e);
 					}
+
+					const mcpTools = await this.getToolsFromAdapter();
 					settingsPanel.webview.postMessage({
 						command,
 						value: {
 							settings: JSON.parse(settings),
 							theme: vscode.window.activeColorTheme.kind,
 							indexedFiles,
+							tools: Array.from(mcpTools.entries()),
 						},
 					});
 					break;
@@ -91,43 +106,16 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					});
 					break;
 				}
-				case "test-mcp": {
-					let success = false;
-					const foundTools: MCPToolConfig["tools"] = [];
-					let tool: ReturnType<typeof createMCPTool> | undefined;
-					try {
-						tool = createMCPTool(value as MCPToolConfig);
-						await tool.connect();
-						const { tools } = await tool.getTools();
-						success = tools.length > 0;
-						if (success) {
-							foundTools.push(...tools.map((t) => ({ name: t.name })));
-						}
-					} catch (e) {
-						console.error(e);
-						if (e instanceof Error) {
-							vscode.window.showErrorMessage(
-								`MCP Tool: ${(value as MCPToolConfig).name} failed validation: ${e.message}`,
-							);
-						}
-					} finally {
-						if (tool) {
-							await tool.close();
-						}
-					}
-
+				case "fetch-mcp": {
+					const mcpTools = await this.getToolsFromAdapter();
 					settingsPanel.webview.postMessage({
-						command: "tool-verified",
-						value: {
-							...(value as MCPToolConfig),
-							verified: success,
-							tools: foundTools,
-						} satisfies MCPToolConfig,
+						command: "tools",
+						value: Array.from(mcpTools),
 					});
 					break;
 				}
 				case "saveSettings":
-					await wingmanSettings.SaveSettings(value as Settings, this.workspace);
+					await wingmanSettings.saveSettings(value as Settings);
 					try {
 						const result = await this._lspClient.validate(this.workspace);
 
@@ -139,7 +127,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						if (!this._lspClient.isRunning()) {
 							await this._lspClient.activate(
 								this.context,
-								await wingmanSettings.LoadSettings(this.workspace),
+								await wingmanSettings.loadSettings(),
 							);
 						}
 
@@ -173,6 +161,32 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		});
 	}
 
+	async getToolsFromAdapter() {
+		const mcpTools: Map<string, MCPTool[]> = new Map();
+		try {
+			const result = await this._mcpAdapter.initialize();
+			// combine result into tools
+			if (result) {
+				for (const [server, tools] of result.entries()) {
+					for (const tool of tools) {
+						const mcpTool = {
+							name: tool.name,
+						};
+						if (mcpTools.has(server)) {
+							mcpTools.get(server)?.push(mcpTool);
+						} else {
+							mcpTools.set(server, [mcpTool]);
+						}
+					}
+				}
+			}
+		} catch (e) {
+			console.error(e);
+		}
+
+		return mcpTools;
+	}
+
 	resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext<unknown>,
@@ -203,7 +217,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private init = async (value: unknown): Promise<string> => {
-		const initSettings = await wingmanSettings.LoadSettings(this.workspace);
+		const initSettings = await wingmanSettings.loadSettings();
 		const settings = structuredClone(initSettings);
 
 		try {
