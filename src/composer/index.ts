@@ -159,7 +159,7 @@ export class WingmanAgent {
 				);
 			}
 		} catch (e) {
-			await this.mcpAdapter.close();
+			console.error(e);
 		}
 
 		this.aiProvider = CreateAIProvider(this.settings, loggingProvider);
@@ -1085,6 +1085,10 @@ ${request.context.text}`,
 
 		messageContent.push({
 			type: "text",
+			text: `The current working directory is: ${this.workspace}\nMake sure all file paths are relative to this path.`,
+		});
+		messageContent.push({
+			type: "text",
 			text: request.input,
 		});
 
@@ -1190,6 +1194,10 @@ ${request.context.text}`,
 
 					if (!message.id) {
 						message.id = event.run_id;
+					}
+
+					if (!message.name) {
+						message.name = event.name;
 					}
 
 					yield {

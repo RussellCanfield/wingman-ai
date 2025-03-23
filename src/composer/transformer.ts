@@ -69,7 +69,7 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 			const results: ComposerMessage[] = [];
 
 			// Handle simple content (string)
-			if (!Array.isArray(message.content)) {
+			if (!Array.isArray(message.content) && message.content) {
 				results.push(
 					new AssistantMessage(
 						message.id!,
@@ -78,14 +78,12 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 						message.usage_metadata?.output_tokens,
 					),
 				);
-			}
-			// Handle complex content (array)
-			else {
+			} else {
 				const messageContent = message.content as MessageContentComplex[];
 
 				// Add text content
 				for (const content of messageContent) {
-					if (content.type === "text") {
+					if (content.type === "text" && content.text) {
 						results.push(
 							new AssistantMessage(
 								message.id!,
@@ -119,12 +117,18 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 
 		// Handle LangChainToolMessage
 		if (message instanceof LangChainToolMessage) {
+			let content = message.content;
+			if (typeof content === "string") {
+				try {
+					content = JSON.parse(content);
+				} catch {}
+			}
 			return [
 				new ToolMessage(
 					message.id!,
 					message.name!,
 					message.tool_call_id!,
-					message.content as unknown as Record<string, unknown>,
+					content as unknown as Record<string, unknown>,
 					"end",
 					message.additional_kwargs,
 				),

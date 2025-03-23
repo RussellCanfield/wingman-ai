@@ -1,4 +1,4 @@
-import { type ComposerResponse, type FileDiagnostic, type FileSearchResult, type ComposerThread, type ComposerState, type ComposerThreadEvent, AssistantMessage, ToolMessage, type ComposerRequest, UserMessage } from "@shared/types/Composer";
+import { type ComposerResponse, type FileDiagnostic, type FileSearchResult, type ComposerThread, type ComposerState, type ComposerThreadEvent, AssistantMessage, type ToolMessage, type ComposerRequest, UserMessage } from "@shared/types/Composer";
 import type { AppMessage } from "@shared/types/Message";
 import type { RenameThreadEvent } from '@shared/types/Events';
 import type React from "react";
@@ -185,8 +185,6 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const handleComposerEvent = (value: ComposerResponse) => {
     const { event, state } = value;
-
-    console.log(event, activeThreadRef.current?.id, state);
 
     switch (event) {
       case "composer-message": {
@@ -431,6 +429,10 @@ const mergeState = (prev: ComposerState, state: ComposerState) => {
       // Only update content if the roles match (tool updates tool, assistant updates assistant)
       // This prevents a tool message from overwriting an assistant message with the same ID
       matchingMessage.content = message.content;
+
+      if (matchingMessage.role === "tool") {
+        (matchingMessage as ToolMessage).metadata = (message as ToolMessage).metadata
+      }
     }
   }
 

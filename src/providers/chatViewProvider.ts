@@ -81,9 +81,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		if (this._webview) {
 			this._webview.postMessage({
 				command: "settings",
-				value: await wingmanSettings.loadSettings(
-					this._workspace.workspaceFolder,
-				),
+				value: await wingmanSettings.loadSettings(),
 			});
 		}
 	}
@@ -352,9 +350,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 						webviewView.webview.postMessage({
 							command: "settings",
-							value: await wingmanSettings.loadSettings(
-								this._workspace.workspaceFolder,
-							),
+							value: await wingmanSettings.loadSettings(),
 						});
 						this.showView(this._launchView);
 						break;

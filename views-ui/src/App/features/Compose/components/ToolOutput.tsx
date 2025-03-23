@@ -7,6 +7,7 @@ import {
 } from "react-icons/ai";
 import { BsTools } from "react-icons/bs";
 import { getTruncatedPath, openFile } from "../../../utilities/files";
+import type { FileMetadata } from "@shared/types/Message";
 
 const ToolNames = {
     list_directory: "Searched: ",
@@ -46,21 +47,21 @@ export const ToolOutput = ({
             }
 
             if (toolName === "read_file") {
-                let content = toolIsLoading ? messages[0].content : JSON.parse(String(messages[1].content));
-                content = typeof (content) === "string" ? JSON.parse(content) : content;
+                const content: Record<string, unknown> | string = toolIsLoading ? messages[0].content : messages[1].content;
+                const fileContent = (typeof (content) === "string" ? JSON.parse(content) : content) as FileMetadata;
                 return <span
                     className="cursor-pointer hover:underline transition-all"
                     onClick={() => openFile({
-                        path: content.path
+                        path: fileContent.path
                     })}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
                             openFile({
-                                path: content.path
+                                path: fileContent.path
                             });
                         }
-                    }}>{getTruncatedPath(content.path)}</span>
+                    }}>{fileContent?.path ? getTruncatedPath(fileContent.path) : ""}</span>
             }
         } catch (error) {
             console.error("Failed to parse tool content:", error);
