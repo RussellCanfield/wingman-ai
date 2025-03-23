@@ -305,17 +305,31 @@ export class WingmanAgent {
 		messages?: GraphStateAnnotation["messages"];
 	}) {
 		const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
-		const state = await graph.getState({
-			configurable: { thread_id: thread.id },
-		});
-		const graphState = state.values as GraphStateAnnotation;
-
 		const config = {
 			configurable: { thread_id: thread.id },
 		};
 
+		const state = await graph.getState(config);
+		const graphState = state.values as GraphStateAnnotation;
+
 		if (messages && graphState.messages) {
-			const removalMessages = graphState.messages.map(
+			const messagesWithMissingIds = graphState.messages.filter((m) => !m.id);
+			const updatedMessages = messagesWithMissingIds.map((m) => ({
+				...m,
+				id: crypto.randomUUID(),
+			}));
+			await graph.updateState(
+				config,
+				{
+					messages: updatedMessages,
+				},
+				"tools",
+			);
+
+			const state = await graph.getState(config);
+			const updatedState = state.values as GraphStateAnnotation;
+
+			const removalMessages = updatedState.messages.map(
 				(m) => new RemoveMessage({ id: m.id! }),
 			);
 
@@ -997,24 +1011,15 @@ Use this context judiciously when it helps address their needs.`,
 
 		if (!request.input) return [];
 
-		if (request.image) {
-			messageContent.push({
-				type: "image_url",
-				image_url: {
-					url: request.image.data,
-				},
-			});
-		}
-
+		let prefixMsg =
+			"The current working directory is: ${this.workspace}\nMake sure all file paths are relative to this path.";
 		const rules = (await loadWingmanRules(this.workspace)) ?? "";
 		if (rules || request.recentFiles || request.contextFiles) {
 			const contextFiles = await this.loadContextFiles(
 				request.contextFiles ?? [],
 			);
 
-			messageContent.push({
-				type: "text",
-				text: `${rules}
+			prefixMsg += `\n\n${rules}
 
 ${
 	!request.recentFiles?.length
@@ -1036,14 +1041,11 @@ This may or may not be relavant, the user has provided files to use as context:
 ${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
 </context_files>
 `
-}`,
-			});
+}`;
 		}
 
 		if (request.context?.fromSelection) {
-			messageContent.push({
-				type: "text",
-				text: `# User Provided Code Context
+			prefixMsg += `\n\n# User Provided Code Context
 Base your guidance on the following information, prefer giving code examples and not editing the file directly unless explicitly asked:
 
 Language: ${request.context.language}
@@ -1051,8 +1053,7 @@ File Path: ${path.relative(this.workspace, request.context.fileName)}
 Current Line: ${request.context.currentLine}
 Line Range: ${request.context.lineRange}
 Contents: 
-${request.context.text}`,
-			});
+${request.context.text}`;
 		}
 
 		if (
@@ -1063,10 +1064,7 @@ ${request.context.text}`,
 			) &&
 			!this.settings.providerSettings.Anthropic.sparkMode
 		) {
-			messageContent.push({
-				type: "text",
-				text: "Only do this — NOTHING ELSE.",
-			});
+			prefixMsg += "\n\nOnly do this — NOTHING ELSE.";
 		}
 
 		if (
@@ -1077,16 +1075,22 @@ ${request.context.text}`,
 			(this.settings?.providerSettings.OpenAI?.chatModel?.startsWith("o3") ||
 				this.settings.providerSettings.AzureAI?.chatModel?.startsWith("o3"))
 		) {
-			messageContent.push({
-				type: "text",
-				text: "Function calling: Always execute the required function calls before you respond.",
-			});
+			prefixMsg +=
+				"\n\nFunction calling: Always execute the required function calls before you respond.";
 		}
 
 		messageContent.push({
 			type: "text",
-			text: `The current working directory is: ${this.workspace}\nMake sure all file paths are relative to this path.`,
+			text: prefixMsg,
 		});
+		if (request.image) {
+			messageContent.push({
+				type: "image_url",
+				image_url: {
+					url: request.image.data,
+				},
+			});
+		}
 		messageContent.push({
 			type: "text",
 			text: request.input,

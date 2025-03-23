@@ -170,6 +170,7 @@ export class LSPServer {
 		try {
 			if (!this.composer) return false;
 
+			await this.composer.initialize();
 			for await (const event of this.composer.execute(
 				request,
 				files,

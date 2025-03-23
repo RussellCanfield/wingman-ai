@@ -11,9 +11,11 @@ export class MCPAdapter {
 
 	async initialize() {
 		try {
-			if (!this.client) {
-				this.client = MultiServerMCPClient.fromConfigFile(this.configPath);
+			if (this.client) {
+				this.client.close();
 			}
+
+			this.client = MultiServerMCPClient.fromConfigFile(this.configPath);
 
 			return this.client?.initializeConnections();
 		} catch (e) {
