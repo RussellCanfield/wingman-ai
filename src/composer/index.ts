@@ -17,7 +17,6 @@ import {
 	ToolMessage,
 	RemoveMessage,
 	type MessageContentText,
-	MessageContent,
 } from "@langchain/core/messages";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { createReadFileTool } from "./tools/read_file";
@@ -57,12 +56,12 @@ import type { Settings } from "@shared/types/Settings";
 import type { AIProvider } from "../service/base";
 import type { VectorStore } from "../server/files/vector";
 import { createSemanticSearchTool } from "./tools/semantic_search";
-import { cleanupProcesses } from "./tools/background_process";
 import { transformState } from "./transformer";
 import type { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createThinkingTool } from "./tools/think";
 import { MCPAdapter } from "./tools/mcpAdapter";
+import { createWebSearchTool } from "./tools/web_search";
 
 let controller = new AbortController();
 
@@ -141,6 +140,7 @@ export class WingmanAgent {
 		private readonly workspace: string,
 		private readonly checkpointer: PartitionedFileSystemSaver,
 		private readonly codeParser: CodeParser,
+		private readonly storagePath: string,
 		private readonly vectorStore?: VectorStore,
 	) {
 		this.mcpAdapter = new MCPAdapter(this.workspace);
@@ -166,6 +166,7 @@ export class WingmanAgent {
 
 		this.tools = [
 			//createBackgroundProcessTool(this.workspace),
+			createWebSearchTool(this.storagePath),
 			createThinkingTool(),
 			createCommandExecuteTool(this.workspace),
 			createReadFileTool(this.workspace, this.codeParser),
@@ -1307,19 +1308,16 @@ Always execute the required function calls before you respond.`;
 							lastMessage.content += text;
 						}
 						if (Array.isArray(lastMessage.content)) {
-							if (
-								!lastMessage.content?.length ||
-								lastMessage.content.length !== currentMessage.content.length
-							) {
+							const lastContent = (
+								lastMessage.content as MessageContentComplex[]
+							).find((c) => c.type === "text") as
+								| MessageContentText
+								| undefined;
+
+							if (!lastContent) {
 								lastMessage.content =
 									currentMessage.content as MessageContentComplex[];
-							}
-
-							const lastContent = lastMessage.content.find(
-								(c) => c.type === "text",
-							) as MessageContentText;
-
-							if (lastContent) {
+							} else {
 								lastContent.text += text;
 							}
 						}

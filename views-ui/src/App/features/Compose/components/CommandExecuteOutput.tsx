@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import {
     AiOutlineLoading3Quarters,
     AiOutlineCheckCircle,
@@ -19,7 +19,7 @@ interface CommandExecuteOutputProps {
     onReject?: (command: string) => void;
 }
 
-export const CommandExecuteOutput = ({
+export const CommandExecuteOutput = memo(({
     messages,
     isLightTheme,
 }: CommandExecuteOutputProps) => {
@@ -28,62 +28,93 @@ export const CommandExecuteOutput = ({
 
     if (!messages) return null;
 
-    let command: CommandMetadata | undefined;
+    // Memoize the command extraction logic
+    const command = useMemo(() => {
+        let extractedCommand: CommandMetadata | undefined;
 
-    if (messages.length === 1) {
-        if ((messages[0].content as Record<string, unknown>).accepted) {
-            command = {
-                id: messages[0].id,
-                //@ts-expect-error
-                ...(messages[0].content as Record<string, unknown>) as CommandMetadata
+        if (messages.length === 1) {
+            if ((messages[0].content as Record<string, unknown>).accepted) {
+                extractedCommand = {
+                    id: messages[0].id,
+                    //@ts-expect-error
+                    ...(messages[0].content as Record<string, unknown>) as CommandMetadata
+                }
+            } else {
+                extractedCommand = {
+                    id: messages[0].id,
+                    command: String((messages[0].content as Record<string, unknown>).command)
+                };
             }
         } else {
-            command = {
-                id: messages[0].id,
-                command: String((messages[0].content as Record<string, unknown>).command)
-            };
+            extractedCommand = messages[messages.length - 1].metadata?.command as unknown as CommandMetadata;
         }
-    } else {
-        command = messages[messages.length - 1].metadata?.command as unknown as CommandMetadata;
-    }
 
-    const handleAccept = () => {
+        return extractedCommand;
+    }, [messages]);
+
+    // Memoize handlers to prevent recreation on each render
+    const handleAccept = useCallback(() => {
         vscode.postMessage({
             command: "accept-command",
             value: {
                 command,
                 threadId: activeThread?.id!
             } satisfies UpdateCommandEvent
-        })
-    };
+        });
+    }, [command, activeThread?.id]);
 
-    const handleReject = () => {
+    const handleReject = useCallback(() => {
         vscode.postMessage({
             command: "reject-command",
             value: {
                 command,
                 threadId: activeThread?.id!
             } satisfies UpdateCommandEvent
-        })
-    };
+        });
+    }, [command, activeThread?.id]);
 
-    const toggleResultExpansion = () => {
-        setIsResultExpanded(!isResultExpanded);
-    };
+    const toggleResultExpansion = useCallback(() => {
+        setIsResultExpanded(prev => !prev);
+    }, []);
 
-    const cssClasses = `${isLightTheme
-        ? "bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]"
-        : "bg-[#1e1e1e] shadow-[0_2px_4px_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25),0_12px_24px_rgba(0,0,0,0.25)]"
-        }`;
+    // Memoize UI-related values
+    const cssClasses = useMemo(() => 
+        `${isLightTheme
+            ? "bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]"
+            : "bg-[#1e1e1e] shadow-[0_2px_4px_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25),0_12px_24px_rgba(0,0,0,0.25)]"
+        }`
+    , [isLightTheme]);
 
-    const buttonBaseClasses = "flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-all";
-    const acceptButtonClasses = `${buttonBaseClasses} bg-green-600 text-white hover:bg-green-700 active:bg-green-800`;
-    const rejectButtonClasses = `${buttonBaseClasses} bg-red-600 text-white hover:bg-red-700 active:bg-red-800`;
+    const buttonStyles = useMemo(() => {
+        const buttonBaseClasses = "flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-all";
+        return {
+            accept: `${buttonBaseClasses} bg-green-600 text-white hover:bg-green-700 active:bg-green-800`,
+            reject: `${buttonBaseClasses} bg-red-600 text-white hover:bg-red-700 active:bg-red-800`
+        };
+    }, []);
 
-    const commandLoading = command.accepted && command.success === undefined && command.result === undefined;
+    // Memoize derived state
+    const { 
+        commandLoading, 
+        shouldShowButtons,
+        resultSectionClasses,
+        resultContentClasses
+    } = useMemo(() => {
+        const isLoading = command?.accepted && command.success === undefined && command.result === undefined;
+        const showButtons = !command?.accepted && !command?.rejected && !command?.success && !command?.failed;
+        
+        const sectionClasses = `px-4 pb-4 pt-0 ${isLightTheme ? 'bg-gray-50' : 'bg-[#252525]'} border-t ${isLightTheme ? 'border-gray-200' : 'border-gray-700'}`;
+        const contentClasses = `mt-2 p-3 rounded font-mono text-sm whitespace-pre-wrap overflow-auto max-h-[400px] ${isLightTheme ? 'bg-gray-100 text-gray-800' : 'bg-[#1a1a1a] text-gray-300'}`;
+        
+        return { 
+            commandLoading: isLoading, 
+            shouldShowButtons: showButtons,
+            resultSectionClasses: sectionClasses,
+            resultContentClasses: contentClasses
+        };
+    }, [command, isLightTheme]);
 
-    // Determine if we should show the action buttons
-    const shouldShowButtons = !command.accepted && !command.rejected && !command.success && !command.failed;
+    if (!command) return null;
 
     return (
         <div
@@ -134,8 +165,8 @@ export const CommandExecuteOutput = ({
 
                 {/* Collapsible result section */}
                 {command.result && isResultExpanded && (
-                    <div className={`px-4 pb-4 pt-0 ${isLightTheme ? 'bg-gray-50' : 'bg-[#252525]'} border-t ${isLightTheme ? 'border-gray-200' : 'border-gray-700'}`}>
-                        <div className={`mt-2 p-3 rounded font-mono text-sm whitespace-pre-wrap overflow-auto max-h-[400px] ${isLightTheme ? 'bg-gray-100 text-gray-800' : 'bg-[#1a1a1a] text-gray-300'}`} style={{ scrollbarWidth: 'thin' }}>
+                    <div className={resultSectionClasses}>
+                        <div className={resultContentClasses} style={{ scrollbarWidth: 'thin' }}>
                             {command.result}
                         </div>
                     </div>
@@ -143,28 +174,33 @@ export const CommandExecuteOutput = ({
 
                 {/* Action buttons moved underneath */}
                 {shouldShowButtons && (
-                    <div className={`px-4 py-3 flex justify-end gap-2 ${isLightTheme ? 'bg-gray-50' : 'bg-[#252525]'} border-t ${isLightTheme ? 'border-gray-200' : 'border-gray-700'}`}>
-                        <button
-                            type="button"
-                            className={rejectButtonClasses}
-                            onClick={handleReject}
-                            disabled={command.accepted || command.rejected}
-                        >
-                            <FaTimes size={12} />
-                            Reject
-                        </button>
-                        <button
-                            type="button"
-                            className={acceptButtonClasses}
-                            onClick={handleAccept}
-                            disabled={command.rejected || command.accepted}
-                        >
-                            <FaPlay size={12} />
-                            Run
-                        </button>
+                    <div className={resultSectionClasses}>
+                        <div className="py-3 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                className={buttonStyles.reject}
+                                onClick={handleReject}
+                                disabled={command.accepted || command.rejected}
+                            >
+                                <FaTimes size={12} />
+                                Reject
+                            </button>
+                            <button
+                                type="button"
+                                className={buttonStyles.accept}
+                                onClick={handleAccept}
+                                disabled={command.rejected || command.accepted}
+                            >
+                                <FaPlay size={12} />
+                                Run
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
         </div>
     );
-};
+});
+
+// Display name for debugging
+CommandExecuteOutput.displayName = 'CommandExecuteOutput';

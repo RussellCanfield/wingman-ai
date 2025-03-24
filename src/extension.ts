@@ -7,7 +7,6 @@ import { HotKeyCodeSuggestionProvider } from "./providers/hotkeyCodeSuggestionPr
 import { RefactorProvider } from "./providers/refactorProvider";
 import { ActivityStatusBar } from "./providers/statusBarProvider";
 import lspClient from "./client/index";
-import { CreateAIProvider } from "./service/utils/models";
 import { loggingProvider } from "./providers/loggingProvider";
 import { eventEmitter } from "./events/eventEmitter";
 import { wingmanSettings } from "./service/settings";
@@ -22,6 +21,7 @@ import { BindingDownloader } from "./client/bindingDownload";
 import { ThreadViewProvider } from "./providers/threadViewProvider";
 import type { AIProvider } from "./service/base";
 import { getRecentFileTracker } from "./providers/recentFileTracker";
+import { ensureChromium } from "./utils/chromium";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;
@@ -42,12 +42,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	try {
-		let progressResolve: (() => void) | undefined;
+		let progressResolveOuter: (() => void) | undefined;
+		let progressResolveInner: (() => void) | undefined;
+		let progressObject:
+			| vscode.Progress<{ message?: string; increment?: number }>
+			| undefined;
 		const PROGRESS_DELAY = 3000;
+		let progressShown = false;
 
 		// Create a delayed progress window
 		const progressPromise = new Promise<void>((resolve) => {
 			const timeout = setTimeout(() => {
+				progressShown = true;
 				vscode.window.withProgress(
 					{
 						location: vscode.ProgressLocation.Notification,
@@ -55,16 +61,19 @@ export async function activate(context: vscode.ExtensionContext) {
 						cancellable: false,
 					},
 					async (progress) => {
-						progress.report({ message: "Checking bindings..." });
+						progressObject = progress;
+						progress.report({
+							message: "Verifying dependencies...",
+						});
 						return new Promise<void>((res) => {
-							progressResolve = res;
+							progressResolveInner = res;
 						});
 					},
 				);
 			}, PROGRESS_DELAY);
 
 			// Store the resolve function to be called later
-			progressResolve = () => {
+			progressResolveOuter = () => {
 				clearTimeout(timeout);
 				resolve();
 			};
@@ -74,9 +83,20 @@ export async function activate(context: vscode.ExtensionContext) {
 		const bindingDownloader = new BindingDownloader(context, loggingProvider);
 		await bindingDownloader.ensureBindings();
 
-		// Resolve the progress window if it was shown
-		if (progressResolve) {
-			progressResolve();
+		// Update progress message for Chromium check/download
+		if (progressObject) {
+			progressObject.report({ message: "Setting up Chromium dependencies..." });
+		}
+
+		// Now check/download Chromium
+		await ensureChromium(context?.globalStorageUri?.fsPath);
+
+		// Resolve both promises if needed
+		if (progressShown && progressResolveInner) {
+			progressResolveInner();
+		}
+		if (progressResolveOuter) {
+			progressResolveOuter();
 		}
 
 		// Wait for any pending progress to close
@@ -114,9 +134,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		),
 	);
 
-	const settings = await wingmanSettings.loadSettings(
-		vscode.workspace.workspaceFolders[0].name,
-	);
+	const settings = await wingmanSettings.loadSettings();
 
 	if (wingmanSettings.isDefault) {
 		const result = await vscode.window.showErrorMessage(

@@ -83,6 +83,7 @@ export class LSPServer {
 	vectorStore: VectorStore | undefined;
 	embedder: Embeddings | undefined;
 	summaryModel: BaseChatModel | undefined;
+	storagePath: string | undefined;
 
 	constructor() {
 		// Create a connection for the server, using Node's IPC as a transport.
@@ -126,6 +127,7 @@ export class LSPServer {
 			this.workspaceFolders[0],
 			this.checkPointer,
 			this.codeParser,
+			this.storagePath!,
 			this.vectorStore,
 		);
 		await this.composer.initialize();
@@ -274,6 +276,7 @@ ${input}`,
 					(folder) => URI.parse(folder.uri).fsPath,
 				);
 			}
+			this.storagePath = params.initializationOptions.storagePath;
 
 			this.connection?.console.log(
 				`Workspace folders: ${this.workspaceFolders.join(", ")}`,
