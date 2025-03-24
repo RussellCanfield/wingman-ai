@@ -29,6 +29,47 @@ Wingman allows you to attach an image to your message, have it fix a bug, or des
 You can use browser MCP tools, or figma MCP tools as well!
 :::
 
+## Tools
+
+Wingman is powered by a set of tools that enhance its capabilities:
+
+### Semantic Search
+Quickly finds relevant files across your codebase using natural language queries, making it easy to locate implementations or understand how code is organized. This is related to the **indexing feature.**
+
+### Command Execution
+Executes terminal commands safely, with built-in protections against potentially destructive operations.
+
+### File Operations
+Tools to read files, list directories, and write changes, all while tracking dependencies between files.
+
+### Web Search
+Retrieves content from URLs and converts it to a readable format for analysis.
+
+**Example**: If you want to analyze a specific web page, just ask:
+```
+Can you take a look at https://wingman.work and tell me what it's about?
+```
+
+### Research
+Performs deep research on topics by exploring multiple sources and synthesizing the information.
+
+**Example**: When you need comprehensive information about a concept:
+```
+Can you research modern state management techniques in React and compare the top solutions?
+```
+
+### Thinking Tool
+Allows Wingman to brainstorm and reason through complex problems without making immediate changes.
+
+**Example**: When you want Wingman to think through a problem:
+```
+Can you think about different strategies for optimizing this database query before making any changes?
+```
+
+:::note
+The thinking tool differs from "thinking mode" in LLMs - it's a deliberate brainstorming step where Wingman evaluates options before taking action.
+:::
+
 ## Constraints
 
 Wingman can execute commands but is restricted from running destructive commands. It will try not to run long running scripts like running a web server that does not exit.
