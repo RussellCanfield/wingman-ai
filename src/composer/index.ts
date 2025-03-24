@@ -1011,8 +1011,9 @@ Use this context judiciously when it helps address their needs.`,
 
 		if (!request.input) return [];
 
-		let prefixMsg =
-			"The current working directory is: ${this.workspace}\nMake sure all file paths are relative to this path.";
+		let prefixMsg = `# Current Working Directory
+**Make sure all file paths are relative to this path.**
+${this.workspace}`;
 		const rules = (await loadWingmanRules(this.workspace)) ?? "";
 		if (rules || request.recentFiles || request.contextFiles) {
 			const contextFiles = await this.loadContextFiles(
@@ -1024,7 +1025,7 @@ Use this context judiciously when it helps address their needs.`,
 ${
 	!request.recentFiles?.length
 		? ""
-		: `# Recently Viewed Files
+		: `\n\n# Recently Viewed Files
 This may or may not be relavant, here are recently viewed files:
 
 <recent_files>
@@ -1035,7 +1036,7 @@ ${request.recentFiles?.map((f) => f.path).join("\n")}
 ${
 	!request.contextFiles?.length
 		? ""
-		: `# Context Files
+		: `\n\n# Context Files
 This may or may not be relavant, the user has provided files to use as context:
 <context_files>
 ${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
@@ -1075,8 +1076,8 @@ ${request.context.text}`;
 			(this.settings?.providerSettings.OpenAI?.chatModel?.startsWith("o3") ||
 				this.settings.providerSettings.AzureAI?.chatModel?.startsWith("o3"))
 		) {
-			prefixMsg +=
-				"\n\nFunction calling: Always execute the required function calls before you respond.";
+			prefixMsg += `\n\n# Function calling
+Always execute the required function calls before you respond.`;
 		}
 
 		messageContent.push({
