@@ -120,73 +120,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				// TODO - move to a mediator pattern
 				switch (command) {
 					case "save-image": {
-						const base64Data = String(value);
-
-						try {
-							// Check if data URL prefix is present to extract mime type
-							let mimeType = "image/png"; // Default mime type
-							let base64Image = base64Data;
-
-							const dataUrlMatch = base64Data.match(
-								/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/,
-							);
-							if (dataUrlMatch) {
-								mimeType = dataUrlMatch[1];
-								base64Image = dataUrlMatch[2];
-							} else {
-								// If no data URL prefix, just remove it if it exists
-								base64Image = base64Data.replace(
-									/^data:image\/\w+;base64,/,
-									"",
-								);
-							}
-
-							// Determine file extension from mime type
-							const extensionMap: Record<string, string> = {
-								"image/png": "png",
-								"image/jpeg": "jpg",
-								"image/jpg": "jpg",
-								"image/webp": "webp",
-								"image/gif": "gif",
-								"image/svg+xml": "svg",
-								"image/bmp": "bmp",
-							};
-
-							const extension = extensionMap[mimeType] || "png";
-
-							// Create a buffer from the base64 string
-							const imageBuffer = Buffer.from(base64Image, "base64");
-
-							// Get current workspace folder as default location
-							const workspaceFolders = vscode.workspace.workspaceFolders;
-							const defaultUri =
-								workspaceFolders && workspaceFolders.length > 0
-									? vscode.Uri.joinPath(
-											workspaceFolders[0].uri,
-											`image.${extension}`,
-										)
-									: vscode.Uri.file(`image.${extension}`);
-
-							// Show native save dialog
-							const result = await vscode.window.showSaveDialog({
-								defaultUri,
-								filters: {
-									Images: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"],
-								},
-							});
-
-							if (result) {
-								// Write the file
-								fs.writeFileSync(result.fsPath, imageBuffer);
-								vscode.window.showInformationMessage(
-									`Image saved to ${result.fsPath}`,
-								);
-							}
-						} catch (error) {
-							vscode.window.showErrorMessage(
-								`Failed to save image: ${error instanceof Error ? error.message : String(error)}`,
-							);
-						}
+						await this.saveImage(String(value));
 						break;
 					}
 
@@ -304,8 +238,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						const { file, threadId, toolId } = value as DiffViewCommand;
 						this._diffViewProvider.createDiffView({
 							file,
-							onAccept: async (event: UpdateComposerFileEvent) => {
-								await this.acceptFile(event);
+							onAccept: async (
+								event: UpdateComposerFileEvent,
+								isRevert: boolean,
+							) => {
+								if (isRevert) {
+									const file = event.files[0];
+									const orig = file.original;
+									file.original = file.code;
+									file.code = orig;
+								}
+								await this.acceptFile(event, isRevert);
 							},
 							onReject: async (event: UpdateComposerFileEvent) => {
 								await this.rejectFile(event);
@@ -437,6 +380,66 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
+	private async saveImage(base64Data: string) {
+		try {
+			// Check if data URL prefix is present to extract mime type
+			let mimeType = "image/png"; // Default mime type
+			let base64Image = base64Data;
+
+			const dataUrlMatch = base64Data.match(
+				/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/,
+			);
+			if (dataUrlMatch) {
+				mimeType = dataUrlMatch[1];
+				base64Image = dataUrlMatch[2];
+			} else {
+				// If no data URL prefix, just remove it if it exists
+				base64Image = base64Data.replace(/^data:image\/\w+;base64,/, "");
+			}
+
+			// Determine file extension from mime type
+			const extensionMap: Record<string, string> = {
+				"image/png": "png",
+				"image/jpeg": "jpg",
+				"image/jpg": "jpg",
+				"image/webp": "webp",
+				"image/gif": "gif",
+				"image/svg+xml": "svg",
+				"image/bmp": "bmp",
+			};
+
+			const extension = extensionMap[mimeType] || "png";
+
+			// Create a buffer from the base64 string
+			const imageBuffer = Buffer.from(base64Image, "base64");
+
+			// Get current workspace folder as default location
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			const defaultUri =
+				workspaceFolders && workspaceFolders.length > 0
+					? vscode.Uri.joinPath(workspaceFolders[0].uri, `image.${extension}`)
+					: vscode.Uri.file(`image.${extension}`);
+
+			// Show native save dialog
+			const result = await vscode.window.showSaveDialog({
+				defaultUri,
+				filters: {
+					Images: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"],
+				},
+			});
+
+			if (result) {
+				// Write the file
+				fs.writeFileSync(result.fsPath, imageBuffer);
+				vscode.window.showInformationMessage(`Image saved to ${result.fsPath}`);
+			}
+		} catch (error) {
+			vscode.window.showErrorMessage(
+				`Failed to save image: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
+
 	private async undoFile({ files, threadId, toolId }: UpdateComposerFileEvent) {
 		try {
 			const fileMap = new Map<string, FileMetadata>();
@@ -472,11 +475,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	private async acceptFile({
-		files,
-		threadId,
-		toolId,
-	}: UpdateComposerFileEvent): Promise<void> {
+	private async acceptFile(
+		{ files, threadId, toolId }: UpdateComposerFileEvent,
+		isRevert = false,
+	): Promise<void> {
 		const fileMap = new Map<string, FileMetadata>();
 		for (const file of files) {
 			const relativeFilePath = vscode.workspace.asRelativePath(file.path);
@@ -488,7 +490,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				fileUri,
 				new TextEncoder().encode(file.code),
 			);
-			file.accepted = true;
+			file.accepted = !isRevert;
 			file.rejected = false;
 			fileMap.set(file.id!, file);
 		}

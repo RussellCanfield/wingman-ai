@@ -235,7 +235,7 @@ export const App = () => {
 					<p className="text-[var(--vscode-descriptionForeground)]">
 						Configure your AI assistant to match your workflow. Visit{" "}
 						<a
-							href="https://wingman.squadron-ai.com/"
+							href="https://docs.getwingmanai.com"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-blue-500 hover:text-blue-600 underline"

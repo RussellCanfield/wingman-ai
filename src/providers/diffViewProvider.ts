@@ -41,7 +41,7 @@ export class DiffViewProvider {
 		onAccept,
 		onReject,
 	}: DiffViewCommand & {
-		onAccept: (event: UpdateComposerFileEvent) => void;
+		onAccept: (event: UpdateComposerFileEvent, isRevert: boolean) => void;
 		onReject: (event: UpdateComposerFileEvent) => void;
 	}) {
 		if (this.panels.has(file.path)) {
@@ -70,6 +70,22 @@ export class DiffViewProvider {
 			this.panels.delete(file.path);
 		});
 
+		let showRevert = false;
+		const diffFile = { ...file };
+		if (file.accepted) {
+			const fileUri = vscode.Uri.joinPath(
+				vscode.Uri.parse(vscode.workspace.workspaceFolders![0].uri.fsPath),
+				file.path,
+			);
+			if (fs.existsSync(fileUri.fsPath)) {
+				diffFile.code = diffFile.original;
+				diffFile.original = (
+					await vscode.workspace.fs.readFile(fileUri)
+				).toString();
+				showRevert = true;
+			}
+		}
+
 		currentPanel.webview.onDidReceiveMessage(async (message: AppMessage) => {
 			if (!message) return;
 
@@ -77,24 +93,6 @@ export class DiffViewProvider {
 
 			switch (command) {
 				case "webviewLoaded": {
-					let showRevert = false;
-					const diffFile = { ...file };
-					if (file.accepted) {
-						const fileUri = vscode.Uri.joinPath(
-							vscode.Uri.parse(
-								vscode.workspace.workspaceFolders![0].uri.fsPath,
-							),
-							file.path,
-						);
-						if (fs.existsSync(fileUri.fsPath)) {
-							diffFile.code = diffFile.original;
-							diffFile.original = (
-								await vscode.workspace.fs.readFile(fileUri)
-							).toString();
-							showRevert = true;
-						}
-					}
-
 					currentPanel.webview.postMessage({
 						command: "diff-file",
 						value: {
@@ -107,14 +105,18 @@ export class DiffViewProvider {
 					});
 					break;
 				}
-				case "accept-file-changes":
+				case "accept-file-changes": {
 					await this.acceptFileChanges(
 						currentPanel,
 						file.path,
 						value as FileMetadata,
 					);
-					onAccept({ files: [value as FileMetadata], threadId, toolId });
+					onAccept(
+						{ files: [value as FileMetadata], threadId, toolId },
+						showRevert,
+					);
 					break;
+				}
 				case "reject-file-changes":
 					onReject({ files: [value as FileMetadata], threadId, toolId });
 					if (currentPanel) {

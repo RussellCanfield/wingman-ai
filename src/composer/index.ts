@@ -701,6 +701,8 @@ When modifying or creating files:
 10. Do not use placeholder comments like '// existing import statements' or assume parts of the code are already present unless the I explicitly provide them
 11. Do not be lazy! Ensure the code is fully functional and ready to use as-is, with no missing dependencies or incomplete sections
 
+**CRITICAL: Do not try to take shortcuts and leave placeholder comments like '// [Previous Code]' - ALWAYS ALWAYS ALWAYS call write_file with the full contents of the file**
+
 # Research
 When the user asks you to research a topic, or the user appears to be stuck, then ask if you can research for them:
 - Always ask before you do research! This is an expensive operation, and you should rely on your own knowledge before doing so or unless explicitly asked

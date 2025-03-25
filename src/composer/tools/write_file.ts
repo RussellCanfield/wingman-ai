@@ -152,7 +152,7 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 		{
 			name: "write_file",
 			description:
-				"Write a file to the file system, use this tool when you need to create or edit a file. The input expects the full file contents",
+				"Write a file to the file system, use this tool when you need to create or edit a file. The input expects the full file contents, do not omit any code for the file.",
 			schema: writeFileSchema,
 			returnDirect: false,
 		},

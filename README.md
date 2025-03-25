@@ -8,7 +8,7 @@
 
 <b>
 
-[Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) brings high quality AI agentic coding right to your computer. We support most major AI providers - OpenAI, Anthropic and Ollama which is 100% free and private.
+[Wingman-AI](https://getwingmanai.com/) brings high quality AI agentic coding right to your computer. We support most major AI providers - OpenAI, Anthropic and Ollama which is 100% free and private.
 
 Wingman is also supports [Model Context Protocol](https://modelcontextprotocol.io/introduction) tools, allowing you to extend and integrate with a number of servers already available such as Figma or even [your own browser](https://github.com/AgentDeskAI/browser-tools-mcp)!
 
@@ -38,7 +38,7 @@ Have a specific question? Simply highlight text in the editor and Wingman will f
 
 <center>
 
-<b> [Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) supports advanced features such as: </b>
+<b> [Wingman-AI](https://getwingmanai.com/) supports advanced features such as: </b>
 
 <h3>Code completion</h3>
 Real-time code suggestions as you type
