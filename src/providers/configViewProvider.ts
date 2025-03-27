@@ -154,9 +154,17 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						command: "settingsSaved",
 					});
 					break;
-				case "reloadWindow":
-					await vscode.commands.executeCommand("workbench.action.reloadWindow");
+				case "load-ollama-models": {
+					const initSettings = await wingmanSettings.loadSettings();
+
+					settingsPanel.webview.postMessage({
+						command: "ollama-models",
+						value: await this.loadOllamaModels(
+							initSettings.providerSettings.Ollama?.baseUrl ?? "",
+						),
+					});
 					break;
+				}
 			}
 		});
 	}
@@ -219,23 +227,27 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	private init = async (value: unknown): Promise<string> => {
 		const initSettings = await wingmanSettings.loadSettings();
 		const settings = structuredClone(initSettings);
+		//@ts-expect-error
+		settings.ollamaModels = await this.loadOllamaModels(
+			settings.providerSettings.Ollama?.baseUrl ?? "",
+		);
+		return JSON.stringify(settings);
+	};
+
+	private loadOllamaModels = async (url: string): Promise<string[]> => {
+		if (!url) {
+			return ["Failed to load."];
+		}
 
 		try {
-			const modelsResponse = await fetch(
-				`${settings.providerSettings.Ollama?.baseUrl}/api/tags`,
-			);
+			const modelsResponse = await fetch(path.join(url, "/api/tags"));
 			const modelsJson = (await modelsResponse.json()) as {
 				models: { name: string }[];
 			};
-			const modelNames = modelsJson.models.map((m) => m.name);
-			//@ts-expect-error
-			settings.ollamaModels = modelNames;
+			return modelsJson.models.map((m) => m.name);
 		} catch (e) {
-			//@ts-expect-error
-			settings.ollamaModels = ["Failed to load."];
+			return ["Failed to load."];
 		}
-
-		return JSON.stringify(settings);
 	};
 
 	private _getSimpleViewHtml = (webview: vscode.Webview): string => {

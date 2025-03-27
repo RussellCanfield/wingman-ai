@@ -2,30 +2,58 @@ import type { OllamaSettingsType } from "@shared/types/Settings";
 import { VscRefresh } from "react-icons/vsc";
 import type { InitSettings } from "./App";
 import { vscode } from "./utilities/vscode";
+import { useEffect, useState } from "react";
+import type { AppMessage } from "@shared/types/Message";
 
 type OllamaSection = InitSettings["providerSettings"]["Ollama"] & {
-	ollamaModels: string[];
 	onChange: (ollamaSettings: OllamaSettingsType) => void;
 };
+
+const loadOllamaModels = () => {
+	vscode.postMessage({
+		command: "load-ollama-models"
+	});
+}
+
 export const OllamaSettingsView = ({
 	codeModel,
 	chatModel,
-	ollamaModels,
 	apiPath,
 	modelInfoPath,
 	baseUrl,
 	onChange,
 }: OllamaSection) => {
+	const [ollamaModels, setOllamaModels] = useState<string[] | undefined>();
+
+	useEffect(() => {
+		loadOllamaModels();
+
+		window.addEventListener("message", handleResponse);
+		return () => {
+			window.removeEventListener("message", handleResponse);
+		};
+	}, []);
+
+	const handleResponse = (event: MessageEvent<AppMessage>) => {
+		const { command, value } = event.data;
+
+		switch (command) {
+			case "ollama-models": {
+				setOllamaModels(value as string[]);
+			}
+		}
+	}
+
 	const paths = { codeModel, chatModel, baseUrl, apiPath, modelInfoPath };
 	const handleChange = (e: any) => {
-		if (!ollamaModels.includes(e.target.value)) return;
+		if (!ollamaModels?.includes(e.target.value)) return;
 		const clone = { ...paths };
 		clone.codeModel = e.target.value;
 		onChange(clone);
 	};
 
 	const handleChatChange = (e: any) => {
-		if (!ollamaModels.includes(e.target.value)) return;
+		if (!ollamaModels?.includes(e.target.value)) return;
 		const clone = { ...paths };
 		clone.chatModel = e.target.value;
 		onChange(clone);
@@ -38,12 +66,6 @@ export const OllamaSettingsView = ({
 		clone[field] = e.target.value;
 		onChange(clone);
 	};
-
-	const reloadWindow = () => {
-		vscode.postMessage({
-			command: "reloadWindow"
-		})
-	}
 
 	return (
 		<div className="flex flex-col space-y-4">
@@ -76,15 +98,18 @@ export const OllamaSettingsView = ({
 							disabled:cursor-not-allowed
 							"
 					>
-						{ollamaModels.map((model) => (
+						{ollamaModels?.map((model) => (
 							<option key={model} value={model}>
 								{model}
 							</option>
 						))}
+						{!ollamaModels && (
+							<option disabled value="">Loading models...</option>
+						)}
 					</select>
 					<button
 						type="button"
-						onClick={reloadWindow}
+						onClick={loadOllamaModels}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
 					>
@@ -125,15 +150,18 @@ export const OllamaSettingsView = ({
 								disabled:cursor-not-allowed
 								"
 					>
-						{ollamaModels.map((model) => (
+						{ollamaModels?.map((model) => (
 							<option key={model} value={model}>
 								{model}
 							</option>
 						))}
+						{!ollamaModels && (
+							<option disabled value="">Loading models...</option>
+						)}
 					</select>
 					<button
 						type="button"
-						onClick={reloadWindow}
+						onClick={loadOllamaModels}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
 					>

@@ -21,9 +21,7 @@ import { AgentFeaturesView } from "./AgentFeaturesView";
 import { MCPConfiguration } from "./McpTools";
 import { EmbeddingProvider } from "./EmbeddingProvider";
 
-export type InitSettings = Settings & {
-	ollamaModels: string[];
-};
+export type InitSettings = Settings;
 
 export const App = () => {
 	const [loading, setLoading] = useState(true);
