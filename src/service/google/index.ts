@@ -47,7 +47,7 @@ export class Google implements AIProvider {
 			model: "gemini-2.0-flash-exp-image-generation",
 			contents: input,
 			config: {
-				responseModalities: ["Image"],
+				responseModalities: ["Text", "Image"],
 			},
 		});
 

@@ -13,6 +13,7 @@ import { CollapsibleSection } from "./components/CollapsibleSection";
 import { useSettingsContext } from "../../../context/settingsContext";
 import { useComposerContext } from "../../../context/composerContext";
 import { vscode } from "../../../utilities/vscode";
+import { FaPencil } from "react-icons/fa6";
 
 const MAX_WIDTH = 1024;
 const MAX_HEIGHT = 1024;
@@ -181,6 +182,12 @@ const ChatInput = ({
 
 	const handleImageUpload = () => fileInputRef.current?.click();
 
+	const openCanvas = () => {
+		vscode.postMessage({
+			command: "image-editor"
+		})
+	}
+
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (file) handleImageSelect(file);
@@ -347,14 +354,24 @@ const ChatInput = ({
 				/>
 				{shouldShowButtons && (
 					<div className={buttonContainerClass}>
-						<button
-							type="button"
-							className={iconButtonClass}
-							onClick={handleImageUpload}
-							title="Attach image"
-						>
-							<FaPaperclip size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
-						</button>
+						<div className="flex flex-row gap-4">
+							<button
+								type="button"
+								className={iconButtonClass}
+								onClick={handleImageUpload}
+								title="Attach image"
+							>
+								<FaPaperclip size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
+							</button>
+							<button
+								type="button"
+								className={iconButtonClass}
+								onClick={openCanvas}
+								title="Image Canvas"
+							>
+								<FaPencil size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
+							</button>
+						</div>
 						{!loading ? (
 							<button
 								type="button"

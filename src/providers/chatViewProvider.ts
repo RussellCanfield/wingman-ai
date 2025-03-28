@@ -32,6 +32,7 @@ import type { ThreadViewProvider } from "./threadViewProvider";
 import { getRecentFileTracker } from "./recentFileTracker";
 import { getGitignorePatterns } from "../server/files/utils";
 import { wingmanSettings } from "../service/settings";
+import { ImageEditorViewProvider } from "./imageEditorViewProvider";
 
 export type ChatView = "composer" | "indexer";
 
@@ -42,6 +43,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 	private _disposables: vscode.Disposable[] = [];
 	private _webview: vscode.Webview | undefined;
 	private _launchView: ChatView = "composer";
+	private _imageCanvas: ImageEditorViewProvider | undefined;
 
 	constructor(
 		private readonly _lspClient: LSPClient,
@@ -50,7 +52,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		private readonly _threadViewProvider: ThreadViewProvider,
 		private readonly _workspace: Workspace,
 		private readonly _settingsViewProvider: ConfigViewProvider,
-	) {}
+	) {
+		this._imageCanvas = new ImageEditorViewProvider(_context, _lspClient);
+	}
 
 	dispose() {
 		// biome-ignore lint/complexity/noForEach: <explanation>
@@ -119,11 +123,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
 				// TODO - move to a mediator pattern
 				switch (command) {
+					case "image-editor": {
+						this._imageCanvas?.openEditor();
+						break;
+					}
 					case "save-image": {
 						await this.saveImage(String(value));
 						break;
 					}
-
 					case "fix-diagnostics": {
 						const event = value as FixDiagnosticsEvent;
 						if (!event.diagnostics?.length) return;

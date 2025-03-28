@@ -21,7 +21,7 @@ export interface AIProvider {
 		recentClipboard?: string,
 	): Promise<string>;
 	getModel(params?: ModelParams): LLM | BaseChatModel;
-	generateImage?(input: string): Promise<string | undefined>;
+	generateImage?(input: unknown): Promise<string | undefined>;
 	getEmbedder(): Embeddings;
 	getLightweightModel(): LLM | BaseChatModel;
 }

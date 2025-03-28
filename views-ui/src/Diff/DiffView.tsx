@@ -9,7 +9,6 @@ import { FaCheckCircle } from "react-icons/fa";
 import ReactDiffViewer, { DiffMethod } from "../Common/DiffView";
 import { FaXmark } from "react-icons/fa6";
 import { vscode } from "./utilities/vscode";
-import type { FileMetadata } from "@shared/types/Message";
 
 const CodeContainer = memo(({ children }: PropsWithChildren) => {
 	return (

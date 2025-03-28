@@ -70,7 +70,6 @@ const ThreadVisualization: React.FC<ThreadVisualizationProps> = ({
     onThreadSelect,
     onClose,
 }) => {
-    console.log(threads, activeThreadId);
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [initialized, setInitialized] = useState(false);

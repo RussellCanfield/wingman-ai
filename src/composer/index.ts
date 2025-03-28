@@ -63,6 +63,7 @@ import { createThinkingTool } from "./tools/think";
 import { MCPAdapter } from "./tools/mcpAdapter";
 import { createWebSearchTool } from "./tools/web_search";
 import { Ollama } from "../service/ollama";
+import { createImageGenerationTool } from "./tools/generate_image";
 
 let controller = new AbortController();
 
@@ -179,6 +180,10 @@ export class WingmanAgent {
 			createResearchTool(this.workspace, this.aiProvider!),
 			...remoteTools,
 		];
+
+		// if (this.aiProvider.generateImage) {
+		// 	this.tools.push(createImageGenerationTool(this.aiProvider));
+		// }
 
 		if (this.vectorStore) {
 			this.tools.push(
