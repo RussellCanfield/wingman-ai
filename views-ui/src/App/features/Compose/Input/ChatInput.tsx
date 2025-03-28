@@ -98,7 +98,7 @@ const ChatInput = ({
 	suggestionTitle = "Diagnostics"
 }: ChatInputProps) => {
 	const [ref, isVisible] = useOnScreen();
-	const { isLightTheme } = useSettingsContext();
+	const { isLightTheme, settings } = useSettingsContext();
 	const { activeFiles, setActiveFiles, activeComposerState } = useComposerContext();
 	const [inputValue, setInputValue] = useState("");
 	const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -363,14 +363,14 @@ const ChatInput = ({
 							>
 								<FaPaperclip size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
 							</button>
-							<button
+							{settings?.aiProvider === "Google" && (<button
 								type="button"
 								className={iconButtonClass}
 								onClick={openCanvas}
 								title="Image Canvas"
 							>
 								<FaPencil size={16} className={isLightTheme ? 'text-gray-600' : 'text-gray-300'} />
-							</button>
+							</button>)}
 						</div>
 						{!loading ? (
 							<button

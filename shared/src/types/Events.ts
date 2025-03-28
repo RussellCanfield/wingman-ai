@@ -21,3 +21,8 @@ export interface UpdateCommandEvent {
 	command: CommandMetadata;
 	threadId: string;
 }
+
+export interface ImageGenEvent {
+	imageData: string | undefined;
+	instructions: string;
+}

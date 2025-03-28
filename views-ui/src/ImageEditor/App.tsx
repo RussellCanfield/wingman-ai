@@ -6,23 +6,30 @@ import { vscode } from "./utilities/vscode";
 import { FaPencil } from "react-icons/fa6";
 import { HiCursorArrowRays } from "react-icons/hi2";
 import { FaRegSquare } from "react-icons/fa6";
-import { FaRegCircle } from "react-icons/fa";
+import { FaQuestionCircle, FaRegCircle } from "react-icons/fa";
 import { FaEraser } from "react-icons/fa";
 import { VscSymbolColor } from "react-icons/vsc";
 import { CgSize } from "react-icons/cg";
 import { IoText } from "react-icons/io5";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
+import type { ImageGenEvent } from "@shared/types/Events";
+import { Tooltip } from "react-tooltip";
 
-// Destructure the fabric library
-const { Canvas, Rect, Circle, FabricObject, PencilBrush, IText } = fabricModule;
+const { Canvas, Rect, Circle, PencilBrush, IText } = fabricModule;
 
-// Defining canvas tool types
 type ToolType = 'select' | 'pen' | 'rectangle' | 'circle' | 'eraser' | 'text';
 type ColorType = string;
 
-// Type for canvas state
 interface CanvasState {
 	objects: any[];
 	background: string;
+}
+
+interface ContextMenuState {
+	visible: boolean;
+	x: number;
+	y: number;
+	target: fabricModule.FabricObject | null;
 }
 
 export default function App() {
@@ -42,10 +49,23 @@ export default function App() {
 	const [zoom, setZoom] = useState<number>(1);
 	const [isPanning, setIsPanning] = useState<boolean>(false);
 	const [lastPanPosition, setLastPanPosition] = useState<{ x: number; y: number } | null>(null);
+	const [generating, setGenerating] = useState<boolean>(false);
+
+	// New state for generate instructions input
+	const [showGenerateInput, setShowGenerateInput] = useState<boolean>(false);
+	const [generateInstructions, setGenerateInstructions] = useState<string>("");
 
 	// History state for undo/redo functionality
 	const [history, setHistory] = useState<CanvasState[]>([]);
 	const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+	// New state for context menu
+	const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+		visible: false,
+		x: 0,
+		y: 0,
+		target: null
+	});
 
 	// Initialize canvas with correct dimensions and pan/zoom support
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
@@ -93,12 +113,17 @@ export default function App() {
 				zoomNew *= 0.999 ** delta;
 				if (zoomNew > 20) zoomNew = 20;
 				if (zoomNew < 0.01) zoomNew = 0.01;
-				//@ts-expect-error
+				// @ts-expect-error
 				canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoomNew);
 				opt.e.preventDefault();
 				opt.e.stopPropagation();
 				setZoom(zoomNew);
 			});
+
+			// Suppress the default context menu on the canvas element
+			if (canvasContainerRef.current) {
+				canvasContainerRef.current.addEventListener('contextmenu', (e) => e.preventDefault());
+			}
 
 			setFabricCanvas(canvas);
 			fabricCanvasRef.current = canvas;
@@ -110,6 +135,7 @@ export default function App() {
 			setHistory([initialState]);
 			setHistoryIndex(0);
 
+			// Object change events
 			canvas.on('object:added', () => saveToHistory());
 			canvas.on('object:modified', () => saveToHistory());
 			canvas.on('object:removed', () => saveToHistory());
@@ -122,55 +148,6 @@ export default function App() {
 			}
 		};
 	}, []);
-
-	// Handle keyboard events for deletion
-	useEffect(() => {
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (!fabricCanvas) return;
-
-			// Skip if we're in drawing mode or panning
-			if (fabricCanvas.isDrawingMode || isPanning) return;
-
-			if (event.key === 'Delete' || event.key === 'Backspace') {
-				// Prevent backspace from navigating
-				event.preventDefault();
-
-				const activeObjects = fabricCanvas.getActiveObjects();
-				if (activeObjects.length > 0) {
-					fabricCanvas.remove(...activeObjects);
-					fabricCanvas.discardActiveObject();
-					fabricCanvas.renderAll();
-					saveToHistory();
-				}
-			}
-		};
-
-		window.addEventListener('keydown', handleKeyDown);
-		return () => window.removeEventListener('keydown', handleKeyDown);
-	}, [fabricCanvas, isPanning]);
-
-	// Handle panning
-	const handlePanStart = (e: React.MouseEvent) => {
-		if (isPanning) {
-			setLastPanPosition({ x: e.clientX, y: e.clientY });
-		}
-	};
-
-	const handlePanMove = (e: React.MouseEvent) => {
-		if (isPanning && lastPanPosition && fabricCanvas) {
-			const vpt = fabricCanvas.viewportTransform;
-			if (!vpt) return;
-
-			vpt[4] += e.clientX - lastPanPosition.x;
-			vpt[5] += e.clientY - lastPanPosition.y;
-			fabricCanvas.requestRenderAll();
-			setLastPanPosition({ x: e.clientX, y: e.clientY });
-		}
-	};
-
-	const handlePanEnd = () => {
-		setLastPanPosition(null);
-	};
 
 	// Save the current canvas state to history
 	const saveToHistory = useCallback(() => {
@@ -248,12 +225,9 @@ export default function App() {
 			fabricCanvas.freeDrawingBrush.color = color;
 		}
 
-		// Add to recent colors if not already present
 		if (!recentColors.includes(color)) {
-			// Create a new array with the new color at the start and take the first 5 items
 			setRecentColors(prevColors => {
 				const newColors = [color];
-				// Add previous colors that aren't the same as the new color
 				// biome-ignore lint/complexity/noForEach: <explanation>
 				prevColors.forEach(prevColor => {
 					if (prevColor !== color && newColors.length < 5) {
@@ -283,8 +257,71 @@ export default function App() {
 		return { x: pointer.x, y: pointer.y };
 	};
 
+	const handlePanStart = (e: React.MouseEvent) => {
+		if (e.button === 1) { // Middle mouse button
+			e.preventDefault();
+			setIsPanning(true);
+			setLastPanPosition({ x: e.clientX, y: e.clientY });
+		} else if (isPanning) {
+			setLastPanPosition({ x: e.clientX, y: e.clientY });
+		}
+	};
+
+	// Handle keyboard shortcuts
+	const handleKeyDown = useCallback((e: KeyboardEvent) => {
+		if (!fabricCanvas) return;
+
+		// Delete/Backspace key
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			// Only handle delete if we're not in a text editing mode
+			const activeObject = fabricCanvas.getActiveObject();
+			if (activeObject && !(activeObject instanceof IText && activeObject.isEditing)) {
+				const activeObjects = fabricCanvas.getActiveObjects();
+				fabricCanvas.remove(...activeObjects);
+				fabricCanvas.discardActiveObject();
+				fabricCanvas.renderAll();
+				saveToHistory();
+			}
+		}
+	}, [fabricCanvas, saveToHistory]);
+
+	// Add this useEffect to set up the listener
+	useEffect(() => {
+		window.addEventListener('keydown', handleKeyDown);
+		return () => {
+			window.removeEventListener('keydown', handleKeyDown);
+		};
+	}, [handleKeyDown]);
+
+
+	const handlePanMove = (e: React.MouseEvent) => {
+		if (isPanning && lastPanPosition && fabricCanvas) {
+			const vpt = fabricCanvas.viewportTransform;
+			if (!vpt) return;
+
+			vpt[4] += e.clientX - lastPanPosition.x;
+			vpt[5] += e.clientY - lastPanPosition.y;
+			fabricCanvas.requestRenderAll();
+			setLastPanPosition({ x: e.clientX, y: e.clientY });
+		}
+	};
+
+	const handlePanEnd = (e?: React.MouseEvent) => {
+		if (e && e.button === 1) {
+			setIsPanning(false);
+		}
+		setLastPanPosition(null);
+	};
+
 	// Event handlers for shape drawing and text
 	const handleCanvasMouseDown = (event: React.MouseEvent) => {
+		if (event.button === 2) {
+			handleContextMenu(event);
+		}
+
+		// Exit if it's not a left-click (button 0)
+		if (event.button !== 0) return;
+
 		if (!fabricCanvas || (activeTool !== 'rectangle' && activeTool !== 'circle' && activeTool !== 'text')) return;
 
 		const coords = getCanvasCoordinates(event);
@@ -342,6 +379,28 @@ export default function App() {
 		}
 	};
 
+	const handleContextMenu = (event: React.MouseEvent) => {
+		if (!fabricCanvas) return;
+
+		const activeObject = fabricCanvas.getActiveObject();
+
+		console.log('Here!', event, activeObject);
+
+		if (activeObject) {
+			event.preventDefault();
+			if (canvasContainerRef.current) {
+				const rect = canvasContainerRef.current.getBoundingClientRect();
+				const x = event.clientX - rect.left;
+				const y = event.clientY - rect.top;
+				setContextMenu({ visible: true, x, y, target: activeObject });
+			}
+		} else {
+			// Hide context menu on left click
+			setContextMenu({ visible: false, x: 0, y: 0, target: null });
+		}
+	}
+
+
 	const handleCanvasMouseMove = (event: React.MouseEvent) => {
 		if (!fabricCanvas || !isDrawing || (activeTool !== 'rectangle' && activeTool !== 'circle')) return;
 
@@ -357,10 +416,7 @@ export default function App() {
 			const width = Math.abs(coords.x - startX);
 			const height = Math.abs(coords.y - startY);
 
-			activeObject.set({
-				width: width,
-				height: height,
-			});
+			activeObject.set({ width: width, height: height });
 
 			if (coords.x < startX) {
 				activeObject.set({ left: coords.x });
@@ -373,16 +429,9 @@ export default function App() {
 		} else if (activeTool === 'circle' && activeObject instanceof Circle) {
 			const startX = activeObject.left || 0;
 			const startY = activeObject.top || 0;
-			const radius = Math.sqrt(
-				(coords.x - startX) ** 2 + (coords.y - startY) ** 2
-			) / 2;
+			const radius = Math.sqrt((coords.x - startX) ** 2 + (coords.y - startY) ** 2) / 2;
 
-			activeObject.set({
-				radius: radius,
-				left: startX,
-				top: startY
-			});
-
+			activeObject.set({ radius: radius, left: startX, top: startY });
 			fabricCanvas.renderAll();
 		}
 	};
@@ -422,7 +471,7 @@ export default function App() {
 					newObj = new fabricModule.Path(objData.path, objData);
 					break;
 				case 'image':
-					//@ts-expect-error
+					// @ts-expect-error
 					fabricModule.FabricImage.fromURL(objData.src, (img) => {
 						img.set(objData);
 						fabricCanvas.add(img);
@@ -470,7 +519,7 @@ export default function App() {
 					newObj = new fabricModule.Path(objData.path, objData);
 					break;
 				case 'image':
-					//@ts-expect-error
+					// @ts-expect-error
 					fabricModule.FabricImage.fromURL(objData.src, (img) => {
 						img.set(objData);
 						fabricCanvas.add(img);
@@ -501,18 +550,114 @@ export default function App() {
 		saveToHistory();
 	};
 
-	const generateImage = () => {
-		const imageDataUrl = fabricCanvas?.toDataURL({
-			format: 'png',
-			quality: 1,
-			multiplier: 1
-		});
+	const handleGenerationSubmit = async () => {
+		console.log(fabricCanvas, generateInstructions);
+		if (!fabricCanvas || !generateInstructions.trim()) return;
 
-		vscode.postMessage({
-			command: 'generate-image',
-			value: imageDataUrl
-		})
-	}
+		// Get active selection or active object
+		const activeObjects = fabricCanvas.getActiveObjects();
+		const hasSelection = activeObjects.length > 0;
+
+		// If we have selected objects, create an optimized image of just those objects
+		if (hasSelection) {
+			// Calculate the bounding box of all selected objects
+			const selectionBoundingBox = fabricCanvas.getActiveObjects().reduce((bbox, obj) => {
+				const objBbox = obj.getBoundingRect();
+				return {
+					left: Math.min(bbox.left, objBbox.left),
+					top: Math.min(bbox.top, objBbox.top),
+					right: Math.max(bbox.right || objBbox.left + objBbox.width, objBbox.left + objBbox.width),
+					bottom: Math.max(bbox.bottom || objBbox.top + objBbox.height, objBbox.top + objBbox.height)
+				};
+			}, { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, bottom: Number.NEGATIVE_INFINITY });
+
+			// Reduce padding since we're now including stroke widths
+			const padding = 10;
+			// Round dimensions up to prevent fractional pixels
+			const width = Math.ceil(selectionBoundingBox.right - selectionBoundingBox.left + (padding * 2));
+			const height = Math.ceil(selectionBoundingBox.bottom - selectionBoundingBox.top + (padding * 2));
+
+			// Create a temporary canvas sized to the selection
+			const tempCanvasElem = document.createElement('canvas');
+			tempCanvasElem.width = width;
+			tempCanvasElem.height = height;
+			const tempCanvas = new fabricModule.StaticCanvas(tempCanvasElem, {
+				renderOnAddRemove: true
+			});
+
+			// Clone and add objects one by one
+			for (const obj of activeObjects) {
+				const clone = await obj.clone();
+				// Adjust position relative to the new canvas and round to prevent fractional coordinates
+				clone.set({
+					left: Math.round(obj.left! - selectionBoundingBox.left + padding),
+					top: Math.round(obj.top! - selectionBoundingBox.top + padding),
+				});
+				// Ensure the clone maintains its original scale and position
+				clone.setCoords();
+				tempCanvas.add(clone);
+			}
+
+			// Ensure everything is rendered
+			tempCanvas.renderAll();
+
+			// Get the image data with specific export settings
+			const imageDataUrl = tempCanvas.toDataURL({
+				format: 'png',
+				quality: 1,
+				multiplier: 1,
+				enableRetinaScaling: false,
+			});
+
+			// Clean up
+			tempCanvas.dispose();
+
+			// Send the optimized image
+			vscode.postMessage({
+				command: 'generate-image',
+				value: {
+					imageData: imageDataUrl,
+					instructions: generateInstructions
+				} satisfies ImageGenEvent
+			});
+		} else {
+			// No selection - use the entire canvas
+			const imageDataUrl = fabricCanvas.toDataURL({
+				format: 'png',
+				quality: 1,
+				multiplier: 1,
+				enableRetinaScaling: false
+			});
+
+			vscode.postMessage({
+				command: 'generate-image',
+				value: {
+					imageData: imageDataUrl,
+					instructions: generateInstructions
+				} satisfies ImageGenEvent
+			});
+		}
+
+		setGenerating(true);
+		setShowGenerateInput(false);
+		setGenerateInstructions("");
+	};
+
+
+	// Modified generateImage function: now just toggles the generate input
+	const handleGenerateClick = () => {
+		if (!showGenerateInput) {
+			setShowGenerateInput(true);
+		}
+	};
+
+	// Handle key down in the generate instructions textarea
+	const handleGenerateKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			handleGenerationSubmit();
+		}
+	};
 
 	// Handle image upload with proper positioning and constraints
 	const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -535,16 +680,13 @@ export default function App() {
 					return;
 				}
 
-				// Get canvas dimensions
 				const canvasWidth = fabricCanvas.width || 800;
 				const canvasHeight = fabricCanvas.height || 600;
 
-				// Calculate scale to fit image within canvas (80% of canvas size)
 				const scaleX = (canvasWidth * 0.8) / img.width!;
 				const scaleY = (canvasHeight * 0.8) / img.height!;
 				const scale = Math.min(scaleX, scaleY);
 
-				// Set image properties
 				img.set({
 					left: (canvasWidth - (img.width! * scale)) / 2,
 					top: (canvasHeight - (img.height! * scale)) / 2,
@@ -556,11 +698,13 @@ export default function App() {
 					lockUniScaling: true,
 				});
 
-				// Add image to canvas
 				fabricCanvas.add(img);
 				fabricCanvas.setActiveObject(img);
 				fabricCanvas.renderAll();
 				saveToHistory();
+
+				// Reset the file input value after successful upload
+				event.target.value = '';
 			} catch (error) {
 				console.error('Error loading image:', error);
 			}
@@ -568,6 +712,7 @@ export default function App() {
 
 		reader.readAsDataURL(file);
 	};
+
 
 	// VSCode webview integration
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
@@ -585,7 +730,6 @@ export default function App() {
 							? imgData
 							: `data:image/png;base64,${imgData}`;
 
-						// Switch to select tool first
 						handleToolChange('select');
 
 						const img = await fabricModule.FabricImage.fromURL(dataUrl, {
@@ -597,16 +741,13 @@ export default function App() {
 							return;
 						}
 
-						// Get canvas dimensions
 						const canvasWidth = canvas.width || 800;
 						const canvasHeight = canvas.height || 600;
 
-						// Calculate scale to fit image within canvas (80% of canvas size)
 						const scaleX = (canvasWidth * 0.8) / img.width!;
 						const scaleY = (canvasHeight * 0.8) / img.height!;
 						const scale = Math.min(scaleX, scaleY);
 
-						// Set image properties
 						img.set({
 							left: (canvasWidth - (img.width! * scale)) / 2,
 							top: (canvasHeight - (img.height! * scale)) / 2,
@@ -618,7 +759,6 @@ export default function App() {
 							lockUniScaling: true,
 						});
 
-						// Add image to canvas
 						canvas.add(img);
 						canvas.setActiveObject(img);
 						canvas.renderAll();
@@ -626,6 +766,7 @@ export default function App() {
 					} catch (error) {
 						console.error('Error loading image:', error);
 					}
+					setGenerating(false);
 					break;
 				}
 			}
@@ -640,16 +781,16 @@ export default function App() {
 	// Zoom controls
 	const handleZoomIn = () => {
 		if (!fabricCanvas) return;
-		const zoom = fabricCanvas.getZoom();
-		fabricCanvas.setZoom(zoom * 1.1);
-		setZoom(zoom * 1.1);
+		const zoomLevel = fabricCanvas.getZoom();
+		fabricCanvas.setZoom(zoomLevel * 1.1);
+		setZoom(zoomLevel * 1.1);
 	};
 
 	const handleZoomOut = () => {
 		if (!fabricCanvas) return;
-		const zoom = fabricCanvas.getZoom();
-		fabricCanvas.setZoom(zoom / 1.1);
-		setZoom(zoom / 1.1);
+		const zoomLevel = fabricCanvas.getZoom();
+		fabricCanvas.setZoom(zoomLevel / 1.1);
+		setZoom(zoomLevel / 1.1);
 	};
 
 	const handleResetZoom = () => {
@@ -657,6 +798,104 @@ export default function App() {
 		fabricCanvas.setZoom(1);
 		setZoom(1);
 	};
+
+	// Handle paste event for images
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+	useEffect(() => {
+		const handlePaste = (e: ClipboardEvent) => {
+			if (!fabricCanvasRef.current) return;
+			if (e.clipboardData) {
+				const items = e.clipboardData.items;
+				for (let i = 0; i < items.length; i++) {
+					const item = items[i];
+					if (item.type.indexOf('image') !== -1) {
+						const file = item.getAsFile();
+						if (file) {
+							const reader = new FileReader();
+							reader.onload = (event) => {
+								const imgData = event.target?.result as string;
+								handleToolChange('select');
+								fabricModule.FabricImage.fromURL(imgData)
+									.then((img) => {
+										if (!img) {
+											console.error('Failed to create image object from clipboard');
+											return;
+										}
+										const canvasWidth = fabricCanvasRef.current?.width || 800;
+										const canvasHeight = fabricCanvasRef.current?.height || 600;
+										const scaleX = (canvasWidth * 0.8) / img.width;
+										const scaleY = (canvasHeight * 0.8) / img.height;
+										const scale = Math.min(scaleX, scaleY);
+										img.set({
+											left: (canvasWidth - (img.width * scale)) / 2,
+											top: (canvasHeight - (img.height * scale)) / 2,
+											scaleX: scale,
+											scaleY: scale,
+											selectable: true,
+											hasControls: true,
+											hasBorders: true,
+											lockUniScaling: true
+										});
+										if (fabricCanvasRef.current) {
+											fabricCanvasRef.current.add(img);
+											fabricCanvasRef.current.setActiveObject(img);
+											fabricCanvasRef.current.renderAll();
+										}
+										saveToHistory();
+									})
+									.catch(err => console.error(err));
+								reader.readAsDataURL(file);
+								e.preventDefault();
+							}
+						}
+					}
+				}
+				window.addEventListener('paste', handlePaste);
+				return () => {
+					window.removeEventListener('paste', handlePaste);
+				};
+			}
+		}
+	}, [fabricCanvas, saveToHistory]);
+
+	// Custom handler for context menu option: Save as Image
+	const handleSaveAs = async () => {
+		if (!contextMenu.target || !fabricCanvas) return;
+
+		// Create a temporary canvas element
+		const bbox = contextMenu.target.getBoundingRect();
+		const tempCanvasElem = document.createElement('canvas');
+		tempCanvasElem.width = bbox.width;
+		tempCanvasElem.height = bbox.height;
+		// @ts-expect-error
+		const tempStaticCanvas = new fabricModule.StaticCanvas(tempCanvasElem, { backgroundColor: null, renderOnAddRemove: true });
+
+		// Clone the object and add it to the temporary canvas
+		const clonedObj = await contextMenu.target.clone();
+		clonedObj.set({ left: 0, top: 0 });
+		tempStaticCanvas.add(clonedObj);
+		tempStaticCanvas.renderAll();
+		// @ts-expect-error
+		const dataURL = tempStaticCanvas.toDataURL({ format: 'png' });
+		vscode.postMessage({ command: 'save-object-image', value: dataURL });
+		tempStaticCanvas.dispose();
+
+		// Hide the context menu after action
+		setContextMenu({ visible: false, x: 0, y: 0, target: null });
+	};
+
+	// Hide context menu on any click outside
+	useEffect(() => {
+		const handleClickOutside = (e: MouseEvent) => {
+			if (contextMenu.visible) {
+				setContextMenu({ visible: false, x: 0, y: 0, target: null });
+			}
+		};
+		window.addEventListener('click', handleClickOutside);
+		return () => {
+			window.removeEventListener('click', handleClickOutside);
+		};
+	}, [contextMenu]);
 
 	return (
 		<div className="app-container">
@@ -717,18 +956,21 @@ export default function App() {
 					>
 						<i className="icon eraser-icon"><FaEraser size={16} /></i>
 					</button>
-					<button
-						type="button"
-						className={`tool-btn ${showColorWheel ? 'active' : ''}`}
-						onClick={() => {
-							setShowColorWheel(!showColorWheel);
-							setShowBrushSize(false);
-						}}
-						title="Color"
-						style={{ color: brushColor }}
-					>
-						<i className="icon"><VscSymbolColor size={16} /></i>
-					</button>
+					<div className="flex flex-col">
+						<button
+							type="button"
+							className={`tool-btn ${showColorWheel ? 'active' : ''}`}
+							onClick={() => {
+								setShowColorWheel(!showColorWheel);
+								setShowBrushSize(false);
+							}}
+							title="Color"
+
+						>
+							<i className="icon"><VscSymbolColor size={16} /></i>
+						</button>
+						<span style={{ borderBottom: `1px solid ${brushColor}` }} />
+					</div>
 					<button
 						type="button"
 						className={`tool-btn ${showBrushSize ? 'active' : ''}`}
@@ -744,49 +986,98 @@ export default function App() {
 
 				{/* Floating Actions Panel */}
 				<div className="floating-actions">
-					<button
-						type="button"
-						className="action-btn"
-						onClick={handleUndo}
-						disabled={!canUndo}
-						title="Undo (Ctrl/⌘+Z)"
-					>
-						Undo
-					</button>
-					<button
-						type="button"
-						className="action-btn"
-						onClick={handleRedo}
-						disabled={!canRedo}
-						title="Redo (Ctrl/⌘+Shift+Z)"
-					>
-						Redo
-					</button>
-					<button
-						type="button"
-						className="action-btn"
-						onClick={handleClear}
-						title="Clear Canvas"
-					>
-						Clear
-					</button>
-					<label className="action-btn">
-						Insert
-						<input
-							type="file"
-							accept="image/*"
-							onChange={handleImageUpload}
-							style={{ display: 'none' }}
-						/>
-					</label>
-					<button
-						type="button"
-						className="action-btn"
-						onClick={generateImage}
-						title="Generate Image"
-					>
-						Generate
-					</button>
+					<div className="flex gap-4">
+						<button
+							type="button"
+							className="action-btn"
+							onClick={handleClear}
+							title="Clear Canvas"
+						>
+							Clear
+						</button>
+						<label className="action-btn">
+							Insert
+							<input
+								type="file"
+								accept="image/*"
+								onChange={handleImageUpload}
+								style={{ display: 'none' }}
+							/>
+						</label>
+						<button
+							type="button"
+							className="action-btn flex flex-row items-center gap-2"
+							onClick={handleGenerateClick}
+							title="Generate Image"
+							disabled={generating}
+						>
+							{generating && (
+								<AiOutlineLoading3Quarters
+									className="animate-spin text-stone-400"
+									size={16}
+								/>)}
+							Generate
+
+						</button>
+					</div>
+					{/* Generate Instructions Input Box */}
+					{showGenerateInput && (
+						<div className="generate-input-container mt-4">
+							<div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+								<div className="mb-3 text-gray-800 dark:text-gray-200 font-medium">
+									Enter image generation instructions (required)
+								</div>
+								<textarea
+									value={generateInstructions}
+									placeholder="Describe what you want to generate..."
+									onChange={(e) => setGenerateInstructions(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter' && !e.shiftKey) {
+											e.preventDefault();
+											if (generateInstructions.trim()) {
+												handleGenerationSubmit();
+											}
+										}
+									}}
+									className="w-full p-3 mb-3 resize-none rounded-md border border-gray-300 dark:border-gray-600 
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                   focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                   placeholder-gray-500 dark:placeholder-gray-400
+                   min-h-[100px] transition-colors duration-200"
+								/>
+								<div className="space-y-3">
+									<div className="text-sm text-gray-600 dark:text-gray-400">
+										Press Enter to generate or Shift+Enter for a new line
+									</div>
+									<div className="flex justify-end gap-3">
+										<button
+											type="button"
+											className="px-4 py-2 rounded-md text-gray-700 dark:text-gray-200 
+                       bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 
+                       dark:hover:bg-gray-600 transition-colors duration-200
+                       border border-gray-300 dark:border-gray-600"
+											onClick={() => setShowGenerateInput(false)}
+										>
+											Cancel
+										</button>
+										<button
+											type="button"
+											className={`px-4 py-2 rounded-md text-white
+                       bg-blue-600 hover:bg-blue-700 
+                       disabled:opacity-50 disabled:cursor-not-allowed
+                       transition-colors duration-200
+                       ${!generateInstructions.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
+											onClick={handleGenerationSubmit}
+											disabled={!generateInstructions.trim()}
+										>
+											Generate
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+
 				</div>
 
 				{/* Color Wheel */}
@@ -835,7 +1126,17 @@ export default function App() {
 				</div>
 
 				{/* Zoom Controls */}
-				<div className="zoom-controls">
+				<div className="zoom-controls p-2">
+					<div>
+						<span data-tooltip-id="tips">
+							<FaQuestionCircle size={16} />
+							<Tooltip
+								id="tips"
+								place="bottom"
+								content="You can save or generate based off a specific shape by selecting it. If no selection is made, it will use the canvas's viewport."
+							/>
+						</span>
+					</div>
 					<button
 						type="button"
 						className="zoom-btn"
@@ -862,7 +1163,7 @@ export default function App() {
 					</button>
 				</div>
 
-				{/* Canvas */}
+				{/* Canvas Container */}
 				<div
 					ref={canvasContainerRef}
 					className="canvas-container"
@@ -874,6 +1175,26 @@ export default function App() {
 					<div className="canvas-wrapper">
 						<canvas ref={canvasRef} id="fabric-canvas" />
 					</div>
+
+					{contextMenu.visible && (
+						// biome-ignore lint/a11y/useKeyWithClickEvents: <explanation>
+						<div
+							className="context-menu"
+							style={{ position: 'absolute', left: contextMenu.x, top: contextMenu.y, background: '#fff', border: '1px solid #ccc', borderRadius: '4px', zIndex: 1000, padding: '4px' }}
+							onClick={(e) => e.stopPropagation()} // Prevent click from bubbling up
+						>
+							<button
+								type="button"
+								onClick={(e) => {
+									e.stopPropagation(); // Stop propagation here as well
+									handleSaveAs();
+								}}
+								style={{ background: 'none', color: '#000', border: 'none', padding: '4px 8px', cursor: 'pointer' }}
+							>
+								Save as Image
+							</button>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

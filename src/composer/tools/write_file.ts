@@ -9,7 +9,7 @@ import { Command } from "@langchain/langgraph";
 import { ToolMessage } from "@langchain/core/messages";
 
 export const writeFileSchema = baseFileSchema.extend({
-	contents: z.string().describe("The contents of the file to write"),
+	contents: z.string().describe("The contents of the file"),
 });
 
 /**
@@ -134,7 +134,7 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 						messages: [
 							new ToolMessage({
 								id: config.callbacks._parentRunId,
-								content: `Successfully wrote ${input.path} - ${input.explanation}`,
+								content: `Successfully wrote file: ${input.path}`,
 								tool_call_id: config.toolCall.id,
 								name: "write_file",
 								additional_kwargs: {

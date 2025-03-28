@@ -5,6 +5,8 @@ import type { LSPClient } from "../client";
 import { wingmanSettings } from "../service/settings";
 import { CreateAIProvider } from "../service/utils/models";
 import { loggingProvider } from "./loggingProvider";
+import type { ImageGenEvent } from "@shared/types/Events";
+import fs from "node:fs";
 
 export class ImageEditorViewProvider {
 	private panel: vscode.WebviewPanel | undefined;
@@ -14,7 +16,7 @@ export class ImageEditorViewProvider {
 		private readonly _lspClient: LSPClient,
 	) {}
 
-	async openEditor(onSend: (imageData: string) => void) {
+	async openEditor() {
 		if (this.panel) {
 			this.panel.dispose();
 		}
@@ -25,6 +27,7 @@ export class ImageEditorViewProvider {
 			vscode.ViewColumn.One,
 			{
 				enableScripts: true,
+				retainContextWhenHidden: true,
 			},
 		);
 
@@ -40,6 +43,7 @@ export class ImageEditorViewProvider {
 
 			switch (command) {
 				case "generate-image": {
+					const { imageData, instructions } = value as ImageGenEvent;
 					try {
 						const settings = await wingmanSettings.loadSettings();
 						const ai = CreateAIProvider(settings, loggingProvider);
@@ -47,15 +51,17 @@ export class ImageEditorViewProvider {
 							break;
 						}
 
-						const contents = [
-							{ text: "Make the image look real" },
-							{
+						const contents = [{ text: instructions }];
+
+						if (imageData) {
+							contents.push({
+								//@ts-expect-error
 								inlineData: {
 									mimeType: "image/png",
-									data: String(value).split("data:image/png;base64,")[1],
+									data: imageData.split("data:image/png;base64,")[1],
 								},
-							},
-						];
+							});
+						}
 
 						this.panel?.webview.postMessage({
 							command: "image-result",
@@ -66,6 +72,76 @@ export class ImageEditorViewProvider {
 							command: "image-failure",
 							value: (e as Error).message,
 						});
+					}
+					break;
+				}
+				case "save-object-image": {
+					// Handle the save object as image request
+					if (!value) break;
+
+					const base64Data = String(value);
+
+					try {
+						// Check if data URL prefix is present to extract mime type
+						let mimeType = "image/png"; // Default mime type
+						let base64Image = base64Data;
+
+						const dataUrlMatch = base64Data.match(
+							/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/,
+						);
+						if (dataUrlMatch) {
+							mimeType = dataUrlMatch[1];
+							base64Image = dataUrlMatch[2];
+						} else {
+							// If no data URL prefix, just remove it if it exists
+							base64Image = base64Data.replace(/^data:image\/\w+;base64,/, "");
+						}
+
+						// Determine file extension from mime type
+						const extensionMap: Record<string, string> = {
+							"image/png": "png",
+							"image/jpeg": "jpg",
+							"image/jpg": "jpg",
+							"image/webp": "webp",
+							"image/gif": "gif",
+							"image/svg+xml": "svg",
+							"image/bmp": "bmp",
+						};
+
+						const extension = extensionMap[mimeType] || "png";
+
+						// Create a buffer from the base64 string
+						const imageBuffer = Buffer.from(base64Image, "base64");
+
+						// Get current workspace folder as default location
+						const workspaceFolders = vscode.workspace.workspaceFolders;
+						const defaultUri =
+							workspaceFolders && workspaceFolders.length > 0
+								? vscode.Uri.joinPath(
+										workspaceFolders[0].uri,
+										`image.${extension}`,
+									)
+								: vscode.Uri.file(`image.${extension}`);
+
+						// Show native save dialog
+						const result = await vscode.window.showSaveDialog({
+							defaultUri,
+							filters: {
+								Images: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"],
+							},
+						});
+
+						if (result) {
+							// Write the file
+							fs.writeFileSync(result.fsPath, imageBuffer);
+							vscode.window.showInformationMessage(
+								`Image saved to ${result.fsPath}`,
+							);
+						}
+					} catch (error) {
+						vscode.window.showErrorMessage(
+							`Failed to save image: ${(error as Error).message}`,
+						);
 					}
 					break;
 				}
@@ -96,7 +172,7 @@ async function getWebViewHtml(
 	const prefix = webview.asWebviewUri(
 		vscode.Uri.joinPath(context.extensionUri, "out", "views"),
 	);
-	const srcHrefRegex = /(src|href)="([^"]+)"/g;
+	const srcHrefRegex = /(src|href)=\"([^\"]+)\"/g;
 
 	// Replace the matched filename with the prefixed filename
 	const updatedHtmlContent = finalHtmlContent.replace(
