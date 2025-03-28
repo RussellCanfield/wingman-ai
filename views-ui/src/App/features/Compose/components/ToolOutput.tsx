@@ -143,6 +143,10 @@ const ComplexTool = memo(({ messages, isLightTheme }: { messages: ComposerMessag
             }
             return undefined;
         }
+
+        if (lastMessage.content?.length > 0 && !lastMessage.content[0].type) {
+            return undefined
+        }
         return lastMessage.content as unknown as Array<ToolImageContent | ToolTextContent>;
     }, [lastMessage.content, lastMessage]);
 

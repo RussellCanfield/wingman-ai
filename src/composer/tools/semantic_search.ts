@@ -16,7 +16,7 @@ export const semanticSearchSchema = baseToolSchema.extend({
 });
 
 /**
- * Creates a tool that reads file contents
+ * Creates a tool that performs semantic searches against a vector database
  */
 export const createSemanticSearchTool = (
 	settings: Settings,

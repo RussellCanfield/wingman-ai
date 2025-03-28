@@ -1127,7 +1127,7 @@ export default function App() {
 
 				{/* Zoom Controls */}
 				<div className="zoom-controls p-2">
-					<div>
+					<div className="flex items-center">
 						<span data-tooltip-id="tips">
 							<FaQuestionCircle size={16} />
 							<Tooltip
