@@ -16,23 +16,20 @@ export default ({ env, command, envMode }) => {
 				chat: "./src/App/index.tsx",
 				config: "./src/Config/index.tsx",
 				diff: "./src/Diff/index.tsx",
-				threads: "./src/Threads/index.tsx"
+				threads: "./src/Threads/index.tsx",
+				image: "./src/ImageEditor/index.tsx",
 			},
 		},
 		tools: {
 			rspack: (config) => {
 				if (config.output) {
 					config.output.devtoolModuleFilenameTemplate = (info) => {
-						const {
-							absoluteResourcePath,
-							namespace,
-							resourcePath,
-						} = info;
+						const { absoluteResourcePath, namespace, resourcePath } = info;
 
 						if (path.isAbsolute(absoluteResourcePath)) {
 							return path.relative(
 								path.join(__dirname, "out", "views"),
-								absoluteResourcePath
+								absoluteResourcePath,
 							);
 						}
 

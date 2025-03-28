@@ -6,13 +6,15 @@ import {
 	type OllamaSettingsType,
 } from "@shared/types/Settings";
 import type { InitSettings } from "./App";
-import { HFSettingsView } from "./HFSettingsView";
 import { OllamaSettingsView } from "./OllamaSettingsView";
 import { OpenAISettingsView } from "./OpenAISettingsView";
 import { AnthropicSettingsView } from "./AnthropicSettingsView";
 import { ProviderInfoView } from "./ProviderInfoView";
 import { AzureAISettingsView } from "./AzureAISettingsView";
 import { XAISettingsView } from './xAISettingsView';
+import { OpenRouterSettingsView } from "./OpenRouterSettingsView";
+import { GoogleSettingsView } from "./GoogleSettingsView";
+import { HFSettingsView } from './HFSettingsView';
 
 export type AiProviderProps = {
 	settings: InitSettings;
@@ -27,8 +29,8 @@ export const AiProvider = ({
 	onProviderChanged,
 	onProviderSettingsChanged,
 }: AiProviderProps) => {
-	const { aiProvider, providerSettings, ollamaModels } = settings;
-	const { Ollama, HuggingFace, OpenAI, Anthropic, AzureAI, xAI } =
+	const { aiProvider, providerSettings } = settings;
+	const { Ollama, HuggingFace, OpenAI, Anthropic, AzureAI, xAI, OpenRouter, Google } =
 		providerSettings;
 
 	const handleProviderChange = (e: any) => {
@@ -62,7 +64,12 @@ export const AiProvider = ({
 				//@ts-expect-error
 				<OllamaSettingsView
 					{...Ollama}
-					ollamaModels={ollamaModels}
+					onChange={onProviderSettingsChanged}
+				/>
+			)}
+			{aiProvider === "Google" && (
+				<GoogleSettingsView
+					{...Google}
 					onChange={onProviderSettingsChanged}
 				/>
 			)}

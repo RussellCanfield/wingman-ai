@@ -161,6 +161,9 @@ export const App = () => {
 		} else if (settings.aiProvider === "xAI") {
 			updatedProviderSettings.xAI =
 				aiProviderSettings as xAISettingsType;
+		} else if (settings.aiProvider === "Google") {
+			updatedProviderSettings.Google =
+				aiProviderSettings as ApiSettingsType;
 		}
 
 		setSettings((s) => ({
@@ -184,6 +187,9 @@ export const App = () => {
 		} else if (settings.embeddingProvider === "AzureAI") {
 			updatedProviderSettings.AzureAI =
 				aiProviderSettings as Settings["embeddingSettings"]["AzureAI"];
+		} else if (settings.embeddingProvider === "Google") {
+			updatedProviderSettings.Google =
+				aiProviderSettings as Settings["embeddingSettings"]["Google"];
 		}
 
 		setSettings((s) => ({

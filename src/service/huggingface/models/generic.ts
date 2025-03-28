@@ -1,6 +1,6 @@
-import type { OpenAIModel } from "@shared/types/Models";
+import type { HuggingFaceAIModel } from "@shared/types/Models";
 
-export class GPTModel implements OpenAIModel {
+export class GenericModel implements HuggingFaceAIModel {
 	get CodeCompletionPrompt(): string {
 		return `You are a senior full-stack developer specializing in writing clean, maintainable code and natural language content.
 
@@ -11,13 +11,13 @@ Complete the content marked by <|FIM_HOLE|> with high-quality output that matche
 - Generate only the content that replaces <|FIM_HOLE|>
 - Return plain text without markdown formatting
 - Adapt completion style based on content type:
-	• For code: Follow existing style, patterns, and type safety
-	• For prompts: Match tone, formatting, and instruction style
-	• For text: Maintain consistent voice and terminology
+    • For code: Follow existing style, patterns, and type safety
+    • For prompts: Match tone, formatting, and instruction style
+    • For text: Maintain consistent voice and terminology
 - Preserve existing:
-	• Indentation and formatting
-	• Language patterns
-	• Technical terminology
+    • Indentation and formatting
+    • Language patterns
+    • Technical terminology
 - If intent is unclear, return an empty response
 - Consider surrounding context for better continuity
 

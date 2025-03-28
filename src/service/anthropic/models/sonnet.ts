@@ -1,19 +1,14 @@
 import type { AnthropicModel } from "@shared/types/Models";
-import {
-	commonChatPrompt,
-	commonDocPrompt,
-	commonRefactorPrompt,
-} from "../../common";
 
 export class SonnetModel implements AnthropicModel {
 	get CodeCompletionPrompt(): string {
 		return `You are a senior full-stack developer specializing in writing clean, maintainable code and natural language content.
 
 **Objective:**
-Complete the content marked by [FILL IN THE MIDDLE] with high-quality output that matches the style and context of the surrounding content, whether it's code, documentation, or natural language.
+Complete the content marked by <|FIM_HOLE|> with high-quality output that matches the style and context of the surrounding content, whether it's code, documentation, or natural language.
 
 **Rules:**
-- Generate only the content that replaces [FILL IN THE MIDDLE]
+- Generate only the content that replaces <|FIM_HOLE|>
 - Return plain text without markdown formatting
 - Adapt completion style based on content type:
 	• For code: Follow existing style, patterns, and type safety
@@ -32,18 +27,6 @@ Complete the content marked by [FILL IN THE MIDDLE] with high-quality output tha
 - Do not return any other text or explanations, just the missing portion of code
 
 Code:
-{beginning}[FILL IN THE MIDDLE]{ending}`;
-	}
-
-	get ChatPrompt(): string {
-		return commonChatPrompt;
-	}
-
-	get genDocPrompt(): string {
-		return commonDocPrompt;
-	}
-
-	get refactorPrompt(): string {
-		return commonRefactorPrompt;
+{beginning}<|FIM_HOLE|>{ending}`;
 	}
 }

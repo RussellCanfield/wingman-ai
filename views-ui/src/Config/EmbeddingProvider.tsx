@@ -10,6 +10,7 @@ import { OpenAISettingsView } from "./EmbeddingOpenAISettingsView";
 import { AzureAISettingsView } from "./EmbeddingAzureAISettingsView";
 import { VscSync } from "react-icons/vsc";
 import { IndexedFilesProgress } from "./IndexedFilesProgress";
+import { GoogleSettingsView } from "./EmbeddingGoogleSettingsView";
 
 export type EmbeddingProviderProps = {
 	settings: InitSettings;
@@ -26,8 +27,8 @@ export const EmbeddingProvider = ({
 	onProviderChanged,
 	onProviderSettingsChanged,
 }: EmbeddingProviderProps) => {
-	const { embeddingProvider, embeddingSettings, providerSettings, ollamaModels } = settings;
-	const { Ollama, OpenAI, AzureAI } =
+	const { embeddingProvider, embeddingSettings, providerSettings } = settings;
+	const { Ollama, OpenAI, AzureAI, Google } =
 		embeddingSettings;
 
 	const handleProviderChange = (e: any) => {
@@ -43,6 +44,18 @@ export const EmbeddingProvider = ({
 		clone.General[field] = value;
 		onProviderSettingsChanged(clone);
 	};
+
+	if (OpenAI && !OpenAI.apiKey) {
+		OpenAI.apiKey = settings.providerSettings.OpenAI?.apiKey!;
+	}
+
+	if (AzureAI && !AzureAI.apiKey) {
+		AzureAI.apiKey = settings.providerSettings.AzureAI?.apiKey!;
+	}
+
+	if (Google && !Google.apiKey) {
+		Google.apiKey = settings.providerSettings.Google.apiKey!;
+	}
 
 	const copyProviderSettings = () => {
 		// Get the current provider settings
@@ -78,12 +91,19 @@ export const EmbeddingProvider = ({
 				summaryModel: currentProviderSettings.chatModel || "",
 				dimensions: 1536
 			};
+		} else if (embeddingProvider === "Google") {
+			updatedSettings = {
+				//@ts-expect-error
+				apiKey: currentProviderSettings.apiKey || "",
+				model: "gemini-embedding-exp-03-07",
+				summaryModel: "gemini-2.0-flash",
+				dimensions: 3072,
+			};
 		}
 
 		// Update the settings
 		onProviderSettingsChanged(updatedSettings);
 	}
-
 
 	return (
 		<div className="container mx-auto">
@@ -169,7 +189,6 @@ export const EmbeddingProvider = ({
 				//@ts-expect-error
 				<OllamaSettingsView
 					{...Ollama}
-					ollamaModels={ollamaModels}
 					onChange={onProviderSettingsChanged}
 				/>
 			)}
@@ -186,6 +205,12 @@ export const EmbeddingProvider = ({
 					{...AzureAI}
 					onChange={onProviderSettingsChanged}
 				/>
+			)}
+			{embeddingProvider === "Google" && (
+				//@ts-expect-error
+				<GoogleSettingsView
+					{...Google}
+					onChange={onProviderSettingsChanged} />
 			)}
 		</div>
 	);

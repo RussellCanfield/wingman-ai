@@ -45,9 +45,9 @@ import type { UpdateComposerFileEvent } from "@shared/types/Events";
 import { loggingProvider } from "../server/loggingProvider";
 import type { CodeParser } from "../server/files/parser";
 import { getTextDocumentFromPath } from "../server/files/utils";
-import { Anthropic } from "../service/anthropic/anthropic";
-import { OpenAI } from "../service/openai/openai";
-import { AzureAI } from "../service/azure/azure";
+import { Anthropic } from "../service/anthropic";
+import { OpenAI } from "../service/openai";
+import { AzureAI } from "../service/azure";
 import { createResearchTool } from "./tools/research";
 import { loadWingmanRules } from "./utils";
 import { wingmanSettings } from "../service/settings";
@@ -62,6 +62,7 @@ import { randomUUID } from "node:crypto";
 import { createThinkingTool } from "./tools/think";
 import { MCPAdapter } from "./tools/mcpAdapter";
 import { createWebSearchTool } from "./tools/web_search";
+import { Ollama } from "../service/ollama";
 
 let controller = new AbortController();
 
@@ -961,7 +962,11 @@ Use this context judiciously when it helps address their needs.`,
 			}
 
 			const stream = await app.streamEvents(input, config);
-			yield* this.handleStreamEvents(stream, request.threadId, messages);
+			yield* this.handleStreamEvents(
+				stream,
+				request.threadId,
+				this.aiProvider instanceof Ollama,
+			);
 		} catch (e) {
 			console.error(e);
 			if (e instanceof Error) {
@@ -1119,7 +1124,7 @@ Always execute the required function calls before you respond.`;
 	async *handleStreamEvents(
 		stream: AsyncIterable<any>,
 		threadId: string,
-		humanMessages: HumanMessage[],
+		isOllama = false,
 	): AsyncIterableIterator<ComposerResponse> {
 		const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
 		let state = await graph.getState({
@@ -1327,11 +1332,13 @@ Always execute the required function calls before you respond.`;
 						lastMessage.usage_metadata = currentMessage.usage_metadata;
 					}
 
-					if (!lastMessage) {
+					if (!lastMessage && !isOllama) {
 						break;
 					}
 
-					lastMessage.id = event.run_id;
+					if (lastMessage) {
+						lastMessage.id = event.run_id;
+					}
 
 					// Yield updated state
 					yield {

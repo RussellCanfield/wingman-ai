@@ -1,16 +1,22 @@
-import type { OllamaSettingsType } from "@shared/types/Settings";
 import { VscRefresh } from "react-icons/vsc";
 import type { InitSettings } from "./App";
 import { vscode } from "./utilities/vscode";
+import { useEffect, useState } from "react";
+import type { AppMessage } from "@shared/types/Message";
 
 type OllamaSection = InitSettings["embeddingSettings"]["Ollama"] & {
-	ollamaModels: string[];
 	onChange: (ollamaSettings: InitSettings["embeddingSettings"]["Ollama"]) => void;
 };
+
+const loadOllamaModels = () => {
+	vscode.postMessage({
+		command: "load-ollama-models"
+	});
+}
+
 export const OllamaSettingsView = ({
 	model,
 	summaryModel,
-	ollamaModels,
 	dimensions,
 	apiPath,
 	modelInfoPath,
@@ -18,6 +24,26 @@ export const OllamaSettingsView = ({
 	onChange,
 }: OllamaSection) => {
 	const paths = { model, summaryModel, baseUrl, apiPath, modelInfoPath, dimensions };
+	const [ollamaModels, setOllamaModels] = useState<string[] | undefined>();
+
+	useEffect(() => {
+		loadOllamaModels();
+
+		window.addEventListener("message", handleResponse);
+		return () => {
+			window.removeEventListener("message", handleResponse);
+		};
+	}, []);
+
+	const handleResponse = (event: MessageEvent<AppMessage>) => {
+		const { command, value } = event.data;
+
+		switch (command) {
+			case "ollama-models": {
+				setOllamaModels(value as string[]);
+			}
+		}
+	}
 
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
@@ -27,12 +53,6 @@ export const OllamaSettingsView = ({
 		clone[field] = value;
 		onChange(clone);
 	};
-
-	const reloadWindow = () => {
-		vscode.postMessage({
-			command: "reloadWindow"
-		})
-	}
 
 	return (
 		<div className="flex flex-col space-y-4">
@@ -66,15 +86,18 @@ export const OllamaSettingsView = ({
 							disabled:cursor-not-allowed
 							"
 					>
-						{ollamaModels.map((model) => (
+						{ollamaModels?.map((model) => (
 							<option key={model} value={model}>
 								{model}
 							</option>
 						))}
+						{!ollamaModels && (
+							<option disabled value="">Loading models...</option>
+						)}
 					</select>
 					<button
 						type="button"
-						onClick={reloadWindow}
+						onClick={loadOllamaModels}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
 					>
@@ -93,17 +116,48 @@ export const OllamaSettingsView = ({
 				>
 					Summary Model:
 				</label>
-				<input
-					id="summaryModel"
-					type="text"
-					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
-					onChange={handleChangeInput}
-					value={summaryModel}
-					data-name="summaryModel"
-					title="OpenAI Summary Model"
-				/>
+				<div className="flex gap-2">
+					<select
+						id="summaryModel"
+						value={summaryModel}
+						onChange={handleChangeInput}
+						className="w-full
+							px-3 
+							py-2 
+							appearance-none
+							bg-[var(--vscode-input-background)]
+							text-[var(--vscode-input-foreground)]
+							border border-[var(--vscode-input-border)]
+							rounded-md
+							focus:outline-none 
+							focus:ring-2 
+							focus:ring-[var(--vscode-focusBorder)]
+							text-sm
+							sm:text-base
+							disabled:opacity-50
+							disabled:cursor-not-allowed
+							"
+					>
+						{ollamaModels?.map((model) => (
+							<option key={model} value={model}>
+								{model}
+							</option>
+						))}
+						{!ollamaModels && (
+							<option disabled value="">Loading models...</option>
+						)}
+					</select>
+					<button
+						type="button"
+						onClick={loadOllamaModels}
+						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+						title="Refresh models"
+					>
+						<VscRefresh size={16} />
+					</button>
+				</div>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for parsing code files before embeddings (can be small like qwen2.5-coder 1.5b)
+					Used for summarizing code files
 				</p>
 			</div>
 

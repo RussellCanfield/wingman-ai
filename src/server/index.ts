@@ -82,7 +82,6 @@ export class LSPServer {
 	checkPointer: PartitionedFileSystemSaver | undefined;
 	vectorStore: VectorStore | undefined;
 	embedder: Embeddings | undefined;
-	summaryModel: BaseChatModel | undefined;
 	storagePath: string | undefined;
 
 	constructor() {
@@ -140,7 +139,6 @@ export class LSPServer {
 					settings,
 					loggingProvider,
 				).getEmbedder();
-				this.summaryModel = provider.getLightweightModel();
 			}
 		} catch (e) {
 			console.error(e);
@@ -463,14 +461,11 @@ ${input}`,
 			const settings = await wingmanSettings.loadSettings(true);
 			await this.composer?.initialize();
 
-			const provider = CreateAIProvider(settings, loggingProvider);
-
 			if (settings.embeddingSettings.General.enabled) {
 				this.embedder = CreateEmbeddingProvider(
 					settings,
 					loggingProvider,
 				).getEmbedder();
-				this.summaryModel = provider.getLightweightModel();
 			}
 
 			if (this.vectorStore) {
@@ -526,7 +521,7 @@ ${input}`,
 		this.connection?.onRequest(
 			"wingman/indexFiles",
 			async (indexFiles: [string, IndexFile][]) => {
-				if (!this.vectorStore || !this.embedder || !this.summaryModel) return;
+				if (!this.vectorStore || !this.embedder) return;
 
 				for (const [filePath, metadata] of indexFiles) {
 					if (!fs.existsSync(filePath)) continue;

@@ -1,14 +1,12 @@
 import type { Settings } from "@shared/types/Settings";
 import { Tooltip } from "react-tooltip";
-import { FaInfoCircle, FaCode, FaBolt, FaWindowMaximize, FaCommentAlt } from "react-icons/fa";
+import { FaInfoCircle, FaCode, FaWindowMaximize, FaCommentAlt } from "react-icons/fa";
 import { useState } from "react";
 
 type InteractionSettings = Required<Settings>["interactionSettings"];
 const tooltipInformation = {
 	completion:
 		"Enable this setting activates code completion. Code completion will run when you type in a file for a supported language.",
-	streaming:
-		"Enabling this setting activates code streaming for code completion, prioritizing faster code completion results over detailed suggestions by providing shorter responses.",
 	codeContextWindow:
 		"Adjust the context window size to determine the amount of context included in code completion. Starting with a lower value (e.g., 512) is recommended, increasing as needed for better performance on more powerful setups.",
 	codeMaxTokens:
@@ -67,8 +65,6 @@ export const InteractionSettingsConfig = ({
 		switch (field) {
 			case "codeCompletionEnabled":
 				return <FaCode className="text-blue-500" />;
-			case "codeStreaming":
-				return <FaBolt className="text-yellow-500" />;
 			case "codeContextWindow":
 			case "chatContextWindow":
 				return <FaWindowMaximize className="text-green-500" />;
@@ -91,8 +87,6 @@ export const InteractionSettingsConfig = ({
 		switch (field) {
 			case "codeCompletionEnabled":
 				return tooltipInformation.completion;
-			case "codeStreaming":
-				return tooltipInformation.streaming;
 			default:
 				return "No tooltip information available";
 		}
@@ -131,43 +125,6 @@ export const InteractionSettingsConfig = ({
 					data-name="codeCompletionEnabled"
 					onChange={handleCompletionChange}
 					value={interactions.codeCompletionEnabled.toString()}
-				>
-					<option>true</option>
-					<option>false</option>
-				</select>
-			</div>
-
-			<div className="mb-4">
-				<div className="flex items-center mb-2">
-					<label htmlFor="code-streaming" className="block mr-2">
-						Code streaming:
-					</label>
-					<span
-						data-tooltip-id="streaming-tooltip"
-						className="cursor-help transition-transform hover:scale-110"
-					>
-						{getIconForField("codeStreaming")}
-					</span>
-					<Tooltip
-						id="streaming-tooltip"
-						content={tooltipInformation.streaming}
-						place="right"
-						className="max-w-xs z-50"
-						style={{
-							backgroundColor: theme === 'light' ? '#333' : '#f5f5f5',
-							color: theme === 'light' ? '#fff' : '#333',
-							borderRadius: '6px',
-							padding: '8px 12px',
-							boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-						}}
-					/>
-				</div>
-				<select
-					id="code-streaming"
-					className="w-full min-w-[200px] p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)] bg-[var(--vscode-input-background)] border-[var(--vscode-editor-foreground)]"
-					data-name="codeStreaming"
-					onChange={handleStreamChange}
-					value={interactions.codeStreaming.toString()}
 				>
 					<option>true</option>
 					<option>false</option>

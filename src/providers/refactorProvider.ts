@@ -10,6 +10,7 @@ import { EVENT_REFACTOR, telemetry } from "./telemetryProvider";
 import { wingmanSettings } from "../service/settings";
 import { CreateAIProvider } from "../service/utils/models";
 import { loggingProvider } from "./loggingProvider";
+import { commonRefactorPrompt } from "../service/common";
 
 // biome-ignore lint/style/useConst: <explanation>
 let abortController = new AbortController();
@@ -73,18 +74,28 @@ export class RefactorProvider implements vscode.CodeActionProvider {
 
 				telemetry.sendEvent(EVENT_REFACTOR);
 
-				const result = await aiProvider.refactor(
-					`Code to refactor:
+				const model = aiProvider.getModel();
+
+				const result = await model.invoke(
+					`${commonRefactorPrompt}
+${
+	symbols
+		? `\nHere are the available types to use as a reference in answering questions, these may not be related to the code provided:
+	
+${symbols}`
+		: ""
+}
+
+Code to refactor:
 \`\`\`${document.languageId}
 ${highlightedCode}
 \`\`\``,
-					symbols
-						? `\nHere are the available types to use as a reference in answering questions, these may not be related to the code provided:\n${symbols}\n----------\n`
-						: "",
-					abortController.signal,
+					{
+						signal: abortController.signal,
+					},
 				);
 
-				const newCode = extractCodeBlock(result);
+				const newCode = extractCodeBlock(result.content.toString());
 
 				if (newCode) {
 					editor?.edit((builder) => {

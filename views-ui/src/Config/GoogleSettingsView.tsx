@@ -2,16 +2,16 @@ import type { ApiSettingsType } from "@shared/types/Settings";
 import type { InitSettings } from "./App";
 import { useState } from "react";
 
-type OpenAiSection = InitSettings["providerSettings"]["OpenAI"] & {
+type GoogleSection = InitSettings["providerSettings"]["Google"] & {
 	onChange: (openAISettings: ApiSettingsType) => void;
 };
-export const OpenAISettingsView = ({
+export const GoogleSettingsView = ({
 	codeModel,
 	chatModel,
 	baseUrl,
 	apiKey,
 	onChange,
-}: OpenAiSection) => {
+}: GoogleSection) => {
 	const paths = { codeModel, chatModel, baseUrl, apiKey };
 
 	const [showPassword, setShowPassword] = useState(false);
@@ -40,10 +40,10 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={codeModel}
 					data-name="codeModel"
-					title="OpenAI Code Model"
+					title="Google Code Model"
 				/>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for autocomplete code generation (e.g., gpt-4o)
+					Used for autocomplete code generation (e.g., gemini-2.5-pro-exp-03-25)
 				</p>
 			</div>
 
@@ -61,10 +61,10 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={chatModel}
 					data-name="chatModel"
-					title="OpenAI Chat Model"
+					title="Google Chat Model"
 				/>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for the Chat Agent experience (e.g., gpt-4o)
+					Used for the Chat Agent experience (e.g., gemini-2.5-pro-exp-03-25)
 				</p>
 			</div>
 
@@ -84,7 +84,7 @@ export const OpenAISettingsView = ({
 						onChange={handleChangeInput}
 						value={apiKey}
 						data-name="apiKey"
-						title={!apiKey ? "Please add your OpenAI API key" : "OpenAI api key"}
+						title={!apiKey ? "Please add your Google AI Studio API key" : "Google AI Studio api key"}
 					/>
 					<button
 						type="button"

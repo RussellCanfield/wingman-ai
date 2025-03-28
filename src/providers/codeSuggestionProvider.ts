@@ -7,7 +7,6 @@ import {
 	type TextDocument,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
-import type { AIProvider, AIStreamProvider } from "../service/base";
 import { delay } from "../service/delay";
 import { getContentWindow } from "../service/utils/contentWindow";
 import type { Settings } from "@shared/types/Settings";
@@ -69,7 +68,6 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				prefix,
 				abort.signal,
 				suffix,
-				settings.interactionSettings.codeStreaming,
 				settings,
 				types,
 			);
@@ -83,7 +81,6 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 		prefix: string,
 		signal: AbortSignal,
 		suffix: string,
-		streaming: boolean,
 		settings: Settings,
 		additionalContext?: string,
 	): Promise<InlineCompletionItem[]> {
@@ -113,25 +110,13 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 			// 	return [new InlineCompletionItem(cachedResult)];
 			// }
 
-			let result: string;
-
 			const aiProvider = CreateAIProvider(settings, loggingProvider);
-
-			if ("codeCompleteStream" in aiProvider && streaming) {
-				result = await (aiProvider as AIStreamProvider).codeCompleteStream(
-					prefix,
-					suffix,
-					signal,
-					additionalContext,
-				);
-			} else {
-				result = await aiProvider.codeComplete(
-					prefix,
-					suffix,
-					signal,
-					additionalContext,
-				);
-			}
+			let result = await aiProvider.codeComplete(
+				prefix,
+				suffix,
+				signal,
+				additionalContext,
+			);
 
 			if (result.startsWith("```")) {
 				result = extractCodeBlock(result);

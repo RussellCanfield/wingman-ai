@@ -7,6 +7,7 @@ import type { Settings } from "@shared/types/Settings";
 import { CreateEmbeddingProvider } from "../../service/utils/models";
 import { loggingProvider } from "../loggingProvider";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { LLM } from "@langchain/core/language_models/llms";
 
 export interface VectorMetadata {
 	filePath: string;
@@ -59,7 +60,7 @@ export class VectorStore {
 	private storageDirectory: string | null = null;
 	private currentFilePaths: Set<string> = new Set();
 	private embedder: Embeddings;
-	private summaryModel: BaseChatModel;
+	private summaryModel: BaseChatModel | LLM;
 	private connect?: (
 		uri: string,
 		options?: Partial<ConnectionOptions>,
@@ -279,14 +280,14 @@ export class VectorStore {
 		if (!shouldUpdate) return filePath;
 
 		try {
-			const summary = (
-				await this.summaryModel.invoke(
-					buildSummarizationQuery(
-						fileContents,
-						path.relative(this.workspace, filePath),
-					),
-				)
-			).content.toString();
+			const result = await this.summaryModel.invoke(
+				buildSummarizationQuery(
+					fileContents,
+					path.relative(this.workspace, filePath),
+				),
+			);
+			const summary =
+				typeof result === "string" ? result : result.content.toString();
 			const vector = await this.embedder.embedQuery(summary);
 
 			if (this.currentFilePaths.has(filePath)) {

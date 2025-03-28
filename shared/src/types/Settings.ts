@@ -39,7 +39,6 @@ export interface AgentSettings {
 
 export interface InteractionSettings {
 	codeCompletionEnabled: boolean;
-	codeStreaming: boolean;
 	codeContextWindow: number;
 	codeMaxTokens: number;
 	chatContextWindow: number;
@@ -53,10 +52,16 @@ export const AiProviders = [
 	"Anthropic",
 	"AzureAI",
 	"xAI",
+	"Google",
 ] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
-export const EmbeddingProviders = ["Ollama", "OpenAI", "AzureAI"] as const;
+export const EmbeddingProviders = [
+	"Ollama",
+	"OpenAI",
+	"AzureAI",
+	"Google",
+] as const;
 export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
 
 // Create a type for AiProviders
@@ -86,7 +91,6 @@ export type AzureAISettingsType = Omit<ApiSettingsType, "baseUrl"> & {
 
 export const defaultInteractionSettings: InteractionSettings = {
 	codeCompletionEnabled: true,
-	codeStreaming: false,
 	codeContextWindow: 512,
 	codeMaxTokens: 256,
 	chatContextWindow: 4096,
@@ -129,6 +133,20 @@ export const defaultOpenAISettings: ApiSettingsType = {
 	apiKey: "",
 };
 
+export const defaultOpenRouterSettings: ApiSettingsType = {
+	chatModel: "deepseek/deepseek-chat-v3-0324:free",
+	codeModel: "deepseek/deepseek-chat-v3-0324:free",
+	baseUrl: "https://openrouter.ai/api/v1",
+	apiKey: "",
+};
+
+export const defaultGoogleSettings: ApiSettingsType = {
+	chatModel: "gemini-2.5-pro-exp-03-25",
+	codeModel: "gemini-2.5-pro-exp-03-25",
+	baseUrl: "https://generativelanguage.googleapis.com/v1beta/models",
+	apiKey: "",
+};
+
 export const defaultAnthropicSettings: ApiSettingsType = {
 	chatModel: "claude-3-7-sonnet-latest",
 	codeModel: "claude-3-5-haiku-latest",
@@ -154,6 +172,8 @@ export type Settings = {
 		Anthropic?: AnthropicSettingsType;
 		AzureAI?: AzureAISettingsType;
 		xAI?: xAISettingsType;
+		OpenRouter?: ApiSettingsType;
+		Google: ApiSettingsType;
 	};
 	agentSettings: AgentSettings;
 	embeddingProvider: (typeof EmbeddingProviders)[number];
@@ -177,6 +197,16 @@ export type Settings = {
 			summaryModel: string;
 			dimensions: number;
 		};
+		OpenRouter?: Omit<ApiSettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
+		Google?: Omit<ApiSettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
 	};
 };
 
@@ -195,6 +225,8 @@ export const defaultSettings: Settings = {
 		OpenAI: defaultOpenAISettings,
 		AzureAI: defaultAzureAISettings,
 		xAI: defaultxAISettings,
+		OpenRouter: defaultOpenRouterSettings,
+		Google: defaultGoogleSettings,
 	},
 	embeddingProvider: "OpenAI",
 	embeddingSettings: {
@@ -219,6 +251,12 @@ export const defaultSettings: Settings = {
 			model: "text-embedding-3-small",
 			summaryModel: "gpt-4o-mini",
 			dimensions: 1536,
+		},
+		Google: {
+			...defaultGoogleSettings,
+			model: "gemini-embedding-exp-03-07",
+			summaryModel: "gemini-2.0-flash",
+			dimensions: 3072,
 		},
 	},
 	agentSettings: defaultAgentSettings,

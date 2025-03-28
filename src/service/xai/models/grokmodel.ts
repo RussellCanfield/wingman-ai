@@ -1,9 +1,4 @@
 import type { xAIModel } from "@shared/types/Models";
-import {
-	commonChatPrompt,
-	commonDocPrompt,
-	commonRefactorPrompt,
-} from "../../common";
 
 export class GrokModel implements xAIModel {
 	get CodeCompletionPrompt(): string {
@@ -33,17 +28,5 @@ Complete the content marked by <|FIM_HOLE|> with high-quality output that matche
 
 Code:
 {beginning}<|FIM_HOLE|>{ending}`;
-	}
-
-	get ChatPrompt(): string {
-		return commonChatPrompt;
-	}
-
-	get genDocPrompt(): string {
-		return commonDocPrompt;
-	}
-
-	get refactorPrompt(): string {
-		return commonRefactorPrompt;
 	}
 }

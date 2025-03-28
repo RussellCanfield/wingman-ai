@@ -1,6 +1,6 @@
-import type { OpenAIModel } from "@shared/types/Models";
+import type { AIModel } from "@shared/types/Models";
 
-export class GPTModel implements OpenAIModel {
+export class OpenRouterModel implements AIModel {
 	get CodeCompletionPrompt(): string {
 		return `You are a senior full-stack developer specializing in writing clean, maintainable code and natural language content.
 
@@ -21,13 +21,10 @@ Complete the content marked by <|FIM_HOLE|> with high-quality output that matche
 - If intent is unclear, return an empty response
 - Consider surrounding context for better continuity
 
-**CRITICAL:**
-- Do not return any other text or explanations, just the missing portion of code
-
-**Context:**
 {context}
 
------
+**CRITICAL:**
+- Do not return any other text or explanations, just the missing portion of code
 
 Code:
 {beginning}<|FIM_HOLE|>{ending}`;

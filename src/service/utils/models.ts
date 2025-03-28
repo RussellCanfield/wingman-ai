@@ -1,19 +1,20 @@
 import { HuggingFace } from "../huggingface/huggingface";
-import { Anthropic } from "../anthropic/anthropic";
-import { OpenAI } from "../openai/openai";
-import { Ollama } from "../ollama/ollama";
+import { Anthropic } from "../anthropic";
+import { OpenAI } from "../openai";
+import { Ollama } from "../ollama";
 import type { Settings } from "@shared/types/Settings";
 import type { AIProvider } from "../base";
 import type { ILoggingProvider } from "@shared/types/Logger";
-import { AzureAI } from "../azure/azure";
+import { AzureAI } from "../azure";
 import { xAI } from "../xai";
+import { OpenRouter } from "../openrouter";
+import { Google } from "../google";
 
 export function CreateAIProvider(
 	settings: Settings,
 	loggingProvider: ILoggingProvider,
 ): AIProvider {
 	if (settings.aiProvider === "HuggingFace") {
-		//@ts-expect-error
 		return new HuggingFace(
 			settings.providerSettings.HuggingFace,
 			settings.interactionSettings,
@@ -25,7 +26,6 @@ export function CreateAIProvider(
 		return new OpenAI(
 			settings.providerSettings.OpenAI,
 			settings.interactionSettings,
-			settings.embeddingSettings.OpenAI,
 			loggingProvider,
 		);
 	}
@@ -42,7 +42,6 @@ export function CreateAIProvider(
 		return new AzureAI(
 			settings.providerSettings.AzureAI,
 			settings.interactionSettings,
-			settings.embeddingSettings.AzureAI,
 			loggingProvider,
 		);
 	}
@@ -55,10 +54,25 @@ export function CreateAIProvider(
 		);
 	}
 
+	if (settings.aiProvider === "OpenRouter") {
+		return new OpenRouter(
+			settings.providerSettings.OpenRouter,
+			settings.interactionSettings,
+			loggingProvider,
+		);
+	}
+
+	if (settings.aiProvider === "Google") {
+		return new Google(
+			settings.providerSettings.Google,
+			settings.interactionSettings,
+			loggingProvider,
+		);
+	}
+
 	return new Ollama(
 		settings.providerSettings.Ollama,
 		settings.interactionSettings,
-		settings.embeddingSettings.Ollama,
 		loggingProvider,
 	);
 }
@@ -71,8 +85,8 @@ export function CreateEmbeddingProvider(
 		return new OpenAI(
 			settings.providerSettings.OpenAI,
 			settings.interactionSettings,
-			settings.embeddingSettings.OpenAI,
 			loggingProvider,
+			settings.embeddingSettings.OpenAI,
 		);
 	}
 
@@ -80,15 +94,33 @@ export function CreateEmbeddingProvider(
 		return new AzureAI(
 			settings.providerSettings.AzureAI,
 			settings.interactionSettings,
-			settings.embeddingSettings.AzureAI,
 			loggingProvider,
+			settings.embeddingSettings.AzureAI,
+		);
+	}
+
+	if (settings.embeddingProvider === "OpenRouter") {
+		return new OpenRouter(
+			settings.providerSettings.OpenRouter,
+			settings.interactionSettings,
+			loggingProvider,
+			settings.embeddingSettings.OpenRouter,
+		);
+	}
+
+	if (settings.embeddingProvider === "Google") {
+		return new Google(
+			settings.providerSettings.Google,
+			settings.interactionSettings,
+			loggingProvider,
+			settings.embeddingSettings.Google,
 		);
 	}
 
 	return new Ollama(
 		settings.providerSettings.Ollama,
 		settings.interactionSettings,
-		settings.embeddingSettings.Ollama,
 		loggingProvider,
+		settings.embeddingSettings.Ollama,
 	);
 }

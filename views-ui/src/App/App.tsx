@@ -2,7 +2,6 @@ import Toolbar from "./Toolbar";
 import { useEffect, useState } from "react";
 import Compose from "./features/Compose";
 import "./App.css";
-import { useSettingsContext } from "./context/settingsContext";
 import { useComposerContext } from "./context/composerContext";
 
 const App = () => {

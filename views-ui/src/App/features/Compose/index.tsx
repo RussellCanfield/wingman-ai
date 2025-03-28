@@ -9,6 +9,8 @@ import ThreadManagement from "./ThreadManagement";
 import { useSettingsContext } from "../../context/settingsContext";
 import { VscArrowDown, VscArrowUp } from "react-icons/vsc";
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
+import { FaRegQuestionCircle } from "react-icons/fa";
+import { Tooltip } from "react-tooltip";
 
 const getFileExtension = (fileName: string): string => {
 	return fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2);
@@ -74,6 +76,22 @@ export default function Compose() {
 		<main className="h-full flex flex-col overflow-auto text-base justify-between">
 			<div className="flex items-center justify-between p-2 pt-0 border-b border-[var(--vscode-panel-border)]">
 				<ThreadManagement loading={loading} />
+				<div>
+					<Tooltip
+						id="question-tooltip"
+						content="If you switch AI providers or abruptly stop mid-chat. It can cause compatibility issues, simply clear the chat to continue."
+						place="right"
+						className="max-w-xs z-50"
+						style={{
+							backgroundColor: isLightTheme ? '#333' : '#f5f5f5',
+							color: isLightTheme ? '#fff' : '#333',
+							borderRadius: '6px',
+							padding: '8px 12px',
+							boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+						}}
+					/>
+					<FaRegQuestionCircle size={16} data-tooltip-id="question-tooltip" />
+				</div>
 			</div>
 			<ErrorBoundary resetKeys={[activeComposerState ?? 0]} fallback={<div className="flex items-center justify-center h-full p-4 bg-[var(--vscode-input-background)] rounded-md">
 				<div className="text-center max-w-lg p-6">

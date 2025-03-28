@@ -7,10 +7,10 @@ import {
 	extractJsDocs,
 	extractStringDocs,
 } from "../service/extractFromCodeMd";
-import { generateDocPrompFactory } from "../service/generateDocPrompFactory";
 import { isTsRelated } from "../service/langCheckers";
 import { isArrowFunction } from "../providers/utilities";
 import { EVENT_DOC_GEN, telemetry } from "../providers/telemetryProvider";
+import { commonDocPrompt } from "../service/common";
 
 export class GenDocs implements vscode.CodeActionProvider {
 	constructor(private readonly _aiProvider: AIProvider) {}
@@ -28,9 +28,6 @@ export class GenDocs implements vscode.CodeActionProvider {
 			return;
 		}
 
-		if (!("genCodeDocs" in this._aiProvider)) {
-			return;
-		}
 		const codeAction = new vscode.CodeAction(
 			"✈️ Document using Wingman",
 			vscode.CodeActionKind.QuickFix,
@@ -115,14 +112,25 @@ export class GenDocs implements vscode.CodeActionProvider {
 
 				if (text && "genCodeDocs" in provider) {
 					eventEmitter._onQueryStart.fire();
-					const result = await provider.genCodeDocs!(
-						text,
-						generateDocPrompFactory(editor.document.languageId),
-						signal,
+					const model = provider.getModel();
+					const result = await model.invoke(
+						`${commonDocPrompt}
+Use the following file and extension to determine the appropriate language and documentation style such as jsdoc, etc.
+
+File:
+${vscode.window.activeTextEditor?.document.fileName}
+
+Generate documentation for the following code:
+${text}
+`,
+						{
+							signal,
+						},
 					);
 					eventEmitter._onQueryComplete.fire();
 					telemetry.sendEvent(EVENT_DOC_GEN);
-					const code = result; //extractFromCodeMd(result); sometimes I'm not getting the full MD so we'll depend on code blocks
+					const code =
+						typeof result === "string" ? result : result.content.toString();
 					if (!code) {
 						loggingProvider.logError(result);
 						vscode.window.showErrorMessage("Failed to generate docs");

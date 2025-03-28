@@ -2,16 +2,16 @@ import type { ApiSettingsType } from "@shared/types/Settings";
 import type { InitSettings } from "./App";
 import { useState } from "react";
 
-type OpenAiSection = InitSettings["providerSettings"]["OpenAI"] & {
+type OpenRouterSection = InitSettings["providerSettings"]["OpenRouter"] & {
 	onChange: (openAISettings: ApiSettingsType) => void;
 };
-export const OpenAISettingsView = ({
+export const OpenRouterSettingsView = ({
 	codeModel,
 	chatModel,
 	baseUrl,
 	apiKey,
 	onChange,
-}: OpenAiSection) => {
+}: OpenRouterSection) => {
 	const paths = { codeModel, chatModel, baseUrl, apiKey };
 
 	const [showPassword, setShowPassword] = useState(false);
@@ -40,10 +40,10 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={codeModel}
 					data-name="codeModel"
-					title="OpenAI Code Model"
+					title="OpenRouter Code Model"
 				/>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for autocomplete code generation (e.g., gpt-4o)
+					Used for autocomplete code generation (e.g., deepseek/deepseek-chat-v3-0324:free)
 				</p>
 			</div>
 
@@ -61,11 +61,29 @@ export const OpenAISettingsView = ({
 					onChange={handleChangeInput}
 					value={chatModel}
 					data-name="chatModel"
-					title="OpenAI Chat Model"
+					title="OpenRouter Chat Model"
 				/>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for the Chat Agent experience (e.g., gpt-4o)
+					Used for the Chat Agent experience (e.g., deepseek/deepseek-chat-v3-0324:free)
 				</p>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="baseUrl"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Base url:
+				</label>
+				<input
+					id="baseUrl"
+					type="text"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					onChange={handleChangeInput}
+					value={baseUrl}
+					data-name="baseUrl"
+					title="OpenRouter base url"
+				/>
 			</div>
 
 			<div className="flex flex-col">
@@ -84,7 +102,7 @@ export const OpenAISettingsView = ({
 						onChange={handleChangeInput}
 						value={apiKey}
 						data-name="apiKey"
-						title={!apiKey ? "Please add your OpenAI API key" : "OpenAI api key"}
+						title={!apiKey ? "Please add your OpenRouter API key" : "OpenRouter api key"}
 					/>
 					<button
 						type="button"
