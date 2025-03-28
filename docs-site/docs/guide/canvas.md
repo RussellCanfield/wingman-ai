@@ -14,6 +14,8 @@ The **canvas** has several tools available and should be familiar to most simple
 
 Here's a comprehensive explanation of the canvas basics:
 
+![](/Canvas-Drawing.png)
+
 ## Canvas Tools Overview
 
 1. **Drawing Tools**
