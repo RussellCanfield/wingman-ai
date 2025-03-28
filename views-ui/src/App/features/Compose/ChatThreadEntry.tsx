@@ -33,7 +33,7 @@ export const ChatThread = ({
 	const { isLightTheme } = useSettingsContext();
 	const { toolMap } = useTools(state);
 
-	console.log("Tool Map:", toolMap, loading, state);
+	console.log("Tool Map:", toolMap, loading);
 
 	const renderedTools = new Set<string>();
 	return (<>
@@ -59,7 +59,7 @@ export const ChatThread = ({
 			if (toolMessage.name === "write_file" && !renderedTools.has(toolMessage.toolCallId)) {
 				renderedTools.add(toolMessage.toolCallId);
 				return (
-					<ChatEntry key={toolMessage.toolCallId} fromUser={false}>
+					<ChatEntry key={`tool-${toolMessage.toolCallId}`} fromUser={false}>
 						<WriteFileOutput isLightTheme={isLightTheme} messages={toolEvents} key={toolMessage.toolCallId} />
 					</ChatEntry>
 				);
@@ -67,14 +67,14 @@ export const ChatThread = ({
 
 			if (toolMessage.name === "command_execute" && !renderedTools.has(toolMessage.toolCallId)) {
 				renderedTools.add(toolMessage.toolCallId);
-				return <ChatEntry key={toolMessage.toolCallId} fromUser={false}>
+				return <ChatEntry key={`tool-${toolMessage.toolCallId}`} fromUser={false}>
 					<CommandExecuteOutput messages={toolEvents} isLightTheme={isLightTheme} />
 				</ChatEntry>
 			}
 
 			if (!renderedTools.has(toolMessage.toolCallId)) {
 				renderedTools.add(toolMessage.toolCallId);
-				return <ChatEntry key={toolMessage.toolCallId} fromUser={false}>
+				return <ChatEntry key={`tool-${toolMessage.toolCallId}`} fromUser={false}>
 					<ToolOutput isLightTheme={isLightTheme} messages={toolEvents} loading={isLast && loading} />
 				</ChatEntry>
 			}

@@ -103,7 +103,7 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 						new ToolMessage(
 							message.id!,
 							toolCall.name,
-							toolCall.id!,
+							toolCall.id! ?? message.id!,
 							toolCall.args,
 							"start",
 							message.additional_kwargs,
@@ -127,7 +127,7 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 				new ToolMessage(
 					message.id!,
 					message.name!,
-					message.tool_call_id!,
+					message.tool_call_id! ?? message.id!,
 					content as unknown as Record<string, unknown>,
 					"end",
 					message.additional_kwargs,

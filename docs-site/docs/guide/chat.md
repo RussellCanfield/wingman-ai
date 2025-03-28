@@ -70,6 +70,10 @@ Can you think about different strategies for optimizing this database query befo
 The thinking tool differs from "thinking mode" in LLMs - it's a deliberate brainstorming step where Wingman evaluates options before taking action.
 :::
 
+### Image Generation
+
+Currently only supported using Google AI Studio as a provider, allows you to generate images.
+
 ## Constraints
 
 Wingman can execute commands but is restricted from running destructive commands. It will try not to run long running scripts like running a web server that does not exit.

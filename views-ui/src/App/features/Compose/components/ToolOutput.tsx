@@ -19,7 +19,8 @@ const ToolNames = {
     research: "Researching...",
     semantic_search: "Semantic search...",
     think: "Thinking...",
-    web_search: "Webpage search: "
+    web_search: "Webpage search: ",
+    generate_image: "Generating image..."
 };
 
 export interface ToolOutputProps {
@@ -128,12 +129,22 @@ const ComplexTool = memo(({ messages, isLightTheme }: { messages: ComposerMessag
         setCollapsed(prev => !prev);
     }, []);
 
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = messages[messages.length - 1] as ToolMessage;
 
     const toolContent = useMemo(() => {
-        if (!Array.isArray(lastMessage.content)) return [];
+        if (!Array.isArray(lastMessage.content)) {
+            if (lastMessage.metadata?.image) {
+                return [{
+                    type: "image_url",
+                    image_url: {
+                        url: lastMessage.metadata?.image.toString()
+                    }
+                }]
+            }
+            return undefined;
+        }
         return lastMessage.content as unknown as Array<ToolImageContent | ToolTextContent>;
-    }, [lastMessage.content]);
+    }, [lastMessage.content, lastMessage]);
 
     const saveImage = useCallback((imageBase64: string) => {
         vscode.postMessage({
@@ -156,7 +167,7 @@ const ComplexTool = memo(({ messages, isLightTheme }: { messages: ComposerMessag
         setContextMenu(prev => ({ ...prev, visible: false }));
     }, []);
 
-    if (!Array.isArray(lastMessage.content)) return null;
+    if (!Array.isArray(toolContent)) return null;
 
     return (
         <div className="relative p-3">
@@ -185,12 +196,13 @@ const ComplexTool = memo(({ messages, isLightTheme }: { messages: ComposerMessag
                             return (
                                 <div key={`image-${// biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
                                     index}`} className="relative">
-                                    <img
-                                        src={content.image_url.url}
-                                        alt="Tool generated"
-                                        className="max-w-full h-auto cursor-pointer"
-                                        onContextMenu={(e) => handleContextMenu(e, content.image_url.url)}
-                                    />
+                                    {content.image_url.url && (
+                                        <img
+                                            src={content.image_url.url}
+                                            alt="Tool generated"
+                                            className="max-w-full h-auto cursor-pointer"
+                                            onContextMenu={(e) => handleContextMenu(e, content.image_url.url)}
+                                        />)}
                                 </div>
                             );
                         }
@@ -317,7 +329,7 @@ export const ToolOutput = memo(({
                         )}
                     </div>
                 </div>
-                {!knownToolName && !toolIsLoading && (
+                {!toolIsLoading && (
                     <ComplexTool messages={messages} isLightTheme={isLightTheme} />
                 )}
             </div>

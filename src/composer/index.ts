@@ -181,9 +181,9 @@ export class WingmanAgent {
 			...remoteTools,
 		];
 
-		// if (this.aiProvider.generateImage) {
-		// 	this.tools.push(createImageGenerationTool(this.aiProvider));
-		// }
+		if (this.aiProvider.generateImage) {
+			this.tools.push(createImageGenerationTool(this.aiProvider));
+		}
 
 		if (this.vectorStore) {
 			this.tools.push(
@@ -659,7 +659,7 @@ export class WingmanAgent {
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 In most cases the user expects you to work autonomously, use the tools and answer your own questions. 
 Only provide code examples if you are explicitly asked.
-Any code examples provided should use github flavored markdown with the proper language - except when using tools.
+Any code examples provided should use github flavored markdown with the proper language format, use file names to infer the language if you are unable to determine it.
 
 **CRITICAL - Always use file paths relative to the current working directory**
 
@@ -1272,6 +1272,10 @@ Always execute the required function calls before you respond.`;
 							if (!outputMessage) break;
 
 							outputMessage.id = event.run_id;
+
+							if (toolCall && !toolCall.id) {
+								toolCall.id = event.run_id;
+							}
 
 							yield {
 								event: "composer-message",

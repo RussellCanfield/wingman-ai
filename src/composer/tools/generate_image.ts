@@ -1,9 +1,5 @@
 import { tool } from "@langchain/core/tools";
-import fs from "node:fs";
-import path from "node:path";
 import { baseToolSchema } from "./schemas";
-import type { CodeParser } from "../../server/files/parser";
-import { getTextDocumentFromPath } from "../../server/files/utils";
 import { ToolMessage } from "@langchain/core/messages";
 import type { AIProvider } from "../../service/base";
 import { z } from "zod";
@@ -26,14 +22,9 @@ export const createImageGenerationTool = (aiProvider: AIProvider) => {
 
 			return new ToolMessage({
 				id: config.callbacks._parentRunId,
-				content: [
-					{
-						type: "text",
-						text: "Image generated successfully",
-					},
-				],
+				content: "Image generated successfully",
 				additional_kwargs: {
-					image: result,
+					image: `data:image/png;base64,${result}`,
 				},
 				tool_call_id: config.toolCall.id,
 			});
