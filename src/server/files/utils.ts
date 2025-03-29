@@ -6,6 +6,7 @@ import type { Location } from "vscode-languageserver";
 import { URI } from "vscode-uri";
 import { loggingProvider } from "../loggingProvider";
 import { glob } from "tinyglobby";
+import { minimatch } from "minimatch";
 
 export const getWorkspaceFolderForDocument = (
 	documentUri: string,
@@ -98,39 +99,70 @@ export function clearFilterCache() {
 	cachedGitignorePatterns = null;
 }
 
+/**
+ * Checks if a file matches include patterns and doesn't match exclude patterns
+ * Updated to use individual patterns for better accuracy
+ */
 export async function checkFileMatch(
 	filePath: string,
 	includePatterns: string,
 	excludePatterns?: string,
+	workspace?: string,
 ): Promise<boolean> {
-	// Check inclusion
-	const included = await glob(includePatterns, { onlyFiles: true });
+	// Check if file matches include patterns
+	const isIncluded = minimatch(filePath, includePatterns, {
+		dot: true,
+		matchBase: true,
+	});
 
-	// Check exclusion if patterns are provided
-	const excluded = excludePatterns
-		? await glob(excludePatterns, { onlyFiles: true })
-		: [];
+	if (!isIncluded) {
+		return false; // File doesn't match inclusion pattern
+	}
 
-	// File is matched if it appears in included and not in excluded list
-	return included.includes(filePath) && !excluded.includes(filePath);
+	// If no exclude patterns and file is included, return true
+	if (!excludePatterns) {
+		return true;
+	}
+
+	// Check if the file matches any exclusion pattern
+	const isExcluded = minimatch(filePath, excludePatterns, {
+		dot: true,
+		matchBase: true,
+	});
+
+	// If workspace is provided, also check gitignore patterns
+	if (workspace) {
+		const isExcludedByGitignore = await isFileExcludedByGitignore(
+			filePath,
+			workspace,
+		);
+		return isIncluded && !isExcluded && !isExcludedByGitignore;
+	}
+
+	// Return true if file is included and not excluded
+	return isIncluded && !isExcluded;
 }
 
+/**
+ * Gets gitignore patterns as an array of individual patterns
+ * This makes it easier to process and filter files
+ */
 export async function getGitignorePatterns(
 	workspace: string,
 	exclusionFilter?: string,
-): Promise<string> {
+): Promise<string[]> {
 	if (cachedGitignorePatterns) {
-		return `{${cachedGitignorePatterns.join(",")}}`;
+		return cachedGitignorePatterns;
 	}
 
 	if (!workspace) {
-		return "";
+		return [];
 	}
 
 	const gitignorePath = path.join(workspace, ".gitignore");
 
 	try {
-		const gitignoreContent = await fs.readFile(gitignorePath);
+		const gitignoreContent = await fs.readFile(gitignorePath, "utf8");
 		const gitignoreLines = gitignoreContent.toString().split("\n");
 
 		// Process gitignore patterns
@@ -140,40 +172,100 @@ export async function getGitignorePatterns(
 				const trimmed = pattern.trim();
 				if (!trimmed) return null;
 
-				// Remove any existing braces or nested groups
-				const sanitizedPattern = trimmed
-					.replace(/[{}]/g, "")
-					.replace(/\s*,\s*/g, ",");
-
-				if (sanitizedPattern.startsWith("!")) {
-					return `!**/${sanitizedPattern.slice(1).trim()}`;
-				}
-
-				// Ensure pattern starts with **/ if it doesn't already
-				const globPattern = sanitizedPattern.startsWith("**/")
-					? sanitizedPattern
-					: `**/${sanitizedPattern}`;
-
-				return globPattern;
+				// Return the pattern as is, without additional modifications
+				return trimmed;
 			})
 			.filter(Boolean) as string[];
 
-		// Combine and sanitize additional exclusion filters
+		// Add additional exclusion filters if provided
 		if (exclusionFilter) {
 			const sanitizedFilters = exclusionFilter
 				.split(",")
-				.map((filter) => filter.replace(/[{}]/g, "").trim())
+				.map((filter) => filter.trim())
 				.filter(Boolean);
 
 			cachedGitignorePatterns.push(...sanitizedFilters);
 		}
 
-		// Wrap in single outer group
-		return `{${cachedGitignorePatterns.join(",")}}`;
+		loggingProvider.logInfo(
+			`Loaded ${cachedGitignorePatterns.length} gitignore patterns from ${gitignorePath}`,
+		);
+		return cachedGitignorePatterns;
 	} catch (err) {
 		if (err instanceof Error) {
 			loggingProvider.logError(`Error reading .gitignore file: ${err.message}`);
 		}
-		return "";
+		return [];
 	}
+}
+
+/**
+ * Helper function to check if a file matches any of the gitignore patterns
+ * This allows for more accurate pattern matching than trying to use a single combined pattern
+ */
+export async function isFileExcludedByGitignore(
+	filePath: string,
+	workspace: string,
+): Promise<boolean> {
+	const patterns = await getGitignorePatterns(workspace);
+	if (patterns.length === 0) return false;
+
+	// Get the relative path for proper matching
+	const relativePath = path.relative(workspace, filePath);
+
+	// Match against each pattern individually
+	for (const pattern of patterns) {
+		// Handle negated patterns (those starting with !)
+		if (pattern.startsWith("!")) {
+			const negatedPattern = pattern.substring(1);
+			if (matchPattern(relativePath, negatedPattern)) {
+				// Negated patterns override previous matches
+				return false;
+			}
+		} else if (matchPattern(relativePath, pattern)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Enhanced pattern matching helper for gitignore rules
+ * Handles directory-specific patterns and path segments correctly
+ */
+function matchPattern(filePath: string, pattern: string): boolean {
+	// Normalize path separators
+	const normalizedPath = filePath.replace(/\\/g, "/");
+	const normalizedPattern = pattern.replace(/\\/g, "/");
+
+	// Special handling for directory patterns (ending with /)
+	if (normalizedPattern.endsWith("/")) {
+		// Split path into segments
+		const pathSegments = normalizedPath.split("/");
+		const patternSegments = normalizedPattern.slice(0, -1).split("/");
+
+		// For patterns like "node_modules/", we want to match exactly at segment boundaries
+		if (patternSegments.length === 1) {
+			return pathSegments.includes(patternSegments[0]);
+		}
+
+		// For nested patterns, we need to check segment by segment
+		for (let i = 0; i <= pathSegments.length - patternSegments.length; i++) {
+			const segmentMatch = patternSegments.every(
+				(segment, j) => segment === pathSegments[i + j],
+			);
+			if (segmentMatch) return true;
+		}
+		return false;
+	}
+
+	// For regular patterns, use minimatch with correct matching options
+	return minimatch(normalizedPath, normalizedPattern, {
+		dot: true, // Allow matching files/dirs that begin with a dot
+		matchBase: false, // Don't match against basename only
+		nocase: false, // Case sensitive matching
+		noglobstar: false, // Allow ** for matching across directories
+		preserveMultipleSlashes: true, // Preserve exact path structure
+	});
 }

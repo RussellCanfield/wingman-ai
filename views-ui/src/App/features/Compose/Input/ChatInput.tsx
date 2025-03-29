@@ -14,6 +14,7 @@ import { useSettingsContext } from "../../../context/settingsContext";
 import { useComposerContext } from "../../../context/composerContext";
 import { vscode } from "../../../utilities/vscode";
 import { FaPencil } from "react-icons/fa6";
+import { debounce } from "../../../utilities/debounce";
 
 const MAX_WIDTH = 1024;
 const MAX_HEIGHT = 1024;
@@ -208,6 +209,8 @@ const ChatInput = ({
 		const value = e.target.value;
 		setInputValue(value);
 
+		console.log(value, value.split(/\s+/).pop() || "");
+
 		const lastWord = value.split(/\s+/).pop() || "";
 		if (lastWord.startsWith("@")) {
 			const searchTerm = lastWord.slice(1);
@@ -272,11 +275,18 @@ const ChatInput = ({
 		}
 	};
 
+	const debouncedFetchFiles = debounce((filter: string) => {
+		if (filter.length >= 2) {
+			vscode.postMessage({
+				command: "get-files",
+				value: filter,
+			});
+		}
+	}, 100);
+
+	// Inside component, replace fetchFiles with:
 	const fetchFiles = (filter: string) => {
-		vscode.postMessage({
-			command: "get-files",
-			value: filter,
-		});
+		debouncedFetchFiles(filter);
 	};
 
 	const inputContainerClass = `

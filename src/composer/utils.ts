@@ -1,7 +1,7 @@
 import type { ChatMessage } from "@langchain/core/messages";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { getGitignorePatterns } from "../server/files/utils";
+import { getGitignorePatterns, isFileExcludedByGitignore } from "../server/files/utils";
 import { minimatch } from "minimatch";
 
 export function formatMessages(messages: ChatMessage[]) {
@@ -38,7 +38,8 @@ export async function scanDirectory(
 	cwd?: string,
 ): Promise<DirectoryContent[]> {
 	const contents: DirectoryContent[] = [];
-	const excludePatterns = await getGitignorePatterns(cwd ?? dir);
+	const workspaceDir = cwd ?? dir;
+	const gitignorePatterns = await getGitignorePatterns(workspaceDir);
 
 	const systemDirs = [
 		".git",
@@ -59,16 +60,12 @@ export async function scanDirectory(
 			const fullPath = path.join(currentPath, entry.name);
 			const relativePath = path.relative(dir, fullPath);
 
+			// Skip system directories
 			if (systemDirs.includes(entry.name)) continue;
 
-			// Check if path matches exclude patterns using minimatch
-			if (excludePatterns) {
-				const isExcluded = minimatch(relativePath, excludePatterns, {
-					dot: true,
-					matchBase: true,
-				});
-				if (isExcluded) continue;
-			}
+			// Check if path matches gitignore patterns
+			const shouldExclude = await isFileExcludedByGitignore(fullPath, workspaceDir);
+			if (shouldExclude) continue;
 
 			if (entry.isDirectory()) {
 				contents.push({

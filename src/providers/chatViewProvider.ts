@@ -30,7 +30,10 @@ import path from "node:path";
 import type { FileMetadata } from "@shared/types/Message";
 import type { ThreadViewProvider } from "./threadViewProvider";
 import { getRecentFileTracker } from "./recentFileTracker";
-import { getGitignorePatterns } from "../server/files/utils";
+import {
+	getGitignorePatterns,
+	isFileExcludedByGitignore,
+} from "../server/files/utils";
 import { wingmanSettings } from "../service/settings";
 import { ImageEditorViewProvider } from "./imageEditorViewProvider";
 
@@ -286,30 +289,60 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 					case "get-files": {
 						const searchTerm = value as string | undefined;
 						if (!searchTerm || searchTerm?.length === 0) {
-							return [];
+							webviewView.webview.postMessage({
+								command: "get-files-result",
+								value: [],
+							});
+							return;
 						}
 
-						// Find all files in the workspace that match the search term
-						const matchingFiles = await vscode.workspace.findFiles(
-							"**/*",
-							(await getGitignorePatterns(this._workspace.workspacePath)) || "",
-						);
+						try {
+							// Find all files in the workspace first without any filtering
+							// We'll apply our own filtering based on the search term and gitignore patterns
+							const allFiles = await vscode.workspace.findFiles("**/*");
 
-						// Convert to relative paths
-						const filteredFiles: FileSearchResult[] = matchingFiles
-							.filter((f) => f.fsPath.includes(searchTerm))
-							.map((file) => {
-								const path = vscode.workspace.asRelativePath(file.fsPath);
-								return {
-									file: String(path.split("/").pop()),
-									path,
-								} satisfies FileSearchResult;
+							// Filter files that don't match the search term
+							const initialFiltered = allFiles.filter((file) =>
+								file.fsPath.toLowerCase().includes(searchTerm.toLowerCase()),
+							);
+
+							const matchingFiles: vscode.Uri[] = [];
+
+							// For a small number of files, process them directly
+							for (const file of initialFiltered) {
+								const shouldExclude = await isFileExcludedByGitignore(
+									file.fsPath,
+									this._workspace.workspacePath,
+								);
+
+								if (!shouldExclude) {
+									matchingFiles.push(file);
+								}
+							}
+
+							// Convert to FileSearchResult format
+							const filteredFiles: FileSearchResult[] = matchingFiles.map(
+								(file) => {
+									const path = vscode.workspace.asRelativePath(file.fsPath);
+									return {
+										file: String(path.split("/").pop()),
+										path,
+									} satisfies FileSearchResult;
+								},
+							);
+
+							// Send results
+							webviewView.webview.postMessage({
+								command: "get-files-result",
+								value: filteredFiles,
 							});
-
-						webviewView.webview.postMessage({
-							command: "get-files-result",
-							value: filteredFiles,
-						});
+						} catch (error) {
+							console.error("Error searching files:", error);
+							webviewView.webview.postMessage({
+								command: "get-files-result",
+								value: [],
+							});
+						}
 						break;
 					}
 					case "compose": {
