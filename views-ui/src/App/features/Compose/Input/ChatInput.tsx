@@ -147,6 +147,17 @@ const ChatInput = ({
 		};
 	}, []);
 
+	const debouncedFetchFiles = useRef(
+		debounce((filter: string) => {
+			if (filter.length >= 2) {
+				vscode.postMessage({
+					command: "get-files",
+					value: filter,
+				});
+			}
+		}, 50)
+	).current;
+
 	const handlePaste = (e: ClipboardEvent) => {
 		const items = e.clipboardData?.items;
 		if (!items) return;
@@ -218,35 +229,35 @@ const ChatInput = ({
 
 		// Find word boundary characters (space, newline, tab)
 		const boundaryRegex = /[\s\n\t]/;
-		
+
 		// Find the start of the current word
 		let startPos = cursorPos;
 		while (startPos > 0 && !boundaryRegex.test(text.charAt(startPos - 1))) {
 			startPos--;
 		}
-		
+
 		// Find the end of the current word
 		let endPos = cursorPos;
 		while (endPos < text.length && !boundaryRegex.test(text.charAt(endPos))) {
 			endPos++;
 		}
-		
+
 		// Extract the current word
 		const word = text.substring(startPos, endPos);
-		
+
 		return { word, start: startPos, end: endPos };
 	};
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		const value = e.target.value;
 		const cursorPos = e.target.selectionStart;
-		
+
 		setInputValue(value);
 		setCursorPosition(cursorPos);
-		
+
 		// Get the word where the cursor is currently positioned
 		const { word, start } = getWordAtCursor(value, cursorPos);
-		
+
 		// If the word starts with @ and has at least one character after it, trigger file search
 		if (word.startsWith("@") && word.length > 1) {
 			const searchTerm = word.slice(1);
@@ -262,15 +273,15 @@ const ChatInput = ({
 		if (!activeFiles.some((chip) => chip.path === item.path)) {
 			const newChips = [...activeFiles, item];
 			setActiveFiles(newChips);
-			
+
 			// Find the "@word" at the cursor position and replace it
 			const { word, start, end } = getWordAtCursor(inputValue, cursorPosition);
-			
+
 			if (word.startsWith("@")) {
 				// Replace the @word with empty string
-				const newValue = inputValue.substring(0, start) + 
-								 inputValue.substring(end);
-				
+				const newValue = inputValue.substring(0, start) +
+					inputValue.substring(end);
+
 				setInputValue(newValue);
 			}
 		}
@@ -317,15 +328,6 @@ const ChatInput = ({
 			setFocusedDropdownIndex((prevIndex) => Math.max(prevIndex - 1, 0));
 		}
 	};
-
-	const debouncedFetchFiles = debounce((filter: string) => {
-		if (filter.length >= 2) {
-			vscode.postMessage({
-				command: "get-files",
-				value: filter,
-			});
-		}
-	}, 100);
 
 	// Inside component, replace fetchFiles with:
 	const fetchFiles = (filter: string) => {

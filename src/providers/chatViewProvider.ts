@@ -297,44 +297,67 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						}
 
 						try {
-							// Find all files in the workspace first without any filtering
-							// We'll apply our own filtering based on the search term and gitignore patterns
-							const allFiles = await vscode.workspace.findFiles("**/*");
+							// First level optimization: Use a more targeted search pattern
+							// This significantly reduces the initial result set
+							const filePattern = `**/*${searchTerm}*`;
+							// Exclude common binary and build files to reduce initial result set
+							const excludePattern =
+								"**/node_modules/**,**/dist/**,**/build/**,**/*.jpg,**/*.jpeg,**/*.png,**/*.gif,**/*.ico,**/*.webp,**/*.mp3,**/*.mp4,**/*.woff,**/*.woff2";
 
-							// Filter files that don't match the search term
-							const initialFiltered = allFiles.filter((file) =>
-								file.fsPath.toLowerCase().includes(searchTerm.toLowerCase()),
+							const initialFiles = await vscode.workspace.findFiles(
+								filePattern,
+								excludePattern,
+								200,
 							);
 
-							const matchingFiles: vscode.Uri[] = [];
+							const matchingFiles: FileSearchResult[] = [];
 
-							// For a small number of files, process them directly
-							for (const file of initialFiltered) {
+							// Still apply gitignore check for precise control
+							for (const file of initialFiles) {
 								const shouldExclude = await isFileExcludedByGitignore(
 									file.fsPath,
 									this._workspace.workspacePath,
 								);
 
 								if (!shouldExclude) {
-									matchingFiles.push(file);
+									const relativePath = vscode.workspace.asRelativePath(
+										file.fsPath,
+									);
+									const fileName = relativePath.split("/").pop() || "";
+
+									matchingFiles.push({
+										file: fileName,
+										path: relativePath,
+									});
 								}
 							}
 
-							// Convert to FileSearchResult format
-							const filteredFiles: FileSearchResult[] = matchingFiles.map(
-								(file) => {
-									const path = vscode.workspace.asRelativePath(file.fsPath);
-									return {
-										file: String(path.split("/").pop()),
-										path,
-									} satisfies FileSearchResult;
-								},
-							);
+							// Sort results to prioritize:
+							// 1. Filename matches first (more relevant)
+							// 2. Then by path length (shorter paths usually more relevant)
+							matchingFiles.sort((a, b) => {
+								// Check if filename contains search term
+								const aFileMatch = a.file
+									.toLowerCase()
+									.includes(searchTerm.toLowerCase());
+								const bFileMatch = b.file
+									.toLowerCase()
+									.includes(searchTerm.toLowerCase());
 
-							// Send results
+								// Filename matches take priority
+								if (aFileMatch && !bFileMatch) return -1;
+								if (bFileMatch && !aFileMatch) return 1;
+
+								// If both or neither filenames match, shorter paths get priority
+								return a.path.length - b.path.length;
+							});
+
+							// Optionally limit final results to improve UI performance
+							const limitedResults = matchingFiles.slice(0, 50);
+
 							webviewView.webview.postMessage({
 								command: "get-files-result",
-								value: filteredFiles,
+								value: limitedResults,
 							});
 						} catch (error) {
 							console.error("Error searching files:", error);
@@ -345,6 +368,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						}
 						break;
 					}
+
 					case "compose": {
 						const request = value as ComposerRequest;
 						await this._lspClient.compose({
