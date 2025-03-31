@@ -110,6 +110,7 @@ const ChatInput = ({
 	const [focusedDropdownIndex, setFocusedDropdownIndex] = useState<number>(1);
 	const [allDropdownItems, setDropdownItems] = useState<FileSearchResult[]>([]);
 	const [inputRect, setInputRect] = useState<DOMRect | null>(null);
+	const [cursorPosition, setCursorPosition] = useState<number>(0);
 
 	useEffect(() => {
 		if (isVisible) {
@@ -205,15 +206,50 @@ const ChatInput = ({
 	const chipMap = new Set(activeFiles.map((chip) => chip.path));
 	const filteredDropDownItems = allDropdownItems.filter((d) => !chipMap.has(d.path));
 
+	// Track when cursor position changes to get correct word at cursor
+	const handleCursorPositionChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+		setCursorPosition(e.currentTarget.selectionStart);
+	};
+
+	// Function to extract the word at the current cursor position
+	const getWordAtCursor = (text: string, cursorPos: number): { word: string, start: number, end: number } => {
+		// Handle empty text
+		if (!text) return { word: "", start: 0, end: 0 };
+
+		// Find word boundary characters (space, newline, tab)
+		const boundaryRegex = /[\s\n\t]/;
+		
+		// Find the start of the current word
+		let startPos = cursorPos;
+		while (startPos > 0 && !boundaryRegex.test(text.charAt(startPos - 1))) {
+			startPos--;
+		}
+		
+		// Find the end of the current word
+		let endPos = cursorPos;
+		while (endPos < text.length && !boundaryRegex.test(text.charAt(endPos))) {
+			endPos++;
+		}
+		
+		// Extract the current word
+		const word = text.substring(startPos, endPos);
+		
+		return { word, start: startPos, end: endPos };
+	};
+
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		const value = e.target.value;
+		const cursorPos = e.target.selectionStart;
+		
 		setInputValue(value);
-
-		console.log(value, value.split(/\s+/).pop() || "");
-
-		const lastWord = value.split(/\s+/).pop() || "";
-		if (lastWord.startsWith("@")) {
-			const searchTerm = lastWord.slice(1);
+		setCursorPosition(cursorPos);
+		
+		// Get the word where the cursor is currently positioned
+		const { word, start } = getWordAtCursor(value, cursorPos);
+		
+		// If the word starts with @ and has at least one character after it, trigger file search
+		if (word.startsWith("@") && word.length > 1) {
+			const searchTerm = word.slice(1);
 			fetchFiles(searchTerm);
 		} else {
 			setShowDropdown(false);
@@ -226,10 +262,17 @@ const ChatInput = ({
 		if (!activeFiles.some((chip) => chip.path === item.path)) {
 			const newChips = [...activeFiles, item];
 			setActiveFiles(newChips);
-
-			const words = inputValue.split(/\s+/);
-			words.pop();
-			setInputValue(words.join(" ") + (words.length > 0 ? " " : ""));
+			
+			// Find the "@word" at the cursor position and replace it
+			const { word, start, end } = getWordAtCursor(inputValue, cursorPosition);
+			
+			if (word.startsWith("@")) {
+				// Replace the @word with empty string
+				const newValue = inputValue.substring(0, start) + 
+								 inputValue.substring(end);
+				
+				setInputValue(newValue);
+			}
 		}
 
 		setShowDropdown(false);
@@ -264,12 +307,12 @@ const ChatInput = ({
 					handleAutoResize(e.target as HTMLTextAreaElement, true);
 				}
 			}
-		} else if (e.key === "ArrowDown") {
+		} else if (e.key === "ArrowDown" && showDropdown && filteredDropDownItems.length > 0) {
 			e.preventDefault();
 			setFocusedDropdownIndex((prevIndex) =>
-				Math.min(prevIndex + 1, allDropdownItems.length - 1)
+				Math.min(prevIndex + 1, filteredDropDownItems.length - 1)
 			);
-		} else if (e.key === "ArrowUp") {
+		} else if (e.key === "ArrowUp" && showDropdown && filteredDropDownItems.length > 0) {
 			e.preventDefault();
 			setFocusedDropdownIndex((prevIndex) => Math.max(prevIndex - 1, 0));
 		}
@@ -349,6 +392,8 @@ const ChatInput = ({
 						handleInputChange(e);
 						handleAutoResize(e.target);
 					}}
+					onKeyUp={handleCursorPositionChange}
+					onClick={handleCursorPositionChange}
 					ref={chatInputBox}
 					tabIndex={0}
 					rows={1}

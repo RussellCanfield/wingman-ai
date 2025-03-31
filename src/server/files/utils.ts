@@ -237,35 +237,71 @@ export async function isFileExcludedByGitignore(
 function matchPattern(filePath: string, pattern: string): boolean {
 	// Normalize path separators
 	const normalizedPath = filePath.replace(/\\/g, "/");
-	const normalizedPattern = pattern.replace(/\\/g, "/");
+	let normalizedPattern = pattern.replace(/\\/g, "/");
 
-	// Special handling for directory patterns (ending with /)
-	if (normalizedPattern.endsWith("/")) {
-		// Split path into segments
-		const pathSegments = normalizedPath.split("/");
-		const patternSegments = normalizedPattern.slice(0, -1).split("/");
-
-		// For patterns like "node_modules/", we want to match exactly at segment boundaries
-		if (patternSegments.length === 1) {
-			return pathSegments.includes(patternSegments[0]);
-		}
-
-		// For nested patterns, we need to check segment by segment
-		for (let i = 0; i <= pathSegments.length - patternSegments.length; i++) {
-			const segmentMatch = patternSegments.every(
-				(segment, j) => segment === pathSegments[i + j],
-			);
-			if (segmentMatch) return true;
-		}
-		return false;
+	// Handle trailing slashes in patterns
+	const isDirectoryPattern = normalizedPattern.endsWith("/");
+	if (isDirectoryPattern) {
+		normalizedPattern = normalizedPattern.slice(0, -1);
 	}
 
-	// For regular patterns, use minimatch with correct matching options
+	// First try exact matching (for both directory and non-directory patterns)
+	const exactMatchOptions = {
+		dot: true,
+		nocase: false,
+		matchBase: false,
+		noglobstar: false,
+	};
+
+	// For patterns like "node_modules", we need to match both files and paths that contain node_modules
+	// If it's a directory pattern (node_modules/), the pattern should only match directories
+	if (!isDirectoryPattern) {
+		// For non-directory patterns:
+		// 1. Check if the full path matches the pattern
+		const fullPathMatch = minimatch(
+			normalizedPath,
+			normalizedPattern,
+			exactMatchOptions,
+		);
+		if (fullPathMatch) return true;
+
+		// 2. Check if any path segment matches the pattern
+		const pathSegments = normalizedPath.split("/");
+		return pathSegments.some((segment) => segment === normalizedPattern);
+	}
+	// For directory patterns:
+	// 1. Check if full path matches (should be a directory)
+	if (minimatch(normalizedPath, normalizedPattern, exactMatchOptions)) {
+		return true;
+	}
+
+	// 2. Check if any directory in the path matches the pattern
+	// This handles cases like "node_modules/" matching "path/to/node_modules/something"
+	const pathSegments = normalizedPath.split("/");
+	for (let i = 0; i < pathSegments.length - 1; i++) {
+		// Check if this segment matches the directory pattern
+		if (pathSegments[i] === normalizedPattern) {
+			return true;
+		}
+
+		// Check for multi-segment patterns
+		if (normalizedPattern.includes("/")) {
+			const patternSegments = normalizedPattern.split("/");
+			if (i + patternSegments.length <= pathSegments.length) {
+				const segmentMatch = patternSegments.every(
+					(segment, j) => segment === pathSegments[i + j],
+				);
+				if (segmentMatch) return true;
+			}
+		}
+	}
+
+	// Fall back to standard minimatch with matchBase (to handle globs like "*.log")
 	return minimatch(normalizedPath, normalizedPattern, {
-		dot: true, // Allow matching files/dirs that begin with a dot
-		matchBase: false, // Don't match against basename only
-		nocase: false, // Case sensitive matching
-		noglobstar: false, // Allow ** for matching across directories
-		preserveMultipleSlashes: true, // Preserve exact path structure
+		dot: true,
+		matchBase: true,
+		nocase: false,
+		noglobstar: false,
+		preserveMultipleSlashes: true,
 	});
 }
