@@ -265,7 +265,24 @@ export const ToolOutput = memo(({
 
             if (toolName === "read_file") {
                 const content: Record<string, unknown> | string = toolIsLoading ? messages[0].content : messages[1].content;
-                const fileContent = (typeof (content) === "string" ? JSON.parse(content) : content) as FileMetadata;
+                let fileContent: FileMetadata | undefined;
+
+                if (typeof (content) === "string") {
+                    try {
+                        if (content.startsWith('{')) {
+                            fileContent = JSON.parse(content);
+                        } else {
+                            fileContent = messages[0].content as unknown as FileMetadata;
+                        }
+                    } catch (e) {
+                        fileContent = JSON.parse(String(messages[0].content));
+                    }
+                } else {
+                    fileContent = content as unknown as FileMetadata;
+                }
+
+                if (!fileContent) return null;
+
                 const handleClick = () => openFile({ path: fileContent.path });
                 const handleKeyDown = (e: React.KeyboardEvent) => {
                     if (e.key === 'Enter' || e.key === ' ') {

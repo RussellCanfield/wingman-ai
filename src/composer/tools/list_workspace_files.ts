@@ -10,7 +10,9 @@ const listDirectorySchema = baseToolSchema.extend({
 	depth: z
 		.number()
 		.optional()
-		.describe("How deep to scan the directory (default: 3)"),
+		.describe(
+			"The level of subdirectories to recursively descend into during the scan. For example, a depth of 1 will scan the initial directory and its direct subdirectories, while 2 will go one level deeper. The default value is 3.",
+		),
 });
 
 /**
