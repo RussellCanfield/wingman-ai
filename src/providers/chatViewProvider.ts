@@ -301,13 +301,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							// This significantly reduces the initial result set
 							const filePattern = `**/*${searchTerm}*`;
 							// Exclude common binary and build files to reduce initial result set
-							const excludePattern =
-								"**/node_modules/**,**/dist/**,**/build/**,**/*.jpg,**/*.jpeg,**/*.png,**/*.gif,**/*.ico,**/*.webp,**/*.mp3,**/*.mp4,**/*.woff,**/*.woff2";
+							const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+							const excludePattern = new vscode.RelativePattern(
+								workspaceFolder!,
+								"{**/node_modules/**,**/dist/**,**/build/**,**/*.jpg,**/*.jpeg,**/*.png,**/*.gif,**/*.ico,**/*.webp,**/*.mp3,**/*.mp4,**/*.woff,**/*.woff2}",
+							);
+
+							// const excludePattern =
+							// 	"{**/node_modules/**,**/dist/**,**/build/**,**/*.{jpg,jpeg,png,gif,ico,webp,mp3,mp4,woff,woff2}}";
 
 							const initialFiles = await vscode.workspace.findFiles(
 								filePattern,
 								excludePattern,
-								200,
+								500,
 							);
 
 							const matchingFiles: FileSearchResult[] = [];

@@ -34,6 +34,31 @@ export const OllamaSettingsView = ({
 		};
 	}, []);
 
+	// Set default models when ollamaModels are loaded
+	useEffect(() => {
+		if (ollamaModels && ollamaModels.length > 0) {
+			const paths = { codeModel, chatModel, baseUrl, apiPath, modelInfoPath };
+			let shouldUpdate = false;
+
+			// If codeModel is not set or not in the available models list, use the first model
+			if (!codeModel || !ollamaModels.includes(codeModel)) {
+				paths.codeModel = ollamaModels[0];
+				shouldUpdate = true;
+			}
+
+			// If chatModel is not set or not in the available models list, use the first model
+			if (!chatModel || !ollamaModels.includes(chatModel)) {
+				paths.chatModel = ollamaModels[0];
+				shouldUpdate = true;
+			}
+
+			// Only update if changes were made
+			if (shouldUpdate) {
+				onChange(paths);
+			}
+		}
+	}, [ollamaModels, codeModel, chatModel, baseUrl, apiPath, modelInfoPath, onChange]);
+
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { command, value } = event.data;
 

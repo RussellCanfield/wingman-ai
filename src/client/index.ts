@@ -105,13 +105,16 @@ export class LSPClient {
 				)
 					.then(async (msg) => {
 						const settings = await wingmanSettings.loadSettings();
-						const textContent = Array.isArray(msg.content)
-							? (
-									msg.content.find(
-										(m) => m.type === "text",
-									)! as MessageContentText
-								).text
-							: msg.content.toString();
+						const textContent =
+							typeof msg === "string"
+								? msg
+								: Array.isArray(msg.content)
+									? (
+											msg.content.find(
+												(m) => m.type === "text",
+											)! as MessageContentText
+										).text
+									: msg.content;
 
 						await wingmanSettings.saveSettings({
 							...settings,
@@ -347,7 +350,7 @@ export class LSPClient {
 					aiProvider: settings.aiProvider,
 				});
 				throw new Error(
-					`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
+					`AI Provider: ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
 				);
 			}
 
@@ -359,7 +362,7 @@ export class LSPClient {
 						aiProvider: settings.aiProvider,
 					});
 					throw new Error(
-						`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
+						`Embeddings Provider: ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
 					);
 				}
 			}
@@ -452,13 +455,16 @@ export class LSPClient {
 				)
 					.then(async (msg) => {
 						const settings = await wingmanSettings.loadSettings();
-						const textContent = Array.isArray(msg.content)
-							? (
-									msg.content.find(
-										(m) => m.type === "text",
-									)! as MessageContentText
-								).text
-							: msg.content.toString();
+						const textContent =
+							typeof msg === "string"
+								? msg
+								: Array.isArray(msg.content)
+									? (
+											msg.content.find(
+												(m) => m.type === "text",
+											)! as MessageContentText
+										).text
+									: msg.content;
 
 						await wingmanSettings.saveSettings({
 							...settings,

@@ -35,6 +35,32 @@ export const OllamaSettingsView = ({
 		};
 	}, []);
 
+	// Set default models when ollamaModels are loaded
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+	useEffect(() => {
+		if (ollamaModels && ollamaModels.length > 0) {
+			const updatedPaths = { ...paths };
+			let shouldUpdate = false;
+
+			// If model is not set or not in the available models list, use the first model
+			if (!model || !ollamaModels.includes(model)) {
+				updatedPaths.model = ollamaModels[0];
+				shouldUpdate = true;
+			}
+
+			// If summaryModel is not set or not in the available models list, use the first model
+			if (!summaryModel || !ollamaModels.includes(summaryModel)) {
+				updatedPaths.summaryModel = ollamaModels[0];
+				shouldUpdate = true;
+			}
+
+			// Only update if changes were made
+			if (shouldUpdate) {
+				onChange(updatedPaths);
+			}
+		}
+	}, [ollamaModels, model, summaryModel, dimensions, baseUrl, apiPath, modelInfoPath, onChange]);
+
 	const handleResponse = (event: MessageEvent<AppMessage>) => {
 		const { command, value } = event.data;
 
@@ -68,6 +94,7 @@ export const OllamaSettingsView = ({
 					<select
 						id="model"
 						value={model}
+						data-name="model"
 						onChange={handleChangeInput}
 						className="w-full
 							px-3 
@@ -120,6 +147,7 @@ export const OllamaSettingsView = ({
 					<select
 						id="summaryModel"
 						value={summaryModel}
+						data-name="summaryModel"
 						onChange={handleChangeInput}
 						className="w-full
 							px-3 
