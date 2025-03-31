@@ -23,7 +23,7 @@ export class Anthropic implements AIProvider {
 			throw new Error("Unable to load Anthropic settings.");
 		}
 
-		if (!this.settings?.apiKey.trim()) {
+		if (!this.settings?.apiKey || !this.settings.apiKey.trim()) {
 			throw new Error("Anthropic API key is required.");
 		}
 

@@ -21,15 +21,25 @@ export class Google implements AIProvider {
 			throw new Error("Unable to load Google settings.");
 		}
 
-		if (!this.settings?.apiKey.trim() || !this.settings?.baseUrl.trim()) {
+		if (
+			!this.settings?.apiKey ||
+			!this.settings.apiKey.trim() ||
+			!this.settings?.baseUrl ||
+			!this.settings.baseUrl.trim()
+		) {
 			throw new Error("Google AI Studio requires an api key and a base url.");
 		}
 
 		if (
 			embeddingSettings &&
-			(!embeddingSettings.apiKey.trim() ||
+			(!embeddingSettings.apiKey ||
+				!embeddingSettings.apiKey.trim() ||
+				!embeddingSettings.dimensions ||
 				Number.isNaN(embeddingSettings.dimensions) ||
+				embeddingSettings.dimensions <= 0 ||
+				!embeddingSettings.model ||
 				!embeddingSettings.model.trim() ||
+				!embeddingSettings.summaryModel ||
 				!embeddingSettings.summaryModel.trim())
 		) {
 			throw new Error(

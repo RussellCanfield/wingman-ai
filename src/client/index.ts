@@ -369,7 +369,7 @@ export class LSPClient {
 			return true;
 		} catch (e) {
 			console.error(e);
-			return false;
+			throw e;
 		}
 	};
 

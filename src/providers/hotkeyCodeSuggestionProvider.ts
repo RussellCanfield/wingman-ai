@@ -4,9 +4,7 @@ import vscode, {
 	SnippetString,
 } from "vscode";
 import { eventEmitter } from "../events/eventEmitter";
-import type { AIProvider, AIStreamProvider } from "../service/base";
 import { getContentWindow } from "../service/utils/contentWindow";
-import type { Settings } from "@shared/types/Settings";
 import { EVENT_CODE_COMPLETE_HOTKEY, telemetry } from "./telemetryProvider";
 import { wingmanSettings } from "../service/settings";
 import { CreateAIProvider } from "../service/utils/models";
@@ -38,19 +36,20 @@ export class HotKeyCodeSuggestionProvider
 			return [];
 		}
 
-		const settings = await wingmanSettings.loadSettings();
-		const aiProvider = CreateAIProvider(settings, loggingProvider);
-
-		const [prefix, suffix] = getContentWindow(
-			document,
-			position,
-			settings.interactionSettings.codeContextWindow,
-		);
-		//get the biginning of the last line in prefix
-		const lastLineStart = prefix.lastIndexOf("\n");
-		// count the starting spaces in the last line
-		const spaces = prefix.substring(lastLineStart + 1).search(/\S/) ?? 0;
 		try {
+			const settings = await wingmanSettings.loadSettings();
+			const aiProvider = CreateAIProvider(settings, loggingProvider);
+
+			const [prefix, suffix] = getContentWindow(
+				document,
+				position,
+				settings.interactionSettings.codeContextWindow,
+			);
+			//get the biginning of the last line in prefix
+			const lastLineStart = prefix.lastIndexOf("\n");
+			// count the starting spaces in the last line
+			const spaces = prefix.substring(lastLineStart + 1).search(/\S/) ?? 0;
+
 			eventEmitter._onQueryStart.fire();
 			try {
 				telemetry.sendEvent(EVENT_CODE_COMPLETE_HOTKEY, {

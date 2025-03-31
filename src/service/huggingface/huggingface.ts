@@ -18,7 +18,7 @@ export class HuggingFace implements AIProvider {
 			throw new Error("Unable to log HuggingFace configuration.");
 		}
 
-		if (!this.settings?.apiKey.trim()) {
+		if (!this.settings?.apiKey || !this.settings.apiKey.trim()) {
 			throw new Error("Hugging Face API key is required.");
 		}
 

@@ -31,9 +31,14 @@ export class Ollama implements AIProvider {
 
 		if (
 			embeddingSettings &&
-			(!embeddingSettings.baseUrl.trim() ||
+			(!embeddingSettings.baseUrl ||
+				!embeddingSettings.baseUrl.trim() ||
+				!embeddingSettings.dimensions ||
 				Number.isNaN(embeddingSettings.dimensions) ||
+				embeddingSettings.dimensions <= 0 ||
+				!embeddingSettings.model ||
 				!embeddingSettings.model.trim() ||
+				!embeddingSettings.summaryModel ||
 				!embeddingSettings.summaryModel.trim())
 		) {
 			throw new Error("Ollama embeddings are not configured properly.");

@@ -329,6 +329,8 @@ export class WingmanAgent {
 				config,
 				{
 					messages: updatedMessages,
+					commands: [],
+					files: [],
 				},
 				"tools",
 			);

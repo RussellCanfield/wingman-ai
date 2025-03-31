@@ -21,16 +21,21 @@ export class OpenAI implements AIProvider {
 			throw new Error("Unable to load OpenAI settings.");
 		}
 
-		if (!this.settings?.apiKey.trim()) {
+		if (!this.settings?.apiKey || !this.settings.apiKey.trim()) {
 			throw new Error("OpenAI API key is required.");
 		}
 
 		if (
 			embeddingSettings &&
 			(!embeddingSettings.apiKey ||
+				!embeddingSettings.apiKey.trim() ||
+				!embeddingSettings.dimensions ||
 				Number.isNaN(embeddingSettings.dimensions) ||
+				embeddingSettings.dimensions <= 0 ||
 				!embeddingSettings.model ||
-				!embeddingSettings.summaryModel)
+				!embeddingSettings.model.trim() ||
+				!embeddingSettings.summaryModel ||
+				!embeddingSettings.summaryModel.trim())
 		) {
 			throw new Error("OpenAI embeddings are not configured properly.");
 		}

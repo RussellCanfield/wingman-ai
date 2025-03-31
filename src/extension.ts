@@ -166,7 +166,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				aiProvider: settings.aiProvider,
 			});
 			throw new Error(
-				`AI Provider ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
+				`AI Provider: ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
 			);
 		}
 		await lspClient.activate(context, settings);
