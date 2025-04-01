@@ -64,12 +64,9 @@ import { MCPAdapter } from "./tools/mcpAdapter";
 import { createWebSearchTool } from "./tools/web_search";
 import { Ollama } from "../service/ollama";
 import { createImageGenerationTool } from "./tools/generate_image";
+import { Google } from "../service/google";
 
 let controller = new AbortController();
-
-export function cancelComposer() {
-	controller.abort();
-}
 
 export type GraphStateAnnotation = typeof GraphAnnotation.State;
 
@@ -135,6 +132,7 @@ export class WingmanAgent {
 	private workflow: StateGraph<GraphStateAnnotation> | undefined;
 	private messages: GraphStateAnnotation["messages"] = [];
 	private mcpAdapter: MCPAdapter;
+	private lastToolCallId: string | undefined;
 
 	initialized = false;
 
@@ -212,6 +210,37 @@ export class WingmanAgent {
 			.addEdge("tools", "agent");
 
 		this.initialized = true;
+	}
+
+	async cancel(threadId: string) {
+		controller.abort();
+
+		if (threadId) {
+			const graph = this.workflow!.compile({ checkpointer: this.checkpointer });
+			const config = {
+				configurable: { thread_id: threadId },
+			};
+
+			const state = await graph.getState(config);
+			const graphState = state.values as GraphStateAnnotation;
+
+			if (graphState.messages) {
+				await graph.updateState(
+					config,
+					{
+						messages: [
+							new HumanMessage({
+								id: crypto.randomUUID(),
+								content: "Cancelled the interaction.",
+							}),
+						],
+						commands: [],
+						files: [],
+					},
+					"tools",
+				);
+			}
+		}
 	}
 
 	/**
@@ -343,10 +372,12 @@ export class WingmanAgent {
 			);
 
 			try {
+				this.checkpointer.cleanup(0, 1, thread.id);
 				await graph.updateState(
 					config,
 					{
-						messages: removalMessages,
+						...state.values,
+						messages: [],
 					},
 					"tools",
 				);
@@ -503,57 +534,22 @@ export class WingmanAgent {
 		const state = graphState.values as GraphStateAnnotation;
 		const messages: GraphStateAnnotation["messages"] = [];
 
-		// Process each file in the array
+		const message = state.messages.find(
+			(m) => m instanceof ToolMessage && m.tool_call_id === toolId,
+		);
+
 		for (const file of files) {
-			const fileIndex = state.files.findIndex((f) => f.path === file.path);
-
-			const message = state.messages.find(
-				(m) => m instanceof ToolMessage && m.tool_call_id === toolId,
-			);
-
 			if (message) {
 				message.additional_kwargs.file = { ...file };
 				messages.push(message);
 			}
-
-			if (fileIndex !== -1) {
-				const matchingFile = state.files[fileIndex];
-
-				// Check if event file has a definitive status
-				const eventFileHasStatus =
-					file.accepted === true || file.rejected === true;
-
-				// If event file doesn't have status, check if matching file has one
-				const matchingFileHasStatus =
-					matchingFile.accepted === true || matchingFile.rejected === true;
-
-				// Only proceed if at least one file has a definitive status
-				if (!eventFileHasStatus && !matchingFileHasStatus) {
-					loggingProvider.logError(
-						`Unable to update file - file has no acceptance status: ${file.path}`,
-					);
-					continue; // Skip to the next file
-				}
-
-				if (file.rejected) {
-					// Remove rejected files from the state
-					state.files = state.files.filter((f) => f.path !== file.path);
-				} else {
-					// Update the file with new properties
-					state.files[fileIndex] = { ...matchingFile, ...file };
-				}
-			} else {
-				state.files.push(file);
-			}
 		}
 
-		// Update the state once after processing all files
 		await graph.updateState(
 			{
 				configurable: { thread_id: threadId },
 			},
 			{
-				...state,
 				messages,
 			},
 			"review",
@@ -660,7 +656,7 @@ export class WingmanAgent {
 					content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 In most cases the user expects you to work autonomously, use the tools and answer your own questions. 
-Only provide code examples if you are explicitly asked.
+Only provide code examples if you are explicitly asked for an "example" or "snippet".
 Any code examples provided should use github flavored markdown with the proper language format, use file names to infer the language if you are unable to determine it.
 
 **CRITICAL - Always use file paths relative to the current working directory**
@@ -834,7 +830,6 @@ Use this context judiciously when it helps address their needs.`,
 								},
 							}),
 						],
-						commands: [cmd],
 					},
 				});
 			}
@@ -859,7 +854,6 @@ Use this context judiciously when it helps address their needs.`,
 				goto: "tools",
 				update: {
 					messages: [lastMessage],
-					commands: [cmd],
 				},
 			});
 		}
@@ -882,7 +876,6 @@ Use this context judiciously when it helps address their needs.`,
 								},
 							}),
 						],
-						files,
 					},
 				});
 			}
@@ -907,7 +900,6 @@ Use this context judiciously when it helps address their needs.`,
 				goto: "tools",
 				update: {
 					messages: [lastMessage],
-					files,
 				},
 			});
 		}
@@ -1063,7 +1055,7 @@ ${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path
 
 		if (request.context?.fromSelection) {
 			prefixMsg += `\n\n# User Provided Code Context
-Base your guidance on the following information, prefer giving code examples and not editing the file directly unless explicitly asked:
+Base your guidance on the following information, assume that I want code snippet and not editing the file directly:
 
 Language: ${request.context.language}
 File Path: ${path.relative(this.workspace, request.context.fileName)}
@@ -1094,6 +1086,18 @@ ${request.context.text}`;
 		) {
 			prefixMsg += `\n\n# Function calling
 Always execute the required function calls before you respond.`;
+		}
+
+		if (
+			(this.aiProvider instanceof Google ||
+				this.aiProvider instanceof Google) &&
+			(this.settings?.providerSettings.Google ||
+				this.settings?.providerSettings.Google)
+		) {
+			prefixMsg += `\n\n# Function calling
+Always execute the required function calls before you respond.
+
+If you are unclear about what to do, ask me for clarification.`;
 		}
 
 		messageContent.push({
@@ -1196,7 +1200,7 @@ Always execute the required function calls before you respond.`;
 					break;
 				}
 				case "on_tool_end": {
-					let message: BaseMessage | undefined;
+					let message: ToolMessage | undefined;
 					if (Array.isArray(event.data.output) && event.data.output[0].update) {
 						const cmd = event.data.output[0].update;
 						message = cmd.messages[0];
@@ -1215,6 +1219,10 @@ Always execute the required function calls before you respond.`;
 
 					if (!message.id) {
 						message.id = event.run_id;
+					}
+
+					if (!message.tool_call_id) {
+						message.tool_call_id = this.lastToolCallId!;
 					}
 
 					if (!message.name) {
@@ -1276,7 +1284,8 @@ Always execute the required function calls before you respond.`;
 							outputMessage.id = event.run_id;
 
 							if (toolCall && !toolCall.id) {
-								toolCall.id = event.run_id;
+								this.lastToolCallId = event.run_id;
+								toolCall.id = this.lastToolCallId;
 							}
 
 							yield {

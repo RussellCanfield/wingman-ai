@@ -9,7 +9,7 @@ import { Command } from "@langchain/langgraph";
 import { ToolMessage } from "@langchain/core/messages";
 
 export const writeFileSchema = baseFileSchema.extend({
-	contents: z.string().describe("The contents of the file"),
+	contents: z.string().describe("The contents of the file as a string"),
 });
 
 /**
@@ -26,7 +26,7 @@ const generateDiffFromModifiedCode = async (
 		}
 
 		if (typeof newCode !== "string") {
-			throw new Error("New code must be a string");
+			throw new Error(`New code must be a string, received: ${typeof newCode}`);
 		}
 
 		const patch = createPatch(
@@ -128,20 +128,13 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 					}
 				}
 
-				return new Command({
-					update: {
-						files: [file],
-						messages: [
-							new ToolMessage({
-								id: config.callbacks._parentRunId,
-								content: `Successfully wrote file: ${input.path}`,
-								tool_call_id: config.toolCall.id,
-								name: "write_file",
-								additional_kwargs: {
-									file: file,
-								},
-							}),
-						],
+				return new ToolMessage({
+					id: config.callbacks._parentRunId,
+					content: `Successfully wrote file: ${input.path}`,
+					tool_call_id: config.toolCall.id,
+					name: "write_file",
+					additional_kwargs: {
+						file: file,
 					},
 				});
 			} catch (e) {

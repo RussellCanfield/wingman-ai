@@ -68,20 +68,13 @@ export const createCommandExecuteTool = (
 							rejected: false,
 						};
 						resolve(
-							new Command({
-								update: {
-									commands: [command],
-									messages: [
-										new ToolMessage({
-											id: config.runId,
-											content: `Command: "${input.command}" rejected, contains potentially destructive operations`,
-											tool_call_id: config.toolCall.id,
-											name: "command_execute",
-											additional_kwargs: {
-												command,
-											},
-										}),
-									],
+							new ToolMessage({
+								id: config.runId,
+								content: `Command: "${input.command}" rejected, contains potentially destructive operations`,
+								tool_call_id: config.toolCall.id,
+								name: "command_execute",
+								additional_kwargs: {
+									command,
 								},
 							}),
 						);
@@ -103,20 +96,13 @@ export const createCommandExecuteTool = (
 							rejected: false,
 						};
 						resolve(
-							new Command({
-								update: {
-									commands: [command],
-									messages: [
-										new ToolMessage({
-											id: config.runId,
-											content: `Command: "${input.command}" rejected, script execution not allowed`,
-											tool_call_id: config.toolCall.id,
-											name: "command_execute",
-											additional_kwargs: {
-												command,
-											},
-										}),
-									],
+							new ToolMessage({
+								id: config.runId,
+								content: `Command: "${input.command}" rejected, script execution not allowed`,
+								tool_call_id: config.toolCall.id,
+								name: "command_execute",
+								additional_kwargs: {
+									command,
 								},
 							}),
 						);
@@ -155,20 +141,13 @@ export const createCommandExecuteTool = (
 								rejected: false,
 							};
 							resolve(
-								new Command({
-									update: {
-										commands: [command],
-										messages: [
-											new ToolMessage({
-												id: config.runId,
-												content: `Command: "${input.command}" timed out after 60 seconds`,
-												tool_call_id: config.toolCall.id,
-												name: "command_execute",
-												additional_kwargs: {
-													command,
-												},
-											}),
-										],
+								new ToolMessage({
+									id: config.runId,
+									content: `Command: "${input.command}" timed out after 60 seconds`,
+									tool_call_id: config.toolCall.id,
+									name: "command_execute",
+									additional_kwargs: {
+										command,
 									},
 								}),
 							);
@@ -197,20 +176,13 @@ export const createCommandExecuteTool = (
 								rejected: false,
 							};
 							resolve(
-								new Command({
-									update: {
-										commands: [command],
-										messages: [
-											new ToolMessage({
-												id: config.runId,
-												content: `Command: "${input.command}" failed, error: ${err.message}`,
-												tool_call_id: config.toolCall.id,
-												name: "command_execute",
-												additional_kwargs: {
-													command,
-												},
-											}),
-										],
+								new ToolMessage({
+									id: config.runId,
+									content: `Command: "${input.command}" failed, error: ${err.message}`,
+									tool_call_id: config.toolCall.id,
+									name: "command_execute",
+									additional_kwargs: {
+										command,
 									},
 								}),
 							);
@@ -232,20 +204,13 @@ export const createCommandExecuteTool = (
 									rejected: false,
 								};
 								resolve(
-									new Command({
-										update: {
-											commands: [command],
-											messages: [
-												new ToolMessage({
-													id: config.runId,
-													content: `Command: "${input.command}" ran successfully`,
-													tool_call_id: config.toolCall.id,
-													name: "command_execute",
-													additional_kwargs: {
-														command,
-													},
-												}),
-											],
+									new ToolMessage({
+										id: config.runId,
+										content: `Command: "${input.command}" ran successfully`,
+										tool_call_id: config.toolCall.id,
+										name: "command_execute",
+										additional_kwargs: {
+											command,
 										},
 									}),
 								);
@@ -260,20 +225,13 @@ export const createCommandExecuteTool = (
 									rejected: false,
 								};
 								resolve(
-									new Command({
-										update: {
-											commands: [command],
-											messages: [
-												new ToolMessage({
-													id: config.runId,
-													content: `Command: "${input.command}" failed, output: ${output}`,
-													tool_call_id: config.toolCall.id,
-													name: "command_execute",
-													additional_kwargs: {
-														command,
-													},
-												}),
-											],
+									new ToolMessage({
+										id: config.runId,
+										content: `Command: "${input.command}" failed, output: ${output}`,
+										tool_call_id: config.toolCall.id,
+										name: "command_execute",
+										additional_kwargs: {
+											command,
 										},
 									}),
 								);
@@ -293,20 +251,13 @@ export const createCommandExecuteTool = (
 						rejected: false,
 					};
 					resolve(
-						new Command({
-							update: {
-								commands: [command],
-								messages: [
-									new ToolMessage({
-										id: config.runId,
-										content: `Command: "${input.command}" failed, error: ${errorMessage}`,
-										tool_call_id: config.toolCall.id,
-										name: "command_execute",
-										additional_kwargs: {
-											command,
-										},
-									}),
-								],
+						new ToolMessage({
+							id: config.runId,
+							content: `Command: "${input.command}" failed, error: ${errorMessage}`,
+							tool_call_id: config.toolCall.id,
+							name: "command_execute",
+							additional_kwargs: {
+								command,
 							},
 						}),
 					);

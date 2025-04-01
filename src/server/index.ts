@@ -28,7 +28,7 @@ import {
 } from "@shared/types/Composer";
 import { loggingProvider } from "./loggingProvider";
 import path from "node:path";
-import { cancelComposer, WingmanAgent } from "../composer";
+import { WingmanAgent } from "../composer";
 import { PartitionedFileSystemSaver } from "../composer/checkpointer";
 import type {
 	FixDiagnosticsEvent,
@@ -439,9 +439,12 @@ ${input}`,
 			},
 		);
 
-		this.connection?.onRequest("wingman/cancelComposer", async () => {
-			cancelComposer();
-		});
+		this.connection?.onRequest(
+			"wingman/cancelComposer",
+			async (threadId: string) => {
+				this.composer?.cancel(threadId);
+			},
+		);
 
 		this.connection?.onRequest(
 			"wingman/compose",

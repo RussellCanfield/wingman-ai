@@ -1,4 +1,4 @@
-import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef } from "react";
+import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatThread } from "./ChatThreadEntry";
 import { useComposerContext } from "../../context/composerContext";
 
@@ -9,28 +9,49 @@ function ChatThreadList({
 	const { activeComposerState, activeThread, composerStates } = useComposerContext();
 	const ulRef = useRef<HTMLUListElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
+	const [previousMessageCount, setPreviousMessageCount] = useState(0);
+	const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
+	// Simple scroll to bottom function
 	const scrollToBottom = useCallback(() => {
-		// Add a small delay to ensure content is rendered
-		setTimeout(() => {
-			if (bottomRef.current) {
-				bottomRef.current.scrollIntoView({
-					behavior: "smooth",
-					block: "end",
-				});
-			}
-		}, 100);
+		if (bottomRef.current) {
+			bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+		}
 	}, []);
 
-	// Scroll on new messages or loading state change
+	// Track scroll position to determine if we should auto-scroll
+	const handleScroll = useCallback(() => {
+		if (!ulRef.current) return;
+
+		const { scrollTop, scrollHeight, clientHeight } = ulRef.current;
+		const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50; // Using a small threshold
+		setShouldAutoScroll(isAtBottom);
+	}, []);
+
+	// Add scroll event listener
+	useEffect(() => {
+		const ul = ulRef.current;
+		if (ul) {
+			ul.addEventListener('scroll', handleScroll);
+			return () => ul.removeEventListener('scroll', handleScroll);
+		}
+	}, [handleScroll]);
+
+	// Scroll on new messages only if we're at the bottom
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
-		scrollToBottom();
-	}, [activeComposerState, loading, scrollToBottom]);
+		const currentMessageCount = activeComposerState?.messages.length || 0;
+		const hasNewMessages = currentMessageCount > previousMessageCount;
+
+		if (hasNewMessages && (shouldAutoScroll || activeComposerState?.messages[currentMessageCount - 1]?.role === "user")) {
+			scrollToBottom();
+		}
+
+		setPreviousMessageCount(currentMessageCount);
+	}, [activeComposerState?.messages.length, scrollToBottom, shouldAutoScroll]);
 
 	const state = useMemo(() => {
 		if (!activeThread || !activeComposerState) return null;
-
 		return activeThread.id === activeComposerState.threadId ? activeComposerState : composerStates.find(s => s.threadId === activeThread.id);
 	}, [activeComposerState, activeThread, composerStates]);
 

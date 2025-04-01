@@ -1240,47 +1240,75 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 	}
 
 	/**
-	 * Clean up old checkpoints to manage disk space
+	 * Clean up old checkpoints to manage disk space.
+	 * If threadId is provided, cleanup is limited to that thread.
 	 * @param maxAge Maximum age in milliseconds
 	 * @param maxCheckpointsPerThread Maximum number of checkpoints to keep per thread
+	 * @param threadId Optional thread ID to limit cleanup scope
 	 */
-	cleanup(maxAge?: number, maxCheckpointsPerThread?: number): void {
+	cleanup(
+		maxAge?: number,
+		maxCheckpointsPerThread?: number,
+		threadId?: string,
+	): void {
 		this.loadIndex();
 
+		// Determine which threads to process
+		let threadsToProcess: string[];
+		if (threadId) {
+			// Filter index threads to only include those matching the provided threadId
+			threadsToProcess = this.index.threads.filter((t) =>
+				t.startsWith(`${threadId}:`),
+			);
+		} else {
+			// Process all threads if no specific threadId is given
+			threadsToProcess = this.index.threads;
+		}
+
 		// Skip if nothing to clean
-		if (this.index.threads.length === 0) {
+		if (threadsToProcess.length === 0) {
 			return;
 		}
 
 		const now = Date.now();
 		let removedCount = 0;
 
-		// Process each thread
-		for (const threadKey of this.index.threads) {
-			const [threadId, checkpoint_ns] = threadKey.split(":", 2);
+		// Process each selected thread
+		for (const threadKey of threadsToProcess) {
+			const [currentThreadId, checkpoint_ns] = threadKey.split(":", 2);
 
 			// Load thread data
-			this.loadThread(threadId, checkpoint_ns);
+			this.loadThread(currentThreadId, checkpoint_ns);
 			const threadCheckpoints = this.threadMap.get(threadKey);
 
 			if (!threadCheckpoints || threadCheckpoints.size === 0) {
 				continue;
 			}
 
-			const checkpoints = Array.from(threadCheckpoints.values()).sort((a, b) =>
-				b.checkpoint_id.localeCompare(a.checkpoint_id),
+			// Sort checkpoints by ID descending (latest first)
+			const checkpoints = Array.from(threadCheckpoints.values()).sort(
+				(a, b) => {
+					const numA = Number(a.checkpoint_id);
+					const numB = Number(b.checkpoint_id);
+					if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+						return numB - numA;
+					}
+					return b.checkpoint_id.localeCompare(a.checkpoint_id);
+				},
 			);
 
 			// Keep track of checkpoints to remove
 			const checkpointsToRemove: string[] = [];
 
 			// Check age-based cleanup
-			if (maxAge !== undefined && maxAge > 0) {
+			if (maxAge !== undefined && maxAge >= 0) {
 				for (const checkpoint of checkpoints) {
 					// Use checkpoint_id as timestamp if it's numerical
 					const timestamp = Number.parseInt(checkpoint.checkpoint_id, 10);
 					if (!Number.isNaN(timestamp) && now - timestamp > maxAge) {
-						checkpointsToRemove.push(checkpoint.checkpoint_id);
+						if (!checkpointsToRemove.includes(checkpoint.checkpoint_id)) {
+							checkpointsToRemove.push(checkpoint.checkpoint_id);
+						}
 					}
 				}
 			}
@@ -1288,7 +1316,7 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 			// Check count-based cleanup
 			if (
 				maxCheckpointsPerThread !== undefined &&
-				maxCheckpointsPerThread > 0
+				maxCheckpointsPerThread >= 0
 			) {
 				if (checkpoints.length > maxCheckpointsPerThread) {
 					// Keep the most recent checkpoints, remove the older ones
@@ -1303,7 +1331,7 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 			// Remove the selected checkpoints
 			for (const checkpoint_id of checkpointsToRemove) {
 				const key = this.makeCheckpointKey(
-					threadId,
+					currentThreadId,
 					checkpoint_ns,
 					checkpoint_id,
 				);
@@ -1326,7 +1354,7 @@ export class PartitionedFileSystemSaver extends BaseCheckpointSaver {
 
 					// Remove associated writes
 					const writesKey = this.makeWritesKey(
-						threadId,
+						currentThreadId,
 						checkpoint_ns,
 						checkpoint_id,
 					);

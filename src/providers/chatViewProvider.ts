@@ -30,10 +30,7 @@ import path from "node:path";
 import type { FileMetadata } from "@shared/types/Message";
 import type { ThreadViewProvider } from "./threadViewProvider";
 import { getRecentFileTracker } from "./recentFileTracker";
-import {
-	getGitignorePatterns,
-	isFileExcludedByGitignore,
-} from "../server/files/utils";
+import { isFileExcludedByGitignore } from "../server/files/utils";
 import { wingmanSettings } from "../service/settings";
 import { ImageEditorViewProvider } from "./imageEditorViewProvider";
 
@@ -112,7 +109,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 		this._lspClient.setComposerWebViewReference(webviewView.webview);
 
 		token.onCancellationRequested((e) => {
-			this._lspClient.cancelComposer();
+			this._lspClient.cancelComposer("");
 			eventEmitter._onQueryComplete.fire();
 		});
 
@@ -385,7 +382,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						break;
 					}
 					case "cancel": {
-						await this._lspClient.cancelComposer();
+						await this._lspClient.cancelComposer(String(value));
 						break;
 					}
 					case "ready": {

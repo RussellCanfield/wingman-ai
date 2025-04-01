@@ -430,8 +430,8 @@ export class LSPClient {
 		return client.sendRequest("wingman/deleteIndex");
 	};
 
-	cancelComposer = async () => {
-		return client.sendRequest("wingman/cancelComposer");
+	cancelComposer = async (threadId: string) => {
+		return client.sendRequest("wingman/cancelComposer", threadId);
 	};
 
 	getIndexedFiles = async (): Promise<string[]> => {

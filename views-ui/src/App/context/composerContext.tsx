@@ -352,6 +352,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     setOutputTokens(0);
     vscode.postMessage({
       command: "cancel",
+      value: activeThreadRef.current?.id
     });
   }
 
