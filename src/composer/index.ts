@@ -1055,7 +1055,7 @@ ${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path
 
 		if (request.context?.fromSelection) {
 			prefixMsg += `\n\n# User Provided Code Context
-Base your guidance on the following information, assume that I want code snippet and not editing the file directly:
+Base your guidance on the following information, assume that I want code snippet and not editing the file directly - ONLY FOR THIS INTERACTION:
 
 Language: ${request.context.language}
 File Path: ${path.relative(this.workspace, request.context.fileName)}

@@ -442,7 +442,7 @@ const ChatInput = ({
 						) : (
 							<button
 								type="button"
-								className={`${iconButtonClass} text-white`}
+								className={`${iconButtonClass} p-2.5`}
 								onClick={onChatCancelled}
 								title="Cancel"
 							>

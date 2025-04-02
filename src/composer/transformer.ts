@@ -44,23 +44,29 @@ const mapMessages = (messages: BaseMessage[]): ComposerMessage[] => {
 	return messages.flatMap((message): ComposerMessage[] => {
 		// Handle HumanMessage
 		if (message instanceof HumanMessage && !message.additional_kwargs.temp) {
-			const imageMsg = (message.content as MessageContentComplex[]).find(
-				(c) => c.type === "image_url",
-			) as MessageContentImageUrl | undefined;
-			const messageContent = message.content as MessageContentText[];
-			const lastContent = messageContent[messageContent.length - 1];
+			if (Array.isArray(message.content)) {
+				const imageMsg = (message.content as MessageContentComplex[]).find(
+					(c) => c.type === "image_url",
+				) as MessageContentImageUrl | undefined;
+				const messageContent = message.content as MessageContentText[];
+				const lastContent = messageContent[messageContent.length - 1];
+				return [
+					new UserMessage(
+						message.id!,
+						lastContent.text,
+						imageMsg
+							? {
+									//@ts-expect-error
+									data: imageMsg.image_url.url,
+									ext: "image/jpeg",
+								}
+							: undefined,
+					),
+				];
+			}
+
 			return [
-				new UserMessage(
-					message.id!,
-					lastContent.text,
-					imageMsg
-						? {
-								//@ts-expect-error
-								data: imageMsg.image_url.url,
-								ext: "image/jpeg",
-							}
-						: undefined,
-				),
+				new UserMessage(message.id!, message.content as string, undefined),
 			];
 		}
 
