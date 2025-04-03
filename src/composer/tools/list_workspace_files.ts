@@ -19,6 +19,7 @@ const listDirectorySchema = baseToolSchema.extend({
  * Creates a tool that lists contents of a directory
  */
 export const createListDirectoryTool = (workspace: string) => {
+	//@ts-expect-error
 	return tool(
 		async (input, config) => {
 			try {
@@ -50,6 +51,7 @@ export const createListDirectoryTool = (workspace: string) => {
 			description:
 				"Lists files and directories from the specified path with configurable depth. Returns a structured tree representation of the filesystem hierarchy. To avoid redundant operations, save the results and reference them in your reasoning when exploring the same directory.",
 			schema: listDirectorySchema,
+			cache_control: { type: "ephemeral" },
 		},
 	);
 };

@@ -50,6 +50,11 @@ export class Anthropic implements AIProvider {
 			model: targetModel,
 			temperature: this.settings?.enableReasoning ? undefined : 0,
 			maxTokens: this.interactionSettings?.chatMaxTokens,
+			clientOptions: {
+				defaultHeaders: {
+					"anthropic-beta": "prompt-caching-2024-07-31",
+				},
+			},
 			thinking:
 				this.settings?.enableReasoning && isReasoningModel
 					? {

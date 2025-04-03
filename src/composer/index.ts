@@ -671,6 +671,7 @@ Guidelines for our interaction:
 7. When unexpected results occur, focus on solutions rather than apologies
 8. NEVER output code to the USER, unless requested
 9. When providing code examples, consistently use GitHub-flavored fenced markdown, specifying the appropriate programming language for syntax highlighting
+10. Keep responses concise and relevant, avoiding unnecessary details
 
 # Information Gathering
 If you need more context to properly address the user's request:
@@ -1022,24 +1023,31 @@ Use this context judiciously when it helps address their needs.`,
 		let prefixMsg = `# Current Working Directory
 **Make sure all file paths are relative to this path.**
 ${this.workspace}`;
+
 		const rules = (await loadWingmanRules(this.workspace)) ?? "";
-		if (rules || request.recentFiles || request.contextFiles) {
+
+		if (rules) {
+			messageContent.push({
+				type: "text",
+				text: `\n\n${rules}`,
+				cache_control: { type: "ephemeral" },
+			});
+		}
+
+		if (request.recentFiles?.length || request.contextFiles?.length) {
 			const contextFiles = await this.loadContextFiles(
 				request.contextFiles ?? [],
 			);
-
-			prefixMsg += `\n\n${rules}
-
-${
-	!request.recentFiles?.length
-		? ""
-		: `\n\n# Recently Viewed Files
+			prefixMsg += `\n\n${
+				!request.recentFiles?.length
+					? ""
+					: `\n\n# Recently Viewed Files
 This may or may not be relavant, here are recently viewed files:
 
 <recent_files>
 ${request.recentFiles?.map((f) => f.path).join("\n")}
 </recent_files>`
-}
+			}
 
 ${
 	!request.contextFiles?.length
@@ -1110,6 +1118,7 @@ If you are unclear about what to do, ask me for clarification.`;
 				image_url: {
 					url: request.image.data,
 				},
+				cache_control: { type: "ephemeral" },
 			});
 		}
 		messageContent.push({
