@@ -153,7 +153,7 @@ export class WingmanAgent {
 
 		try {
 			const mcpTools = await this.mcpAdapter.initialize();
-			for (const [server, tools] of mcpTools ?? []) {
+			for (const [server, tools] of Object.entries(mcpTools ?? {})) {
 				remoteTools.push(...tools);
 				loggingProvider.logInfo(
 					`MCP server: ${server} added ${tools.length} tools`,
