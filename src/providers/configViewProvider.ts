@@ -165,6 +165,17 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					});
 					break;
 				}
+				case "load-lmstudio-models": {
+					const initSettings = await wingmanSettings.loadSettings();
+
+					settingsPanel.webview.postMessage({
+						command: "lmstudio-models",
+						value: await this.loadLMStudioModels(
+							`${initSettings.providerSettings.LMStudio?.baseUrl}${initSettings.providerSettings.LMStudio?.modelInfoPath}`,
+						),
+					});
+					break;
+				}
 			}
 		});
 	}
@@ -175,7 +186,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			const result = await this._mcpAdapter.initialize();
 			// combine result into tools
 			if (result) {
-				for (const [server, tools] of result.entries()) {
+				for (const [server, tools] of Object.entries(result)) {
 					for (const tool of tools) {
 						const mcpTool = {
 							name: tool.name,
@@ -246,6 +257,24 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			};
 			return modelsJson.models.map((m) => m.name);
 		} catch (e) {
+			console.error(e);
+			return ["Failed to load."];
+		}
+	};
+
+	private loadLMStudioModels = async (url: string): Promise<string[]> => {
+		if (!url) {
+			return ["Failed to load."];
+		}
+
+		try {
+			const modelsResponse = await fetch(url);
+			const modelsJson = (await modelsResponse.json()) as {
+				data: { id: string }[];
+			};
+			return modelsJson.data.map((m) => m.id);
+		} catch (e) {
+			console.error(e);
 			return ["Failed to load."];
 		}
 	};

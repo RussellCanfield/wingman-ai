@@ -15,6 +15,7 @@ import { XAISettingsView } from './xAISettingsView';
 import { OpenRouterSettingsView } from "./OpenRouterSettingsView";
 import { GoogleSettingsView } from "./GoogleSettingsView";
 import { HFSettingsView } from './HFSettingsView';
+import { LMStudioSettingsView } from "./LMStudioSettingsView";
 
 export type AiProviderProps = {
 	settings: InitSettings;
@@ -30,7 +31,7 @@ export const AiProvider = ({
 	onProviderSettingsChanged,
 }: AiProviderProps) => {
 	const { aiProvider, providerSettings } = settings;
-	const { Ollama, HuggingFace, OpenAI, Anthropic, AzureAI, xAI, OpenRouter, Google } =
+	const { Ollama, HuggingFace, OpenAI, Anthropic, AzureAI, xAI, OpenRouter, Google, LMStudio } =
 		providerSettings;
 
 	const handleProviderChange = (e: any) => {
@@ -105,6 +106,20 @@ export const AiProvider = ({
 				//@ts-expect-error
 				<XAISettingsView
 					{...xAI}
+					onChange={onProviderSettingsChanged}
+				/>
+			)}
+			{aiProvider === "OpenRouter" && (
+				//@ts-expect-error
+				<OpenRouterSettingsView
+					{...OpenRouter}
+					onChange={onProviderSettingsChanged}
+				/>
+			)}
+			{aiProvider === "LMStudio" && (
+				//@ts-expect-error
+				<LMStudioSettingsView
+					{...LMStudio}
 					onChange={onProviderSettingsChanged}
 				/>
 			)}

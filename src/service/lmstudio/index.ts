@@ -1,76 +1,136 @@
 import type { InteractionSettings, Settings } from "@shared/types/Settings";
-import { OpenRouterModel } from "./models/generic";
+import { LMStudioModel } from "./models/generic";
 import type { OpenAIModel } from "@shared/types/Models";
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { ChatOpenAI, OpenAI, OpenAIEmbeddings } from "@langchain/openai";
+import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import type { AIProvider, ModelParams } from "../base";
 import type { ILoggingProvider } from "@shared/types/Logger";
 import type { Embeddings } from "@langchain/core/embeddings";
 import { LLM } from "@langchain/core/language_models/llms";
 
 export class LMStudio implements AIProvider {
-	codeModel: OpenRouterModel | undefined;
+	codeModel: LMStudioModel | undefined;
 
 	constructor(
-		private readonly settings: Settings["providerSettings"]["OpenRouter"],
+		private readonly settings: Settings["providerSettings"]["LMStudio"],
 		private readonly interactionSettings: InteractionSettings,
 		private readonly loggingProvider: ILoggingProvider,
-		private readonly embeddingSettings?: Settings["embeddingSettings"]["OpenRouter"],
+		private readonly embeddingSettings?: Settings["embeddingSettings"]["LMStudio"],
 	) {
 		if (!settings) {
-			throw new Error("Unable to load OpenRouter settings.");
+			throw new Error("Unable to load LMStudio settings.");
 		}
 
-		if (!this.settings?.apiKey.trim() || !this.settings?.baseUrl.trim()) {
-			throw new Error("OpenRouter requires an api key and a base url.");
+		if (
+			!this.settings?.modelInfoPath.trim() ||
+			!this.settings?.baseUrl.trim()
+		) {
+			throw new Error(
+				"LMStudio requires the base url and modelInfoPath configured.",
+			);
 		}
 
 		if (
 			embeddingSettings &&
-			(!embeddingSettings.apiKey ||
-				!embeddingSettings.baseUrl ||
+			(!embeddingSettings.baseUrl ||
+				!embeddingSettings.baseUrl.trim() ||
+				!embeddingSettings.dimensions ||
 				Number.isNaN(embeddingSettings.dimensions) ||
+				embeddingSettings.dimensions <= 0 ||
 				!embeddingSettings.model ||
-				!embeddingSettings.summaryModel)
+				!embeddingSettings.model.trim() ||
+				!embeddingSettings.summaryModel ||
+				!embeddingSettings.summaryModel.trim())
 		) {
-			throw new Error("OpenRouter embeddings are not configured properly.");
+			throw new Error("LMStudio embeddings are not configured properly.");
 		}
 
 		this.codeModel = this.getCodeModel(this.settings!.codeModel);
 	}
 
+	async validateSettings(): Promise<boolean> {
+		if (
+			!(await this.validateModelExists(this.settings?.chatModel ?? "unknown"))
+		) {
+			return false;
+		}
+
+		if (
+			!(await this.validateModelExists(this.settings?.codeModel ?? "unknown"))
+		) {
+			return false;
+		}
+
+		if (!this.codeModel) return false;
+
+		return true;
+	}
+
+	public async validateModelExists(modelName: string): Promise<boolean> {
+		try {
+			const response = await fetch(
+				new URL(`${this.settings?.baseUrl}${this.settings?.modelInfoPath}`),
+			);
+
+			if (!response.ok) {
+				return false;
+			}
+			const models = (await response.json()) as { data: { id: string }[] };
+			const model = models.data.find((m: { id: string }) => m.id === modelName);
+
+			if (!model) {
+				this.loggingProvider.logError(
+					`Model ${modelName} not found in LMStudio.`,
+				);
+				return false;
+			}
+
+			if (response.status === 200) {
+				return true;
+			}
+		} catch (error) {
+			console.error(error);
+		}
+
+		return false;
+	}
+
 	getEmbedder(): Embeddings {
 		return new OpenAIEmbeddings({
-			apiKey: this.embeddingSettings?.apiKey,
 			model: this.embeddingSettings?.model,
-			openAIApiKey: this.embeddingSettings?.apiKey,
+			configuration: {
+				baseURL: this.embeddingSettings?.baseUrl,
+			},
 		});
 	}
 
 	getLightweightModel() {
-		return new OpenAI({
-			apiKey: this.embeddingSettings?.apiKey,
+		return new ChatOpenAI({
 			model: this.embeddingSettings?.summaryModel,
-			openAIApiKey: this.embeddingSettings?.apiKey,
+			apiKey: "123",
+			temperature: 0,
+			maxTokens: this.interactionSettings.chatMaxTokens,
+			configuration: {
+				baseURL: this.embeddingSettings?.baseUrl,
+			},
 		});
 	}
 
 	getModel(params?: ModelParams) {
 		const targetModel = params?.model ?? this.settings?.chatModel;
-		return new OpenAI({
-			apiKey: this.settings?.apiKey,
+		return new ChatOpenAI({
 			model: targetModel,
-			openAIApiKey: this.settings?.apiKey,
+			apiKey: "123",
+			temperature: 0,
+			maxTokens: this.interactionSettings.chatMaxTokens,
 			...(params ?? {}),
+			configuration: {
+				baseURL: `${this.settings?.baseUrl}/v1`,
+			},
 		});
 	}
 
-	validateSettings() {
-		return Promise.resolve(true);
-	}
-
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
-		return new OpenRouterModel();
+		return new LMStudioModel();
 	}
 
 	public async codeComplete(
@@ -114,9 +174,11 @@ ${recentClipboard}
 				model: this.settings?.codeModel,
 			}).invoke(prompt, { signal });
 
-			return response;
+			return response.content.toString();
 		} catch (error) {
-			this.loggingProvider.logError(error);
+			this.loggingProvider.logError(
+				`LMStudio code completion failed: ${error}`,
+			);
 		}
 
 		return "";

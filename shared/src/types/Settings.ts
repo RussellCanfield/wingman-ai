@@ -53,6 +53,8 @@ export const AiProviders = [
 	"AzureAI",
 	"xAI",
 	"Google",
+	"LMStudio",
+	"OpenRouter",
 ] as const;
 export const AiProvidersList: string[] = [...AiProviders];
 
@@ -61,6 +63,8 @@ export const EmbeddingProviders = [
 	"OpenAI",
 	"AzureAI",
 	"Google",
+	"LMStudio",
+	"OpenRouter",
 ] as const;
 export const EmbeddingProvidersList: string[] = [...EmbeddingProviders];
 
@@ -119,6 +123,14 @@ export const defaultOllamaSettings: OllamaSettingsType = {
 	modelInfoPath: "/api/show",
 };
 
+export const defaultLMStudioSettings: OllamaSettingsType = {
+	codeModel: "qwen2.5-coder-14b-instruct",
+	chatModel: "qwen2.5-coder-14b-instruct",
+	baseUrl: "http://localhost:1234",
+	apiPath: "/api/v0/chat/completions",
+	modelInfoPath: "/api/v0/models",
+};
+
 export const defaultHfSettings: ApiSettingsType = {
 	codeModel: "codellama/CodeLlama-7b-hf",
 	chatModel: "mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -134,8 +146,8 @@ export const defaultOpenAISettings: ApiSettingsType = {
 };
 
 export const defaultOpenRouterSettings: ApiSettingsType = {
-	chatModel: "deepseek/deepseek-chat-v3-0324:free",
-	codeModel: "deepseek/deepseek-chat-v3-0324:free",
+	chatModel: "deepseek/deepseek-v3-base:free",
+	codeModel: "deepseek/deepseek-v3-base:free",
 	baseUrl: "https://openrouter.ai/api/v1",
 	apiKey: "",
 };
@@ -173,6 +185,7 @@ export type Settings = {
 		AzureAI?: AzureAISettingsType;
 		xAI?: xAISettingsType;
 		OpenRouter?: ApiSettingsType;
+		LMStudio?: OllamaSettingsType;
 		Google: ApiSettingsType;
 	};
 	agentSettings: AgentSettings;
@@ -202,6 +215,11 @@ export type Settings = {
 			summaryModel: string;
 			dimensions: number;
 		};
+		LMStudio?: Omit<OllamaSettingsType, "chatModel" | "codeModel"> & {
+			model: string;
+			summaryModel: string;
+			dimensions: number;
+		};
 		Google?: Omit<ApiSettingsType, "chatModel" | "codeModel"> & {
 			model: string;
 			summaryModel: string;
@@ -213,7 +231,9 @@ export type Settings = {
 export type EmbeddingSettingsType =
 	| Settings["embeddingSettings"]["Ollama"]
 	| Settings["embeddingSettings"]["AzureAI"]
-	| Settings["embeddingSettings"]["OpenAI"];
+	| Settings["embeddingSettings"]["OpenAI"]
+	| Settings["embeddingSettings"]["OpenRouter"]
+	| Settings["embeddingSettings"]["LMStudio"];
 
 export const defaultSettings: Settings = {
 	aiProvider: "Anthropic",
@@ -226,6 +246,7 @@ export const defaultSettings: Settings = {
 		AzureAI: defaultAzureAISettings,
 		xAI: defaultxAISettings,
 		OpenRouter: defaultOpenRouterSettings,
+		LMStudio: defaultLMStudioSettings,
 		Google: defaultGoogleSettings,
 	},
 	embeddingProvider: "OpenAI",
@@ -251,6 +272,18 @@ export const defaultSettings: Settings = {
 			model: "text-embedding-3-small",
 			summaryModel: "gpt-4o-mini",
 			dimensions: 1536,
+		},
+		OpenRouter: {
+			...defaultOpenRouterSettings,
+			model: "nomic-embed-text",
+			summaryModel: "",
+			dimensions: 768,
+		},
+		LMStudio: {
+			...defaultLMStudioSettings,
+			model: "nomic-embed-text",
+			summaryModel: "",
+			dimensions: 768,
 		},
 		Google: {
 			...defaultGoogleSettings,

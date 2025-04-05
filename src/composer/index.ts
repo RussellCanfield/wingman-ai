@@ -65,6 +65,7 @@ import { createWebSearchTool } from "./tools/web_search";
 import { Ollama } from "../service/ollama";
 import { createImageGenerationTool } from "./tools/generate_image";
 import { Google } from "../service/google";
+import { LMStudio } from "../service/lmstudio";
 
 let controller = new AbortController();
 
@@ -170,7 +171,10 @@ export class WingmanAgent {
 			createThinkingTool(),
 			createCommandExecuteTool(this.workspace),
 			createReadFileTool(this.workspace, this.codeParser),
-			createListDirectoryTool(this.workspace),
+			createListDirectoryTool(
+				this.workspace,
+				this.aiProvider instanceof Anthropic,
+			),
 			createWriteFileTool(
 				this.workspace,
 				this.settings?.agentSettings.vibeMode,
@@ -649,11 +653,10 @@ export class WingmanAgent {
 	callModel = async (state: GraphStateAnnotation) => {
 		//@ts-expect-error
 		const model = this.aiProvider?.getModel().bindTools(this.tools);
-		const response = await model!.invoke(
-			[
-				{
-					role: "system",
-					content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
+
+		const system = {
+			role: "system",
+			content: `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 In most cases the user expects you to work autonomously, use the tools and answer your own questions. 
 Only provide code examples if you are explicitly asked for an "example" or "snippet".
@@ -694,8 +697,8 @@ When using the tools at your disposal:
 When modifying or creating files:
 1. The semantic search tool - if available, is the most efficient way to discover general features and code concepts
 2. Use the read_file tool to get the current content before making changes
-   - This ensures you're working with the latest version and prevents overwriting recent changes
-   - File exports and imports are not always relevant, determine if you need to use them
+- This ensures you're working with the latest version and prevents overwriting recent changes
+- File exports and imports are not always relevant, determine if you need to use them
 3. Base your edits on the most recent content, not on your memory of the file
 4. Always use the write_file tool after you have the most recent content for a file
 5. After writing a file, consider the new content as the current state for future operations
@@ -741,24 +744,24 @@ You are a master at UX, when you write frontend code make the UI mind blowing!
 
 ## Tailwind v3 to v4 Migration
 1. Start with the migration tool:
-	- Run the command: "npx @tailwindcss/upgrade"
-	- For most projects, the upgrade tool will automate the entire migration process including updating your dependencies, migrating your configuration file to CSS, and handling any changes to your template files.
-	- The upgrade tool requires Node.js 20 or higher, so ensure your environment is updated before running it.
+- Run the command: "npx @tailwindcss/upgrade"
+- For most projects, the upgrade tool will automate the entire migration process including updating your dependencies, migrating your configuration file to CSS, and handling any changes to your template files.
+- The upgrade tool requires Node.js 20 or higher, so ensure your environment is updated before running it.
 
 ## Tailwind v4 new project guide
 1. Install dependencies
-	- npm install tailwindcss @tailwindcss/postcss postcss
-	or with vite
-	- npm install tailwindcss @tailwindcss/vite
+- npm install tailwindcss @tailwindcss/postcss postcss
+or with vite
+- npm install tailwindcss @tailwindcss/vite
 
 2. Configure Tailwind Plugin
 
 **postcss.config.mjs**
 <file>
 export default {
-  plugins: {
-    "@tailwindcss/postcss": {},
-  }
+plugins: {
+"@tailwindcss/postcss": {},
+}
 }
 </file>
 
@@ -767,9 +770,9 @@ export default {
 import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
-  plugins: [
-    tailwindcss(),
-  ],
+plugins: [
+tailwindcss(),
+],
 })
 </file>
 
@@ -779,10 +782,15 @@ export default defineConfig({
 # Additional Context
 Additional user context may be attached and include contextual information such as their open files, cursor position, higlighted code and recently viewed files.
 Use this context judiciously when it helps address their needs.`,
-					cache_control: { type: "ephemeral" },
-				},
-				...this.trimMessages(state.messages),
-			],
+		};
+
+		if (this.aiProvider instanceof Anthropic) {
+			//@ts-expect-error
+			system.cache_control = { type: "ephemeral" };
+		}
+
+		const response = await model!.invoke(
+			[system, ...this.trimMessages(state.messages)],
 			{
 				// Wait a maximum of 3 minutes
 				timeout: 180000,
@@ -1027,11 +1035,17 @@ ${this.workspace}`;
 		const rules = (await loadWingmanRules(this.workspace)) ?? "";
 
 		if (rules) {
-			messageContent.push({
+			const msg = {
 				type: "text",
 				text: `\n\n${rules}`,
-				cache_control: { type: "ephemeral" },
-			});
+			};
+
+			if (this.aiProvider instanceof Anthropic) {
+				//@ts-expect-error
+				msg.cache_control = { type: "ephemeral" };
+			}
+
+			messageContent.push(msg);
 		}
 
 		if (request.recentFiles?.length || request.contextFiles?.length) {
@@ -1042,7 +1056,8 @@ ${this.workspace}`;
 				!request.recentFiles?.length
 					? ""
 					: `\n\n# Recently Viewed Files
-This may or may not be relavant, here are recently viewed files:
+This may or may not be relavant, here are recently viewed files.
+These files give you an idea of what the user is working on.
 
 <recent_files>
 ${request.recentFiles?.map((f) => f.path).join("\n")}
@@ -1053,7 +1068,9 @@ ${
 	!request.contextFiles?.length
 		? ""
 		: `\n\n# Context Files
-This may or may not be relavant, the user has provided files to use as context:
+This may or may not be relavant, the user has provided the following files to use as context.
+Consider these files as the latest version, you do not need to read the file contents again.
+
 <context_files>
 ${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
 </context_files>
@@ -1097,6 +1114,14 @@ Always execute the required function calls before you respond.`;
 		}
 
 		if (
+			this.aiProvider instanceof LMStudio ||
+			this.aiProvider instanceof Ollama
+		) {
+			prefixMsg += `\n\n# Function calling
+Always execute the required function calls before you respond.`;
+		}
+
+		if (
 			(this.aiProvider instanceof Google ||
 				this.aiProvider instanceof Google) &&
 			(this.settings?.providerSettings.Google ||
@@ -1113,13 +1138,18 @@ If you are unclear about what to do, ask me for clarification.`;
 			text: prefixMsg,
 		});
 		if (request.image) {
-			messageContent.push({
+			const msg = {
 				type: "image_url",
 				image_url: {
 					url: request.image.data,
 				},
-				cache_control: { type: "ephemeral" },
-			});
+			};
+
+			if (this.aiProvider instanceof Anthropic) {
+				//@ts-expect-error
+				msg.cache_control = { type: "ephemeral" };
+			}
+			messageContent.push(msg);
 		}
 		messageContent.push({
 			type: "text",

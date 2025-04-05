@@ -1,26 +1,27 @@
-import type { ApiSettingsType } from "@shared/types/Settings";
 import type { InitSettings } from "./App";
 import { useState } from "react";
 
-type xAiSection = InitSettings["providerSettings"]["xAI"] & {
-	onChange: (xAiSettings: ApiSettingsType) => void;
+type OpenRouterSection = InitSettings["embeddingSettings"]["OpenRouter"] & {
+	onChange: (openRouterSettings: InitSettings["embeddingSettings"]["OpenRouter"]) => void;
 };
-export const XAISettingsView = ({
-	codeModel,
-	chatModel,
-	apiKey,
+export const OpenRouterSettingsView = ({
+	model,
+	summaryModel,
 	baseUrl,
+	dimensions,
+	apiKey,
 	onChange,
-}: xAiSection) => {
-	const paths = { codeModel, chatModel, baseUrl, apiKey };
+}: OpenRouterSection) => {
+	const paths = { baseUrl, apiKey, model, summaryModel, dimensions };
 
 	const [showPassword, setShowPassword] = useState(false);
 
 	const handleChangeInput = (e: any) => {
 		const field = e.target.getAttribute("data-name");
+		const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
 		const clone = { ...paths };
 		//@ts-ignore
-		clone[field] = e.target.value;
+		clone[field] = value;
 		onChange(clone);
 	};
 
@@ -28,44 +29,62 @@ export const XAISettingsView = ({
 		<div className="flex flex-col space-y-4">
 			<div className="flex flex-col">
 				<label
-					htmlFor="codeModel"
+					htmlFor="model"
 					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
 				>
-					Code Model:
+					Model:
 				</label>
 				<input
-					id="codeModel"
+					id="model"
 					type="text"
 					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 					onChange={handleChangeInput}
-					value={codeModel}
-					data-name="codeModel"
-					title="xAI Code Model"
+					value={model}
+					data-name="model"
+					title="AzureAI Model"
 				/>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for autocomplete code generation (e.g., grok-2-latest)
+					Used for embeddings
 				</p>
 			</div>
 
 			<div className="flex flex-col">
 				<label
-					htmlFor="chatModel"
+					htmlFor="summaryModel"
 					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
 				>
-					Chat Model:
+					Summary Model:
 				</label>
 				<input
-					id="chatModel"
+					id="summaryModel"
 					type="text"
 					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 					onChange={handleChangeInput}
-					value={chatModel}
-					data-name="chatModel"
-					title="xAI Chat Model"
+					value={summaryModel}
+					data-name="summaryModel"
+					title="OpenAI Summary Model"
 				/>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for the Chat Agent experience (e.g., grok-2-latest)
+					Used for parsing code files before embeddings (can be small like gpt-4o-mini)
 				</p>
+			</div>
+
+			<div className="flex flex-col">
+				<label
+					htmlFor="dimensions"
+					className="mb-1 text-sm font-medium text-[var(--vscode-foreground)]"
+				>
+					Dimensions:
+				</label>
+				<input
+					id="dimensions"
+					type="text"
+					className="px-3 py-2 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
+					onChange={handleChangeInput}
+					value={dimensions}
+					data-name="dimensions"
+					title="Model dimensions"
+				/>
 			</div>
 
 			<div className="flex flex-col">
@@ -82,7 +101,7 @@ export const XAISettingsView = ({
 					onChange={handleChangeInput}
 					value={baseUrl}
 					data-name="baseUrl"
-					title="xAI base url"
+					title="OpenAI base url"
 				/>
 			</div>
 
@@ -102,7 +121,7 @@ export const XAISettingsView = ({
 						onChange={handleChangeInput}
 						value={apiKey}
 						data-name="apiKey"
-						title={!apiKey ? "Please add your xAI API key" : "xAI api key"}
+						title={!apiKey ? "Please add your OpenAI API key" : "OpenAI api key"}
 					/>
 					<button
 						type="button"

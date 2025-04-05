@@ -11,6 +11,8 @@ import { AzureAISettingsView } from "./EmbeddingAzureAISettingsView";
 import { VscSync } from "react-icons/vsc";
 import { IndexedFilesProgress } from "./IndexedFilesProgress";
 import { GoogleSettingsView } from "./EmbeddingGoogleSettingsView";
+import { OpenRouterSettingsView } from "./EmbeddingOpenRouterSettingsView";
+import { LMStudioSettingsView } from "./EmbeddingLMStudioSettingsView";
 
 export type EmbeddingProviderProps = {
 	settings: InitSettings;
@@ -28,7 +30,7 @@ export const EmbeddingProvider = ({
 	onProviderSettingsChanged,
 }: EmbeddingProviderProps) => {
 	const { embeddingProvider, embeddingSettings, providerSettings } = settings;
-	const { Ollama, OpenAI, AzureAI, Google } =
+	const { Ollama, OpenAI, AzureAI, Google, OpenRouter, LMStudio } =
 		embeddingSettings;
 
 	const handleProviderChange = (e: any) => {
@@ -57,6 +59,10 @@ export const EmbeddingProvider = ({
 		Google.apiKey = settings.providerSettings.Google.apiKey!;
 	}
 
+	if (OpenRouter && !OpenRouter.apiKey) {
+		OpenRouter.apiKey = settings.providerSettings.OpenRouter?.apiKey!;
+	}
+
 	const copyProviderSettings = () => {
 		// Get the current provider settings
 		const currentProviderSettings = { ...providerSettings[embeddingProvider] };
@@ -66,7 +72,8 @@ export const EmbeddingProvider = ({
 
 		if (embeddingProvider === "Ollama") {
 			updatedSettings = {
-				...defaultSettings.embeddingSettings.Ollama
+				...defaultSettings.embeddingSettings.Ollama,
+				...currentProviderSettings,
 			};
 		} else if (embeddingProvider === "OpenAI") {
 			updatedSettings = {
@@ -74,9 +81,12 @@ export const EmbeddingProvider = ({
 				baseUrl: currentProviderSettings.baseUrl || "https://api.openai.com/v1/chat/completions",
 				//@ts-expect-error
 				apiKey: currentProviderSettings.apiKey || "",
-				model: "text-embedding-3-small",
-				summaryModel: "gpt-4o-mini",
-				dimensions: 1536
+				//@ts-expect-error
+				model: currentProviderSettings.model || "text-embedding-3-small",
+				//@ts-expect-error
+				summaryModel: currentProviderSettings.summaryModel || "gpt-4o-mini",
+				//@ts-expect-error
+				dimensions: currentProviderSettings.dimensions || 1536,
 			};
 		} else if (embeddingProvider === "AzureAI") {
 			updatedSettings = {
@@ -86,20 +96,45 @@ export const EmbeddingProvider = ({
 				apiKey: currentProviderSettings.apiKey || "",
 				//@ts-expect-error
 				apiVersion: currentProviderSettings.apiVersion || "2024-06-01",
-				model: "text-embedding-ada-002",
+				//@ts-expect-error
+				model: currentProviderSettings.model || "text-embedding-ada-002",
 				//@ts-expect-error
 				summaryModel: currentProviderSettings.chatModel || "",
-				dimensions: 1536
+				//@ts-expect-error
+				dimensions: currentProviderSettings.dimensions || 1536,
 			};
 		} else if (embeddingProvider === "Google") {
 			updatedSettings = {
 				//@ts-expect-error
 				apiKey: currentProviderSettings.apiKey || "",
-				model: "gemini-embedding-exp-03-07",
-				summaryModel: "gemini-2.0-flash",
-				dimensions: 3072,
+				//@ts-expect-error
+				model: currentProviderSettings.model || "gemini-embedding-exp-03-07",
+				//@ts-expect-error
+				summaryModel: currentProviderSettings.summaryModel || "gemini-2.0-flash",
+				//@ts-expect-error
+				dimensions: currentProviderSettings.dimensions || 3072,
+			};
+		} else if (embeddingProvider === "OpenRouter") {
+			updatedSettings = {
+				//@ts-expect-error
+				baseUrl: currentProviderSettings.baseUrl || "https://api.openai.com/v1/chat/completions",
+				//@ts-expect-error
+				apiKey: currentProviderSettings.apiKey || "",
+				//@ts-expect-error
+				model: currentProviderSettings.model || "text-embedding-3-small",
+				//@ts-ignore
+				summaryModel: currentProviderSettings.summaryModel || "gpt-4o-mini",
+				//@ts-ignore
+				dimensions: currentProviderSettings.dimensions || 1536
+			};
+		} else if (embeddingProvider === "LMStudio") {
+			updatedSettings = {
+				...defaultSettings.embeddingSettings.LMStudio,
+				...currentProviderSettings
 			};
 		}
+
+		console.log(embeddingProvider, updatedSettings, currentProviderSettings);
 
 		// Update the settings
 		onProviderSettingsChanged(updatedSettings);
@@ -211,6 +246,20 @@ export const EmbeddingProvider = ({
 				<GoogleSettingsView
 					{...Google}
 					onChange={onProviderSettingsChanged} />
+			)}
+			{embeddingProvider === "OpenRouter" && (
+				//@ts-expect-error
+				<OpenRouterSettingsView
+					{...OpenRouter}
+					onChange={onProviderSettingsChanged}
+				/>
+			)}
+			{embeddingProvider === "LMStudio" && (
+				//@ts-expect-error
+				<LMStudioSettingsView
+					{...LMStudio}
+					onChange={onProviderSettingsChanged}
+				/>
 			)}
 		</div>
 	);

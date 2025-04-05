@@ -384,8 +384,6 @@ export default function App() {
 
 		const activeObject = fabricCanvas.getActiveObject();
 
-		console.log('Here!', event, activeObject);
-
 		if (activeObject) {
 			event.preventDefault();
 			if (canvasContainerRef.current) {
@@ -551,7 +549,6 @@ export default function App() {
 	};
 
 	const handleGenerationSubmit = async () => {
-		console.log(fabricCanvas, generateInstructions);
 		if (!fabricCanvas || !generateInstructions.trim()) return;
 
 		// Get active selection or active object

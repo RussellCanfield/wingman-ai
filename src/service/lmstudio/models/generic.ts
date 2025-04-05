@@ -1,6 +1,6 @@
 import type { AIModel } from "@shared/types/Models";
 
-export class OpenRouterModel implements AIModel {
+export class LMStudioModel implements AIModel {
 	get CodeCompletionPrompt(): string {
 		return `You are a senior full-stack developer specializing in writing clean, maintainable code and natural language content.
 

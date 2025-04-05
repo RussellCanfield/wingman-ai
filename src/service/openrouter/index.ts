@@ -43,6 +43,9 @@ export class OpenRouter implements AIProvider {
 			apiKey: this.embeddingSettings?.apiKey,
 			model: this.embeddingSettings?.model,
 			openAIApiKey: this.embeddingSettings?.apiKey,
+			configuration: {
+				baseURL: this.settings?.baseUrl,
+			},
 		});
 	}
 
@@ -51,6 +54,10 @@ export class OpenRouter implements AIProvider {
 			apiKey: this.embeddingSettings?.apiKey,
 			model: this.embeddingSettings?.summaryModel,
 			openAIApiKey: this.embeddingSettings?.apiKey,
+			maxTokens: this.interactionSettings.chatMaxTokens,
+			configuration: {
+				baseURL: this.settings?.baseUrl,
+			},
 		});
 	}
 
@@ -60,7 +67,11 @@ export class OpenRouter implements AIProvider {
 			apiKey: this.settings?.apiKey,
 			model: targetModel,
 			openAIApiKey: this.settings?.apiKey,
+			maxTokens: this.interactionSettings.chatMaxTokens,
 			...(params ?? {}),
+			configuration: {
+				baseURL: this.settings?.baseUrl,
+			},
 		});
 	}
 

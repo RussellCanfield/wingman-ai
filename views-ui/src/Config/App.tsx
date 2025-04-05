@@ -164,6 +164,12 @@ export const App = () => {
 		} else if (settings.aiProvider === "Google") {
 			updatedProviderSettings.Google =
 				aiProviderSettings as ApiSettingsType;
+		} else if (settings.aiProvider === "OpenRouter") {
+			updatedProviderSettings.OpenRouter =
+				aiProviderSettings as ApiSettingsType;
+		} else if (settings.aiProvider === "LMStudio") {
+			updatedProviderSettings.LMStudio =
+				aiProviderSettings as OllamaSettingsType;
 		}
 
 		setSettings((s) => ({
@@ -190,6 +196,12 @@ export const App = () => {
 		} else if (settings.embeddingProvider === "Google") {
 			updatedProviderSettings.Google =
 				aiProviderSettings as Settings["embeddingSettings"]["Google"];
+		} else if (settings.embeddingProvider === "OpenRouter") {
+			updatedProviderSettings.OpenRouter =
+				aiProviderSettings as Settings["embeddingSettings"]["OpenRouter"];
+		} else if (settings.embeddingProvider === "LMStudio") {
+			updatedProviderSettings.LMStudio =
+				aiProviderSettings as Settings["embeddingSettings"]["LMStudio"];
 		}
 
 		setSettings((s) => ({

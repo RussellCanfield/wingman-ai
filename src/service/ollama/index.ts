@@ -30,6 +30,15 @@ export class Ollama implements AIProvider {
 		}
 
 		if (
+			!this.settings?.modelInfoPath.trim() ||
+			!this.settings?.baseUrl.trim()
+		) {
+			throw new Error(
+				"Ollama requires the base url and modelInfoPath configured.",
+			);
+		}
+
+		if (
 			embeddingSettings &&
 			(!embeddingSettings.baseUrl ||
 				!embeddingSettings.baseUrl.trim() ||

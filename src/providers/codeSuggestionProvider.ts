@@ -131,10 +131,6 @@ export class CodeSuggestionProvider implements InlineCompletionItemProvider {
 				result = result.trim().slice(currentLine.length).trimStart();
 			}
 
-			loggingProvider.logInfo(
-				`Code complete: \n${prefix}\n\n${suffix}\n\n${result}`,
-			);
-
 			if (result === "") {
 				return [];
 			}

@@ -22,6 +22,7 @@ import { ThreadViewProvider } from "./providers/threadViewProvider";
 import type { AIProvider } from "./service/base";
 import { getRecentFileTracker } from "./providers/recentFileTracker";
 import { ensureChromium } from "./utils/chromium";
+import { OpenAI } from "@langchain/openai";
 
 let statusBarProvider: ActivityStatusBar;
 let diffViewProvider: DiffViewProvider;

@@ -9,6 +9,7 @@ import { AzureAI } from "../azure";
 import { xAI } from "../xai";
 import { OpenRouter } from "../openrouter";
 import { Google } from "../google";
+import { LMStudio } from "../lmstudio";
 
 export function CreateAIProvider(
 	settings: Settings,
@@ -70,10 +71,19 @@ export function CreateAIProvider(
 		);
 	}
 
+	if (settings.aiProvider === "LMStudio") {
+		return new LMStudio(
+			settings.providerSettings.LMStudio,
+			settings.interactionSettings,
+			loggingProvider,
+		);
+	}
+
 	return new Ollama(
 		settings.providerSettings.Ollama,
 		settings.interactionSettings,
 		loggingProvider,
+		settings.embeddingSettings.Ollama,
 	);
 }
 
@@ -114,6 +124,15 @@ export function CreateEmbeddingProvider(
 			settings.interactionSettings,
 			loggingProvider,
 			settings.embeddingSettings.Google,
+		);
+	}
+
+	if (settings.embeddingProvider === "LMStudio") {
+		return new LMStudio(
+			settings.providerSettings.LMStudio,
+			settings.interactionSettings,
+			loggingProvider,
+			settings.embeddingSettings.LMStudio,
 		);
 	}
 
