@@ -51,6 +51,19 @@ You can use the following models:
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent to OpenAI
 
+## [Google AI Studio](https://ai.google.dev/)
+
+You can use the following models:
+
+-   Gemini 2.5 Pro
+-   Gemini 2.5 Flash
+
+:::note
+Gemini 2.5 Pro supports image generation capabilities, allowing you to create visual content directly within your workflow. This can be particularly useful for generating UI mockups, diagrams, or other visual assets.
+:::
+
+**NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent to Google AI.
+
 ## [AzureAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=python-secure#gpt-4o-and-gpt-4-turbo)
 
 **NOTE** - AzureAI has general latency due to content filters on models by default. This can cause delays in responses and may require additional configuration to disable content filters.
@@ -66,6 +79,19 @@ You can use the following models:
 -   GPT-1o
 
 **NOTE** - Unlike using Ollama, your data is not private and will not be sanitized prior to being sent Azure OpenAI.
+
+## [OpenRouter](https://openrouter.ai/)
+
+OpenRouter provides access to a wide range of models from different providers through a unified API.
+
+You can use models from:
+- Anthropic
+- OpenAI
+- Google
+- Mistral
+- And many other providers
+
+**NOTE** - OpenRouter acts as a proxy to these models, so your data is not private and will not be sanitized prior to being sent to the respective model providers.
 
 ## [Ollama](https://ollama.com/)
 
@@ -89,6 +115,16 @@ Supported Models for _Chat_:
 
 -   [Qwen2.5 Coder Instruct](https://ollama.com/library/qwen2.5-coder)
 -   [Llama 3.3](https://ollama.com/library/llama3.3)
+
+## [LMStudio](https://lmstudio.ai/)
+
+LMStudio provides a user-friendly interface for running local AI models with an OpenAI-compatible API.
+
+Supported Models:
+- Any model that can be loaded into LMStudio and exposed via its API server
+- Particularly good with Mistral, Llama, and CodeLlama variants
+
+**NOTE** - When using LMStudio, your data remains on your local machine, providing enhanced privacy compared to cloud-based solutions.
 
 ## [Hugging Face](https://huggingface.co/)
 
