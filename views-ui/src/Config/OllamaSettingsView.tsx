@@ -194,7 +194,7 @@ export const OllamaSettingsView = ({
 					</button>
 				</div>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for the Chat Agent experience
+					Used for the Chat Agent experience - must support tools!!!
 				</p>
 			</div>
 

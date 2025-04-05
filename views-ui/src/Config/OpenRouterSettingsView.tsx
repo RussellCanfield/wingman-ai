@@ -64,7 +64,7 @@ export const OpenRouterSettingsView = ({
 					title="OpenRouter Chat Model"
 				/>
 				<p className="mt-1 text-xs text-[var(--vscode-descriptionForeground)]">
-					Used for the Chat Agent experience (e.g., deepseek/deepseek-chat-v3-0324:free)
+					Used for the Chat Agent experience - must support tools!!!
 				</p>
 			</div>
 
