@@ -1,7 +1,7 @@
 import type { InteractionSettings, Settings } from "@shared/types/Settings";
 import { LMStudioModel } from "./models/generic";
 import type { OpenAIModel } from "@shared/types/Models";
-import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
+import { ChatOpenAI, OpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import type { AIProvider, ModelParams } from "../base";
 import type { ILoggingProvider } from "@shared/types/Logger";
 import type { Embeddings } from "@langchain/core/embeddings";
@@ -104,7 +104,7 @@ export class LMStudio implements AIProvider {
 	}
 
 	getLightweightModel() {
-		return new ChatOpenAI({
+		return new OpenAI({
 			model: this.embeddingSettings?.summaryModel,
 			apiKey: "123",
 			temperature: 0,
@@ -124,7 +124,7 @@ export class LMStudio implements AIProvider {
 			maxTokens: this.interactionSettings.chatMaxTokens,
 			...(params ?? {}),
 			configuration: {
-				baseURL: `${this.settings?.baseUrl}/v1`,
+				baseURL: this.settings?.baseUrl,
 			},
 		});
 	}

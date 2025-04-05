@@ -2,7 +2,7 @@ import type { InteractionSettings, Settings } from "@shared/types/Settings";
 import { OpenRouterModel } from "./models/generic";
 import type { OpenAIModel } from "@shared/types/Models";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
+import { ChatOpenAI, OpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import type { AIProvider, ModelParams } from "../base";
 import type { ILoggingProvider } from "@shared/types/Logger";
 import type { Embeddings } from "@langchain/core/embeddings";
@@ -49,8 +49,8 @@ export class OpenRouter implements AIProvider {
 		});
 	}
 
-	getLightweightModel(): BaseChatModel {
-		return new ChatOpenAI({
+	getLightweightModel() {
+		return new OpenAI({
 			apiKey: this.embeddingSettings?.apiKey,
 			model: this.embeddingSettings?.summaryModel,
 			openAIApiKey: this.embeddingSettings?.apiKey,

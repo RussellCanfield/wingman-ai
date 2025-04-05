@@ -285,13 +285,7 @@ export class VectorStore {
 				fileContents,
 				path.relative(this.workspace, filePath),
 			);
-			const result = await this.summaryModel.invoke([
-				{
-					type: "text",
-					role: "user",
-					content: msg,
-				},
-			]);
+			const result = await this.summaryModel.invoke(msg);
 			const summary =
 				typeof result === "string" ? result : result.content.toString();
 			const vector = await this.embedder.embedQuery(summary);

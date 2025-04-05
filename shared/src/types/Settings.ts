@@ -126,9 +126,9 @@ export const defaultOllamaSettings: OllamaSettingsType = {
 export const defaultLMStudioSettings: OllamaSettingsType = {
 	codeModel: "qwen2.5-coder-14b-instruct",
 	chatModel: "qwen2.5-coder-14b-instruct",
-	baseUrl: "http://localhost:1234",
-	apiPath: "/api/v0/chat/completions",
-	modelInfoPath: "/api/v0/models",
+	baseUrl: "http://localhost:1234/v1",
+	apiPath: "/chat/completions",
+	modelInfoPath: "/models",
 };
 
 export const defaultHfSettings: ApiSettingsType = {
