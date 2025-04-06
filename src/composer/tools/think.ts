@@ -5,7 +5,7 @@ import { z } from "zod";
 export const readFileSchema = z.object({
 	thought: z.object({
 		type: z.string(),
-		description: z.string().describe("Your thoughts"),
+		description: z.string().describe("Your thoughts in plain text"),
 	}),
 });
 
