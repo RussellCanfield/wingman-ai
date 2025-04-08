@@ -7,6 +7,7 @@ import { wingmanSettings } from "../service/settings";
 import type { LSPClient } from "../client";
 import { MCPAdapter } from "../composer/tools/mcpAdapter";
 import path from "node:path";
+import { loggingProvider } from "./loggingProvider";
 
 let panel: vscode.WebviewPanel | undefined;
 
@@ -134,6 +135,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						await this._lspClient.updateSettings();
 					} catch (e) {
 						if (e instanceof Error) {
+							loggingProvider.logError(e);
 							await settingsPanel.webview.postMessage({
 								command: "save-failed",
 							});
@@ -155,8 +157,6 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					});
 					break;
 				case "load-ollama-models": {
-					const initSettings = await wingmanSettings.loadSettings();
-
 					settingsPanel.webview.postMessage({
 						command: "ollama-models",
 						value: await this.loadOllamaModels(String(value)),
@@ -261,6 +261,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			return modelsJson.models.map((m) => m.name);
 		} catch (e) {
 			console.error(e);
+			loggingProvider.logError(e);
 			return ["Failed to load."];
 		}
 	};
@@ -278,6 +279,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 			return modelsJson.data.map((m) => m.id);
 		} catch (e) {
 			console.error(e);
+			loggingProvider.logError(e);
 			return ["Failed to load."];
 		}
 	};
