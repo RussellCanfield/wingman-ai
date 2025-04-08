@@ -134,8 +134,6 @@ export const EmbeddingProvider = ({
 			};
 		}
 
-		console.log(embeddingProvider, updatedSettings, currentProviderSettings);
-
 		// Update the settings
 		onProviderSettingsChanged(updatedSettings);
 	}

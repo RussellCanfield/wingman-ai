@@ -359,7 +359,7 @@ export class LSPClient {
 			}
 			return true;
 		} catch (e) {
-			console.error(e);
+			loggingProvider.logError(e);
 			throw e;
 		}
 	};
@@ -497,7 +497,7 @@ export class LSPClient {
 				}
 			}
 		} catch (e) {
-			console.error(e);
+			loggingProvider.logError(e);
 		}
 
 		return client.sendRequest("wingman/updateSettings");

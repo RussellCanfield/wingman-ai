@@ -8,9 +8,10 @@ type OllamaSection = InitSettings["embeddingSettings"]["Ollama"] & {
 	onChange: (ollamaSettings: InitSettings["embeddingSettings"]["Ollama"]) => void;
 };
 
-const loadOllamaModels = () => {
+const loadOllamaModels = (url: string) => {
 	vscode.postMessage({
-		command: "load-ollama-models"
+		command: "load-ollama-models",
+		value: url
 	});
 }
 
@@ -27,13 +28,13 @@ export const OllamaSettingsView = ({
 	const [ollamaModels, setOllamaModels] = useState<string[] | undefined>();
 
 	useEffect(() => {
-		loadOllamaModels();
+		loadOllamaModels(baseUrl);
 
 		window.addEventListener("message", handleResponse);
 		return () => {
 			window.removeEventListener("message", handleResponse);
 		};
-	}, []);
+	}, [baseUrl]);
 
 	// Set default models when ollamaModels are loaded
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
@@ -124,7 +125,7 @@ export const OllamaSettingsView = ({
 					</select>
 					<button
 						type="button"
-						onClick={loadOllamaModels}
+						onClick={() => loadOllamaModels(baseUrl)}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
 					>
@@ -177,7 +178,7 @@ export const OllamaSettingsView = ({
 					</select>
 					<button
 						type="button"
-						onClick={loadOllamaModels}
+						onClick={() => loadOllamaModels(baseUrl)}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
 					>
