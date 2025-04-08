@@ -159,9 +159,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 
 					settingsPanel.webview.postMessage({
 						command: "ollama-models",
-						value: await this.loadOllamaModels(
-							initSettings.providerSettings.Ollama?.baseUrl ?? "",
-						),
+						value: await this.loadOllamaModels(String(value)),
 					});
 					break;
 				}
@@ -171,7 +169,12 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 					settingsPanel.webview.postMessage({
 						command: "lmstudio-models",
 						value: await this.loadLMStudioModels(
-							`${initSettings.providerSettings.LMStudio?.baseUrl}${initSettings.providerSettings.LMStudio?.modelInfoPath}`,
+							new URL(
+								path.join(
+									String(value),
+									initSettings.providerSettings.LMStudio?.modelInfoPath ?? "",
+								),
+							),
 						),
 					});
 					break;
@@ -251,7 +254,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		try {
-			const modelsResponse = await fetch(path.join(url, "/api/tags"));
+			const modelsResponse = await fetch(new URL(path.join(url, "/api/tags")));
 			const modelsJson = (await modelsResponse.json()) as {
 				models: { name: string }[];
 			};
@@ -262,7 +265,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		}
 	};
 
-	private loadLMStudioModels = async (url: string): Promise<string[]> => {
+	private loadLMStudioModels = async (url: URL): Promise<string[]> => {
 		if (!url) {
 			return ["Failed to load."];
 		}

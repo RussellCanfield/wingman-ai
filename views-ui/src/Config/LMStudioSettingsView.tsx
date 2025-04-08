@@ -9,9 +9,10 @@ type LMStudioSection = InitSettings["providerSettings"]["LMStudio"] & {
 	onChange: (lmstudioSettings: OllamaSettingsType) => void;
 };
 
-const loadLMStudioModels = () => {
+const loadLMStudioModels = (url: string) => {
 	vscode.postMessage({
-		command: "load-lmstudio-models"
+		command: "load-lmstudio-models",
+		value: url,
 	});
 }
 
@@ -26,13 +27,13 @@ export const LMStudioSettingsView = ({
 	const [lmstudioModels, setLMStudioModels] = useState<string[] | undefined>();
 
 	useEffect(() => {
-		loadLMStudioModels();
+		loadLMStudioModels(baseUrl);
 
 		window.addEventListener("message", handleResponse);
 		return () => {
 			window.removeEventListener("message", handleResponse);
 		};
-	}, []);
+	}, [baseUrl]);
 
 	// Set default models when ollamaModels are loaded
 	useEffect(() => {
@@ -134,7 +135,7 @@ export const LMStudioSettingsView = ({
 					</select>
 					<button
 						type="button"
-						onClick={loadLMStudioModels}
+						onClick={() => loadLMStudioModels(baseUrl)}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
 					>
@@ -186,7 +187,7 @@ export const LMStudioSettingsView = ({
 					</select>
 					<button
 						type="button"
-						onClick={loadLMStudioModels}
+						onClick={() => loadLMStudioModels(baseUrl)}
 						className="px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-md hover:bg-[var(--vscode-button-hoverBackground)] focus:outline-none focus:ring-2 focus:ring-[var(--vscode-focusBorder)]"
 						title="Refresh models"
 					>
