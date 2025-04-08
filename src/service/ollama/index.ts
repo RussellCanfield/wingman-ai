@@ -130,20 +130,17 @@ export class Ollama implements AIProvider {
 		if (signal.aborted) {
 			return undefined;
 		}
-		return fetch(
-			new URL(path.join(this.settings?.baseUrl!, this.settings?.apiPath!)),
-			{
-				method: "POST",
-				body: JSON.stringify(payload),
-				signal,
-			},
-		);
+		return fetch(new URL(this.settings?.apiPath!, this.settings?.baseUrl!), {
+			method: "POST",
+			body: JSON.stringify(payload),
+			signal,
+		});
 	}
 
 	public async validateModelExists(modelName: string): Promise<boolean> {
 		try {
 			const response = await fetch(
-				new URL(`${this.settings?.baseUrl}${this.settings?.modelInfoPath}`),
+				new URL(this.settings?.modelInfoPath!, this.settings?.baseUrl),
 				{
 					method: "POST",
 					body: JSON.stringify({

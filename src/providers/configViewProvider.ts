@@ -170,10 +170,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 						command: "lmstudio-models",
 						value: await this.loadLMStudioModels(
 							new URL(
-								path.join(
-									String(value),
-									initSettings.providerSettings.LMStudio?.modelInfoPath ?? "",
-								),
+								initSettings.providerSettings.LMStudio?.modelInfoPath ?? "",
+								String(value),
 							),
 						),
 					});
@@ -254,7 +252,8 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		try {
-			const modelsResponse = await fetch(new URL(path.join(url, "/api/tags")));
+			const modelsResponse = await fetch(new URL("/api/tags", url));
+
 			const modelsJson = (await modelsResponse.json()) as {
 				models: { name: string }[];
 			};

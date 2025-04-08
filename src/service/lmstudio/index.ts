@@ -68,7 +68,7 @@ export class LMStudio implements AIProvider {
 	public async validateModelExists(modelName: string): Promise<boolean> {
 		try {
 			const response = await fetch(
-				new URL(`${this.settings?.baseUrl}${this.settings?.modelInfoPath}`),
+				new URL(this.settings?.modelInfoPath!, this.settings?.baseUrl),
 			);
 
 			if (!response.ok) {
