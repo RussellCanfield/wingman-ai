@@ -454,7 +454,27 @@ export class CodeParser {
 	};
 
 	convertNodeId(id: string) {
-		return path.relative(this.workspace, fileURLToPath(id));
+		// Find the last occurrence of '-' followed by numbers (line/char)
+		const uriEndIndex = id.search(/-\d+-\d+$/);
+		if (uriEndIndex === -1) {
+			// Handle cases where the ID might not have line/char (though it should based on generation)
+			// Or maybe it's already just a path/URI? Log or handle appropriately.
+			console.warn(`Could not parse URI from node ID: ${id}`);
+			// Attempt conversion anyway, or return a default/error
+			try {
+				return path.relative(this.workspace, fileURLToPath(id));
+			} catch {
+				return id; // Fallback or further error handling
+			}
+		}
+		const uri = id.substring(0, uriEndIndex);
+		try {
+			const filePath = fileURLToPath(uri);
+			return path.relative(this.workspace, filePath);
+		} catch (e) {
+			console.error(`Error converting URI ${uri} from node ID ${id}:`, e);
+			return id; // Fallback or further error handling
+		}
 	}
 
 	async retrieveCodeByPathAndRange(

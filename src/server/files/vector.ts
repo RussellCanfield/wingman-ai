@@ -8,7 +8,6 @@ import { CreateEmbeddingProvider } from "../../service/utils/models";
 import { loggingProvider } from "../loggingProvider";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { BaseLLM } from "@langchain/core/language_models/llms";
-import { HumanMessage } from "@langchain/core/messages";
 
 export interface VectorMetadata {
 	filePath: string;

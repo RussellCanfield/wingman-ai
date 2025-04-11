@@ -166,7 +166,7 @@ export class LSPClient {
 					params.state.canResume)
 			) {
 				try {
-					const filePath = `${context.extensionPath}/audio/ui-notification.mp3`;
+					const filePath = path.join(context.extensionPath, 'audio', 'ui-notification.mp3');
 					sound.play(filePath);
 				} catch (e) {
 					console.error("Failed to play sound", e);

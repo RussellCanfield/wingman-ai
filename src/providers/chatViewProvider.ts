@@ -249,12 +249,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 								event: UpdateComposerFileEvent,
 								isRevert: boolean,
 							) => {
-								if (isRevert) {
-									const file = event.files[0];
-									const orig = file.original;
-									file.original = file.code;
-									file.code = orig;
-								}
 								await this.acceptFile(event, isRevert);
 							},
 							onReject: async (event: UpdateComposerFileEvent) => {
@@ -326,7 +320,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 									const relativePath = vscode.workspace.asRelativePath(
 										file.fsPath,
 									);
-									const fileName = relativePath.split("/").pop() || "";
+									const fileName = path.basename(relativePath);
 
 									matchingFiles.push({
 										file: fileName,
