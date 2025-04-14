@@ -31,7 +31,7 @@ export class BindingDownloader {
 		},
 		{
 			name: "lancedb",
-			version: "0.18.1",
+			version: "0.18.2",
 			packagePrefix: "@lancedb/lancedb",
 		},
 	];

@@ -25,8 +25,16 @@ export type SkeletonizedCodeGraphNode = {
 export type CodeGraphEdgeMap = Map<string, Set<string>>;
 
 async function loadAstGrepBinding() {
-	const { js } = await import("@ast-grep/napi");
-	return js;
+	try {
+		const { js } = await import("@ast-grep/napi");
+		if (!js) {
+			console.error("js is undefined after importing @ast-grep/napi");
+		}
+		return js;
+	} catch (error) {
+		console.error("Error importing @ast-grep/napi:", error);
+		throw error;
+	}
 }
 
 export class CodeParser {

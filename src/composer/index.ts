@@ -152,12 +152,13 @@ export class WingmanAgent {
 		const remoteTools: StructuredToolInterface[] = [];
 
 		try {
-			const mcpTools = await this.mcpAdapter.initialize();
-			for (const [server, tools] of Object.entries(mcpTools ?? {})) {
-				remoteTools.push(...tools);
-				loggingProvider.logInfo(
-					`MCP server: ${server} added ${tools.length} tools`,
-				);
+			await this.mcpAdapter.initialize();
+			const mcpTools = await this.mcpAdapter.getTools();
+			if (mcpTools) {
+				for (const [server, tool] of Object.entries(mcpTools)) {
+					remoteTools.push(tool);
+					loggingProvider.logInfo(`MCP server: ${server} added ${tool.name}`);
+				}
 			}
 		} catch (e) {
 			console.error(e);
@@ -1129,6 +1130,7 @@ Always execute the required function calls before you respond.`;
 		) {
 			prefixMsg += `\n\n# Function calling
 Always execute the required function calls before you respond.
+You should edit files directly, unless I've explicitly asked for an example.
 
 If you are unclear about what to do, ask me for clarification.`;
 		}

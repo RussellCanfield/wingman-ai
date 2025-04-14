@@ -1,5 +1,6 @@
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import path from "node:path";
+import fs from "node:fs";
 
 export class MCPAdapter {
 	client: MultiServerMCPClient | undefined;
@@ -15,16 +16,33 @@ export class MCPAdapter {
 				this.client.close();
 			}
 
-			this.client = MultiServerMCPClient.fromConfigFile(this.configPath);
+			const mcpFileContents = await fs.promises.readFile(
+				this.configPath,
+				"utf-8",
+			);
+			if (!mcpFileContents) {
+				throw new Error(`MCP config file not found at ${this.configPath}`);
+			}
+			const mcpConfig = JSON.parse(mcpFileContents) as { mcpServers: any };
+			if (!mcpConfig) {
+				throw new Error(
+					`MCP config file is empty or invalid at ${this.configPath}`,
+				);
+			}
 
-			return this.client?.initializeConnections();
+			this.client = new MultiServerMCPClient({
+				throwOnLoadError: true,
+				prefixToolNameWithServerName: true,
+				additionalToolNamePrefix: "mcp",
+				mcpServers: mcpConfig.mcpServers,
+			});
 		} catch (e) {
 			console.error(e);
 		}
+	}
 
-		return Promise.resolve(new Map()) as ReturnType<
-			MultiServerMCPClient["initializeConnections"]
-		>;
+	async getTools() {
+		return this.client?.getTools();
 	}
 
 	async close() {

@@ -61,6 +61,7 @@ export default ({ env, command, envMode }) => {
 			],
 			cleanDistPath: false,
 			minify: isProd,
+			sourceMap: !isProd,
 			target: "node",
 			externals: {
 				vscode: "commonjs vscode",
@@ -87,28 +88,30 @@ export default ({ env, command, envMode }) => {
 					"commonjs ./lancedb.win32-arm64-msvc.node",
 
 				// macOS
-				"./ast-grep.darwin-arm64.node": "commonjs ./ast-grep.darwin-arm64.node",
-				"./ast-grep.darwin-x64.node": "commonjs ./ast-grep.darwin-x64.node",
-				"./ast-grep.darwin-universal.node":
-					"commonjs ./ast-grep.darwin-universal.node",
+				"./ast-grep-napi.darwin-arm64.node":
+					"commonjs ./ast-grep-napi.darwin-arm64.node",
+				"./ast-grep-napi.darwin-x64.node":
+					"commonjs ./ast-grep-napi.darwin-x64.node",
+				"./ast-grep-napi.darwin-universal.node":
+					"commonjs ./ast-grep-napi.darwin-universal.node",
 
-				// Linux (GNU)
-				"./ast-grep.linux-x64-gnu.node":
-					"commonjs ./ast-grep.linux-x64-gnu.node",
-				"./ast-grep.linux-arm64-gnu.node":
-					"commonjs ./ast-grep.linux-arm64-gnu.node",
+				// Linux GNU
+				"./ast-grep-napi.linux-x64-gnu.node":
+					"commonjs ./ast-grep-napi.linux-x64-gnu.node",
+				"./ast-grep-napi.linux-arm64-gnu.node":
+					"commonjs ./ast-grep-napi.linux-arm64-gnu.node",
 
-				// Linux (musl)
-				"./ast-grep.linux-x64-musl.node":
-					"commonjs ./ast-grep.linux-x64-musl.node",
-				"./ast-grep.linux-arm64-musl.node":
-					"commonjs ./ast-grep.linux-arm64-musl.node",
+				// Linux musl
+				"./ast-grep-napi.linux-x64-musl.node":
+					"commonjs ./ast-grep-napi.linux-x64-musl.node",
+				"./ast-grep-napi.linux-arm64-musl.node":
+					"commonjs ./ast-grep-napi.linux-arm64-musl.node",
 
 				// Windows
-				"./ast-grep.win32-x64-msvc.node":
-					"commonjs ./ast-grep.win32-x64-msvc.node",
-				"./ast-grep.win32-arm64-msvc.node":
-					"commonjs ./ast-grep.win32-arm64-msvc.node",
+				"./ast-grep-napi.win32-x64-msvc.node":
+					"commonjs ./ast-grep-napi.win32-x64-msvc.node",
+				"./ast-grep-napi.win32-arm64-msvc.node":
+					"commonjs ./ast-grep-napi.win32-arm64-msvc.node",
 			},
 			distPath: {
 				root: "out",

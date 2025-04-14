@@ -51,6 +51,7 @@ export default ({ env, command, envMode }) => {
 		},
 		output: {
 			minify: isProd,
+			sourceMap: !isProd,
 			distPath: {
 				root: "../out/views",
 				js: "static",
