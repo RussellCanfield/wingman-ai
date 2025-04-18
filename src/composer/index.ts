@@ -237,6 +237,9 @@ export class WingmanAgent {
 							new HumanMessage({
 								id: crypto.randomUUID(),
 								content: "Cancelled the interaction.",
+								additional_kwargs: {
+									temp: true,
+								},
 							}),
 						],
 						commands: [],

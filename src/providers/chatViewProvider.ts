@@ -551,6 +551,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				fileUri,
 				new TextEncoder().encode(file.code),
 			);
+			if (isRevert) {
+				const code = file.code;
+				file.code = file.original;
+				file.original = code;
+			}
 			file.accepted = !isRevert;
 			file.rejected = false;
 			fileMap.set(file.id!, file);

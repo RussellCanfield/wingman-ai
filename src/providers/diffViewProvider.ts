@@ -78,10 +78,9 @@ export class DiffViewProvider {
 				file.path,
 			);
 			if (fs.existsSync(fileUri.fsPath)) {
+				const code = diffFile.code;
 				diffFile.code = diffFile.original;
-				diffFile.original = (
-					await vscode.workspace.fs.readFile(fileUri)
-				).toString();
+				diffFile.original = code;
 				showRevert = true;
 			}
 		}
@@ -106,15 +105,8 @@ export class DiffViewProvider {
 					break;
 				}
 				case "accept-file-changes": {
-					await this.acceptFileChanges(
-						currentPanel,
-						file.path,
-						value as FileMetadata,
-					);
-					onAccept(
-						{ files: [value as FileMetadata], threadId, toolId },
-						showRevert,
-					);
+					await this.acceptFileChanges(currentPanel, file.path, diffFile);
+					onAccept({ files: [diffFile], threadId, toolId }, showRevert);
 					break;
 				}
 				case "reject-file-changes":

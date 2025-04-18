@@ -321,6 +321,9 @@ export class VectorStore {
 				await this.createIndexIfNeeded();
 			}
 		} catch (e) {
+			if (e instanceof Error && e.message.startsWith("lance error:")) {
+				await this.resync();
+			}
 			console.log("Upsert Error: ", e);
 		}
 
@@ -432,6 +435,7 @@ export class VectorStore {
 	async resync() {
 		await this.ensureInitialized();
 		await this.removeIndex();
+		this.initialized = false;
 		await this.initialize();
 	}
 
