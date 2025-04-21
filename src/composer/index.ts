@@ -1133,9 +1133,15 @@ Always execute the required function calls before you respond.`;
 		) {
 			prefixMsg += `\n\n# Function calling
 Always execute the required function calls before you respond.
-You should edit files directly, unless I've explicitly asked for an example.
+If you are unclear about what to do, ask me for clarification.
 
-If you are unclear about what to do, ask me for clarification.`;
+# File Editing
+- If your intentions are to edit a file or provide code, use the tools provided, do not give me the file contents directly.
+- Do not make assumptions about the product structure or dependencies already existing, look at the files available in the workspace.
+- Do not leave extraneous comments in the code.
+- If you are assuming code exists, check for the code's existence first, create it if it doesn't exist.
+- DO NOT LEAVE COMMENTS SUCH AS "// ASSUMING THIS CODE EXISTS" OR "// EXISTING CODE" - ALWAYS USE THE WRITE_FILE TOOL WITH THE FULL CONTENTS OF THE FILE.
+`;
 		}
 
 		messageContent.push({
