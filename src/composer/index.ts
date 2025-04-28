@@ -9,8 +9,8 @@ import {
 	messagesStateReducer,
 } from "@langchain/langgraph";
 import {
-	AIMessageChunk,
 	type AIMessage,
+	AIMessageChunk,
 	HumanMessage,
 	type BaseMessage,
 	type MessageContentComplex,
@@ -199,6 +199,7 @@ export class WingmanAgent {
 		);
 
 		const toolNode = new ToolNode(this.tools);
+
 		//@ts-expect-error
 		this.workflow = new StateGraph(GraphAnnotation)
 			.addNode("agent", this.callModel)
@@ -697,21 +698,15 @@ When using the tools at your disposal:
 - Describe your actions in user-friendly terms (e.g., "I'll modify this file" rather than "I'll use the edit_file tool")
 - Use tools only when required - rely on your knowledge for general questions
 
-# Working with Files
-When modifying or creating files:
-1. The semantic search tool - if available, is the most efficient way to discover general features and code concepts
-2. Use the read_file tool to get the current content before making changes
-- This ensures you're working with the latest version and prevents overwriting recent changes
-- File exports and imports are not always relevant, determine if you need to use them
-3. Base your edits on the most recent content, not on your memory of the file
-4. Always use the write_file tool after you have the most recent content for a file
-5. After writing a file, consider the new content as the current state for future operations
-6. **File paths must always be correct! Always use paths relative to the current working directory**
-7. Prioritize human readable code and efficient solutions, more code is more debt
-8. Keep file sizes manageable, split files into logical, manageable chunks that serve a single purpose
-9. Never remove existing code without reason
-10. Do not use placeholder comments like '// existing import statements' or assume parts of the code are already present unless the I explicitly provide them
-11. Do not be lazy! Ensure the code is fully functional and ready to use as-is, with no missing dependencies or incomplete sections
+# File Handling Guidelines
+1.  **Discover:** Use semantic search (if available) to find relevant code/features.
+2.  **Read First:** *Always* use 'read_file' to get the current content *before* editing. Base modifications *only* on this latest content.
+3.  **Write Correctly:** Use 'write_file' to save changes. Assume this written content is now the current state.
+4.  **Paths:** **Crucial:** Use correct paths, always relative to the working directory.
+5.  **Code Quality:** Write readable, efficient, and *fully functional* code.
+    *   No placeholders (like '// existing imports') or incomplete sections.
+    *   Justify any code removal.
+    *   Keep files focused and manageably sized.
 
 **CRITICAL: Do not try to take shortcuts and leave placeholder comments like '// [Previous Code]' - ALWAYS ALWAYS ALWAYS call write_file with the full contents of the file**
 
@@ -835,7 +830,7 @@ Use this context judiciously when it helps address their needs.`,
 							new ToolMessage({
 								id: randomUUID(),
 								content:
-									"User rejected changes: The command are not correct, ask the user how to proceed",
+									"User rejected changes: The command is not correct, ask the user how to proceed",
 								tool_call_id: lastMessage.tool_calls[0].id!,
 								name: "command_execute",
 								additional_kwargs: {
@@ -1076,7 +1071,7 @@ This may or may not be relavant, the user has provided the following files to us
 Consider these files as the latest version, you do not need to read the file contents again.
 
 <context_files>
-${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents: ${f.code}\n</file>`).join("\n\n")}
+${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents:\n ${f.code}\n</file>`).join("\n\n")}
 </context_files>
 `
 }`;
@@ -1086,12 +1081,15 @@ ${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path
 			prefixMsg += `\n\n# User Provided Code Context
 Base your guidance on the following information, assume that I want code snippet and not editing the file directly - ONLY FOR THIS INTERACTION:
 
+<current_active_file>
 Language: ${request.context.language}
 File Path: ${path.relative(this.workspace, request.context.fileName)}
 Current Line: ${request.context.currentLine}
 Line Range: ${request.context.lineRange}
 Contents: 
-${request.context.text}`;
+${request.context.text}
+
+</current_active_file>`;
 		}
 
 		if (
@@ -1131,16 +1129,17 @@ Always execute the required function calls before you respond.`;
 			(this.settings?.providerSettings.Google ||
 				this.settings?.providerSettings.Google)
 		) {
-			prefixMsg += `\n\n# Function calling
-Always execute the required function calls before you respond.
-If you are unclear about what to do, ask me for clarification.
+			prefixMsg += `\n\n# Function Calls & File Editing Protocol
+** Always execute the required function calls before you respond. DO NOT WAIT FOR THE USER TO TAKE ACTION! STOP STALLING! **
+** Only use tools to work with files, do not reply with code to the USER directly. You must get this right! **
 
-# File Editing
-- If your intentions are to edit a file or provide code, use the tools provided, do not give me the file contents directly.
-- Do not make assumptions about the product structure or dependencies already existing, look at the files available in the workspace.
-- Do not leave extraneous comments in the code.
-- If you are assuming code exists, check for the code's existence first, create it if it doesn't exist.
-- DO NOT LEAVE COMMENTS SUCH AS "// ASSUMING THIS CODE EXISTS" OR "// EXISTING CODE" - ALWAYS USE THE WRITE_FILE TOOL WITH THE FULL CONTENTS OF THE FILE.
+1.  **Execute Tools First:** Always complete necessary function calls *before* generating your text response. Ask for clarification if unsure.
+2.  **Verify Workspace:** Before editing, use tools to check the actual file structure and existence of code/dependencies. Do not make assumptions. Create necessary files/code if missing.
+3.  **Use 'write_file' for Changes:**
+    *   Provide code or file modifications *only* via file writing tools (e.g., 'write_file'). Do not output code blocks directly in your response.
+    *   **Crucial:** Always write the *complete and final* content for the file.
+    *   **No Placeholders:** Avoid comments like '// existing code' or '// assuming function exists'.
+4.  **Clean Code:** Remove unnecessary comments from the final code.
 `;
 		}
 
