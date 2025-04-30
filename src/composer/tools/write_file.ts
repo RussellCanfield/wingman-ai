@@ -9,7 +9,11 @@ import { Command } from "@langchain/langgraph";
 import { ToolMessage } from "@langchain/core/messages";
 
 export const writeFileSchema = baseFileSchema.extend({
-	contents: z.string().describe("The contents of the file as a string"),
+	contents: z
+		.string()
+		.describe(
+			"The contents of the file as a string, this can never be empty or undefined.",
+		),
 });
 
 /**
@@ -117,6 +121,13 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 
 				if (autoCommit) {
 					file.accepted = true;
+
+					// check if directory exists
+					const dir = path.dirname(file.path);
+					if (!fs.existsSync(dir)) {
+						await fs.promises.mkdir(dir, { recursive: true });
+					}
+
 					await promises.writeFile(path.join(workspace, file.path), file.code!);
 				} else {
 					// In manual mode, the args are supplemented with "pre-run" data points, restore those if present.
@@ -132,7 +143,7 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 					id: config.callbacks._parentRunId,
 					content: `Successfully wrote file: ${input.path}`,
 					tool_call_id: config.toolCall.id,
-					name: "write_file",
+					name: "edit_file",
 					additional_kwargs: {
 						file: file,
 					},
@@ -143,9 +154,9 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 			}
 		},
 		{
-			name: "write_file",
+			name: "edit_file",
 			description:
-				"Write a file to the file system, use this tool when you need to create or edit a file. The input expects the full file contents, do not omit any code for the file.",
+				"Edit or write a file to the file system, use this tool when you need to create or edit a file. The contents need to be the full file contents, do not omit any code for the file.",
 			schema: writeFileSchema,
 			returnDirect: false,
 		},

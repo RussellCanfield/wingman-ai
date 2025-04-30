@@ -56,7 +56,7 @@ export const ChatThread = ({
 				return null;
 			}
 
-			if (toolMessage.name === "write_file" && !renderedTools.has(toolMessage.toolCallId)) {
+			if (toolMessage.name === "edit_file" && !renderedTools.has(toolMessage.toolCallId)) {
 				renderedTools.add(toolMessage.toolCallId);
 				return (
 					<ChatEntry key={`tool-${toolMessage.toolCallId}`} fromUser={false}>

@@ -219,11 +219,11 @@ export class CodeParser {
 				]).filter(
 					(loc, index, self) =>
 						index ===
-						self.findIndex(
-							(t) =>
-								t.uri === loc.uri &&
-								t.range.start.line === loc.range.start.line,
-						),
+							self.findIndex(
+								(t) =>
+									t.uri === loc.uri &&
+									t.range.start.line === loc.range.start.line,
+							) && loc.uri.startsWith("file://"),
 				);
 				// .filter(
 				// 	(loc) =>

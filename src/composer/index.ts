@@ -631,7 +631,7 @@ export class WingmanAgent {
 		if (lastMessage.tool_calls?.length) {
 			if (
 				!this.settings?.agentSettings.vibeMode &&
-				(lastMessage.tool_calls.some((c) => c.name === "write_file") ||
+				(lastMessage.tool_calls.some((c) => c.name === "edit_file") ||
 					lastMessage.tool_calls.some((c) => c.name === "command_execute"))
 			) {
 				return "review";
@@ -701,14 +701,14 @@ When using the tools at your disposal:
 # File Handling Guidelines
 1.  **Discover:** Use semantic search (if available) to find relevant code/features.
 2.  **Read First:** *Always* use 'read_file' to get the current content *before* editing. Base modifications *only* on this latest content.
-3.  **Write Correctly:** Use 'write_file' to save changes. Assume this written content is now the current state.
+3.  **Write Correctly:** Use 'edit_file' to save changes. Assume this written content is now the current state.
 4.  **Paths:** **Crucial:** Use correct paths, always relative to the working directory.
 5.  **Code Quality:** Write readable, efficient, and *fully functional* code.
     *   No placeholders (like '// existing imports') or incomplete sections.
     *   Justify any code removal.
     *   Keep files focused and manageably sized.
 
-**CRITICAL: Do not try to take shortcuts and leave placeholder comments like '// [Previous Code]' - ALWAYS ALWAYS ALWAYS call write_file with the full contents of the file**
+**CRITICAL: Do not try to take shortcuts and leave placeholder comments like '// [Previous Code]' - ALWAYS ALWAYS ALWAYS call edit_file with the full contents of the file**
 
 # Research
 When the user asks you to research a topic, or the user appears to be stuck, then ask if you can research for them:
@@ -791,8 +791,8 @@ Use this context judiciously when it helps address their needs.`,
 		const response = await model!.invoke(
 			[system, ...this.trimMessages(state.messages)],
 			{
-				// Wait a maximum of 3 minutes
-				timeout: 180000,
+				// Wait a maximum of 5 minutes
+				timeout: 300000,
 			},
 		);
 
@@ -877,7 +877,7 @@ Use this context judiciously when it helps address their needs.`,
 								id: randomUUID(),
 								content:
 									"User rejected changes: The file updates are not correct, ask the user how to proceed",
-								name: "write_file",
+								name: "edit_file",
 								tool_call_id: lastMessage.tool_calls[0].id!,
 								additional_kwargs: {
 									file: files[0],
@@ -890,7 +890,7 @@ Use this context judiciously when it helps address their needs.`,
 
 			if (lastMessage.tool_calls) {
 				const fileTool = lastMessage.tool_calls.find(
-					(t) => t.name === "write_file",
+					(t) => t.name === "edit_file",
 				);
 				if (fileTool) {
 					lastMessage.additional_kwargs = {
@@ -1135,8 +1135,8 @@ Always execute the required function calls before you respond.`;
 
 1.  **Execute Tools First:** Always complete necessary function calls *before* generating your text response. Ask for clarification if unsure.
 2.  **Verify Workspace:** Before editing, use tools to check the actual file structure and existence of code/dependencies. Do not make assumptions. Create necessary files/code if missing.
-3.  **Use 'write_file' for Changes:**
-    *   Provide code or file modifications *only* via file writing tools (e.g., 'write_file'). Do not output code blocks directly in your response.
+3.  **Use 'edit_file' for Changes:**
+    *   Provide code or file modifications *only* via file writing tools (e.g., 'edit_file'). Do not output code blocks directly in your response.
     *   **Crucial:** Always write the *complete and final* content for the file.
     *   **No Placeholders:** Avoid comments like '// existing code' or '// assuming function exists'.
 4.  **Clean Code:** Remove unnecessary comments from the final code.
@@ -1302,7 +1302,7 @@ Always execute the required function calls before you respond.`;
 
 							const toolCall = currentMessage.tool_calls[0];
 
-							if (toolCall.name === "write_file") {
+							if (toolCall.name === "edit_file") {
 								outputMessage = await processWriteFileTool(
 									currentMessage,
 									this.workspace,

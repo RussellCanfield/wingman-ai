@@ -547,6 +547,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 				vscode.Uri.parse(this._workspace.workspacePath),
 				relativeFilePath,
 			);
+
+			// check if directory exists
+			const dir = path.dirname(file.path);
+			if (!fs.existsSync(dir)) {
+				await fs.promises.mkdir(dir, { recursive: true });
+			}
+
 			await vscode.workspace.fs.writeFile(
 				fileUri,
 				new TextEncoder().encode(file.code),
