@@ -21,25 +21,6 @@ export class OpenAI implements AIProvider {
 			throw new Error("Unable to load OpenAI settings.");
 		}
 
-		if (!this.settings?.apiKey || !this.settings.apiKey.trim()) {
-			throw new Error("OpenAI API key is required.");
-		}
-
-		if (
-			embeddingSettings &&
-			(!embeddingSettings.apiKey ||
-				!embeddingSettings.apiKey.trim() ||
-				!embeddingSettings.dimensions ||
-				Number.isNaN(embeddingSettings.dimensions) ||
-				embeddingSettings.dimensions <= 0 ||
-				!embeddingSettings.model ||
-				!embeddingSettings.model.trim() ||
-				!embeddingSettings.summaryModel ||
-				!embeddingSettings.summaryModel.trim())
-		) {
-			throw new Error("OpenAI embeddings are not configured properly.");
-		}
-
 		this.codeModel = this.getCodeModel(this.settings!.codeModel);
 	}
 
@@ -74,7 +55,29 @@ export class OpenAI implements AIProvider {
 		});
 	}
 
-	validateSettings(): Promise<boolean> {
+	async validateEmbeddingSettings() {
+		if (
+			this.embeddingSettings &&
+			(!this.embeddingSettings.apiKey ||
+				!this.embeddingSettings.apiKey.trim() ||
+				!this.embeddingSettings.dimensions ||
+				Number.isNaN(this.embeddingSettings.dimensions) ||
+				this.embeddingSettings.dimensions <= 0 ||
+				!this.embeddingSettings.model ||
+				!this.embeddingSettings.model.trim() ||
+				!this.embeddingSettings.summaryModel ||
+				!this.embeddingSettings.summaryModel.trim())
+		) {
+			throw new Error("OpenAI embeddings are not configured properly.");
+		}
+		return true;
+	}
+
+	async validateSettings() {
+		if (!this.settings?.apiKey || !this.settings.apiKey.trim()) {
+			throw new Error("OpenAI API key is required.");
+		}
+
 		const isChatModelValid =
 			this.settings?.chatModel?.startsWith("gpt-4") ||
 			this.settings?.chatModel?.startsWith("o") ||
@@ -83,14 +86,12 @@ export class OpenAI implements AIProvider {
 			this.settings?.codeModel?.startsWith("gpt-4") ||
 			this.settings?.codeModel?.startsWith("o") ||
 			false;
-		return Promise.resolve(isChatModelValid && isCodeModelValid);
+
+		return isChatModelValid && isCodeModelValid;
 	}
 
 	private getCodeModel(codeModel: string): OpenAIModel | undefined {
-		switch (true) {
-			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o"):
-				return new GPTModel();
-		}
+		return new GPTModel();
 	}
 
 	public async codeComplete(

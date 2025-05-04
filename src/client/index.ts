@@ -166,7 +166,11 @@ export class LSPClient {
 					params.state.canResume)
 			) {
 				try {
-					const filePath = path.join(context.extensionPath, 'audio', 'ui-notification.mp3');
+					const filePath = path.join(
+						context.extensionPath,
+						"audio",
+						"ui-notification.mp3",
+					);
 					sound.play(filePath);
 				} catch (e) {
 					console.error("Failed to play sound", e);
@@ -339,7 +343,7 @@ export class LSPClient {
 
 	isRunning = () => client?.isRunning() ?? false;
 
-	validate = async (workspace: string) => {
+	validate = async () => {
 		const settings = await wingmanSettings.loadSettings();
 
 		try {
@@ -350,12 +354,20 @@ export class LSPClient {
 					aiProvider: settings.aiProvider,
 				});
 				throw new Error(
-					`AI Provider: ${settings.aiProvider} is not configured correctly. If you're using Ollama, try changing the model and saving your settings.`,
+					`AI Provider: ${settings.aiProvider} is not configured correctly.`,
 				);
 			}
 
 			if (settings.embeddingSettings.General.enabled) {
 				aiProvider = CreateEmbeddingProvider(settings, loggingProvider);
+				if (!(await aiProvider.validateEmbeddingSettings())) {
+					telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
+						aiProvider: settings.embeddingProvider,
+					});
+					throw new Error(
+						`AI Embedding Provider: ${settings.embeddingProvider} is not configured correctly.`,
+					);
+				}
 			}
 			return true;
 		} catch (e) {

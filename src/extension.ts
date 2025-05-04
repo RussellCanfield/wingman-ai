@@ -159,9 +159,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	let modelProvider: AIProvider;
 	try {
-		if (
-			!(await lspClient.validate(vscode.workspace.workspaceFolders?.[0].name))
-		) {
+		if (!(await lspClient.validate())) {
 			telemetry.sendEvent(EVENT_AI_PROVIDER_VALIDATION_FAILED, {
 				aiProvider: settings.aiProvider,
 			});

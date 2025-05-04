@@ -13,6 +13,7 @@ export type ModelParams = {
 export interface AIProvider {
 	codeModel: AIModel | undefined;
 	validateSettings(): Promise<boolean>;
+	validateEmbeddingSettings(): Promise<boolean>;
 	codeComplete(
 		beginning: string,
 		ending: string,

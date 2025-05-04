@@ -23,30 +23,6 @@ export class AzureAI implements AIProvider {
 			throw new Error("Unable to load AzureAI settings.");
 		}
 
-		if (
-			!this.settings?.apiKey.trim() ||
-			!this.settings?.apiVersion.trim() ||
-			!this.settings?.instanceName.trim() ||
-			!this.settings?.chatModel.trim() ||
-			!this.settings?.codeModel.trim()
-		) {
-			throw new Error(
-				"AzureAI is not configured correctly, all field are required.",
-			);
-		}
-
-		if (
-			this.embeddingSettings &&
-			(!this.embeddingSettings.apiKey.trim() ||
-				!this.embeddingSettings.apiVersion.trim() ||
-				Number.isNaN(this.embeddingSettings.dimensions) ||
-				!this.embeddingSettings.instanceName.trim() ||
-				!this.embeddingSettings.model.trim() ||
-				!this.embeddingSettings.summaryModel.trim())
-		) {
-			throw new Error("AzureAI embeddings is not configured properly.");
-		}
-
 		this.codeModel = this.getCodeModel(this.settings!.codeModel);
 	}
 
@@ -93,7 +69,37 @@ export class AzureAI implements AIProvider {
 		});
 	}
 
+	async validateEmbeddingSettings(): Promise<boolean> {
+		if (
+			this.embeddingSettings &&
+			(!this.embeddingSettings.apiKey ||
+				!this.embeddingSettings.apiKey.trim() ||
+				!this.embeddingSettings.apiVersion ||
+				!this.embeddingSettings.instanceName ||
+				!this.embeddingSettings.model ||
+				!this.embeddingSettings.model.trim() ||
+				!this.embeddingSettings.summaryModel ||
+				!this.embeddingSettings.summaryModel.trim())
+		) {
+			throw new Error("AzureAI embeddings are not configured properly.");
+		}
+
+		return true;
+	}
+
 	validateSettings(): Promise<boolean> {
+		if (
+			!this.settings?.apiKey.trim() ||
+			!this.settings?.apiVersion.trim() ||
+			!this.settings?.instanceName.trim() ||
+			!this.settings?.chatModel.trim() ||
+			!this.settings?.codeModel.trim()
+		) {
+			throw new Error(
+				"AzureAI is not configured correctly, all field are required.",
+			);
+		}
+
 		const isChatModelValid =
 			this.settings?.chatModel?.startsWith("gpt-4") ||
 			this.settings?.chatModel?.startsWith("o") ||
@@ -110,7 +116,11 @@ export class AzureAI implements AIProvider {
 		);
 	}
 
-	private getCodeModel(codeModel: string): AzureAIModel | undefined {
+	private getCodeModel(codeModel?: string): AzureAIModel | undefined {
+		if (!codeModel) {
+			return undefined;
+		}
+
 		switch (true) {
 			case codeModel.startsWith("gpt-4") || codeModel.startsWith("o"):
 				return new GPTModel();

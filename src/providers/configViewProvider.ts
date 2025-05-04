@@ -118,7 +118,7 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 				case "saveSettings":
 					await wingmanSettings.saveSettings(value as Settings);
 					try {
-						const result = await this._lspClient.validate(this.workspace);
+						const result = await this._lspClient.validate();
 
 						if (!result) {
 							throw new Error(
@@ -184,19 +184,18 @@ export class ConfigViewProvider implements vscode.WebviewViewProvider {
 	async getToolsFromAdapter() {
 		const mcpTools: Map<string, MCPTool[]> = new Map();
 		try {
-			const result = await this._mcpAdapter.initialize();
-			// combine result into tools
-			if (result) {
-				for (const [server, tools] of Object.entries(result)) {
-					for (const tool of tools) {
-						const mcpTool = {
-							name: tool.name,
-						};
-						if (mcpTools.has(server)) {
-							mcpTools.get(server)?.push(mcpTool);
-						} else {
-							mcpTools.set(server, [mcpTool]);
-						}
+			await this._mcpAdapter.initialize();
+			const results = await this._mcpAdapter.getTools();
+
+			if (results) {
+				for (const [server, tool] of Object.entries(results)) {
+					const mcpTool = {
+						name: tool.name,
+					};
+					if (mcpTools.has(server)) {
+						mcpTools.get(server)?.push(mcpTool);
+					} else {
+						mcpTools.set(server, [mcpTool]);
 					}
 				}
 			}

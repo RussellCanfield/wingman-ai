@@ -20,6 +20,10 @@ export class LMStudio implements AIProvider {
 			throw new Error("Unable to load LMStudio settings.");
 		}
 
+		this.codeModel = this.getCodeModel(this.settings!.codeModel);
+	}
+
+	async validateSettings(): Promise<boolean> {
 		if (
 			!this.settings?.modelInfoPath.trim() ||
 			!this.settings?.baseUrl.trim()
@@ -29,25 +33,6 @@ export class LMStudio implements AIProvider {
 			);
 		}
 
-		if (
-			embeddingSettings &&
-			(!embeddingSettings.baseUrl ||
-				!embeddingSettings.baseUrl.trim() ||
-				!embeddingSettings.dimensions ||
-				Number.isNaN(embeddingSettings.dimensions) ||
-				embeddingSettings.dimensions <= 0 ||
-				!embeddingSettings.model ||
-				!embeddingSettings.model.trim() ||
-				!embeddingSettings.summaryModel ||
-				!embeddingSettings.summaryModel.trim())
-		) {
-			throw new Error("LMStudio embeddings are not configured properly.");
-		}
-
-		this.codeModel = this.getCodeModel(this.settings!.codeModel);
-	}
-
-	async validateSettings(): Promise<boolean> {
 		if (
 			!(await this.validateModelExists(this.settings?.chatModel ?? "unknown"))
 		) {
@@ -61,6 +46,25 @@ export class LMStudio implements AIProvider {
 		}
 
 		if (!this.codeModel) return false;
+
+		return true;
+	}
+
+	async validateEmbeddingSettings(): Promise<boolean> {
+		if (
+			this.embeddingSettings &&
+			(!this.embeddingSettings.baseUrl ||
+				!this.embeddingSettings.baseUrl.trim() ||
+				!this.embeddingSettings.dimensions ||
+				Number.isNaN(this.embeddingSettings.dimensions) ||
+				this.embeddingSettings.dimensions <= 0 ||
+				!this.embeddingSettings.model ||
+				!this.embeddingSettings.model.trim() ||
+				!this.embeddingSettings.summaryModel ||
+				!this.embeddingSettings.summaryModel.trim())
+		) {
+			throw new Error("LMStudio embeddings are not configured properly.");
+		}
 
 		return true;
 	}

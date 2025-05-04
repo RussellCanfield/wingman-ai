@@ -20,10 +20,6 @@ export class xAI implements AIProvider {
 			throw new Error("Unable to load xAI settings.");
 		}
 
-		if (!this.settings?.apiKey.trim()) {
-			throw new Error("xAI API key is required.");
-		}
-
 		this.codeModel = this.getCodeModel(this.settings.codeModel);
 	}
 
@@ -49,6 +45,10 @@ export class xAI implements AIProvider {
 	}
 
 	validateSettings(): Promise<boolean> {
+		if (!this.settings?.apiKey.trim()) {
+			throw new Error("xAI API key is required.");
+		}
+
 		const isChatModelValid =
 			this.settings?.chatModel?.startsWith("grok") || false;
 		const isCodeModelValid =

@@ -38,6 +38,10 @@ export class Anthropic implements AIProvider {
 		return isChatModelValid && isCodeModelValid;
 	}
 
+	async validateEmbeddingSettings(): Promise<boolean> {
+		return true;
+	}
+
 	getModel(params?: ModelParams): BaseChatModel {
 		const targetModel = params?.model ?? this.settings?.chatModel;
 		const isReasoningModel = reasoningModels.some((reasoningModel) =>

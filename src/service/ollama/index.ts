@@ -29,30 +29,6 @@ export class Ollama implements AIProvider {
 			throw new Error("Unable to load Ollama settings.");
 		}
 
-		if (
-			!this.settings?.modelInfoPath.trim() ||
-			!this.settings?.baseUrl.trim()
-		) {
-			throw new Error(
-				"Ollama requires the base url and modelInfoPath configured.",
-			);
-		}
-
-		if (
-			embeddingSettings &&
-			(!embeddingSettings.baseUrl ||
-				!embeddingSettings.baseUrl.trim() ||
-				!embeddingSettings.dimensions ||
-				Number.isNaN(embeddingSettings.dimensions) ||
-				embeddingSettings.dimensions <= 0 ||
-				!embeddingSettings.model ||
-				!embeddingSettings.model.trim() ||
-				!embeddingSettings.summaryModel ||
-				!embeddingSettings.summaryModel.trim())
-		) {
-			throw new Error("Ollama embeddings are not configured properly.");
-		}
-
 		this.codeModel = this.getCodeModel(this.settings!.codeModel);
 	}
 
@@ -84,7 +60,35 @@ export class Ollama implements AIProvider {
 		});
 	}
 
+	async validateEmbeddingSettings(): Promise<boolean> {
+		if (
+			this.embeddingSettings &&
+			(!this.embeddingSettings.baseUrl ||
+				!this.embeddingSettings.baseUrl.trim() ||
+				!this.embeddingSettings.dimensions ||
+				Number.isNaN(this.embeddingSettings.dimensions) ||
+				this.embeddingSettings.dimensions <= 0 ||
+				!this.embeddingSettings.model ||
+				!this.embeddingSettings.model.trim() ||
+				!this.embeddingSettings.summaryModel ||
+				!this.embeddingSettings.summaryModel.trim())
+		) {
+			throw new Error("Ollama embeddings are not configured properly.");
+		}
+
+		return true;
+	}
+
 	async validateSettings(): Promise<boolean> {
+		if (
+			!this.settings?.modelInfoPath.trim() ||
+			!this.settings?.baseUrl.trim()
+		) {
+			throw new Error(
+				"Ollama requires the base url and modelInfoPath configured.",
+			);
+		}
+
 		if (
 			!(await this.validateModelExists(this.settings?.chatModel ?? "unknown"))
 		) {
@@ -102,7 +106,9 @@ export class Ollama implements AIProvider {
 		return true;
 	}
 
-	private getCodeModel(codeModel: string): OllamaAIModel | undefined {
+	private getCodeModel(codeModel?: string): OllamaAIModel | undefined {
+		if (!codeModel) return undefined;
+
 		switch (true) {
 			case codeModel.startsWith("phi4"):
 				return new Phi();
