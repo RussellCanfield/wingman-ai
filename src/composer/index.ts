@@ -1034,17 +1034,7 @@ ${this.workspace}`;
 		const rules = (await loadWingmanRules(this.workspace)) ?? "";
 
 		if (rules) {
-			const msg = {
-				type: "text",
-				text: `\n\n${rules}`,
-			};
-
-			if (this.aiProvider instanceof Anthropic) {
-				//@ts-expect-error
-				msg.cache_control = { type: "ephemeral" };
-			}
-
-			messageContent.push(msg);
+			prefixMsg += `\n\n${rules}`;
 		}
 
 		if (request.recentFiles?.length || request.contextFiles?.length) {
