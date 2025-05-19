@@ -549,7 +549,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 			);
 
 			// check if directory exists
-			const dir = path.dirname(file.path);
+			const dir = path.dirname(fileUri.fsPath);
 			if (!fs.existsSync(dir)) {
 				await fs.promises.mkdir(dir, { recursive: true });
 			}
