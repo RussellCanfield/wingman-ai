@@ -1,6 +1,8 @@
 import type React from "react";
 import { FaX } from "react-icons/fa6";
 import type { FileSearchResult } from "@shared/types/Composer";
+import { Tooltip } from 'react-tooltip';
+import { vscode } from "../../../../utilities/vscode";
 
 interface FileChipsProps {
 	chips: FileSearchResult[];
@@ -22,25 +24,36 @@ export const FileChips: React.FC<FileChipsProps> = ({
 		return null;
 	}
 
+	const handleChipClick = (chip: FileSearchResult) => {
+		vscode.postMessage({
+			command: "open-file",
+			value: { path: chip.path },
+		});
+	};
+
 	return (
 		<div className="flex flex-wrap items-center">
-			{chips.map((chip, index) => (
+			{chips.map((chip) => (
+				// biome-ignore lint/a11y/useKeyWithClickEvents: <explanation>
 				<span
 					key={chip.path}
-					className={`${chipClasses} rounded-md px-2 py-1 m-1 inline-flex items-center hover:bg-stone-500 hover:border-stone-600 transition-all duration-200 relative group`}
-					data-tooltip={chip.path}
+					className={`${chipClasses} rounded-md px-2 py-1 m-1 inline-flex items-center hover:bg-stone-500 hover:border-stone-600 transition-all duration-200 relative group cursor-pointer`}
+					data-tooltip-id={`tooltip-${chip.path}`}
+					data-tooltip-content={chip.path}
+					onClick={() => handleChipClick(chip)}
 				>
 					{chip.file}
 					<button
 						type="button"
 						className="ml-1 font-bold text-opacity-70 hover:text-opacity-100"
-						onClick={() => onChipRemove(chip)}
+						onClick={(e) => {
+							e.stopPropagation(); // Prevent chip click when removing
+							onChipRemove(chip);
+						}}
 					>
 						<FaX />
 					</button>
-					<span className="invisible group-hover:visible absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap p-2 z-10 shadow-md">
-						{chip.path}
-					</span>
+					<Tooltip id={`tooltip-${chip.path}`} place="top" className="z-50 border-gray-500" />
 				</span>
 			))}
 		</div>

@@ -19,7 +19,7 @@ export default function Toolbar() {
 		view,
 		setView,
 	} = useSettingsContext();
-	const { activeThread, setComposerStates, setActiveComposerState } = useComposerContext();
+	const { activeThread, setComposerStates, setActiveComposerState, setFileDiagnostics } = useComposerContext();
 
 	const buttonBaseClasses = "rounded transition-colors duration-300 p-2";
 	const buttonActiveClasses = isLightTheme
@@ -75,7 +75,8 @@ export default function Toolbar() {
 
 						state.messages = [];
 						return { ...state };
-					})
+					});
+					setFileDiagnostics([]);
 				}}
 				title="Clear chat history"
 			>

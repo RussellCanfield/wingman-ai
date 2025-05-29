@@ -17,6 +17,7 @@ interface ComposerContextType {
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   clearActiveMessage: () => void;
   setActiveComposerState: React.Dispatch<React.SetStateAction<ComposerState | undefined>>;
+  setFileDiagnostics: React.Dispatch<React.SetStateAction<FileDiagnostic[]>>;
   activeComposerState: ComposerState | undefined;
   activeFiles: FileSearchResult[];
   setActiveFiles: React.Dispatch<React.SetStateAction<FileSearchResult[]>>;
@@ -350,6 +351,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
     setLoading(false);
     setInputTokens(0);
     setOutputTokens(0);
+    setFileDiagnostics([]);
     vscode.postMessage({
       command: "cancel",
       value: activeThreadRef.current?.id
@@ -390,6 +392,7 @@ export const ComposerProvider: FC<PropsWithChildren> = ({ children }) => {
       activeComposerState,
       clearActiveMessage,
       setActiveComposerState,
+      setFileDiagnostics,
       activeFiles: chips,
       setActiveFiles: setChips,
       fileDiagnostics: fileDiagnostics ?? [],
