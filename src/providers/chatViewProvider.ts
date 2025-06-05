@@ -288,68 +288,134 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 						}
 
 						try {
-							// First level optimization: Use a more targeted search pattern
-							// This significantly reduces the initial result set
-							const filePattern = `**/*${searchTerm}*`;
-							// Exclude common binary and build files to reduce initial result set
 							const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 							const excludePattern = new vscode.RelativePattern(
 								workspaceFolder!,
 								"{**/node_modules/**,**/dist/**,**/build/**,**/*.jpg,**/*.jpeg,**/*.png,**/*.gif,**/*.ico,**/*.webp,**/*.mp3,**/*.mp4,**/*.woff,**/*.woff2}",
 							);
 
-							// const excludePattern =
-							// 	"{**/node_modules/**,**/dist/**,**/build/**,**/*.{jpg,jpeg,png,gif,ico,webp,mp3,mp4,woff,woff2}}";
+							// Use multiple patterns to catch different scenarios
+							const searchPatterns = [
+								`**/*${searchTerm}*/**/*`, // Files in directories containing search term
+								`**/*${searchTerm}*`, // Files/directories directly matching search term
+								`**/${searchTerm}*/**/*`, // Files in directories starting with search term
+								`**/*${searchTerm}*.*`, // Files with search term in name
+							];
 
-							const initialFiles = await vscode.workspace.findFiles(
-								filePattern,
-								excludePattern,
-								500,
-							);
+							const allFiles = new Set<string>(); // Use Set to avoid duplicates
+
+							// Search with multiple patterns
+							for (const pattern of searchPatterns) {
+								const files = await vscode.workspace.findFiles(
+									pattern,
+									excludePattern,
+									200, // Reduced per pattern since we're doing multiple searches
+								);
+
+								// biome-ignore lint/complexity/noForEach: <explanation>
+								files.forEach((file) => allFiles.add(file.fsPath));
+							}
 
 							const matchingFiles: FileSearchResult[] = [];
 
-							// Still apply gitignore check for precise control
-							for (const file of initialFiles) {
+							// Process all unique files
+							for (const filePath of allFiles) {
 								const shouldExclude = await isFileExcludedByGitignore(
-									file.fsPath,
+									filePath,
 									this._workspace.workspacePath,
 								);
 
 								if (!shouldExclude) {
-									const relativePath = vscode.workspace.asRelativePath(
-										file.fsPath,
-									);
+									const relativePath =
+										vscode.workspace.asRelativePath(filePath);
 									const fileName = path.basename(relativePath);
 
-									matchingFiles.push({
-										file: fileName,
-										path: relativePath,
-									});
+									// Additional filtering to ensure relevance
+									const searchLower = searchTerm.toLowerCase();
+									const pathLower = relativePath.toLowerCase();
+									const fileNameLower = fileName.toLowerCase();
+
+									// Check if search term appears in path or filename
+									if (
+										pathLower.includes(searchLower) ||
+										fileNameLower.includes(searchLower)
+									) {
+										matchingFiles.push({
+											file: fileName,
+											path: relativePath,
+										});
+									}
 								}
 							}
 
-							// Sort results to prioritize:
-							// 1. Filename matches first (more relevant)
-							// 2. Then by path length (shorter paths usually more relevant)
+							// Enhanced sorting to prioritize:
+							// 1. Exact filename matches (without extension)
+							// 2. Exact directory name matches
+							// 3. Files directly in matching directories
+							// 4. Partial directory matches
+							// 5. Partial filename matches
+							// 6. Then by path length
 							matchingFiles.sort((a, b) => {
-								// Check if filename contains search term
-								const aFileMatch = a.file
-									.toLowerCase()
-									.includes(searchTerm.toLowerCase());
-								const bFileMatch = b.file
-									.toLowerCase()
-									.includes(searchTerm.toLowerCase());
+								const searchLower = searchTerm.toLowerCase();
 
-								// Filename matches take priority
+								// Check exact filename matches (without extension)
+								const aFileNameNoExt = path.parse(a.file).name.toLowerCase();
+								const bFileNameNoExt = path.parse(b.file).name.toLowerCase();
+								const aExactFileMatch = aFileNameNoExt === searchLower;
+								const bExactFileMatch = bFileNameNoExt === searchLower;
+
+								if (aExactFileMatch && !bExactFileMatch) return -1;
+								if (bExactFileMatch && !aExactFileMatch) return 1;
+
+								// Check directory components
+								const aDirectories = a.path.split("/").slice(0, -1);
+								const bDirectories = b.path.split("/").slice(0, -1);
+
+								// Check for exact directory matches
+								const aExactDirMatch = aDirectories.some(
+									(dir) => dir.toLowerCase() === searchLower,
+								);
+								const bExactDirMatch = bDirectories.some(
+									(dir) => dir.toLowerCase() === searchLower,
+								);
+
+								if (aExactDirMatch && !bExactDirMatch) return -1;
+								if (bExactDirMatch && !aExactDirMatch) return 1;
+
+								// Check if file is directly in a matching directory (immediate parent)
+								const aDirectParent =
+									aDirectories[aDirectories.length - 1]?.toLowerCase();
+								const bDirectParent =
+									bDirectories[bDirectories.length - 1]?.toLowerCase();
+								const aDirectParentMatch = aDirectParent?.includes(searchLower);
+								const bDirectParentMatch = bDirectParent?.includes(searchLower);
+
+								if (aDirectParentMatch && !bDirectParentMatch) return -1;
+								if (bDirectParentMatch && !aDirectParentMatch) return 1;
+
+								// Check for any directory matches
+								const aDirectoryMatch = aDirectories.some((dir) =>
+									dir.toLowerCase().includes(searchLower),
+								);
+								const bDirectoryMatch = bDirectories.some((dir) =>
+									dir.toLowerCase().includes(searchLower),
+								);
+
+								if (aDirectoryMatch && !bDirectoryMatch) return -1;
+								if (bDirectoryMatch && !aDirectoryMatch) return 1;
+
+								// Check partial filename matches
+								const aFileMatch = a.file.toLowerCase().includes(searchLower);
+								const bFileMatch = b.file.toLowerCase().includes(searchLower);
+
 								if (aFileMatch && !bFileMatch) return -1;
 								if (bFileMatch && !aFileMatch) return 1;
 
-								// If both or neither filenames match, shorter paths get priority
+								// If all else is equal, shorter paths get priority
 								return a.path.length - b.path.length;
 							});
 
-							// Optionally limit final results to improve UI performance
+							// Limit final results to improve UI performance
 							const limitedResults = matchingFiles.slice(0, 50);
 
 							webviewView.webview.postMessage({

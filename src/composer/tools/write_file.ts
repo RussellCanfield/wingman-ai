@@ -33,14 +33,10 @@ const generateDiffFromModifiedCode = async (
 			throw new Error(`New code must be a string, received: ${typeof newCode}`);
 		}
 
-		const patch = createPatch(
-			filePath,
-			originalCode ?? "",
-			newCode,
-			"",
-			"",
-			{ context: 3 }, // Optional: control context lines
-		);
+		const patch = createPatch(filePath, originalCode ?? "", newCode, "", "", {
+			context: 3,
+			ignoreWhitespace: true,
+		});
 
 		const stats = {
 			additions: 0,

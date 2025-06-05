@@ -109,14 +109,14 @@ const ChatEntry = ({ fromUser, message, children }: PropsWithChildren<ChatEntryP
 		<li
 			className="tracking-wide leading-relaxed text-md message mt-4 mb-4"
 		>
-			<div className={`${fromUser ? "" : "pl-[48px]"} pr-[16px] flex items-center ${textColor}`}>
+			<div className={`px-[16px] flex items-center ${textColor}`}>
 				<div className="relative flex items-center gap-4 flex-grow w-full">
-					{fromUser && (
-						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center">
-							<FaUser className="text-stone-200" size={16} />
-						</div>
-					)}
 					<div className={`${bgClasses} flex-grow w-full justify-center items-center ${fromUser ? "shadow-lg" : ""}`}>
+						{fromUser && (
+							<div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-600 flex items-center justify-center ml-3 mt-3">
+								<FaUser className="text-stone-200" size={16} />
+							</div>
+						)}
 						{children}
 						{fromUser && message?.image && (
 							<div className="p-3">
