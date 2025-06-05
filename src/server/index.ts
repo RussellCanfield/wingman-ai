@@ -44,7 +44,6 @@ import {
 	CreateAIProvider,
 	CreateEmbeddingProvider,
 } from "../service/utils/models";
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 export type CustomRange = {
 	start: { line: number; character: number };
@@ -128,6 +127,7 @@ export class LSPServer {
 			this.codeParser,
 			this.storagePath!,
 			this.vectorStore,
+			this.diagnosticsRetriever,
 		);
 		await this.composer.initialize();
 

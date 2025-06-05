@@ -119,6 +119,15 @@ export const /**
       } else if (e.key === 'Escape') {
         e.preventDefault();
         setEditingThreadId(null);
+        setEditingTitle(''); // Reset the editing title
+      } else if (e.key === 'Tab') {
+        // Allow tab to work normally for accessibility
+        handleSaveThreadTitle();
+      } else if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        // Handle Ctrl+A (Windows/Linux) or Cmd+A (Mac) for select all
+        e.preventDefault();
+        const input = e.target as HTMLInputElement;
+        input.select();
       }
     };
 
@@ -219,7 +228,10 @@ export const /**
                           onKeyDown={handleEditInputKeyDown}
                           className="flex-1 bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded px-2 py-1"
                           onClick={(e) => e.stopPropagation()}
+                          onFocus={(e) => e.target.select()} // Select all text when focused
+                          aria-label="Edit thread name"
                         />
+
                       ) : (
                         <div className="flex-1 truncate">{thread.title}</div>
                       )}

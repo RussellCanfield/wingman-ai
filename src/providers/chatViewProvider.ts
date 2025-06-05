@@ -193,10 +193,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 							id: event.threadId,
 							title: event.title,
 						});
+						const currentThread = await this._lspClient.loadThread(
+							event.threadId,
+						);
 						webviewView.webview.postMessage({
 							command: "thread-data",
 							value: {
-								state: await this._lspClient.loadThread(event.threadId),
+								state: currentThread,
 								activeThreadId: (await this._workspace.load()).activeThreadId!,
 							} satisfies ComposerThreadEvent,
 						});

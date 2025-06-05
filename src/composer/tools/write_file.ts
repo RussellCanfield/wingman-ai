@@ -5,12 +5,12 @@ import path from "node:path";
 import { z } from "zod";
 import { baseFileSchema } from "./schemas";
 import type { FileMetadata } from "@shared/types/Message";
-import { Command } from "@langchain/langgraph";
 import { ToolMessage } from "@langchain/core/messages";
 
 export const writeFileSchema = baseFileSchema.extend({
 	contents: z
 		.string()
+		.min(0)
 		.describe(
 			"The contents of the file as a string, this can never be empty or undefined.",
 		),
@@ -77,6 +77,15 @@ export const generateFileMetadata = async (
 	id: string,
 	input: z.infer<typeof writeFileSchema>,
 ) => {
+	// Validate input before processing
+	if (!input.contents && input.contents !== "") {
+		throw new Error(`File contents are required but received: ${typeof input.contents}`);
+	}
+
+	if (!input.path) {
+		throw new Error("File path is required");
+	}
+
 	let fileContents = "";
 	const filePath = path.join(workspace, input.path);
 	if (fs.existsSync(filePath)) {
@@ -109,22 +118,36 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 	return tool(
 		async (input, config) => {
 			try {
+				// Validate input early
+				const validatedInput = writeFileSchema.parse(input);
+				
+				console.log("Write file tool input:", {
+					path: validatedInput.path,
+					contentsType: typeof validatedInput.contents,
+					contentsLength: validatedInput.contents?.length ?? 0,
+					hasContents: validatedInput.contents !== undefined
+				});
+
 				const file: FileMetadata = await generateFileMetadata(
 					workspace,
 					config.callbacks._parentRunId,
-					input,
+					validatedInput,
 				);
 
 				if (autoCommit) {
 					file.accepted = true;
 
 					// check if directory exists
-					const dir = path.dirname(file.path);
+					const dir = path.dirname(path.join(workspace, file.path));
 					if (!fs.existsSync(dir)) {
 						await fs.promises.mkdir(dir, { recursive: true });
 					}
 
-					await promises.writeFile(path.join(workspace, file.path), file.code!);
+					if (file.code) {
+						await promises.writeFile(path.join(workspace, file.path), file.code);
+					} else {
+						throw new Error("File code is undefined, cannot write file");
+					}
 				} else {
 					// In manual mode, the args are supplemented with "pre-run" data points, restore those if present.
 					if (config.toolCall) {
@@ -145,7 +168,8 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 					},
 				});
 			} catch (e) {
-				console.error(e);
+				console.error("Write file tool error:", e);
+				console.error("Input received:", JSON.stringify(input, null, 2));
 				throw e;
 			}
 		},

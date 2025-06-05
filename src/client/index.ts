@@ -242,20 +242,21 @@ export class LSPClient {
 					// Get all diagnostics for this file
 					const allDiagnostics = vscode.languages.getDiagnostics(uri);
 
-					// Filter for the specific types you're interested in
+					// First get import-related issues
 					const importIssues = allDiagnostics.filter(
 						(diag) =>
 							diag.message.includes("import") ||
 							diag.message.includes("Cannot find module"),
 					);
 
+					// Then get linting errors, excluding those already captured as import issues
 					const lintingErrors = allDiagnostics.filter(
 						(diag) =>
-							// Filter for your specific linting errors of interest
-							diag.source === "eslint" ||
-							diag.source === "tslint" ||
-							diag.source === "biome" ||
-							diag.source === "ts",
+							(diag.source === "eslint" ||
+								diag.source === "tslint" ||
+								diag.source === "biome" ||
+								diag.source === "ts") &&
+							!importIssues.includes(diag), // Exclude if already in import issues
 					);
 
 					if (lintingErrors.length === 0 && importIssues.length === 0) continue;

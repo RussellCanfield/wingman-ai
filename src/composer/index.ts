@@ -66,6 +66,9 @@ import { Ollama } from "../service/ollama";
 import { createImageGenerationTool } from "./tools/generate_image";
 import { Google } from "../service/google";
 import { LMStudio } from "../service/lmstudio";
+import { isGitAvailable } from "../utils/gitCommandEngine";
+import type { DiagnosticRetriever } from "../server/retriever";
+import { createFileInspectorTool } from "./tools/file_inspector";
 
 let controller = new AbortController();
 
@@ -134,6 +137,7 @@ export class WingmanAgent {
 	private messages: GraphStateAnnotation["messages"] = [];
 	private mcpAdapter: MCPAdapter;
 	private lastToolCallId: string | undefined;
+	private gitAvailable = false;
 
 	initialized = false;
 
@@ -143,6 +147,7 @@ export class WingmanAgent {
 		private readonly codeParser: CodeParser,
 		private readonly storagePath: string,
 		private readonly vectorStore?: VectorStore,
+		private readonly diagnosticRetriever?: DiagnosticRetriever,
 	) {
 		this.mcpAdapter = new MCPAdapter(this.workspace);
 	}
@@ -164,6 +169,12 @@ export class WingmanAgent {
 			console.error(e);
 		}
 
+		try {
+			this.gitAvailable = await isGitAvailable();
+		} catch (e) {
+			console.error("Error checking Git availability:", e);
+		}
+
 		this.aiProvider = CreateAIProvider(this.settings, loggingProvider);
 
 		this.tools = [
@@ -181,6 +192,7 @@ export class WingmanAgent {
 				this.settings?.agentSettings.vibeMode,
 			),
 			createResearchTool(this.workspace, this.aiProvider!),
+			createFileInspectorTool(this.diagnosticRetriever!, this.workspace),
 			...remoteTools,
 		];
 
@@ -392,6 +404,18 @@ export class WingmanAgent {
 				);
 			} catch (e) {
 				console.error(e);
+			}
+		} else {
+			if (thread.title) {
+				await graph.updateState(
+					config,
+					{
+						title: thread.title,
+						commands: [],
+						files: [],
+					},
+					"tools",
+				);
 			}
 		}
 	}
@@ -700,8 +724,8 @@ When using the tools at your disposal:
 
 # File Handling Guidelines
 1.  **Discover:** Use semantic search (if available) to find relevant code/features.
-2.  **Read First:** *Always* use 'read_file' to get the current content *before* editing. Base modifications *only* on this latest content.
-3.  **Write Correctly:** Use 'edit_file' to save changes. Assume this written content is now the current state.
+2.  **Read:** *Always* use 'read_file' to get the current content *before* editing. Base modifications *only* on this latest content.
+3.  **Write:** Use 'edit_file' to modify a file. Assume this written content is now the current state. Prefer editing files over responding with code snippets - unless the user explicitly asks for a code snippet.
 4.  **Paths:** **Crucial:** Use correct paths, always relative to the working directory.
 5.  **Code Quality:** Write readable, efficient, and *fully functional* code.
     *   No placeholders (like '// existing imports') or incomplete sections.
@@ -709,6 +733,34 @@ When using the tools at your disposal:
     *   Keep files focused and manageably sized.
 
 **CRITICAL: Do not try to take shortcuts and leave placeholder comments like '// [Previous Code]' - ALWAYS ALWAYS ALWAYS call edit_file with the full contents of the file**
+
+${
+	this.gitAvailable
+		? `# Git Integration:
+Git is available and ready for version control operations.
+Always confirm with the user before executing any git operations that modify the repository state.
+
+## Available Git Operations:
+- **Status & Inspection**: Use 'git status', 'git log', 'git diff', and 'git show' to inspect repository state and history
+- **Branch Management**: Create, switch, and manage branches with 'git branch', 'git checkout', and 'git merge'
+- **Staging & Commits**: Stage changes with 'git add' and create commits with 'git commit'
+- **Remote Operations**: Push, pull, and fetch changes with 'git push', 'git pull', and 'git fetch'
+- **Advanced Operations**: Stash changes, reset commits, and manage remotes as needed
+
+## Safety Guidelines:
+- **Always confirm with the user** before executing destructive operations (push, reset, force operations)
+- **Always confirm with the user** before making commits or pushing changes to remote repositories
+- Use 'git status' and 'git diff' to review changes before staging or committing
+- Prefer safe operations like 'git stash' over 'git reset --hard' when possible
+- When in doubt about git state, use inspection commands first (status, log, diff)
+
+## Best Practices:
+- Use descriptive commit messages that explain the changes
+- Review staged changes before committing
+- Use 'git log --oneline' for quick history overview
+`
+		: ""
+}
 
 # Research
 When the user asks you to research a topic, or the user appears to be stuck, then ask if you can research for them:
@@ -1057,8 +1109,13 @@ ${
 	!request.contextFiles?.length
 		? ""
 		: `\n\n# Context Files
-This may or may not be relavant, the user has provided the following files to use as context.
-Consider these files as the latest version, you do not need to read the file contents again.
+The user has provided the following files as context to help you understand their current work and codebase state.
+
+## Important Notes:
+- **These represent the LATEST version** of each file - you do not need to read them again using file tools
+- **Use this context judiciously** - reference these files when they're directly relevant to the user's request
+- **File relationships matter** - consider how these files interact with each other and the broader codebase
+- **Assume currency** - treat this as the most up-to-date state of the user's code
 
 <context_files>
 ${contextFiles?.map((f) => `<file>\nPath: ${path.relative(this.workspace, f.path)}\nContents:\n ${f.code}\n</file>`).join("\n\n")}
