@@ -20,7 +20,8 @@ const ToolNames = {
     semantic_search: "Semantic search...",
     think: "Thinking...",
     web_search: "Webpage search: ",
-    generate_image: "Generating image..."
+    generate_image: "Generating image...",
+    file_inspector: "Inspecting file..."
 };
 
 export interface ToolOutputProps {
@@ -171,7 +172,7 @@ const ComplexTool = memo(({ messages, isLightTheme }: { messages: ComposerMessag
         setContextMenu(prev => ({ ...prev, visible: false }));
     }, []);
 
-    if (!Array.isArray(toolContent)) return null;
+    if (!toolContent || !Array.isArray(toolContent)) return null;
 
     return (
         <div className="relative p-3">

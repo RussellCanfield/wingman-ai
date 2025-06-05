@@ -27,9 +27,6 @@ export const createFileInspectorTool = (
 			return new ToolMessage({
 				id: config.callbacks._parentRunId,
 				content: "File inspection completed successfully",
-				additional_kwargs: {
-					image: `data:image/png;base64,${result}`,
-				},
 				tool_call_id: config.toolCall.id,
 			});
 		},
