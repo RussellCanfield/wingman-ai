@@ -33,8 +33,6 @@ export const ChatThread = ({
 	const { isLightTheme } = useSettingsContext();
 	const { toolMap } = useTools(state);
 
-	console.log("Tool Map:", toolMap, loading);
-
 	const renderedTools = new Set<string>();
 	return (<>
 		{state.messages.map((message, i) => {

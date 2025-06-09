@@ -231,7 +231,10 @@ export class LSPClient {
 		client.onRequest(
 			"wingman/provideFileDiagnostics",
 			async (filePaths: string[]) => {
-				const fileUrls = filePaths.map((p) => {
+				// Deduplicate file paths to avoid processing the same file multiple times
+				const uniqueFilePaths = [...new Set(filePaths)];
+
+				const fileUrls = uniqueFilePaths.map((p) => {
 					return path.isAbsolute(p)
 						? vscode.Uri.parse(p)
 						: vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, p);
@@ -242,15 +245,25 @@ export class LSPClient {
 					// Get all diagnostics for this file
 					const allDiagnostics = vscode.languages.getDiagnostics(uri);
 
-					// First get import-related issues
-					const importIssues = allDiagnostics.filter(
+					// Deduplicate diagnostics by message to avoid showing the same error from different sources
+					const seenMessages = new Set<string>();
+					const uniqueDiagnostics = allDiagnostics.filter((diag) => {
+						if (seenMessages.has(diag.message)) {
+							return false;
+						}
+						seenMessages.add(diag.message);
+						return true;
+					});
+
+					// First get import-related issues from the unique list
+					const importIssues = uniqueDiagnostics.filter(
 						(diag) =>
 							diag.message.includes("import") ||
 							diag.message.includes("Cannot find module"),
 					);
 
 					// Then get linting errors, excluding those already captured as import issues
-					const lintingErrors = allDiagnostics.filter(
+					const lintingErrors = uniqueDiagnostics.filter(
 						(diag) =>
 							(diag.source === "eslint" ||
 								diag.source === "tslint" ||

@@ -9,7 +9,6 @@ function ChatThreadList({
 	const { activeComposerState, activeThread, composerStates } = useComposerContext();
 	const ulRef = useRef<HTMLUListElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
-	const [previousMessageCount, setPreviousMessageCount] = useState(0);
 	const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
 	// Simple scroll to bottom function
@@ -37,18 +36,18 @@ function ChatThreadList({
 		}
 	}, [handleScroll]);
 
-	// Scroll on new messages only if we're at the bottom
-	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+	// Scroll on new messages or when content streams, only if we're at the bottom
 	useEffect(() => {
-		const currentMessageCount = activeComposerState?.messages.length || 0;
-		const hasNewMessages = currentMessageCount > previousMessageCount;
+		const messages = activeComposerState?.messages ?? [];
+		const lastMessage = messages[messages.length - 1];
 
-		if (hasNewMessages && (shouldAutoScroll || activeComposerState?.messages[currentMessageCount - 1]?.role === "user")) {
+		// We auto-scroll under two conditions:
+		// 1. The user is already at the bottom of the chat (`shouldAutoScroll`).
+		// 2. The latest message is from the user, ensuring their own messages are always visible immediately.
+		if (shouldAutoScroll || lastMessage?.role === "user") {
 			scrollToBottom();
 		}
-
-		setPreviousMessageCount(currentMessageCount);
-	}, [activeComposerState?.messages.length, scrollToBottom, shouldAutoScroll]);
+	}, [activeComposerState?.messages, scrollToBottom, shouldAutoScroll]);
 
 	const state = useMemo(() => {
 		if (!activeThread || !activeComposerState) return null;

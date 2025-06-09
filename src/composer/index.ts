@@ -38,6 +38,7 @@ import type {
 } from "@shared/types/Composer";
 import type { CommandMetadata, FileMetadata } from "@shared/types/Message";
 import path from "node:path";
+import os from "node:os";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { createCommandExecuteTool } from "./tools/cmd_execute";
 import type { PartitionedFileSystemSaver } from "./checkpointer";
@@ -682,6 +683,11 @@ export class WingmanAgent {
 	callModel = async (state: GraphStateAnnotation) => {
 		//@ts-expect-error
 		const model = this.aiProvider?.getModel().bindTools(this.tools);
+		const userInfo = os.userInfo();
+		const machineInfo = `# User's Machine Information
+Operating System: ${os.platform()}
+Architecture: ${os.arch()}
+Default Shell: ${userInfo.shell}`;
 
 		const system = {
 			role: "system",
@@ -692,6 +698,8 @@ Only provide code examples if you are explicitly asked for an "example" or "snip
 Any code examples provided should use github flavored markdown with the proper language format, use file names to infer the language if you are unable to determine it.
 
 **CRITICAL - Always use file paths relative to the current working directory**
+
+${machineInfo}
 
 Guidelines for our interaction:
 1. Keep responses focused and avoid redundancy
@@ -789,46 +797,8 @@ When suggesting technologies for projects, consider these options based on speci
 # UI/UX Skills
 You are a master at UX, when you write frontend code make the UI mind blowing!
 
-# Tailwindcss Integration
-- When using CLIs to create projects such as vite, you will get tailwind v4.x as a dependency
-- Below are instructions for migrating a project, and ensuring new projects are setup properly:
-
-## Tailwind v3 to v4 Migration
-1. Start with the migration tool:
-- Run the command: "npx @tailwindcss/upgrade"
-- For most projects, the upgrade tool will automate the entire migration process including updating your dependencies, migrating your configuration file to CSS, and handling any changes to your template files.
-- The upgrade tool requires Node.js 20 or higher, so ensure your environment is updated before running it.
-
-## Tailwind v4 new project guide
-1. Install dependencies
-- npm install tailwindcss @tailwindcss/postcss postcss
-or with vite
-- npm install tailwindcss @tailwindcss/vite
-
-2. Configure Tailwind Plugin
-
-**postcss.config.mjs**
-<file>
-export default {
-plugins: {
-"@tailwindcss/postcss": {},
-}
-}
-</file>
-
-**vite.config.ts**
-<file>
-import { defineConfig } from 'vite'
-import tailwindcss from '@tailwindcss/vite'
-export default defineConfig({
-plugins: [
-tailwindcss(),
-],
-})
-</file>
-
-3. Import css utilities in main css file
-@import "tailwindcss";
+# Markdown
+When providing code examples, always use GitHub-flavored fenced markdown with the appropriate language specified.
 
 # Additional Context
 Additional user context may be attached and include contextual information such as their open files, cursor position, higlighted code and recently viewed files.

@@ -151,7 +151,7 @@ export default function Compose() {
 				)}
 				{initialized && (
 					<>
-						<ChatThreadList loading={loading} />
+						<ChatThreadList loading={loading} key={activeThread?.id} />
 						{inputTokens > 0 && outputTokens > 0 && (
 							<div className="mt-4 flex justify-center items-center gap-3 text-gray-400/70 text-sm">
 								<div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${cssClasses}`}>

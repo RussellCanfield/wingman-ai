@@ -151,7 +151,6 @@ export const WriteFileOutput = memo(({
 }) => {
     const { activeThread } = useComposerContext();
 
-    // Get file metadata from messages
     const file = useMemo(() => {
         if (messages.length === 0) return undefined;
         return messages.length === 1
@@ -159,32 +158,34 @@ export const WriteFileOutput = memo(({
             : messages[1].metadata?.file as unknown as FileMetadata;
     }, [messages]);
 
-    // Extract tool call ID
     const toolId = useMemo(() => {
         return messages[0]?.toolCallId || '';
     }, [messages]);
 
-    if (!file || !activeThread) return null;
-
-    // Calculate derived values
     const diffParts = useMemo(() => {
-        return file.diff?.split(',');
-    }, [file.diff]);
+        return file?.diff?.split(',');
+    }, [file?.diff]);
 
     const truncatedPath = useMemo(() => {
-        return getTruncatedPath(file.path);
-    }, [file.path]);
+        return file ? getTruncatedPath(file.path) : '';
+    }, [file]);
 
     const handleOpenFile = useCallback(() => {
-        openFile(file);
+        if (file) {
+            openFile(file);
+        }
     }, [file]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (file && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             openFile(file);
         }
     }, [file]);
+
+    if (!file || !activeThread) {
+        return null;
+    }
 
     const cssClasses = `${isLightTheme
         ? 'bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.15),0_12px_24px_rgba(0,0,0,0.15)]'
