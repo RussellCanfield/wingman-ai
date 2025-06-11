@@ -107,29 +107,6 @@ export const AnthropicSettingsView = ({
 				</div>
 			)}
 
-			{chatModel.startsWith("claude-3-7-sonnet") && (
-				<div className="flex flex-col gap-2 items-center">
-					<div className="w-full">
-						<input
-							id="sparkMode"
-							type="checkbox"
-							checked={sparkMode}
-							onChange={handleToggleSparkMode}
-							className="w-4 h-4 text-blue-600 bg-[var(--vscode-input-background)] border-[var(--vscode-input-border)] rounded focus:ring-[var(--vscode-focusBorder)]"
-						/>
-						<label
-							htmlFor="sparkMode"
-							className="ml-2 text-sm font-medium text-[var(--vscode-editor-foreground)]"
-						>
-							Raw Mode
-						</label>
-					</div>
-					<div className="text-xs w-full text-[var(--vscode-descriptionForeground)]">
-						(Raw unconstrained mode)
-					</div>
-				</div>
-			)}
-
 			<div className="flex flex-col">
 				<label
 					htmlFor="baseUrl"
