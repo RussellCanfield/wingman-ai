@@ -1,4 +1,4 @@
-import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef } from "react";
 import { ChatThread } from "./ChatThreadEntry";
 import { useComposerContext } from "../../context/composerContext";
 
@@ -9,45 +9,58 @@ function ChatThreadList({
 	const { activeComposerState, activeThread, composerStates } = useComposerContext();
 	const ulRef = useRef<HTMLUListElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
-	const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+	// Use a ref to track scroll position without causing re-renders on every scroll event.
+	const shouldAutoScrollRef = useRef(true);
 
-	// Simple scroll to bottom function
+	// Scroll to the bottom of the chat list.
 	const scrollToBottom = useCallback(() => {
-		if (bottomRef.current) {
-			bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-		}
+		// Defer the scroll action to ensure the DOM is updated with the new message first.
+		setTimeout(() => {
+			if (bottomRef.current) {
+				// Use 'auto' for an instantaneous scroll, which feels more responsive for new messages.
+				bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+			}
+		}, 0);
 	}, []);
 
-	// Track scroll position to determine if we should auto-scroll
+	// Update the scroll reference based on the user's scroll position.
 	const handleScroll = useCallback(() => {
-		if (!ulRef.current) return;
+		const listElement = ulRef.current;
+		if (!listElement) return;
 
-		const { scrollTop, scrollHeight, clientHeight } = ulRef.current;
-		const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50; // Using a small threshold
-		setShouldAutoScroll(isAtBottom);
+		const { scrollTop, scrollHeight, clientHeight } = listElement;
+		// If the user is within a certain threshold of the bottom, we'll keep auto-scrolling.
+		const isAtBottom = scrollHeight - clientHeight - scrollTop < 100; // Increased threshold for robustness
+		shouldAutoScrollRef.current = isAtBottom;
 	}, []);
 
-	// Add scroll event listener
+	// Attach the scroll event listener to the list.
 	useEffect(() => {
-		const ul = ulRef.current;
-		if (ul) {
-			ul.addEventListener('scroll', handleScroll);
-			return () => ul.removeEventListener('scroll', handleScroll);
+		const listElement = ulRef.current;
+		if (listElement) {
+			listElement.addEventListener('scroll', handleScroll);
+			return () => listElement.removeEventListener('scroll', handleScroll);
 		}
 	}, [handleScroll]);
 
-	// Scroll on new messages or when content streams, only if we're at the bottom
+	// This is the core effect that triggers auto-scrolling.
+	// It runs whenever new messages are added or the loading state changes.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
 		const messages = activeComposerState?.messages ?? [];
 		const lastMessage = messages[messages.length - 1];
 
-		// We auto-scroll under two conditions:
-		// 1. The user is already at the bottom of the chat (`shouldAutoScroll`).
-		// 2. The latest message is from the user, ensuring their own messages are always visible immediately.
-		if (shouldAutoScroll || lastMessage?.role === "user") {
+		// CRITICAL: Always scroll to the bottom when the user sends a message.
+		if (lastMessage?.role === 'user') {
+			scrollToBottom();
+			return; // Exit early
+		}
+
+		// For AI messages, only scroll if the user is already near the bottom.
+		if (shouldAutoScrollRef.current) {
 			scrollToBottom();
 		}
-	}, [activeComposerState?.messages, scrollToBottom, shouldAutoScroll]);
+	}, [activeComposerState?.messages, loading, scrollToBottom]);
 
 	const state = useMemo(() => {
 		if (!activeThread || !activeComposerState) return null;
@@ -60,7 +73,7 @@ function ChatThreadList({
 		<ul
 			ref={ulRef}
 			className="flex-1 overflow-x-hidden overflow-y-auto list-none m-0 p-0 pr-2"
-			style={{ scrollBehavior: 'smooth' }}
+			style={{ scrollBehavior: 'auto' }} // Use 'auto' for programmatic scrolls
 		>
 			<ChatThread state={state} loading={loading} />
 			{children}

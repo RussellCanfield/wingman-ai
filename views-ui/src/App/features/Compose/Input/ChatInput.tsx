@@ -363,7 +363,7 @@ const ChatInput = ({
 	const shouldShowButtons = !activeComposerState || !activeComposerState.threadId || activeComposerState.threadId === threadId;
 
 	return (
-		<div className="flex-basis-50 py-3 flex flex-col items-stretch" ref={ref}>
+		<div className="pt-3 flex flex-col items-stretch" ref={ref}>
 			{!loading && suggestionItems.length > 0 && (
 				<CollapsibleSection
 					items={suggestionItems}
