@@ -47,12 +47,12 @@ export const createCommandExecuteTool = (
 					if (
 						BLOCKED_COMMANDS.some((cmd) => {
 							// Check for exact command match or command with arguments
-							const parts = commandLower.split(/\s+/);
+							const parts = commandLower.split(/\\s+/);
 							return (
 								parts[0] === cmd ||
-								// Check for command as part of a path (like /rm or \rm)
+								// Check for command as part of a path (like /rm or \\rm)
 								commandLower.includes(`/${cmd} `) ||
-								commandLower.includes(`\\${cmd} `) ||
+								commandLower.includes(`\\\\${cmd} `) ||
 								// Check for command with arguments
 								parts.some((part) => part === cmd)
 							);
@@ -61,7 +61,7 @@ export const createCommandExecuteTool = (
 						const command: CommandMetadata = {
 							id: config.runId,
 							command: input.command,
-							result: `Command: "${input.command}" rejected, contains potentially destructive operations`,
+							result: `Command: \"${input.command}\" rejected, contains potentially destructive operations`,
 							failed: true,
 							success: false,
 							accepted: true,
@@ -70,7 +70,7 @@ export const createCommandExecuteTool = (
 						resolve(
 							new ToolMessage({
 								id: config.runId,
-								content: `Command: "${input.command}" rejected, contains potentially destructive operations`,
+								content: `Command: \"${input.command}\" rejected, contains potentially destructive operations`,
 								tool_call_id: config.toolCall.id,
 								name: "command_execute",
 								additional_kwargs: {
@@ -89,7 +89,7 @@ export const createCommandExecuteTool = (
 						const command: CommandMetadata = {
 							id: config.runId,
 							command: input.command,
-							result: `Command: "${input.command}" blocked`,
+							result: `Command: \"${input.command}\" blocked`,
 							failed: true,
 							success: false,
 							accepted: true,
@@ -98,7 +98,7 @@ export const createCommandExecuteTool = (
 						resolve(
 							new ToolMessage({
 								id: config.runId,
-								content: `Command: "${input.command}" rejected, script execution not allowed`,
+								content: `Command: \"${input.command}\" rejected, script execution not allowed`,
 								tool_call_id: config.toolCall.id,
 								name: "command_execute",
 								additional_kwargs: {
@@ -115,6 +115,7 @@ export const createCommandExecuteTool = (
 					const terminalProcess: ChildProcess = spawn(input.command, [], {
 						cwd: workspace,
 						shell: true,
+						stdio: ["ignore", "pipe", "pipe"], // Explicitly ignore stdin
 						env: {
 							...process.env,
 							FORCE_COLOR: "0",
@@ -134,7 +135,7 @@ export const createCommandExecuteTool = (
 							const command: CommandMetadata = {
 								id: config.runId,
 								command: input.command,
-								result: `Command: "${input.command}" timed out after 60 seconds`,
+								result: `Command: \"${input.command}\" timed out after 60 seconds`,
 								failed: true,
 								success: false,
 								accepted: true,
@@ -143,7 +144,7 @@ export const createCommandExecuteTool = (
 							resolve(
 								new ToolMessage({
 									id: config.runId,
-									content: `Command: "${input.command}" timed out after 60 seconds`,
+									content: `Command: \"${input.command}\" timed out after 60 seconds`,
 									tool_call_id: config.toolCall.id,
 									name: "command_execute",
 									additional_kwargs: {
@@ -178,7 +179,7 @@ export const createCommandExecuteTool = (
 							resolve(
 								new ToolMessage({
 									id: config.runId,
-									content: `Command: "${input.command}" failed, error: ${err.message}`,
+									content: `Command: \"${input.command}\" failed, error: ${err.message}`,
 									tool_call_id: config.toolCall.id,
 									name: "command_execute",
 									additional_kwargs: {
@@ -206,7 +207,7 @@ export const createCommandExecuteTool = (
 								resolve(
 									new ToolMessage({
 										id: config.runId,
-										content: `Command: "${input.command}" ran successfully`,
+										content: `Command: \"${input.command}\" ran successfully`,
 										tool_call_id: config.toolCall.id,
 										name: "command_execute",
 										additional_kwargs: {
@@ -227,7 +228,7 @@ export const createCommandExecuteTool = (
 								resolve(
 									new ToolMessage({
 										id: config.runId,
-										content: `Command: "${input.command}" failed, output: ${output}`,
+										content: `Command: \"${input.command}\" failed, output: ${output}`,
 										tool_call_id: config.toolCall.id,
 										name: "command_execute",
 										additional_kwargs: {
@@ -253,7 +254,7 @@ export const createCommandExecuteTool = (
 					resolve(
 						new ToolMessage({
 							id: config.runId,
-							content: `Command: "${input.command}" failed, error: ${errorMessage}`,
+							content: `Command: \"${input.command}\" failed, error: ${errorMessage}`,
 							tool_call_id: config.toolCall.id,
 							name: "command_execute",
 							additional_kwargs: {

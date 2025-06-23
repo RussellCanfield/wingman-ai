@@ -4,7 +4,7 @@ import type { StructuredTool } from "@langchain/core/tools";
 import { MCPAdapter } from "./tools/mcpAdapter";
 import getGlobalStoragePath, { isGitAvailable } from "./utils";
 import { getSystemPrompt } from "./prompts/system";
-import os, { version } from "node:os";
+import os from "node:os";
 import { createWebSearchTool } from "./tools/web_search";
 import { createThinkingTool } from "./tools/think";
 import { createCommandExecuteTool } from "./tools/cmd_execute";
@@ -24,11 +24,7 @@ import {
 import { GraphAnnotation, type WingmanGraphState } from "./state/graph";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
-import {
-	HumanMessage,
-	SystemMessage,
-	type AIMessage,
-} from "@langchain/core/messages";
+import { HumanMessage, type AIMessage } from "@langchain/core/messages";
 import { z } from "zod";
 
 const WingmanAgentConfigSchema = z.object({

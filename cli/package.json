@@ -33,23 +33,25 @@
 		"@langchain/ollama": "0.2.3",
 		"@langchain/openai": "0.5.14",
 		"@langchain/xai": "0.0.3",
-		"langchain": "0.3.29",
-		"puppeteer-chromium-resolver": "^24.0.1",
-		"typescript-language-server": "4.3.4",
-		"pyright": "1.1.402",
-		"vscode-languageserver": "9.0.1",
-		"vscode-jsonrpc": "8.2.1",
-		"vscode-languageserver-textdocument": "1.0.12",
-		"commander": "14.0.0",
 		"@wingman-ai/agent": "*",
+		"chalk": "^5.4.1",
+		"commander": "14.0.0",
+		"langchain": "0.3.29",
+		"ora": "^8.2.0",
+		"puppeteer-chromium-resolver": "^24.0.1",
+		"pyright": "1.1.402",
 		"tar": "^7.1.1",
-		"yauzl": "^3.1.3",
-		"tsx": "4.20.3"
+		"tsx": "4.20.3",
+		"typescript-language-server": "4.3.4",
+		"vscode-jsonrpc": "8.2.1",
+		"vscode-languageserver": "9.0.1",
+		"vscode-languageserver-textdocument": "1.0.12",
+		"yauzl": "^3.1.3"
 	},
 	"devDependencies": {
 		"@rslib/core": "0.10.2",
-		"typescript": "^5.8.2",
 		"ts-node": "^10.9.2",
+		"typescript": "^5.8.2",
 		"vitest": "^3.2.4"
 	}
 }

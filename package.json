@@ -5,13 +5,7 @@
 	"license": "SEE LICENSE IN LICENSE.txt",
 	"author": "Wingman AI",
 	"type": "module",
-	"workspaces": [
-		"agent",
-		"cli",
-		"docs-site",
-		"extension",
-		"shared"
-	],
+	"workspaces": ["agent", "cli", "docs-site", "extension", "shared"],
 	"scripts": {
 		"build": "rsbuild build",
 		"changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
@@ -20,8 +14,6 @@
 		"format": "biome format .",
 		"lint": "biome lint .",
 		"lint:fix": "biome lint --apply .",
-		"postinstall": "husky",
-		"prepare": "npm run build",
 		"preview": "rsbuild preview",
 		"release": "release-it",
 		"test": "vitest",
@@ -33,16 +25,15 @@
 		}
 	},
 	"devDependencies": {
-		"@rsbuild/core": "1.0.0-alpha.2",
-		"@rsbuild/plugin-node-polyfill": "1.0.0-alpha.2",
-		"@rsbuild/plugin-react": "1.0.0-alpha.2",
+		"@rsbuild/core": "1.3.22",
+		"@rsbuild/plugin-node-polyfill": "1.3.0",
+		"@rsbuild/plugin-react": "1.3.2",
 		"@types/node": "^20.12.12",
 		"conventional-changelog-cli": "^5.0.0",
 		"cz-conventional-changelog": "^3.3.0",
-		"husky": "^9.0.11",
 		"release-it": "^17.2.1",
 		"typescript": "^5.4.5",
-		"vitest": "^1.6.0"
+		"vitest": "^3.2.4"
 	},
 	"packageManager": "npm@10.5.2",
 	"dependencies": {
