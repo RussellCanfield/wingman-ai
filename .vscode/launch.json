@@ -4,21 +4,25 @@
 // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
 {
 	"version": "0.2.0",
+	"inputs": [
+		{
+			"id": "cliArgs",
+			"type": "promptString",
+			"description": "Enter the arguments for the CLI",
+			"default": ""
+		}
+	],
 	"configurations": [
 		{
 			"name": "Run Extension",
 			"type": "extensionHost",
 			"request": "launch",
-			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}"
-			],
-			"outFiles": [
-				"${workspaceFolder}/out/**/*.js"
-			],
+			"args": ["--extensionDevelopmentPath=${workspaceFolder}/extension"],
+			"outFiles": ["${workspaceFolder}/extension/out/**/*.js"],
 			"sourceMapPathOverrides": {
-				"webpack:///./src/*": "${workspaceFolder}/src/*",
-				"webpack:///src/*": "${workspaceFolder}/src/*",
-				"webpack:///*": "${workspaceFolder}/*"
+				"webpack:///./src/*": "${workspaceFolder}/extension/src/*",
+				"webpack:///src/*": "${workspaceFolder}/extension/src/*",
+				"webpack:///*": "${workspaceFolder}/extension/*"
 			},
 			"sourceMaps": true,
 			"preLaunchTask": "rsbuild"
@@ -35,22 +39,25 @@
 				"maxAttempts": 10
 			},
 			"sourceMapPathOverrides": {
-				"webpack:///./src/*": "${workspaceFolder}/src/*",
-				"webpack:///src/*": "${workspaceFolder}/src/*",
-				"webpack:///*": "${workspaceFolder}/*"
+				"webpack:///./src/*": "${workspaceFolder}/extension/src/*",
+				"webpack:///src/*": "${workspaceFolder}/extension/src/*",
+				"webpack:///*": "${workspaceFolder}/extension/*"
 			},
-			"outFiles": [
-				"${workspaceFolder}/out/**/*.js"
-			]
+			"outFiles": ["${workspaceFolder}/extension/out/**/*.js"]
+		},
+		{
+			"name": "Debug cli",
+			"type": "node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/cli",
+			"runtimeExecutable": "npm",
+			"runtimeArgs": ["run", "start", "--", "${input:cliArgs}"]
 		}
 	],
 	"compounds": [
 		{
 			"name": "Client + Server",
-			"configurations": [
-				"Run Extension",
-				"Attach to LSP"
-			]
+			"configurations": ["Run Extension", "Attach to LSP"]
 		}
 	]
 }

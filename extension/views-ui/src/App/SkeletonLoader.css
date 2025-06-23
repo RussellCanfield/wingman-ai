@@ -1,0 +1,45 @@
+.loader-dark {
+    width: 40px;
+    /* reduced from 60px */
+    aspect-ratio: 2;
+    --_g: no-repeat radial-gradient(circle closest-side, #000 90%, transparent);
+    background:
+        var(--_g) 0% 50%,
+        var(--_g) 50% 50%,
+        var(--_g) 100% 50%;
+    background-size: calc(100%/3) 40%;
+    /* reduced from 50% */
+    animation: l3 1s infinite linear;
+}
+
+.loader-light {
+    width: 40px;
+    /* reduced from 60px */
+    aspect-ratio: 2;
+    --_g: no-repeat radial-gradient(circle closest-side, #e2e2e2 90%, transparent);
+    background:
+        var(--_g) 0% 50%,
+        var(--_g) 50% 50%,
+        var(--_g) 100% 50%;
+    background-size: calc(100%/3) 40%;
+    /* reduced from 50% */
+    animation: l3 1s infinite linear;
+}
+
+@keyframes l3 {
+    20% {
+        background-position: 0% 0%, 50% 50%, 100% 50%
+    }
+
+    40% {
+        background-position: 0% 100%, 50% 0%, 100% 50%
+    }
+
+    60% {
+        background-position: 0% 50%, 50% 100%, 100% 0%
+    }
+
+    80% {
+        background-position: 0% 50%, 50% 50%, 100% 100%
+    }
+}

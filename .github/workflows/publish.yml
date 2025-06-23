@@ -23,6 +23,7 @@ jobs:
             - run: npm install --global @vscode/vsce
             - run: npm install
             - name: Publish
+              working-directory: ./extension
               env:
                   TELEMETRY_CONNECTIONSTRING: ${{ secrets.TELEMETRY_CONNECTIONSTRING }}
               run: vsce publish -p ${{ secrets.PAT }}

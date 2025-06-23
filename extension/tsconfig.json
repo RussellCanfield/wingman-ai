@@ -1,0 +1,25 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"target": "ES2021",
+		"lib": ["ES2021"],
+		"module": "commonjs",
+		"outDir": "out",
+		"sourceMap": true,
+		"rootDir": "src",
+		"baseUrl": ".",
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"paths": {
+			"@shared/*": ["../shared/src/*"]
+		}
+	},
+	"include": [
+		"src",
+		"./node_modules/vscode/vscode.d.ts",
+		"./node_modules/vscode/lib/*"
+	],
+	"exclude": ["**/node_modules", "/node_modules/", ".vscode-test", "scripts", "media", "views-ui", "audio"],
+	"references": [{ "path": "../shared" }]
+}

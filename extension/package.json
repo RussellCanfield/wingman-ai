@@ -1,0 +1,245 @@
+{
+	"name": "wing-man",
+	"displayName": "Wingman-AI",
+	"description": "Wingman - AI agentic coding assistant that works with Anthropic, OpenAI, Azure and Ollama",
+	"version": "1.5.3",
+	"publisher": "WingMan",
+	"license": "MIT",
+	"workspaces": ["shared", "views-ui"],
+	"authors": [
+		[
+			{
+				"name": "Russell Canfield",
+				"email": "rcanfield86@gmail.com"
+			},
+			{
+				"name": "Harlen Alvarez",
+				"email": "harlenalvarez@gmail.com"
+			}
+		]
+	],
+	"icon": "media/icon.png",
+	"galleryBanner": {
+		"color": "#262626",
+		"theme": "dark"
+	},
+	"contributors": [
+		{
+			"name": "Russell Canfield",
+			"email": "rcanfield86@gmail.com"
+		},
+		{
+			"name": "Harlen Alvarez",
+			"email": "harlenalvarez@gmail.com"
+		}
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/RussellCanfield/wingman-ai"
+	},
+	"engines": {
+		"vscode": "^1.95.0"
+	},
+	"categories": [
+		"Programming Languages",
+		"Snippets",
+		"Machine Learning",
+		"Education",
+		"AI",
+		"Chat"
+	],
+	"pricing": "Free",
+	"keywords": [
+		"ai",
+		"codestral",
+		"chatgpt",
+		"copilot",
+		"compose",
+		"sonnet",
+		"intellisense",
+		"openai",
+		"anthropic",
+		"composer",
+		"gpt",
+		"chat",
+		"ollama",
+		"huggingface",
+		"code assistant"
+	],
+	"activationEvents": ["onStartupFinished", "onLanguage:plaintext"],
+	"main": "./out/extension.js",
+	"contributes": {
+		"configuration": {
+			"properties": {
+				"wingman-ai.workspace.trust": {
+					"type": "boolean",
+					"default": true,
+					"description": "Trust workspace for file system operations"
+				}
+			}
+		},
+		"icons": {
+			"wingman-logo": {
+				"description": "Wingman icon",
+				"default": {
+					"fontPath": "media/wingman.woff",
+					"fontCharacter": "\\e900"
+				}
+			}
+		},
+		"languages": [
+			{
+				"id": "plaintext",
+				"aliases": ["Plain Text", "plaintext"],
+				"extensions": [".txt", ".text"]
+			}
+		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "wing-man",
+					"title": "Wingman",
+					"icon": "media/wingman-logo.png"
+				}
+			],
+			"panel": [
+				{
+					"id": "wing-man-config",
+					"title": "Wingman",
+					"icon": "media/wingman-logo.png"
+				}
+			]
+		},
+		"views": {
+			"wing-man": [
+				{
+					"id": "wingman.chatview",
+					"name": "We've got your back!",
+					"type": "webview"
+				}
+			],
+			"wing-man-config": [
+				{
+					"id": "wingman.configview",
+					"name": "Wingman",
+					"type": "webview"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "wingmanai.gendocument",
+				"title": "Wingman: Gen Docs"
+			},
+			{
+				"command": "wingmanai.refactorcode",
+				"title": "Wingman: Refactor Code"
+			},
+			{
+				"command": "wingmanai.triggercodecomplete",
+				"title": "Wingman: Code Complete"
+			},
+			{
+				"command": "wingmanai.opencomposer",
+				"title": "Wingman: Composer"
+			},
+			{
+				"command": "wingmanai.openconfig",
+				"title": "Wingman: Settings"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "wingmanai.triggercodecomplete",
+				"key": "ctrl+shift+space"
+			},
+			{
+				"command": "wingmanai.opencomposer",
+				"key": "ctrl+i",
+				"mac": "cmd+i"
+			}
+		]
+	},
+	"scripts": {
+		"start:views": "cd views-ui && npm run dev",
+		"build": "rsbuild build",
+		"build:views": "cd views-ui && npm run build",
+		"build:shared": "cd shared && npm run build",
+		"build:docs": "cd docs-site && npm run build",
+		"vscode:prepublish": "npm run compile",
+		"compile": "npm run clean && npm run build && npm run build:shared && npm run build:views && node ./scripts/removeBindings.js",
+		"watch": "tsc -b --watch",
+		"watch:views": "npm run clean && NODE_ENV=development npm run build:views && NODE_ENV=development npm run build",
+		"pretest": "npm run compile && npm run lint",
+		"lint": "eslint src --ext ts",
+		"clean": "rimraf out",
+		"docs": "cd docs-site && npm run dev",
+		"test": "vitest"
+	},
+	"dependencies": {
+		"@langchain/anthropic": "0.3.23",
+		"@langchain/community": "0.3.47",
+		"@langchain/core": "0.3.60",
+		"@langchain/google-genai": "0.2.13",
+		"@langchain/langgraph": "0.3.4",
+		"@langchain/mcp-adapters": "0.5.2",
+		"@langchain/ollama": "0.2.3",
+		"@langchain/openai": "0.5.14",
+		"@langchain/xai": "0.0.3",
+		"langchain": "0.3.29",
+		"@ast-grep/napi": "0.36.1",
+		"@google/genai": "0.15.0",
+		"@huggingface/inference": "4.0.5",
+		"@lancedb/lancedb": "0.18.2",
+		"@modelcontextprotocol/sdk": "^1.11.4",
+		"@vscode/extension-telemetry": "^0.9.8",
+		"apache-arrow": "18.1.0",
+		"cheerio": "1.0.0",
+		"detect-libc": "2.0.3",
+		"duck-duck-scrape": "2.2.7",
+		"event-source-polyfill": "1.0.31",
+		"eventsource": "3.0.5",
+		"extended-eventsource": "2.1.0",
+		"ignore": "5.2.0",
+		"json5": "2.2.3",
+		"minimatch": "10.0.1",
+		"node-cache": "^5.1.2",
+		"node-fetch": "3.3.2",
+		"puppeteer-chromium-resolver": "^23.0.0",
+		"sound-play": "1.1.0",
+		"tar": "7.4.3",
+		"tinyglobby": "0.2.10",
+		"tree-sitter": "0.22.4",
+		"turndown": "7.2.0",
+		"vscode-languageclient": "9.0.1",
+		"vscode-languageserver": "9.0.1",
+		"vscode-languageserver-textdocument": "1.0.12",
+		"vscode-uri": "3.0.8",
+		"zod": "3.24.1",
+		"zod-to-json-schema": "3.24.1"
+	},
+	"devDependencies": {
+		"@ast-grep/cli": "0.36.1",
+		"@biomejs/biome": "1.9.4",
+		"@rsbuild/core": "1.3.22",
+		"@rsbuild/plugin-react": "1.3.2",
+		"@testing-library/jest-dom": "^6.6.3",
+		"@types/event-source-polyfill": "1.0.5",
+		"@types/mocha": "10.0.8",
+		"@types/node": "22.5.5",
+		"@types/sound-play": "^1.1.3",
+		"@types/turndown": "5.0.5",
+		"@types/vscode": "1.95.0",
+		"@types/vscode-webview": "1.57.5",
+		"@vitest/ui": "^3.2.4",
+		"@vscode/test-cli": "0.0.10",
+		"@vscode/test-electron": "^2.4.1",
+		"adm-zip": "0.5.16",
+		"generate-license-file": "3.5.1",
+		"node-fetch": "3.3.2",
+		"rimraf": "^6.0.1",
+		"typescript": "^5.8.2",
+		"vite-plugin-node-polyfills": "^0.22.0",
+		"vitest": "^3.2.4"
+	}
+}

@@ -1,0 +1,180 @@
+/* ThreadVisualization.css */
+.thread-visualization-container {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--vscode-editor-background);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.visualization-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    flex-shrink: 0;
+}
+
+.thread-visualization {
+    flex: 1;
+    min-height: 500px;
+    width: 100%;
+    position: relative;
+}
+
+.no-threads-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--vscode-descriptionForeground);
+}
+
+.thread-node {
+    padding: 10px 15px;
+    border-radius: 8px;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    width: 180px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.thread-node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+}
+
+.thread-node.active {
+    border-color: var(--vscode-focusBorder);
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.thread-title {
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.thread-date {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-top: 4px;
+}
+
+.visualization-legend {
+    display: flex;
+    gap: 16px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--vscode-panel-border);
+    flex-shrink: 0;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.legend-node {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background-color: var(--vscode-button-background);
+}
+
+.legend-node.active {
+    border: 2px solid var(--vscode-focusBorder);
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.legend-edge {
+    width: 20px;
+    height: 2px;
+    background-color: var(--vscode-foreground);
+    position: relative;
+}
+
+.legend-edge:after {
+    content: '';
+    position: absolute;
+    right: -4px;
+    top: -3px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid var(--vscode-foreground);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+}
+
+/* Make sure ReactFlow styles are properly applied */
+.react-flow__container {
+    height: 100%;
+    width: 100%;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.close-button:hover {
+    opacity: 1;
+}
+
+/* Add to ThreadVisualization.css */
+.react-flow__edge {
+    z-index: 1;
+    pointer-events: all;
+}
+
+.react-flow__edge-path {
+    stroke: var(--vscode-editor-foreground);
+    stroke-width: 2;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+    stroke-dasharray: 5;
+    animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+    from {
+        stroke-dashoffset: 10;
+    }
+}
+
+/* Ensure nodes are above edges but don't block edge visibility */
+.thread-node {
+    z-index: 2;
+}
+
+.react-flow__handle {
+    width: 8px;
+    height: 8px;
+    background-color: #555;
+    border-radius: 50%;
+}
+
+.react-flow__handle-right {
+    right: -4px;
+}
+
+.react-flow__handle-left {
+    left: -4px;
+}
+
+.react-flow__panel {
+    background: transparent;
+}
