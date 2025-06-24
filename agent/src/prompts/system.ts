@@ -15,6 +15,7 @@ ${machineInfo}
 ${
 	cwd
 		? `# Current Working Directory:
+(NOTE - usually all files will be relative to this directory)
 ${cwd}`
 		: ""
 }

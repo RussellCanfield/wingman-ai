@@ -10,7 +10,6 @@ import {
 	type BaseMessage,
 } from "@langchain/core/messages";
 import { MemorySaver } from "@langchain/langgraph";
-import { ChatOpenAI } from "@langchain/openai";
 import {
 	useState,
 	useEffect,
@@ -21,6 +20,7 @@ import {
 	useContext,
 } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { loadConfig, createModel } from "../config/";
 
 export enum Status {
 	Idle = 0,
@@ -211,11 +211,12 @@ export function WingmanProvider({
 
 	useEffect(() => {
 		const initializeAgent = async () => {
+			const config = loadConfig();
+			const model = createModel(config);
+
 			const wingmanAgent = new WingmanAgent({
 				name: "Wingman CLI Agent",
-				model: new ChatOpenAI({
-					model: "gpt-4o",
-				}),
+				model,
 				mode: "vibe",
 				workingDirectory: process.cwd(),
 			});

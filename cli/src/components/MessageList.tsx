@@ -18,13 +18,17 @@ const MessageList: React.FC<Props> = ({ messages }) => {
 						{msg.type === "human" && (
 							<Box>
 								<Text color="green">You: </Text>
-								<Text>{msg.content}</Text>
+								<Box marginLeft={0.5}>
+									<Text>{msg.content}</Text>
+								</Box>
 							</Box>
 						)}
 						{msg.type === "ai" && (
 							<Box>
 								<Text color="blue">Wingman: </Text>
-								<Text>{msg.content}</Text>
+								<Box marginLeft={0.5}>
+									<Text>{msg.content}</Text>
+								</Box>
 							</Box>
 						)}
 						{msg.type === "tool" && (
@@ -43,9 +47,11 @@ const ToolHandler = ({ msg }: { msg: Message }) => {
 	// use switch case for different tool types
 	if (msg.toolStatus === "executing") {
 		return (
-			<Box>
-				<Spinner status="ExecutingTool" />
-				<Text color="yellow"> Executing tool - {msg.toolName}</Text>
+			<Box flexDirection="column">
+				<Box>
+					<Spinner status="ExecutingTool" />
+					<Text color="yellow">Executing tool - {msg.toolName}</Text>
+				</Box>
 			</Box>
 		);
 	}
@@ -63,7 +69,7 @@ const ToolHandler = ({ msg }: { msg: Message }) => {
 	return (
 		<Box flexDirection="column">
 			<Box>
-				<Text color="cyan"> Executed tool - {msg.toolName}</Text>
+				<Text color="cyan">Executed tool - {msg.toolName}</Text>
 			</Box>
 		</Box>
 	);

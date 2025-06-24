@@ -38,6 +38,7 @@
 		"@wingman-ai/agent": "*",
 		"chalk": "^5.4.1",
 		"commander": "14.0.0",
+		"dotenv": "^16.4.5",
 		"langchain": "0.3.29",
 		"ora": "^8.2.0",
 		"puppeteer-chromium-resolver": "^24.0.1",

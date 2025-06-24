@@ -7,17 +7,21 @@ Brief description of your project.
 2. [Features](#features)
 3. [Installation](#installation)
 4. [Usage](#usage)
-5. [Contributing](#contributing)
-6. [License](#license)
-7. [Contact](#contact)
+5. [Wingman CLI Configuration](#wingman-cli-configuration)
+6. [LangChain Environment Variables](#langchain-environment-variables)
+7. [Configuration Loader](#configuration-loader)
+8. [Contributing](#contributing)
+9. [License](#license)
+10. [Contact](#contact)
 
 ## Introduction
 Provide a more detailed description of the project. Explain what problem it solves and why it’s useful.
 
 ## Features
-- Feature 1
-- Feature 2
-- Feature 3
+- **Command Recognition**: The UserInput component supports command recognition, allowing users to input commands like `/file`, `/dir`, and `/clear` to manage context.
+- **Dynamic Command Suggestions**: As users type commands, the component dynamically suggests available commands that match the input.
+- **Context Management**: Users can add files and directories to the context or clear the context using specific commands.
+- **Interactive Input**: The component provides an interactive input field for users to enter their commands and text, with real-time feedback and command filtering.
 
 ## Installation
 Instructions on how to install and set up the project. For example:
@@ -30,6 +34,43 @@ npm install
 
 ## Usage
 Examples of how to run or use the project. Screenshots or code snippets can be helpful.
+
+## Wingman CLI Configuration
+To configure the Wingman CLI, you should place your configuration file in a `.wingman` subdirectory within your project. The configuration file should be named `wingman.config.json`. Here is an example of what the configuration might look like:
+
+```json
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-0"
+}
+```
+
+## LangChain Environment Variables
+LangChain supports multiple AI providers. To configure these, set the following environment variables:
+
+### OpenAI
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+### Anthropic
+```bash
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+```
+
+### Google
+```bash
+export GOOGLE_API_KEY="your-google-api-key"
+```
+
+Ensure these keys are kept secure and not exposed in your source code.
+
+## Configuration Loader
+The configuration loader is responsible for loading the Wingman CLI configuration. It looks for a `.wingman` directory in the current working directory and expects a `wingman.config.json` file and an optional `.env` file for environment variables.
+
+- **Default Configuration**: If no configuration file is found, a default configuration is used with `provider` set to `openai` and `model` set to `gpt-4o`.
+- **Environment Variables**: If a `.env` file is present, it loads environment variables from it.
+- **Error Handling**: The loader uses `Zod` for schema validation. If the configuration file is invalid, it logs the errors and falls back to the default configuration.
 
 ## Contributing
 Guidelines for contributing to the project. Include information on submitting issues and pull requests.

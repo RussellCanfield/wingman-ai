@@ -29,16 +29,20 @@ const UserInput: React.FC<Props> = ({
 	const { clearContext } = useWingman();
 
 	useEffect(() => {
-		if (input.startsWith("/")) {
-			const parts = input.split(" ");
-			const command = parts[0];
-			const hasArgument = parts.length > 1 && parts[1] !== "";
+		if (input.endsWith(" ")) {
+			setShowCommands(false);
+			return;
+		}
 
+		const words = input.split(" ");
+		const lastWord = words[words.length - 1];
+
+		if (lastWord?.startsWith("/")) {
 			const matchingCommands = commands.filter((cmd) =>
-				cmd.name.toLowerCase().startsWith(command.toLowerCase()),
+				cmd.name.toLowerCase().startsWith(lastWord.toLowerCase()),
 			);
 
-			if (matchingCommands.length > 0 && !hasArgument) {
+			if (matchingCommands.length > 0) {
 				setShowCommands(true);
 				setFilteredCommands(matchingCommands);
 			} else {
@@ -50,28 +54,40 @@ const UserInput: React.FC<Props> = ({
 	}, [input]);
 
 	const handleOnSubmit = (value: string) => {
-		let request: WingmanRequest;
-		if (value.startsWith("/file ")) {
-			const filePath = value.split(" ")[1];
-			request = {
-				input: value,
-				contextFiles: [filePath],
-			};
-		} else if (value.startsWith("/dir ")) {
-			const dirPath = value.split(" ")[1];
-			request = {
-				input: value,
-				contextDirectories: [dirPath],
-			};
-		} else if (value.startsWith("/clear")) {
+		const fileRegex = /\/file\s+([^\s]+)/g;
+		const dirRegex = /\/dir\s+([^\s]+)/g;
+		const clearRegex = /\/clear/g;
+
+		// Handle the /clear command
+		if (clearRegex.test(value)) {
 			clearContext();
-			setInput("");
-			return;
-		} else {
-			request = {
-				input: value,
-			};
+			// If the input consists only of /clear commands, clear the input field and stop.
+			if (value.replace(clearRegex, "").trim() === "") {
+				setInput("");
+				return;
+			}
 		}
+
+		// Extract file and directory paths from the input
+		const contextFiles = Array.from(value.matchAll(fileRegex), (m) => m[1]);
+		const contextDirectories = Array.from(
+			value.matchAll(dirRegex),
+			(m) => m[1],
+		);
+
+		// Build the request object
+		const request: WingmanRequest = {
+			input: value,
+		};
+
+		if (contextFiles.length > 0) {
+			request.contextFiles = contextFiles;
+		}
+
+		if (contextDirectories.length > 0) {
+			request.contextDirectories = contextDirectories;
+		}
+
 		onSubmit(request);
 	};
 
