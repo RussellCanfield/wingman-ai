@@ -1,14 +1,18 @@
 import React from "react";
-import { Box, Text, useApp } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import MessageList from "./components/MessageList";
 import UserInput from "./components/UserInput";
 import { wingmanArt } from "./art";
 import { Status, useWingman } from "./contexts/WingmanContext";
 import Spinner from "ink-spinner";
+import StatusBar from "./components/StatusBar";
+import type { WingmanRequest } from "@wingman-ai/agent";
 
 const UI: React.FC = () => {
-	const { messages, status, input, setInput, handleSubmit } = useWingman();
+	const { messages, status, input, setInput, handleSubmit, toggleContextView } =
+		useWingman();
 	const { exit } = useApp();
+	const hotkeyWasPressed = React.useRef(false);
 
 	React.useEffect(() => {
 		const handleExit = () => {
@@ -19,6 +23,27 @@ const UI: React.FC = () => {
 			process.off("SIGINT", handleExit);
 		};
 	}, [exit]);
+
+	useInput((inputChar, key) => {
+		if ((key.ctrl || key.meta) && inputChar === "v") {
+			hotkeyWasPressed.current = true;
+			toggleContextView();
+		}
+	});
+
+	const customSetInput = React.useCallback(
+		(value: string) => {
+			if (hotkeyWasPressed.current) {
+				hotkeyWasPressed.current = false;
+				// Block the 'v' character from the hotkey combination
+				if (value === `${input}v`) {
+					return;
+				}
+			}
+			setInput(value);
+		},
+		[input, setInput],
+	);
 
 	const isThinking = status === Status.Thinking;
 	const isExecutingTool = status === Status.ExecutingTool;
@@ -32,8 +57,10 @@ const UI: React.FC = () => {
 			<Box>
 				<Text color="blue">Your AI-powered partner</Text>
 			</Box>
-			<Box flexDirection="column" flexGrow={1} marginTop={1}>
+			<Box flexGrow={1} flexDirection="column" marginTop={1}>
 				<MessageList messages={messages} />
+			</Box>
+			<Box flexDirection="column">
 				{isThinking && (
 					<Box>
 						<Spinner type="dots" />
@@ -42,11 +69,12 @@ const UI: React.FC = () => {
 				{isIdle && (
 					<UserInput
 						input={input}
-						setInput={setInput}
-						onSubmit={(value) => handleSubmit(value)}
+						setInput={customSetInput}
+						onSubmit={(request: WingmanRequest) => handleSubmit(request)}
 						isThinking={isThinking || isExecutingTool}
 					/>
 				)}
+				<StatusBar />
 			</Box>
 		</Box>
 	);

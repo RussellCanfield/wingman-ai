@@ -1,4 +1,8 @@
-import { WingmanAgent, type WingmanGraphState } from "@wingman-ai/agent";
+import {
+	WingmanAgent,
+	type WingmanGraphState,
+	type WingmanRequest,
+} from "@wingman-ai/agent";
 import {
 	AIMessage,
 	AIMessageChunk,
@@ -38,8 +42,14 @@ export interface WingmanContextType {
 	messages: Message[];
 	status: Status;
 	input: string;
+	totalTokens: number;
+	contextFiles: string[];
+	contextDirectories: string[];
+	isContextViewExpanded: boolean;
 	setInput: (input: string) => void;
-	handleSubmit: (prompt: string) => Promise<void>;
+	handleSubmit: (request: WingmanRequest) => Promise<void>;
+	toggleContextView: () => void;
+	clearContext: () => void;
 }
 
 export const WingmanContext = createContext<WingmanContextType | undefined>(
@@ -56,111 +66,148 @@ export function WingmanProvider({
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [status, setStatus] = useState<Status>(Status.Idle);
 	const [input, setInput] = useState<string>("");
+	const [totalTokens, setTotalTokens] = useState<number>(0);
+	const [contextFiles, setContextFiles] = useState<string[]>([]);
+	const [contextDirectories, setContextDirectories] = useState<string[]>([]);
+	const [isContextViewExpanded, setIsContextViewExpanded] = useState(false);
 
 	const agent = useRef<WingmanAgent | null>(null);
 	const checkpointer = useRef<MemorySaver | null>(null);
 	const threadId = useRef<string>(uuidv4());
 
-	const handleSubmit = useCallback(async (prompt: string) => {
-		if (!agent.current || !checkpointer.current) return;
+	const toggleContextView = useCallback(() => {
+		setIsContextViewExpanded((prev) => !prev);
+	}, []);
 
-		const humanMessage: Message = {
-			id: uuidv4(),
-			type: "human",
-			content: prompt,
-		};
-		setMessages((prev) => [...prev, humanMessage]);
-		setStatus(Status.Thinking);
-		setInput("");
+	const clearContext = useCallback(() => {
+		setContextFiles([]);
+		setContextDirectories([]);
+	}, []);
 
-		let currentAiMessage: Message | null = null;
+	const handleSubmit = useCallback(
+		async (request: WingmanRequest) => {
+			if (!agent.current || !checkpointer.current) return;
 
-		try {
-			for await (const res of agent.current.stream(
-				{
-					input: prompt,
-					threadId: threadId.current,
-				},
-				checkpointer.current,
-			)) {
-				const { messages: newMessages } = res as WingmanGraphState;
-				const message = newMessages[newMessages.length - 1] as BaseMessage;
+			if (request.contextFiles) {
+				setContextFiles((prev) => [
+					...new Set([...prev, ...request.contextFiles!]),
+				]);
+			}
+			if (request.contextDirectories) {
+				setContextDirectories((prev) => [
+					...new Set([...prev, ...request.contextDirectories!]),
+				]);
+			}
 
-				if (message instanceof AIMessageChunk || message instanceof AIMessage) {
-					if (message.tool_calls && message.tool_calls.length > 0) {
-						setMessages((prev) => {
-							const existingToolCallIds = new Set(
-								prev.filter((m) => m.type === "tool").map((m) => m.id),
-							);
-							const toolCalls = message.tool_calls ?? [];
-							const newToolCallMessages: Message[] = toolCalls
-								.filter((tc) => tc.id && !existingToolCallIds.has(tc.id))
-								.map((toolCall) => ({
-									id: toolCall.id!,
-									type: "tool",
-									toolName: toolCall.name,
-									args: toolCall.args,
-									content: "",
-									toolStatus: "executing",
-								}));
+			const humanMessage: Message = {
+				id: uuidv4(),
+				type: "human",
+				content: request.input,
+			};
+			setMessages((prev) => [...prev, humanMessage]);
+			setStatus(Status.Thinking);
+			setInput("");
 
-							if (newToolCallMessages.length > 0) {
-								setStatus(Status.ExecutingTool);
-								return [...prev, ...newToolCallMessages];
+			const fullRequest: WingmanRequest = {
+				...request,
+				threadId: threadId.current,
+			};
+
+			let currentAiMessage: Message | null = null;
+
+			try {
+				for await (const res of agent.current.stream(
+					fullRequest,
+					checkpointer.current,
+				)) {
+					const { messages: newMessages } = res as WingmanGraphState;
+					const message = newMessages[newMessages.length - 1] as BaseMessage;
+
+					if (message instanceof AIMessageChunk || message instanceof AIMessage) {
+						if (message.tool_calls && message.tool_calls.length > 0) {
+							setMessages((prev) => {
+								const existingToolCallIds = new Set(
+									prev.filter((m) => m.type === "tool").map((m) => m.id),
+								);
+								const toolCalls = message.tool_calls ?? [];
+								const newToolCallMessages: Message[] = toolCalls
+									.filter((tc) => tc.id && !existingToolCallIds.has(tc.id))
+									.map((toolCall) => ({
+										id: toolCall.id!,
+										type: "tool",
+										toolName: toolCall.name,
+										args: toolCall.args,
+										content: "",
+										toolStatus: "executing",
+									}));
+
+								if (newToolCallMessages.length > 0) {
+									setStatus(Status.ExecutingTool);
+									return [...prev, ...newToolCallMessages];
+								}
+								return prev;
+							});
+						}
+
+						if (
+							message.content &&
+							typeof message.content === "string" &&
+							message.content.trim()
+						) {
+							if (!currentAiMessage) {
+								currentAiMessage = {
+									id: uuidv4(),
+									type: "ai",
+									content: message.content,
+									tokenCount: message.usage_metadata?.total_tokens,
+								};
+								if (message.usage_metadata?.total_tokens) {
+									setTotalTokens(
+										(prev) => prev + message.usage_metadata!.total_tokens,
+									);
+								}
+								setMessages((prev) => [...prev, currentAiMessage!]);
+							} else {
+								currentAiMessage.content += message.content;
+								if (message.usage_metadata?.total_tokens) {
+									currentAiMessage.tokenCount =
+										message.usage_metadata.total_tokens;
+									setTotalTokens(
+										(prev) => prev + message.usage_metadata!.total_tokens,
+									);
+								}
+								setMessages((prev) =>
+									prev.map((m) =>
+										m.id === currentAiMessage!.id ? currentAiMessage! : m,
+									),
+								);
 							}
-							return prev;
-						});
-					}
-
-					if (
-						message.content &&
-						typeof message.content === "string" &&
-						message.content.trim()
-					) {
-						if (!currentAiMessage) {
-							currentAiMessage = {
-								id: uuidv4(),
-								type: "ai",
-								content: message.content,
-								tokenCount: message.usage_metadata?.total_tokens,
-							};
-							setMessages((prev) => [...prev, currentAiMessage!]);
-						} else {
-							currentAiMessage.content += message.content;
-							if (message.usage_metadata?.total_tokens) {
-								currentAiMessage.tokenCount =
-									message.usage_metadata.total_tokens;
-							}
-							setMessages((prev) =>
-								prev.map((m) =>
-									m.id === currentAiMessage!.id ? currentAiMessage! : m,
-								),
-							);
 						}
 					}
-				}
 
-				if (message.getType() === "tool") {
-					setMessages((prev) =>
-						prev.map((m) => {
-							if (m.id === (message as ToolMessage).tool_call_id) {
-								return {
-									...m,
-									type: "tool",
-									content: message.content as string,
-									toolStatus: "finished",
-								};
-							}
-							return m;
-						}),
-					);
-					setStatus(Status.Thinking);
+					if (message.getType() === "tool") {
+						setMessages((prev) =>
+							prev.map((m) => {
+								if (m.id === (message as ToolMessage).tool_call_id) {
+									return {
+										...m,
+										type: "tool",
+										content: message.content as string,
+										toolStatus: "finished",
+									};
+								}
+								return m;
+							}),
+						);
+						setStatus(Status.Thinking);
+					}
 				}
+			} finally {
+				setStatus(Status.Idle);
 			}
-		} finally {
-			setStatus(Status.Idle);
-		}
-	}, []);
+		},
+		[],
+	);
 
 	useEffect(() => {
 		const initializeAgent = async () => {
@@ -169,6 +216,7 @@ export function WingmanProvider({
 				model: new ChatOpenAI({
 					model: "gpt-4o",
 				}),
+				mode: "vibe",
 				workingDirectory: process.cwd(),
 			});
 			await wingmanAgent.initialize();
@@ -176,7 +224,7 @@ export function WingmanProvider({
 			checkpointer.current = new MemorySaver();
 
 			if (initialPrompt) {
-				void handleSubmit(initialPrompt);
+				void handleSubmit({ input: initialPrompt });
 			}
 		};
 		void initializeAgent();
@@ -188,8 +236,14 @@ export function WingmanProvider({
 				messages,
 				status,
 				input,
+				totalTokens,
+				contextFiles,
+				contextDirectories,
+				isContextViewExpanded,
 				setInput,
 				handleSubmit,
+				toggleContextView,
+				clearContext,
 			}}
 		>
 			{children}

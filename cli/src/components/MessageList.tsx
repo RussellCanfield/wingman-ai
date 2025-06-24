@@ -1,7 +1,6 @@
 import type React from "react";
 import { Box, Text } from "ink";
 import type { Message } from "../contexts/WingmanContext";
-import TokenCount from "./TokenCount";
 import Spinner from "./Spinner";
 import { ReadFileTool } from "./tools/ReadFileTool";
 import { ListDirectoryTool } from "./tools/ListDirectory";
@@ -26,7 +25,6 @@ const MessageList: React.FC<Props> = ({ messages }) => {
 							<Box>
 								<Text color="blue">Wingman: </Text>
 								<Text>{msg.content}</Text>
-								{msg.tokenCount && <TokenCount count={msg.tokenCount} />}
 							</Box>
 						)}
 						{msg.type === "tool" && (
