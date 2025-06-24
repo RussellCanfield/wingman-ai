@@ -49,7 +49,7 @@ export const createResearchTool = (
 				const researchResults = await crawler.deepResearch(query);
 
 				return new ToolMessage({
-					id: config.callbacks._parentRunId,
+					id: config.callbacks.tool_call_id,
 					content: `# Research Results: ${query}\n\n${researchResults}\n\n---\nResearch complete.`,
 					tool_call_id: config.toolCall.id,
 				});

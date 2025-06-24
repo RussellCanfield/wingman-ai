@@ -25,7 +25,7 @@ export const createFileInspectorTool = (
 			const result = await retriever.getFileDiagnostics([fileUri]);
 
 			return new ToolMessage({
-				id: config.callbacks._parentRunId,
+				id: config.callbacks.tool_call_id,
 				content: "File inspection completed successfully",
 				tool_call_id: config.toolCall.id,
 			});

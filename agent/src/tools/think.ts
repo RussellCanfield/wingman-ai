@@ -16,7 +16,7 @@ export const createThinkingTool = () => {
 	return tool(
 		async (input, config) => {
 			return new ToolMessage({
-				id: config.callbacks._parentRunId,
+				id: config.callbacks.tool_call_id,
 				content: JSON.stringify({
 					input,
 				}),
