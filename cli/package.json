@@ -2,13 +2,15 @@
 	"name": "@wingman-ai/cli",
 	"version": "1.0.0",
 	"main": "dist/cli.js",
+	"type": "module",
 	"bin": {
 		"wingman": "./bin/wingman"
 	},
 	"scripts": {
 		"prepack": "npm run build",
 		"build": "rslib build",
-		"start": "tsx ./src/index.ts",
+		"dev": "tsx src/index.tsx",
+		"start": "rsbuild start",
 		"test": "vitest",
 		"postinstall": "tsx ./scripts/postinstall.ts"
 	},
@@ -39,9 +41,15 @@
 		"langchain": "0.3.29",
 		"ora": "^8.2.0",
 		"puppeteer-chromium-resolver": "^24.0.1",
+		"@rsbuild/plugin-node-polyfill": "1.3.0",
 		"pyright": "1.1.402",
 		"tar": "^7.1.1",
 		"tsx": "4.20.3",
+		"ink": "6.0.0",
+		"ink-spinner": "5.0.0",
+		"ink-text-input": "6.0.0",
+		"react": "19.1.0",
+		"react-dom": "19.1.0",
 		"typescript-language-server": "4.3.4",
 		"vscode-jsonrpc": "8.2.1",
 		"vscode-languageserver": "9.0.1",
@@ -50,6 +58,8 @@
 	},
 	"devDependencies": {
 		"@rslib/core": "0.10.2",
+		"@rsbuild/plugin-react": "1.3.2",
+		"@types/react": "19.1.8",
 		"ts-node": "^10.9.2",
 		"typescript": "^5.8.2",
 		"vitest": "^3.2.4"

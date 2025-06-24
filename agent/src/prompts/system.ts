@@ -12,7 +12,12 @@ Any code examples provided should use github flavored markdown with the proper l
 
 ${machineInfo}
 
-${cwd ? `# Current Working Directory: ${cwd}` : ""}
+${
+	cwd
+		? `# Current Working Directory:
+${cwd}`
+		: ""
+}
 
 # Guidelines for our interaction:
 1. Keep responses focused and avoid redundancy

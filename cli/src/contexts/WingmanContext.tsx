@@ -1,0 +1,206 @@
+import { WingmanAgent, type WingmanGraphState } from "@wingman-ai/agent";
+import {
+	AIMessage,
+	AIMessageChunk,
+	type ToolMessage,
+	type BaseMessage,
+} from "@langchain/core/messages";
+import { MemorySaver } from "@langchain/langgraph";
+import { ChatOpenAI } from "@langchain/openai";
+import {
+	useState,
+	useEffect,
+	useCallback,
+	useRef,
+	createContext,
+	type ReactNode,
+	useContext,
+} from "react";
+import { v4 as uuidv4 } from "uuid";
+
+export enum Status {
+	Idle = 0,
+	Thinking = 1,
+	ExecutingTool = 2,
+}
+
+export interface Message {
+	id: string;
+	type: "human" | "ai" | "tool";
+	content: string;
+	args?: Record<string, unknown>;
+	toolName?: string;
+	tokenCount?: number;
+	toolStatus?: "executing" | "finished";
+}
+
+export interface WingmanContextType {
+	messages: Message[];
+	status: Status;
+	input: string;
+	setInput: (input: string) => void;
+	handleSubmit: (prompt: string) => Promise<void>;
+}
+
+export const WingmanContext = createContext<WingmanContextType | undefined>(
+	undefined,
+);
+
+export function WingmanProvider({
+	children,
+	initialPrompt,
+}: {
+	children: ReactNode;
+	initialPrompt?: string;
+}) {
+	const [messages, setMessages] = useState<Message[]>([]);
+	const [status, setStatus] = useState<Status>(Status.Idle);
+	const [input, setInput] = useState<string>("");
+
+	const agent = useRef<WingmanAgent | null>(null);
+	const checkpointer = useRef<MemorySaver | null>(null);
+	const threadId = useRef<string>(uuidv4());
+
+	const handleSubmit = useCallback(async (prompt: string) => {
+		if (!agent.current || !checkpointer.current) return;
+
+		const humanMessage: Message = {
+			id: uuidv4(),
+			type: "human",
+			content: prompt,
+		};
+		setMessages((prev) => [...prev, humanMessage]);
+		setStatus(Status.Thinking);
+		setInput("");
+
+		let currentAiMessage: Message | null = null;
+
+		try {
+			for await (const res of agent.current.stream(
+				{
+					input: prompt,
+					threadId: threadId.current,
+				},
+				checkpointer.current,
+			)) {
+				const { messages: newMessages } = res as WingmanGraphState;
+				const message = newMessages[newMessages.length - 1] as BaseMessage;
+
+				if (message instanceof AIMessageChunk || message instanceof AIMessage) {
+					if (message.tool_calls && message.tool_calls.length > 0) {
+						setMessages((prev) => {
+							const existingToolCallIds = new Set(
+								prev.filter((m) => m.type === "tool").map((m) => m.id),
+							);
+							const toolCalls = message.tool_calls ?? [];
+							const newToolCallMessages: Message[] = toolCalls
+								.filter((tc) => tc.id && !existingToolCallIds.has(tc.id))
+								.map((toolCall) => ({
+									id: toolCall.id!,
+									type: "tool",
+									toolName: toolCall.name,
+									args: toolCall.args,
+									content: "",
+									toolStatus: "executing",
+								}));
+
+							if (newToolCallMessages.length > 0) {
+								setStatus(Status.ExecutingTool);
+								return [...prev, ...newToolCallMessages];
+							}
+							return prev;
+						});
+					}
+
+					if (
+						message.content &&
+						typeof message.content === "string" &&
+						message.content.trim()
+					) {
+						if (!currentAiMessage) {
+							currentAiMessage = {
+								id: uuidv4(),
+								type: "ai",
+								content: message.content,
+								tokenCount: message.usage_metadata?.total_tokens,
+							};
+							setMessages((prev) => [...prev, currentAiMessage!]);
+						} else {
+							currentAiMessage.content += message.content;
+							if (message.usage_metadata?.total_tokens) {
+								currentAiMessage.tokenCount =
+									message.usage_metadata.total_tokens;
+							}
+							setMessages((prev) =>
+								prev.map((m) =>
+									m.id === currentAiMessage!.id ? currentAiMessage! : m,
+								),
+							);
+						}
+					}
+				}
+
+				if (message.getType() === "tool") {
+					setMessages((prev) =>
+						prev.map((m) => {
+							if (m.id === (message as ToolMessage).tool_call_id) {
+								return {
+									...m,
+									type: "tool",
+									content: message.content as string,
+									toolStatus: "finished",
+								};
+							}
+							return m;
+						}),
+					);
+					setStatus(Status.Thinking);
+				}
+			}
+		} finally {
+			setStatus(Status.Idle);
+		}
+	}, []);
+
+	useEffect(() => {
+		const initializeAgent = async () => {
+			const wingmanAgent = new WingmanAgent({
+				name: "Wingman CLI Agent",
+				model: new ChatOpenAI({
+					model: "gpt-4o",
+				}),
+				workingDirectory: process.cwd(),
+			});
+			await wingmanAgent.initialize();
+			agent.current = wingmanAgent;
+			checkpointer.current = new MemorySaver();
+
+			if (initialPrompt) {
+				void handleSubmit(initialPrompt);
+			}
+		};
+		void initializeAgent();
+	}, [initialPrompt, handleSubmit]);
+
+	return (
+		<WingmanContext.Provider
+			value={{
+				messages,
+				status,
+				input,
+				setInput,
+				handleSubmit,
+			}}
+		>
+			{children}
+		</WingmanContext.Provider>
+	);
+}
+
+export const useWingman = () => {
+	const context = useContext(WingmanContext);
+	if (!context) {
+		throw new Error("useWingman must be used within a WingmanProvider");
+	}
+	return context;
+};

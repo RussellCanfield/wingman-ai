@@ -51,7 +51,7 @@
 			"request": "launch",
 			"cwd": "${workspaceFolder}/cli",
 			"runtimeExecutable": "npm",
-			"runtimeArgs": ["run", "start", "--", "${input:cliArgs}"]
+			"runtimeArgs": ["run", "dev", "--", "${input:cliArgs}"]
 		}
 	],
 	"compounds": [

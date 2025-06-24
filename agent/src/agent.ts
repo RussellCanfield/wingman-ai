@@ -30,10 +30,17 @@ import { z } from "zod";
 const WingmanAgentConfigSchema = z.object({
 	name: z.string().min(1, "Agent name is required"),
 	instructions: z.string().optional(),
-	model: z.any().refine((val) => val instanceof BaseChatModel, {
-		message: "Agent model is required",
-	}),
+	// TODO - revisit type validation
+	model: z.any().refine(
+		(val) => {
+			return (val.lc_namespace as string[]).includes("langchain");
+		},
+		{
+			message: "Agent model is required",
+		},
+	),
 	workingDirectory: z.string().optional(),
+	mode: z.enum(["interactive", "vibe"]).default("vibe"),
 	toolAbilities: z
 		.object({
 			symbolRetriever: z.any().optional(),
@@ -114,7 +121,10 @@ Default Shell: ${userInfo.shell}`;
 			createCommandExecuteTool(this.config.workingDirectory),
 			createReadFileTool(this.config.workingDirectory),
 			createListDirectoryTool(this.config.workingDirectory),
-			createWriteFileTool(this.config.workingDirectory),
+			createWriteFileTool(
+				this.config.workingDirectory,
+				this.config.mode === "vibe",
+			),
 			createResearchTool(this.config.workingDirectory, this.config.model),
 			...remoteTools,
 		];

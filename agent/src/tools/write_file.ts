@@ -89,7 +89,9 @@ export const generateFileMetadata = async (
 	}
 
 	let fileContents = "";
-	const filePath = path.join(workspace, input.path);
+	const filePath = path.isAbsolute(input.path)
+		? input.path
+		: path.join(workspace, input.path);
 	if (fs.existsSync(filePath)) {
 		try {
 			fileContents = await promises.readFile(filePath, {
@@ -132,7 +134,7 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 
 				const file: FileMetadata = await generateFileMetadata(
 					workspace,
-					config.callbacks._parentRunId,
+					config.toolCall.id,
 					validatedInput,
 				);
 
@@ -164,7 +166,7 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 				}
 
 				return new ToolMessage({
-					id: config.callbacks._parentRunId,
+					id: config.toolCall.id,
 					content: `Successfully wrote file: ${input.path}`,
 					tool_call_id: config.toolCall.id,
 					name: "edit_file",

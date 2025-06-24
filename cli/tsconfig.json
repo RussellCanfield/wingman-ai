@@ -11,8 +11,10 @@
 		"baseUrl": ".",
 		"strict": true,
 		"skipLibCheck": true,
+		"skipDefaultLibCheck": true,
 		"esModuleInterop": true,
 		"isolatedModules": true,
+		"jsx": "react-jsx",
 		"paths": {
 			"@shared/*": ["../shared/src/*"]
 		}
