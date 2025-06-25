@@ -1,114 +1,88 @@
 import type React from "react";
+import { memo } from "react";
 import { Box, Text } from "ink";
-import Markdown from './Markdown';
+import Markdown from "./Markdown";
 import type { Message } from "../contexts/WingmanContext";
 import Spinner from "./Spinner";
 import { ReadFileTool } from "./tools/ReadFileTool";
 import { ListDirectoryTool } from "./tools/ListDirectory";
 import { CommandExecuteTool } from "./tools/CommandExecuteTool";
+import { EditFileTool } from "./tools/EditFileTool";
 
 interface Props {
 	messages: Message[];
 }
 
-const MessageList: React.FC<Props> = ({ messages }) => {
-	return (
-		<Box flexDirection="column" gap={0.5}>
-			{messages.map((msg) => {
-				return (
-					<Box key={msg.id} flexDirection="column">
-						{msg.type === "human" && (
-							<UserMessage content={msg.content} />
-						)}
-						{msg.type === "ai" && (
-							<AssistantMessage content={msg.content} />
-						)}
-						{msg.type === "tool" && (
-							<ToolMessage msg={msg} />
-						)}
-					</Box>
-				);
-			})}
+const UserMessage: React.FC<{ content: string }> = ({ content }) => (
+	<Box flexDirection="column" marginBottom={0.5}>
+		<Box paddingX={-0.5} paddingY={0.5}>
+			<Text color="green" bold>
+				{" "}
+				You{" "}
+			</Text>
 		</Box>
-	);
-};
-
-const UserMessage: React.FC<{ content: string }> = ({ content }) => {
-	return (
-		<Box flexDirection="column" marginBottom={0.5}>
-			{/* User header */}
-			<Box paddingX={-0.5} paddingY={0.5}>
-				<Text color="green" bold> You </Text>
-			</Box>
-
-			{/* User message content with dark background */}
-			<Box
-				borderLeft={true}
-				borderTop={false}
-				borderRight={false}
-				borderBottom={false}
-				borderColor="green"
-				borderStyle="bold"
-				paddingX={2}
-				paddingY={1}
-			>
-				<Text color="white">{content}</Text>
-			</Box>
+		<Box
+			borderLeft
+			borderTop={false}
+			borderRight={false}
+			borderBottom={false}
+			borderColor="green"
+			borderStyle="bold"
+			paddingX={2}
+			paddingY={1}
+		>
+			<Text color="white">{content}</Text>
 		</Box>
-	);
-};
+	</Box>
+);
 
-const AssistantMessage: React.FC<{ content: string }> = ({ content }) => {
-	return (
-		<Box flexDirection="column" marginBottom={0.5}>
-			{/* Assistant header */}
-			<Box paddingX={-0.5} paddingY={0.5}>
-				<Text color="blue" bold> Wingman </Text>
-			</Box>
-
-			{/* Assistant message content with dark background */}
-			<Box
-				borderLeft={true}
-				borderTop={false}
-				borderRight={false}
-				borderBottom={false}
-				borderColor="blue"
-				borderStyle="bold"
-				paddingX={2}
-				paddingY={1}
-			>
-				<Markdown>{content}</Markdown>
-			</Box>
+const AssistantMessage: React.FC<{ content: string }> = ({ content }) => (
+	<Box flexDirection="column" marginBottom={0.5}>
+		<Box paddingX={-0.5} paddingY={0.5}>
+			<Text color="blue" bold>
+				{" "}
+				Wingman{" "}
+			</Text>
 		</Box>
-	);
-};
-
-const ToolMessage: React.FC<{ msg: Message }> = ({ msg }) => {
-	return (
-		<Box flexDirection="column" marginBottom={0.5}>
-			{/* Tool header */}
-			<Box paddingX={-0.5} paddingY={0.5}>
-				<Text color="gray" bold> Tool </Text>
-			</Box>
-
-			{/* Tool content with dark background */}
-			<Box
-				borderLeft={true}
-				borderTop={false}
-				borderRight={false}
-				borderBottom={false}
-				borderColor="gray"
-				borderStyle="bold"
-				paddingX={2}
-				paddingY={1}
-			>
-				<ToolHandler msg={msg} />
-			</Box>
+		<Box
+			borderLeft
+			borderTop={false}
+			borderRight={false}
+			borderBottom={false}
+			borderColor="blue"
+			borderStyle="bold"
+			paddingX={2}
+			paddingY={1}
+		>
+			<Markdown>{content}</Markdown>
 		</Box>
-	);
-};
+	</Box>
+);
 
-const ToolHandler = ({ msg }: { msg: Message }) => {
+const ToolMessage: React.FC<{ msg: Message }> = ({ msg }) => (
+	<Box flexDirection="column" marginBottom={0.5}>
+		<Box paddingX={-0.5} paddingY={0.5}>
+			<Text color="gray" bold>
+				{" "}
+				Tool{" "}
+			</Text>
+		</Box>
+		<Box
+			borderLeft
+			borderTop={false}
+			borderRight={false}
+			borderBottom={false}
+			borderColor="gray"
+			borderStyle="bold"
+			paddingX={2}
+			paddingY={1}
+		>
+			<ToolHandler msg={msg} />
+		</Box>
+	</Box>
+);
+
+const ToolHandler: React.FC<{ msg: Message }> = ({ msg }) => {
 	if (msg.toolStatus === "executing") {
 		return (
 			<Box flexDirection="row" gap={1}>
@@ -122,15 +96,15 @@ const ToolHandler = ({ msg }: { msg: Message }) => {
 		if (msg.toolName?.includes("list_directory")) {
 			return <ListDirectoryTool message={msg} />;
 		}
-
 		if (msg.toolName?.includes("read_file")) {
 			return <ReadFileTool message={msg} />;
 		}
-
 		if (msg.toolName?.includes("command_execute")) {
 			return <CommandExecuteTool message={msg} />;
 		}
-
+		if (msg.toolName?.includes("edit_file")) {
+			return <EditFileTool message={msg} />;
+		}
 		return (
 			<Box flexDirection="column">
 				<Text color="green">✓ Completed: {msg.toolName}</Text>
@@ -145,4 +119,31 @@ const ToolHandler = ({ msg }: { msg: Message }) => {
 	);
 };
 
-export default MessageList;
+const MemoizedUserMessage = memo(UserMessage);
+const MemoizedAssistantMessage = memo(AssistantMessage);
+const MemoizedToolMessage = memo(ToolMessage);
+
+const MessageItem: React.FC<{ msg: Message }> = ({ msg }) => {
+	switch (msg.type) {
+		case "human":
+			return <MemoizedUserMessage content={msg.content} />;
+		case "ai":
+			return <MemoizedAssistantMessage content={msg.content} />;
+		case "tool":
+			return <MemoizedToolMessage msg={msg} />;
+		default:
+			return null;
+	}
+};
+
+export const MemoizedMessageItem = memo(MessageItem);
+
+const MessageList: React.FC<Props> = ({ messages }) => (
+	<Box flexDirection="column" gap={0.5}>
+		{messages.map((msg) => (
+			<MemoizedMessageItem key={msg.id} msg={msg} />
+		))}
+	</Box>
+);
+
+export default memo(MessageList);

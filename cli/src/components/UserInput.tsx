@@ -58,11 +58,13 @@ const UserInput: React.FC<Props> = ({
 		const dirRegex = /\/dir\s+([^\s]+)/g;
 		const clearRegex = /\/clear/g;
 
+		let cleanValue = value;
+
 		// Handle the /clear command
 		if (clearRegex.test(value)) {
 			clearContext();
-			// If the input consists only of /clear commands, clear the input field and stop.
-			if (value.replace(clearRegex, "").trim() === "") {
+			cleanValue = cleanValue.replace(clearRegex, "").trim();
+			if (cleanValue === "") {
 				setInput("");
 				return;
 			}
@@ -75,9 +77,12 @@ const UserInput: React.FC<Props> = ({
 			(m) => m[1],
 		);
 
+		// Remove the command strings from the input
+		cleanValue = cleanValue.replace(fileRegex, "").replace(dirRegex, "").trim();
+
 		// Build the request object
 		const request: WingmanRequest = {
-			input: value,
+			input: cleanValue,
 		};
 
 		if (contextFiles.length > 0) {

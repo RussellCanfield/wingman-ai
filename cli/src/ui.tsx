@@ -1,6 +1,6 @@
 import React from "react";
-import { Box, Text, useApp, useInput } from "ink";
-import MessageList from "./components/MessageList";
+import { Box, Text, useApp, useInput, Static } from "ink";
+import MessageList, { MemoizedMessageItem } from "./components/MessageList";
 import UserInput from "./components/UserInput";
 import { wingmanArt } from "./art";
 import { Status, useWingman } from "./contexts/WingmanContext";
@@ -49,6 +49,10 @@ const UI: React.FC = () => {
 	const isExecutingTool = status === Status.ExecutingTool;
 	const isIdle = status === Status.Idle;
 
+	// Separate messages into static and active
+	const staticMessages = messages.slice(0, -2);
+	const activeMessages = messages.slice(-2);
+
 	return (
 		<Box flexDirection="column" padding={1}>
 			<Box>
@@ -58,7 +62,10 @@ const UI: React.FC = () => {
 				<Text color="blue">Your AI-powered partner</Text>
 			</Box>
 			<Box flexGrow={1} flexDirection="column" marginTop={1}>
-				<MessageList messages={messages} />
+				<Static items={staticMessages}>
+					{(msg) => <MemoizedMessageItem key={msg.id} msg={msg} />}
+				</Static>
+				<MessageList messages={activeMessages} />
 			</Box>
 			<Box flexDirection="column">
 				{isThinking && (

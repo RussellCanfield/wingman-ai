@@ -1,4 +1,4 @@
-import { tool } from "@langchain/core/tools";
+ import { tool } from "@langchain/core/tools";
 import { z } from "zod/v4";
 import { spawn, type ChildProcess } from "node:child_process";
 import { baseToolSchema } from "./schemas";
@@ -40,23 +40,12 @@ export const createCommandExecuteTool = (
 		async (input, config) => {
 			return new Promise((resolve, reject) => {
 				try {
-					const commandLower = input.command.toLowerCase();
+					const commandParts = input.command.trim().split(/\s+/);
+					const commandName = (commandParts[0] || "").toLowerCase();
+					const baseCommand = commandName.split(/[\\/]/).pop() || "";
 
 					// More precise check for blocked commands
-					if (
-						BLOCKED_COMMANDS.some((cmd) => {
-							// Check for exact command match or command with arguments
-							const parts = commandLower.split(/\\s+/);
-							return (
-								parts[0] === cmd ||
-								// Check for command as part of a path (like /rm or \\rm)
-								commandLower.includes(`/${cmd} `) ||
-								commandLower.includes(`\\\\${cmd} `) ||
-								// Check for command with arguments
-								parts.some((part) => part === cmd)
-							);
-						})
-					) {
+					if (BLOCKED_COMMANDS.includes(baseCommand)) {
 						const command: CommandMetadata = {
 							id: config.runId,
 							command: input.command,
@@ -81,9 +70,9 @@ export const createCommandExecuteTool = (
 					}
 
 					if (
-						commandLower.includes(".sh") ||
-						commandLower.includes(".bat") ||
-						commandLower.includes(".cmd")
+						commandName.endsWith(".sh") ||
+						commandName.endsWith(".bat") ||
+						commandName.endsWith(".cmd")
 					) {
 						const command: CommandMetadata = {
 							id: config.runId,
@@ -119,6 +108,7 @@ export const createCommandExecuteTool = (
 							...process.env,
 							FORCE_COLOR: "0",
 							NO_COLOR: "1",
+							GIT_PAGER: "cat",
 							...(envVariables ?? {}),
 						},
 						windowsHide: true,
@@ -206,7 +196,9 @@ export const createCommandExecuteTool = (
 								resolve(
 									new ToolMessage({
 										id: config.runId,
-										content: `Command: \"${input.command}\" ran successfully`,
+										content:
+											output ||
+											`Command "${input.command}" ran successfully with no output.`,
 										tool_call_id: config.toolCall.id,
 										name: "command_execute",
 										additional_kwargs: {

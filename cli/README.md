@@ -71,6 +71,8 @@ The configuration loader is responsible for loading the Wingman CLI configuratio
 - **Default Configuration**: If no configuration file is found, a default configuration is used with `provider` set to `openai` and `model` set to `gpt-4o`.
 - **Environment Variables**: If a `.env` file is present, it loads environment variables from it.
 - **Error Handling**: The loader uses `Zod` for schema validation. If the configuration file is invalid, it logs the errors and falls back to the default configuration.
+- **Supplemental Instructions**: The loader can also incorporate supplemental instructions from an `instructions.md` file located in the `.wingman` directory. This file is intended to provide additional guidance or configuration details to the AI agent, enhancing its functionality and adaptability.
+- **Configuration Schema**: The configuration schema includes a `model` which is an instance of `BaseChatModel`, and optional `capabilities` that specify the programming language capabilities such as `typescript`, `javascript`, `python`, `csharp`, or `rust`.
 
 ## Contributing
 Guidelines for contributing to the project. Include information on submitting issues and pull requests.

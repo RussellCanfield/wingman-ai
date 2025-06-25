@@ -114,7 +114,7 @@ export function WingmanProvider({
 				threadId: threadId.current,
 			};
 
-			let currentAiMessage: Message | null = null;
+			let currentAiMessageId: string | null = null;
 
 			try {
 				for await (const res of agent.current.stream(
@@ -155,33 +155,37 @@ export function WingmanProvider({
 							typeof message.content === "string" &&
 							message.content.trim()
 						) {
-							if (!currentAiMessage) {
-								currentAiMessage = {
+							if (!currentAiMessageId) {
+								const newAiMessage: Message = {
 									id: uuidv4(),
 									type: "ai",
 									content: message.content,
 									tokenCount: message.usage_metadata?.total_tokens,
 								};
+								currentAiMessageId = newAiMessage.id;
 								if (message.usage_metadata?.total_tokens) {
 									setTotalTokens(
 										(prev) => prev + message.usage_metadata!.total_tokens,
 									);
 								}
-								setMessages((prev) => [...prev, currentAiMessage!]);
+								setMessages((prev) => [...prev, newAiMessage]);
 							} else {
-								currentAiMessage.content += message.content;
-								if (message.usage_metadata?.total_tokens) {
-									currentAiMessage.tokenCount =
-										message.usage_metadata.total_tokens;
-									setTotalTokens(
-										(prev) => prev + message.usage_metadata!.total_tokens,
-									);
-								}
-								setMessages((prev) =>
-									prev.map((m) =>
-										m.id === currentAiMessage!.id ? currentAiMessage! : m,
-									),
-								);
+								setMessages((prev) => {
+									const lastMessage = prev[prev.length - 1];
+									if (lastMessage && lastMessage.id === currentAiMessageId) {
+										lastMessage.content += message.content;
+										if (message.usage_metadata?.total_tokens) {
+											lastMessage.tokenCount =
+												message.usage_metadata.total_tokens;
+											setTotalTokens(
+												(prevTotal) =>
+													prevTotal + message.usage_metadata!.total_tokens,
+											);
+										}
+										return [...prev.slice(0, -1), lastMessage];
+									}
+									return prev;
+								});
 							}
 						}
 					}
