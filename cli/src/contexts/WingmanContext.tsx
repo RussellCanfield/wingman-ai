@@ -21,13 +21,12 @@ import {
 } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { loadConfig, createModel } from "../config/";
-import os from "node:os";
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { initialState, wingmanReducer } from "./wingmanReducer";
 import type { Message } from "./types";
 import { Status } from "./types";
 import { getWingmanInstructions } from "src/config";
-import { useStderr } from "ink";
+import { handleCommand } from "src/commands/commandHandler";
 
 export interface WingmanContextType {
 	messages: Message[];
@@ -73,8 +72,6 @@ export function WingmanProvider({
 	const agent = useRef<WingmanAgent | null>(null);
 	const threadId = useRef<string>(uuidv4());
 
-	const { stderr } = useStderr();
-
 	const setInput = (input: string | ((prev: string) => string)) => {
 		dispatch({ type: "SET_INPUT", payload: input });
 	};
@@ -90,33 +87,14 @@ export function WingmanProvider({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	const handleSubmit = useCallback(
 		async (request: WingmanRequest) => {
-			if (request.input.trim() === "/hotkeys") {
-				const isMac = os.platform() === "darwin";
-				const toggleKey = isMac ? "Cmd+B" : "Ctrl+B";
-				const clearKey = isMac ? "Cmd+D" : "Ctrl+D";
-				const hotkeyMessage: Message = {
-					id: uuidv4(),
-					type: "ai",
-					content: `Here are the available hotkeys:\n\n- **${toggleKey}**: Toggle context view\n- **${clearKey}**: Clear context files and directories`,
-				};
-				dispatch({ type: "ADD_MESSAGE", payload: hotkeyMessage });
-				dispatch({ type: "SET_INPUT", payload: "" });
-				return;
-			}
+			const commandHandled = await handleCommand({
+				request,
+				agent,
+				threadId,
+				dispatch,
+			});
 
-			if (request.input.trim() === "/compact") {
-				if (!agent.current) return;
-				dispatch({ type: "SET_STATUS", payload: Status.Compacting });
-				await agent.current.compactMessages(threadId.current);
-				dispatch({ type: "COMPACT", payload: "" });
-				const compactMessage: Message = {
-					id: uuidv4(),
-					type: "ai",
-					content: "Conversation compacted. The summary will be used as context for the next message.",
-				};
-				dispatch({ type: "ADD_MESSAGE", payload: compactMessage });
-				dispatch({ type: "SET_STATUS", payload: Status.Idle });
-				dispatch({ type: "SET_INPUT", payload: "" });
+			if (commandHandled) {
 				return;
 			}
 
