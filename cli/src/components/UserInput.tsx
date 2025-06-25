@@ -1,4 +1,4 @@
-import type React from "react";
+ import type React from "react";
 import { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
@@ -16,6 +16,7 @@ const commands = [
 	{ name: "/file", description: "Add a file to the context" },
 	{ name: "/dir", description: "Add a directory to the context" },
 	{ name: "/clear", description: "Clear the context" },
+	{ name: "/hotkeys", description: "Show available hotkeys" },
 ];
 
 const UserInput: React.FC<Props> = ({
@@ -54,6 +55,11 @@ const UserInput: React.FC<Props> = ({
 	}, [input]);
 
 	const handleOnSubmit = (value: string) => {
+		if (value.trim() === "/hotkeys") {
+			onSubmit({ input: value.trim() });
+			return;
+		}
+
 		const fileRegex = /\/file\s+([^\s]+)/g;
 		const dirRegex = /\/dir\s+([^\s]+)/g;
 		const clearRegex = /\/clear/g;

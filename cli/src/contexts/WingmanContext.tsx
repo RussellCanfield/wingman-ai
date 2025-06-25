@@ -9,7 +9,7 @@ import {
 	type ToolMessage,
 	type BaseMessage,
 } from "@langchain/core/messages";
-import { MemorySaver } from "@langchain/langgraph";
+import fs from "node:fs";
 import {
 	useState,
 	useEffect,
@@ -22,6 +22,8 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { loadConfig, createModel } from "../config/";
 import { getWingmanInstructions } from "src/config";
+import os from "node:os";
+import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 
 export enum Status {
 	Idle = 0,
@@ -73,7 +75,6 @@ export function WingmanProvider({
 	const [isContextViewExpanded, setIsContextViewExpanded] = useState(false);
 
 	const agent = useRef<WingmanAgent | null>(null);
-	const checkpointer = useRef<MemorySaver | null>(null);
 	const threadId = useRef<string>(uuidv4());
 
 	const toggleContextView = useCallback(() => {
@@ -85,9 +86,24 @@ export function WingmanProvider({
 		setContextDirectories([]);
 	}, []);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	const handleSubmit = useCallback(
 		async (request: WingmanRequest) => {
-			if (!agent.current || !checkpointer.current) return;
+			if (request.input.trim() === "/hotkeys") {
+				const isMac = os.platform() === "darwin";
+				const toggleKey = isMac ? "Cmd+V" : "Ctrl+V";
+				const clearKey = isMac ? "Cmd+K" : "Ctrl+K";
+				const hotkeyMessage: Message = {
+					id: uuidv4(),
+					type: "ai",
+					content: `Here are the available hotkeys:\n\n- **${toggleKey}**: Toggle context view\n- **${clearKey}**: Clear context files and directories`,
+				};
+				setMessages((prev) => [...prev, hotkeyMessage]);
+				setInput("");
+				return;
+			}
+
+			if (!agent.current) return;
 
 			if (request.contextFiles) {
 				setContextFiles((prev) => [
@@ -118,8 +134,7 @@ export function WingmanProvider({
 
 			try {
 				for await (const res of agent.current.stream(
-					fullRequest,
-					checkpointer.current,
+					fullRequest
 				)) {
 					const { messages: newMessages } = res as WingmanGraphState;
 					const message = newMessages[newMessages.length - 1] as BaseMessage;
@@ -211,7 +226,7 @@ export function WingmanProvider({
 				setStatus(Status.Idle);
 			}
 		},
-		[],
+		[agent],
 	);
 
 	useEffect(() => {
@@ -219,16 +234,19 @@ export function WingmanProvider({
 			const config = loadConfig();
 			const model = createModel(config);
 
+			if (!fs.existsSync("./.wingman")) {
+				fs.mkdirSync("./.wingman", { recursive: true });
+			}
+
 			const wingmanAgent = new WingmanAgent({
 				name: "Wingman CLI Agent",
 				model,
 				instructions: getWingmanInstructions(process.cwd()),
 				mode: "vibe",
-				workingDirectory: process.cwd(),
+				memory: SqliteSaver.fromConnString("./.wingman/memory.db")
 			});
 			await wingmanAgent.initialize();
 			agent.current = wingmanAgent;
-			checkpointer.current = new MemorySaver();
 
 			if (initialPrompt) {
 				void handleSubmit({ input: initialPrompt });

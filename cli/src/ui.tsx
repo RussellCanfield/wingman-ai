@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Text, useApp, useInput, Static } from "ink";
+import { Box, Text, useApp, Static } from "ink";
 import MessageList, { MemoizedMessageItem } from "./components/MessageList";
 import UserInput from "./components/UserInput";
 import { wingmanArt } from "./art";
@@ -7,12 +7,12 @@ import { Status, useWingman } from "./contexts/WingmanContext";
 import Spinner from "ink-spinner";
 import StatusBar from "./components/StatusBar";
 import type { WingmanRequest } from "@wingman-ai/agent";
+import { useHotkeys } from "./hooks/useHotkeys";
 
 const UI: React.FC = () => {
-	const { messages, status, input, setInput, handleSubmit, toggleContextView } =
-		useWingman();
+	const { messages, status, input, handleSubmit } = useWingman();
 	const { exit } = useApp();
-	const hotkeyWasPressed = React.useRef(false);
+	const { customSetInput } = useHotkeys();
 
 	React.useEffect(() => {
 		const handleExit = () => {
@@ -23,27 +23,6 @@ const UI: React.FC = () => {
 			process.off("SIGINT", handleExit);
 		};
 	}, [exit]);
-
-	useInput((inputChar, key) => {
-		if ((key.ctrl || key.meta) && inputChar === "v") {
-			hotkeyWasPressed.current = true;
-			toggleContextView();
-		}
-	});
-
-	const customSetInput = React.useCallback(
-		(value: string) => {
-			if (hotkeyWasPressed.current) {
-				hotkeyWasPressed.current = false;
-				// Block the 'v' character from the hotkey combination
-				if (value === `${input}v`) {
-					return;
-				}
-			}
-			setInput(value);
-		},
-		[input, setInput],
-	);
 
 	const isThinking = status === Status.Thinking;
 	const isExecutingTool = status === Status.ExecutingTool;

@@ -1,6 +1,6 @@
-# Project Name
+# Wingman CLI
 
-Brief description of your project.
+[Wingman-AI](https://marketplace.visualstudio.com/items?itemName=WingMan.wing-man) is an open source vscode extension that empowers users with an agentic code assistant. The **CLI** now brings the same power right to your terminal!
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -15,13 +15,11 @@ Brief description of your project.
 10. [Contact](#contact)
 
 ## Introduction
-Provide a more detailed description of the project. Explain what problem it solves and why it’s useful.
+Wingman ClI is an open source, terminal based AI coding partner that supports the most popular frontier AI models; such as `Anthropic`, `OpenAI` or `Google`.
 
 ## Features
-- **Command Recognition**: The UserInput component supports command recognition, allowing users to input commands like `/file`, `/dir`, and `/clear` to manage context.
-- **Dynamic Command Suggestions**: As users type commands, the component dynamically suggests available commands that match the input.
+- **Command Recognition**: The CLI allows users to input commands like `/file`, `/dir`, and `/clear` to manage context.
 - **Context Management**: Users can add files and directories to the context or clear the context using specific commands.
-- **Interactive Input**: The component provides an interactive input field for users to enter their commands and text, with real-time feedback and command filtering.
 
 ## Installation
 Instructions on how to install and set up the project. For example:

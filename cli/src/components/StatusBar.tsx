@@ -1,4 +1,4 @@
-import type React from "react";
+ import type React from "react";
 import { Box, Text } from "ink";
 import { useWingman } from "../contexts/WingmanContext";
 import os from "node:os";
@@ -14,6 +14,7 @@ const StatusBar: React.FC = () => {
 	const hasContext = contextFiles.length > 0 || contextDirectories.length > 0;
 	const isMac = os.platform() === "darwin";
 	const toggleKey = isMac ? "Cmd+V" : "Ctrl+V";
+	const clearKey = isMac ? "Cmd+K" : "Ctrl+K";
 
 	return (
 		<Box
@@ -59,7 +60,9 @@ const StatusBar: React.FC = () => {
 				</Box>
 				{hasContext && (
 					<Box>
-						<Text color="gray">(Press '{toggleKey}' to toggle context view)</Text>
+						<Text color="gray">
+							(Press '{toggleKey}' to toggle, '{clearKey}' to clear)
+						</Text>
 					</Box>
 				)}
 			</Box>

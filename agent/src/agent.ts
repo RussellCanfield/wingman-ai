@@ -1,5 +1,5 @@
 import type { StructuredToolInterface } from "@langchain/core/dist/tools/types";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { StructuredTool } from "@langchain/core/tools";
 import { MCPAdapter } from "./tools/mcpAdapter";
 import getGlobalStoragePath, { isGitAvailable } from "./utils";
@@ -18,6 +18,7 @@ import type { DiagnosticRetriever } from "./files/diagnostics";
 import {
 	type BaseCheckpointSaver,
 	END,
+	MemorySaver,
 	START,
 	StateGraph,
 } from "@langchain/langgraph";
@@ -30,17 +31,17 @@ import { z } from "zod";
 const WingmanAgentConfigSchema = z.object({
 	name: z.string().min(1, "Agent name is required"),
 	instructions: z.string().optional(),
-	// TODO - revisit type validation
-	model: z.any().refine(
+	model: z.custom<BaseChatModel>().refine(
 		(val) => {
-			return (val.lc_namespace as string[]).includes("langchain");
+			return val && (val.lc_namespace as string[]).includes("langchain");
 		},
 		{
-			message: "Agent model is required",
+			message: "Agent model must be a valid LangChain model.",
 		},
 	),
 	workingDirectory: z.string().optional(),
 	mode: z.enum(["interactive", "vibe"]).default("vibe"),
+	memory: z.custom<BaseCheckpointSaver>().optional(),
 	toolAbilities: z
 		.object({
 			symbolRetriever: z.any().optional(),
@@ -210,14 +211,16 @@ Default Shell: ${userInfo.shell}`;
 		return allMessages.slice(startIdx);
 	};
 
-	async *stream(request: WingmanRequest, checkpointer?: BaseCheckpointSaver) {
+	async *stream(request: WingmanRequest) {
 		if (!this.workflow) {
 			throw new Error(
 				"Agent workflow is not initialized. Call initialize() first.",
 			);
 		}
 
-		const app = this.workflow.compile({ checkpointer });
+		const app = this.workflow.compile({
+			checkpointer: this.config.memory ? this.config.memory : new MemorySaver(),
+		});
 		const config = {
 			recursionLimit: 100,
 			streamMode: "values" as const,
