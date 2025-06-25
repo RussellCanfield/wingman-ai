@@ -5,10 +5,8 @@ export type WingmanGraphState = typeof GraphAnnotation.State;
 
 export const GraphAnnotation = Annotation.Root({
 	messages: Annotation<BaseMessage[]>({
-		reducer: (currentState, updateValue) => {
-			const state = messagesStateReducer(currentState, updateValue);
-			return state;
-		},
+		reducer: (currentState, updateValue) =>
+			messagesStateReducer(currentState, updateValue),
 		default: () => [],
 	}),
 });

@@ -2,6 +2,7 @@ export enum Status {
 	Idle = 0,
 	Thinking = 1,
 	ExecutingTool = 2,
+	Compacting = 3,
 }
 
 export interface Message {
@@ -24,6 +25,7 @@ export interface WingmanState {
 	contextFiles: string[];
 	contextDirectories: string[];
 	isContextViewExpanded: boolean;
+	summary: string | null;
 }
 
 export type WingmanAction =
@@ -49,4 +51,5 @@ export type WingmanAction =
 	| { type: "ADD_CONTEXT_FILES"; payload: string[] }
 	| { type: "ADD_CONTEXT_DIRECTORIES"; payload: string[] }
 	| { type: "TOGGLE_CONTEXT_VIEW" }
-	| { type: "CLEAR_CONTEXT" };
+	| { type: "CLEAR_CONTEXT" }
+	| { type: "COMPACT"; payload: string };

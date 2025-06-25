@@ -21,12 +21,13 @@ import {
 } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { loadConfig, createModel } from "../config/";
-import { getWingmanInstructions } from "src/config";
 import os from "node:os";
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { initialState, wingmanReducer } from "./wingmanReducer";
 import type { Message } from "./types";
 import { Status } from "./types";
+import { getWingmanInstructions } from "src/config";
+import { useStderr } from "ink";
 
 export interface WingmanContextType {
 	messages: Message[];
@@ -66,10 +67,13 @@ export function WingmanProvider({
 		contextFiles,
 		contextDirectories,
 		isContextViewExpanded,
+		summary,
 	} = state;
 
 	const agent = useRef<WingmanAgent | null>(null);
 	const threadId = useRef<string>(uuidv4());
+
+	const { stderr } = useStderr();
 
 	const setInput = (input: string | ((prev: string) => string)) => {
 		dispatch({ type: "SET_INPUT", payload: input });
@@ -100,6 +104,22 @@ export function WingmanProvider({
 				return;
 			}
 
+			if (request.input.trim() === "/compact") {
+				if (!agent.current) return;
+				dispatch({ type: "SET_STATUS", payload: Status.Compacting });
+				await agent.current.compactMessages(threadId.current);
+				dispatch({ type: "COMPACT", payload: "" });
+				const compactMessage: Message = {
+					id: uuidv4(),
+					type: "ai",
+					content: "Conversation compacted. The summary will be used as context for the next message.",
+				};
+				dispatch({ type: "ADD_MESSAGE", payload: compactMessage });
+				dispatch({ type: "SET_STATUS", payload: Status.Idle });
+				dispatch({ type: "SET_INPUT", payload: "" });
+				return;
+			}
+
 			if (!agent.current) return;
 
 			if (request.contextFiles) {
@@ -115,10 +135,14 @@ export function WingmanProvider({
 				});
 			}
 
+			const finalInput = summary
+				? `Summary of previous conversation:\n${summary}\n\nContinue the conversation based on this summary.\n\n${request.input}`
+				: request.input;
+
 			const humanMessage: Message = {
 				id: uuidv4(),
 				type: "human",
-				content: request.input,
+				content: finalInput,
 			};
 			dispatch({ type: "ADD_MESSAGE", payload: humanMessage });
 			dispatch({ type: "SET_STATUS", payload: Status.Thinking });
@@ -126,6 +150,7 @@ export function WingmanProvider({
 
 			const fullRequest: WingmanRequest = {
 				...request,
+				input: finalInput,
 				threadId: threadId.current,
 			};
 
@@ -221,11 +246,14 @@ export function WingmanProvider({
 				dispatch({ type: "SET_STATUS", payload: Status.Idle });
 			}
 		},
-		[agent, messages],
+		[agent, messages, summary],
 	);
 
 	useEffect(() => {
 		const initializeAgent = async () => {
+			if (agent.current) {
+				return; // Agent is already initialized
+			}
 			const config = loadConfig();
 			const model = createModel(config);
 			dispatch({ type: "SET_MODEL", payload: config.model });

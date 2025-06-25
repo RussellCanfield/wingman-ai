@@ -11,6 +11,7 @@ export const initialState: WingmanState = {
 	contextFiles: [],
 	contextDirectories: [],
 	isContextViewExpanded: false,
+	summary: null,
 };
 
 export function wingmanReducer(
@@ -79,6 +80,14 @@ export function wingmanReducer(
 			return { ...state, isContextViewExpanded: !state.isContextViewExpanded };
 		case "CLEAR_CONTEXT":
 			return { ...state, contextFiles: [], contextDirectories: [] };
+		case "COMPACT":
+			return {
+				...state,
+				messages: [],
+				inputTokens: 0,
+				outputTokens: 0,
+				summary: action.payload,
+			};
 		default:
 			return state;
 	}

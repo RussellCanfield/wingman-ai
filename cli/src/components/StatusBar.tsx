@@ -3,9 +3,12 @@ import { Box, Text } from "ink";
 import { useWingman } from "../contexts/WingmanContext";
 import os from "node:os";
 import { getModelCosts, getContextWindow } from "@wingman-ai/agent";
+import { ProgressBar, Spinner } from "@inkjs/ui";
+import { Status } from "src/contexts/types";
 
 const StatusBar: React.FC = () => {
 	const {
+		status,
 		inputTokens,
 		outputTokens,
 		model,
@@ -25,7 +28,7 @@ const StatusBar: React.FC = () => {
 	const totalTokens = inputTokens + outputTokens;
 	const cost = modelInfo
 		? (inputTokens / contextWindow) * modelInfo.input +
-		  (outputTokens / contextWindow) * modelInfo.output
+		(outputTokens / contextWindow) * modelInfo.output
 		: 0;
 
 	const contextPercentage =
@@ -33,12 +36,7 @@ const StatusBar: React.FC = () => {
 			? Math.min((totalTokens / contextWindow) * 100, 100)
 			: 0;
 
-	const progressBarLength = 20;
-	const filledLength = Math.round((contextPercentage / 100) * progressBarLength);
-	const emptyLength = progressBarLength - filledLength;
-
-	const filledBar = "■".repeat(filledLength);
-	const emptyBar = "□".repeat(emptyLength);
+	const roundedContextPercentage = Math.round(contextPercentage);
 
 	return (
 		<Box
@@ -70,7 +68,7 @@ const StatusBar: React.FC = () => {
 					)}
 				</Box>
 			)}
-			<Box justifyContent="space-between">
+			{status !== Status.Compacting && (<Box justifyContent="space-between">
 				<Box>
 					<Text>
 						<Text color="green">▲</Text> {inputTokens}
@@ -91,15 +89,17 @@ const StatusBar: React.FC = () => {
 					)}
 				</Box>
 				{contextWindow && (
-					<Box>
-						<Text>
-							{` ${filledBar}`}
-							<Text color="gray">{emptyBar}</Text>
-							{` ${contextPercentage.toFixed(2)}%`}
-						</Text>
+					<Box width={30}>
+						<ProgressBar value={roundedContextPercentage} />
 					</Box>
 				)}
-			</Box>
+			</Box>)}
+			{status === Status.Compacting && (
+				<Box justifyContent="flex-end">
+					<Spinner />
+					<Text color="yellow"> Compacting conversation...</Text>
+				</Box>
+			)}
 			{hasContext && (
 				<Box justifyContent="flex-end">
 					<Text color="gray">

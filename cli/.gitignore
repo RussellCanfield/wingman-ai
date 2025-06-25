@@ -1,4 +1,5 @@
 bin/*
 !bin/wingman
 sample_project
-.wingman
+.wingman/*
+!.wingman/wingman.config.json

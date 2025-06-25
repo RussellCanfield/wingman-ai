@@ -28,6 +28,7 @@ const UI: React.FC = () => {
 	const isThinking = status === Status.Thinking;
 	const isExecutingTool = status === Status.ExecutingTool;
 	const isIdle = status === Status.Idle;
+	const isCompacting = status === Status.Compacting;
 
 	return (
 		<Box flexDirection="column" padding={1}>
@@ -41,7 +42,7 @@ const UI: React.FC = () => {
 				<MessageList messages={messages} />
 			</Box>
 			<Box flexDirection="column">
-				{isThinking && (
+				{(isThinking || isCompacting) && (
 					<Box>
 						<Spinner type="dots" />
 					</Box>
@@ -51,7 +52,7 @@ const UI: React.FC = () => {
 						input={input}
 						setInput={setInput}
 						onSubmit={(request: WingmanRequest) => handleSubmit(request)}
-						isThinking={isThinking || isExecutingTool}
+						isThinking={isThinking || isExecutingTool || isCompacting}
 					/>
 				)}
 				<StatusBar />

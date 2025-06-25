@@ -17,6 +17,7 @@ const commands = [
 	{ name: "/dir", description: "Add a directory to the context" },
 	{ name: "/clear", description: "Clear the context" },
 	{ name: "/hotkeys", description: "Show available hotkeys" },
+	{ name: "/compact", description: "Compact context" },
 ];
 
 const UserInput: React.FC<Props> = ({

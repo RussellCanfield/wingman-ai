@@ -17,6 +17,7 @@ import type { SymbolRetriever } from "./files/symbols";
 import type { DiagnosticRetriever } from "./files/diagnostics";
 import {
 	type BaseCheckpointSaver,
+	type CompiledStateGraph,
 	END,
 	MemorySaver,
 	START,
@@ -26,9 +27,9 @@ import { GraphAnnotation, type WingmanGraphState } from "./state/graph";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import {
+	AIMessage,
 	HumanMessage,
 	RemoveMessage,
-	type AIMessage,
 } from "@langchain/core/messages";
 import { z } from "zod";
 import { compactConversationPrompt } from "./prompts/compact";
@@ -80,7 +81,9 @@ export class WingmanAgent {
 	private readonly config: WingmanConfig;
 	private readonly storagePath: string;
 	private tools: Array<StructuredTool | StructuredToolInterface> = [];
-	private workflow: StateGraph<WingmanGraphState> | undefined;
+	private app:
+		| CompiledStateGraph<unknown, unknown, "__start__", z.AnyZodObject>
+		| undefined;
 
 	constructor(wingmanConfig: WingmanAgentConfig) {
 		const validatedConfig = WingmanAgentConfigSchema.parse(wingmanConfig);
@@ -144,13 +147,17 @@ Default Shell: ${userInfo.shell}`;
 
 		const toolNode = new ToolNode(this.tools);
 
-		//@ts-expect-error
-		this.workflow = new StateGraph(GraphAnnotation)
+		const workflow = new StateGraph(GraphAnnotation)
 			.addNode("agent", this.callModel)
 			.addNode("tools", toolNode)
 			.addEdge(START, "agent")
 			.addConditionalEdges("agent", this.routerAfterLLM, ["tools", END])
 			.addEdge("tools", "agent");
+
+		//@ts-expect-error
+		this.app = workflow.compile({
+			checkpointer: this.config.memory ? this.config.memory : new MemorySaver(),
+		});
 	}
 
 	private callModel = async (state: WingmanGraphState) => {
@@ -174,7 +181,7 @@ Default Shell: ${userInfo.shell}`;
 
 		return {
 			messages: [response],
-		};
+		} satisfies WingmanGraphState;
 	};
 
 	private routerAfterLLM = async (state: WingmanGraphState) => {
@@ -188,23 +195,18 @@ Default Shell: ${userInfo.shell}`;
 	};
 
 	compactMessages = async (threadId: string) => {
-		if (!this.workflow) {
-			throw new Error(
-				"Agent workflow is not initialized. Call initialize() first.",
-			);
+		if (!this.app) {
+			throw new Error("Agent is not initialized. Call initialize() first.");
 		}
 
-		const app = this.workflow.compile({
-			checkpointer: this.config.memory ? this.config.memory : new MemorySaver(),
-		});
-		const graphState = await app.getState({
+		const graphState = await this.app.getState({
 			configurable: {
-				threadId,
+				thread_id: threadId,
 			},
 		});
 		const state = graphState.values as WingmanGraphState;
 		if (!state || !state.messages || state.messages.length === 0) {
-			return [];
+			return;
 		}
 		const compactResult = await this.config.model.invoke(
 			compactConversationPrompt(state.messages),
@@ -217,37 +219,39 @@ Default Shell: ${userInfo.shell}`;
 			removedMessages.push(new RemoveMessage({ id: message.id }));
 		}
 
-		await app.updateState(
+		await this.app.updateState(
 			{
 				configurable: {
-					threadId,
+					thread_id: threadId,
 				},
 			},
 			{
-				messages: [...removedMessages, compactResult],
+				messages: [
+					...removedMessages,
+					new AIMessage({ content: compactResult.content }),
+				],
 			},
 		);
 	};
 
 	async *stream(request: WingmanRequest) {
-		if (!this.workflow) {
+		if (!this.app) {
 			throw new Error(
 				"Agent workflow is not initialized. Call initialize() first.",
 			);
 		}
 
-		const app = this.workflow.compile({
-			checkpointer: this.config.memory ? this.config.memory : new MemorySaver(),
-		});
 		const config = {
 			recursionLimit: 100,
 			streamMode: "values" as const,
+			version: "v2" as const,
 			configurable: {
 				thread_id: request.threadId,
+				checkpoint_ns: "",
 			},
 		};
 
-		const stream = await app.stream(
+		const stream = await this.app.stream(
 			{
 				messages: [new HumanMessage({ content: request.input })],
 			},
@@ -262,13 +266,12 @@ Default Shell: ${userInfo.shell}`;
 		request: WingmanRequest,
 		checkpointer?: BaseCheckpointSaver,
 	) {
-		if (!this.workflow) {
+		if (!this.app) {
 			throw new Error(
 				"Agent workflow is not initialized. Call initialize() first.",
 			);
 		}
 
-		const app = this.workflow.compile({ checkpointer });
 		const config = {
 			recursionLimit: 50,
 			version: "v2" as const,
@@ -278,7 +281,7 @@ Default Shell: ${userInfo.shell}`;
 			},
 		};
 
-		const stream = await app.streamEvents(
+		const stream = await this.app.streamEvents(
 			{
 				messages: [new HumanMessage(request.input)],
 			},
