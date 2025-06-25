@@ -87,6 +87,8 @@ export function WingmanProvider({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	const handleSubmit = useCallback(
 		async (request: WingmanRequest) => {
+			const originalInput = request.input;
+
 			const commandHandled = await handleCommand({
 				request,
 				agent,
@@ -113,18 +115,18 @@ export function WingmanProvider({
 				});
 			}
 
-			const finalInput = summary
-				? `Summary of previous conversation:\n${summary}\n\nContinue the conversation based on this summary.\n\n${request.input}`
-				: request.input;
-
 			const humanMessage: Message = {
 				id: uuidv4(),
 				type: "human",
-				content: finalInput,
+				content: originalInput,
 			};
 			dispatch({ type: "ADD_MESSAGE", payload: humanMessage });
 			dispatch({ type: "SET_STATUS", payload: Status.Thinking });
 			dispatch({ type: "SET_INPUT", payload: "" });
+
+			const finalInput = summary
+				? `Summary of previous conversation:\n${summary}\n\nContinue the conversation based on this summary.\n\n${request.input}`
+				: request.input;
 
 			const fullRequest: WingmanRequest = {
 				...request,

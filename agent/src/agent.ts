@@ -36,6 +36,7 @@ import { compactConversationPrompt } from "./prompts/compact";
 
 const WingmanAgentConfigSchema = z.object({
 	name: z.string().min(1, "Agent name is required"),
+	prompt: z.string().optional(),
 	instructions: z.string().optional(),
 	model: z.custom<BaseChatModel>().refine(
 		(val) => {
@@ -170,7 +171,10 @@ Default Shell: ${userInfo.shell}`;
 		const model = this.config.model.bindTools?.(this.tools)!;
 		const response = await model.invoke(
 			[
-				{ role: "system", content: await this.buildSystemPrompt() },
+				{
+					role: "system",
+					content: this.config.prompt ?? (await this.buildSystemPrompt()),
+				},
 				...state.messages,
 			],
 			{

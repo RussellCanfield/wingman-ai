@@ -28,7 +28,7 @@ const StatusBar: React.FC = () => {
 	const totalTokens = inputTokens + outputTokens;
 	const cost = modelInfo
 		? (inputTokens / contextWindow) * modelInfo.input +
-		(outputTokens / contextWindow) * modelInfo.output
+		  (outputTokens / contextWindow) * modelInfo.output
 		: 0;
 
 	const contextPercentage =
@@ -68,32 +68,34 @@ const StatusBar: React.FC = () => {
 					)}
 				</Box>
 			)}
-			{status !== Status.Compacting && (<Box justifyContent="space-between">
-				<Box>
-					<Text>
-						<Text color="green">▲</Text> {inputTokens}
-					</Text>
-					<Text> | </Text>
-					<Text>
-						<Text color="red">▼</Text> {outputTokens}
-					</Text>
-					<Text> | </Text>
-					<Text>Est. Cost: ${cost.toFixed(4)}</Text>
-					{hasContext && (
-						<Box marginLeft={2}>
-							<Text>
-								Context: {contextFiles.length} files, {contextDirectories.length}{" "}
-								directories
-							</Text>
+			{status !== Status.Compacting && (
+				<Box justifyContent="space-between">
+					<Box>
+						<Text>
+							<Text color="green">▲</Text> {inputTokens}
+						</Text>
+						<Text> | </Text>
+						<Text>
+							<Text color="red">▼</Text> {outputTokens}
+						</Text>
+						<Text> | </Text>
+						<Text>Est. Cost: ${cost.toFixed(4)}</Text>
+						{hasContext && (
+							<Box marginLeft={2}>
+								<Text>
+									Context: {contextFiles.length} files,{" "}
+									{contextDirectories.length} directories
+								</Text>
+							</Box>
+						)}
+					</Box>
+					{contextWindow && (
+						<Box width={30}>
+							<ProgressBar value={roundedContextPercentage} />
 						</Box>
 					)}
 				</Box>
-				{contextWindow && (
-					<Box width={30}>
-						<ProgressBar value={roundedContextPercentage} />
-					</Box>
-				)}
-			</Box>)}
+			)}
 			{status === Status.Compacting && (
 				<Box justifyContent="flex-end">
 					<Spinner />

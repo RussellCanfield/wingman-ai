@@ -1,4 +1,4 @@
- import type React from "react";
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
@@ -19,6 +19,7 @@ const commands = [
 	{ name: "/hotkeys", description: "Show available hotkeys" },
 	{ name: "/compact", description: "Compact context" },
 	{ name: "/resume", description: "Resume the last conversation" },
+	{ name: "/init", description: "Have Wingman generate a new instructions document to learn your project" },
 ];
 
 const UserInput: React.FC<Props> = ({
@@ -56,7 +57,11 @@ const UserInput: React.FC<Props> = ({
 	const handleOnSubmit = (value: string) => {
 		let cleanValue = value.trim();
 
-		if (cleanValue === "/hotkeys" || cleanValue === "/resume") {
+		if (
+			cleanValue === "/hotkeys" ||
+			cleanValue === "/resume" ||
+			cleanValue === "/init"
+		) {
 			onSubmit({ input: cleanValue });
 			return;
 		}
