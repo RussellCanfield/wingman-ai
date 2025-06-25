@@ -49,7 +49,7 @@ export const createWebSearchTool = (storagePath: string) => {
 				const markdown = turndownService.turndown($.html());
 
 				return new ToolMessage({
-					id: config.callbacks.tool_call_id,
+					id: config.toolCall.id,
 					content: JSON.stringify({
 						id: config.toolCall.id,
 						content: markdown,

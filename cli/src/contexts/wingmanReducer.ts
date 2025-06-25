@@ -21,7 +21,13 @@ export function wingmanReducer(
 		case "SET_STATUS":
 			return { ...state, status: action.payload };
 		case "SET_INPUT":
-			return { ...state, input: action.payload };
+			return {
+				...state,
+				input:
+					typeof action.payload === "function"
+						? action.payload(state.input)
+						: action.payload,
+			};
 		case "SET_MODEL":
 			return { ...state, model: action.payload };
 		case "ADD_MESSAGE":

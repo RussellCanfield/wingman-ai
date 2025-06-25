@@ -7,7 +7,7 @@ export function ReadFileTool({ message }: { message: Message }) {
 
 	return (
 		<Box flexDirection="row" gap={1}>
-			<Text color="cyan">Reading file - </Text>
+			<Text color="cyan">📄 Read file - </Text>
 			<Markdown>{`\`${filePath}\n\``}</Markdown>
 		</Box>
 	);

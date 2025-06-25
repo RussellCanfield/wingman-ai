@@ -16,8 +16,8 @@ const StatusBar: React.FC = () => {
 
 	const hasContext = contextFiles.length > 0 || contextDirectories.length > 0;
 	const isMac = os.platform() === "darwin";
-	const toggleKey = isMac ? "Cmd+V" : "Ctrl+V";
-	const clearKey = isMac ? "Cmd+K" : "Ctrl+K";
+	const toggleKey = isMac ? "Cmd+B" : "Ctrl+B";
+	const clearKey = isMac ? "Cmd+D" : "Ctrl+D";
 
 	const modelInfo = getModelCosts(model);
 	const contextWindow = getContextWindow(model) ?? 200_000;
@@ -25,7 +25,7 @@ const StatusBar: React.FC = () => {
 	const totalTokens = inputTokens + outputTokens;
 	const cost = modelInfo
 		? (inputTokens / contextWindow) * modelInfo.input +
-		(outputTokens / contextWindow) * modelInfo.output
+		  (outputTokens / contextWindow) * modelInfo.output
 		: 0;
 
 	const contextPercentage =
@@ -80,7 +80,7 @@ const StatusBar: React.FC = () => {
 						<Text color="red">▼</Text> {outputTokens}
 					</Text>
 					<Text> | </Text>
-					<Text>Cost: ${cost.toFixed(4)}</Text>
+					<Text>Est. Cost: ${cost.toFixed(4)}</Text>
 					{hasContext && (
 						<Box marginLeft={2}>
 							<Text>

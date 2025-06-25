@@ -11,9 +11,9 @@ import { useHotkeys } from "./hooks/useHotkeys";
 import { Status } from "./contexts/types";
 
 const UI: React.FC = () => {
-	const { messages, status, input, handleSubmit } = useWingman();
+	const { messages, status, input, setInput, handleSubmit } = useWingman();
 	const { exit } = useApp();
-	const { customSetInput } = useHotkeys();
+	useHotkeys();
 
 	React.useEffect(() => {
 		const handleExit = () => {
@@ -49,7 +49,7 @@ const UI: React.FC = () => {
 				{isIdle && (
 					<UserInput
 						input={input}
-						setInput={customSetInput}
+						setInput={setInput}
 						onSubmit={(request: WingmanRequest) => handleSubmit(request)}
 						isThinking={isThinking || isExecutingTool}
 					/>

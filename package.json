@@ -5,13 +5,7 @@
 	"license": "SEE LICENSE IN LICENSE.txt",
 	"author": "Wingman AI",
 	"type": "module",
-	"workspaces": [
-		"agent",
-		"cli",
-		"docs-site",
-		"extension",
-		"shared"
-	],
+	"workspaces": ["agent", "cli", "docs-site", "extension", "shared"],
 	"scripts": {
 		"build": "rsbuild build",
 		"changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
@@ -43,10 +37,9 @@
 	},
 	"packageManager": "npm@10.5.2",
 	"dependencies": {
-		"@types/react": "^17.0.87",
+		"@types/react": "^18.3.23",
 		"biome": "^0.3.3",
-		"ink": "^3.2.0",
-		"react": "^17.0.2",
-		"react-dom": "^17.0.2"
+		"ink": "^5.2.1",
+		"ink-text-input": "^6.0.0"
 	}
 }

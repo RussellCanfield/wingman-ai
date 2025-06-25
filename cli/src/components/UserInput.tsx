@@ -1,4 +1,4 @@
- import type React from "react";
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
@@ -30,17 +30,14 @@ const UserInput: React.FC<Props> = ({
 	const { clearContext } = useWingman();
 
 	useEffect(() => {
-		if (input.endsWith(" ")) {
-			setShowCommands(false);
-			return;
-		}
-
-		const words = input.split(" ");
-		const lastWord = words[words.length - 1];
-
-		if (lastWord?.startsWith("/")) {
+		const trimmedInput = input.trimStart();
+		if (
+			trimmedInput.startsWith("/") &&
+			!trimmedInput.includes(" ") &&
+			!trimmedInput.substring(1).includes("/")
+		) {
 			const matchingCommands = commands.filter((cmd) =>
-				cmd.name.toLowerCase().startsWith(lastWord.toLowerCase()),
+				cmd.name.toLowerCase().startsWith(trimmedInput.toLowerCase()),
 			);
 
 			if (matchingCommands.length > 0) {
@@ -55,38 +52,59 @@ const UserInput: React.FC<Props> = ({
 	}, [input]);
 
 	const handleOnSubmit = (value: string) => {
-		if (value.trim() === "/hotkeys") {
-			onSubmit({ input: value.trim() });
+		let cleanValue = value.trim();
+
+		if (cleanValue === "/hotkeys") {
+			onSubmit({ input: cleanValue });
 			return;
 		}
 
-		const fileRegex = /\/file\s+([^\s]+)/g;
-		const dirRegex = /\/dir\s+([^\s]+)/g;
-		const clearRegex = /\/clear/g;
+		const fileRegex = /^\/file\s+([^\s]+)/;
+		const dirRegex = /^\/dir\s+([^\s]+)/;
+		const clearRegex = /^\/clear(\s|$)/;
 
-		let cleanValue = value;
+		const contextFiles: string[] = [];
+		const contextDirectories: string[] = [];
+		let isClear = false;
 
-		// Handle the /clear command
-		if (clearRegex.test(value)) {
-			clearContext();
-			cleanValue = cleanValue.replace(clearRegex, "").trim();
-			if (cleanValue === "") {
-				setInput("");
-				return;
+		let changed = true;
+		while (changed) {
+			changed = false;
+			const fileMatch = cleanValue.match(fileRegex);
+			if (fileMatch) {
+				contextFiles.push(fileMatch[1]);
+				cleanValue = cleanValue.replace(fileRegex, "").trim();
+				changed = true;
+			}
+
+			const dirMatch = cleanValue.match(dirRegex);
+			if (dirMatch) {
+				contextDirectories.push(dirMatch[1]);
+				cleanValue = cleanValue.replace(dirRegex, "").trim();
+				changed = true;
+			}
+
+			if (clearRegex.test(cleanValue)) {
+				isClear = true;
+				cleanValue = cleanValue.replace(clearRegex, "").trim();
+				changed = true;
 			}
 		}
 
-		// Extract file and directory paths from the input
-		const contextFiles = Array.from(value.matchAll(fileRegex), (m) => m[1]);
-		const contextDirectories = Array.from(
-			value.matchAll(dirRegex),
-			(m) => m[1],
-		);
+		if (isClear) {
+			clearContext();
+		}
 
-		// Remove the command strings from the input
-		cleanValue = cleanValue.replace(fileRegex, "").replace(dirRegex, "").trim();
+		if (
+			cleanValue === "" &&
+			isClear &&
+			contextFiles.length === 0 &&
+			contextDirectories.length === 0
+		) {
+			setInput("");
+			return;
+		}
 
-		// Build the request object
 		const request: WingmanRequest = {
 			input: cleanValue,
 		};

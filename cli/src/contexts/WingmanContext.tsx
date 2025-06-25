@@ -38,7 +38,7 @@ export interface WingmanContextType {
 	contextFiles: string[];
 	contextDirectories: string[];
 	isContextViewExpanded: boolean;
-	setInput: (input: string) => void;
+	setInput: (input: string | ((prev: string) => string)) => void;
 	handleSubmit: (request: WingmanRequest) => Promise<void>;
 	toggleContextView: () => void;
 	clearContext: () => void;
@@ -71,7 +71,7 @@ export function WingmanProvider({
 	const agent = useRef<WingmanAgent | null>(null);
 	const threadId = useRef<string>(uuidv4());
 
-	const setInput = (input: string) => {
+	const setInput = (input: string | ((prev: string) => string)) => {
 		dispatch({ type: "SET_INPUT", payload: input });
 	};
 
@@ -88,8 +88,8 @@ export function WingmanProvider({
 		async (request: WingmanRequest) => {
 			if (request.input.trim() === "/hotkeys") {
 				const isMac = os.platform() === "darwin";
-				const toggleKey = isMac ? "Cmd+V" : "Ctrl+V";
-				const clearKey = isMac ? "Cmd+K" : "Ctrl+K";
+				const toggleKey = isMac ? "Cmd+B" : "Ctrl+B";
+				const clearKey = isMac ? "Cmd+D" : "Ctrl+D";
 				const hotkeyMessage: Message = {
 					id: uuidv4(),
 					type: "ai",

@@ -7,7 +7,7 @@ export function CommandExecuteTool({ message }: { message: Message }) {
 
 	return (
 		<Box flexDirection="column" gap={1}>
-			<Text color="cyan">Executing command</Text>
+			<Text color="cyan">❯ Executed command</Text>
 			<Markdown>{`\`\`\`bash\n${command}\n\`\`\``}</Markdown>
 		</Box>
 	);

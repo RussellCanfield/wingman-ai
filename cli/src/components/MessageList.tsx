@@ -8,6 +8,7 @@ import { ListDirectoryTool } from "./tools/ListDirectory";
 import { CommandExecuteTool } from "./tools/CommandExecuteTool";
 import { EditFileTool } from "./tools/EditFileTool";
 import type { Message } from "src/contexts/types";
+import { WebSearchTool } from "./tools/WebSearch";
 
 interface Props {
 	messages: Message[];
@@ -104,6 +105,11 @@ const ToolHandler: React.FC<{ msg: Message }> = ({ msg }) => {
 		}
 		if (msg.toolName?.includes("edit_file")) {
 			return <EditFileTool message={msg} />;
+		}
+		if (msg.toolName?.includes("web_search")) {
+			return (
+				<WebSearchTool message={msg} />
+			);
 		}
 		return (
 			<Box flexDirection="column">

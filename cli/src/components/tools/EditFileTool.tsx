@@ -7,7 +7,7 @@ export function EditFileTool({ message }: { message: Message }) {
 
 	return (
 		<Box flexDirection="row" gap={1}>
-			<Text color="cyan">Editing file - </Text>
+			<Text color="cyan">📝 Edited file - </Text>
 			<Markdown>{`\`${filePath}\n\``}</Markdown>
 		</Box>
 	);

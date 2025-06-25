@@ -91,9 +91,7 @@ export class WingmanAgent {
 			toolAbilities: validatedConfig.toolAbilities || {},
 		};
 		this.mcpAdapter = new MCPAdapter(this.config.workingDirectory);
-		this.storagePath = getGlobalStoragePath(
-			this.config.workingDirectory.split("/").pop() || "wingman",
-		);
+		this.storagePath = getGlobalStoragePath(this.config.workingDirectory);
 	}
 
 	private async buildSystemPrompt(): Promise<string> {

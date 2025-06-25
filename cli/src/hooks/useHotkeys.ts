@@ -1,33 +1,31 @@
-import { useRef } from "react";
+import { useCallback } from "react";
 import { useInput } from "ink";
+import os from "node:os";
 import { useWingman } from "../contexts/WingmanContext";
 
 export function useHotkeys() {
-	const { toggleContextView, clearContext, setInput } = useWingman();
-	const hotkeyWasPressed = useRef(false);
+	const { toggleContextView, clearContext } = useWingman();
+	const isMac = os.platform() === "darwin";
 
-	useInput((inputChar, key) => {
-		if (key.ctrl || key.meta) {
-			if (inputChar === "v") {
-				hotkeyWasPressed.current = true;
-				toggleContextView();
-			} else if (inputChar === "k") {
-				hotkeyWasPressed.current = true;
-				clearContext();
-			}
-		}
-	});
+	useInput(
+		useCallback(
+			(inputChar, key) => {
+				const modifierPressed = isMac ? key.meta : key.ctrl;
 
-	const customSetInput = (value: string) => {
-		if (hotkeyWasPressed.current) {
-			// A hotkey was just pressed. We set the ref back to false
-			// and ignore the current input change completely to prevent
-			// the hotkey's character (e.g., 'v' or 'k') from appearing.
-			hotkeyWasPressed.current = false;
-			return;
-		}
-		setInput(value);
-	};
+				// Only handle hotkeys, not general input
+				if (!modifierPressed) {
+					return;
+				}
 
-	return { customSetInput };
+				const char = inputChar.toLowerCase();
+
+				if (char === "b") {
+					toggleContextView();
+				} else if (char === "d") {
+					clearContext();
+				}
+			},
+			[isMac, toggleContextView, clearContext],
+		),
+	);
 }

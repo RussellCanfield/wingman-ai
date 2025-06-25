@@ -28,7 +28,7 @@ export interface WingmanState {
 
 export type WingmanAction =
 	| { type: "SET_STATUS"; payload: Status }
-	| { type: "SET_INPUT"; payload: string }
+	| { type: "SET_INPUT"; payload: string | ((prev: string) => string) }
 	| { type: "SET_MODEL"; payload: string }
 	| { type: "ADD_MESSAGE"; payload: Message }
 	| {

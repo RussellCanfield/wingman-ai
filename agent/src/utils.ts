@@ -8,14 +8,9 @@ import PCR from "puppeteer-chromium-resolver";
 
 const execAsync = promisify(exec);
 
-export default function getGlobalStoragePath(folder: string): string {
+export default function getGlobalStoragePath(cwd: string): string {
 	const homeDir = os.homedir();
-	const targetPath = path.join(
-		homeDir,
-		".wingman",
-		path.basename(folder),
-		folder,
-	);
+	const targetPath = path.join(homeDir, ".wingman", path.basename(cwd));
 	return targetPath;
 }
 
