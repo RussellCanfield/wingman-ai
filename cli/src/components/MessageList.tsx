@@ -5,6 +5,7 @@ import type { Message } from "../contexts/WingmanContext";
 import Spinner from "./Spinner";
 import { ReadFileTool } from "./tools/ReadFileTool";
 import { ListDirectoryTool } from "./tools/ListDirectory";
+import { CommandExecuteTool } from "./tools/CommandExecuteTool";
 
 interface Props {
 	messages: Message[];
@@ -39,16 +40,16 @@ const UserMessage: React.FC<{ content: string }> = ({ content }) => {
 			<Box paddingX={-0.5} paddingY={0.5}>
 				<Text color="green" bold> You </Text>
 			</Box>
-			
+
 			{/* User message content with dark background */}
-			<Box 
+			<Box
 				borderLeft={true}
 				borderTop={false}
 				borderRight={false}
 				borderBottom={false}
 				borderColor="green"
 				borderStyle="bold"
-				paddingX={2} 
+				paddingX={2}
 				paddingY={1}
 			>
 				<Text color="white">{content}</Text>
@@ -64,16 +65,16 @@ const AssistantMessage: React.FC<{ content: string }> = ({ content }) => {
 			<Box paddingX={-0.5} paddingY={0.5}>
 				<Text color="blue" bold> Wingman </Text>
 			</Box>
-			
+
 			{/* Assistant message content with dark background */}
-			<Box 
+			<Box
 				borderLeft={true}
 				borderTop={false}
 				borderRight={false}
 				borderBottom={false}
 				borderColor="blue"
 				borderStyle="bold"
-				paddingX={2} 
+				paddingX={2}
 				paddingY={1}
 			>
 				<Markdown>{content}</Markdown>
@@ -89,16 +90,16 @@ const ToolMessage: React.FC<{ msg: Message }> = ({ msg }) => {
 			<Box paddingX={-0.5} paddingY={0.5}>
 				<Text color="gray" bold> Tool </Text>
 			</Box>
-			
+
 			{/* Tool content with dark background */}
-			<Box 
+			<Box
 				borderLeft={true}
 				borderTop={false}
 				borderRight={false}
 				borderBottom={false}
 				borderColor="gray"
 				borderStyle="bold"
-				paddingX={2} 
+				paddingX={2}
 				paddingY={1}
 			>
 				<ToolHandler msg={msg} />
@@ -125,7 +126,11 @@ const ToolHandler = ({ msg }: { msg: Message }) => {
 		if (msg.toolName?.includes("read_file")) {
 			return <ReadFileTool message={msg} />;
 		}
-		
+
+		if (msg.toolName?.includes("command_execute")) {
+			return <CommandExecuteTool message={msg} />;
+		}
+
 		return (
 			<Box flexDirection="column">
 				<Text color="green">✓ Completed: {msg.toolName}</Text>

@@ -2,6 +2,7 @@ export const getSystemPrompt = (
 	machineInfo: string,
 	cwd: string,
 	gitAvailable: boolean,
+	additionalInstructions = "",
 ) => `You are an expert full stack developer collaborating with the user as their coding partner - you are their Wingman.
 Your mission is to tackle whatever coding challenge they present - whether it's building something new, enhancing existing code, troubleshooting issues, or providing technical insights.
 In most cases the user expects you to work autonomously, use the tools and answer your own questions. 
@@ -141,4 +142,6 @@ When providing code examples, always use GitHub-flavored fenced markdown with th
 
 # Additional Context
 Additional user context may be attached and include contextual information such as their open files, cursor position, higlighted code and recently viewed files.
-Use this context judiciously when it helps address their needs.`;
+Use this context judiciously when it helps address their needs.
+
+${additionalInstructions}`;

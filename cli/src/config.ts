@@ -28,3 +28,16 @@ export const getWingmanConfig = (): WingmanConfig => {
 
 	return validatedConfig;
 };
+
+export const getWingmanInstructions = (workingDirectory: string): string => {
+	const instructionsPath = path.join(
+		workingDirectory,
+		".wingman",
+		"instructions.md",
+	);
+	if (!fs.existsSync(instructionsPath)) {
+		return "";
+	}
+	const instructions = fs.readFileSync(instructionsPath, "utf-8").trim();
+	return instructions;
+};

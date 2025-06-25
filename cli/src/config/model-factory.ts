@@ -1,6 +1,7 @@
 import type { WingmanConfig } from "./schema";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 export const createModel = (config: WingmanConfig): BaseChatModel => {
@@ -12,6 +13,11 @@ export const createModel = (config: WingmanConfig): BaseChatModel => {
 			});
 		case "anthropic":
 			return new ChatAnthropic({
+				model: config.model,
+				temperature: 0,
+			});
+		case "google":
+			return new ChatGoogleGenerativeAI({
 				model: config.model,
 				temperature: 0,
 			});

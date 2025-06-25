@@ -2,7 +2,6 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod/v4";
 import { spawn, type ChildProcess } from "node:child_process";
 import { baseToolSchema } from "./schemas";
-import { Command } from "@langchain/langgraph";
 import type { CommandMetadata } from "@shared/types/Message";
 import { ToolMessage } from "@langchain/core/messages";
 

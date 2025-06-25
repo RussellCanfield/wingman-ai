@@ -21,6 +21,7 @@ import {
 } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { loadConfig, createModel } from "../config/";
+import { getWingmanInstructions } from "src/config";
 
 export enum Status {
 	Idle = 0,
@@ -217,6 +218,7 @@ export function WingmanProvider({
 			const wingmanAgent = new WingmanAgent({
 				name: "Wingman CLI Agent",
 				model,
+				instructions: getWingmanInstructions(process.cwd()),
 				mode: "vibe",
 				workingDirectory: process.cwd(),
 			});

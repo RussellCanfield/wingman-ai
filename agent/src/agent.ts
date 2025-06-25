@@ -249,7 +249,7 @@ Default Shell: ${userInfo.shell}`;
 
 		const app = this.workflow.compile({ checkpointer });
 		const config = {
-			recursionLimit: 100,
+			recursionLimit: 50,
 			version: "v2" as const,
 			streamMode: "updates" as const,
 			configurable: {
