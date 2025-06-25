@@ -1,13 +1,14 @@
 import React from "react";
-import { Box, Text, useApp, Static } from "ink";
-import MessageList, { MemoizedMessageItem } from "./components/MessageList";
+import { Box, Text, useApp } from "ink";
+import MessageList from "./components/MessageList";
 import UserInput from "./components/UserInput";
 import { wingmanArt } from "./art";
-import { Status, useWingman } from "./contexts/WingmanContext";
+import { useWingman } from "./contexts/WingmanContext";
 import Spinner from "ink-spinner";
 import StatusBar from "./components/StatusBar";
 import type { WingmanRequest } from "@wingman-ai/agent";
 import { useHotkeys } from "./hooks/useHotkeys";
+import { Status } from "./contexts/types";
 
 const UI: React.FC = () => {
 	const { messages, status, input, handleSubmit } = useWingman();
@@ -28,10 +29,6 @@ const UI: React.FC = () => {
 	const isExecutingTool = status === Status.ExecutingTool;
 	const isIdle = status === Status.Idle;
 
-	// Separate messages into static and active
-	const staticMessages = messages.slice(0, -2);
-	const activeMessages = messages.slice(-2);
-
 	return (
 		<Box flexDirection="column" padding={1}>
 			<Box>
@@ -41,10 +38,7 @@ const UI: React.FC = () => {
 				<Text color="blue">Your AI-powered partner</Text>
 			</Box>
 			<Box flexGrow={1} flexDirection="column" marginTop={1}>
-				<Static items={staticMessages}>
-					{(msg) => <MemoizedMessageItem key={msg.id} msg={msg} />}
-				</Static>
-				<MessageList messages={activeMessages} />
+				<MessageList messages={messages} />
 			</Box>
 			<Box flexDirection="column">
 				{isThinking && (

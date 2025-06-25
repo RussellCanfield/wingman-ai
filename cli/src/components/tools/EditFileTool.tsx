@@ -1,6 +1,6 @@
-import type { Message } from "../../contexts/WingmanContext";
 import { Box, Text } from "ink";
 import Markdown from "../Markdown";
+import type { Message } from "src/contexts/types";
 
 export function EditFileTool({ message }: { message: Message }) {
 	const filePath = message.args?.path as string;

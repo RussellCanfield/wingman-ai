@@ -15,23 +15,29 @@
 10. [Contact](#contact)
 
 ## Introduction
-Wingman ClI is an open source, terminal based AI coding partner that supports the most popular frontier AI models; such as `Anthropic`, `OpenAI` or `Google`.
+Wingman CLI is an open source, terminal-based AI coding partner that supports the most popular frontier AI models; such as `Anthropic`, `OpenAI`, or `Google`.
 
 ## Features
 - **Command Recognition**: The CLI allows users to input commands like `/file`, `/dir`, and `/clear` to manage context.
 - **Context Management**: Users can add files and directories to the context or clear the context using specific commands.
 
 ## Installation
-Instructions on how to install and set up the project. For example:
+To install the Wingman CLI, clone the repository and install the dependencies:
 
 ```bash
-git clone https://github.com/yourusername/yourproject.git
-cd yourproject
+git clone https://github.com/wingman-ai/cli.git
+cd cli
 npm install
 ```
 
 ## Usage
-Examples of how to run or use the project. Screenshots or code snippets can be helpful.
+To start using the Wingman CLI, run the following command:
+
+```bash
+npx wingman
+```
+
+This will launch the CLI, allowing you to interact with your AI coding partner directly from the terminal. You can use commands like `/file` to add files to the context or `/clear` to reset the context.
 
 ## Wingman CLI Configuration
 To configure the Wingman CLI, you should place your configuration file in a `.wingman` subdirectory within your project. The configuration file should be named `wingman.config.json`. Here is an example of what the configuration might look like:
@@ -73,10 +79,10 @@ The configuration loader is responsible for loading the Wingman CLI configuratio
 - **Configuration Schema**: The configuration schema includes a `model` which is an instance of `BaseChatModel`, and optional `capabilities` that specify the programming language capabilities such as `typescript`, `javascript`, `python`, `csharp`, or `rust`.
 
 ## Contributing
-Guidelines for contributing to the project. Include information on submitting issues and pull requests.
+We welcome contributions from the community! To contribute, please fork the repository and create a pull request with your changes. Ensure that your code adheres to our coding standards and includes tests where applicable.
 
 ## License
-Indicate what license the project is distributed under. For example, MIT, GPL, etc.
+This project is licensed under the ISC License.
 
 ## Contact
-Provide contact information for users or developers to reach out with questions or feedback.
+For questions or feedback, please reach out to us at support@wingman-ai.com or visit our [GitHub repository](https://github.com/wingman-ai/cli) to open an issue.

@@ -25,8 +25,13 @@ import {
 import { GraphAnnotation, type WingmanGraphState } from "./state/graph";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
-import { HumanMessage, type AIMessage } from "@langchain/core/messages";
+import {
+	HumanMessage,
+	RemoveMessage,
+	type AIMessage,
+} from "@langchain/core/messages";
 import { z } from "zod";
+import { compactConversationPrompt } from "./prompts/compact";
 
 const WingmanAgentConfigSchema = z.object({
 	name: z.string().min(1, "Agent name is required"),
@@ -161,7 +166,7 @@ Default Shell: ${userInfo.shell}`;
 		const response = await model.invoke(
 			[
 				{ role: "system", content: await this.buildSystemPrompt() },
-				...this.trimMessages(state.messages),
+				...state.messages,
 			],
 			{
 				// Wait a maximum of 5 minutes
@@ -184,31 +189,46 @@ Default Shell: ${userInfo.shell}`;
 		return END;
 	};
 
-	trimMessages = (allMessages: WingmanGraphState["messages"]) => {
-		// Find interaction boundaries
-		const maxLastInteractions = 3;
-		const interactionBoundaries = [];
-		for (let i = 0; i < allMessages.length; i++) {
-			if (
-				allMessages[i] instanceof HumanMessage &&
-				allMessages[i].getType() === "human"
-			) {
-				interactionBoundaries.push(i);
+	compactMessages = async (threadId: string) => {
+		if (!this.workflow) {
+			throw new Error(
+				"Agent workflow is not initialized. Call initialize() first.",
+			);
+		}
+
+		const app = this.workflow.compile({
+			checkpointer: this.config.memory ? this.config.memory : new MemorySaver(),
+		});
+		const graphState = await app.getState({
+			configurable: {
+				threadId,
+			},
+		});
+		const state = graphState.values as WingmanGraphState;
+		if (!state || !state.messages || state.messages.length === 0) {
+			return [];
+		}
+		const compactResult = await this.config.model.invoke(
+			compactConversationPrompt(state.messages),
+		);
+		const removedMessages: RemoveMessage[] = [];
+		for (const message of state.messages) {
+			if (!message.id) {
+				continue;
 			}
+			removedMessages.push(new RemoveMessage({ id: message.id }));
 		}
 
-		// Include the last 3 complete interactions plus current interaction
-		if (interactionBoundaries.length <= maxLastInteractions) {
-			// Not enough history, include everything
-			return allMessages;
-		}
-
-		// Get the starting index for the context window
-		const startIdx =
-			interactionBoundaries[interactionBoundaries.length - maxLastInteractions];
-
-		// Add the messages from the selected interactions
-		return allMessages.slice(startIdx);
+		await app.updateState(
+			{
+				configurable: {
+					threadId,
+				},
+			},
+			{
+				messages: [...removedMessages, compactResult],
+			},
+		);
 	};
 
 	async *stream(request: WingmanRequest) {

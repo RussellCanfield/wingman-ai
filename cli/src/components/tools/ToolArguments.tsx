@@ -1,5 +1,5 @@
 import type React from "react";
-import { Box, Text } from "ink";
+import { Box } from "ink";
 import Markdown from "../Markdown";
 
 interface ToolArgumentsProps {

@@ -117,41 +117,42 @@ const commonPatterns = {
 
 export const highlightSyntax = (code: string, language: string, theme: SyntaxTheme = defaultSyntaxTheme): string => {
   if (!language) return code;
-  
+
   const lang = language.toLowerCase();
   const patterns = languagePatterns[lang];
-  
+
   if (!patterns) return code;
-  
+
   // Clean any existing ANSI codes first
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: <explanation>
   const cleanCode = code.replace(/\u001b\[[0-9;]*m/g, '');
   let highlighted = cleanCode;
-  
+
   // Apply comments first to avoid interfering with other patterns
   if (patterns.comments) {
     highlighted = highlighted.replace(patterns.comments, (match) => theme.comment(match));
   }
-  
+
   // Apply strings before other patterns to avoid conflicts
   highlighted = highlighted.replace(commonPatterns.strings, (match) => theme.string(match));
-  
+
   // Apply language-specific patterns
   if (patterns.keywords) {
     highlighted = highlighted.replace(patterns.keywords, (match) => theme.keyword(match));
   }
-  
+
   if (patterns.types) {
     highlighted = highlighted.replace(patterns.types, (match) => theme.type(match));
   }
-  
+
   if (patterns.operators) {
     highlighted = highlighted.replace(patterns.operators, (match) => theme.operator(match));
   }
-  
+
   // Apply numbers and functions last
   highlighted = highlighted.replace(commonPatterns.numbers, (match) => theme.number(match));
   highlighted = highlighted.replace(commonPatterns.functions, (match) => theme.function(match));
-  
+
   return highlighted;
 };
 

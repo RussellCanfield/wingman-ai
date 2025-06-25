@@ -1,4 +1,4 @@
-import type { Message } from "../../contexts/WingmanContext";
+import type { Message } from "src/contexts/types";
 import { Box, Text } from "ink";
 import Markdown from "../Markdown";
 

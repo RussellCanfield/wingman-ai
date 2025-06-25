@@ -11,41 +11,30 @@ import {
 } from "@langchain/core/messages";
 import fs from "node:fs";
 import {
-	useState,
 	useEffect,
 	useCallback,
 	useRef,
 	createContext,
 	type ReactNode,
 	useContext,
+	useReducer,
 } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { loadConfig, createModel } from "../config/";
 import { getWingmanInstructions } from "src/config";
 import os from "node:os";
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
-
-export enum Status {
-	Idle = 0,
-	Thinking = 1,
-	ExecutingTool = 2,
-}
-
-export interface Message {
-	id: string;
-	type: "human" | "ai" | "tool";
-	content: string;
-	args?: Record<string, unknown>;
-	toolName?: string;
-	tokenCount?: number;
-	toolStatus?: "executing" | "finished";
-}
+import { initialState, wingmanReducer } from "./wingmanReducer";
+import type { Message } from "./types";
+import { Status } from "./types";
 
 export interface WingmanContextType {
 	messages: Message[];
 	status: Status;
 	input: string;
-	totalTokens: number;
+	inputTokens: number;
+	outputTokens: number;
+	model: string;
 	contextFiles: string[];
 	contextDirectories: string[];
 	isContextViewExpanded: boolean;
@@ -66,24 +55,32 @@ export function WingmanProvider({
 	children: ReactNode;
 	initialPrompt?: string;
 }) {
-	const [messages, setMessages] = useState<Message[]>([]);
-	const [status, setStatus] = useState<Status>(Status.Idle);
-	const [input, setInput] = useState<string>("");
-	const [totalTokens, setTotalTokens] = useState<number>(0);
-	const [contextFiles, setContextFiles] = useState<string[]>([]);
-	const [contextDirectories, setContextDirectories] = useState<string[]>([]);
-	const [isContextViewExpanded, setIsContextViewExpanded] = useState(false);
+	const [state, dispatch] = useReducer(wingmanReducer, initialState);
+	const {
+		messages,
+		status,
+		input,
+		inputTokens,
+		outputTokens,
+		model,
+		contextFiles,
+		contextDirectories,
+		isContextViewExpanded,
+	} = state;
 
 	const agent = useRef<WingmanAgent | null>(null);
 	const threadId = useRef<string>(uuidv4());
 
+	const setInput = (input: string) => {
+		dispatch({ type: "SET_INPUT", payload: input });
+	};
+
 	const toggleContextView = useCallback(() => {
-		setIsContextViewExpanded((prev) => !prev);
+		dispatch({ type: "TOGGLE_CONTEXT_VIEW" });
 	}, []);
 
 	const clearContext = useCallback(() => {
-		setContextFiles([]);
-		setContextDirectories([]);
+		dispatch({ type: "CLEAR_CONTEXT" });
 	}, []);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
@@ -98,22 +95,24 @@ export function WingmanProvider({
 					type: "ai",
 					content: `Here are the available hotkeys:\n\n- **${toggleKey}**: Toggle context view\n- **${clearKey}**: Clear context files and directories`,
 				};
-				setMessages((prev) => [...prev, hotkeyMessage]);
-				setInput("");
+				dispatch({ type: "ADD_MESSAGE", payload: hotkeyMessage });
+				dispatch({ type: "SET_INPUT", payload: "" });
 				return;
 			}
 
 			if (!agent.current) return;
 
 			if (request.contextFiles) {
-				setContextFiles((prev) => [
-					...new Set([...prev, ...request.contextFiles!]),
-				]);
+				dispatch({
+					type: "ADD_CONTEXT_FILES",
+					payload: request.contextFiles,
+				});
 			}
 			if (request.contextDirectories) {
-				setContextDirectories((prev) => [
-					...new Set([...prev, ...request.contextDirectories!]),
-				]);
+				dispatch({
+					type: "ADD_CONTEXT_DIRECTORIES",
+					payload: request.contextDirectories,
+				});
 			}
 
 			const humanMessage: Message = {
@@ -121,9 +120,9 @@ export function WingmanProvider({
 				type: "human",
 				content: request.input,
 			};
-			setMessages((prev) => [...prev, humanMessage]);
-			setStatus(Status.Thinking);
-			setInput("");
+			dispatch({ type: "ADD_MESSAGE", payload: humanMessage });
+			dispatch({ type: "SET_STATUS", payload: Status.Thinking });
+			dispatch({ type: "SET_INPUT", payload: "" });
 
 			const fullRequest: WingmanRequest = {
 				...request,
@@ -133,36 +132,34 @@ export function WingmanProvider({
 			let currentAiMessageId: string | null = null;
 
 			try {
-				for await (const res of agent.current.stream(
-					fullRequest
-				)) {
+				for await (const res of agent.current.stream(fullRequest)) {
 					const { messages: newMessages } = res as WingmanGraphState;
 					const message = newMessages[newMessages.length - 1] as BaseMessage;
 
 					if (message instanceof AIMessageChunk || message instanceof AIMessage) {
 						if (message.tool_calls && message.tool_calls.length > 0) {
-							setMessages((prev) => {
-								const existingToolCallIds = new Set(
-									prev.filter((m) => m.type === "tool").map((m) => m.id),
-								);
-								const toolCalls = message.tool_calls ?? [];
-								const newToolCallMessages: Message[] = toolCalls
-									.filter((tc) => tc.id && !existingToolCallIds.has(tc.id))
-									.map((toolCall) => ({
-										id: toolCall.id!,
-										type: "tool",
-										toolName: toolCall.name,
-										args: toolCall.args,
-										content: "",
-										toolStatus: "executing",
-									}));
+							const existingToolCallIds = new Set(
+								messages.filter((m) => m.type === "tool").map((m) => m.id),
+							);
+							const toolCalls = message.tool_calls ?? [];
+							const newToolCallMessages: Message[] = toolCalls
+								.filter((tc) => tc.id && !existingToolCallIds.has(tc.id))
+								.map((toolCall) => ({
+									id: toolCall.id!,
+									type: "tool",
+									toolName: toolCall.name,
+									args: toolCall.args,
+									content: "",
+									toolStatus: "executing",
+								}));
 
-								if (newToolCallMessages.length > 0) {
-									setStatus(Status.ExecutingTool);
-									return [...prev, ...newToolCallMessages];
-								}
-								return prev;
-							});
+							if (newToolCallMessages.length > 0) {
+								dispatch({ type: "SET_STATUS", payload: Status.ExecutingTool });
+								// biome-ignore lint/complexity/noForEach: <explanation>
+								newToolCallMessages.forEach((msg) =>
+									dispatch({ type: "ADD_MESSAGE", payload: msg }),
+								);
+							}
 						}
 
 						if (
@@ -178,61 +175,60 @@ export function WingmanProvider({
 									tokenCount: message.usage_metadata?.total_tokens,
 								};
 								currentAiMessageId = newAiMessage.id;
-								if (message.usage_metadata?.total_tokens) {
-									setTotalTokens(
-										(prev) => prev + message.usage_metadata!.total_tokens,
-									);
+								if (message.usage_metadata) {
+									dispatch({
+										type: "ADD_TOKENS",
+										payload: {
+											input: message.usage_metadata.input_tokens,
+											output: message.usage_metadata.output_tokens,
+										},
+									});
 								}
-								setMessages((prev) => [...prev, newAiMessage]);
+								dispatch({ type: "ADD_MESSAGE", payload: newAiMessage });
 							} else {
-								setMessages((prev) => {
-									const lastMessage = prev[prev.length - 1];
-									if (lastMessage && lastMessage.id === currentAiMessageId) {
-										lastMessage.content += message.content;
-										if (message.usage_metadata?.total_tokens) {
-											lastMessage.tokenCount =
-												message.usage_metadata.total_tokens;
-											setTotalTokens(
-												(prevTotal) =>
-													prevTotal + message.usage_metadata!.total_tokens,
-											);
-										}
-										return [...prev.slice(0, -1), lastMessage];
-									}
-									return prev;
+								dispatch({
+									type: "UPDATE_LAST_MESSAGE",
+									payload: {
+										content: message.content as string,
+										usage_metadata: message.usage_metadata,
+									},
 								});
+								if (message.usage_metadata) {
+									dispatch({
+										type: "ADD_TOKENS",
+										payload: {
+											input: message.usage_metadata.input_tokens,
+											output: message.usage_metadata.output_tokens,
+										},
+									});
+								}
 							}
 						}
 					}
 
 					if (message.getType() === "tool") {
-						setMessages((prev) =>
-							prev.map((m) => {
-								if (m.id === (message as ToolMessage).tool_call_id) {
-									return {
-										...m,
-										type: "tool",
-										content: message.content as string,
-										toolStatus: "finished",
-									};
-								}
-								return m;
-							}),
-						);
-						setStatus(Status.Thinking);
+						dispatch({
+							type: "UPDATE_TOOL_CALL_MESSAGE",
+							payload: {
+								tool_call_id: (message as ToolMessage).tool_call_id!,
+								content: message.content as string,
+							},
+						});
+						dispatch({ type: "SET_STATUS", payload: Status.Thinking });
 					}
 				}
 			} finally {
-				setStatus(Status.Idle);
+				dispatch({ type: "SET_STATUS", payload: Status.Idle });
 			}
 		},
-		[agent],
+		[agent, messages],
 	);
 
 	useEffect(() => {
 		const initializeAgent = async () => {
 			const config = loadConfig();
 			const model = createModel(config);
+			dispatch({ type: "SET_MODEL", payload: config.model });
 
 			if (!fs.existsSync("./.wingman")) {
 				fs.mkdirSync("./.wingman", { recursive: true });
@@ -243,7 +239,7 @@ export function WingmanProvider({
 				model,
 				instructions: getWingmanInstructions(process.cwd()),
 				mode: "vibe",
-				memory: SqliteSaver.fromConnString("./.wingman/memory.db")
+				memory: SqliteSaver.fromConnString("./.wingman/memory.db"),
 			});
 			await wingmanAgent.initialize();
 			agent.current = wingmanAgent;
@@ -261,7 +257,9 @@ export function WingmanProvider({
 				messages,
 				status,
 				input,
-				totalTokens,
+				inputTokens,
+				outputTokens,
+				model,
 				contextFiles,
 				contextDirectories,
 				isContextViewExpanded,

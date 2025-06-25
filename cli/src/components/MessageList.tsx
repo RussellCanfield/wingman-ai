@@ -2,12 +2,12 @@ import type React from "react";
 import { memo } from "react";
 import { Box, Text } from "ink";
 import Markdown from "./Markdown";
-import type { Message } from "../contexts/WingmanContext";
 import Spinner from "./Spinner";
 import { ReadFileTool } from "./tools/ReadFileTool";
 import { ListDirectoryTool } from "./tools/ListDirectory";
 import { CommandExecuteTool } from "./tools/CommandExecuteTool";
 import { EditFileTool } from "./tools/EditFileTool";
+import type { Message } from "src/contexts/types";
 
 interface Props {
 	messages: Message[];
