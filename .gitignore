@@ -6,6 +6,8 @@ node_modules/
 webview-ui/build
 .vscode/settings.json
 
+test-install
+
 # C extensions
 *.so
 

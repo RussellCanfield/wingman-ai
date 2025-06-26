@@ -5,7 +5,14 @@
 	"license": "SEE LICENSE IN LICENSE.txt",
 	"author": "Wingman AI",
 	"type": "module",
-	"workspaces": ["agent", "cli", "docs-site", "extension", "shared"],
+	"workspaces": [
+		"agent",
+		"cli",
+		"docs-site",
+		"extension",
+		"shared",
+		"test-install"
+	],
 	"scripts": {
 		"build": "rsbuild build",
 		"changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
