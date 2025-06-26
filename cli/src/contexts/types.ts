@@ -1,3 +1,10 @@
+import type {
+	AIMessage,
+	AIMessageChunk,
+	BaseMessage,
+	ToolMessage,
+} from "@langchain/core/messages";
+
 export enum Status {
 	Idle = 0,
 	Thinking = 1,
@@ -26,6 +33,7 @@ export interface WingmanState {
 	contextDirectories: string[];
 	isContextViewExpanded: boolean;
 	summary: string | null;
+	currentAiMessageId: string | null;
 }
 
 export type WingmanAction =
@@ -52,4 +60,17 @@ export type WingmanAction =
 	| { type: "ADD_CONTEXT_DIRECTORIES"; payload: string[] }
 	| { type: "TOGGLE_CONTEXT_VIEW" }
 	| { type: "CLEAR_CONTEXT" }
-	| { type: "COMPACT"; payload: string };
+	| { type: "COMPACT"; payload: string }
+	| { type: "SET_CURRENT_AI_MESSAGE_ID"; payload: string | null }
+	| {
+			type: "HANDLE_AI_MESSAGE";
+			payload: {
+				message: AIMessageChunk | AIMessage;
+			};
+	  }
+	| {
+			type: "HANDLE_TOOL_MESSAGE";
+			payload: {
+				message: ToolMessage;
+			};
+	  };

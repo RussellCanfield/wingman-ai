@@ -84,7 +84,6 @@ export function WingmanProvider({
 		dispatch({ type: "CLEAR_CONTEXT" });
 	}, []);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	const handleSubmit = useCallback(
 		async (request: WingmanRequest) => {
 			const originalInput = request.input;
@@ -123,6 +122,7 @@ export function WingmanProvider({
 			dispatch({ type: "ADD_MESSAGE", payload: humanMessage });
 			dispatch({ type: "SET_STATUS", payload: Status.Thinking });
 			dispatch({ type: "SET_INPUT", payload: "" });
+			dispatch({ type: "SET_CURRENT_AI_MESSAGE_ID", payload: null });
 
 			const finalInput = summary
 				? `Summary of previous conversation:\n${summary}\n\nContinue the conversation based on this summary.\n\n${request.input}`
@@ -134,99 +134,37 @@ export function WingmanProvider({
 				threadId: threadId.current,
 			};
 
-			let currentAiMessageId: string | null = null;
-
 			try {
 				for await (const res of agent.current.stream(fullRequest)) {
 					const { messages: newMessages } = res as WingmanGraphState;
 					const message = newMessages[newMessages.length - 1] as BaseMessage;
 
 					if (message instanceof AIMessageChunk || message instanceof AIMessage) {
-						if (message.tool_calls && message.tool_calls.length > 0) {
-							const existingToolCallIds = new Set(
-								messages.filter((m) => m.type === "tool").map((m) => m.id),
-							);
-							const toolCalls = message.tool_calls ?? [];
-							const newToolCallMessages: Message[] = toolCalls
-								.filter((tc) => tc.id && !existingToolCallIds.has(tc.id))
-								.map((toolCall) => ({
-									id: toolCall.id!,
-									type: "tool",
-									toolName: toolCall.name,
-									args: toolCall.args,
-									content: "",
-									toolStatus: "executing",
-								}));
-
-							if (newToolCallMessages.length > 0) {
-								dispatch({ type: "SET_STATUS", payload: Status.ExecutingTool });
-								// biome-ignore lint/complexity/noForEach: <explanation>
-								newToolCallMessages.forEach((msg) =>
-									dispatch({ type: "ADD_MESSAGE", payload: msg }),
-								);
-							}
-						}
-
-						if (
-							message.content &&
-							typeof message.content === "string" &&
-							message.content.trim()
-						) {
-							if (!currentAiMessageId) {
-								const newAiMessage: Message = {
-									id: uuidv4(),
-									type: "ai",
-									content: message.content,
-									tokenCount: message.usage_metadata?.total_tokens,
-								};
-								currentAiMessageId = newAiMessage.id;
-								if (message.usage_metadata) {
-									dispatch({
-										type: "ADD_TOKENS",
-										payload: {
-											input: message.usage_metadata.input_tokens,
-											output: message.usage_metadata.output_tokens,
-										},
-									});
-								}
-								dispatch({ type: "ADD_MESSAGE", payload: newAiMessage });
-							} else {
-								dispatch({
-									type: "UPDATE_LAST_MESSAGE",
-									payload: {
-										content: message.content as string,
-										usage_metadata: message.usage_metadata,
-									},
-								});
-								if (message.usage_metadata) {
-									dispatch({
-										type: "ADD_TOKENS",
-										payload: {
-											input: message.usage_metadata.input_tokens,
-											output: message.usage_metadata.output_tokens,
-										},
-									});
-								}
-							}
+						dispatch({ type: "HANDLE_AI_MESSAGE", payload: { message } });
+						if (message.usage_metadata) {
+							dispatch({
+								type: "ADD_TOKENS",
+								payload: {
+									input: message.usage_metadata.input_tokens,
+									output: message.usage_metadata.output_tokens,
+								},
+							});
 						}
 					}
 
 					if (message.getType() === "tool") {
 						dispatch({
-							type: "UPDATE_TOOL_CALL_MESSAGE",
-							payload: {
-								tool_call_id: (message as ToolMessage).tool_call_id!,
-								content: message.content as string,
-							},
+							type: "HANDLE_TOOL_MESSAGE",
+							payload: { message: message as ToolMessage },
 						});
-						dispatch({ type: "SET_STATUS", payload: Status.Thinking });
 					}
 				}
 			} finally {
 				dispatch({ type: "SET_STATUS", payload: Status.Idle });
+				dispatch({ type: "SET_CURRENT_AI_MESSAGE_ID", payload: null });
 			}
 		},
-		[agent, messages, summary],
+		[summary],
 	);
 
 	useEffect(() => {
