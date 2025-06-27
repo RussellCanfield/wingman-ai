@@ -2,14 +2,13 @@ import React from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import MessageList from "./components/MessageList";
 import UserInput from "./components/UserInput";
-import ScrollArea from "./components/ScrollArea";
 import { wingmanArt } from "./art";
 import { useWingman } from "./contexts/WingmanContext";
-import Spinner from "ink-spinner";
 import StatusBar from "./components/StatusBar";
 import type { WingmanRequest } from "@wingman-ai/agent";
 import { Status } from "./contexts/types";
 import { uiLogger, logInputEvent } from "./utils/logger";
+import { Spinner } from "./components/Spinner";
 
 const UI: React.FC = () => {
 	const { messages, status, input, setInput, handleSubmit } = useWingman();

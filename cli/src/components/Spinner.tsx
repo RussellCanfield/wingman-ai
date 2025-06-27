@@ -1,21 +1,18 @@
-import { Text } from "ink";
-import Spinner from "ink-spinner";
+import { useState, useEffect } from 'react';
+import { Text } from 'ink';
+import cliSpinners, { type SpinnerName } from 'cli-spinners';
 
-interface Props {
-	status: "Thinking" | "ExecutingTool";
-}
+export const Spinner = ({ type = 'dots' }: { type?: SpinnerName }) => {
+	const [frame, setFrame] = useState(0);
+	const spinner = cliSpinners[type];
 
-const CustomSpinner: React.FC<Props> = ({ status }) => {
-	const text = status === "Thinking" ? "Thinking..." : "Executing tool...";
+	useEffect(() => {
+		const timer = setInterval(() => {
+			setFrame(prevFrame => (prevFrame + 1) % spinner.frames.length);
+		}, spinner.interval);
 
-	return (
-		<Text>
-			<Text color="green">
-				<Spinner type="dots" />
-			</Text>
-			{` ${text}`}
-		</Text>
-	);
+		return () => clearInterval(timer);
+	}, [spinner]);
+
+	return <Text>{spinner.frames[frame]}</Text>;
 };
-
-export default CustomSpinner;

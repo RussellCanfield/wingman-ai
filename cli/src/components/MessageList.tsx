@@ -2,7 +2,7 @@ import type React from "react";
 import { memo } from "react";
 import { Box, Text } from "ink";
 import Markdown from "./Markdown";
-import Spinner from "./Spinner";
+import { Spinner } from "./Spinner";
 import { ReadFileTool } from "./tools/ReadFileTool";
 import { ListDirectoryTool } from "./tools/ListDirectory";
 import { CommandExecuteTool } from "./tools/CommandExecuteTool";
@@ -87,7 +87,7 @@ const ToolHandler: React.FC<{ msg: Message }> = ({ msg }) => {
 	if (msg.toolStatus === "executing") {
 		return (
 			<Box flexDirection="row" gap={1}>
-				<Spinner status="ExecutingTool" />
+				<Spinner />
 				<Text color="yellow">Executing {msg.toolName}</Text>
 			</Box>
 		);

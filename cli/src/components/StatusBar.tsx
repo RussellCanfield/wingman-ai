@@ -3,9 +3,10 @@ import { Box, Text } from "ink";
 import { useWingman } from "../contexts/WingmanContext";
 import os from "node:os";
 import { getModelCosts, getContextWindow } from "@wingman-ai/agent";
-import { ProgressBar, Spinner } from "@inkjs/ui";
 import { Status } from "src/contexts/types";
 import { useMemo } from "react";
+import { Spinner } from "./Spinner";
+import ProgressBar from "./ProgressBar";
 
 const StatusBar: React.FC = () => {
 	const {
@@ -31,7 +32,7 @@ const StatusBar: React.FC = () => {
 
 		const calculatedCost = modelInfo
 			? (inputTokens / contextWindow) * modelInfo.input +
-			  (outputTokens / contextWindow) * modelInfo.output
+			(outputTokens / contextWindow) * modelInfo.output
 			: 0;
 
 		const calculatedContextPercentage =
