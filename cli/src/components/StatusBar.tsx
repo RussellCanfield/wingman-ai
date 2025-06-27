@@ -1,7 +1,6 @@
-import type React from "react";
+ import type React from "react";
 import { Box, Text } from "ink";
 import { useWingman } from "../contexts/WingmanContext";
-import os from "node:os";
 import { getModelCosts, getContextWindow } from "@wingman-ai/agent";
 import { Status } from "src/contexts/types";
 import { useMemo } from "react";
@@ -20,9 +19,8 @@ const StatusBar: React.FC = () => {
 	} = useWingman();
 
 	const hasContext = contextFiles.length > 0 || contextDirectories.length > 0;
-	const isMac = os.platform() === "darwin";
-	const toggleKey = isMac ? "Cmd+B" : "Ctrl+B";
-	const clearKey = isMac ? "Cmd+D" : "Ctrl+D";
+	const toggleKey = "Ctrl+B";
+	const clearKey = "Ctrl+D";
 
 	// Memoize expensive calculations
 	const { cost, contextPercentage, roundedContextPercentage } = useMemo(() => {

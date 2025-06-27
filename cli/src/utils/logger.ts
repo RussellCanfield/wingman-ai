@@ -1,4 +1,4 @@
-import pino from "pino";
+ import pino from "pino";
 import { mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -22,31 +22,66 @@ function getLogLevel(): pino.Level {
 	return process.env.NODE_ENV === "development" ? "debug" : "info";
 }
 
-// Ensure .wingman directory exists
+// Ensure .wingman directory exists and return its path
 function ensureLogDirectory(): string {
 	const logDir = join(process.cwd(), ".wingman");
 	if (!existsSync(logDir)) {
 		mkdirSync(logDir, { recursive: true });
 	}
-	return join(logDir, "debug.log");
+	return logDir;
 }
 
 const logLevel = getLogLevel();
-const logFile = ensureLogDirectory();
+const logDirectory = ensureLogDirectory();
 
-export const logger = pino({
-	level: logLevel,
-	transport: {
-		target: "pino-pretty",
-		options: {
-			colorize: false, // Disable colors for file output
-			destination: logFile,
-			translateTime: "SYS:standard",
-			mkdir: true,
-			append: true,
-		},
+const isDevelopment = process.env.NODE_ENV === "development";
+
+const transport = isDevelopment
+	? pino.transport({
+			targets: [
+				{
+					target: "pino-pretty",
+					options: {
+						colorize: true,
+						levelFirst: true,
+						translateTime: "SYS:standard",
+					},
+					level: logLevel,
+				},
+				{
+					target: "pino-roll",
+					options: {
+						file: join(logDirectory, "debug"),
+						extension: ".log",
+						frequency: "daily",
+						dateFormat: "yyyy-MM-dd",
+						mkdir: true,
+						size: "10M",
+						files: 5,
+					},
+					level: logLevel,
+				},
+			],
+		})
+	: pino.transport({
+			target: "pino-roll",
+			options: {
+				file: join(logDirectory, "debug"),
+				extension: ".log",
+				frequency: "daily",
+				dateFormat: "yyyy-MM-dd",
+				mkdir: true,
+				size: "10M",
+				files: 5,
+			},
+		});
+
+export const logger = pino(
+	{
+		level: logLevel,
 	},
-});
+	transport,
+);
 
 // Create child loggers for different components
 export const createComponentLogger = (component: string) => {
@@ -135,9 +170,11 @@ export const logPerformance = (
 };
 
 // Export the current log level and file path for CLI info
-export const getLogInfo = () => ({
-	level: logLevel,
-	file: logFile,
-	//@ts-expect-error
-	enabled: logLevel !== "silent",
-});
+export const getLogInfo = () => {
+	return {
+		level: logLevel,
+		file: join(logDirectory, "debug.log"),
+		//@ts-expect-error
+		enabled: logLevel !== "silent",
+	};
+};

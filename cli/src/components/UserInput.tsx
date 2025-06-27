@@ -1,4 +1,4 @@
-import type React from "react";
+ import type React from "react";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Box, Text, useInput, useStdin } from "ink";
 import type { WingmanRequest } from "@wingman-ai/agent";
@@ -36,7 +36,7 @@ const UserInput: React.FC<Props> = ({
 	const [showCommands, setShowCommands] = useState(false);
 	const [filteredCommands, setFilteredCommands] = useState(commands);
 	const [cursorPosition, setCursorPosition] = useState(0);
-	const { clearContext, toggleContextView } = useWingman();
+	const { clearContext } = useWingman();
 	const isMac = os.platform() === "darwin";
 	const [showCursor, setShowCursor] = useState(true);
 	const { stdin, setRawMode } = useStdin();
@@ -228,51 +228,8 @@ const UserInput: React.FC<Props> = ({
 	// Optimized input handler with reduced logging
 	const inputHandler = useCallback(
 		(inputChar: string, key: any) => {
-			// Reduced logging in production
-			//if (process.env.NODE_ENV === 'development') {
-			logInputEvent('user_input_handler', {
-				inputChar,
-				ctrl: key.ctrl,
-				key,
-				meta: key.meta,
-				shift: key.shift,
-				return: key.return,
-				escape: key.escape,
-				tab: key.tab,
-				backspace: key.backspace || (isMac && key.delete),
-				delete: key.delete && !isMac,
-				arrows: {
-					up: key.upArrow,
-					down: key.downArrow,
-					left: key.leftArrow,
-					right: key.rightArrow,
-				},
-				handlerActive: !isThinking,
-				currentInputLength: input.length,
-				cursorPosition
-			});
-			//}
-
-			// Handle Ctrl+C - let it pass through to global handler
-			if (key.ctrl && inputChar === '\u0003') {
-				return;
-			}
-
-			// Handle our custom hotkeys
-			const modifierPressed = key.ctrl || (isMac && key.meta);
-			if (modifierPressed) {
-				if (inputChar === 'b') { // Ctrl+B or Cmd+B
-
-					logInputEvent('context_toggle', { reason: 'input_mode' });
-					toggleContextView();
-					return;
-				}
-				if (inputChar === 'd') { // Ctrl+D or Cmd+D
-					clearContext();
-					setInput("");
-					setCursorPosition(0);
-					return;
-				}
+			// Let global handler process shortcuts
+			if (key.ctrl) {
 				return;
 			}
 
@@ -329,8 +286,6 @@ const UserInput: React.FC<Props> = ({
 		},
 		[
 			isMac,
-			toggleContextView,
-			clearContext,
 			input,
 			setInput,
 			handleOnSubmit,

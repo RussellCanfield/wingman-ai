@@ -11,14 +11,25 @@ import { uiLogger, logInputEvent } from "./utils/logger";
 import { Spinner } from "./components/Spinner";
 
 const UI: React.FC = () => {
-	const { messages, status, input, setInput, handleSubmit } = useWingman();
+	const {
+		messages,
+		status,
+		input,
+		setInput,
+		handleSubmit,
+		toggleContextView,
+		clearContext,
+	} = useWingman();
 	const { exit } = useApp();
 
 	React.useEffect(() => {
-		uiLogger.info({ event: 'mount' }, 'UI component mounted');
+		uiLogger.info({ event: "mount" }, "UI component mounted");
 
 		const handleExit = () => {
-			uiLogger.info({ event: 'sigint_handler', source: 'process.on' }, 'SIGINT received, exiting');
+			uiLogger.info(
+				{ event: "sigint_handler", source: "process.on" },
+				"SIGINT received, exiting",
+			);
 			exit();
 		};
 
@@ -26,58 +37,91 @@ const UI: React.FC = () => {
 
 		return () => {
 			process.off("SIGINT", handleExit);
-			uiLogger.info({ event: 'unmount' }, 'UI component unmounted');
+			uiLogger.info({ event: "unmount" }, "UI component unmounted");
 		};
 	}, [exit]);
 
-	// Global input handler that's always active - only for Ctrl+C
+	// Global input handler for all shortcuts
 	useInput(
 		React.useCallback(
 			(inputChar, key) => {
-				logInputEvent('global_handler_input', {
+				logInputEvent("global_handler_input", {
 					inputChar,
 					ctrl: key.ctrl,
 					meta: key.meta,
-					keyPressed: Object.keys(key).filter(k => key[k as keyof typeof key]).join("+")
+					keyPressed: Object.keys(key)
+						.filter((k) => key[k as keyof typeof key])
+						.join("+"),
 				});
 
-				// Handle Ctrl+C to exit - this should always work
-				if (key.ctrl && inputChar === 'c') {
-					uiLogger.info({
-						event: 'ctrl_c_exit',
-						handler: 'global',
-						priority: 'high'
-					}, 'Ctrl+C detected in global handler - exiting');
-					exit();
-					return;
+				if (key.ctrl) {
+					// Handle Ctrl+C to exit
+					if (inputChar === "c") {
+						uiLogger.info(
+							{
+								event: "ctrl_c_exit",
+								handler: "global",
+								priority: "high",
+							},
+							"Ctrl+C detected in global handler - exiting",
+						);
+						exit();
+						return;
+					}
+
+					// Handle Ctrl+B to toggle context view
+					if (inputChar === "b") {
+						logInputEvent("context_toggle", { reason: "global_handler_ctrl_b" });
+						toggleContextView();
+						return;
+					}
+
+					// Handle Ctrl+D to clear context
+					if (inputChar === "d") {
+						logInputEvent("context_clear", { reason: "global_handler_ctrl_d" });
+						clearContext();
+						setInput(""); // Also clear the user input field
+						return;
+					}
 				}
 
-				uiLogger.trace({
-					event: 'global_handler_passthrough',
-					inputChar,
-					keyPressed: Object.keys(key).filter(k => key[k as keyof typeof key]).join("+")
-				}, 'Event not handled by global handler');
+				uiLogger.trace(
+					{
+						event: "global_handler_passthrough",
+						inputChar,
+						keyPressed: Object.keys(key)
+							.filter((k) => key[k as keyof typeof key])
+							.join("+"),
+					},
+					"Event not handled by global handler",
+				);
 			},
-			[exit],
+			[exit, toggleContextView, clearContext, setInput],
 		),
 		{
-			isActive: true, // Always active so Ctrl+C always works
+			isActive: true, // Always active for global shortcuts
 		},
 	);
 
 	// Log handler registration state
 	React.useEffect(() => {
-		uiLogger.debug({
-			event: 'handler_registration',
-			handler: 'global_input',
-			active: true
-		}, 'Global input handler registered');
+		uiLogger.debug(
+			{
+				event: "handler_registration",
+				handler: "global_input",
+				active: true,
+			},
+			"Global input handler registered",
+		);
 
 		return () => {
-			uiLogger.debug({
-				event: 'handler_deregistration',
-				handler: 'global_input'
-			}, 'Global input handler deregistered');
+			uiLogger.debug(
+				{
+					event: "handler_deregistration",
+					handler: "global_input",
+				},
+				"Global input handler deregistered",
+			);
 		};
 	}, []);
 
@@ -88,14 +132,17 @@ const UI: React.FC = () => {
 
 	// Log status changes
 	React.useEffect(() => {
-		uiLogger.debug({
-			event: 'status_change',
-			status: Status[status],
-			isThinking,
-			isExecutingTool,
-			isIdle,
-			isCompacting
-		}, `Status changed to: ${Status[status]}`);
+		uiLogger.debug(
+			{
+				event: "status_change",
+				status: Status[status],
+				isThinking,
+				isExecutingTool,
+				isIdle,
+				isCompacting,
+			},
+			`Status changed to: ${Status[status]}`,
+		);
 	}, [status, isThinking, isExecutingTool, isIdle, isCompacting]);
 
 	return (
