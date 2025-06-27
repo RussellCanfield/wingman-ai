@@ -1,4 +1,4 @@
- import type React from "react";
+import type React from "react";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Box, Text, useInput, useStdin } from "ink";
 import type { WingmanRequest } from "@wingman-ai/agent";
@@ -226,6 +226,7 @@ const UserInput: React.FC<Props> = ({
 	);
 
 	// Optimized input handler with reduced logging
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	const inputHandler = useCallback(
 		(inputChar: string, key: any) => {
 			// Let global handler process shortcuts
