@@ -1,34 +1,103 @@
 import React from "react";
-import { Box, Text, useApp } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import MessageList from "./components/MessageList";
 import UserInput from "./components/UserInput";
+import ScrollArea from "./components/ScrollArea";
 import { wingmanArt } from "./art";
 import { useWingman } from "./contexts/WingmanContext";
 import Spinner from "ink-spinner";
 import StatusBar from "./components/StatusBar";
 import type { WingmanRequest } from "@wingman-ai/agent";
-import { useHotkeys } from "./hooks/useHotkeys";
 import { Status } from "./contexts/types";
+import { uiLogger, logInputEvent } from "./utils/logger";
 
 const UI: React.FC = () => {
 	const { messages, status, input, setInput, handleSubmit } = useWingman();
 	const { exit } = useApp();
-	useHotkeys();
 
 	React.useEffect(() => {
+		uiLogger.info({ event: 'mount' }, 'UI component mounted');
+
 		const handleExit = () => {
+			uiLogger.info({ event: 'sigint_handler', source: 'process.on' }, 'SIGINT received, exiting');
 			exit();
 		};
+
 		process.on("SIGINT", handleExit);
+
 		return () => {
 			process.off("SIGINT", handleExit);
+			uiLogger.info({ event: 'unmount' }, 'UI component unmounted');
 		};
 	}, [exit]);
+
+	// Global input handler that's always active - only for Ctrl+C
+	useInput(
+		React.useCallback(
+			(inputChar, key) => {
+				logInputEvent('global_handler_input', {
+					inputChar,
+					ctrl: key.ctrl,
+					meta: key.meta,
+					keyPressed: Object.keys(key).filter(k => key[k as keyof typeof key]).join("+")
+				});
+
+				// Handle Ctrl+C to exit - this should always work
+				if (key.ctrl && inputChar === 'c') {
+					uiLogger.info({
+						event: 'ctrl_c_exit',
+						handler: 'global',
+						priority: 'high'
+					}, 'Ctrl+C detected in global handler - exiting');
+					exit();
+					return;
+				}
+
+				uiLogger.trace({
+					event: 'global_handler_passthrough',
+					inputChar,
+					keyPressed: Object.keys(key).filter(k => key[k as keyof typeof key]).join("+")
+				}, 'Event not handled by global handler');
+			},
+			[exit],
+		),
+		{
+			isActive: true, // Always active so Ctrl+C always works
+		},
+	);
+
+	// Log handler registration state
+	React.useEffect(() => {
+		uiLogger.debug({
+			event: 'handler_registration',
+			handler: 'global_input',
+			active: true
+		}, 'Global input handler registered');
+
+		return () => {
+			uiLogger.debug({
+				event: 'handler_deregistration',
+				handler: 'global_input'
+			}, 'Global input handler deregistered');
+		};
+	}, []);
 
 	const isThinking = status === Status.Thinking;
 	const isExecutingTool = status === Status.ExecutingTool;
 	const isIdle = status === Status.Idle;
 	const isCompacting = status === Status.Compacting;
+
+	// Log status changes
+	React.useEffect(() => {
+		uiLogger.debug({
+			event: 'status_change',
+			status: Status[status],
+			isThinking,
+			isExecutingTool,
+			isIdle,
+			isCompacting
+		}, `Status changed to: ${Status[status]}`);
+	}, [status, isThinking, isExecutingTool, isIdle, isCompacting]);
 
 	return (
 		<Box flexDirection="column" padding={1}>
@@ -38,7 +107,7 @@ const UI: React.FC = () => {
 			<Box>
 				<Text color="blue">Your AI-powered partner</Text>
 			</Box>
-			<Box flexGrow={1} flexDirection="column" marginTop={1}>
+			<Box flexGrow={1} flexDirection="column" marginTop={1} overflow="hidden">
 				<MessageList messages={messages} />
 			</Box>
 			<Box flexDirection="column">

@@ -33,6 +33,7 @@ import {
 } from "@langchain/core/messages";
 import { z } from "zod";
 import { compactConversationPrompt } from "./prompts/compact";
+import { buildHumanMessages } from "./prompts/human";
 
 const WingmanAgentConfigSchema = z.object({
 	name: z.string().min(1, "Agent name is required"),
@@ -147,7 +148,6 @@ Default Shell: ${userInfo.shell}`;
 		}
 
 		const toolNode = new ToolNode(this.tools);
-
 		const workflow = new StateGraph(GraphAnnotation)
 			.addNode("agent", this.callModel)
 			.addNode("tools", toolNode)
@@ -246,7 +246,7 @@ Default Shell: ${userInfo.shell}`;
 		}
 
 		const config = {
-			recursionLimit: 100,
+			recursionLimit: 50,
 			streamMode: "values" as const,
 			version: "v2" as const,
 			configurable: {
@@ -255,9 +255,14 @@ Default Shell: ${userInfo.shell}`;
 			},
 		};
 
+		const messages = await buildHumanMessages(
+			request,
+			this.config.workingDirectory,
+		);
+
 		const stream = await this.app.stream(
 			{
-				messages: [new HumanMessage({ content: request.input })],
+				messages,
 			},
 			config,
 		);
@@ -266,10 +271,7 @@ Default Shell: ${userInfo.shell}`;
 		}
 	}
 
-	async *streamEvents(
-		request: WingmanRequest,
-		checkpointer?: BaseCheckpointSaver,
-	) {
+	async *streamEvents(request: WingmanRequest) {
 		if (!this.app) {
 			throw new Error(
 				"Agent workflow is not initialized. Call initialize() first.",
@@ -285,9 +287,14 @@ Default Shell: ${userInfo.shell}`;
 			},
 		};
 
+		const messages = await buildHumanMessages(
+			request,
+			this.config.workingDirectory,
+		);
+
 		const stream = await this.app.streamEvents(
 			{
-				messages: [new HumanMessage(request.input)],
+				messages,
 			},
 			config,
 		);

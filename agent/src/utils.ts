@@ -54,3 +54,17 @@ export async function ensureChromium(globalStoragePath: string) {
 	});
 	return stats;
 }
+
+export async function loadFiles(cwd: string, files: string[]) {
+	const loadedFiles: { path: string; code: string }[] = [];
+
+	for (const file of files) {
+		const filePath = path.join(cwd, file);
+		if (fs.existsSync(filePath)) {
+			const code = await fs.promises.readFile(filePath, "utf-8");
+			loadedFiles.push({ path: filePath, code });
+		}
+	}
+
+	return loadedFiles;
+}

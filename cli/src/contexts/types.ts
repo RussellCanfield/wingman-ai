@@ -4,6 +4,7 @@ import type {
 	BaseMessage,
 	ToolMessage,
 } from "@langchain/core/messages";
+import type { ToolCall } from "@langchain/core/messages/tool";
 
 export enum Status {
 	Idle = 0,
@@ -72,5 +73,12 @@ export type WingmanAction =
 			type: "HANDLE_TOOL_MESSAGE";
 			payload: {
 				message: ToolMessage;
+			};
+	  }
+	| {
+			type: "ADD_TOOL_CALLS";
+			payload: {
+				toolCalls: ToolCall[];
+				messageId?: string;
 			};
 	  };
