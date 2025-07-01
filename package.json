@@ -2,7 +2,7 @@
 	"name": "wing-man",
 	"version": "1.5.3",
 	"description": "Your AI pair programmer, right in your editor",
-	"license": "SEE LICENSE IN LICENSE.txt",
+	"license": "MIT",
 	"author": "Wingman AI",
 	"type": "module",
 	"workspaces": [

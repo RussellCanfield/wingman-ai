@@ -1,7 +1,8 @@
 import React from "react";
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import MessageList from "./components/MessageList";
 import UserInput from "./components/UserInput";
+import ScrollableArea from "./components/ScrollableArea";
 import { wingmanArt } from "./art";
 import { useWingman } from "./contexts/WingmanContext";
 import StatusBar from "./components/StatusBar";
@@ -21,6 +22,9 @@ const UI: React.FC = () => {
 		clearContext,
 	} = useWingman();
 	const { exit } = useApp();
+	const { stdout } = useStdout();
+	const columns = stdout.columns || 80;
+	const rows = stdout.rows || 24;
 
 	React.useEffect(() => {
 		uiLogger.info({ event: "mount" }, "UI component mounted");
@@ -145,32 +149,51 @@ const UI: React.FC = () => {
 		);
 	}, [status, isThinking, isExecutingTool, isIdle, isCompacting]);
 
+	// Fixed layout heights to prevent resizing
+	const headerHeight = 30; // ASCII art (7) + subtitle (1) + margins (2)
+	const fixedFooterHeight = 8; // Reserve space for max possible footer: UserInput (4) + StatusBar (4) + margins (2)
+	const availableHeight = Math.max(8, rows - headerHeight - fixedFooterHeight);
+
 	return (
 		<Box flexDirection="column" padding={1}>
+			{/* Fixed Header Section */}
 			<Box>
 				<Text>{wingmanArt}</Text>
 			</Box>
 			<Box>
 				<Text color="blue">Your AI-powered partner</Text>
 			</Box>
-			<Box flexGrow={1} flexDirection="column" marginTop={1} overflow="hidden">
-				<MessageList messages={messages} />
+
+			{/* Fixed Height Scrollable Message Area */}
+			<Box marginTop={1}>
+				<ScrollableArea
+					height={availableHeight}
+					autoScroll={true}
+					showScrollIndicators={true}
+				>
+					<MessageList messages={messages} />
+				</ScrollableArea>
 			</Box>
-			<Box flexDirection="column">
-				{(isThinking || isCompacting) && (
-					<Box>
-						<Spinner type="dots" />
-					</Box>
-				)}
-				{isIdle && (
-					<UserInput
-						input={input}
-						setInput={setInput}
-						onSubmit={(request: WingmanRequest) => handleSubmit(request)}
-						isThinking={isThinking || isExecutingTool || isCompacting}
-					/>
-				)}
-				<StatusBar />
+
+			{/* Fixed Height Footer Section */}
+			<Box flexDirection="column" height={fixedFooterHeight} justifyContent="flex-end">
+				{/* Dynamic content within fixed container */}
+				<Box flexDirection="column">
+					{(isThinking || isCompacting) && (
+						<Box>
+							<Spinner type="dots" />
+						</Box>
+					)}
+					{isIdle && (
+						<UserInput
+							input={input}
+							setInput={setInput}
+							onSubmit={(request: WingmanRequest) => handleSubmit(request)}
+							isThinking={isThinking || isExecutingTool || isCompacting}
+						/>
+					)}
+					<StatusBar />
+				</Box>
 			</Box>
 		</Box>
 	);
