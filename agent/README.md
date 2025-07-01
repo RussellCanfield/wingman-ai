@@ -89,6 +89,52 @@ The agent comes with a variety of built-in tools:
 - **Research:** Conducts in-depth research on a topic.
 - **File Inspector:** Inspects files for linting issues and diagnostics.
 
+## Tool Abilities
+
+Extending and enhancing Wingman happens with tools.
+
+- **Symbol Retriever:** A callback that delivers symbols for a file.
+- **File Diagnostics:** A callback that delivers linting and error feedback for a file.
+- **Blocked Commands:** A `string[]` of commands the agent cannot execute. Defaults to:
+
+```json
+[
+	"rm",
+	"remove",
+	"del",
+	"delete",
+	"rmdir",
+	"rd",
+	"mv",
+	"move",
+	"format",
+	">",
+	">>",
+	"chmod",
+	"chown",
+	":>",
+	"sudo",
+	"su",
+]
+```
+
+## MCP Support
+
+Support for MCP based on [LangChain's MCP adapter package](https://github.com/langchain-ai/langchainjs/tree/main/libs/langchain-mcp-adapters).
+
+In the `.wingman` directory, create a `mcp.json` file with the following schema:
+
+```json
+{
+  mcpServers: {
+    'data-processor': {
+      command: 'python',
+      args: ['data_server.py']
+    },
+  }
+}
+```
+
 ## Dependencies
 
 The `@wingman-ai/agent` package relies on several key libraries:

@@ -7,7 +7,10 @@ import { getSystemPrompt } from "./prompts/system";
 import os from "node:os";
 import { createWebSearchTool } from "./tools/web_search";
 import { createThinkingTool } from "./tools/think";
-import { createCommandExecuteTool } from "./tools/cmd_execute";
+import {
+	createCommandExecuteTool,
+	DEFAULT_BLOCKED_COMMANDS,
+} from "./tools/cmd_execute";
 import { createReadFileTool } from "./tools/read_file";
 import { createListDirectoryTool } from "./tools/list_workspace_files";
 import { createWriteFileTool } from "./tools/write_file";
@@ -26,19 +29,20 @@ import {
 import { GraphAnnotation, type WingmanGraphState } from "./state/graph";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
-import {
-	AIMessage,
-	HumanMessage,
-	RemoveMessage,
-} from "@langchain/core/messages";
-import { z } from "zod";
+import { AIMessage, RemoveMessage } from "@langchain/core/messages";
+import { z } from "zod/v4";
 import { compactConversationPrompt } from "./prompts/compact";
 import { buildHumanMessages } from "./prompts/human";
 
-const WingmanAgentConfigSchema = z.object({
+export const WingmanAgentConfigSchema = z.object({
 	name: z.string().min(1, "Agent name is required"),
 	prompt: z.string().optional(),
-	instructions: z.string().optional(),
+	instructions: z
+		.string()
+		.describe(
+			"Additional instructions for the agent that augment the system prompt",
+		)
+		.optional(),
 	model: z.custom<BaseChatModel>().refine(
 		(val) => {
 			return val && (val.lc_namespace as string[]).includes("langchain");
@@ -52,8 +56,21 @@ const WingmanAgentConfigSchema = z.object({
 	memory: z.custom<BaseCheckpointSaver>().optional(),
 	toolAbilities: z
 		.object({
-			symbolRetriever: z.any().optional(),
-			fileDiagnostics: z.any().optional(),
+			symbolRetriever: z
+				.any()
+				.describe("Symbol retrieval capabilities")
+				.optional(),
+			fileDiagnostics: z
+				.any()
+				.describe("File diagnostics capabilities")
+				.optional(),
+			blockedCommands: z
+				.array(z.string())
+				.optional()
+				.describe(
+					"List of commands that the agent should not execute. Defaults to common destructive commands.",
+				)
+				.default(DEFAULT_BLOCKED_COMMANDS),
 		})
 		.optional(),
 });
@@ -62,10 +79,26 @@ export type WingmanAgentConfig = z.infer<typeof WingmanAgentConfigSchema>;
 
 const WingmanInternalConfigSchema = WingmanAgentConfigSchema.extend({
 	workingDirectory: z.string(),
-	instructions: z.string(),
+	instructions: z
+		.string()
+		.describe(
+			"Additional instructions for the agent that augment the system prompt",
+		)
+		.optional(),
 	toolAbilities: z.object({
-		symbolRetriever: z.any().optional(),
-		fileDiagnostics: z.any().optional(),
+		symbolRetriever: z
+			.any()
+			.describe("Symbol retrieval capabilities")
+			.optional(),
+		fileDiagnostics: z
+			.any()
+			.describe("File diagnostics capabilities")
+			.optional(),
+		blockedCommands: z
+			.array(z.string())
+			.optional()
+			.describe("List of commands that the agent should not execute")
+			.default(DEFAULT_BLOCKED_COMMANDS),
 	}),
 });
 
@@ -83,17 +116,18 @@ export class WingmanAgent {
 	private readonly config: WingmanConfig;
 	private readonly storagePath: string;
 	private tools: Array<StructuredTool | StructuredToolInterface> = [];
-	private app:
-		| CompiledStateGraph<unknown, unknown, "__start__", z.AnyZodObject>
-		| undefined;
+	private app: // biome-ignore lint/complexity/noBannedTypes: <explanation>
+	CompiledStateGraph<unknown, unknown, "__start__", {}> | undefined;
 
 	constructor(wingmanConfig: WingmanAgentConfig) {
 		const validatedConfig = WingmanAgentConfigSchema.parse(wingmanConfig);
 		this.config = {
 			workingDirectory: process.cwd(),
+			toolAbilities: {
+				blockedCommands: DEFAULT_BLOCKED_COMMANDS,
+			},
 			...validatedConfig,
 			instructions: validatedConfig.instructions || "",
-			toolAbilities: validatedConfig.toolAbilities || {},
 		};
 		this.mcpAdapter = new MCPAdapter(this.config.workingDirectory);
 		this.storagePath = getGlobalStoragePath(this.config.workingDirectory);
@@ -120,6 +154,7 @@ Default Shell: ${userInfo.shell}`;
 		const mcpTools = await this.mcpAdapter.getTools();
 		if (mcpTools) {
 			for (const [_, tool] of Object.entries(mcpTools)) {
+				//@ts-expect-error -- MCP adapter type mismatch
 				remoteTools.push(tool);
 			}
 		}

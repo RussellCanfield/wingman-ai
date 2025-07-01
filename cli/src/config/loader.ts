@@ -1,12 +1,16 @@
 import { WingmanConfigSchema, type WingmanConfig } from "./schema";
 import path from "node:path";
 import fs from "node:fs";
-import { ZodError } from "zod";
+import { ZodError } from "zod/v4";
 import dotenv from "dotenv";
+import { DEFAULT_BLOCKED_COMMANDS } from "@wingman-ai/agent";
 
 const defaultConfig: WingmanConfig = {
 	provider: "openai",
 	model: "gpt-4o",
+	toolAbilities: {
+		blockedCommands: DEFAULT_BLOCKED_COMMANDS,
+	},
 };
 
 export const loadConfig = (): WingmanConfig => {
@@ -20,9 +24,7 @@ export const loadConfig = (): WingmanConfig => {
 	}
 
 	if (!fs.existsSync(configPath)) {
-		console.warn(
-			"wingman.config.json not found, using default configuration.",
-		);
+		console.warn("wingman.config.json not found, using default configuration.");
 		return defaultConfig;
 	}
 
@@ -34,13 +36,10 @@ export const loadConfig = (): WingmanConfig => {
 		if (error instanceof ZodError) {
 			console.error(
 				"Invalid configuration in wingman.config.json:",
-				error.errors,
+				error.message,
 			);
 		} else {
-			console.error(
-				"Error reading or parsing wingman.config.json:",
-				error,
-			);
+			console.error("Error reading or parsing wingman.config.json:", error);
 		}
 		return defaultConfig;
 	}

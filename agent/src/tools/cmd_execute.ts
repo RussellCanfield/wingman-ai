@@ -1,4 +1,4 @@
- import { tool } from "@langchain/core/tools";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod/v4";
 import { spawn, type ChildProcess } from "node:child_process";
 import { baseToolSchema } from "./schemas";
@@ -9,7 +9,7 @@ export const commandExecuteSchema = baseToolSchema.extend({
 	command: z.string().describe("The command to execute in the terminal"),
 });
 
-const BLOCKED_COMMANDS = [
+export const DEFAULT_BLOCKED_COMMANDS = [
 	"rm",
 	"remove",
 	"del",
@@ -34,6 +34,7 @@ const BLOCKED_COMMANDS = [
 export const createCommandExecuteTool = (
 	workspace: string,
 	envVariables?: Record<string, string>,
+	blockedCommands: string[] = DEFAULT_BLOCKED_COMMANDS,
 	timeoutInMilliseconds = 60000,
 ) => {
 	return tool(
@@ -45,7 +46,7 @@ export const createCommandExecuteTool = (
 					const baseCommand = commandName.split(/[\\/]/).pop() || "";
 
 					// More precise check for blocked commands
-					if (BLOCKED_COMMANDS.includes(baseCommand)) {
+					if (blockedCommands.includes(baseCommand)) {
 						const command: CommandMetadata = {
 							id: config.runId,
 							command: input.command,

@@ -1,4 +1,5 @@
-import React from "react";
+import type React from "react";
+import { useCallback, useEffect } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import MessageList from "./components/MessageList";
 import UserInput from "./components/UserInput";
@@ -23,10 +24,9 @@ const UI: React.FC = () => {
 	} = useWingman();
 	const { exit } = useApp();
 	const { stdout } = useStdout();
-	const columns = stdout.columns || 80;
 	const rows = stdout.rows || 24;
 
-	React.useEffect(() => {
+	useEffect(() => {
 		uiLogger.info({ event: "mount" }, "UI component mounted");
 
 		const handleExit = () => {
@@ -47,7 +47,7 @@ const UI: React.FC = () => {
 
 	// Global input handler for all shortcuts
 	useInput(
-		React.useCallback(
+		useCallback(
 			(inputChar, key) => {
 				logInputEvent("global_handler_input", {
 					inputChar,
@@ -75,7 +75,9 @@ const UI: React.FC = () => {
 
 					// Handle Ctrl+B to toggle context view
 					if (inputChar === "b") {
-						logInputEvent("context_toggle", { reason: "global_handler_ctrl_b" });
+						logInputEvent("context_toggle", {
+							reason: "global_handler_ctrl_b",
+						});
 						toggleContextView();
 						return;
 					}
@@ -108,7 +110,7 @@ const UI: React.FC = () => {
 	);
 
 	// Log handler registration state
-	React.useEffect(() => {
+	useEffect(() => {
 		uiLogger.debug(
 			{
 				event: "handler_registration",
@@ -135,7 +137,7 @@ const UI: React.FC = () => {
 	const isCompacting = status === Status.Compacting;
 
 	// Log status changes
-	React.useEffect(() => {
+	useEffect(() => {
 		uiLogger.debug(
 			{
 				event: "status_change",
@@ -176,7 +178,11 @@ const UI: React.FC = () => {
 			</Box>
 
 			{/* Fixed Height Footer Section */}
-			<Box flexDirection="column" height={fixedFooterHeight} justifyContent="flex-end">
+			<Box
+				flexDirection="column"
+				height={fixedFooterHeight}
+				justifyContent="flex-end"
+			>
 				{/* Dynamic content within fixed container */}
 				<Box flexDirection="column">
 					{(isThinking || isCompacting) && (

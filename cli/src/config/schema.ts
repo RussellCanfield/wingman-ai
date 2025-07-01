@@ -1,8 +1,25 @@
-import { z } from "zod";
+import {
+	WingmanAgentConfigSchema,
+	DEFAULT_BLOCKED_COMMANDS,
+} from "@wingman-ai/agent";
+import { z } from "zod/v4";
 
-export const WingmanConfigSchema = z.object({
-	provider: z.enum(["openai", "anthropic", "google"]).default("openai"),
-	model: z.string().default("gpt-4.1"),
+const AgentConfig = WingmanAgentConfigSchema.pick({
+	toolAbilities: true,
 });
+
+export const WingmanConfigSchema = AgentConfig.extend({
+	provider: z.union([
+		z.literal("openai"),
+		z.literal("anthropic"),
+		z.literal("google"),
+	]),
+	model: z.string(),
+}).transform((data) => ({
+	...data,
+	toolAbilities: data.toolAbilities || {
+		blockedCommands: DEFAULT_BLOCKED_COMMANDS,
+	},
+}));
 
 export type WingmanConfig = z.infer<typeof WingmanConfigSchema>;

@@ -317,6 +317,9 @@ export function WingmanProvider({
 					instructions: getWingmanInstructions(process.cwd()),
 					mode: "vibe",
 					memory: SqliteSaver.fromConnString("./.wingman/memory.db"),
+					toolAbilities: {
+						blockedCommands: config.toolAbilities?.blockedCommands,
+					},
 				});
 
 				agentLogger.debug({ event: 'agent_created' }, 'WingmanAgent instance created');
