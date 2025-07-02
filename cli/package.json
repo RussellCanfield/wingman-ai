@@ -3,6 +3,7 @@
 	"version": "1.0.0",
 	"main": "dist/index.js",
 	"type": "module",
+	"private": false,
 	"bin": {
 		"wingman": "./bin/wingman"
 	},
