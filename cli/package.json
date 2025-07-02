@@ -8,7 +8,7 @@
 	},
 	"scripts": {
 		"prepack": "npm run build",
-		"build": "rslib build",
+		"build": "NODE_ENV=production rslib build",
 		"dev": "tsx src/index.ts",
 		"test": "vitest"
 	},
@@ -35,7 +35,7 @@
 		"@langchain/openai": "0.5.16",
 		"@langchain/xai": "0.0.3",
 		"@rsbuild/plugin-node-polyfill": "1.3.0",
-		"@wingman-ai/agent": "^1.0.4",
+		"@wingman-ai/agent": "^1.0.5",
 		"@clack/prompts": "^0.8.2",
 		"chalk": "^5.4.1",
 		"clipboardy": "^4.0.0",

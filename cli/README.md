@@ -17,9 +17,13 @@
 ## Introduction
 Wingman CLI is an open source, terminal-based AI coding partner that supports the most popular frontier AI models; such as `Anthropic`, `OpenAI`, or `Google`.
 
+## Local Storage
+Wingman CLI stores all files within a `.wingman` folder of the current working directory.
+
 ## Features
 - **Command Recognition**: The CLI allows users to input commands like `/file`, `/dir`, and `/clear` to manage context.
 - **Context Management**: Users can add files and directories to the context or clear the context using specific commands.
+- **Memory**: Wingman supports a local SQLite instance to preserve chat history. You can `/resume` and `/compact` the conversation.
 
 ## Installation
 To install the Wingman CLI, clone the repository and install the dependencies:
@@ -49,6 +53,18 @@ To configure the Wingman CLI, you should place your configuration file in a `.wi
 }
 ```
 
+## Abilities
+
+Wingman CLI will soon support advanced capabilities, much like the vscode extension does. Here are the currently available features, just add them to your `/.wingman/wingman.config.json` file.
+
+```json
+{
+  toolAbilities: {
+    blockedCommands: ["sudo"]
+  }
+}
+```
+
 ## LangChain Environment Variables
 LangChain supports multiple AI providers. To configure these, set the following environment variables:
 
@@ -68,15 +84,6 @@ export GOOGLE_API_KEY="your-google-api-key"
 ```
 
 Ensure these keys are kept secure and not exposed in your source code.
-
-## Configuration Loader
-The configuration loader is responsible for loading the Wingman CLI configuration. It looks for a `.wingman` directory in the current working directory and expects a `wingman.config.json` file and an optional `.env` file for environment variables.
-
-- **Default Configuration**: If no configuration file is found, a default configuration is used with `provider` set to `openai` and `model` set to `gpt-4o`.
-- **Environment Variables**: If a `.env` file is present, it loads environment variables from it.
-- **Error Handling**: The loader uses `Zod` for schema validation. If the configuration file is invalid, it logs the errors and falls back to the default configuration.
-- **Supplemental Instructions**: The loader can also incorporate supplemental instructions from an `instructions.md` file located in the `.wingman` directory. This file is intended to provide additional guidance or configuration details to the AI agent, enhancing its functionality and adaptability.
-- **Configuration Schema**: The configuration schema includes a `model` which is an instance of `BaseChatModel`, and optional `capabilities` that specify the programming language capabilities such as `typescript`, `javascript`, `python`, `csharp`, or `rust`.
 
 ## Contributing
 We welcome contributions from the community! To contribute, please fork the repository and create a pull request with your changes. Ensure that your code adheres to our coding standards and includes tests where applicable.
