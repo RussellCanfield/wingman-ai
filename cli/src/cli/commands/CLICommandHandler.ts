@@ -4,7 +4,6 @@ import { getPlanningPrompt } from "../../commands/planning.js";
 import { ConversationRetriever } from "../../persistence/conversationManager.js";
 import { logError, agentLogger } from "../../utils/logger.js";
 import type { CLIState } from "../types/CLITypes.js";
-import fs from "node:fs";
 
 export class CLICommandHandler {
 	constructor(
@@ -24,7 +23,7 @@ export class CLICommandHandler {
 			case "/help":
 				this.showHelp();
 				return true;
-			
+
 			case "/file":
 				this.addFileContext(args);
 				return true;
@@ -66,68 +65,40 @@ export class CLICommandHandler {
 
 	private addFileContext(files: string[]) {
 		if (files.length === 0) {
-			log.warn("Please provide at least one file path.");
+			log.warn("Please provide a file path.");
 			return;
 		}
 
-		const addedFiles: string[] = [];
-		for (const file of files) {
-			try {
-				if (fs.existsSync(file)) {
-					if (!this.state.contextFiles.includes(file)) {
-						this.state.contextFiles.push(file);
-						addedFiles.push(file);
-					} else {
-						log.warn(`File '${file}' is already in the context.`);
-					}
-				} else {
-					log.error(`File not found: ${file}`);
-				}
-			} catch (error) {
-				log.error(`Error accessing file '${file}': ${(error as Error).message}`);
-			}
-		}
+		const file = files[0];
+		this.state.contextFiles.push(file);
 
-		if (addedFiles.length > 0) {
-			agentLogger.debug({
-				event: 'context_files_added',
-				files: addedFiles
-			}, `Adding ${addedFiles.length} context files`);
-			log.success(`Added to context: ${addedFiles.join(", ")}`);
-		}
+		agentLogger.debug(
+			{
+				event: "context_files_added",
+				files: [file],
+			},
+			`Adding context file: ${file}`,
+		);
+		log.success(`Added to context: ${file}`);
 	}
 
 	private addDirContext(dirs: string[]) {
 		if (dirs.length === 0) {
-			log.warn("Please provide at least one directory path.");
+			log.warn("Please provide a directory path.");
 			return;
 		}
 
-		const addedDirs: string[] = [];
-		for (const dir of dirs) {
-			try {
-				if (fs.existsSync(dir) && fs.lstatSync(dir).isDirectory()) {
-					if (!this.state.contextDirectories.includes(dir)) {
-						this.state.contextDirectories.push(dir);
-						addedDirs.push(dir);
-					} else {
-						log.warn(`Directory '${dir}' is already in the context.`);
-					}
-				} else {
-					log.error(`Directory not found or is not a directory: ${dir}`);
-				}
-			} catch (error) {
-				log.error(`Error accessing directory '${dir}': ${(error as Error).message}`);
-			}
-		}
+		const dir = dirs[0];
+		this.state.contextDirectories.push(dir);
 
-		if (addedDirs.length > 0) {
-			agentLogger.debug({
-				event: 'context_directories_added',
-				directories: addedDirs
-			}, `Adding ${addedDirs.length} context directories`);
-			log.success(`Added to context: ${addedDirs.join(", ")}`);
-		}
+		agentLogger.debug(
+			{
+				event: "context_directories_added",
+				directories: [dir],
+			},
+			`Adding context directory: ${dir}`,
+		);
+		log.success(`Added to context: ${dir}`);
 	}
 
 	private async initProject() {
@@ -177,37 +148,39 @@ export class CLICommandHandler {
 	}
 
 	private showHelp() {
-		note(
-			// biome-ignore lint/style/useTemplate: <explanation>
-			`${chalk.bold("Available Commands:")}\\n\\n` +
-				`${chalk.cyan("/help")} - Show this help message\\n` +
-				`${chalk.cyan("/file <path>")} - Add a file to the context\\n` +
-				`${chalk.cyan("/dir <path>")} - Add a directory to the context\\n` +
-				`${chalk.cyan("/init")} - Get a comprehensive project analysis prompt\\n` +
-				`${chalk.cyan("/hotkeys")} - Show keyboard shortcuts\\n` +
-				`${chalk.cyan("/resume")} - Resume a previous conversation\\n` +
-				`${chalk.cyan("/compact")} - Compact message history to save tokens\\n` +
-				`${chalk.cyan("/clear")} - Clear context files and directories\\n` +
-				`${chalk.cyan("/status")} - Show current session status\\n` +
-				`${chalk.cyan("/exit")} or ${chalk.cyan("/quit")} - Exit Wingman\\n\\n` +
-				`${chalk.bold("Tips:")}\\n` +
-				`• Use ${chalk.cyan("Ctrl+C")} to exit at any time\\n` +
-				"• Wingman remembers your conversation history\\n" +
-				"• You can reference files and directories in your messages\\n" +
-				`• Use ${chalk.cyan("/init")} to get started with analyzing a new project`,
-			"Wingman Help",
-		);
+		const helpText = `
+${chalk.bold("Available Commands:")}
+
+  ${chalk.cyan("/help")} - Show this help message
+  ${chalk.cyan("/file <path>")} - Add a file to the context
+  ${chalk.cyan("/dir <path>")} - Add a directory to the context
+  ${chalk.cyan("/init")} - Get a comprehensive project analysis prompt
+  ${chalk.cyan("/hotkeys")} - Show keyboard shortcuts
+  ${chalk.cyan("/resume")} - Resume a previous conversation
+  ${chalk.cyan("/compact")} - Compact message history to save tokens
+  ${chalk.cyan("/clear")} - Clear context files and directories
+  ${chalk.cyan("/status")} - Show current session status
+  ${chalk.cyan("/exit")} or ${chalk.cyan("/quit")} - Exit Wingman
+
+${chalk.bold("Tips:")}
+
+  • Use ${chalk.cyan("Ctrl+C")} to exit at any time
+  • Wingman remembers your conversation history
+  • You can reference files and directories in your messages
+  • Use ${chalk.cyan("/init")} to get started with analyzing a new project
+`;
+		note(helpText.trim(), "Wingman Help");
 	}
 
 	private showHotkeys() {
 		note(
-			`${chalk.bold("Keyboard Shortcuts:")}\\n\\n` +
-				`${chalk.cyan("Ctrl+C")} - Exit Wingman\\n` +
-				`${chalk.cyan("Enter")} - Send message\\n` +
-				`${chalk.cyan("↑/↓")} - Navigate command history (if supported)\\n\\n` +
-				`${chalk.bold("Command Shortcuts:")}\\n` +
-				`${chalk.cyan("/h")} - Same as /help\\n` +
-				`${chalk.cyan("/q")} - Same as /quit\\n` +
+			`${chalk.bold("Keyboard Shortcuts:")}\n\n` +
+				`${chalk.cyan("Ctrl+C")} - Exit Wingman\n` +
+				`${chalk.cyan("Enter")} - Send message\n` +
+				`${chalk.cyan("↑/↓")} - Navigate command history (if supported)\n\n` +
+				`${chalk.bold("Command Shortcuts:")}\n` +
+				`${chalk.cyan("/h")} - Same as /help\n` +
+				`${chalk.cyan("/q")} - Same as /quit\n` +
 				`${chalk.cyan("/r")} - Same as /resume`,
 			"Keyboard Shortcuts",
 		);
@@ -280,11 +253,6 @@ export class CLICommandHandler {
 			return;
 		}
 
-		if (this.state.messages.length < 5) {
-			log.info("Not enough messages to compact");
-			return;
-		}
-
 		const shouldCompact = await confirm({
 			message: `Compact ${this.state.messages.length} messages to save tokens?`,
 			initialValue: true,
@@ -326,7 +294,7 @@ export class CLICommandHandler {
 			`Input Tokens: ${chalk.cyan(this.state.inputTokens.toLocaleString())}`,
 			`Output Tokens: ${chalk.cyan(this.state.outputTokens.toLocaleString())}`,
 			`Total Tokens: ${chalk.cyan((this.state.inputTokens + this.state.outputTokens).toLocaleString())}`,
-		].join("\\n");
+		].join("\n");
 
 		note(status, "Session Status");
 	}

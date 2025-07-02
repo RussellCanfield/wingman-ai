@@ -50,7 +50,10 @@ export class ConversationRetriever {
 					if (agentMessages.length > 0) {
 						// Use first message content as title (truncated)
 						const firstMessage = agentMessages[0];
-						if (firstMessage?.kwargs?.content) {
+						if (
+							firstMessage?.kwargs?.content &&
+							typeof firstMessage.kwargs.content === "string"
+						) {
 							title =
 								firstMessage.kwargs.content.substring(0, 50) +
 								(firstMessage.kwargs.content.length > 50 ? "..." : "");

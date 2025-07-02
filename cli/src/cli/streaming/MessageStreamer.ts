@@ -1,10 +1,11 @@
 import { spinner, note, log } from "@clack/prompts";
 import chalk from "chalk";
 import { v4 as uuidv4 } from "uuid";
-import type {
-	WingmanAgent,
-	WingmanGraphState,
-	WingmanRequest,
+import {
+	getContextWindow,
+	type WingmanAgent,
+	type WingmanGraphState,
+	type WingmanRequest,
 } from "@wingman-ai/agent";
 import {
 	AIMessage,
@@ -13,14 +14,15 @@ import {
 	type BaseMessage,
 } from "@langchain/core/messages";
 import { agentLogger, logPerformance } from "../../utils/logger.js";
-import type { StreamingState } from "../types/CLITypes.js";
+import type { CLIState } from "../types/CLITypes.js";
 import type { ToolCall } from "@langchain/core/messages/tool";
 import { getToolDisplay } from "./tools/index.js";
+import { getModelContextSize } from "@langchain/core/language_models/base";
 
 export class MessageStreamer {
 	constructor(
 		private agent: WingmanAgent,
-		private state: StreamingState,
+		private state: CLIState,
 	) {}
 
 	async streamResponse(request: WingmanRequest): Promise<void> {
@@ -118,9 +120,12 @@ export class MessageStreamer {
 						`Tool message ${toolCallCount} received`,
 					);
 
-					s.message(
-						`Executing tool - ${toolCall ? getToolDisplay(toolCall) : "Unknown tool"}...`,
-					);
+					this.state.messages.push({
+						id: uuidv4(),
+						type: "tool" as const,
+						content: `Executing tool - ${toolCall ? getToolDisplay(toolCall) : "Unknown tool"}...`,
+						timestamp: new Date(),
+					});
 				}
 			}
 
@@ -156,6 +161,20 @@ export class MessageStreamer {
 		} catch (error) {
 			s.stop(chalk.red("Error occurred"));
 			throw error;
+		}
+
+		// if we are within 80% of the model's context size, log a warning
+		const contextSize =
+			getContextWindow(this.state.model) ??
+			getModelContextSize(this.state.model);
+		const totalTokens = this.state.inputTokens + this.state.outputTokens;
+		const usagePercentage = (totalTokens / contextSize) * 100;
+		if (usagePercentage >= 80) {
+			log.warn(
+				`You are using ${chalk.yellow(
+					Math.round(usagePercentage),
+				)}% of the model's context size (${contextSize} tokens). Consider compacting messages or clearing context to avoid issues.`,
+			);
 		}
 
 		// Add some spacing for readability

@@ -103,8 +103,8 @@ export class CLIInitializer {
 				`${chalk.bold("Available Commands:")}\n` +
 				`• ${chalk.cyan("/help")} - Show available commands\n` +
 				`• ${chalk.cyan("/init")} - Get a comprehensive project analysis\n` +
-				`• ${chalk.cyan("/file <path>")} - Add a file to the context\\n` +
-				`• ${chalk.cyan("/dir <path>")} - Add a directory to the context\\n` +
+				`• ${chalk.cyan("/file <path>")} - Add a file to the context\n` +
+				`• ${chalk.cyan("/dir <path>")} - Add a directory to the context\n` +
 				`• ${chalk.cyan("/hotkeys")} - Show keyboard shortcuts\n` +
 				`• ${chalk.cyan("/resume")} - Resume previous conversation\n` +
 				`• ${chalk.cyan("/compact")} - Compact message history\n` +

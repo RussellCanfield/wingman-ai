@@ -1,8 +1,8 @@
-import { WingmanAgent } from "@wingman-ai/agent";
+import type { WingmanAgent } from "@wingman-ai/agent";
 
 export interface Message {
 	id: string;
-	type: 'human' | 'ai' | 'system' | 'tool';
+	type: "human" | "ai" | "system" | "tool";
 	content: string;
 	toolCalls?: any[];
 	timestamp?: Date;
@@ -17,10 +17,4 @@ export interface CLIState {
 	inputTokens: number;
 	outputTokens: number;
 	model: string;
-}
-
-export interface StreamingState {
-	inputTokens: number;
-	outputTokens: number;
-	messages: Message[];
 }
