@@ -3,81 +3,51 @@ import { memo } from "react";
 import { Box, Text } from "ink";
 import Markdown from "./Markdown";
 import { Spinner } from "./Spinner";
-import { ReadFileTool } from "./tools/ReadFileTool";
-import { ListDirectoryTool } from "./tools/ListDirectory";
-import { CommandExecuteTool } from "./tools/CommandExecuteTool";
-import { EditFileTool } from "./tools/EditFileTool";
+import { ReadFileTool } from "../cli/streaming/tools/ReadFileTool";
+import { ListDirectoryTool } from "../cli/streaming/tools/ListDirectory";
+import { CommandExecuteTool } from "../cli/streaming/tools/CommandExecuteTool";
+import { EditFileTool } from "../cli/streaming/tools/EditFileTool";
 import type { Message } from "src/contexts/types";
-import { WebSearchTool } from "./tools/WebSearch";
+import { WebSearchTool } from "../cli/streaming/tools/WebSearch";
 
 interface Props {
 	messages: Message[];
 }
 
 const UserMessage: React.FC<{ content: string }> = ({ content }) => (
-	<Box flexDirection="column" marginBottom={0.5}>
-		<Box paddingX={-0.5} paddingY={0.5}>
+	<Box flexDirection="column" marginBottom={2}>
+		<Box marginBottom={1}>
 			<Text color="green" bold>
-				{" "}
-				You{" "}
+				▶ You
 			</Text>
 		</Box>
-		<Box
-			borderLeft
-			borderTop={false}
-			borderRight={false}
-			borderBottom={false}
-			borderColor="green"
-			borderStyle="bold"
-			paddingX={2}
-			paddingY={1}
-		>
+		<Box paddingLeft={2}>
 			<Text color="white">{content}</Text>
 		</Box>
 	</Box>
 );
 
 const AssistantMessage: React.FC<{ content: string }> = ({ content }) => (
-	<Box flexDirection="column" marginBottom={0.5}>
-		<Box paddingX={-0.5} paddingY={0.5}>
+	<Box flexDirection="column" marginBottom={2}>
+		<Box marginBottom={1}>
 			<Text color="blue" bold>
-				{" "}
-				Wingman{" "}
+				▶ Wingman
 			</Text>
 		</Box>
-		<Box
-			borderLeft
-			borderTop={false}
-			borderRight={false}
-			borderBottom={false}
-			borderColor="blue"
-			borderStyle="bold"
-			paddingX={2}
-			paddingY={1}
-		>
+		<Box paddingLeft={2}>
 			<Markdown>{content}</Markdown>
 		</Box>
 	</Box>
 );
 
 const ToolMessage: React.FC<{ msg: Message }> = ({ msg }) => (
-	<Box flexDirection="column" marginBottom={0.5}>
-		<Box paddingX={-0.5} paddingY={0.5}>
+	<Box flexDirection="column" marginBottom={2}>
+		<Box marginBottom={1}>
 			<Text color="gray" bold>
-				{" "}
-				Tool{" "}
+				▶ Tool
 			</Text>
 		</Box>
-		<Box
-			borderLeft
-			borderTop={false}
-			borderRight={false}
-			borderBottom={false}
-			borderColor="gray"
-			borderStyle="bold"
-			paddingX={2}
-			paddingY={1}
-		>
+		<Box paddingLeft={2}>
 			<ToolHandler msg={msg} />
 		</Box>
 	</Box>
@@ -144,12 +114,34 @@ const MessageItem: React.FC<{ msg: Message }> = ({ msg }) => {
 
 export const MemoizedMessageItem = memo(MessageItem);
 
-const MessageList: React.FC<Props> = ({ messages }) => (
-	<Box flexDirection="column" gap={0.5}>
-		{messages.map((msg) => (
-			<MemoizedMessageItem key={msg.id} msg={msg} />
-		))}
-	</Box>
-);
+const MessageList: React.FC<Props> = ({ messages }) => {
+	if (messages.length === 0) {
+		return (
+			<Box justifyContent="center" alignItems="center" paddingY={4}>
+				<Text color="gray" dimColor>
+					Welcome! Ask me anything to get started.
+				</Text>
+			</Box>
+		);
+	}
+
+	return (
+		<Box flexDirection="column" paddingY={1}>
+			{messages.map((msg, index) => (
+				<Box key={msg.id}>
+					<MemoizedMessageItem msg={msg} />
+					{/* Add separator between messages except for the last one */}
+					{index < messages.length - 1 && (
+						<Box marginBottom={1}>
+							<Text color="gray" dimColor>
+								{"─".repeat(60)}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			))}
+		</Box>
+	);
+};
 
 export default memo(MessageList);

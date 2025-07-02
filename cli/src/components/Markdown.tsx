@@ -35,7 +35,7 @@ const defaultTheme = {
       chalk.red.bold,
     ];
     const colorFn = colors[level - 1] || chalk.white.bold;
-    const markers = ["▓▓▓", "▓▓", "▓", "▸", "▸", "▸"];
+    const markers = ["##", "##", "#", "▸", "▸", "▸"];
     const marker = markers[level - 1] || "▸";
     return `${colorFn(`${marker} ${text}`)}`;
   },
@@ -43,11 +43,11 @@ const defaultTheme = {
   em: (text: string): string => chalk.italic.cyan(text),
   code: (text: string): string => chalk.bgGray.black(` ${text} `),
   codespan: (text: string): string => chalk.bgGray.black(` ${text} `),
-  listitem: (text: string): string => `${chalk.cyan("▸")} ${text}`,
+  listitem: (text: string): string => `• ${text}`,
   link: (text: string, href: string): string =>
-    `${chalk.blue.underline(text)} ${chalk.dim.gray(`→ ${href}`)}`,
+    `${chalk.blue.underline(text)} ${chalk.dim.gray(`(${href})`)}`,
   blockquote: (text: string): string => chalk.yellow.italic(`▐ ${text}`),
-  hr: (): string => chalk.dim("━".repeat(60)),
+  hr: (): string => chalk.dim("─".repeat(50)),
 };
 
 const renderInlineTokens = (
@@ -96,11 +96,11 @@ const renderMarkdownToString = (
   const renderToken = (token: any): string => {
     switch (token.type) {
       case "heading":
-        return `\n${theme.heading(token.text, token.depth)}\n\n`;
+        return `\n${theme.heading(token.text, token.depth)}\n`;
 
       case "paragraph": {
         const paragraphText = renderInlineTokens(token.tokens, theme);
-        return `${paragraphText}\n\n`;
+        return `${paragraphText}\n`;
       }
       case "list": {
         const listItems = token.items
@@ -128,7 +128,7 @@ const renderMarkdownToString = (
             return `  ${theme.listitem(itemText)}`;
           })
           .join("\n");
-        return `${listItems}\n\n`;
+        return `${listItems}\n`;
       }
       case "code": {
         const lines = token.text.split("\n");
@@ -158,7 +158,7 @@ const renderMarkdownToString = (
           `└${"─".repeat(lineNumWidth + 2)}┘`,
         );
 
-        return `\n${chalk.dim("┌─ ")}${langLabel}\n${formattedLines.join("\n")}\n${bottomBorder}\n\n`;
+        return `\n${chalk.dim("┌─ ")}${langLabel}\n${formattedLines.join("\n")}\n${bottomBorder}\n`;
       }
       case "blockquote": {
         const quoteText = token.tokens
@@ -171,11 +171,11 @@ const renderMarkdownToString = (
         const quotedLines = quoteLines.map(
           (line: string) => `  ${theme.blockquote(line.trim())}`,
         );
-        return `\n${quotedLines.join("\n")}\n\n`;
+        return `\n${quotedLines.join("\n")}\n`;
       }
 
       case "hr": {
-        return `\n${theme.hr()}\n\n`;
+        return `\n${theme.hr()}\n`;
       }
       case "space": {
         return "\n";

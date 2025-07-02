@@ -1,9 +1,9 @@
 import type React from "react";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Box, Text, useInput, useStdin } from "ink";
+import { Box, Text, useInput, useStdin, useStdout } from "ink";
 import type { WingmanRequest } from "@wingman-ai/agent";
 import { useWingman } from "../contexts/WingmanContext";
-import { inputLogger, logInputEvent } from "../utils/logger";
+import { inputLogger } from "../utils/logger";
 import os from "node:os";
 
 interface Props {
@@ -40,6 +40,7 @@ const UserInput: React.FC<Props> = ({
 	const isMac = os.platform() === "darwin";
 	const [showCursor, setShowCursor] = useState(true);
 	const { stdin, setRawMode } = useStdin();
+	const { stdout } = useStdout();
 
 	// Use refs to track state without causing re-renders
 	const isActiveRef = useRef(!isThinking);
@@ -67,7 +68,7 @@ const UserInput: React.FC<Props> = ({
 		}
 	}, [isThinking, setRawMode]);
 
-	// Optimized keyboard event handling for Home/End keys
+	// Enhanced keyboard event handling for Home/End keys
 	useEffect(() => {
 		const handleData = (data: Buffer) => {
 			if (!isActiveRef.current) return;
@@ -91,27 +92,25 @@ const UserInput: React.FC<Props> = ({
 		}
 	}, [stdin, isThinking, input.length]);
 
-	// Reduced logging frequency
+	// Minimal logging - only in development with debug flag
 	useEffect(() => {
-		if (process.env.NODE_ENV === 'development') {
+		if (process.env.NODE_ENV === 'development' && process.env.DEBUG_INPUT) {
 			inputLogger.debug({
 				event: 'handler_state_change',
 				isActive: !isThinking,
 				isThinking,
-				reason: isThinking ? 'thinking_mode' : 'input_mode'
 			}, `Input handler ${!isThinking ? 'activated' : 'deactivated'}`);
 		}
 	}, [isThinking]);
 
-	// Optimized cursor position sync
+	// Optimized cursor position sync with bounds checking
 	useEffect(() => {
 		if (cursorPosition > input.length) {
-			const newPos = input.length;
-			setCursorPosition(newPos);
+			setCursorPosition(input.length);
 		}
 	}, [input.length, cursorPosition]);
 
-	// Optimized cursor blinking - slower interval and better cleanup
+	// Optimized cursor blinking - slower and only when active
 	useEffect(() => {
 		// Clear any existing timer
 		if (cursorTimerRef.current) {
@@ -130,7 +129,7 @@ const UserInput: React.FC<Props> = ({
 			if (isActiveRef.current) {
 				setShowCursor((v) => !v);
 			}
-		}, 800); // Increased from 500ms to 800ms
+		}, 1000); // Reduced frequency
 
 		return () => {
 			if (cursorTimerRef.current) {
@@ -142,10 +141,9 @@ const UserInput: React.FC<Props> = ({
 
 	const handleOnSubmit = useCallback(
 		(value: string) => {
-			if (process.env.NODE_ENV === 'development') {
+			if (process.env.NODE_ENV === 'development' && process.env.DEBUG_INPUT) {
 				inputLogger.info({
 					event: 'submit',
-					value,
 					length: value.length
 				}, 'Submitting user input');
 			}
@@ -225,8 +223,7 @@ const UserInput: React.FC<Props> = ({
 		[clearContext, onSubmit, setInput],
 	);
 
-	// Optimized input handler with reduced logging
-	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+	// Simplified input handler that relies on Ink's built-in paste handling
 	const inputHandler = useCallback(
 		(inputChar: string, key: any) => {
 			// Let global handler process shortcuts
@@ -244,14 +241,12 @@ const UserInput: React.FC<Props> = ({
 
 			// Handle arrow key navigation
 			if (key.leftArrow) {
-				const newPos = Math.max(0, cursorPosition - 1);
-				setCursorPosition(newPos);
+				setCursorPosition(Math.max(0, cursorPosition - 1));
 				return;
 			}
 
 			if (key.rightArrow) {
-				const newPos = Math.min(input.length, cursorPosition + 1);
-				setCursorPosition(newPos);
+				setCursorPosition(Math.min(input.length, cursorPosition + 1));
 				return;
 			}
 
@@ -276,12 +271,22 @@ const UserInput: React.FC<Props> = ({
 			}
 
 			// Handle regular character input AND paste operations
+			// Ink automatically handles paste by calling this once with the entire pasted string
 			if (inputChar && inputChar.length > 0 && !key.ctrl && !key.meta) {
 				const newInput = input.slice(0, cursorPosition) + inputChar + input.slice(cursorPosition);
 				const newCursorPosition = cursorPosition + inputChar.length;
 
 				setInput(newInput);
 				setCursorPosition(newCursorPosition);
+
+				// Log large paste operations for debugging
+				if (process.env.NODE_ENV === 'development' && process.env.DEBUG_INPUT && inputChar.length > 10) {
+					inputLogger.info({
+						event: 'paste_detected',
+						pastedLength: inputChar.length,
+						newInputLength: newInput.length
+					}, 'Large paste operation handled by Ink');
+				}
 				return;
 			}
 		},
@@ -291,7 +296,6 @@ const UserInput: React.FC<Props> = ({
 			setInput,
 			handleOnSubmit,
 			cursorPosition,
-			isThinking,
 		],
 	);
 
@@ -327,23 +331,60 @@ const UserInput: React.FC<Props> = ({
 		}
 	}, [commandSuggestions, showCommands]);
 
-	// Heavily optimized rendered input with better memoization
+	// Calculate available width for input display
+	const terminalWidth = stdout.columns || 80;
+	// Account for border (2 chars) + padding (2 chars) + some margin
+	const availableWidth = Math.max(40, terminalWidth - 6);
+
+	// Simple single-line input display with generous horizontal scrolling
 	const renderedInput = useMemo(() => {
 		if (input.length === 0) {
 			return showCursor && !isThinking ? <Text color="blue">█</Text> : <Text> </Text>;
 		}
 
-		const beforeCursor = input.slice(0, cursorPosition);
-		const afterCursor = input.slice(cursorPosition);
+		// If input fits in available width, show it all
+		if (input.length <= availableWidth) {
+			const beforeCursor = input.slice(0, cursorPosition);
+			const afterCursor = input.slice(cursorPosition);
+
+			return (
+				<Text>
+					{beforeCursor}
+					{showCursor && !isThinking && <Text color="blue">█</Text>}
+					{afterCursor}
+				</Text>
+			);
+		}
+
+		// For long inputs, show a generous window around the cursor
+		// Use 80% of available width for the window, leaving 20% buffer
+		const windowSize = Math.floor(availableWidth * 0.8);
+		const halfWindow = Math.floor(windowSize / 2);
+
+		let start = Math.max(0, cursorPosition - halfWindow);
+		const end = Math.min(input.length, start + windowSize);
+
+		// Adjust start if we're near the end to maximize visible content
+		if (end - start < windowSize) {
+			start = Math.max(0, end - windowSize);
+		}
+
+		const windowText = input.slice(start, end);
+		const adjustedCursorPos = cursorPosition - start;
+
+		const beforeCursor = windowText.slice(0, adjustedCursorPos);
+		const afterCursor = windowText.slice(adjustedCursorPos);
 
 		return (
-			<>
-				<Text>{beforeCursor}</Text>
+			<Text>
+				{start > 0 && "…"}
+				{beforeCursor}
 				{showCursor && !isThinking && <Text color="blue">█</Text>}
-				<Text>{afterCursor}</Text>
-			</>
+				{afterCursor}
+				{end < input.length && "…"}
+			</Text>
 		);
-	}, [input, cursorPosition, showCursor, isThinking]);
+	}, [input, cursorPosition, showCursor, isThinking, availableWidth]);
 
 	// Memoized command display
 	const commandDisplay = useMemo(() => {
@@ -376,6 +417,13 @@ const UserInput: React.FC<Props> = ({
 			<Box borderStyle="round" borderColor="gray" paddingX={1}>
 				{renderedInput}
 			</Box>
+			{input.length > availableWidth && (
+				<Box>
+					<Text color="gray" dimColor>
+						{input.length.toLocaleString()} characters • Position {cursorPosition + 1}
+					</Text>
+				</Box>
+			)}
 		</Box>
 	);
 };

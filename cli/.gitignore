@@ -3,3 +3,4 @@ bin/*
 sample_project
 .wingman/*
 !.wingman/wingman.config.json
+*.tgz

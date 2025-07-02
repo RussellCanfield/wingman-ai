@@ -125,13 +125,6 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 				// Validate input early
 				const validatedInput = writeFileSchema.parse(input);
 
-				console.log("Write file tool input:", {
-					path: validatedInput.path,
-					contentsType: typeof validatedInput.contents,
-					contentsLength: validatedInput.contents?.length ?? 0,
-					hasContents: validatedInput.contents !== undefined,
-				});
-
 				const file: FileMetadata = await generateFileMetadata(
 					workspace,
 					config.toolCall.id,
@@ -183,7 +176,7 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 		{
 			name: "edit_file",
 			description:
-				"Edit or write a file to the file system, use this tool when you need to create or edit a file. The contents need to be the full file contents, do not omit any code for the file.",
+				"Edit or write a file to the file system, use this tool when you need to create or edit a file. The contents need to be the full file contents, do not omit any code for the file. The contents can NEVER be empty or blank.",
 			schema: writeFileSchema,
 			returnDirect: false,
 		},

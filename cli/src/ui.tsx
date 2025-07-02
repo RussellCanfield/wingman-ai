@@ -4,6 +4,8 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import MessageList from "./components/MessageList";
 import UserInput from "./components/UserInput";
 import ScrollableArea from "./components/ScrollableArea";
+import CompactHeader from "./components/CompactHeader";
+import TerminalSizeWarning from "./components/TerminalSizeWarning";
 import { wingmanArt } from "./art";
 import { useWingman } from "./contexts/WingmanContext";
 import StatusBar from "./components/StatusBar";
@@ -11,6 +13,7 @@ import type { WingmanRequest } from "@wingman-ai/agent";
 import { Status } from "./contexts/types";
 import { uiLogger, logInputEvent } from "./utils/logger";
 import { Spinner } from "./components/Spinner";
+import { calculateLayout, validateLayout, getTerminalSizeMessage } from "./utils/layout";
 
 const UI: React.FC = () => {
 	const {
@@ -26,8 +29,18 @@ const UI: React.FC = () => {
 	const { stdout } = useStdout();
 	const rows = stdout.rows || 24;
 
+	// Calculate responsive layout dimensions
+	const layout = calculateLayout(rows);
+	const layoutValidation = validateLayout(layout);
+	const terminalSizeMessage = getTerminalSizeMessage(rows);
+
 	useEffect(() => {
-		uiLogger.info({ event: "mount" }, "UI component mounted");
+		uiLogger.info({ 
+			event: "mount",
+			terminalRows: rows,
+			layout,
+			layoutValidation,
+		}, "UI component mounted with responsive layout");
 
 		const handleExit = () => {
 			uiLogger.info(
@@ -43,7 +56,18 @@ const UI: React.FC = () => {
 			process.off("SIGINT", handleExit);
 			uiLogger.info({ event: "unmount" }, "UI component unmounted");
 		};
-	}, [exit]);
+	}, [exit, rows, layout, layoutValidation]);
+
+	// Log layout warnings
+	useEffect(() => {
+		if (layoutValidation.warnings.length > 0) {
+			uiLogger.warn({
+				event: "layout_warnings",
+				warnings: layoutValidation.warnings,
+				layout,
+			}, "Layout validation warnings detected");
+		}
+	}, [layoutValidation, layout]);
 
 	// Global input handler for all shortcuts
 	useInput(
@@ -151,36 +175,75 @@ const UI: React.FC = () => {
 		);
 	}, [status, isThinking, isExecutingTool, isIdle, isCompacting]);
 
-	// Fixed layout heights to prevent resizing
-	const headerHeight = 30; // ASCII art (7) + subtitle (1) + margins (2)
-	const fixedFooterHeight = 8; // Reserve space for max possible footer: UserInput (4) + StatusBar (4) + margins (2)
-	const availableHeight = Math.max(8, rows - headerHeight - fixedFooterHeight);
+	// Handle extremely small terminals
+	if (!layout.minTerminalMet) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Box>
+					<Text color="red" bold>
+						⚠️  Terminal Too Small
+					</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text>
+						Current: {rows} rows
+					</Text>
+				</Box>
+				<Box>
+					<Text>
+						Minimum: 15 rows required
+					</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text color="gray">
+						Please resize your terminal window
+					</Text>
+				</Box>
+			</Box>
+		);
+	}
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{/* Fixed Header Section */}
-			<Box>
-				<Text>{wingmanArt}</Text>
-			</Box>
-			<Box>
-				<Text color="blue">Your AI-powered partner</Text>
+			{/* Terminal size warning if needed */}
+			{terminalSizeMessage && (
+				<TerminalSizeWarning 
+					message={terminalSizeMessage}
+					isError={!layoutValidation.isValid}
+				/>
+			)}
+
+			{/* Responsive Header Section */}
+			<Box height={layout.headerHeight}>
+				{layout.showFullHeader ? (
+					<Box flexDirection="column">
+						<Box>
+							<Text>{wingmanArt}</Text>
+						</Box>
+						<Box>
+							<Text color="blue">Your AI-powered partner</Text>
+						</Box>
+					</Box>
+				) : (
+					<CompactHeader showFullHeader={false} />
+				)}
 			</Box>
 
-			{/* Fixed Height Scrollable Message Area */}
-			<Box marginTop={1}>
+			{/* Responsive Scrollable Message Area */}
+			<Box marginTop={layout.isCompact ? 0 : 1}>
 				<ScrollableArea
-					height={availableHeight}
+					height={layout.availableHeight}
 					autoScroll={true}
-					showScrollIndicators={true}
+					showScrollIndicators={!layout.isCompact}
 				>
 					<MessageList messages={messages} />
 				</ScrollableArea>
 			</Box>
 
-			{/* Fixed Height Footer Section */}
+			{/* Responsive Footer Section */}
 			<Box
 				flexDirection="column"
-				height={fixedFooterHeight}
+				height={layout.footerHeight}
 				justifyContent="flex-end"
 			>
 				{/* Dynamic content within fixed container */}
@@ -198,7 +261,8 @@ const UI: React.FC = () => {
 							isThinking={isThinking || isExecutingTool || isCompacting}
 						/>
 					)}
-					<StatusBar />
+					{/* Only show StatusBar if we have enough space */}
+					{!layout.isCompact && <StatusBar />}
 				</Box>
 			</Box>
 		</Box>

@@ -79,7 +79,9 @@ export const generateFileMetadata = async (
 ) => {
 	// Validate input before processing
 	if (!input.contents && input.contents !== "") {
-		throw new Error(`File contents are required but received: ${typeof input.contents}`);
+		throw new Error(
+			`File contents are required but received: ${typeof input.contents}`,
+		);
 	}
 
 	if (!input.path) {
@@ -120,13 +122,6 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 			try {
 				// Validate input early
 				const validatedInput = writeFileSchema.parse(input);
-				
-				console.log("Write file tool input:", {
-					path: validatedInput.path,
-					contentsType: typeof validatedInput.contents,
-					contentsLength: validatedInput.contents?.length ?? 0,
-					hasContents: validatedInput.contents !== undefined
-				});
 
 				const file: FileMetadata = await generateFileMetadata(
 					workspace,
@@ -144,7 +139,10 @@ export const createWriteFileTool = (workspace: string, autoCommit = false) => {
 					}
 
 					if (file.code) {
-						await promises.writeFile(path.join(workspace, file.path), file.code);
+						await promises.writeFile(
+							path.join(workspace, file.path),
+							file.code,
+						);
 					} else {
 						throw new Error("File code is undefined, cannot write file");
 					}

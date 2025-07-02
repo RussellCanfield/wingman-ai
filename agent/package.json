@@ -2,7 +2,7 @@
 	"name": "@wingman-ai/agent",
 	"displayName": "Wingman Agent",
 	"description": "Wingman-AI agentic coding assistant that works with Anthropic, OpenAI, Google, Azure and Ollama",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"main": "index.js",
 	"private": false,
 	"license": "MIT",
