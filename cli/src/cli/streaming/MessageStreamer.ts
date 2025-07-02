@@ -120,12 +120,11 @@ export class MessageStreamer {
 						`Tool message ${toolCallCount} received`,
 					);
 
-					this.state.messages.push({
-						id: uuidv4(),
-						type: "tool" as const,
-						content: `Executing tool - ${toolCall ? getToolDisplay(toolCall) : "Unknown tool"}...`,
-						timestamp: new Date(),
-					});
+					log.message(
+						chalk.gray(
+							`Executed tool - ${toolCall ? getToolDisplay(toolCall) : "Unknown tool"}`,
+						),
+					);
 				}
 			}
 
