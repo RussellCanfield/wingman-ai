@@ -3,6 +3,6 @@
     "wingman": "wingman"
   },
   "dependencies": {
-    "@wingman-ai/cli": "file:../cli/wingman-ai-cli-1.0.0.tgz"
+    "@wingman-ai/cli": "^1.0.0"
   }
 }
