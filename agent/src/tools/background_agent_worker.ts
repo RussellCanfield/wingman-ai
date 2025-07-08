@@ -175,45 +175,145 @@ class BackgroundAgentWorker {
 		}
 	}
 
-	private async createPullRequest(
+	/**
+	 * Try to get GitHub authentication token from various sources
+	 */
+	private async getGitHubToken(): Promise<string | undefined> {
+		// 1. Check environment variables (most common)
+		const envTokens = [
+			process.env.GITHUB_TOKEN,
+			process.env.GH_TOKEN,
+			process.env.GITHUB_PAT,
+			process.env.GH_PAT,
+		];
+
+		for (const token of envTokens) {
+			if (token) {
+				console.log("[BackgroundWorker] Found GitHub token in environment");
+				return token;
+			}
+		}
+
+		// 2. Try to get token from GitHub CLI if available
+		try {
+			const { stdout } = await execAsync("gh auth token", {
+				cwd: this.config.repoPath,
+			});
+			const token = stdout.trim();
+			if (token) {
+				console.log("[BackgroundWorker] Found GitHub token from gh CLI");
+				return token;
+			}
+		} catch (error) {
+			// GitHub CLI not available or not authenticated
+		}
+
+		// 3. Try to extract from git config (less common but possible)
+		try {
+			const { stdout } = await execAsync(
+				"git config --get github.token",
+				{
+					cwd: this.config.repoPath,
+				}
+			);
+			const token = stdout.trim();
+			if (token) {
+				console.log("[BackgroundWorker] Found GitHub token in git config");
+				return token;
+			}
+		} catch (error) {
+			// No token in git config
+		}
+
+		console.warn("[BackgroundWorker] No GitHub token found in any location");
+		return undefined;
+	}
+
+	/**
+	 * Parse GitHub repository information from remote URL
+	 */
+	private parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | null {
+		// Handle both HTTPS and SSH URLs
+		const httpsMatch = remoteUrl.match(/github\.com[/:]([\w-]+)\/([\w-]+)(?:\.git)?/);
+		if (httpsMatch) {
+			return { owner: httpsMatch[1], repo: httpsMatch[2] };
+		}
+		return null;
+	}
+
+	/**
+	 * Create pull request using Octokit (GitHub API)
+	 */
+	private async createGitHubPullRequestWithOctokit(
 		worktreeBranch: string,
 		changedFiles: string[],
 		repoRoot: string,
 	): Promise<string | undefined> {
 		try {
-			// Get remote URL to determine the platform (GitHub, GitLab, etc.)
-			const { stdout: remoteUrl } = await execAsync(
-				"git remote get-url origin",
-				{
-					cwd: repoRoot,
-				},
-			);
+			// Dynamic import to avoid requiring @octokit/rest if not needed
+			const { Octokit } = await import("@octokit/rest");
 
-			const cleanUrl = remoteUrl.trim();
-
-			// Check if it's a GitHub repository
-			if (cleanUrl.includes("github.com")) {
-				return await this.createGitHubPullRequest(
-					worktreeBranch,
-					changedFiles,
-					repoRoot,
-				);
+			const token = await this.getGitHubToken();
+			if (!token) {
+				console.warn("[BackgroundWorker] No GitHub token available for Octokit");
+				return undefined;
 			}
 
-			// Add support for other platforms here (GitLab, Bitbucket, etc.)
-			console.warn(
-				`[BackgroundWorker] Pull request creation not supported for: ${cleanUrl}`,
+			// Get remote URL and parse repository info
+			const { stdout: remoteUrl } = await execAsync(
+				"git remote get-url origin",
+				{ cwd: repoRoot }
 			);
-			return undefined;
+
+			const repoInfo = this.parseGitHubRepo(remoteUrl.trim());
+			if (!repoInfo) {
+				console.warn("[BackgroundWorker] Could not parse GitHub repository info");
+				return undefined;
+			}
+
+			const octokit = new Octokit({ auth: token });
+
+			// Format changed files for PR body
+			const changedFilesText =
+				changedFiles.length > 0
+					? changedFiles.map((file) => `- ${file}`).join("\n")
+					: "No files changed";
+
+			// Replace placeholders in PR title and body
+			const title = this.config.config.backgroundAgentConfig.pullRequestTitle
+				.replace("{agentName}", this.config.agentName)
+				.replace("{input}", this.config.input);
+
+			const body = this.config.config.backgroundAgentConfig.pullRequestBody
+				.replace("{agentName}", this.config.agentName)
+				.replace("{input}", this.config.input)
+				.replace("{changedFiles}", changedFilesText);
+
+			// Create the pull request
+			const response = await octokit.rest.pulls.create({
+				owner: repoInfo.owner,
+				repo: repoInfo.repo,
+				title,
+				body,
+				head: worktreeBranch,
+				base: this.config.mainBranch,
+			});
+
+			const prUrl = response.data.html_url;
+			console.log(`[BackgroundWorker] Created pull request via Octokit: ${prUrl}`);
+			return prUrl;
 		} catch (error) {
 			console.error(
-				`[BackgroundWorker] Failed to create pull request: ${error}`,
+				`[BackgroundWorker] Failed to create GitHub pull request via Octokit: ${error}`,
 			);
 			return undefined;
 		}
 	}
 
-	private async createGitHubPullRequest(
+	/**
+	 * Create pull request using GitHub CLI
+	 */
+	private async createGitHubPullRequestWithCLI(
 		worktreeBranch: string,
 		changedFiles: string[],
 		repoRoot: string,
@@ -241,18 +341,80 @@ class BackgroundAgentWorker {
 			// Create the pull request
 			const { stdout } = await execAsync(
 				`gh pr create --title "${title}" --body "${body}" --head ${worktreeBranch} --base ${this.config.mainBranch}`,
-				{ cwd: repoRoot },
+				{ cwd: repoRoot }
 			);
 
 			const prUrl = stdout.trim();
-			console.log(`[BackgroundWorker] Created pull request: ${prUrl}`);
+			console.log(`[BackgroundWorker] Created pull request via GitHub CLI: ${prUrl}`);
 			return prUrl;
 		} catch (error) {
 			console.error(
-				`[BackgroundWorker] Failed to create GitHub pull request: ${error}`,
+				`[BackgroundWorker] Failed to create GitHub pull request via CLI: ${error}`,
 			);
 			return undefined;
 		}
+	}
+
+	private async createPullRequest(
+		worktreeBranch: string,
+		changedFiles: string[],
+		repoRoot: string,
+	): Promise<string | undefined> {
+		try {
+			// Get remote URL to determine the platform (GitHub, GitLab, etc.)
+			const { stdout: remoteUrl } = await execAsync(
+				"git remote get-url origin",
+				{
+					cwd: repoRoot,
+				},
+			);
+
+			const cleanUrl = remoteUrl.trim();
+
+			// Check if it's a GitHub repository
+			if (cleanUrl.includes("github.com")) {
+				console.log("[BackgroundWorker] Detected GitHub repository");
+
+				// Try Octokit first (more reliable and doesn't require CLI installation)
+				let prUrl = await this.createGitHubPullRequestWithOctokit(
+					worktreeBranch,
+					changedFiles,
+					repoRoot,
+				);
+
+				// Fallback to GitHub CLI if Octokit fails
+				if (!prUrl) {
+					console.log("[BackgroundWorker] Octokit failed, trying GitHub CLI...");
+					prUrl = await this.createGitHubPullRequestWithCLI(
+						worktreeBranch,
+						changedFiles,
+						repoRoot,
+					);
+				}
+
+				return prUrl;
+			}
+
+			// Add support for other platforms here (GitLab, Bitbucket, etc.)
+			console.warn(
+				`[BackgroundWorker] Pull request creation not supported for: ${cleanUrl}`,
+			);
+			return undefined;
+		} catch (error) {
+			console.error(
+				`[BackgroundWorker] Failed to create pull request: ${error}`,
+			);
+			return undefined;
+		}
+	}
+
+	private async createGitHubPullRequest(
+		worktreeBranch: string,
+		changedFiles: string[],
+		repoRoot: string,
+	): Promise<string | undefined> {
+		// This method is kept for backward compatibility but now just calls the main createPullRequest method
+		return this.createPullRequest(worktreeBranch, changedFiles, repoRoot);
 	}
 
 	private async attemptIntegration(
@@ -455,7 +617,7 @@ class BackgroundAgentWorker {
 		try {
 			const repoRoot = await getRepoRoot(this.config.repoPath);
 			const worktreeBranch = `background-${this.config.threadId}`;
-			const worktreePath = path.resolve(repoRoot, `../${worktreeBranch}`);
+			const worktreePath = path.resolve(repoRoot, worktreeBranch);
 
 			// Send initial status
 			this.sendStatus({
