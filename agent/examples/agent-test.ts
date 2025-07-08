@@ -18,6 +18,13 @@ async function runIntelligentOrchestrationExample() {
 			model: "claude-sonnet-4-0",
 			temperature: 0,
 		}),
+		backgroundAgentConfig: {
+			pushToRemote: true, // Enable remote push for this test
+			createPullRequest: true, // Enable PR creation for this test
+			pullRequestTitle: "Wingman-AI Background Agent: {agentName}",
+			pullRequestBody:
+				"This pull request was automatically created by Wingman-AI Background Agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
+		},
 		workingDirectory: process.cwd(),
 		mode: "vibe",
 	});

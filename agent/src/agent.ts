@@ -62,15 +62,61 @@ export const AvailableTools = [
 ] as const;
 export type AvailableToolsType = (typeof AvailableTools)[number];
 
+/**
+ * Configuration schema for Wingman AI Agent
+ * 
+ * @example
+ * ```typescript
+ * import { WingmanAgent } from '@wingman-ai/agent';
+ * import { ChatOpenAI } from '@langchain/openai';
+ * 
+ * const agent = new WingmanAgent({
+ *   name: "My Coding Assistant",
+ *   model: new ChatOpenAI({ model: "gpt-4" }),
+ *   workingDirectory: "/path/to/project",
+ *   mode: "vibe",
+ *   backgroundAgentConfig: {
+ *     pushToRemote: true,
+ *     createPullRequest: true,
+ *     pullRequestTitle: "🤖 {agentName}: {input}",
+ *     pullRequestBody: "Automated changes by {agentName}\n\nTask: {input}\n\nFiles changed:\n{changedFiles}"
+ *   },
+ *   tools: ["background_agent", "edit_file", "command_execute"]
+ * });
+ * ```
+ */
 export const WingmanAgentConfigSchema = z.object({
+	/**
+	 * Display name for the agent
+	 * @example "My Coding Assistant"
+	 */
 	name: z.string().min(1, "Agent name is required"),
+	
+	/**
+	 * Custom system prompt to override the default system prompt
+	 * If not provided, the agent will use the built-in system prompt
+	 * @example "You are a senior TypeScript developer focused on clean code and best practices."
+	 */
 	prompt: z.string().optional(),
+	
+	/**
+	 * Additional instructions that augment the system prompt
+	 * These are appended to the system prompt to provide specific guidance
+	 * @example "Always use TypeScript strict mode and prefer functional programming patterns."
+	 */
 	instructions: z
 		.string()
 		.describe(
 			"Additional instructions for the agent that augment the system prompt",
 		)
 		.optional(),
+	
+	/**
+	 * LangChain chat model instance for the agent
+	 * Supports OpenAI, Anthropic, Google, and other LangChain-compatible models
+	 * @example new ChatOpenAI({ model: "gpt-4", temperature: 0.1 })
+	 * @example new ChatAnthropic({ model: "claude-3-sonnet-20240229" })
+	 */
 	model: z.custom<BaseChatModel>().refine(
 		(val) => {
 			return val && (val.lc_namespace as string[]).includes("langchain");
@@ -79,19 +125,130 @@ export const WingmanAgentConfigSchema = z.object({
 			message: "Agent model must be a valid LangChain model.",
 		},
 	),
+	
+	/**
+	 * Working directory for the agent
+	 * If not specified, uses the current working directory
+	 * @example "/Users/username/projects/my-app"
+	 * @default process.cwd()
+	 */
 	workingDirectory: z.string().optional(),
+	
+	/**
+	 * Agent interaction mode
+	 * - "interactive": More conversational, asks for confirmation
+	 * - "vibe": More autonomous, takes action based on context
+	 * @default "vibe"
+	 */
 	mode: z.enum(["interactive", "vibe"]).default("vibe"),
+	
+	/**
+	 * Memory/checkpoint saver for conversation persistence
+	 * If not provided, uses in-memory storage
+	 * @example new RedisSaver(redisClient)
+	 */
 	memory: z.custom<BaseCheckpointSaver>().optional(),
+	
+	/**
+	 * Configuration for background agent behavior
+	 * Controls how background agents integrate their work back into the main branch
+	 */
+	backgroundAgentConfig: z
+		.object({
+			/**
+			 * Whether background agents should push their branches to the remote repository
+			 * - false: Local-only integration (merge directly in local repo)
+			 * - true: Push to remote before integration
+			 * @default false
+			 * @example true // Enable remote push for team collaboration
+			 */
+			pushToRemote: z
+				.boolean()
+				.describe(
+					"Whether background agents should push their branches to the remote repository (defaults to false for local-only integration)",
+				)
+				.default(false),
+			
+			/**
+			 * Whether to automatically create a pull request when pushing to remote
+			 * Requires pushToRemote to be true
+			 * When enabled, creates PR instead of direct merge
+			 * @default false
+			 * @example true // Create PRs for code review
+			 */
+			createPullRequest: z
+				.boolean()
+				.describe(
+					"Whether to automatically create a pull request when pushing to remote (requires pushToRemote to be true)",
+				)
+				.default(false),
+			
+			/**
+			 * Template for pull request title
+			 * Available placeholders:
+			 * - {agentName}: Name of the background agent
+			 * - {input}: The task description given to the agent
+			 * @default "Background Agent: {agentName}"
+			 * @example "🤖 Automated: {agentName} - {input}"
+			 */
+			pullRequestTitle: z
+				.string()
+				.describe(
+					"Template for pull request title. Use {agentName} and {input} placeholders",
+				)
+				.default("Background Agent: {agentName}"),
+			
+			/**
+			 * Template for pull request body
+			 * Available placeholders:
+			 * - {agentName}: Name of the background agent
+			 * - {input}: The task description given to the agent
+			 * - {changedFiles}: List of files that were modified
+			 * @default "This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}"
+			 * @example "## Automated Changes\n\nAgent: **{agentName}**\nTask: {input}\n\n### Files Modified\n{changedFiles}\n\n---\n*This PR was created automatically by Wingman AI*"
+			 */
+			pullRequestBody: z
+				.string()
+				.describe(
+					"Template for pull request body. Use {agentName}, {input}, and {changedFiles} placeholders",
+				)
+				.default(
+					"This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
+				),
+		})
+		.optional(),
+	
+	/**
+	 * Tool-specific capabilities and restrictions
+	 */
 	toolAbilities: z
 		.object({
+			/**
+			 * Symbol retrieval capabilities for code analysis
+			 * Provides the agent with the ability to understand code structure
+			 * @example symbolRetriever // Your symbol retriever instance
+			 */
 			symbolRetriever: z
 				.any()
 				.describe("Symbol retrieval capabilities")
 				.optional(),
+			
+			/**
+			 * File diagnostics capabilities for error detection
+			 * Enables the agent to detect and analyze code issues
+			 * @example diagnosticRetriever // Your diagnostic retriever instance
+			 */
 			fileDiagnostics: z
 				.any()
 				.describe("File diagnostics capabilities")
 				.optional(),
+			
+			/**
+			 * List of commands that the agent should not execute
+			 * Prevents potentially destructive operations
+			 * @default ["rm", "rmdir", "del", "format", "fdisk", "mkfs", "dd", "sudo rm", "sudo rmdir", "chmod 777", "chown", "passwd", "su", "sudo su"]
+			 * @example ["rm", "sudo", "chmod 777"] // Block dangerous commands
+			 */
 			blockedCommands: z
 				.array(z.string())
 				.optional()
@@ -99,6 +256,13 @@ export const WingmanAgentConfigSchema = z.object({
 					"List of commands that the agent should not execute. Defaults to common destructive commands.",
 				)
 				.default(DEFAULT_BLOCKED_COMMANDS),
+			
+			/**
+			 * Whether the agent is allowed to execute scripts or commands
+			 * When false, prevents all command execution for safety
+			 * @default true
+			 * @example false // Disable all command execution
+			 */
 			allowScriptExecution: z
 				.boolean()
 				.describe(
@@ -107,6 +271,14 @@ export const WingmanAgentConfigSchema = z.object({
 				.default(true),
 		})
 		.optional(),
+	
+	/**
+	 * List of available tools for the agent
+	 * Controls which capabilities the agent has access to
+	 * @default All available tools
+	 * @example ["edit_file", "read_file", "command_execute"] // Minimal toolset
+	 * @example ["background_agent", "web_search", "research"] // Research-focused
+	 */
 	tools: z
 		.array(z.enum(AvailableTools))
 		.default([...AvailableTools])
@@ -114,6 +286,21 @@ export const WingmanAgentConfigSchema = z.object({
 		.describe("List of available tools for the agent"),
 });
 
+/**
+ * Type definition for Wingman Agent configuration
+ * 
+ * @example
+ * ```typescript
+ * const config: WingmanAgentConfig = {
+ *   name: "Code Assistant",
+ *   model: new ChatOpenAI({ model: "gpt-4" }),
+ *   backgroundAgentConfig: {
+ *     pushToRemote: true,
+ *     createPullRequest: true
+ *   }
+ * };
+ * ```
+ */
 export type WingmanAgentConfig = z.infer<typeof WingmanAgentConfigSchema>;
 
 const WingmanInternalConfigSchema = WingmanAgentConfigSchema.extend({
@@ -124,6 +311,16 @@ const WingmanInternalConfigSchema = WingmanAgentConfigSchema.extend({
 			"Additional instructions for the agent that augment the system prompt",
 		)
 		.optional(),
+	backgroundAgentConfig: z.object({
+		pushToRemote: z.boolean().default(false),
+		createPullRequest: z.boolean().default(false),
+		pullRequestTitle: z.string().default("Background Agent: {agentName}"),
+		pullRequestBody: z
+			.string()
+			.default(
+				"This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
+			),
+	}),
 	toolAbilities: z.object({
 		symbolRetriever: z
 			.any()
@@ -154,13 +351,59 @@ const WingmanInternalConfigSchema = WingmanAgentConfigSchema.extend({
 
 export type WingmanConfig = z.infer<typeof WingmanInternalConfigSchema>;
 
+/**
+ * Request object for agent invocation
+ * 
+ * @example
+ * ```typescript
+ * const request: WingmanRequest = {
+ *   input: "Create a new React component for user authentication",
+ *   threadId: "user-session-123",
+ *   contextFiles: ["src/types/user.ts", "src/utils/auth.ts"],
+ *   contextDirectories: ["src/components"]
+ * };
+ * ```
+ */
 export type WingmanRequest = {
+	/** The user's input/request to the agent */
 	input: string;
+	/** Optional thread ID for conversation continuity */
 	threadId?: string;
+	/** Optional list of files to provide as context */
 	contextFiles?: string[];
+	/** Optional list of directories to provide as context */
 	contextDirectories?: string[];
 };
 
+/**
+ * Main Wingman AI Agent class
+ * 
+ * @example
+ * ```typescript
+ * import { WingmanAgent } from '@wingman-ai/agent';
+ * import { ChatOpenAI } from '@langchain/openai';
+ * 
+ * const agent = new WingmanAgent({
+ *   name: "My Assistant",
+ *   model: new ChatOpenAI({ model: "gpt-4" }),
+ *   workingDirectory: process.cwd(),
+ *   backgroundAgentConfig: {
+ *     pushToRemote: true,
+ *     createPullRequest: true
+ *   }
+ * });
+ * 
+ * await agent.initialize();
+ * 
+ * // Stream responses
+ * for await (const chunk of agent.stream({ input: "Create a new feature" })) {
+ *   console.log(chunk);
+ * }
+ * 
+ * // Or get final result
+ * const result = await agent.invoke({ input: "Fix the bug in auth.ts" });
+ * ```
+ */
 export class WingmanAgent {
 	private readonly mcpAdapter: MCPAdapter;
 	private readonly config: WingmanConfig;
@@ -170,14 +413,50 @@ export class WingmanAgent {
 	private backgroundAgentEventEmitter: BackgroundAgentEventEmitter;
 	public currentThreadId: string | undefined;
 
+	/**
+	 * Event emitter for background agent status updates
+	 * 
+	 * @example
+	 * ```typescript
+	 * agent.events.on('status', (status) => {
+	 *   console.log(`Agent ${status.agentName}: ${status.status}`);
+	 * });
+	 * 
+	 * agent.events.on('complete', (data) => {
+	 *   console.log(`Agent completed with status: ${data.status}`);
+	 * });
+	 * ```
+	 */
 	public get events(): BackgroundAgentEventEmitter {
 		return this.backgroundAgentEventEmitter;
 	}
 
+	/**
+	 * Creates a new Wingman Agent instance
+	 * 
+	 * @param wingmanConfig - Configuration object for the agent
+	 * 
+	 * @example
+	 * ```typescript
+	 * const agent = new WingmanAgent({
+	 *   name: "Code Assistant",
+	 *   model: new ChatOpenAI({ model: "gpt-4" }),
+	 *   mode: "vibe",
+	 *   tools: ["edit_file", "command_execute", "background_agent"]
+	 * });
+	 * ```
+	 */
 	constructor(wingmanConfig: WingmanAgentConfig) {
 		const validatedConfig = WingmanAgentConfigSchema.parse(wingmanConfig);
 		this.config = {
 			workingDirectory: process.cwd(),
+			backgroundAgentConfig: {
+				pushToRemote: false,
+				createPullRequest: false,
+				pullRequestTitle: "Wingman-AI Background Agent: {agentName}",
+				pullRequestBody:
+					"This pull request was automatically created by Wingman-AI Background Agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
+			},
 			toolAbilities: {
 				blockedCommands: DEFAULT_BLOCKED_COMMANDS,
 				allowScriptExecution: true,
@@ -271,6 +550,17 @@ ${this.config.instructions}
 `;
 	}
 
+	/**
+	 * Initialize the agent and set up tools
+	 * Must be called before using the agent
+	 * 
+	 * @example
+	 * ```typescript
+	 * const agent = new WingmanAgent(config);
+	 * await agent.initialize();
+	 * // Agent is now ready to use
+	 * ```
+	 */
 	async initialize() {
 		// Gather MCP tools
 		const remoteTools: StructuredToolInterface[] = [];
@@ -447,6 +737,17 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		return END;
 	};
 
+	/**
+	 * Compact conversation messages to save memory
+	 * Useful for long conversations to prevent context window overflow
+	 * 
+	 * @param threadId - Thread ID to compact messages for
+	 * 
+	 * @example
+	 * ```typescript
+	 * await agent.compactMessages("thread-123");
+	 * ```
+	 */
 	compactMessages = async (threadId: string) => {
 		if (!this.app) {
 			throw new Error("Agent is not initialized. Call initialize() first.");
@@ -487,6 +788,19 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		);
 	};
 
+	/**
+	 * Stream agent responses in real-time
+	 * 
+	 * @param request - Request object with input and optional context
+	 * @returns Async generator yielding response chunks
+	 * 
+	 * @example
+	 * ```typescript
+	 * for await (const chunk of agent.stream({ input: "Create a new component" })) {
+	 *   console.log(chunk);
+	 * }
+	 * ```
+	 */
 	async *stream(request: WingmanRequest) {
 		if (!this.app) {
 			throw new Error(
@@ -523,6 +837,21 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		}
 	}
 
+	/**
+	 * Stream agent events for detailed monitoring
+	 * 
+	 * @param request - Request object with input and optional context
+	 * @returns Async generator yielding event updates
+	 * 
+	 * @example
+	 * ```typescript
+	 * for await (const event of agent.streamEvents({ input: "Debug the issue" })) {
+	 *   if (event.event === 'on_tool_start') {
+	 *     console.log(`Tool started: ${event.name}`);
+	 *   }
+	 * }
+	 * ```
+	 */
 	async *streamEvents(request: WingmanRequest) {
 		if (!this.app) {
 			throw new Error(
@@ -558,6 +887,20 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		}
 	}
 
+	/**
+	 * Invoke the agent and wait for completion
+	 * 
+	 * @param request - Request object with input and optional context
+	 * @returns Promise resolving to the final result
+	 * 
+	 * @example
+	 * ```typescript
+	 * const result = await agent.invoke({
+	 *   input: "Fix the TypeScript errors in auth.ts",
+	 *   contextFiles: ["src/auth.ts", "src/types/user.ts"]
+	 * });
+	 * ```
+	 */
 	async invoke(request: WingmanRequest) {
 		if (!this.app) {
 			throw new Error(
@@ -590,6 +933,18 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		);
 	}
 
+	/**
+	 * Get the current graph state for a thread
+	 * 
+	 * @param threadId - Thread ID to get state for
+	 * @returns Promise resolving to the graph state or undefined
+	 * 
+	 * @example
+	 * ```typescript
+	 * const state = await agent.getGraphState("thread-123");
+	 * console.log(state?.messages.length);
+	 * ```
+	 */
 	getGraphState = async (
 		threadId: string,
 	): Promise<WingmanGraphState | undefined> => {
@@ -611,13 +966,29 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		return graphState.values as WingmanGraphState;
 	};
 
-	// Method to terminate all background agents
+	/**
+	 * Terminate all active background agents
+	 * 
+	 * @example
+	 * ```typescript
+	 * agent.terminateBackgroundAgents();
+	 * ```
+	 */
 	terminateBackgroundAgents() {
 		const manager = BackgroundAgentManager.getInstance();
 		manager.terminateAllAgents();
 	}
 
-	// Method to terminate a specific background agent
+	/**
+	 * Terminate a specific background agent
+	 * 
+	 * @param threadId - Thread ID of the background agent to terminate
+	 * 
+	 * @example
+	 * ```typescript
+	 * agent.terminateBackgroundAgent("bg-agent-123");
+	 * ```
+	 */
 	terminateBackgroundAgent(threadId: string) {
 		const manager = BackgroundAgentManager.getInstance();
 		manager.terminateAgent(threadId);

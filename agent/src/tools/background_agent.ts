@@ -16,6 +16,7 @@ export type BackgroundAgentIntegration = {
 	mergeAttempted: boolean;
 	mergeSuccessful?: boolean;
 	errorMessage?: string;
+	pullRequestUrl?: string;
 };
 
 export type BackgroundAgentStatus = {
@@ -85,6 +86,12 @@ interface SerializableWingmanConfig {
 	};
 	workingDirectory: string;
 	mode: "interactive" | "vibe";
+	backgroundAgentConfig: {
+		pushToRemote: boolean;
+		createPullRequest: boolean;
+		pullRequestTitle: string;
+		pullRequestBody: string;
+	};
 	toolAbilities?: {
 		symbolRetriever?: any;
 		fileDiagnostics?: any;
@@ -342,6 +349,7 @@ export const createBackgroundAgentTool = (
 					modelConfig: extractModelConfig(config.model),
 					workingDirectory: config.workingDirectory,
 					mode: config.mode,
+					backgroundAgentConfig: config.backgroundAgentConfig,
 					toolAbilities: config.toolAbilities,
 					tools: config.tools?.filter((t) => t !== "background_agent") || [],
 				};
@@ -363,13 +371,20 @@ export const createBackgroundAgentTool = (
 				// Start the background agent (this will resolve when the agent completes)
 				manager.spawnBackgroundAgent(threadId, workerData);
 
+				const integrationMode = config.backgroundAgentConfig.pushToRemote
+					? "remote"
+					: "local";
+				const prInfo = config.backgroundAgentConfig.createPullRequest
+					? " with automatic PR creation"
+					: "";
+
 				return new ToolMessage({
 					id: toolConfig.toolCall.id,
 					content: JSON.stringify({
 						success: true,
 						threadId,
 						agentName: input.agentName,
-						message: `Background agent '${input.agentName}' has been started successfully.${input.autoIntegrate ? " Auto-integration is enabled." : " Auto-integration is disabled."}`,
+						message: `Background agent '${input.agentName}' has been started successfully.${input.autoIntegrate ? ` Auto-integration is enabled (${integrationMode}${prInfo}).` : " Auto-integration is disabled."}`,
 						status: "running",
 					}),
 					tool_call_id: toolConfig.toolCall.id,

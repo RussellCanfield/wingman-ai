@@ -11,6 +11,7 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
+import fs from "node:fs";
 import { getCurrentBranch, getRepoRoot } from "../utils";
 
 const execAsync = promisify(exec);
@@ -33,6 +34,12 @@ interface SerializableWingmanConfig {
 	};
 	workingDirectory: string;
 	mode: "interactive" | "vibe";
+	backgroundAgentConfig: {
+		pushToRemote: boolean;
+		createPullRequest: boolean;
+		pullRequestTitle: string;
+		pullRequestBody: string;
+	};
 	toolAbilities?: {
 		symbolRetriever?: any;
 		fileDiagnostics?: any;
@@ -152,6 +159,102 @@ class BackgroundAgentWorker {
 		}
 	}
 
+	private async cleanupWorktreeDirectory(worktreePath: string): Promise<void> {
+		try {
+			// Remove the worktree directory from filesystem
+			if (fs.existsSync(worktreePath)) {
+				await fs.promises.rm(worktreePath, { recursive: true, force: true });
+				console.log(
+					`[BackgroundWorker] Cleaned up worktree directory: ${worktreePath}`,
+				);
+			}
+		} catch (error) {
+			console.warn(
+				`[BackgroundWorker] Failed to cleanup worktree directory: ${error}`,
+			);
+		}
+	}
+
+	private async createPullRequest(
+		worktreeBranch: string,
+		changedFiles: string[],
+		repoRoot: string,
+	): Promise<string | undefined> {
+		try {
+			// Get remote URL to determine the platform (GitHub, GitLab, etc.)
+			const { stdout: remoteUrl } = await execAsync(
+				"git remote get-url origin",
+				{
+					cwd: repoRoot,
+				},
+			);
+
+			const cleanUrl = remoteUrl.trim();
+
+			// Check if it's a GitHub repository
+			if (cleanUrl.includes("github.com")) {
+				return await this.createGitHubPullRequest(
+					worktreeBranch,
+					changedFiles,
+					repoRoot,
+				);
+			}
+
+			// Add support for other platforms here (GitLab, Bitbucket, etc.)
+			console.warn(
+				`[BackgroundWorker] Pull request creation not supported for: ${cleanUrl}`,
+			);
+			return undefined;
+		} catch (error) {
+			console.error(
+				`[BackgroundWorker] Failed to create pull request: ${error}`,
+			);
+			return undefined;
+		}
+	}
+
+	private async createGitHubPullRequest(
+		worktreeBranch: string,
+		changedFiles: string[],
+		repoRoot: string,
+	): Promise<string | undefined> {
+		try {
+			// Check if GitHub CLI is available
+			await execAsync("gh --version", { cwd: repoRoot });
+
+			// Format changed files for PR body
+			const changedFilesText =
+				changedFiles.length > 0
+					? changedFiles.map((file) => `- ${file}`).join("\n")
+					: "No files changed";
+
+			// Replace placeholders in PR title and body
+			const title = this.config.config.backgroundAgentConfig.pullRequestTitle
+				.replace("{agentName}", this.config.agentName)
+				.replace("{input}", this.config.input);
+
+			const body = this.config.config.backgroundAgentConfig.pullRequestBody
+				.replace("{agentName}", this.config.agentName)
+				.replace("{input}", this.config.input)
+				.replace("{changedFiles}", changedFilesText);
+
+			// Create the pull request
+			const { stdout } = await execAsync(
+				`gh pr create --title "${title}" --body "${body}" --head ${worktreeBranch} --base ${this.config.mainBranch}`,
+				{ cwd: repoRoot },
+			);
+
+			const prUrl = stdout.trim();
+			console.log(`[BackgroundWorker] Created pull request: ${prUrl}`);
+			return prUrl;
+		} catch (error) {
+			console.error(
+				`[BackgroundWorker] Failed to create GitHub pull request: ${error}`,
+			);
+			return undefined;
+		}
+	}
+
 	private async attemptIntegration(
 		worktreeBranch: string,
 		worktreePath: string,
@@ -176,68 +279,114 @@ class BackgroundAgentWorker {
 				`[BackgroundWorker] Changed files: ${integration.changedFiles?.join(", ") || "none"}`,
 			);
 
-			// Step 1: Ensure the worktree branch is up to date and pushed to the main repo
-			// This makes the worktree commits available to the main repository
-			await execAsync(
-				`git -C "${worktreePath}" push origin ${worktreeBranch}`,
-				{
-					cwd: repoRoot,
-				},
-			);
+			const { pushToRemote, createPullRequest } =
+				this.config.config.backgroundAgentConfig;
 
-			console.log(`[BackgroundWorker] Pushed ${worktreeBranch} to origin`);
+			if (pushToRemote) {
+				// Remote integration workflow
+				console.log("[BackgroundWorker] Using remote integration workflow");
 
-			// Step 2: In the main repo, fetch the latest changes to ensure we have the worktree branch
-			await execAsync(`git fetch origin ${worktreeBranch}`, {
-				cwd: repoRoot,
-			});
+				// Step 1: Push the worktree branch to remote
+				await execAsync(
+					`git -C "${worktreePath}" push origin ${worktreeBranch}`,
+					{ cwd: repoRoot },
+				);
+				console.log(`[BackgroundWorker] Pushed ${worktreeBranch} to origin`);
 
-			console.log(`[BackgroundWorker] Fetched ${worktreeBranch} in main repo`);
+				if (createPullRequest) {
+					// Create a pull request instead of direct merge
+					const prUrl = await this.createPullRequest(
+						worktreeBranch,
+						integration.changedFiles || [],
+						repoRoot,
+					);
 
-			// Step 3: Ensure we're on the target branch in the main repo
-			await execAsync(`git checkout ${targetBranch}`, {
-				cwd: repoRoot,
-			});
+					if (prUrl) {
+						integration.pullRequestUrl = prUrl;
+						integration.mergeAttempted = true;
+						integration.mergeSuccessful = true; // PR creation is considered success
 
-			console.log(
-				`[BackgroundWorker] Checked out ${targetBranch} in main repo`,
-			);
+						console.log(`[BackgroundWorker] Successfully created PR: ${prUrl}`);
 
-			// Step 4: Attempt to merge the worktree branch
-			await execAsync(`git merge origin/${worktreeBranch}`, {
-				cwd: repoRoot,
-			});
+						// Clean up local worktree directory but keep remote branch
+						await this.cleanupWorktreeDirectory(worktreePath);
 
-			integration.mergeAttempted = true;
-			integration.mergeSuccessful = true;
-
-			console.log(
-				`[BackgroundWorker] Successfully integrated ${worktreeBranch} into ${targetBranch}`,
-			);
-
-			// Step 5: Clean up the remote branch
-			try {
-				await execAsync(`git push origin --delete ${worktreeBranch}`, {
+						return integration;
+					}
+					throw new Error("Failed to create pull request");
+				}
+				// Direct merge workflow with remote push
+				// Step 2: Fetch in main repo
+				await execAsync(`git fetch origin ${worktreeBranch}`, {
 					cwd: repoRoot,
 				});
+
+				// Step 3: Checkout target branch
+				await execAsync(`git checkout ${targetBranch}`, {
+					cwd: repoRoot,
+				});
+
+				// Step 4: Merge
+				await execAsync(`git merge origin/${worktreeBranch}`, {
+					cwd: repoRoot,
+				});
+
+				integration.mergeAttempted = true;
+				integration.mergeSuccessful = true;
+
 				console.log(
-					`[BackgroundWorker] Deleted remote branch ${worktreeBranch}`,
+					`[BackgroundWorker] Successfully integrated ${worktreeBranch} into ${targetBranch}`,
 				);
-			} catch (deleteError) {
-				console.warn(
-					`[BackgroundWorker] Failed to delete remote branch: ${deleteError}`,
+
+				// Step 5: Clean up remote branch (user chose not to keep it)
+				try {
+					await execAsync(`git push origin --delete ${worktreeBranch}`, {
+						cwd: repoRoot,
+					});
+					console.log(
+						`[BackgroundWorker] Deleted remote branch ${worktreeBranch}`,
+					);
+				} catch (deleteError) {
+					console.warn(
+						`[BackgroundWorker] Failed to delete remote branch: ${deleteError}`,
+					);
+				}
+			} else {
+				// Local-only integration workflow
+				console.log("[BackgroundWorker] Using local-only integration workflow");
+
+				// Step 1: Checkout target branch in main repo
+				await execAsync(`git checkout ${targetBranch}`, {
+					cwd: repoRoot,
+				});
+
+				// Step 2: Merge the worktree branch directly (local merge)
+				await execAsync(`git merge ${worktreeBranch}`, {
+					cwd: repoRoot,
+				});
+
+				integration.mergeAttempted = true;
+				integration.mergeSuccessful = true;
+
+				console.log(
+					`[BackgroundWorker] Successfully integrated ${worktreeBranch} into ${targetBranch} (local-only)`,
 				);
 			}
 
-			// Step 6: Clean up the worktree after successful integration
+			// Clean up worktree directory after successful integration
+			await this.cleanupWorktreeDirectory(worktreePath);
+
+			// Remove worktree from git's tracking
 			try {
-				await execAsync(`git worktree remove "${worktreePath}"`, {
+				await execAsync(`git worktree remove "${worktreePath}" --force`, {
 					cwd: repoRoot,
 				});
-				console.log(`[BackgroundWorker] Cleaned up worktree: ${worktreePath}`);
+				console.log(
+					`[BackgroundWorker] Removed worktree from git tracking: ${worktreePath}`,
+				);
 			} catch (cleanupError) {
 				console.warn(
-					`[BackgroundWorker] Failed to cleanup worktree: ${cleanupError}`,
+					`[BackgroundWorker] Failed to remove worktree from git tracking: ${cleanupError}`,
 				);
 			}
 		} catch (error: any) {
@@ -278,19 +427,25 @@ class BackgroundAgentWorker {
 				}
 			}
 
-			// If integration failed, we should still clean up the remote branch if it was pushed
-			try {
-				await execAsync(`git push origin --delete ${worktreeBranch}`, {
-					cwd: repoRoot,
-				});
-				console.log(
-					`[BackgroundWorker] Cleaned up remote branch ${worktreeBranch} after failed integration`,
-				);
-			} catch (cleanupError) {
-				console.warn(
-					`[BackgroundWorker] Failed to cleanup remote branch: ${cleanupError}`,
-				);
+			// Clean up on failure
+			if (this.config.config.backgroundAgentConfig.pushToRemote) {
+				// Clean up remote branch if it was pushed
+				try {
+					await execAsync(`git push origin --delete ${worktreeBranch}`, {
+						cwd: repoRoot,
+					});
+					console.log(
+						`[BackgroundWorker] Cleaned up remote branch ${worktreeBranch} after failed integration`,
+					);
+				} catch (cleanupError) {
+					console.warn(
+						`[BackgroundWorker] Failed to cleanup remote branch: ${cleanupError}`,
+					);
+				}
 			}
+
+			// Always clean up local worktree directory on failure
+			await this.cleanupWorktreeDirectory(worktreePath);
 		}
 
 		return integration;
@@ -300,7 +455,7 @@ class BackgroundAgentWorker {
 		try {
 			const repoRoot = await getRepoRoot(this.config.repoPath);
 			const worktreeBranch = `background-${this.config.threadId}`;
-			const worktreePath = path.resolve(repoRoot, worktreeBranch);
+			const worktreePath = path.resolve(repoRoot, `../${worktreeBranch}`);
 
 			// Send initial status
 			this.sendStatus({
@@ -322,6 +477,7 @@ class BackgroundAgentWorker {
 				model: model,
 				workingDirectory: this.config.config.workingDirectory,
 				mode: this.config.config.mode,
+				backgroundAgentConfig: this.config.config.backgroundAgentConfig,
 				toolAbilities: {
 					...(this.config.config.toolAbilities ?? {}),
 					blockedCommands: [],
