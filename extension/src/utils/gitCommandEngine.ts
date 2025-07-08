@@ -20,6 +20,19 @@ export interface GitDiffOptions {
 	pathSpec?: string;
 }
 
+export interface GitChangedFilesOptions {
+	/** Include staged but not committed files */
+	includeStaged?: boolean;
+	/** Include unstaged (modified) files */
+	includeUnstaged?: boolean;
+	/** Include untracked files */
+	includeUntracked?: boolean;
+	/** Compare against a specific branch/commit instead of just working directory changes */
+	baseBranch?: string;
+	/** Include only committed changes since base branch (useful for integration workflows) */
+	committedOnly?: boolean;
+}
+
 export class GitCommandEngine {
 	constructor(protected readonly cwd: string) {}
 
@@ -65,9 +78,90 @@ export class GitCommandEngine {
 		return this.executeCommand("git rev-parse --abbrev-ref HEAD");
 	}
 
-	async getChangedFiles(): Promise<string[]> {
-		const output = await this.executeCommand("git diff HEAD --name-only");
-		return output.split("\n").filter((file) => file.length > 0);
+	/**
+	 * Get changed files with flexible options for different workflows
+	 */
+	async getChangedFiles(options: GitChangedFilesOptions = {}): Promise<string[]> {
+		const {
+			includeStaged = false,
+			includeUnstaged = false,
+			includeUntracked = false,
+			baseBranch,
+			committedOnly = false,
+		} = options;
+
+		const files = new Set<string>();
+
+		try {
+			if (baseBranch) {
+				// Compare against a specific branch (useful for integration workflows)
+				const command = committedOnly 
+					? `git diff ${baseBranch}...HEAD --name-only`  // Only committed changes
+					: `git diff ${baseBranch} --name-only`;        // All changes including working directory
+				
+				const output = await this.executeCommand(command);
+				output.split("\n").filter(Boolean).forEach(file => files.add(file));
+			} else {
+				// Default behavior: check working directory changes
+				if (includeStaged) {
+					const staged = await this.executeCommand("git diff --cached --name-only");
+					staged.split("\n").filter(Boolean).forEach(file => files.add(file));
+				}
+				
+				if (includeUnstaged) {
+					const unstaged = await this.executeCommand("git diff --name-only");
+					unstaged.split("\n").filter(Boolean).forEach(file => files.add(file));
+				}
+				
+				if (includeUntracked) {
+					const untracked = await this.executeCommand("git ls-files --others --exclude-standard");
+					untracked.split("\n").filter(Boolean).forEach(file => files.add(file));
+				}
+
+				// If no specific options are provided, default to both staged and unstaged
+				if (!includeStaged && !includeUnstaged && !includeUntracked) {
+					const staged = await this.executeCommand("git diff --cached --name-only");
+					const unstaged = await this.executeCommand("git diff --name-only");
+					
+					staged.split("\n").filter(Boolean).forEach(file => files.add(file));
+					unstaged.split("\n").filter(Boolean).forEach(file => files.add(file));
+				}
+			}
+
+			return Array.from(files);
+		} catch (error) {
+			console.error("Error getting changed files:", error);
+			return [];
+		}
+	}
+
+	/**
+	 * Get files that have been committed since a base branch (useful for integration)
+	 */
+	async getCommittedFilesSince(baseBranch?: string): Promise<string[]> {
+		const base = baseBranch || await this.getBaseBranchWithFallback();
+		return this.getChangedFiles({ baseBranch: base, committedOnly: true });
+	}
+
+	/**
+	 * Get all working directory changes (staged + unstaged)
+	 */
+	async getWorkingDirectoryChanges(): Promise<string[]> {
+		return this.getChangedFiles({ includeStaged: true, includeUnstaged: true });
+	}
+
+	/**
+	 * Get only staged files
+	 */
+	async getStagedFiles(): Promise<string[]> {
+		return this.getChangedFiles({ includeStaged: true });
+	}
+
+	/**
+	 * Get only unstaged files
+	 */
+	async getUnstagedFiles(): Promise<string[]> {
+		return this.getChangedFiles({ includeUnstaged: true });
 	}
 
 	async getDiff(options: GitDiffOptions = {}): Promise<string> {

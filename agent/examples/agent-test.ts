@@ -1,6 +1,7 @@
 import "../src/fetch";
 import { WingmanAgent } from "../src/agent";
 import { ChatAnthropic } from "@langchain/anthropic";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 async function runIntelligentOrchestrationExample() {
 	console.log("🧠 Testing Intelligent Orchestration Decision Making");
@@ -9,6 +10,10 @@ async function runIntelligentOrchestrationExample() {
 	// Create a WingmanAgent (no execution mode needed)
 	const agent = new WingmanAgent({
 		name: "IntelligentAgent",
+		// model: new ChatGoogleGenerativeAI({
+		// 	model: "gemini-2.5-pro",
+		// 	temperature: 0,
+		// }),
 		model: new ChatAnthropic({
 			model: "claude-sonnet-4-0",
 			temperature: 0,

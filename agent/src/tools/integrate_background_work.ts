@@ -60,10 +60,18 @@ class BackgroundWorkIntegrator {
 		}
 	}
 
-	async getChangedFiles(worktreePath: string): Promise<string[]> {
+	/**
+	 * Get files changed in a worktree compared to the main branch
+	 * This shows committed changes that are ready for integration
+	 */
+	async getChangedFiles(worktreePath: string, mainBranch?: string): Promise<string[]> {
 		try {
+			// Get the main branch if not provided
+			const baseBranch = mainBranch || await this.getMainBranch();
+			
+			// Get files that have been committed in the worktree since branching from main
 			const { stdout } = await execAsync(
-				`git -C "${worktreePath}" diff --name-only HEAD~1`,
+				`git -C "${worktreePath}" diff --name-only origin/${baseBranch}...HEAD`,
 				{
 					cwd: this.workingDirectory,
 				},
@@ -74,7 +82,54 @@ class BackgroundWorkIntegrator {
 				.filter((file) => file.length > 0);
 		} catch (error) {
 			console.warn(`Failed to get changed files: ${error}`);
-			return [];
+			
+			// Fallback: try comparing against HEAD~1 (previous approach)
+			try {
+				const { stdout } = await execAsync(
+					`git -C "${worktreePath}" diff --name-only HEAD~1`,
+					{
+						cwd: this.workingDirectory,
+					},
+				);
+				return stdout
+					.trim()
+					.split("\n")
+					.filter((file) => file.length > 0);
+			} catch (fallbackError) {
+				console.warn(`Fallback also failed: ${fallbackError}`);
+				return [];
+			}
+		}
+	}
+
+	/**
+	 * Get the main branch name (main, master, etc.)
+	 */
+	private async getMainBranch(): Promise<string> {
+		try {
+			// Try to get the default branch from remote
+			const { stdout } = await execAsync("git symbolic-ref refs/remotes/origin/HEAD", {
+				cwd: this.workingDirectory,
+			});
+			return stdout.trim().replace("refs/remotes/origin/", "");
+		} catch {
+			// Fallback: check which of main/master exists
+			try {
+				await execAsync("git show-ref --verify --quiet refs/heads/main", {
+					cwd: this.workingDirectory,
+				});
+				return "main";
+			} catch {
+				try {
+					await execAsync("git show-ref --verify --quiet refs/heads/master", {
+						cwd: this.workingDirectory,
+					});
+					return "master";
+				} catch {
+					// Final fallback
+					return "main";
+				}
+			}
 		}
 	}
 

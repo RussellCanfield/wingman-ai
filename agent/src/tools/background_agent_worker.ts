@@ -1,6 +1,9 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { WingmanAgent, type WingmanConfig } from "../agent";
-import type { BackgroundAgentStatus, BackgroundAgentIntegration } from "./background_agent";
+import type {
+	BackgroundAgentStatus,
+	BackgroundAgentIntegration,
+} from "./background_agent";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
@@ -8,6 +11,7 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
+import { getCurrentBranch, getRepoRoot } from "../utils";
 
 const execAsync = promisify(exec);
 
@@ -121,24 +125,27 @@ class BackgroundAgentWorker {
 		});
 	}
 
-	private async getCurrentBranch(): Promise<string> {
-		try {
-			const { stdout } = await execAsync("git branch --show-current", {
-				cwd: this.config.repoPath,
-			});
-			return stdout.trim();
-		} catch (error) {
-			console.warn(`Failed to get current branch, using main branch: ${error}`);
-			return this.config.mainBranch;
-		}
-	}
-
 	private async getChangedFiles(worktreePath: string): Promise<string[]> {
 		try {
-			const { stdout } = await execAsync(`git -C "${worktreePath}" diff --name-only HEAD~1`, {
-				cwd: this.config.repoPath,
-			});
-			return stdout.trim().split('\n').filter(file => file.length > 0);
+			// Get the commit hash where the worktree branched from
+			const { stdout: baseCommit } = await execAsync(
+				`git -C "${worktreePath}" merge-base HEAD origin/${this.config.mainBranch}`,
+				{
+					cwd: this.config.repoPath,
+				},
+			);
+
+			// Compare against that base commit
+			const { stdout } = await execAsync(
+				`git -C "${worktreePath}" diff --name-only ${baseCommit.trim()}`,
+				{
+					cwd: this.config.repoPath,
+				},
+			);
+			return stdout
+				.trim()
+				.split("\n")
+				.filter((file) => file.length > 0);
 		} catch (error) {
 			console.warn(`Failed to get changed files: ${error}`);
 			return [];
@@ -148,7 +155,8 @@ class BackgroundAgentWorker {
 	private async attemptIntegration(
 		worktreeBranch: string,
 		worktreePath: string,
-		targetBranch: string
+		targetBranch: string,
+		repoRoot: string,
 	): Promise<BackgroundAgentIntegration> {
 		const integration: BackgroundAgentIntegration = {
 			targetBranch,
@@ -161,56 +169,128 @@ class BackgroundAgentWorker {
 			// Get changed files before attempting merge
 			integration.changedFiles = await this.getChangedFiles(worktreePath);
 
-			// Ensure we're on the target branch
-			await execAsync(`git checkout ${targetBranch}`, {
-				cwd: this.config.repoPath,
+			console.log(
+				`[BackgroundWorker] Attempting to integrate ${worktreeBranch} into ${targetBranch}`,
+			);
+			console.log(
+				`[BackgroundWorker] Changed files: ${integration.changedFiles?.join(", ") || "none"}`,
+			);
+
+			// Step 1: Ensure the worktree branch is up to date and pushed to the main repo
+			// This makes the worktree commits available to the main repository
+			await execAsync(
+				`git -C "${worktreePath}" push origin ${worktreeBranch}`,
+				{
+					cwd: repoRoot,
+				},
+			);
+
+			console.log(`[BackgroundWorker] Pushed ${worktreeBranch} to origin`);
+
+			// Step 2: In the main repo, fetch the latest changes to ensure we have the worktree branch
+			await execAsync(`git fetch origin ${worktreeBranch}`, {
+				cwd: repoRoot,
 			});
 
-			// Attempt to merge the worktree branch
-			await execAsync(`git merge ${worktreeBranch}`, {
-				cwd: this.config.repoPath,
+			console.log(`[BackgroundWorker] Fetched ${worktreeBranch} in main repo`);
+
+			// Step 3: Ensure we're on the target branch in the main repo
+			await execAsync(`git checkout ${targetBranch}`, {
+				cwd: repoRoot,
+			});
+
+			console.log(
+				`[BackgroundWorker] Checked out ${targetBranch} in main repo`,
+			);
+
+			// Step 4: Attempt to merge the worktree branch
+			await execAsync(`git merge origin/${worktreeBranch}`, {
+				cwd: repoRoot,
 			});
 
 			integration.mergeAttempted = true;
 			integration.mergeSuccessful = true;
 
-			console.log(`[BackgroundWorker] Successfully integrated ${worktreeBranch} into ${targetBranch}`);
+			console.log(
+				`[BackgroundWorker] Successfully integrated ${worktreeBranch} into ${targetBranch}`,
+			);
 
-			// Clean up the worktree after successful integration
+			// Step 5: Clean up the remote branch
+			try {
+				await execAsync(`git push origin --delete ${worktreeBranch}`, {
+					cwd: repoRoot,
+				});
+				console.log(
+					`[BackgroundWorker] Deleted remote branch ${worktreeBranch}`,
+				);
+			} catch (deleteError) {
+				console.warn(
+					`[BackgroundWorker] Failed to delete remote branch: ${deleteError}`,
+				);
+			}
+
+			// Step 6: Clean up the worktree after successful integration
 			try {
 				await execAsync(`git worktree remove "${worktreePath}"`, {
-					cwd: this.config.repoPath,
+					cwd: repoRoot,
 				});
 				console.log(`[BackgroundWorker] Cleaned up worktree: ${worktreePath}`);
 			} catch (cleanupError) {
-				console.warn(`[BackgroundWorker] Failed to cleanup worktree: ${cleanupError}`);
+				console.warn(
+					`[BackgroundWorker] Failed to cleanup worktree: ${cleanupError}`,
+				);
 			}
-
 		} catch (error: any) {
 			integration.mergeAttempted = true;
 			integration.mergeSuccessful = false;
 			integration.errorMessage = error.message;
 
-			// Check if it's a merge conflict
-			if (error.message.includes('CONFLICT') || error.message.includes('conflict')) {
-				try {
-					// Get conflict files
-					const { stdout } = await execAsync("git status --porcelain", {
-						cwd: this.config.repoPath,
-					});
-					
-					integration.conflictFiles = stdout
-						.split('\n')
-						.filter(line => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
-						.map(line => line.substring(3));
+			console.error(`[BackgroundWorker] Integration failed: ${error.message}`);
 
-					console.log(`[BackgroundWorker] Merge conflicts detected in files: ${integration.conflictFiles.join(', ')}`);
+			// Check if it's a merge conflict
+			if (
+				error.message.includes("CONFLICT") ||
+				error.message.includes("conflict")
+			) {
+				try {
+					// Get conflict files from the main repo
+					const { stdout } = await execAsync("git status --porcelain", {
+						cwd: repoRoot,
+					});
+
+					integration.conflictFiles = stdout
+						.split("\n")
+						.filter(
+							(line) =>
+								line.startsWith("UU") ||
+								line.startsWith("AA") ||
+								line.startsWith("DD"),
+						)
+						.map((line) => line.substring(3));
+
+					console.log(
+						`[BackgroundWorker] Merge conflicts detected in files: ${integration.conflictFiles.join(", ")}`,
+					);
 				} catch (statusError) {
-					console.warn(`[BackgroundWorker] Failed to get conflict status: ${statusError}`);
+					console.warn(
+						`[BackgroundWorker] Failed to get conflict status: ${statusError}`,
+					);
 				}
 			}
 
-			console.error(`[BackgroundWorker] Integration failed: ${error.message}`);
+			// If integration failed, we should still clean up the remote branch if it was pushed
+			try {
+				await execAsync(`git push origin --delete ${worktreeBranch}`, {
+					cwd: repoRoot,
+				});
+				console.log(
+					`[BackgroundWorker] Cleaned up remote branch ${worktreeBranch} after failed integration`,
+				);
+			} catch (cleanupError) {
+				console.warn(
+					`[BackgroundWorker] Failed to cleanup remote branch: ${cleanupError}`,
+				);
+			}
 		}
 
 		return integration;
@@ -218,8 +298,9 @@ class BackgroundAgentWorker {
 
 	async run() {
 		try {
+			const repoRoot = await getRepoRoot(this.config.repoPath);
 			const worktreeBranch = `background-${this.config.threadId}`;
-			const worktreePath = path.resolve(this.config.repoPath, '..', worktreeBranch);
+			const worktreePath = path.resolve(repoRoot, worktreeBranch);
 
 			// Send initial status
 			this.sendStatus({
@@ -260,10 +341,12 @@ class BackgroundAgentWorker {
 			// Execute the background task
 			await this.agent.invoke({
 				threadId: this.config.threadId,
-				input: `# AUTONOMOUS MODE: Complete task in isolated worktree without user interaction.
-**Role Reassignment**: You are a background agent that performs tasks autonomously in a git worktree.
+				input: `# AUTONOMOUS MODE: 
+You are the background agent that performs tasks autonomously in a git worktree.
+Complete the task in an isolated worktree without user interaction.
 
 ## Setup
+**You must always create a new worktree for each task.**
 Create worktree: \`git worktree add -b ${worktreeBranch} ../${worktreeBranch} origin/${this.config.mainBranch}\`
 
 ## Work Location
@@ -295,14 +378,16 @@ Begin.
 					status: "integrating",
 				});
 
-				const targetBranch = await this.getCurrentBranch();
+				const targetBranch = (await getCurrentBranch(repoRoot)) ?? "main";
 				const integration = await this.attemptIntegration(
 					worktreeBranch,
 					worktreePath,
-					targetBranch
+					targetBranch,
+					repoRoot,
 				);
 
-				const finalStatus: "integrated" | "conflict" = integration.mergeSuccessful ? "integrated" : "conflict";
+				const finalStatus: "integrated" | "conflict" =
+					integration.mergeSuccessful ? "integrated" : "conflict";
 
 				// Send final status with integration information
 				this.sendStatus({
@@ -324,7 +409,7 @@ Begin.
 			} else {
 				// Auto-integration disabled, just mark as completed
 				const integration: BackgroundAgentIntegration = {
-					targetBranch: await this.getCurrentBranch(),
+					targetBranch: (await getCurrentBranch(repoRoot)) ?? "main",
 					worktreePath,
 					mergeAttempted: false,
 					changedFiles: await this.getChangedFiles(worktreePath),
@@ -347,7 +432,6 @@ Begin.
 					},
 				});
 			}
-
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error ? error.message : "Unknown error occurred";

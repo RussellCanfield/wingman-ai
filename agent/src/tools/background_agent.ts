@@ -6,6 +6,7 @@ import { EventEmitter } from "node:events";
 import path from "node:path";
 import fs from "node:fs";
 import type { WingmanConfig } from "../agent";
+import { getCurrentBranch } from "../utils";
 
 export type BackgroundAgentIntegration = {
 	targetBranch: string;
@@ -57,12 +58,6 @@ export const backgroundAgentSchema = z.object({
 		.describe(
 			"Name of the background agent (User Friendly Identifier based on the task)",
 		),
-	mainBranch: z
-		.string()
-		.describe(
-			"The current working git branch to use for the repository (defaults to 'main')",
-		)
-		.default("main"),
 	autoIntegrate: z
 		.boolean()
 		.describe(
@@ -242,12 +237,16 @@ class BackgroundAgentManager {
 
 			// Handle worker exit
 			worker.on("exit", (code) => {
+				// When the worker exits, for any reason, remove it from the active list.
+				this.activeWorkers.delete(threadId);
+
 				if (code !== 0) {
+					// A non-zero exit code indicates an issue. The promise may have already
+					// been settled, so we just emit an event rather than rejecting here.
 					const error = `Background agent worker exited with code ${code}`;
 					this.eventEmitter.emit("error", { error });
-					this.cleanup(threadId);
-					reject(new Error(error));
 				}
+				// Do NOT reject the promise here to avoid unhandled rejections.
 			});
 		});
 	}
@@ -270,9 +269,24 @@ class BackgroundAgentManager {
 	private cleanup(threadId: string) {
 		const worker = this.activeWorkers.get(threadId);
 		if (worker) {
+			// Request graceful shutdown
 			worker.postMessage("terminate");
-			worker.terminate();
-			this.activeWorkers.delete(threadId);
+
+			// Set a timeout to forcefully terminate if it doesn't exit gracefully
+			const timeout = setTimeout(() => {
+				const stillActiveWorker = this.activeWorkers.get(threadId);
+				if (stillActiveWorker) {
+					console.warn(
+						`[BackgroundAgentManager] Worker ${threadId} did not terminate gracefully. Forcing termination.`,
+					);
+					stillActiveWorker.terminate();
+				}
+			}, 2000); // 2-second grace period
+
+			// Once the worker exits, we should clear the timeout.
+			worker.once("exit", () => {
+				clearTimeout(timeout);
+			});
 		}
 	}
 
@@ -337,7 +351,11 @@ export const createBackgroundAgentTool = (
 					input: input.input,
 					agentName: input.agentName,
 					threadId,
-					mainBranch: input.mainBranch,
+					mainBranch:
+						(await getCurrentBranch(
+							config.workingDirectory || process.cwd(),
+						)) ?? "main",
+					// Use the autoIntegrate flag from input,
 					autoIntegrate: input.autoIntegrate,
 					repoPath: config.workingDirectory || process.cwd(),
 				};
@@ -352,7 +370,7 @@ export const createBackgroundAgentTool = (
 						threadId,
 						agentName: input.agentName,
 						message: `Background agent '${input.agentName}' has been started successfully.${input.autoIntegrate ? " Auto-integration is enabled." : " Auto-integration is disabled."}`,
-						status: "completed",
+						status: "running",
 					}),
 					tool_call_id: toolConfig.toolCall.id,
 				});

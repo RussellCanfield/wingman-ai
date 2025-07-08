@@ -418,7 +418,13 @@ ${this.config.instructions}
 				})
 				.join("\n");
 
-			system.content += `\n\n# Background Agent Status\nYou currently have the following background agents:\n${backgroundAgentInfo}\n\nUse the 'integrate_background_work' tool to manage integration of completed work.`;
+			system.content += `
+			
+# Background Agent Status
+You currently have the following background agents:
+${backgroundAgentInfo}
+
+Ask the user if they want to integrate their changes (using 'integrate_background_work' tool - don't mention it by name) to complete the work.`;
 		}
 
 		const response = await model.invoke([system, ...state.messages], {
