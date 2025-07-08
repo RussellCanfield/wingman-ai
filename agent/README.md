@@ -76,7 +76,8 @@ The `WingmanAgent` can be configured with the following options:
 | `workingDirectory` | `string` (optional)                | The working directory for the agent. Defaults to the current working directory.                         |
 | `mode`             | `"interactive" \| "vibe"`          | The agent's mode of operation. Defaults to `"vibe"`.                                                    |
 | `memory`           | `BaseCheckpointSaver` (optional)   | A LangChain checkpoint saver for conversation memory. Defaults to `MemorySaver`.                        |
-| `toolAbilities`    | `object` (optional)                | An object to extend the agent's tool capabilities, such as with a `symbolRetriever` or `fileDiagnostics`. |
+| `toolAbilities`    | `object` (optional)                | An object to extend the agent's tool capabilities. See [Tool Abilities](#tool-abilities) for more details. |
+| `tools`            | `AvailableToolsType[]` (optional)  | An array of tools to be available to the agent. Defaults to all available tools.                        |
 
 ## Tools
 
@@ -88,14 +89,16 @@ The agent comes with a variety of built-in tools:
 - **File System:** Reads, writes, and lists files and directories.
 - **Research:** Conducts in-depth research on a topic.
 - **File Inspector:** Inspects files for linting issues and diagnostics.
+- **Background Agent:** Allows the agent to run tasks in the background.
 
 ## Tool Abilities
 
-Extending and enhancing Wingman happens with tools.
+The `toolAbilities` option allows you to extend and enhance the agent's capabilities.
 
-- **Symbol Retriever:** A callback that delivers symbols for a file.
-- **File Diagnostics:** A callback that delivers linting and error feedback for a file.
-- **Blocked Commands:** A `string[]` of commands the agent cannot execute. Defaults to:
+- **`symbolRetriever`:** A callback that delivers symbols for a file.
+- **`fileDiagnostics`:** A callback that delivers linting and error feedback for a file.
+- **`allowScriptExecution`:** A `boolean` that determines whether the agent is allowed to execute scripts or commands that can modify the system. Defaults to `true`.
+- **`blockedCommands`:** A `string[]` of commands the agent cannot execute. Defaults to:
 
 ```json
 [
@@ -114,7 +117,7 @@ Extending and enhancing Wingman happens with tools.
 	"chown",
 	":>",
 	"sudo",
-	"su",
+	"su"
 ]
 ```
 
@@ -126,11 +129,11 @@ In the `.wingman` directory, create a `mcp.json` file with the following schema:
 
 ```json
 {
-  mcpServers: {
-    'data-processor': {
-      command: 'python',
-      args: ['data_server.py']
-    },
+  "mcpServers": {
+    "data-processor": {
+      "command": "python",
+      "args": ["data_server.py"]
+    }
   }
 }
 ```

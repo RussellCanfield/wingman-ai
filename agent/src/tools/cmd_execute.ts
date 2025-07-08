@@ -28,6 +28,58 @@ export const DEFAULT_BLOCKED_COMMANDS = [
 	"su",
 ];
 
+const createToolResponse = (
+	runId: string,
+	toolCallId: string,
+	command: string,
+	result: string,
+	failed: boolean,
+): ToolMessage => {
+	const metadata: CommandMetadata = {
+		id: runId,
+		command,
+		result,
+		failed,
+		success: !failed,
+		accepted: true,
+		rejected: false,
+	};
+
+	let content: string;
+	if (failed) {
+		content =
+			result.startsWith("Command:") || result.startsWith("Error:")
+				? result
+				: `Command: 
+"${command}" 
+
+Failed with output: 
+${result}`;
+	} else {
+		content =
+			`Command:
+"${command}"
+ 
+Completed successfully with the following output:
+		
+${result}` ||
+			`Command:
+"${command}" 
+
+Completed successfully with no output.`;
+	}
+
+	return new ToolMessage({
+		id: runId,
+		content,
+		tool_call_id: toolCallId,
+		name: "command_execute",
+		additional_kwargs: {
+			command: metadata,
+		},
+	});
+};
+
 /**
  * Creates a tool that executes terminal commands safely
  */
@@ -35,65 +87,49 @@ export const createCommandExecuteTool = (
 	workspace: string,
 	envVariables?: Record<string, string>,
 	blockedCommands: string[] = DEFAULT_BLOCKED_COMMANDS,
-	timeoutInMilliseconds = 60000,
+	allowScriptExecution = true,
+	timeoutInMilliseconds = 300000, // Default timeout of 5 minutes
 ) => {
 	return tool(
 		async (input, config) => {
-			return new Promise((resolve, reject) => {
+			return new Promise((resolve) => {
 				try {
 					const commandParts = input.command.trim().split(/\s+/);
 					const commandName = (commandParts[0] || "").toLowerCase();
 					const baseCommand = commandName.split(/[\\/]/).pop() || "";
 
-					// More precise check for blocked commands
 					if (blockedCommands.includes(baseCommand)) {
-						const command: CommandMetadata = {
-							id: config.runId,
-							command: input.command,
-							result: `Command: \"${input.command}\" rejected, contains potentially destructive operations`,
-							failed: true,
-							success: false,
-							accepted: true,
-							rejected: false,
-						};
+						const result = `Command: "${input.command}" rejected, contains potentially destructive operations`;
 						resolve(
-							new ToolMessage({
-								id: config.runId,
-								content: `Command: \"${input.command}\" rejected, contains potentially destructive operations`,
-								tool_call_id: config.toolCall.id,
-								name: "command_execute",
-								additional_kwargs: {
-									command,
-								},
-							}),
+							createToolResponse(
+								config.runId,
+								config.toolCall.id,
+								input.command,
+								result,
+								true,
+							),
 						);
 						return;
 					}
 
 					if (
-						commandName.endsWith(".sh") ||
-						commandName.endsWith(".bat") ||
-						commandName.endsWith(".cmd")
+						!allowScriptExecution &&
+						(commandName.endsWith(".sh") ||
+							commandName.endsWith(".bash") ||
+							commandName.endsWith(".zsh") ||
+							commandName.endsWith(".ps1") ||
+							commandName.endsWith(".cmd") ||
+							commandName.endsWith(".bat"))
 					) {
-						const command: CommandMetadata = {
-							id: config.runId,
-							command: input.command,
-							result: `Command: \"${input.command}\" blocked`,
-							failed: true,
-							success: false,
-							accepted: true,
-							rejected: false,
-						};
+						const result = `Command: "${input.command}" rejected, script execution not allowed`;
 						resolve(
-							new ToolMessage({
-								id: config.runId,
-								content: `Command: \"${input.command}\" rejected, script execution not allowed`,
-								tool_call_id: config.toolCall.id,
-								name: "command_execute",
-								additional_kwargs: {
-									command,
-								},
-							}),
+							createToolResponse(
+								config.runId,
+								config.toolCall.id,
+								input.command,
+								result,
+								true,
+							),
 						);
 						return;
 					}
@@ -101,49 +137,74 @@ export const createCommandExecuteTool = (
 					let output = "";
 					let hasExited = false;
 
+					// Create a sanitized environment for the child process
+					const safeEnv = {
+						...process.env,
+						FORCE_COLOR: "0",
+						NO_COLOR: "1",
+						GIT_PAGER: "cat",
+						...(envVariables ?? {}),
+					};
+
+					// Remove debugging-related environment variables to prevent child processes
+					// from inheriting the debug context, which can cause unexpected output
+					// like "Waiting for debugger to disconnect...".
+					//@ts-expect-error
+					// biome-ignore lint/performance/noDelete: <explanation>
+					delete safeEnv.NODE_OPTIONS;
+					//@ts-expect-error
+					// biome-ignore lint/performance/noDelete: <explanation>
+					delete safeEnv.NODE_DEBUG;
+					//@ts-expect-error
+					// biome-ignore lint/performance/noDelete: <explanation>
+					delete safeEnv.VSCODE_INSPECTOR_OPTIONS;
+
 					const terminalProcess: ChildProcess = spawn(input.command, [], {
 						cwd: workspace,
 						shell: true,
-						stdio: ["ignore", "pipe", "pipe"], // Explicitly ignore stdin
-						env: {
-							...process.env,
-							FORCE_COLOR: "0",
-							NO_COLOR: "1",
-							GIT_PAGER: "cat",
-							...(envVariables ?? {}),
-						},
+						stdio: ["ignore", "pipe", "pipe"],
+						env: safeEnv,
 						windowsHide: true,
 					});
 
 					const timeout = setTimeout(() => {
 						if (!hasExited) {
+							hasExited = true;
 							try {
 								terminalProcess.kill();
 							} catch (e) {
 								// Ignore kill errors
 							}
-							const command: CommandMetadata = {
-								id: config.runId,
-								command: input.command,
-								result: `Command: \"${input.command}\" timed out after 60 seconds`,
-								failed: true,
-								success: false,
-								accepted: true,
-								rejected: false,
-							};
+							const result = `Command: "${
+								input.command
+							}" timed out after ${timeoutInMilliseconds / 1000} seconds`;
 							resolve(
-								new ToolMessage({
-									id: config.runId,
-									content: `Command: \"${input.command}\" timed out after 60 seconds`,
-									tool_call_id: config.toolCall.id,
-									name: "command_execute",
-									additional_kwargs: {
-										command,
-									},
-								}),
+								createToolResponse(
+									config.runId,
+									config.toolCall.id,
+									input.command,
+									result,
+									true,
+								),
 							);
 						}
 					}, timeoutInMilliseconds);
+
+					const resolveResponse = (result: string, failed: boolean) => {
+						if (!hasExited) {
+							hasExited = true;
+							clearTimeout(timeout);
+							resolve(
+								createToolResponse(
+									config.runId,
+									config.toolCall.id,
+									input.command,
+									result,
+									failed,
+								),
+							);
+						}
+					};
 
 					terminalProcess.stdout?.on("data", (data) => {
 						output += data.toString();
@@ -154,105 +215,23 @@ export const createCommandExecuteTool = (
 					});
 
 					terminalProcess.on("error", (err) => {
-						if (!hasExited) {
-							hasExited = true;
-							clearTimeout(timeout);
-							const command: CommandMetadata = {
-								id: config.runId,
-								command: input.command,
-								result: err.message,
-								failed: true,
-								success: false,
-								accepted: true,
-								rejected: false,
-							};
-							resolve(
-								new ToolMessage({
-									id: config.runId,
-									content: `Command: \"${input.command}\" failed, error: ${err.message}`,
-									tool_call_id: config.toolCall.id,
-									name: "command_execute",
-									additional_kwargs: {
-										command,
-									},
-								}),
-							);
-						}
+						resolveResponse(err.message, true);
 					});
 
 					terminalProcess.on("exit", (code) => {
-						if (!hasExited) {
-							hasExited = true;
-							clearTimeout(timeout);
-							if (code === 0) {
-								const command: CommandMetadata = {
-									id: config.runId,
-									command: input.command,
-									result: output,
-									failed: false,
-									success: true,
-									accepted: true,
-									rejected: false,
-								};
-								resolve(
-									new ToolMessage({
-										id: config.runId,
-										content:
-											output ||
-											`Command "${input.command}" ran successfully with no output.`,
-										tool_call_id: config.toolCall.id,
-										name: "command_execute",
-										additional_kwargs: {
-											command,
-										},
-									}),
-								);
-							} else {
-								const command: CommandMetadata = {
-									id: config.runId,
-									command: input.command,
-									result: output,
-									failed: true,
-									success: false,
-									accepted: true,
-									rejected: false,
-								};
-								resolve(
-									new ToolMessage({
-										id: config.runId,
-										content: `Command: \"${input.command}\" failed, output: ${output}`,
-										tool_call_id: config.toolCall.id,
-										name: "command_execute",
-										additional_kwargs: {
-											command,
-										},
-									}),
-								);
-							}
-						}
+						resolveResponse(output, code !== 0);
 					});
 				} catch (error) {
 					const errorMessage =
 						error instanceof Error ? error.message : "Unknown error occurred";
-					const command: CommandMetadata = {
-						id: config.runId,
-						command: input.command,
-						result: errorMessage,
-						failed: true,
-						success: false,
-						accepted: true,
-						rejected: false,
-					};
 					resolve(
-						new ToolMessage({
-							id: config.runId,
-							content: `Command: \"${input.command}\" failed, error: ${errorMessage}`,
-							tool_call_id: config.toolCall.id,
-							name: "command_execute",
-							additional_kwargs: {
-								command,
-							},
-						}),
+						createToolResponse(
+							config.runId,
+							config.toolCall.id,
+							input.command,
+							`Error: ${errorMessage}`,
+							true,
+						),
 					);
 				}
 			});

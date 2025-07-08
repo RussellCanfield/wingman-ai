@@ -1,7 +1,7 @@
 import { HumanMessage } from "@langchain/core/messages";
 import path from "node:path";
-import type { WingmanRequest } from "src/agent";
-import { loadFiles } from "src/utils";
+import type { WingmanRequest } from "../agent";
+import { loadFiles } from "../utils";
 
 export const buildHumanMessages = async (
 	request: WingmanRequest,

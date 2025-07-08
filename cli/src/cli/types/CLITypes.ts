@@ -1,4 +1,5 @@
 import type { WingmanAgent } from "@wingman-ai/agent";
+import type { TaskManager } from "../tasks/TaskManager.js";
 
 export interface Message {
 	id: string;
@@ -17,4 +18,5 @@ export interface CLIState {
 	inputTokens: number;
 	outputTokens: number;
 	model: string;
+	taskManager?: TaskManager;
 }

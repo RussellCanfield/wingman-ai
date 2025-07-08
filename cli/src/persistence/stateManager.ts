@@ -1,4 +1,3 @@
-import type { BaseMessage } from "@langchain/core/messages";
 import Database, { type Database as SQLDatabase } from "better-sqlite3";
 
 export type Conversation = {
@@ -16,7 +15,7 @@ export type Conversation = {
 	metadata?: any;
 };
 
-export class ConversationRetriever {
+export class StateManager {
 	db: SQLDatabase;
 
 	constructor(dbPath: string) {
@@ -97,7 +96,7 @@ export class ConversationRetriever {
 	static async getAllConversations(
 		dbPath = "./.wingman/memory.db",
 	): Promise<Conversation[]> {
-		const retriever = new ConversationRetriever(dbPath);
+		const retriever = new StateManager(dbPath);
 		try {
 			return retriever.getAllConversations();
 		} finally {

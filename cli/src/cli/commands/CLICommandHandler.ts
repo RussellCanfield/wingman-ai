@@ -1,9 +1,19 @@
-import { confirm, isCancel, log, note, spinner, select } from "@clack/prompts";
+import {
+	confirm,
+	isCancel,
+	log,
+	note,
+	spinner,
+	select,
+	text,
+} from "@clack/prompts";
 import chalk from "chalk";
 import { getPlanningPrompt } from "../../commands/planning.js";
-import { ConversationRetriever } from "../../persistence/conversationManager.js";
+import { StateManager } from "../../persistence/stateManager.js";
 import { logError, agentLogger } from "../../utils/logger.js";
 import type { CLIState } from "../types/CLITypes.js";
+import type { WingmanRequest } from "@wingman-ai/agent";
+import { getGraphState } from "src/persistence/graphManager.js";
 
 export class CLICommandHandler {
 	constructor(
@@ -56,11 +66,173 @@ export class CLICommandHandler {
 				this.showStatus();
 				return true;
 
+			// Task management commands
+			case "/tasks":
+				await this.showTasks();
+				return true;
+
+			case "/task":
+				await this.handleTaskCommand(args);
+				return true;
+
+			case "/background":
+			case "/bg":
+				await this.startBackgroundTask(args);
+				return true;
+
 			default:
 				log.warn(`Unknown command: ${commandLower}`);
 				log.info("Type /help to see available commands");
 				return true;
 		}
+	}
+
+	private async showTasks(): Promise<void> {
+		if (!this.state.taskManager) {
+			log.warn("Task manager or agent not initialized");
+			return;
+		}
+
+		await this.state.taskManager.showTaskDashboard();
+	}
+
+	private async handleTaskCommand(args: string[]): Promise<void> {
+		if (!this.state.taskManager) {
+			log.warn("Task manager not initialized");
+			return;
+		}
+
+		if (args.length === 0) {
+			await this.state.taskManager.showTaskDashboard();
+			return;
+		}
+
+		const subCommand = args[0].toLowerCase();
+		const taskId = args[1];
+
+		switch (subCommand) {
+			case "cancel":
+				if (!taskId) {
+					log.warn("Please provide a task ID: /task cancel <id>");
+					return;
+				}
+				const cancelled = await this.state.taskManager.cancelTask(taskId);
+				if (cancelled) {
+					log.success(`Task ${taskId} cancelled`);
+				} else {
+					log.error(`Failed to cancel task ${taskId}`);
+				}
+				break;
+
+			case "pause":
+				if (!taskId) {
+					log.warn("Please provide a task ID: /task pause <id>");
+					return;
+				}
+				const paused = await this.state.taskManager.pauseTask(taskId);
+				if (paused) {
+					log.success(`Task ${taskId} paused`);
+				} else {
+					log.error(`Failed to pause task ${taskId}`);
+				}
+				break;
+
+			case "resume":
+				if (!taskId) {
+					log.warn("Please provide a task ID: /task resume <id>");
+					return;
+				}
+				const resumed = await this.state.taskManager.resumeTask(taskId);
+				if (resumed) {
+					log.success(`Task ${taskId} resumed`);
+				} else {
+					log.error(`Failed to resume task ${taskId}`);
+				}
+				break;
+
+			default:
+				log.warn(`Unknown task command: ${subCommand}`);
+				log.info("Available: cancel, pause, resume");
+		}
+	}
+
+	private async startBackgroundTask(args: string[]): Promise<void> {
+		if (!this.state.taskManager || !this.state.agent) {
+			log.warn("Task manager or agent not initialized");
+			return;
+		}
+
+		if (args.length === 0) {
+			log.warn("Please provide a prompt for the background task");
+			log.info("Usage: /bg <prompt> or /background <prompt>");
+			return;
+		}
+
+		const prompt = args.join(" ");
+
+		// Ask for task name
+		const taskName = await text({
+			message: "Enter a name for this background task:",
+			placeholder: "e.g., 'Code analysis', 'Documentation review'",
+			defaultValue: `Background: ${prompt.substring(0, 30)}...`,
+			validate: (value) => {
+				if (!value || value.trim().length === 0) {
+					return "Please enter a task name";
+				}
+			},
+		});
+
+		if (isCancel(taskName)) {
+			return;
+		}
+
+		// Ask for task options
+		const cancellable = await confirm({
+			message: "Should this task be cancellable?",
+			initialValue: true,
+		});
+
+		if (isCancel(cancellable)) {
+			return;
+		}
+
+		const pausable = await confirm({
+			message: "Should this task be pausable?",
+			initialValue: false,
+		});
+
+		if (isCancel(pausable)) {
+			return;
+		}
+
+		// Create the request
+		const request: WingmanRequest = {
+			input: prompt,
+			threadId: this.state.threadId,
+			contextFiles:
+				this.state.contextFiles.length > 0
+					? this.state.contextFiles
+					: undefined,
+			contextDirectories:
+				this.state.contextDirectories.length > 0
+					? this.state.contextDirectories
+					: undefined,
+		};
+
+		// Start the background task
+		const taskId = await this.state.taskManager.startTask(
+			taskName.trim(),
+			request,
+			{
+				description: `Background execution of: ${prompt}`,
+				cancellable,
+				pausable,
+			},
+		);
+
+		log.success(`Started background task: ${chalk.cyan(taskName.trim())}`);
+		log.info(`Task ID: ${chalk.gray(taskId)}`);
+		log.info("Use /tasks to monitor progress or /task <id> for details");
 	}
 
 	private addFileContext(files: string[]) {
@@ -136,8 +308,49 @@ export class CLICommandHandler {
 				return;
 			}
 
-			// Process the planning prompt as a regular message
-			await this.processUserInput(planningPrompt);
+			// Ask if they want to run this in the background
+			const runInBackground = await confirm({
+				message: "Would you like to run this analysis in the background?",
+				initialValue: false,
+			});
+
+			if (isCancel(runInBackground)) {
+				log.info("Project analysis cancelled");
+				return;
+			}
+
+			if (runInBackground && this.state.taskManager && this.state.agent) {
+				// Run as background task
+				const request: WingmanRequest = {
+					input: planningPrompt,
+					threadId: this.state.threadId,
+					contextFiles:
+						this.state.contextFiles.length > 0
+							? this.state.contextFiles
+							: undefined,
+					contextDirectories:
+						this.state.contextDirectories.length > 0
+							? this.state.contextDirectories
+							: undefined,
+				};
+
+				const taskId = await this.state.taskManager.startTask(
+					"Project Analysis",
+					request,
+					{
+						description: "Comprehensive project analysis and report generation",
+						cancellable: true,
+						pausable: false,
+					},
+				);
+
+				log.success("Started project analysis in the background");
+				log.info(`Task ID: ${chalk.gray(taskId)}`);
+				log.info("Use /tasks to monitor progress");
+			} else {
+				// Process the planning prompt as a regular message
+				await this.processUserInput(planningPrompt);
+			}
 		} catch (error) {
 			s.stop(chalk.red("Failed to prepare analysis prompt"));
 			logError("WingmanCLI", error as Error, { event: "init_project_error" });
@@ -162,26 +375,37 @@ ${chalk.bold("Available Commands:")}
   ${chalk.cyan("/status")} - Show current session status
   ${chalk.cyan("/exit")} or ${chalk.cyan("/quit")} - Exit Wingman
 
+${chalk.bold("Background Task Commands:")}
+
+  ${chalk.cyan("/tasks")} - Show all background tasks
+  ${chalk.cyan("/bg <prompt>")} - Start a new background task
+  ${chalk.cyan("/task cancel <id>")} - Cancel a specific task
+  ${chalk.cyan("/task pause <id>")} - Pause a specific task
+  ${chalk.cyan("/task resume <id>")} - Resume a paused task
+
 ${chalk.bold("Tips:")}
 
   • Use ${chalk.cyan("Ctrl+C")} to exit at any time
   • Wingman remembers your conversation history
   • You can reference files and directories in your messages
   • Use ${chalk.cyan("/init")} to get started with analyzing a new project
+  • Background tasks let you continue chatting while long operations run
 `;
 		note(helpText.trim(), "Wingman Help");
 	}
 
 	private showHotkeys() {
 		note(
-			`${chalk.bold("Keyboard Shortcuts:")}\n\n` +
-				`${chalk.cyan("Ctrl+C")} - Exit Wingman\n` +
-				`${chalk.cyan("Enter")} - Send message\n` +
-				`${chalk.cyan("↑/↓")} - Navigate command history (if supported)\n\n` +
-				`${chalk.bold("Command Shortcuts:")}\n` +
-				`${chalk.cyan("/h")} - Same as /help\n` +
-				`${chalk.cyan("/q")} - Same as /quit\n` +
-				`${chalk.cyan("/r")} - Same as /resume`,
+			`${chalk.bold("Keyboard Shortcuts:")}\\n\\n` +
+				`${chalk.cyan("Ctrl+C")} - Exit Wingman\\n` +
+				`${chalk.cyan("Enter")} - Send message\\n` +
+				`${chalk.cyan("↑/↓")} - Navigate command history (if supported)\\n\\n` +
+				`${chalk.bold("Command Shortcuts:")}\\n` +
+				`${chalk.cyan("/h")} - Same as /help\\n` +
+				`${chalk.cyan("/q")} - Same as /quit\\n` +
+				`${chalk.cyan("/r")} - Same as /resume\\n` +
+				`${chalk.cyan("/t")} - Same as /tasks\\n` +
+				`${chalk.cyan("/bg")} - Same as /background`,
 			"Keyboard Shortcuts",
 		);
 	}
@@ -191,7 +415,7 @@ ${chalk.bold("Tips:")}
 		s.start("Loading conversations...");
 
 		try {
-			const conversations = await ConversationRetriever.getAllConversations();
+			const conversations = await StateManager.getAllConversations();
 			s.stop("Conversations loaded");
 
 			if (conversations.length === 0) {
@@ -285,6 +509,8 @@ ${chalk.bold("Tips:")}
 	}
 
 	private showStatus() {
+		const taskSummary = this.state.taskManager?.getTasksStatusSummary() || "";
+
 		const status = [
 			`Model: ${chalk.cyan(this.state.model)}`,
 			`Thread ID: ${chalk.gray(this.state.threadId)}`,
@@ -294,7 +520,10 @@ ${chalk.bold("Tips:")}
 			`Input Tokens: ${chalk.cyan(this.state.inputTokens.toLocaleString())}`,
 			`Output Tokens: ${chalk.cyan(this.state.outputTokens.toLocaleString())}`,
 			`Total Tokens: ${chalk.cyan((this.state.inputTokens + this.state.outputTokens).toLocaleString())}`,
-		].join("\n");
+			taskSummary ? `Background Tasks: ${chalk.cyan(taskSummary)}` : "",
+		]
+			.filter(Boolean)
+			.join("\\n");
 
 		note(status, "Session Status");
 	}

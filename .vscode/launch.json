@@ -50,9 +50,18 @@
 			"runtimeArgs": ["run", "dev", "--", "${input:cliArgs}"],
 			"sourceMaps": true,
 			"console": "integratedTerminal",
-			"skipFiles": [
-                "<node_internals>/**"
-            ]
+			"skipFiles": ["<node_internals>/**"]
+		},
+		{
+			"name": "Debug agent",
+			"type": "node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/agent",
+			"runtimeExecutable": "npm",
+			"runtimeArgs": ["run", "int"],
+			"sourceMaps": true,
+			"console": "integratedTerminal",
+			"skipFiles": ["<node_internals>/**"]
 		}
 	],
 	"compounds": [

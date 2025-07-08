@@ -15,6 +15,12 @@ const listDirectorySchema = baseToolSchema.extend({
 		.describe(
 			"The level of subdirectories to recursively descend into during the scan. For example, a depth of 1 will scan the initial directory and its direct subdirectories, while 2 will go one level deeper. The default value is 3.",
 		),
+	exclude: z
+		.string()
+		.optional()
+		.describe(
+			"A comma-separated list of glob patterns to exclude from the directory scan (e.g., '*.test.ts,*.spec.ts')",
+		),
 });
 
 /**
@@ -27,7 +33,7 @@ export const createListDirectoryTool = (
 	const toolConfig = {
 		name: "list_directory",
 		description:
-			"Lists files and directories from the specified path with configurable depth. Returns a structured tree representation of the filesystem hierarchy. To avoid redundant operations, save the results and reference them in your reasoning when exploring the same directory.",
+			"Lists files and directories from the specified path with configurable depth. Returns a structured tree representation of the filesystem hierarchy. To avoid redundant operations, save the results and reference it in your reasoning when exploring the same directory.",
 		schema: listDirectorySchema,
 		cache_control: { type: "ephemeral" },
 	};
@@ -49,7 +55,7 @@ export const createListDirectoryTool = (
 			// Use the provided depth or default to 3
 			const depth = input.depth !== undefined ? (input.depth ?? 3) : 3;
 
-			const files = await scanDirectory(dirPath, depth);
+			const files = await scanDirectory(dirPath, depth, workspace, input.exclude);
 
 			return new ToolMessage({
 				id: config.runId,

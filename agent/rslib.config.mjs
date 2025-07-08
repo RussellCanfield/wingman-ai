@@ -6,8 +6,8 @@ const dependencies = Object.keys(pkg.dependencies || {});
 
 export default {
 	lib: [
-		{ format: "esm", syntax: "es2021", dts: true },
-		{ format: "cjs", syntax: "es2021", dts: true },
+		{ format: "esm", syntax: "es2021", dts: true, bundle: false },
+		{ format: "cjs", syntax: "es2021", dts: true, bundle: false },
 	],
 	external: dependencies,
 };

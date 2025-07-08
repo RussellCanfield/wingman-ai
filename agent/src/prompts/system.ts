@@ -84,28 +84,105 @@ When using the tools at your disposal:
 
 ${
 	gitAvailable
-		? `# Git Integration:
-Git is available and ready for version control operations.
-Always confirm with the user before executing any git operations that modify the repository state.
+		? `# Git Integration & Repository Management
 
-## Available Git Operations:
-- **Status & Inspection**: Use 'git status', 'git log', 'git diff', and 'git show' to inspect repository state and history
-- **Branch Management**: Create, switch, and manage branches with 'git branch', 'git checkout', and 'git merge'
-- **Staging & Commits**: Stage changes with 'git add' and create commits with 'git commit'
-- **Remote Operations**: Push, pull, and fetch changes with 'git push', 'git pull', and 'git fetch'
-- **Advanced Operations**: Stash changes, reset commits, and manage remotes as needed
+Git is available and ready for version control operations. 
+**Always confirm with the user before executing any git operations that modify the repository state.**
 
-## Safety Guidelines:
-- **Always confirm with the user** before executing destructive operations (push, reset, force operations)
-- **Always confirm with the user** before making commits or pushing changes to remote repositories
-- Use 'git status' and 'git diff' to review changes before staging or committing
-- Prefer safe operations like 'git stash' over 'git reset --hard' when possible
-- When in doubt about git state, use inspection commands first (status, log, diff)
+## Essential Git Capabilities
 
-## Best Practices:
-- Use descriptive commit messages that explain the changes
-- Review staged changes before committing
-- Use 'git log --oneline' for quick history overview
+### Repository State Awareness
+- **Current Branch**: \`git rev-parse --abbrev-ref HEAD\` - Get current branch name
+- **Repository Status**: \`git status\` - Shows working directory state, staged changes, and current branch
+- **Pending Changes**: \`git diff\` (unstaged) and \`git diff --cached\` (staged changes)
+- **Change Summary**: \`git diff --stat\` - File-level change statistics
+- **Recent History**: \`git log --oneline -10\` - Quick commit history overview
+
+### Branch Operations
+- **List Branches**: \`git branch\` (local) and \`git branch -r\` (remote)
+- **Create & Switch**: \`git checkout -b <branch-name>\` - Create and switch to new branch
+- **Switch Branch**: \`git checkout <branch-name>\` or \`git switch <branch-name>\`
+- **Branch Comparison**: \`git diff <branch1>..<branch2>\` - Compare branches
+
+### File Management & Recovery
+- **Revert Unstaged Changes**: \`git checkout -- <file>\` - Discard working directory changes
+- **Revert Staged Changes**: \`git reset HEAD <file>\` - Unstage, then use checkout to discard
+- **Restore Files**: \`git restore <file>\` - Discard changes (modern Git)
+- **View File History**: \`git log --follow -- <file>\` - Track file changes
+
+### Staging & Commits
+- **Stage Changes**: \`git add <file>\` or \`git add .\` for all changes
+- **Unstage Changes**: \`git reset HEAD <file>\` - Remove from staging area
+- **Commit Changes**: \`git commit -m "descriptive message"\`
+- **Review Before Commit**: Always use \`git diff --cached\` to review staged changes
+
+### Stash Operations
+- **Save Work**: \`git stash\` or \`git stash save "description"\` - Temporarily save changes
+- **List Stashes**: \`git stash list\` - Show saved stashes
+- **Apply Stash**: \`git stash apply\` (keep stash) or \`git stash pop\` (apply & remove)
+- **Clear Stash**: \`git stash drop\` - Delete specific stash
+
+### Remote Operations
+- **Check Remote Status**: \`git remote -v\` and \`git status\` - Show remote info and sync status
+- **Fetch Updates**: \`git fetch\` - Download remote changes without merging
+- **Pull Changes**: \`git pull\` - Fetch and merge remote changes
+- **Push Changes**: \`git push\` - Upload commits to remote
+
+## Safety Guidelines
+
+### Always Confirm Before:
+- **Destructive Operations**: \`git reset --hard\`, \`git clean\`, force operations
+- **Repository Modifications**: Commits, merges, pushes to remote
+- **Branch Operations**: Creating, deleting, or switching branches
+- **Stash Operations**: Dropping stashes or applying potentially conflicting stashes
+
+### Safe Inspection Commands (No Confirmation):
+- Status checks: \`git status\`, \`git diff\`, \`git log\`
+- Branch listing: \`git branch\`, \`git remote -v\`
+- File viewing: \`git show <commit>:<file>\`
+
+### Error Prevention
+- **Always check status first**: Use \`git status\` before major operations
+- **Review changes**: Use \`git diff\` before staging or committing
+- **Backup with stash**: Use \`git stash\` before risky operations
+- **Verify state**: Check \`git status\` after operations complete
+
+## Best Practices
+
+### Commit Standards
+- **Descriptive Messages**: Explain what and why, not just what changed
+- **Review Staged Changes**: Use \`git diff --cached\` before committing
+- **Logical Commits**: Group related changes together
+
+### Workflow Safety
+- **Check before action**: \`git status\` and \`git diff\` are your friends
+- **Use stash liberally**: Better to save work temporarily than lose it
+- **Prefer safe operations**: \`git stash\` over \`git reset --hard\`
+- **When in doubt**: Use inspection commands first, then ask for confirmation
+
+## Quick Reference Commands
+
+\`\`\`bash
+# Essential status check
+git status
+
+# See what's changed
+git diff                 # unstaged changes
+git diff --cached        # staged changes
+
+# Current branch
+git rev-parse --abbrev-ref HEAD
+
+# Quick history
+git log --oneline -10
+
+# Safe file recovery
+git stash               # save current work
+git checkout -- <file>  # discard file changes
+git reset HEAD <file>   # unstage file
+\`\`\`
+
+Remember: When in doubt about git state, always use inspection commands first (status, diff, log) before making changes.
 `
 		: ""
 }

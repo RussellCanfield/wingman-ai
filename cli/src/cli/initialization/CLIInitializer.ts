@@ -45,12 +45,15 @@ export class CLIInitializer {
 
 			const wingmanAgent = new WingmanAgent({
 				name: "Wingman CLI Agent",
+				//@ts-expect-error
 				model,
 				instructions: getWingmanInstructions(process.cwd()),
 				mode: "vibe",
 				memory: SqliteSaver.fromConnString("./.wingman/memory.db"),
 				toolAbilities: {
 					blockedCommands: config.toolAbilities?.blockedCommands,
+					allowScriptExecution:
+						config.toolAbilities?.allowScriptExecution ?? true,
 				},
 			});
 
@@ -105,6 +108,7 @@ export class CLIInitializer {
 				`• ${chalk.cyan("/init")} - Get a comprehensive project analysis\n` +
 				`• ${chalk.cyan("/file <path>")} - Add a file to the context\n` +
 				`• ${chalk.cyan("/dir <path>")} - Add a directory to the context\n` +
+				`• ${chalk.cyan("/tasks")} - Show background tasks\n` +
 				`• ${chalk.cyan("/hotkeys")} - Show keyboard shortcuts\n` +
 				`• ${chalk.cyan("/resume")} - Resume previous conversation\n` +
 				`• ${chalk.cyan("/compact")} - Compact message history\n` +

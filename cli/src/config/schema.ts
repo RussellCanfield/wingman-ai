@@ -19,6 +19,7 @@ export const WingmanConfigSchema = AgentConfig.extend({
 	...data,
 	toolAbilities: data.toolAbilities || {
 		blockedCommands: DEFAULT_BLOCKED_COMMANDS,
+		allowScriptExecution: true,
 	},
 }));
 

@@ -18,18 +18,15 @@ export async function getGitignorePatterns(
 	let patterns: string[] = [];
 
 	try {
-		if (!fs.existsSync(gitignorePath)) {
-			// If .gitignore doesn't exist, return empty patterns
-			return [];
+		if (fs.existsSync(gitignorePath)) {
+			const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
+			const gitignoreLines = gitignoreContent.toString().split("\n");
+
+			// Process gitignore patterns
+			patterns = gitignoreLines
+				.map((line) => line.trim())
+				.filter((line) => line && !line.startsWith("#"));
 		}
-
-		const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
-		const gitignoreLines = gitignoreContent.toString().split("\n");
-
-		// Process gitignore patterns
-		patterns = gitignoreLines
-			.map((line) => line.trim())
-			.filter((line) => line && !line.startsWith("#"));
 
 		// Add additional exclusion filters if provided
 		if (exclusionFilter) {
@@ -60,8 +57,8 @@ export async function getGitignorePatterns(
  */
 function matchPattern(filePath: string, pattern: string): boolean {
 	// Normalize path separators
-	const normalizedPath = filePath.replace(/\\/g, "/");
-	let normalizedPattern = pattern.replace(/\\/g, "/");
+	const normalizedPath = filePath.replace(/\\\\/g, "/");
+	let normalizedPattern = pattern.replace(/\\\\/g, "/");
 
 	// Handle trailing slashes in patterns
 	const isDirectoryPattern = normalizedPattern.endsWith("/");
@@ -137,8 +134,9 @@ function matchPattern(filePath: string, pattern: string): boolean {
 export async function isFileExcludedByGitignore(
 	filePath: string,
 	workspace: string,
+	exclusionFilter?: string,
 ): Promise<boolean> {
-	const patterns = await getGitignorePatterns(workspace);
+	const patterns = await getGitignorePatterns(workspace, exclusionFilter);
 	if (patterns.length === 0) return false;
 
 	// Get the relative path for proper matching
@@ -172,10 +170,10 @@ export async function scanDirectory(
 	dir: string,
 	maxDepth: number,
 	cwd?: string,
+	exclusionFilter?: string,
 ): Promise<DirectoryContent[]> {
 	const contents: DirectoryContent[] = [];
 	const workspaceDir = cwd ?? dir;
-	const gitignorePatterns = await getGitignorePatterns(workspaceDir);
 
 	const systemDirs = [
 		".git",
@@ -205,6 +203,7 @@ export async function scanDirectory(
 			const shouldExclude = await isFileExcludedByGitignore(
 				fullPath,
 				workspaceDir,
+				exclusionFilter,
 			);
 			if (shouldExclude) continue;
 
