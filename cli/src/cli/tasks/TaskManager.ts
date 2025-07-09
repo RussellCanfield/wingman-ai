@@ -16,7 +16,13 @@ export interface BackgroundTask {
 	id: string;
 	name: string;
 	description?: string;
-	status: "running" | "completed" | "failed" | "paused" | "cancelled";
+	status:
+		| "running"
+		| "completed"
+		| "failed"
+		| "integrating"
+		| "integrated"
+		| "conflict";
 	progress?: number;
 	startTime: Date;
 	endTime?: Date;
@@ -96,7 +102,7 @@ export class TaskManager extends EventEmitter {
 				name: status.agentName,
 				status: "running",
 				startTime: new Date(),
-				output: [`Agent started with status: ${status.status}`],
+				output: [`Agent status: ${status.status}`],
 				cancellable: true,
 				pausable: false,
 				request: {
@@ -108,15 +114,18 @@ export class TaskManager extends EventEmitter {
 
 	private handleAgentCompletion(data: {
 		threadId: string;
-		status: "completed";
+		status: "completed" | "integrated" | "conflict";
 	}) {
 		const task = this.findTaskByAgentThreadId(data.threadId);
 		if (task) {
-			task.status = "completed";
+			task.status = data.status;
 			task.progress = 100;
 			task.endTime = new Date();
 			task.output.push("Agent completed successfully.");
 			this.emit("taskCompleted", task);
+
+			// Terminal notification for background agent completion
+			log.success(`Background agent "${task.name}" completed successfully`);
 		}
 	}
 
@@ -128,6 +137,9 @@ export class TaskManager extends EventEmitter {
 			task.error = data.error;
 			task.output.push(`Agent failed: ${data.error}`);
 			this.emit("taskFailed", task, data.error);
+
+			// Terminal notification for background agent error
+			log.error(`Background agent "${task.name}" failed: ${data.error}`);
 		}
 	}
 
@@ -185,19 +197,13 @@ export class TaskManager extends EventEmitter {
 			for await (const res of this.agent.stream(task.request!)) {
 				// Check if task was cancelled
 				if (abortController.signal.aborted) {
-					task.status = "cancelled";
+					task.status = "failed";
 					task.endTime = new Date();
 					this.emit("taskCancelled", task);
 					if (task.agentThreadId) {
 						this.agent.terminateBackgroundAgent(task.agentThreadId);
 					}
 					return;
-				}
-
-				// Check if task was paused
-				if (task.status === "paused") {
-					// Wait for resume
-					await this.waitForResume(task);
 				}
 
 				results.push(res);
@@ -290,12 +296,14 @@ export class TaskManager extends EventEmitter {
 		const sortedTasks = tasks.sort((a, b) => {
 			const statusOrder = {
 				running: 0,
-				paused: 1,
-				completed: 2,
-				failed: 3,
-				cancelled: 4,
+				completed: 1,
+				failed: 2,
+				integrating: 3,
+				integrated: 4,
+				conflict: 5,
 			};
-			const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+			const statusDiff =
+				(statusOrder[a.status] as number) - (statusOrder[b.status] as number);
 			if (statusDiff !== 0) return statusDiff;
 			return b.startTime.getTime() - a.startTime.getTime();
 		});
@@ -414,22 +422,6 @@ export class TaskManager extends EventEmitter {
 			});
 		}
 
-		if (task.status === "running" && task.pausable) {
-			actions.push({
-				value: "pause",
-				label: "⏸️ Pause Task",
-				hint: "Pause the task",
-			});
-		}
-
-		if (task.status === "paused") {
-			actions.push({
-				value: "resume",
-				label: "▶️ Resume Task",
-				hint: "Resume the task",
-			});
-		}
-
 		if (task.status === "completed" && task.result) {
 			actions.push({
 				value: "view_result",
@@ -460,21 +452,6 @@ export class TaskManager extends EventEmitter {
 		action: string,
 	): Promise<void> {
 		switch (action) {
-			case "cancel":
-				await this.cancelTask(task.id);
-				log.success(`Task "${task.name}" has been cancelled`);
-				break;
-
-			case "pause":
-				await this.pauseTask(task.id);
-				log.success(`Task "${task.name}" has been paused`);
-				break;
-
-			case "resume":
-				await this.resumeTask(task.id);
-				log.success(`Task "${task.name}" has been resumed`);
-				break;
-
 			case "view_result":
 				if (task.result) {
 					// Format and display the result
@@ -504,41 +481,6 @@ export class TaskManager extends EventEmitter {
 				}
 				break;
 		}
-	}
-
-	async cancelTask(taskId: string): Promise<boolean> {
-		const task = this.tasks.get(taskId);
-		if (!task) return false;
-
-		const abortController = this.activeWorkers.get(taskId);
-		if (abortController) {
-			abortController.abort();
-		} else if (task.agentThreadId) {
-			this.agent.terminateBackgroundAgent(task.agentThreadId);
-		}
-
-		task.status = "cancelled";
-		task.endTime = new Date();
-		this.emit("taskCancelled", task);
-		return true;
-	}
-
-	async pauseTask(taskId: string): Promise<boolean> {
-		const task = this.tasks.get(taskId);
-		if (!task || !task.pausable || task.status !== "running") return false;
-
-		task.status = "paused";
-		this.emit("taskPaused", task);
-		return true;
-	}
-
-	async resumeTask(taskId: string): Promise<boolean> {
-		const task = this.tasks.get(taskId);
-		if (!task || task.status !== "paused") return false;
-
-		task.status = "running";
-		this.emit("taskResumed", task);
-		return true;
 	}
 
 	getRunningTasksCount(): number {
@@ -572,10 +514,12 @@ export class TaskManager extends EventEmitter {
 				return "✅";
 			case "failed":
 				return "❌";
-			case "paused":
-				return "⏸️";
-			case "cancelled":
-				return "🛑";
+			case "integrating":
+				return "🔗";
+			case "integrated":
+				return "🔗";
+			case "conflict":
+				return "⚠️";
 			default:
 				return "❓";
 		}
@@ -603,9 +547,7 @@ export class TaskManager extends EventEmitter {
 
 		for (const [id, task] of this.tasks.entries()) {
 			if (
-				(task.status === "completed" ||
-					task.status === "failed" ||
-					task.status === "cancelled") &&
+				(task.status === "completed" || task.status === "failed") &&
 				task.endTime &&
 				task.endTime < oneDayAgo
 			) {

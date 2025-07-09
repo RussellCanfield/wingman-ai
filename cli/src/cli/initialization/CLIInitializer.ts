@@ -31,6 +31,8 @@ export class CLIInitializer {
 				{
 					event: "config_loaded",
 					model: config.model,
+					backgroundAgentConfig: config.backgroundAgentConfig,
+					toolAbilities: config.toolAbilities,
 				},
 				`Configuration loaded with model: ${config.model}`,
 			);
@@ -45,11 +47,12 @@ export class CLIInitializer {
 
 			const wingmanAgent = new WingmanAgent({
 				name: "Wingman CLI Agent",
-				//@ts-expect-error
 				model,
 				instructions: getWingmanInstructions(process.cwd()),
 				mode: "vibe",
+				logger: agentLogger,
 				memory: SqliteSaver.fromConnString("./.wingman/memory.db"),
+				backgroundAgentConfig: config.backgroundAgentConfig,
 				toolAbilities: {
 					blockedCommands: config.toolAbilities?.blockedCommands,
 					allowScriptExecution:

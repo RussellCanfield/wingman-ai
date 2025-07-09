@@ -1,8 +1,18 @@
- import pino from "pino";
+import pino from "pino";
 import { mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-// Get log level from environment or default to 'info'
+// Check for CLI arguments that enable logging
+function isLoggingEnabledByArgs(): boolean {
+	const args = process.argv;
+	return args.includes('--verbose') || 
+		   args.includes('-v') || 
+		   args.includes('--debug') || 
+		   args.includes('-d') ||
+		   args.includes('--log');
+}
+
+// Get log level from environment, CLI args, or default to 'silent'
 function getLogLevel(): pino.Level {
 	const envLevel = process.env.WINGMAN_LOG_LEVEL?.toLowerCase();
 	const validLevels: pino.Level[] = [
@@ -12,18 +22,37 @@ function getLogLevel(): pino.Level {
 		"warn",
 		"error",
 		"fatal",
+		"silent",
 	];
 
+	// If explicitly set via environment variable, use that
 	if (envLevel && validLevels.includes(envLevel as pino.Level)) {
 		return envLevel as pino.Level;
 	}
 
-	// Default to 'debug' in development, 'info' in production
-	return process.env.NODE_ENV === "development" ? "debug" : "info";
+	// Check CLI arguments for logging flags
+	const args = process.argv;
+	if (args.includes('--debug') || args.includes('-d')) {
+		return 'debug';
+	}
+	if (args.includes('--verbose') || args.includes('-v')) {
+		return 'info';
+	}
+	if (args.includes('--log')) {
+		return 'info';
+	}
+
+	// Default to silent - no logging unless explicitly enabled
+	return 'silent';
 }
 
-// Ensure .wingman directory exists and return its path
-function ensureLogDirectory(): string {
+// Only create log directory if logging is enabled
+function ensureLogDirectory(): string | null {
+	const logLevel = getLogLevel();
+	if (logLevel === 'silent') {
+		return null;
+	}
+	
 	const logDir = join(process.cwd(), ".wingman");
 	if (!existsSync(logDir)) {
 		mkdirSync(logDir, { recursive: true });
@@ -33,46 +62,62 @@ function ensureLogDirectory(): string {
 
 const logLevel = getLogLevel();
 const logDirectory = ensureLogDirectory();
+const isLoggingEnabled = logLevel !== 'silent';
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
-const transport = isDevelopment
-	? pino.transport({
-			targets: [
-				{
-					target: "pino-pretty",
-					options: {
-						colorize: true,
-						levelFirst: true,
-						translateTime: "SYS:standard",
+// Only create transport if logging is enabled
+const transport = isLoggingEnabled
+	? isDevelopment
+		? pino.transport({
+				targets: [
+					{
+						target: "pino-pretty",
+						options: {
+							colorize: true,
+							levelFirst: true,
+							translateTime: "SYS:standard",
+						},
+						level: logLevel,
 					},
-					level: logLevel,
+					...(logDirectory ? [{
+						target: "pino-roll",
+						options: {
+							file: join(logDirectory, "debug"),
+							extension: ".log",
+							frequency: "daily",
+							dateFormat: "yyyy-MM-dd",
+							mkdir: true,
+							size: "10M",
+							files: 5,
+						},
+						level: logLevel,
+					}] : []),
+				],
+			})
+		: logDirectory
+		? pino.transport({
+				target: "pino-roll",
+				options: {
+					file: join(logDirectory, "debug"),
+					extension: ".log",
+					frequency: "daily",
+					dateFormat: "yyyy-MM-dd",
+					mkdir: true,
+					size: "10M",
+					files: 5,
 				},
-				{
-					target: "pino-roll",
-					options: {
-						file: join(logDirectory, "debug"),
-						extension: ".log",
-						frequency: "daily",
-						dateFormat: "yyyy-MM-dd",
-						mkdir: true,
-						size: "10M",
-						files: 5,
-					},
-					level: logLevel,
+			})
+		: pino.transport({
+				target: "pino/file",
+				options: {
+					destination: 1, // stdout
 				},
-			],
-		})
+			})
 	: pino.transport({
-			target: "pino-roll",
+			target: "pino/file",
 			options: {
-				file: join(logDirectory, "debug"),
-				extension: ".log",
-				frequency: "daily",
-				dateFormat: "yyyy-MM-dd",
-				mkdir: true,
-				size: "10M",
-				files: 5,
+				destination: "/dev/null", // Discard all logs
 			},
 		});
 
@@ -97,15 +142,21 @@ export const reducerLogger = createComponentLogger("Reducer");
 
 // Utility functions for common logging patterns
 export const logStartup = (data: Record<string, any>) => {
-	cliLogger.info({ event: "startup", ...data }, "Wingman CLI starting");
+	if (isLoggingEnabled) {
+		cliLogger.info({ event: "startup", ...data }, "Wingman CLI starting");
+	}
 };
 
 export const logShutdown = (data?: Record<string, any>) => {
-	cliLogger.info({ event: "shutdown", ...data }, "Wingman CLI shutting down");
+	if (isLoggingEnabled) {
+		cliLogger.info({ event: "shutdown", ...data }, "Wingman CLI shutting down");
+	}
 };
 
 export const logInputEvent = (event: string, data: Record<string, any>) => {
-	inputLogger.info({ event, ...data }, `Input event: ${event}`);
+	if (isLoggingEnabled) {
+		inputLogger.info({ event, ...data }, `Input event: ${event}`);
+	}
 };
 
 export const logStateChange = (
@@ -113,22 +164,26 @@ export const logStateChange = (
 	prevState: any,
 	newState: any,
 ) => {
-	reducerLogger.debug(
-		{
-			event: "state_change",
-			action,
-			prevState: JSON.stringify(prevState),
-			newState: JSON.stringify(newState),
-		},
-		`State change: ${action}`,
-	);
+	if (isLoggingEnabled) {
+		reducerLogger.debug(
+			{
+				event: "state_change",
+				action,
+				prevState: JSON.stringify(prevState),
+				newState: JSON.stringify(newState),
+			},
+			`State change: ${action}`,
+		);
+	}
 };
 
 export const logAgentInteraction = (
 	event: string,
 	data: Record<string, any>,
 ) => {
-	agentLogger.info({ event, ...data }, `Agent interaction: ${event}`);
+	if (isLoggingEnabled) {
+		agentLogger.info({ event, ...data }, `Agent interaction: ${event}`);
+	}
 };
 
 export const logError = (
@@ -136,19 +191,21 @@ export const logError = (
 	error: Error,
 	context?: Record<string, any>,
 ) => {
-	const componentLogger = createComponentLogger(component);
-	componentLogger.error(
-		{
-			event: "error",
-			error: {
-				name: error.name,
-				message: error.message,
-				stack: error.stack,
+	if (isLoggingEnabled) {
+		const componentLogger = createComponentLogger(component);
+		componentLogger.error(
+			{
+				event: "error",
+				error: {
+					name: error.name,
+					message: error.message,
+					stack: error.stack,
+				},
+				...context,
 			},
-			...context,
-		},
-		`Error in ${component}: ${error.message}`,
-	);
+			`Error in ${component}: ${error.message}`,
+		);
+	}
 };
 
 export const logPerformance = (
@@ -157,24 +214,28 @@ export const logPerformance = (
 	duration: number,
 	data?: Record<string, any>,
 ) => {
-	const componentLogger = createComponentLogger(component);
-	componentLogger.debug(
-		{
-			event: "performance",
-			operation,
-			duration,
-			...data,
-		},
-		`${operation} completed in ${duration}ms`,
-	);
+	if (isLoggingEnabled) {
+		const componentLogger = createComponentLogger(component);
+		componentLogger.debug(
+			{
+				event: "performance",
+				operation,
+				duration,
+				...data,
+			},
+			`${operation} completed in ${duration}ms`,
+		);
+	}
 };
 
 // Export the current log level and file path for CLI info
 export const getLogInfo = () => {
 	return {
 		level: logLevel,
-		file: join(logDirectory, "debug.log"),
-		//@ts-expect-error
-		enabled: logLevel !== "silent",
+		file: logDirectory ? join(logDirectory, "debug.log") : null,
+		enabled: isLoggingEnabled,
 	};
 };
+
+// Export helper to check if logging is enabled
+export const isLoggingActive = () => isLoggingEnabled;

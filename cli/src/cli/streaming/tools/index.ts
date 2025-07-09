@@ -14,6 +14,10 @@ export const getToolDisplay = (toolCall: ToolCall): string => {
 			return `Editing file: ${toolCall.args.path}`;
 		case "web_search":
 			return `Searching the web: ${toolCall.args.url}`;
+		case "background_agent":
+			return `Running background agent: ${toolCall.args.agentName}`;
+		case "integrate_background_work":
+			return "Integrating background agent work";
 		default:
 			return "Unknown tool";
 	}

@@ -1,4 +1,14 @@
 {
-	"provider": "google",
-	"model": "gemini-2.5-pro"
+	"provider": "anthropic",
+	"model": "claude-sonnet-4-0",
+	"toolAbilities": {
+		"blockedCommands": [],
+		"allowScriptExecution": true
+	},
+	"backgroundAgentConfig": {
+		"pushToRemote": false,
+		"createPullRequest": false,
+		"pullRequestTitle": "🤖 {agentName}: {input}",
+		"pullRequestBody": "Automated changes by {agentName}\n\nTask: {input}\n\nFiles changed:\n{changedFiles}"
+	}
 }

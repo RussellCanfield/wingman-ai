@@ -32,7 +32,8 @@ async function runIntelligentOrchestrationExample() {
 	await agent.initialize();
 
 	await agent.invoke({
-		input: "What files are in the agent directory?",
+		input:
+			"Use a background agent and create a readme with 'TODO' as the contents under examples/app",
 		threadId: "1",
 	});
 

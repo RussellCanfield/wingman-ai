@@ -10,6 +10,13 @@ const defaultConfig: WingmanConfig = {
 	model: "gpt-4o",
 	toolAbilities: {
 		blockedCommands: DEFAULT_BLOCKED_COMMANDS,
+		allowScriptExecution: true,
+	},
+	backgroundAgentConfig: {
+		pushToRemote: false,
+		createPullRequest: false,
+		pullRequestTitle: "Background Agent: {agentName}",
+		pullRequestBody: "This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
 	},
 };
 

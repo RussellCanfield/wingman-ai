@@ -840,7 +840,7 @@ if (parentPort) {
 	parentPort.on("message", (message) => {
 		if (message === "terminate") {
 			// Create a fallback logger for termination
-			const fallbackLogger = createLoggerFromConfig({ level: "info" });
+			const fallbackLogger = createLoggerFromConfig({ level: "debug" });
 			fallbackLogger.info("[BackgroundWorker] Received termination signal");
 			process.exit(0);
 		}

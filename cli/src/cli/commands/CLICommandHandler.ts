@@ -101,62 +101,7 @@ export class CLICommandHandler {
 			log.warn("Task manager not initialized");
 			return;
 		}
-
-		if (args.length === 0) {
-			await this.state.taskManager.showTaskDashboard();
-			return;
-		}
-
-		const subCommand = args[0].toLowerCase();
-		const taskId = args[1];
-
-		switch (subCommand) {
-			case "cancel": {
-				if (!taskId) {
-					log.warn("Please provide a task ID: /task cancel <id>");
-					return;
-				}
-				const cancelled = await this.state.taskManager.cancelTask(taskId);
-				if (cancelled) {
-					log.success(`Task ${taskId} cancelled`);
-				} else {
-					log.error(`Failed to cancel task ${taskId}`);
-				}
-				break;
-			}
-
-			case "pause": {
-				if (!taskId) {
-					log.warn("Please provide a task ID: /task pause <id>");
-					return;
-				}
-				const paused = await this.state.taskManager.pauseTask(taskId);
-				if (paused) {
-					log.success(`Task ${taskId} paused`);
-				} else {
-					log.error(`Failed to pause task ${taskId}`);
-				}
-				break;
-			}
-
-			case "resume": {
-				if (!taskId) {
-					log.warn("Please provide a task ID: /task resume <id>");
-					return;
-				}
-				const resumed = await this.state.taskManager.resumeTask(taskId);
-				if (resumed) {
-					log.success(`Task ${taskId} resumed`);
-				} else {
-					log.error(`Failed to resume task ${taskId}`);
-				}
-				break;
-			}
-
-			default:
-				log.warn(`Unknown task command: ${subCommand}`);
-				log.info("Available: cancel, pause, resume");
-		}
+		await this.state.taskManager.showTaskDashboard();
 	}
 
 	private async startBackgroundTask(args: string[]): Promise<void> {

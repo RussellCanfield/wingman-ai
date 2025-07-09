@@ -6,6 +6,7 @@ import { z } from "zod/v4";
 
 const AgentConfig = WingmanAgentConfigSchema.pick({
 	toolAbilities: true,
+	backgroundAgentConfig: true,
 });
 
 export const WingmanConfigSchema = AgentConfig.extend({
@@ -20,6 +21,12 @@ export const WingmanConfigSchema = AgentConfig.extend({
 	toolAbilities: data.toolAbilities || {
 		blockedCommands: DEFAULT_BLOCKED_COMMANDS,
 		allowScriptExecution: true,
+	},
+	backgroundAgentConfig: data.backgroundAgentConfig || {
+		pushToRemote: false,
+		createPullRequest: false,
+		pullRequestTitle: "Background Agent: {agentName}",
+		pullRequestBody: "This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
 	},
 }));
 
