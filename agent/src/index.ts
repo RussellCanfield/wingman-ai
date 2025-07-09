@@ -2,7 +2,6 @@ import "./fetch";
 import {
 	WingmanAgent,
 	type WingmanRequest,
-	WingmanAgentConfigSchema,
 	type BackgroundAgentStatus,
 	type BackgroundAgentEventEmitter,
 } from "./agent";
@@ -13,6 +12,14 @@ import type {
 import { getModelCosts } from "./providers/tokenCost";
 import { getContextWindow } from "./providers/contextWindows";
 import { DEFAULT_BLOCKED_COMMANDS } from "./tools/cmd_execute";
+import {
+	type Logger,
+	type LogLevel,
+	WingmanLogger,
+	SilentLogger,
+	createLogger,
+} from "./logger";
+import { WingmanAgentConfigSchema } from "./config";
 
 export {
 	WingmanAgent,
@@ -20,6 +27,9 @@ export {
 	getContextWindow,
 	DEFAULT_BLOCKED_COMMANDS,
 	WingmanAgentConfigSchema,
+	WingmanLogger,
+	SilentLogger,
+	createLogger,
 };
 export type {
 	BackgroundAgentStatus,
@@ -27,4 +37,6 @@ export type {
 	WingmanGraphState,
 	WingmanRequest,
 	WingmanBackgroundAgentTasks,
+	Logger,
+	LogLevel,
 };

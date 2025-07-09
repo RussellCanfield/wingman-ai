@@ -111,7 +111,7 @@ export class CLICommandHandler {
 		const taskId = args[1];
 
 		switch (subCommand) {
-			case "cancel":
+			case "cancel": {
 				if (!taskId) {
 					log.warn("Please provide a task ID: /task cancel <id>");
 					return;
@@ -123,8 +123,9 @@ export class CLICommandHandler {
 					log.error(`Failed to cancel task ${taskId}`);
 				}
 				break;
+			}
 
-			case "pause":
+			case "pause": {
 				if (!taskId) {
 					log.warn("Please provide a task ID: /task pause <id>");
 					return;
@@ -136,8 +137,9 @@ export class CLICommandHandler {
 					log.error(`Failed to pause task ${taskId}`);
 				}
 				break;
+			}
 
-			case "resume":
+			case "resume": {
 				if (!taskId) {
 					log.warn("Please provide a task ID: /task resume <id>");
 					return;
@@ -149,6 +151,7 @@ export class CLICommandHandler {
 					log.error(`Failed to resume task ${taskId}`);
 				}
 				break;
+			}
 
 			default:
 				log.warn(`Unknown task command: ${subCommand}`);

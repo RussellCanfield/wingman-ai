@@ -5,8 +5,9 @@ import { Worker, type WorkerOptions } from "node:worker_threads";
 import { EventEmitter } from "node:events";
 import path from "node:path";
 import fs from "node:fs";
-import type { WingmanConfig } from "../agent";
 import { getCurrentBranch } from "../utils";
+import type { SerializableLoggerConfig } from "../logger";
+import type { WingmanConfig } from "../config";
 
 export type BackgroundAgentIntegration = {
 	targetBranch: string;
@@ -98,6 +99,7 @@ interface SerializableWingmanConfig {
 		blockedCommands?: string[];
 	};
 	tools?: string[];
+	loggerConfig: SerializableLoggerConfig;
 }
 
 interface BackgroundAgentWorkerData {
@@ -145,6 +147,28 @@ function extractModelConfig(
 		model: model.model || model.modelName || "default",
 		temperature: model.temperature,
 	};
+}
+
+// Helper function to extract logger configuration
+function extractLoggerConfig(config: WingmanConfig): SerializableLoggerConfig {
+	// Try to determine the log level from the logger
+	// This is a bit hacky but necessary for serialization
+	const logger = config.logger;
+
+	// Check if it's a SilentLogger
+	if (logger.constructor.name === "SilentLogger") {
+		return { level: "silent" };
+	}
+
+	// For WingmanLogger, we need to access the private level property
+	// This is not ideal but necessary for worker thread serialization
+	const wingmanLogger = logger as any;
+	if (wingmanLogger.level) {
+		return { level: wingmanLogger.level };
+	}
+
+	// Fallback to info level
+	return { level: "info" };
 }
 
 class BackgroundAgentManager {
@@ -352,6 +376,7 @@ export const createBackgroundAgentTool = (
 					backgroundAgentConfig: config.backgroundAgentConfig,
 					toolAbilities: config.toolAbilities,
 					tools: config.tools?.filter((t) => t !== "background_agent") || [],
+					loggerConfig: extractLoggerConfig(config),
 				};
 
 				const workerData: BackgroundAgentWorkerData = {

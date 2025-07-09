@@ -1,5 +1,5 @@
 import { parentPort, workerData } from "node:worker_threads";
-import { WingmanAgent, type WingmanConfig } from "../agent";
+import { WingmanAgent } from "../agent";
 import type {
 	BackgroundAgentStatus,
 	BackgroundAgentIntegration,
@@ -13,6 +13,12 @@ import { promisify } from "node:util";
 import path from "node:path";
 import fs from "node:fs";
 import { getCurrentBranch, getRepoRoot } from "../utils";
+import {
+	type Logger,
+	type SerializableLoggerConfig,
+	createLoggerFromConfig,
+} from "../logger";
+import type { WingmanConfig } from "src/config";
 
 const execAsync = promisify(exec);
 
@@ -46,6 +52,7 @@ interface SerializableWingmanConfig {
 		blockedCommands?: string[];
 	};
 	tools?: string[];
+	loggerConfig: SerializableLoggerConfig;
 }
 
 interface BackgroundAgentWorkerData {
@@ -83,9 +90,6 @@ function reconstructModel(
 			});
 		default:
 			// Fallback to Google Generative AI if provider is unknown
-			console.warn(
-				`Unknown model provider: ${modelConfig.provider}, falling back to Google Generative AI`,
-			);
 			return new ChatGoogleGenerativeAI({
 				model: modelConfig.model || "gemini-pro",
 				temperature: modelConfig.temperature || 0,
@@ -97,34 +101,34 @@ function reconstructModel(
 class BackgroundAgentWorker {
 	private config: BackgroundAgentWorkerData;
 	private agent: WingmanAgent | null = null;
+	private logger: Logger;
 
 	constructor(config: BackgroundAgentWorkerData) {
 		this.config = config;
+		this.logger = createLoggerFromConfig(config.config.loggerConfig);
 	}
 
 	private sendMessage(message: BackgroundAgentMessage) {
-		// Add console logging for local debugging
-		console.log(
+		// Log the message for debugging
+		this.logger.debug(
 			`[BackgroundWorker] ${message.type.toUpperCase()}:`,
-			JSON.stringify(message.data, null, 2),
+			message.data,
 		);
 
 		if (parentPort) {
 			parentPort.postMessage(message);
 		} else {
 			// When running with tsx locally, parentPort might be null
-			console.warn(
+			this.logger.warn(
 				"[BackgroundWorker] No parentPort available - running in standalone mode",
 			);
 		}
 	}
 
 	private sendStatus(status: Partial<BackgroundAgentStatus>) {
-		console.log("[BackgroundWorker] STATUS UPDATE:", {
-			threadId: status.threadId,
-			status: status.status,
-			agentName: status.agentName,
-		});
+		this.logger.info(
+			`[BackgroundWorker] STATUS UPDATE: ${status.threadId} - ${status.status} - ${status.agentName}`,
+		);
 
 		this.sendMessage({
 			type: "status",
@@ -154,7 +158,7 @@ class BackgroundAgentWorker {
 				.split("\n")
 				.filter((file) => file.length > 0);
 		} catch (error) {
-			console.warn(`Failed to get changed files: ${error}`);
+			this.logger.warn(`Failed to get changed files: ${error}`);
 			return [];
 		}
 	}
@@ -164,12 +168,12 @@ class BackgroundAgentWorker {
 			// Remove the worktree directory from filesystem
 			if (fs.existsSync(worktreePath)) {
 				await fs.promises.rm(worktreePath, { recursive: true, force: true });
-				console.log(
+				this.logger.info(
 					`[BackgroundWorker] Cleaned up worktree directory: ${worktreePath}`,
 				);
 			}
 		} catch (error) {
-			console.warn(
+			this.logger.warn(
 				`[BackgroundWorker] Failed to cleanup worktree directory: ${error}`,
 			);
 		}
@@ -189,7 +193,9 @@ class BackgroundAgentWorker {
 
 		for (const token of envTokens) {
 			if (token) {
-				console.log("[BackgroundWorker] Found GitHub token in environment");
+				this.logger.info(
+					"[BackgroundWorker] Found GitHub token in environment",
+				);
 				return token;
 			}
 		}
@@ -201,7 +207,7 @@ class BackgroundAgentWorker {
 			});
 			const token = stdout.trim();
 			if (token) {
-				console.log("[BackgroundWorker] Found GitHub token from gh CLI");
+				this.logger.info("[BackgroundWorker] Found GitHub token from gh CLI");
 				return token;
 			}
 		} catch (error) {
@@ -210,31 +216,34 @@ class BackgroundAgentWorker {
 
 		// 3. Try to extract from git config (less common but possible)
 		try {
-			const { stdout } = await execAsync(
-				"git config --get github.token",
-				{
-					cwd: this.config.repoPath,
-				}
-			);
+			const { stdout } = await execAsync("git config --get github.token", {
+				cwd: this.config.repoPath,
+			});
 			const token = stdout.trim();
 			if (token) {
-				console.log("[BackgroundWorker] Found GitHub token in git config");
+				this.logger.info("[BackgroundWorker] Found GitHub token in git config");
 				return token;
 			}
 		} catch (error) {
 			// No token in git config
 		}
 
-		console.warn("[BackgroundWorker] No GitHub token found in any location");
+		this.logger.warn(
+			"[BackgroundWorker] No GitHub token found in any location",
+		);
 		return undefined;
 	}
 
 	/**
 	 * Parse GitHub repository information from remote URL
 	 */
-	private parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | null {
+	private parseGitHubRepo(
+		remoteUrl: string,
+	): { owner: string; repo: string } | null {
 		// Handle both HTTPS and SSH URLs
-		const httpsMatch = remoteUrl.match(/github\.com[/:]([\w-]+)\/([\w-]+)(?:\.git)?/);
+		const httpsMatch = remoteUrl.match(
+			/github\.com[/:]([\w-]+)\/([\w-]+)(?:\.git)?/,
+		);
 		if (httpsMatch) {
 			return { owner: httpsMatch[1], repo: httpsMatch[2] };
 		}
@@ -255,19 +264,23 @@ class BackgroundAgentWorker {
 
 			const token = await this.getGitHubToken();
 			if (!token) {
-				console.warn("[BackgroundWorker] No GitHub token available for Octokit");
+				this.logger.warn(
+					"[BackgroundWorker] No GitHub token available for Octokit",
+				);
 				return undefined;
 			}
 
 			// Get remote URL and parse repository info
 			const { stdout: remoteUrl } = await execAsync(
 				"git remote get-url origin",
-				{ cwd: repoRoot }
+				{ cwd: repoRoot },
 			);
 
 			const repoInfo = this.parseGitHubRepo(remoteUrl.trim());
 			if (!repoInfo) {
-				console.warn("[BackgroundWorker] Could not parse GitHub repository info");
+				this.logger.warn(
+					"[BackgroundWorker] Could not parse GitHub repository info",
+				);
 				return undefined;
 			}
 
@@ -300,10 +313,12 @@ class BackgroundAgentWorker {
 			});
 
 			const prUrl = response.data.html_url;
-			console.log(`[BackgroundWorker] Created pull request via Octokit: ${prUrl}`);
+			this.logger.info(
+				`[BackgroundWorker] Created pull request via Octokit: ${prUrl}`,
+			);
 			return prUrl;
 		} catch (error) {
-			console.error(
+			this.logger.error(
 				`[BackgroundWorker] Failed to create GitHub pull request via Octokit: ${error}`,
 			);
 			return undefined;
@@ -341,14 +356,16 @@ class BackgroundAgentWorker {
 			// Create the pull request
 			const { stdout } = await execAsync(
 				`gh pr create --title "${title}" --body "${body}" --head ${worktreeBranch} --base ${this.config.mainBranch}`,
-				{ cwd: repoRoot }
+				{ cwd: repoRoot },
 			);
 
 			const prUrl = stdout.trim();
-			console.log(`[BackgroundWorker] Created pull request via GitHub CLI: ${prUrl}`);
+			this.logger.info(
+				`[BackgroundWorker] Created pull request via GitHub CLI: ${prUrl}`,
+			);
 			return prUrl;
 		} catch (error) {
-			console.error(
+			this.logger.error(
 				`[BackgroundWorker] Failed to create GitHub pull request via CLI: ${error}`,
 			);
 			return undefined;
@@ -373,7 +390,7 @@ class BackgroundAgentWorker {
 
 			// Check if it's a GitHub repository
 			if (cleanUrl.includes("github.com")) {
-				console.log("[BackgroundWorker] Detected GitHub repository");
+				this.logger.info("[BackgroundWorker] Detected GitHub repository");
 
 				// Try Octokit first (more reliable and doesn't require CLI installation)
 				let prUrl = await this.createGitHubPullRequestWithOctokit(
@@ -384,7 +401,9 @@ class BackgroundAgentWorker {
 
 				// Fallback to GitHub CLI if Octokit fails
 				if (!prUrl) {
-					console.log("[BackgroundWorker] Octokit failed, trying GitHub CLI...");
+					this.logger.info(
+						"[BackgroundWorker] Octokit failed, trying GitHub CLI...",
+					);
 					prUrl = await this.createGitHubPullRequestWithCLI(
 						worktreeBranch,
 						changedFiles,
@@ -396,25 +415,16 @@ class BackgroundAgentWorker {
 			}
 
 			// Add support for other platforms here (GitLab, Bitbucket, etc.)
-			console.warn(
+			this.logger.warn(
 				`[BackgroundWorker] Pull request creation not supported for: ${cleanUrl}`,
 			);
 			return undefined;
 		} catch (error) {
-			console.error(
+			this.logger.error(
 				`[BackgroundWorker] Failed to create pull request: ${error}`,
 			);
 			return undefined;
 		}
-	}
-
-	private async createGitHubPullRequest(
-		worktreeBranch: string,
-		changedFiles: string[],
-		repoRoot: string,
-	): Promise<string | undefined> {
-		// This method is kept for backward compatibility but now just calls the main createPullRequest method
-		return this.createPullRequest(worktreeBranch, changedFiles, repoRoot);
 	}
 
 	private async attemptIntegration(
@@ -434,10 +444,10 @@ class BackgroundAgentWorker {
 			// Get changed files before attempting merge
 			integration.changedFiles = await this.getChangedFiles(worktreePath);
 
-			console.log(
+			this.logger.info(
 				`[BackgroundWorker] Attempting to integrate ${worktreeBranch} into ${targetBranch}`,
 			);
-			console.log(
+			this.logger.info(
 				`[BackgroundWorker] Changed files: ${integration.changedFiles?.join(", ") || "none"}`,
 			);
 
@@ -446,14 +456,18 @@ class BackgroundAgentWorker {
 
 			if (pushToRemote) {
 				// Remote integration workflow
-				console.log("[BackgroundWorker] Using remote integration workflow");
+				this.logger.info(
+					"[BackgroundWorker] Using remote integration workflow",
+				);
 
 				// Step 1: Push the worktree branch to remote
 				await execAsync(
 					`git -C "${worktreePath}" push origin ${worktreeBranch}`,
 					{ cwd: repoRoot },
 				);
-				console.log(`[BackgroundWorker] Pushed ${worktreeBranch} to origin`);
+				this.logger.info(
+					`[BackgroundWorker] Pushed ${worktreeBranch} to origin`,
+				);
 
 				if (createPullRequest) {
 					// Create a pull request instead of direct merge
@@ -468,7 +482,9 @@ class BackgroundAgentWorker {
 						integration.mergeAttempted = true;
 						integration.mergeSuccessful = true; // PR creation is considered success
 
-						console.log(`[BackgroundWorker] Successfully created PR: ${prUrl}`);
+						this.logger.info(
+							`[BackgroundWorker] Successfully created PR: ${prUrl}`,
+						);
 
 						// Clean up local worktree directory but keep remote branch
 						await this.cleanupWorktreeDirectory(worktreePath);
@@ -496,7 +512,7 @@ class BackgroundAgentWorker {
 				integration.mergeAttempted = true;
 				integration.mergeSuccessful = true;
 
-				console.log(
+				this.logger.info(
 					`[BackgroundWorker] Successfully integrated ${worktreeBranch} into ${targetBranch}`,
 				);
 
@@ -505,17 +521,19 @@ class BackgroundAgentWorker {
 					await execAsync(`git push origin --delete ${worktreeBranch}`, {
 						cwd: repoRoot,
 					});
-					console.log(
+					this.logger.info(
 						`[BackgroundWorker] Deleted remote branch ${worktreeBranch}`,
 					);
 				} catch (deleteError) {
-					console.warn(
+					this.logger.warn(
 						`[BackgroundWorker] Failed to delete remote branch: ${deleteError}`,
 					);
 				}
 			} else {
 				// Local-only integration workflow
-				console.log("[BackgroundWorker] Using local-only integration workflow");
+				this.logger.info(
+					"[BackgroundWorker] Using local-only integration workflow",
+				);
 
 				// Step 1: Checkout target branch in main repo
 				await execAsync(`git checkout ${targetBranch}`, {
@@ -530,7 +548,7 @@ class BackgroundAgentWorker {
 				integration.mergeAttempted = true;
 				integration.mergeSuccessful = true;
 
-				console.log(
+				this.logger.info(
 					`[BackgroundWorker] Successfully integrated ${worktreeBranch} into ${targetBranch} (local-only)`,
 				);
 			}
@@ -543,11 +561,11 @@ class BackgroundAgentWorker {
 				await execAsync(`git worktree remove "${worktreePath}" --force`, {
 					cwd: repoRoot,
 				});
-				console.log(
+				this.logger.info(
 					`[BackgroundWorker] Removed worktree from git tracking: ${worktreePath}`,
 				);
 			} catch (cleanupError) {
-				console.warn(
+				this.logger.warn(
 					`[BackgroundWorker] Failed to remove worktree from git tracking: ${cleanupError}`,
 				);
 			}
@@ -556,7 +574,9 @@ class BackgroundAgentWorker {
 			integration.mergeSuccessful = false;
 			integration.errorMessage = error.message;
 
-			console.error(`[BackgroundWorker] Integration failed: ${error.message}`);
+			this.logger.error(
+				`[BackgroundWorker] Integration failed: ${error.message}`,
+			);
 
 			// Check if it's a merge conflict
 			if (
@@ -579,11 +599,11 @@ class BackgroundAgentWorker {
 						)
 						.map((line) => line.substring(3));
 
-					console.log(
+					this.logger.warn(
 						`[BackgroundWorker] Merge conflicts detected in files: ${integration.conflictFiles.join(", ")}`,
 					);
 				} catch (statusError) {
-					console.warn(
+					this.logger.warn(
 						`[BackgroundWorker] Failed to get conflict status: ${statusError}`,
 					);
 				}
@@ -596,11 +616,11 @@ class BackgroundAgentWorker {
 					await execAsync(`git push origin --delete ${worktreeBranch}`, {
 						cwd: repoRoot,
 					});
-					console.log(
+					this.logger.info(
 						`[BackgroundWorker] Cleaned up remote branch ${worktreeBranch} after failed integration`,
 					);
 				} catch (cleanupError) {
-					console.warn(
+					this.logger.warn(
 						`[BackgroundWorker] Failed to cleanup remote branch: ${cleanupError}`,
 					);
 				}
@@ -619,6 +639,12 @@ class BackgroundAgentWorker {
 			const worktreeBranch = `background-${this.config.threadId}`;
 			const worktreePath = path.resolve(repoRoot, worktreeBranch);
 
+			this.logger.info(
+				`[BackgroundWorker] Starting background agent: ${this.config.agentName}`,
+			);
+			this.logger.info(`[BackgroundWorker] Task: ${this.config.input}`);
+			this.logger.info(`[BackgroundWorker] Worktree branch: ${worktreeBranch}`);
+
 			// Send initial status
 			this.sendStatus({
 				threadId: this.config.threadId,
@@ -630,6 +656,9 @@ class BackgroundAgentWorker {
 
 			// Reconstruct the model from serializable config
 			const model = reconstructModel(this.config.config.modelConfig);
+			this.logger.debug(
+				`[BackgroundWorker] Reconstructed model: ${this.config.config.modelConfig.provider}`,
+			);
 
 			// Create WingmanConfig with reconstructed model
 			const wingmanConfig: WingmanConfig = {
@@ -645,6 +674,7 @@ class BackgroundAgentWorker {
 					blockedCommands: [],
 					allowScriptExecution: true,
 				},
+				logger: this.logger,
 				//@ts-expect-error
 				tools: this.config.config.tools ? this.config.config.tools : [],
 			};
@@ -655,6 +685,7 @@ class BackgroundAgentWorker {
 			});
 
 			await this.agent.initialize();
+			this.logger.info("[BackgroundWorker] Agent initialized successfully");
 
 			// Execute the background task
 			await this.agent.invoke({
@@ -686,8 +717,12 @@ Begin.
 `,
 			});
 
+			this.logger.info("[BackgroundWorker] Task execution completed");
+
 			// Task completed successfully, now attempt integration if enabled
 			if (this.config.autoIntegrate) {
+				this.logger.info("[BackgroundWorker] Starting auto-integration");
+
 				this.sendStatus({
 					threadId: this.config.threadId,
 					input: this.config.input,
@@ -706,6 +741,10 @@ Begin.
 
 				const finalStatus: "integrated" | "conflict" =
 					integration.mergeSuccessful ? "integrated" : "conflict";
+
+				this.logger.info(
+					`[BackgroundWorker] Integration completed with status: ${finalStatus}`,
+				);
 
 				// Send final status with integration information
 				this.sendStatus({
@@ -726,6 +765,10 @@ Begin.
 				});
 			} else {
 				// Auto-integration disabled, just mark as completed
+				this.logger.info(
+					"[BackgroundWorker] Auto-integration disabled, marking as completed",
+				);
+
 				const integration: BackgroundAgentIntegration = {
 					targetBranch: (await getCurrentBranch(repoRoot)) ?? "main",
 					worktreePath,
@@ -754,7 +797,7 @@ Begin.
 			const errorMessage =
 				error instanceof Error ? error.message : "Unknown error occurred";
 
-			console.error("[BackgroundWorker] Error:", error);
+			this.logger.error("[BackgroundWorker] Error:", error);
 
 			// Send failure status
 			this.sendStatus({
@@ -779,7 +822,10 @@ if (workerData) {
 		workerData as BackgroundAgentWorkerData,
 	);
 	worker.run().catch((error) => {
-		console.error("[BackgroundWorker] Fatal error:", error);
+		// Create a fallback logger for fatal errors
+		const fallbackLogger = createLoggerFromConfig({ level: "error" });
+		fallbackLogger.error("[BackgroundWorker] Fatal error:", error);
+
 		if (parentPort) {
 			parentPort.postMessage({
 				type: "error",
@@ -793,7 +839,9 @@ if (workerData) {
 if (parentPort) {
 	parentPort.on("message", (message) => {
 		if (message === "terminate") {
-			console.log("[BackgroundWorker] Received termination signal");
+			// Create a fallback logger for termination
+			const fallbackLogger = createLoggerFromConfig({ level: "info" });
+			fallbackLogger.info("[BackgroundWorker] Received termination signal");
 			process.exit(0);
 		}
 	});

@@ -19,7 +19,10 @@ export async function getGitignorePatterns(
 
 	try {
 		if (fs.existsSync(gitignorePath)) {
-			const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
+			const gitignoreContent = await fs.promises.readFile(
+				gitignorePath,
+				"utf8",
+			);
 			const gitignoreLines = gitignoreContent.toString().split("\n");
 
 			// Process gitignore patterns
@@ -174,6 +177,7 @@ export async function scanDirectory(
 ): Promise<DirectoryContent[]> {
 	const contents: DirectoryContent[] = [];
 	const workspaceDir = cwd ?? dir;
+	const baseDir = dir;
 
 	const systemDirs = [
 		".git",
@@ -188,13 +192,29 @@ export async function scanDirectory(
 	async function scan(currentPath: string, currentDepth: number) {
 		if (currentDepth > maxDepth) return;
 
-		const entries = await fs.promises.readdir(currentPath, {
-			withFileTypes: true,
-		});
+		// biome-ignore lint/suspicious/noImplicitAnyLet: <explanation>
+		let entries;
+		try {
+			entries = await fs.promises.readdir(currentPath, {
+				withFileTypes: true,
+			});
+		} catch (error) {
+			if (error instanceof Error && "code" in error) {
+				// Skip directories we can't read (permission denied, not found, etc.)
+				if (
+					error.code === "EACCES" ||
+					error.code === "ENOENT" ||
+					error.code === "EPERM"
+				) {
+					return;
+				}
+			}
+			throw error; // Re-throw unexpected errors
+		}
 
 		for (const entry of entries) {
 			const fullPath = path.join(currentPath, entry.name);
-			const relativePath = path.relative(dir, fullPath);
+			const relativePath = path.relative(baseDir, fullPath);
 
 			// Skip system directories
 			if (systemDirs.includes(entry.name)) continue;
@@ -227,6 +247,6 @@ export async function scanDirectory(
 		}
 	}
 
-	await scan(dir, 0);
+	await scan(baseDir, 0);
 	return contents;
 }

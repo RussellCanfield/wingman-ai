@@ -10,6 +10,7 @@ The `@wingman-ai/agent` package provides a powerful and flexible agentic coding 
 - **Extensible Toolset:** Comes with a rich set of built-in tools for web searching, file system operations, command execution, and more.
 - **Background Agents:** Spawn autonomous agents that work in isolated git worktrees with automatic integration.
 - **Pull Request Automation:** Automatically create GitHub pull requests with seamless authentication.
+- **CLI-Friendly Logging:** Configurable logging system that doesn't interfere with terminal output.
 - **Stateful Conversations:** Maintains conversation state using a graph-based approach, allowing for complex and multi-turn interactions.
 - **Configurable:** Easily configure the agent with your desired model, tools, and working directory.
 - **Streaming Support:** Supports streaming of responses for real-time interactions.
@@ -73,6 +74,107 @@ for await (const output of agent.stream(request)) {
 }
 ```
 
+## Logging Configuration
+
+The Wingman Agent includes a sophisticated logging system designed to be CLI-friendly and highly configurable.
+
+### Quick Logging Setup
+
+```typescript
+import { WingmanAgent, createLogger } from "@wingman-ai/agent";
+import { ChatOpenAI } from "@langchain/openai";
+
+// Silent mode (ideal for CLI tools)
+const agent = new WingmanAgent({
+  name: "CLI Assistant",
+  model: new ChatOpenAI({ model: "gpt-4" }),
+  logger: createLogger('silent')  // No logs interfere with output
+});
+
+// Debug mode (verbose logging)
+const debugAgent = new WingmanAgent({
+  name: "Debug Assistant", 
+  model: new ChatOpenAI({ model: "gpt-4" }),
+  logLevel: 'debug'  // Show all debug information
+});
+
+// Environment-controlled logging
+const envAgent = new WingmanAgent({
+  name: "Environment Assistant",
+  model: new ChatOpenAI({ model: "gpt-4" })
+  // Uses WINGMAN_LOG_LEVEL environment variable
+});
+```
+
+### Log Levels
+
+| Level   | Description                                    | Use Case                    |
+|---------|------------------------------------------------|-----------------------------|
+| `silent`| No logging output                              | CLI tools, production       |
+| `error` | Only error messages                            | Production with error tracking |
+| `warn`  | Warnings and errors                            | Production monitoring       |
+| `info`  | General information, warnings, and errors     | Development (default)       |
+| `debug` | Verbose logging including debug information    | Debugging, troubleshooting  |
+
+### Environment Variable Control
+
+Set the log level using environment variables:
+
+```bash
+# Silent mode (no logs)
+export WINGMAN_LOG_LEVEL=silent
+your-cli-tool
+
+# Debug mode (verbose)
+export WINGMAN_LOG_LEVEL=debug
+your-cli-tool
+
+# Default info level
+your-cli-tool
+```
+
+### CLI-Friendly Design
+
+The logging system is designed specifically for CLI consumption:
+
+- **Logs go to stderr** - Keeps stdout clean for actual output
+- **Silent mode available** - Completely disable logging for production
+- **No interference** - Debug logs don't mix with user-facing output
+- **Configurable verbosity** - Users control what they see
+
+### Custom Logger Implementation
+
+You can provide your own logger implementation:
+
+```typescript
+import { Logger } from "@wingman-ai/agent";
+
+class CustomLogger implements Logger {
+  debug(message: string, ...args: any[]): void {
+    // Send to your logging service
+    myLoggingService.debug(message, args);
+  }
+  
+  info(message: string, ...args: any[]): void {
+    myLoggingService.info(message, args);
+  }
+  
+  warn(message: string, ...args: any[]): void {
+    myLoggingService.warn(message, args);
+  }
+  
+  error(message: string, ...args: any[]): void {
+    myLoggingService.error(message, args);
+  }
+}
+
+const agent = new WingmanAgent({
+  name: "Custom Logger Agent",
+  model: new ChatOpenAI({ model: "gpt-4" }),
+  logger: new CustomLogger()
+});
+```
+
 ## Advanced Configuration
 
 ### Background Agents with Pull Request Integration
@@ -85,6 +187,9 @@ const agent = new WingmanAgent({
   name: "Code Assistant",
   model: new ChatOpenAI({ model: "gpt-4" }),
   workingDirectory: process.cwd(),
+  
+  // Configure logging for background agents
+  logLevel: 'info',  // Background workers inherit this setting
   
   // Configure background agent behavior
   backgroundAgentConfig: {
@@ -131,6 +236,27 @@ The `WingmanAgent` can be configured with the following options:
 | `workingDirectory` | `string` (optional)                | Working directory for the agent. Defaults to `process.cwd()`.                                          |
 | `mode`             | `"interactive" \| "vibe"`          | Agent interaction mode. `"vibe"` is more autonomous, `"interactive"` asks for confirmation. Default: `"vibe"`. |
 | `memory`           | `BaseCheckpointSaver` (optional)   | LangChain checkpoint saver for conversation persistence. Defaults to `MemorySaver`.                    |
+| `logger`           | `Logger` (optional)                | Custom logger instance. Defaults to `createLogger()`.                                                  |
+| `logLevel`         | `LogLevel` (optional)              | Log level when using built-in logger. Defaults to `'info'`.                                            |
+
+### Logging Configuration
+
+```typescript
+// Logger configuration options
+logger?: Logger;           // Custom logger instance
+logLevel?: LogLevel;       // Built-in logger level
+
+// Log levels
+type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
+
+// Logger interface
+interface Logger {
+  debug(message: string, ...args: any[]): void;
+  info(message: string, ...args: any[]): void;
+  warn(message: string, ...args: any[]): void;
+  error(message: string, ...args: any[]): void;
+}
+```
 
 ### Background Agent Configuration
 
@@ -229,6 +355,7 @@ Background agents are autonomous workers that operate in isolated git worktrees,
 - **Pull Request Creation:** Supports GitHub PR creation with multiple authentication methods
 - **Conflict Detection:** Detects and reports merge conflicts
 - **Event System:** Real-time status updates via event emitters
+- **Inherited Logging:** Background agents inherit the parent agent's logging configuration
 
 ### Usage Example
 
@@ -393,18 +520,86 @@ In the `.wingman` directory, create a `mcp.json` file with the following schema:
 
 ## Examples
 
-### Basic File Operations
+### CLI Tool with Silent Logging
 ```typescript
+import { WingmanAgent, createLogger } from "@wingman-ai/agent";
+import { ChatOpenAI } from "@langchain/openai";
+
 const agent = new WingmanAgent({
-  name: "File Manager",
+  name: "CLI Assistant",
   model: new ChatOpenAI({ model: "gpt-4" }),
-  tools: ["read_file", "edit_file", "list_directory"]
+  
+  // Silent logging for CLI - no interference with output
+  logger: createLogger('silent'),
+  
+  tools: ["edit_file", "read_file", "command_execute"]
 });
 
 await agent.initialize();
 
+// Clean CLI output - no debug logs interfere
 const result = await agent.invoke({
   input: "Read package.json and update the version to 2.0.0"
+});
+
+console.log("Task completed successfully!"); // Goes to stdout
+```
+
+### Development with Debug Logging
+```typescript
+const agent = new WingmanAgent({
+  name: "Debug Assistant",
+  model: new ChatOpenAI({ model: "gpt-4" }),
+  
+  // Verbose logging for development
+  logLevel: 'debug',
+  
+  tools: ["edit_file", "read_file", "command_execute"]
+});
+
+await agent.initialize();
+// Debug logs show detailed operation information
+```
+
+### Environment-Controlled Logging
+```typescript
+const agent = new WingmanAgent({
+  name: "Environment Assistant",
+  model: new ChatOpenAI({ model: "gpt-4" }),
+  
+  // Uses WINGMAN_LOG_LEVEL environment variable
+  // Defaults to 'info' if not set
+  
+  tools: ["edit_file", "read_file", "command_execute"]
+});
+
+// Usage:
+// WINGMAN_LOG_LEVEL=silent npm run cli-tool    # Silent
+// WINGMAN_LOG_LEVEL=debug npm run cli-tool     # Verbose
+// npm run cli-tool                             # Default (info)
+```
+
+### Background Agents with Logging
+```typescript
+const agent = new WingmanAgent({
+  name: "Background Dev Assistant",
+  model: new ChatOpenAI({ model: "gpt-4" }),
+  
+  // Background agents inherit this logging configuration
+  logLevel: 'info',
+  
+  backgroundAgentConfig: {
+    pushToRemote: true,
+    createPullRequest: true,
+    pullRequestTitle: "🤖 Auto-implementation: {input}",
+    pullRequestBody: "Automated changes by {agentName}\n\nTask: {input}\n\nFiles: {changedFiles}"
+  },
+  tools: ["background_agent", "edit_file", "command_execute", "file_inspector"]
+});
+
+// Background agents will log with the same level as the parent
+await agent.invoke({
+  input: "Create a background agent to implement a REST API for user management"
 });
 ```
 
@@ -420,28 +615,6 @@ await agent.initialize();
 
 const result = await agent.invoke({
   input: "Research the latest React 18 features and create a summary document"
-});
-```
-
-### Autonomous Development
-```typescript
-const agent = new WingmanAgent({
-  name: "Dev Assistant",
-  model: new ChatOpenAI({ model: "gpt-4" }),
-  backgroundAgentConfig: {
-    pushToRemote: true,
-    createPullRequest: true,
-    pullRequestTitle: "🤖 Auto-implementation: {input}",
-    pullRequestBody: "Automated changes by {agentName}\n\nTask: {input}\n\nFiles: {changedFiles}"
-  },
-  tools: ["background_agent", "edit_file", "command_execute", "file_inspector"]
-});
-
-await agent.initialize();
-
-// This will create a background agent that works autonomously
-const result = await agent.invoke({
-  input: "Create a background agent to implement a REST API for user management"
 });
 ```
 
