@@ -3,6 +3,7 @@ const CONTEXT_WINDOWS: Record<string, number> = {
 	"claude-opus-4": 200_000,
 	"claude-sonnet-4": 200_000,
 	"gemini-2.5-pro": 1_000_000,
+	"grok-4": 256_000,
 };
 
 export const getContextWindow = (model: string): number | undefined => {

@@ -2,10 +2,13 @@ import { HumanMessage } from "@langchain/core/messages";
 import path from "node:path";
 import type { WingmanRequest } from "../agent";
 import { loadFiles } from "../utils";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatXAI } from "@langchain/xai";
 
 export const buildHumanMessages = async (
 	request: WingmanRequest,
 	cwd: string,
+	model: BaseChatModel | ChatXAI,
 ) => {
 	const messages: HumanMessage[] = [
 		new HumanMessage({
@@ -38,6 +41,12 @@ ${loadedFiles.map((f) => `<file>\nPath: ${path.relative(cwd, f.path)}\nContents:
 	}
 
 	if (prompt) {
+		if (model instanceof ChatXAI) {
+			prompt = `When generating code, always use proper syntax characters directly. 
+Never use HTML entities or encoded characters unless they are absolutely necessary.
+			
+			${prompt}`;
+		}
 		messages.unshift(new HumanMessage({ content: prompt }));
 	}
 

@@ -120,7 +120,9 @@ The Wingman CLI uses a comprehensive configuration schema that supports various 
   "model": "claude-sonnet-4-0",
   "capabilities": {
     "language": "typescript"
-  }
+  },
+  "apiKey": "explicit or use env var",
+  "baseUrl": "openrouter and LMStudio"
 }
 ```
 
@@ -128,8 +130,8 @@ The Wingman CLI uses a comprehensive configuration schema that supports various 
 
 ```json
 {
-  "provider": "openai",
-  "model": "gpt-4o",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-0",
   "capabilities": {
     "language": "typescript"
   },
@@ -147,7 +149,7 @@ The Wingman CLI uses a comprehensive configuration schema that supports various 
 ### Configuration Options
 
 #### Core Settings
-- **`provider`** (required): AI provider - `"anthropic"`, `"openai"`, or `"google"`
+- **`provider`** (required): AI provider - `"anthropic"`, `"openai"`, `"google"`, `"openrouter"`, `"xai"` or `"lmstudio"`
 - **`model`** (required): Model name specific to the provider
 - **`capabilities.language`** (optional): Primary language - `"typescript"`, `"javascript"`, `"python"`, `"csharp"`, or `"rust"`
 
@@ -212,6 +214,11 @@ export ANTHROPIC_API_KEY="your-anthropic-api-key"
 ### Google
 ```bash
 export GOOGLE_API_KEY="your-google-api-key"
+```
+
+### xAI
+```bash
+export XAI_API_KEY="your-api-key"
 ```
 
 Ensure these keys are kept secure and not exposed in your source code.

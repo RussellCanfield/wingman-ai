@@ -6,8 +6,8 @@ import dotenv from "dotenv";
 import { DEFAULT_BLOCKED_COMMANDS } from "@wingman-ai/agent";
 
 const defaultConfig: WingmanConfig = {
-	provider: "openai",
-	model: "gpt-4o",
+	provider: "anthropic",
+	model: "claude-sonnet-4-0",
 	toolAbilities: {
 		blockedCommands: DEFAULT_BLOCKED_COMMANDS,
 		allowScriptExecution: true,
@@ -16,7 +16,8 @@ const defaultConfig: WingmanConfig = {
 		pushToRemote: false,
 		createPullRequest: false,
 		pullRequestTitle: "Background Agent: {agentName}",
-		pullRequestBody: "This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
+		pullRequestBody:
+			"This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
 	},
 };
 

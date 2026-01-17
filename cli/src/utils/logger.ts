@@ -5,11 +5,13 @@ import { join } from "node:path";
 // Check for CLI arguments that enable logging
 function isLoggingEnabledByArgs(): boolean {
 	const args = process.argv;
-	return args.includes('--verbose') || 
-		   args.includes('-v') || 
-		   args.includes('--debug') || 
-		   args.includes('-d') ||
-		   args.includes('--log');
+	return (
+		args.includes("--verbose") ||
+		args.includes("-v") ||
+		args.includes("--debug") ||
+		args.includes("-d") ||
+		args.includes("--log")
+	);
 }
 
 // Get log level from environment, CLI args, or default to 'silent'
@@ -32,27 +34,27 @@ function getLogLevel(): pino.Level {
 
 	// Check CLI arguments for logging flags
 	const args = process.argv;
-	if (args.includes('--debug') || args.includes('-d')) {
-		return 'debug';
+	if (args.includes("--debug") || args.includes("-d")) {
+		return "debug";
 	}
-	if (args.includes('--verbose') || args.includes('-v')) {
-		return 'info';
+	if (args.includes("--verbose") || args.includes("-v")) {
+		return "info";
 	}
-	if (args.includes('--log')) {
-		return 'info';
+	if (args.includes("--log")) {
+		return "info";
 	}
 
 	// Default to silent - no logging unless explicitly enabled
-	return 'silent';
+	return "silent";
 }
 
 // Only create log directory if logging is enabled
 function ensureLogDirectory(): string | null {
 	const logLevel = getLogLevel();
-	if (logLevel === 'silent') {
+	if (logLevel === "silent") {
 		return null;
 	}
-	
+
 	const logDir = join(process.cwd(), ".wingman");
 	if (!existsSync(logDir)) {
 		mkdirSync(logDir, { recursive: true });
@@ -62,7 +64,7 @@ function ensureLogDirectory(): string | null {
 
 const logLevel = getLogLevel();
 const logDirectory = ensureLogDirectory();
-const isLoggingEnabled = logLevel !== 'silent';
+const isLoggingEnabled = logLevel !== "silent";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
@@ -80,40 +82,44 @@ const transport = isLoggingEnabled
 						},
 						level: logLevel,
 					},
-					...(logDirectory ? [{
-						target: "pino-roll",
-						options: {
-							file: join(logDirectory, "debug"),
-							extension: ".log",
-							frequency: "daily",
-							dateFormat: "yyyy-MM-dd",
-							mkdir: true,
-							size: "10M",
-							files: 5,
-						},
-						level: logLevel,
-					}] : []),
+					...(logDirectory
+						? [
+								{
+									target: "pino-roll",
+									options: {
+										file: join(logDirectory, "debug"),
+										extension: ".log",
+										frequency: "daily",
+										dateFormat: "yyyy-MM-dd",
+										mkdir: true,
+										size: "10M",
+										files: 5,
+									},
+									level: logLevel,
+								},
+							]
+						: []),
 				],
 			})
 		: logDirectory
-		? pino.transport({
-				target: "pino-roll",
-				options: {
-					file: join(logDirectory, "debug"),
-					extension: ".log",
-					frequency: "daily",
-					dateFormat: "yyyy-MM-dd",
-					mkdir: true,
-					size: "10M",
-					files: 5,
-				},
-			})
-		: pino.transport({
-				target: "pino/file",
-				options: {
-					destination: 1, // stdout
-				},
-			})
+			? pino.transport({
+					target: "pino-roll",
+					options: {
+						file: join(logDirectory, "debug"),
+						extension: ".log",
+						frequency: "daily",
+						dateFormat: "yyyy-MM-dd",
+						mkdir: true,
+						size: "10M",
+						files: 5,
+					},
+				})
+			: pino.transport({
+					target: "pino/file",
+					options: {
+						destination: 1, // stdout
+					},
+				})
 	: pino.transport({
 			target: "pino/file",
 			options: {

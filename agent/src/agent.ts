@@ -12,7 +12,7 @@ import {
 } from "./tools/cmd_execute";
 import { createReadFileTool } from "./tools/read_file";
 import { createListDirectoryTool } from "./tools/list_workspace_files";
-import { createWriteFileTool } from "./tools/write_file";
+import { createWriteFileTool } from "./tools/edit_file";
 import { createResearchTool } from "./tools/research";
 import { createFileInspectorTool } from "./tools/file_inspector";
 import { createIntegrateBackgroundWorkTool } from "./tools/integrate_background_work";
@@ -558,6 +558,7 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		const messages = await buildHumanMessages(
 			request,
 			this.config.workingDirectory,
+			this.config.model,
 		);
 
 		const stream = await this.app.stream(
@@ -610,6 +611,7 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		const messages = await buildHumanMessages(
 			request,
 			this.config.workingDirectory,
+			this.config.model,
 		);
 
 		const stream = await this.app.streamEvents(
@@ -661,6 +663,7 @@ Ask the user if they want to integrate their changes (using 'integrate_backgroun
 		const messages = await buildHumanMessages(
 			request,
 			this.config.workingDirectory,
+			this.config.model,
 		);
 
 		return this.app.invoke(

@@ -4,6 +4,7 @@ import { baseToolSchema } from "./schemas";
 import { ToolMessage } from "@langchain/core/messages";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { WebCrawler } from "./utils/web";
+import type { ChatXAI } from "@langchain/xai";
 
 export const researchSchema = baseToolSchema.extend({
 	query: z
@@ -24,7 +25,7 @@ export const researchSchema = baseToolSchema.extend({
  */
 export const createResearchTool = (
 	workspace: string,
-	chatModel: BaseChatModel,
+	chatModel: BaseChatModel | ChatXAI,
 ) => {
 	const crawler = new WebCrawler(chatModel);
 

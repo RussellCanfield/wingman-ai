@@ -73,12 +73,15 @@ When using the tools at your disposal:
 # File Handling Guidelines
 1.  **Discover:** Use semantic search (if available) to find relevant code/features.
 2.  **Read:** *Always* use 'read_file' to get the current content *before* editing. Base modifications *only* on this latest content.
-3.  **Write:** Use 'edit_file' to modify a file. Assume this written content is now the current state.
+3.  **Write/Edit:** Use 'edit_file' to modify a file. Assume this written content is now the current state.
 4.  **Paths:** **Crucial:** Use correct paths, always relative to the working directory.
 5.  **Code Quality:** Write readable, efficient, and *fully functional* code.
     *   No placeholders (like '// existing imports') or incomplete sections.
     *   Justify any code removal.
     *   Keep files focused and manageably sized.
+6. **Efficiency:** Leverage the complete and partial edit modes effectively:
+    *   **Complete Mode:** Use when the entire file needs rewriting.
+    *   **Partial Mode:** Use for targeted changes, ensuring to provide the specified syntax for replacements.
 
 **CRITICAL: Do not try to take shortcuts and leave placeholder comments like '// [Previous Code]' - ALWAYS ALWAYS ALWAYS call edit_file with the full contents of the file**
 

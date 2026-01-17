@@ -1,6 +1,6 @@
 {
 	"name": "@wingman-ai/cli",
-	"version": "1.0.4",
+	"version": "1.0.7",
 	"main": "dist/index.js",
 	"type": "module",
 	"private": false,
@@ -40,7 +40,7 @@
 		"@langchain/openai": "0.5.17",
 		"@langchain/xai": "0.0.3",
 		"@rsbuild/plugin-node-polyfill": "1.3.0",
-		"@wingman-ai/agent": "^1.1.1",
+		"@wingman-ai/agent": "^1.1.4",
 		"@clack/prompts": "^0.8.2",
 		"chalk": "^5.4.1",
 		"clipboardy": "^4.0.0",

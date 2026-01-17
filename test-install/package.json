@@ -1,8 +1,0 @@
-{
-  "scripts": {
-    "wingman": "wingman"
-  },
-  "dependencies": {
-    "@wingman-ai/cli": "^1.0.0"
-  }
-}

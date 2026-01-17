@@ -14,8 +14,13 @@ export const WingmanConfigSchema = AgentConfig.extend({
 		z.literal("openai"),
 		z.literal("anthropic"),
 		z.literal("google"),
+		z.literal("xai"),
+		z.literal("lmstudio"),
+		z.literal("openrouter"),
 	]),
 	model: z.string(),
+	apiKey: z.string().optional(),
+	baseUrl: z.string().optional(),
 }).transform((data) => ({
 	...data,
 	toolAbilities: data.toolAbilities || {
@@ -26,7 +31,8 @@ export const WingmanConfigSchema = AgentConfig.extend({
 		pushToRemote: false,
 		createPullRequest: false,
 		pullRequestTitle: "Background Agent: {agentName}",
-		pullRequestBody: "This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
+		pullRequestBody:
+			"This pull request was automatically created by background agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
 	},
 }));
 

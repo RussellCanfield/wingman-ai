@@ -15,6 +15,15 @@ The `@wingman-ai/agent` package provides a powerful and flexible agentic coding 
 - **Configurable:** Easily configure the agent with your desired model, tools, and working directory.
 - **Streaming Support:** Supports streaming of responses for real-time interactions.
 
+## Supported Providers
+
+- **Anthropic**
+- **OpenAI**
+- **Google**
+- **xAI**
+- **OpenRouter**
+- **LMStudio**
+
 ## Installation
 
 To install the `@wingman-ai/agent` package, use your favorite package manager:
@@ -50,7 +59,7 @@ import { ChatAnthropic } from "@langchain/anthropic";
 // 1. Initialize the language model you want to use
 const model = new ChatAnthropic({
   apiKey: "YOUR_ANTHROPIC_API_KEY",
-  modelName: "claude-3-opus-20240229",
+  modelName: "claude-sonnet-4-0",
 });
 
 // 2. Create a new WingmanAgent instance

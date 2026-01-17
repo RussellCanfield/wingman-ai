@@ -15,6 +15,10 @@ const TOKEN_COSTS: Record<string, { input: number; output: number }> = {
 		input: 1.25,
 		output: 10.0,
 	},
+	"grok-4": {
+		input: 3,
+		output: 15,
+	},
 };
 
 export const getModelCosts = (

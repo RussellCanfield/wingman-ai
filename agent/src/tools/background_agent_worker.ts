@@ -19,6 +19,7 @@ import {
 	createLoggerFromConfig,
 } from "../logger";
 import type { WingmanConfig } from "src/config";
+import { ChatXAI } from "@langchain/xai";
 
 const execAsync = promisify(exec);
 
@@ -37,6 +38,7 @@ interface SerializableWingmanConfig {
 		model: string;
 		temperature?: number;
 		apiKey?: string;
+		baseUrl?: string;
 	};
 	workingDirectory: string;
 	mode: "interactive" | "vibe";
@@ -88,13 +90,33 @@ function reconstructModel(
 				temperature: modelConfig.temperature,
 				apiKey: modelConfig.apiKey,
 			});
-		default:
-			// Fallback to Google Generative AI if provider is unknown
-			return new ChatGoogleGenerativeAI({
-				model: modelConfig.model || "gemini-pro",
-				temperature: modelConfig.temperature || 0,
-				apiKey: modelConfig.apiKey || process.env.GOOGLE_API_KEY,
+		case "xai":
+			//@ts-expect-error
+			return new ChatXAI({
+				model: modelConfig.model,
+				temperature: modelConfig.temperature,
+				apiKey: modelConfig.apiKey,
 			});
+		case "openrouter":
+			return new ChatOpenAI({
+				apiKey: modelConfig.apiKey,
+				model: modelConfig.model,
+				openAIApiKey: modelConfig.apiKey,
+				configuration: {
+					baseURL: modelConfig.baseUrl || "https://api.openrouter.ai/v1",
+				},
+			});
+		case "lmstudio":
+			return new ChatOpenAI({
+				apiKey: modelConfig.apiKey,
+				model: modelConfig.model,
+				openAIApiKey: modelConfig.apiKey,
+				configuration: {
+					baseURL: modelConfig.baseUrl || "http://localhost:11434/v1",
+				},
+			});
+		default:
+			throw new Error(`Unsupported model provider: ${modelConfig.provider}`);
 	}
 }
 

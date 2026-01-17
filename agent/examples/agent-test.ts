@@ -2,6 +2,7 @@ import "../src/fetch";
 import { WingmanAgent } from "../src/agent";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatXAI } from "@langchain/xai";
 
 async function runIntelligentOrchestrationExample() {
 	console.log("🧠 Testing Intelligent Orchestration Decision Making");
@@ -14,13 +15,13 @@ async function runIntelligentOrchestrationExample() {
 		// 	model: "gemini-2.5-pro",
 		// 	temperature: 0,
 		// }),
-		model: new ChatAnthropic({
-			model: "claude-sonnet-4-0",
+		model: new ChatXAI({
+			model: "grok-4",
 			temperature: 0,
 		}),
 		backgroundAgentConfig: {
-			pushToRemote: true, // Enable remote push for this test
-			createPullRequest: true, // Enable PR creation for this test
+			pushToRemote: false,
+			createPullRequest: false,
 			pullRequestTitle: "Wingman-AI Background Agent: {agentName}",
 			pullRequestBody:
 				"This pull request was automatically created by Wingman-AI Background Agent: **{agentName}**\n\n## Task\n{input}\n\n## Changed Files\n{changedFiles}",
@@ -31,13 +32,16 @@ async function runIntelligentOrchestrationExample() {
 
 	await agent.initialize();
 
-	await agent.invoke({
+	const response = await agent.invoke({
 		input:
-			"Use a background agent and create a readme with 'TODO' as the contents under examples/app",
+			//"Use a background agent and create a readme with 'TODO' as the contents under examples/app",
+			`Find and fix the bug(s) in the caching system implementation for user data with TTL. 	
+Its located in the agent/examples/test-file.ts
+Ensure it meets the expected behavior of storing user data with expiration times, removing expired entries, maintaining a maximum size limit, and optimizing performance for frequent reads.`,
 		threadId: "1",
 	});
 
-	console.log("\n🎯 Intelligent Orchestration Testing Complete!");
+	console.log("\n🎯 Intelligent Orchestration Testing Complete!", response);
 }
 
 // Run the example

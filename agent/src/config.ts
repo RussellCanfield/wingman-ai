@@ -3,6 +3,7 @@ import type { Logger } from "./logger";
 import { z } from "zod/v4";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { DEFAULT_BLOCKED_COMMANDS } from "./tools/cmd_execute";
+import type { ChatXAI } from "@langchain/xai";
 
 export const AvailableTools = [
 	"background_agent",
@@ -73,7 +74,7 @@ export const WingmanAgentConfigSchema = z.object({
 	 * @example new ChatOpenAI({ model: "gpt-4", temperature: 0.1 })
 	 * @example new ChatAnthropic({ model: "claude-3-sonnet-20240229" })
 	 */
-	model: z.custom<BaseChatModel>().refine(
+	model: z.custom<BaseChatModel | ChatXAI>().refine(
 		(val) => {
 			return val && (val.lc_namespace as string[]).includes("langchain");
 		},

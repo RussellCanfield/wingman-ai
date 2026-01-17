@@ -1,6 +1,10 @@
 import path from "node:path";
-import fs from "node:fs";
+import fs, { promises } from "node:fs";
 import { minimatch } from "minimatch";
+import type { FileMetadata } from "@shared/types/Message";
+import type { writeFileSchema } from "../edit_file";
+import { createPatch } from "diff";
+import type z from "zod/v4";
 
 /**
  * Gets gitignore patterns as an array of individual patterns.
@@ -250,3 +254,102 @@ export async function scanDirectory(
 	await scan(baseDir, 0);
 	return contents;
 }
+
+/**
+ * Generates a diff between existing file content and new code
+ */
+const generateDiffFromModifiedCode = async (
+	newCode: string,
+	filePath: string,
+	originalCode?: string,
+): Promise<string> => {
+	try {
+		if (!filePath) {
+			throw new Error("File path is required");
+		}
+
+		if (typeof newCode !== "string") {
+			throw new Error(`New code must be a string, received: ${typeof newCode}`);
+		}
+
+		const patch = createPatch(filePath, originalCode ?? "", newCode, "", "", {
+			context: 3,
+			ignoreWhitespace: true,
+		});
+
+		const stats = {
+			additions: 0,
+			deletions: 0,
+		};
+
+		// Safer line parsing
+		const lines = patch.split("\n");
+		for (const line of lines) {
+			// Skip diff headers and metadata
+			if (
+				line.startsWith("+++") ||
+				line.startsWith("---") ||
+				line.startsWith("Index:") ||
+				line.startsWith("===") ||
+				line.startsWith("@@") ||
+				line.startsWith("\\")
+			) {
+				continue;
+			}
+
+			if (line.startsWith("+")) {
+				stats.additions++;
+			} else if (line.startsWith("-")) {
+				stats.deletions++;
+			}
+		}
+
+		return `+${stats.additions},-${stats.deletions}`;
+	} catch (error) {
+		console.error("Error generating diff:", error);
+		return "+0,-0"; // Safe fallback
+	}
+};
+
+export const generateFileMetadata = async (
+	workspace: string,
+	id: string,
+	input: z.infer<typeof writeFileSchema>,
+) => {
+	// Validate input before processing
+	if (!input.contents && input.contents !== "") {
+		throw new Error(
+			`File contents are required but received: ${typeof input.contents}`,
+		);
+	}
+
+	if (!input.path) {
+		throw new Error("File path is required");
+	}
+
+	let fileContents = "";
+	const filePath = path.isAbsolute(input.path)
+		? input.path
+		: path.join(workspace, input.path);
+	if (fs.existsSync(filePath)) {
+		try {
+			fileContents = await promises.readFile(filePath, {
+				encoding: "utf-8",
+			});
+		} catch (e) {
+			console.warn(`Failed to read file ${filePath}:`, e);
+		}
+	}
+
+	return {
+		id,
+		path: input.path,
+		code: input.contents,
+		original: fileContents,
+		diff: await generateDiffFromModifiedCode(
+			input.contents,
+			input.path,
+			fileContents,
+		),
+	} satisfies FileMetadata;
+};

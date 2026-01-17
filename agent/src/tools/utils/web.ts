@@ -3,6 +3,7 @@ import TurndownService from "turndown";
 import * as cheerio from "cheerio";
 import fetch from "node-fetch";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { ChatXAI } from "@langchain/xai";
 
 interface ResearchResult {
 	content: string;
@@ -20,7 +21,7 @@ export class WebCrawler {
 	private MAX_PAGES = 5;
 	private sourceReferences: Map<string, number> = new Map(); // Track source references
 
-	constructor(private readonly chatModel: BaseChatModel) {
+	constructor(private readonly chatModel: BaseChatModel | ChatXAI) {
 		this.turndown = new TurndownService({
 			headingStyle: "atx",
 			codeBlockStyle: "fenced",
