@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { AgentConfigLoader } from "../config/agentLoader";
+import { AgentLoader } from "../config/agentLoader";
 
 const TEST_CONFIG_DIR = ".wingman-test";
 
@@ -20,10 +20,10 @@ describe("AgentConfigLoader", () => {
 		}
 	});
 
-	describe("loadAgentConfigs", () => {
+	describe("loadAllAgentConfigs", () => {
 		it("should return empty array when no config exists", () => {
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toEqual([]);
 		});
@@ -47,8 +47,8 @@ describe("AgentConfigLoader", () => {
 				JSON.stringify(config),
 			);
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toHaveLength(1);
 			expect(agents[0].name).toBe("test-agent");
@@ -77,8 +77,8 @@ describe("AgentConfigLoader", () => {
 			writeFileSync(join(agentsDir, "agent1.json"), JSON.stringify(agent1));
 			writeFileSync(join(agentsDir, "agent2.json"), JSON.stringify(agent2));
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toHaveLength(2);
 			expect(agents[0].name).toBe("agent-1");
@@ -112,13 +112,10 @@ describe("AgentConfigLoader", () => {
 				join(TEST_CONFIG_DIR, "agents.config.json"),
 				JSON.stringify(singleFileConfig),
 			);
-			writeFileSync(
-				join(agentsDir, "agent.json"),
-				JSON.stringify(dirConfig),
-			);
+			writeFileSync(join(agentsDir, "agent.json"), JSON.stringify(dirConfig));
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			// Should only load from single file
 			expect(agents).toHaveLength(1);
@@ -133,8 +130,8 @@ describe("AgentConfigLoader", () => {
 				"{ invalid json",
 			);
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toEqual([]);
 		});
@@ -160,8 +157,8 @@ describe("AgentConfigLoader", () => {
 				JSON.stringify(invalidAgent),
 			);
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			// Should only load valid agent
 			expect(agents).toHaveLength(1);
@@ -187,8 +184,8 @@ describe("AgentConfigLoader", () => {
 				JSON.stringify(config),
 			);
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toHaveLength(1);
 			expect(agents[0].model).toBeDefined();
@@ -216,12 +213,12 @@ describe("AgentConfigLoader", () => {
 				JSON.stringify(config),
 			);
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toHaveLength(1);
 			expect(agents[0].tools).toHaveLength(1);
-			expect(agents[0].tools?.[0].name).toBe("command_execute");
+			expect(agents[0].tools?.[0]).toBe("command_execute");
 		});
 
 		it("should ignore non-JSON files in directory", () => {
@@ -238,8 +235,8 @@ describe("AgentConfigLoader", () => {
 			writeFileSync(join(agentsDir, "readme.md"), "# README");
 			writeFileSync(join(agentsDir, "notes.txt"), "Some notes");
 
-			const loader = new AgentConfigLoader(TEST_CONFIG_DIR);
-			const agents = loader.loadAgentConfigs();
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toHaveLength(1);
 			expect(agents[0].name).toBe("valid-agent");

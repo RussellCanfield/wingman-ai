@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	validateAgentConfig,
-	validateAgentsConfigFile,
-	UserAgentConfigSchema,
-	AgentsConfigFileSchema,
+	AgentConfigSchema,
 } from "../config/agentConfig";
 
 describe("Agent Configuration Schema", () => {
@@ -80,72 +78,9 @@ describe("Agent Configuration Schema", () => {
 				systemPrompt: "Test",
 			};
 
-			const parsed = UserAgentConfigSchema.parse(config);
+			const parsed = AgentConfigSchema.parse(config);
 			expect(parsed.allowScriptExecution).toBe(true);
 			expect(parsed.commandTimeout).toBe(300000);
-		});
-	});
-
-	describe("validateAgentsConfigFile", () => {
-		it("should validate a valid agents config file", () => {
-			const config = {
-				agents: [
-					{
-						name: "agent-1",
-						description: "First agent",
-						systemPrompt: "You are agent 1",
-					},
-					{
-						name: "agent-2",
-						description: "Second agent",
-						systemPrompt: "You are agent 2",
-						tools: ["web_crawler"],
-					},
-				],
-			};
-
-			const result = validateAgentsConfigFile(config);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data.agents).toHaveLength(2);
-				expect(result.data.agents[0].name).toBe("agent-1");
-				expect(result.data.agents[1].name).toBe("agent-2");
-			}
-		});
-
-		it("should fail validation for empty agents array", () => {
-			const config = {
-				agents: [],
-			};
-
-			const parsed = AgentsConfigFileSchema.parse(config);
-			expect(parsed.agents).toHaveLength(0);
-		});
-
-		it("should fail validation for missing agents field", () => {
-			const config = {};
-
-			const result = validateAgentsConfigFile(config);
-			expect(result.success).toBe(false);
-		});
-
-		it("should fail validation if any agent is invalid", () => {
-			const config = {
-				agents: [
-					{
-						name: "valid-agent",
-						description: "Valid",
-						systemPrompt: "Valid",
-					},
-					{
-						name: "invalid-agent",
-						// missing description and systemPrompt
-					},
-				],
-			};
-
-			const result = validateAgentsConfigFile(config);
-			expect(result.success).toBe(false);
 		});
 	});
 

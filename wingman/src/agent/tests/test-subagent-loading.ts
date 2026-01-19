@@ -1,6 +1,6 @@
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { AgentConfigLoader } from "../config/agentLoader";
+import { AgentLoader } from "../config/agentLoader";
 
 const testDir = join(process.cwd(), ".test-subagents");
 const testAgentsDir = join(testDir, "agents");
@@ -50,8 +50,8 @@ try {
 		JSON.stringify(agentWithSubagents, null, 2),
 	);
 
-	const loader1 = new AgentConfigLoader(".wingman", testDir);
-	const agents1 = loader1.loadAgentConfigs();
+	const loader1 = new AgentLoader(".wingman", testDir);
+	const agents1 = loader1.loadAllAgentConfigs();
 
 	console.log(`Loaded ${agents1.length} agent(s)`);
 	console.log(`Agent name: ${agents1[0]?.name}`);
@@ -59,9 +59,7 @@ try {
 		`Agent has subagents: ${(agents1[0] as any)?.subagents ? "Yes" : "No"}`,
 	);
 	if ((agents1[0] as any)?.subagents) {
-		console.log(
-			`Number of subagents: ${(agents1[0] as any).subagents.length}`,
-		);
+		console.log(`Number of subagents: ${(agents1[0] as any).subagents.length}`);
 		(agents1[0] as any).subagents.forEach((sub: any, i: number) => {
 			console.log(`  Subagent ${i + 1}: ${sub.name} - ${sub.description}`);
 			console.log(`    Tools: ${sub.tools?.length || 0}`);
@@ -95,15 +93,13 @@ try {
 		JSON.stringify(invalidAgent, null, 2),
 	);
 
-	const loader2 = new AgentConfigLoader(".wingman", testDir);
-	const agents2 = loader2.loadAgentConfigs();
+	const loader2 = new AgentLoader(".wingman", testDir);
+	const agents2 = loader2.loadAllAgentConfigs();
 
 	if (agents2.length === 0) {
 		console.log("✓ Validation correctly rejected nested subagents");
 	} else {
-		console.log(
-			"✗ ERROR: Validation should have rejected nested subagents",
-		);
+		console.log("✗ ERROR: Validation should have rejected nested subagents");
 		process.exit(1);
 	}
 

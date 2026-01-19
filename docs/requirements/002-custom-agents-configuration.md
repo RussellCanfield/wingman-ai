@@ -71,49 +71,37 @@ Current limitations:
 
 ### File Locations
 
-#### Option 1: Single Configuration File
-**Path**: `.wingman/agents.config.json`
-
-**Structure**:
-```json
-{
-  "agents": [
-    { /* agent 1 */ },
-    { /* agent 2 */ }
-  ]
-}
-```
-
-**Pros**:
-- Single source of truth
-- Easy to share entire configuration
-- Simpler to version control
-
-**Cons**:
-- Large file for many agents
-- Merge conflicts in team settings
-
-#### Option 2: Directory of Agent Files
-**Path**: `.wingman/agents/*.json`
+**Path**: `.wingman/agents/{agent-name}/agent.json`
 
 **Structure**:
 ```
 .wingman/agents/
-  data-analyst.json
-  security-researcher.json
-  doc-writer.json
+  coding/
+    agent.json
+  researcher/
+    agent.json
+  data-analyst/
+    agent.json
 ```
 
-**Pros**:
+**Benefits**:
+- Single source of truth
 - Modular organization
+- Each agent isolated in its own directory
 - Easier team collaboration
 - Individual agent sharing
+- Room for agent-specific resources (future: examples, templates, etc.)
 
-**Cons**:
-- Multiple files to manage
-- Less obvious configuration location
-
-**Decision**: Support both, prioritize single file if both exist
+**Example**:
+```json
+// .wingman/agents/data-analyst/agent.json
+{
+  "name": "data-analyst",
+  "description": "Analyzes data using Python...",
+  "systemPrompt": "...",
+  "tools": ["command_execute", "think"]
+}
+```
 
 ### Agent Configuration Schema
 
@@ -130,8 +118,11 @@ Current limitations:
   blockedCommands?: string[];      // Commands to block for command_execute
   allowScriptExecution?: boolean;  // Enable/disable script execution (default: true)
   commandTimeout?: number;         // Timeout in milliseconds (default: 300000)
+  subagents?: AgentConfig[];       // Nested subagents (1 level deep only)
 }
 ```
+
+**Note on Subagents**: Agents can define their own subagents for delegation. Subagents follow the same schema but cannot have their own subagents (nesting limited to 1 level). This allows creating specialized workflows (e.g., a "coding" agent with "planner", "implementor", and "reviewer" subagents).
 
 ### Field Specifications
 
@@ -257,27 +248,25 @@ AgentConfigLoader
 ### Loading Flow
 
 ```
-1. AgentConfigLoader instantiated with config directory
+1. AgentConfigLoader instantiated with workspace directory
    ↓
-2. Check for .wingman/agents.config.json
+2. Check for .wingman/agents/ directory
    ↓
-3a. If exists: loadFromFile()
+3. If exists: Scan for agent subdirectories
+   ├── Find all subdirectories in .wingman/agents/
+   ├── For each directory, look for agent.json
    ├── Read and parse JSON
-   ├── Validate with Zod schema
-   ├── Create SubAgent for each agent
-   └── Return SubAgent[]
+   ├── Validate with Zod schema (including subagents if present)
+   ├── Create WingmanAgent with tools and model
+   ├── Process subagents (prevent nested subagents beyond 1 level)
+   ├── Log success or skip invalid configs
+   └── Return WingmanAgent[]
    ↓
-3b. If not exists: Check .wingman/agents/
-   ├── List *.json files
-   ├── Load and validate each file
-   ├── Skip invalid files with error logs
-   └── Return SubAgent[]
+4. Return empty array if directory doesn't exist (graceful fallback)
    ↓
-4. Return empty array if neither exists (graceful fallback)
+5. Use loaded agents directly via AgentLoader.loadAgent(name)
    ↓
-5. Merge with built-in agents in index.ts
-   ↓
-6. Pass to createDeepAgent()
+6. Agent invocation uses specific agent by name
 ```
 
 ### Validation Strategy
@@ -374,7 +363,7 @@ class ModelFactory {
 
 **Use Case**: Python-based data analysis with safety constraints
 
-**File**: `.wingman/agents/data-analyst.json`
+**File**: `.wingman/agents/data-analyst/agent.json`
 
 ```json
 {
@@ -393,7 +382,7 @@ class ModelFactory {
 
 **Use Case**: Safe security research without command execution
 
-**File**: `.wingman/agents/security-researcher.json`
+**File**: `.wingman/agents/security-researcher/agent.json`
 
 ```json
 {
@@ -409,20 +398,54 @@ class ModelFactory {
 
 **Use Case**: Creating technical documentation with research
 
-**File**: `.wingman/agents.config.json`
+**File**: `.wingman/agents/documentation-writer/agent.json`
 
 ```json
 {
-  "agents": [
+  "name": "documentation-writer",
+  "description": "Creates comprehensive technical documentation, API references, and user guides. Specializes in clear, accessible writing for developers and users.",
+  "systemPrompt": "You are a technical documentation expert focused on creating clear, comprehensive, and user-friendly documentation.\n\nYour principles:\n- Write for your audience (developers, users, or both)\n- Use clear, concise language\n- Include practical examples\n- Structure content logically\n- Maintain consistency in style and formatting\n\nDocumentation types you create:\n- API references with code examples\n- User guides and tutorials\n- Architecture documentation\n- README files\n- Contributing guidelines\n\nFormat output in Markdown with proper headings, code blocks, and links.",
+  "tools": ["web_crawler", "think"]
+}
+```
+
+### Example 4: Coding Agent with Subagents
+
+**Use Case**: Complex agent with specialized subagents for different phases of coding
+
+**File**: `.wingman/agents/coding/agent.json`
+
+```json
+{
+  "name": "coding",
+  "description": "Expert full-stack developer with specialized subagents for planning, implementation, and review.",
+  "systemPrompt": "You are an expert full-stack developer...",
+  "tools": [],
+  "model": "anthropic:claude-sonnet-4-5-20250929",
+  "subagents": [
     {
-      "name": "documentation-writer",
-      "description": "Creates comprehensive technical documentation, API references, and user guides. Specializes in clear, accessible writing for developers and users.",
-      "systemPrompt": "You are a technical documentation expert focused on creating clear, comprehensive, and user-friendly documentation.\n\nYour principles:\n- Write for your audience (developers, users, or both)\n- Use clear, concise language\n- Include practical examples\n- Structure content logically\n- Maintain consistency in style and formatting\n\nDocumentation types you create:\n- API references with code examples\n- User guides and tutorials\n- Architecture documentation\n- README files\n- Contributing guidelines\n\nFormat output in Markdown with proper headings, code blocks, and links.",
-      "tools": ["web_crawler", "think"]
+      "name": "planner",
+      "description": "Creates detailed implementation plans...",
+      "systemPrompt": "You are a software architect...",
+      "tools": ["command_execute"]
+    },
+    {
+      "name": "implementor",
+      "description": "Executes implementation plans...",
+      "systemPrompt": "You are an expert software engineer...",
+      "tools": ["command_execute"]
+    },
+    {
+      "name": "reviewer",
+      "description": "Reviews code for quality and bugs...",
+      "systemPrompt": "You are a senior code reviewer...",
+      "tools": ["command_execute"]
     }
   ]
 }
 ```
+
+**Note**: Subagents cannot have their own subagents. Nesting is limited to 1 level deep.
 
 ## User Experience
 
@@ -430,8 +453,8 @@ class ModelFactory {
 
 1. **Create Configuration**
    ```bash
-   mkdir -p .wingman/agents
-   cat > .wingman/agents/my-agent.json << EOF
+   mkdir -p .wingman/agents/my-agent
+   cat > .wingman/agents/my-agent/agent.json << EOF
    {
      "name": "my-agent",
      "description": "Does something specific",
@@ -442,14 +465,14 @@ class ModelFactory {
    ```
 
 2. **Agent Auto-Loaded**
-   - On startup, AgentConfigLoader scans for configs
-   - Valid agents logged: `"Loaded 1 custom agent(s): my-agent"`
+   - On startup, AgentLoader scans for agent directories
+   - Valid agents logged: `"Loaded agent config: my-agent"`
    - Invalid agents logged with errors
 
 3. **Use Custom Agent**
-   - Root agent now aware of custom agent
-   - Can delegate: "Use my-agent to..."
-   - Agent appears in agent lists
+   - Agent can be loaded by name: `AgentLoader.loadAgent("my-agent")`
+   - Agent is invoked directly with specific tasks
+   - Subagents (if any) are automatically loaded and available
 
 ### Error Scenarios
 
@@ -537,7 +560,8 @@ Info: Agent "my-agent" will use default model
 **Test Case 1**: Create data analyst agent
 ```bash
 # Create config
-cat > .wingman/agents/data-analyst.json << 'EOF'
+mkdir -p .wingman/agents/data-analyst
+cat > .wingman/agents/data-analyst/agent.json << 'EOF'
 {
   "name": "data-analyst",
   "description": "Analyzes data using Python",
@@ -549,7 +573,7 @@ EOF
 
 # Start and test
 npm start
-# Ask: "Use data-analyst to analyze dataset.csv"
+# Invoke: AgentLoader.loadAgent("data-analyst")
 ```
 
 **Expected Results**:
@@ -682,27 +706,32 @@ None at this time. All requirements clearly defined and implemented.
 ### A. Complete Type Definitions
 
 ```typescript
-// From src/config/agentConfig.ts
-export type AvailableToolName =
-  | "internet_search"
-  | "web_crawler"
-  | "command_execute"
-  | "think";
+// From wingman/src/agent/config/agentConfig.ts
+export const AvailableToolNames = z.enum([
+  "internet_search",
+  "web_crawler",
+  "command_execute",
+  "think",
+]);
 
-export interface UserAgentConfig {
-  name: string;
-  description: string;
-  systemPrompt: string;
-  tools?: AvailableToolName[];
-  model?: string;
-  blockedCommands?: string[];
-  allowScriptExecution?: boolean;
-  commandTimeout?: number;
-}
+export type AvailableToolName = z.infer<typeof AvailableToolNames>;
 
-export interface AgentsConfigFile {
-  agents: UserAgentConfig[];
-}
+const BaseAgentConfigSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  systemPrompt: z.string().min(1),
+  tools: z.array(AvailableToolNames).optional(),
+  model: z.string().optional(),
+  blockedCommands: z.array(z.string()).optional(),
+  allowScriptExecution: z.boolean().optional().default(true),
+  commandTimeout: z.number().optional().default(300000),
+});
+
+export const AgentConfigSchema = BaseAgentConfigSchema.extend({
+  subagents: z.array(BaseAgentConfigSchema).optional(),
+});
+
+export type WingmanAgentConfig = z.infer<typeof AgentConfigSchema>;
 ```
 
 ### B. Error Message Reference

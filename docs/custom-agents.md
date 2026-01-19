@@ -4,42 +4,26 @@ Wingman allows you to define custom subagents through configuration files. This 
 
 ## Configuration Location
 
-You can configure custom agents in two ways:
+**Path**: `.wingman/agents/{agent-name}/agent.json`
 
-### Option 1: Single Configuration File
-Create a single file: `.wingman/agents.config.json`
-
-```json
-{
-  "agents": [
-    {
-      "name": "agent-1",
-      "description": "...",
-      "systemPrompt": "...",
-      "tools": ["internet_search", "web_crawler"]
-    },
-    {
-      "name": "agent-2",
-      "description": "...",
-      "systemPrompt": "...",
-      "tools": ["command_execute", "think"]
-    }
-  ]
-}
-```
-
-### Option 2: Directory of Agent Files
-Create individual files in: `.wingman/agents/`
+Each custom agent gets its own directory containing an `agent.json` configuration file:
 
 ```
 .wingman/
 └── agents/
-    ├── data-analyst.json
-    ├── security-researcher.json
-    └── documentation-writer.json
+    ├── data-analyst/
+    │   └── agent.json
+    ├── security-researcher/
+    │   └── agent.json
+    └── documentation-writer/
+        └── agent.json
 ```
 
-Each file contains a single agent configuration (without the `agents` array wrapper).
+**Benefits**:
+- Single source of truth (one configuration format)
+- Modular organization (each agent isolated)
+- Room for future expansion (agent-specific resources, examples)
+- Easy to share individual agents
 
 ## Configuration Schema
 
@@ -86,6 +70,11 @@ Each file contains a single agent configuration (without the `agents` array wrap
   - Only applies if `command_execute` is in the tools list
   - Default: `300000` (5 minutes)
 
+- **`subagents`** (array): Nested subagents for specialized workflows
+  - Each subagent follows the same configuration schema
+  - Subagents cannot have their own subagents (nesting limited to 1 level)
+  - Use for: Creating hierarchical agent workflows (e.g., coding agent with planner/implementor/reviewer)
+
 ## Available Tools
 
 ### `internet_search`
@@ -112,7 +101,7 @@ Each file contains a single agent configuration (without the `agents` array wrap
 
 ### Example 1: Data Analyst Agent
 
-`.wingman/agents/data-analyst.json`:
+`.wingman/agents/data-analyst/agent.json`:
 
 ```json
 {
@@ -129,7 +118,7 @@ Each file contains a single agent configuration (without the `agents` array wrap
 
 ### Example 2: Security Researcher Agent
 
-`.wingman/agents/security-researcher.json`:
+`.wingman/agents/security-researcher/agent.json`:
 
 ```json
 {
@@ -143,20 +132,52 @@ Each file contains a single agent configuration (without the `agents` array wrap
 
 ### Example 3: Documentation Writer Agent
 
-`.wingman/agents.config.json`:
+`.wingman/agents/documentation-writer/agent.json`:
 
 ```json
 {
-  "agents": [
+  "name": "documentation-writer",
+  "description": "Creates comprehensive technical documentation, API references, and user guides. Specializes in clear, accessible writing.",
+  "systemPrompt": "You are a technical documentation expert focused on creating clear, comprehensive, and user-friendly documentation.\n\nYour principles:\n- Write for your audience (developers, users, or both)\n- Use clear, concise language\n- Include practical examples\n- Structure content logically\n- Maintain consistency in style and formatting\n\nDocumentation types you create:\n- API references with code examples\n- User guides and tutorials\n- Architecture documentation\n- README files\n- Contributing guidelines\n\nFormat output in Markdown with proper headings, code blocks, and links.",
+  "tools": ["web_crawler", "think"]
+}
+```
+
+### Example 4: Coding Agent with Subagents
+
+`.wingman/agents/coding/agent.json`:
+
+```json
+{
+  "name": "coding",
+  "description": "Expert full-stack developer with specialized subagents for planning, implementation, and review.",
+  "systemPrompt": "You are an expert full-stack developer...",
+  "tools": [],
+  "model": "anthropic:claude-sonnet-4-5-20250929",
+  "subagents": [
     {
-      "name": "documentation-writer",
-      "description": "Creates comprehensive technical documentation, API references, and user guides. Specializes in clear, accessible writing.",
-      "systemPrompt": "You are a technical documentation expert focused on creating clear, comprehensive, and user-friendly documentation.\n\nYour principles:\n- Write for your audience (developers, users, or both)\n- Use clear, concise language\n- Include practical examples\n- Structure content logically\n- Maintain consistency in style and formatting\n\nDocumentation types you create:\n- API references with code examples\n- User guides and tutorials\n- Architecture documentation\n- README files\n- Contributing guidelines\n\nFormat output in Markdown with proper headings, code blocks, and links.",
-      "tools": ["web_crawler", "think"]
+      "name": "planner",
+      "description": "Creates detailed implementation plans by analyzing requirements and existing code.",
+      "systemPrompt": "You are a software architect and planning specialist...",
+      "tools": ["command_execute"]
+    },
+    {
+      "name": "implementor",
+      "description": "Executes implementation plans by writing and editing code.",
+      "systemPrompt": "You are an expert software engineer...",
+      "tools": ["command_execute"]
+    },
+    {
+      "name": "reviewer",
+      "description": "Reviews code for quality, bugs, and best practices.",
+      "systemPrompt": "You are a senior code reviewer...",
+      "tools": ["command_execute"]
     }
   ]
 }
 ```
+
+**Note**: Subagents cannot have their own subagents. Nesting is limited to 1 level deep.
 
 ## Best Practices
 
@@ -187,29 +208,37 @@ Each file contains a single agent configuration (without the `agents` array wrap
 
 ## How It Works
 
-1. **Loading**: On startup, Wingman scans for agent configs in:
-   - `.wingman/agents.config.json` (checked first)
-   - `.wingman/agents/*.json` (checked if single file doesn't exist)
+1. **Loading**: `AgentLoader` scans for agent configurations:
+   - Looks in `.wingman/agents/` directory
+   - Finds all subdirectories
+   - Reads `agent.json` from each subdirectory
+   - Returns empty array if directory doesn't exist
 
 2. **Validation**: Each config is validated against the schema
+   - Zod validates structure and types
    - Invalid configs are logged and skipped
-   - Unknown tool names are warned but don't prevent loading
+   - Subagents are validated recursively
+   - Nesting beyond 1 level is prevented
 
-3. **Integration**: Valid agents are added to the root agent's subagents array
-   - User-defined agents are added after built-in agents
-   - Agents with duplicate names override earlier definitions
+3. **Agent Creation**: Valid configs are transformed into `WingmanAgent` instances
+   - Tools are created from the tool registry
+   - Models are instantiated if specified
+   - Subagents are processed and attached
+   - Configuration options applied (blockedCommands, timeouts, etc.)
 
-4. **Delegation**: The root agent can delegate to your custom agents
-   - Use the agent's name in delegation
-   - The root agent chooses when to delegate based on the description
+4. **Agent Invocation**: Agents are loaded by name and invoked directly
+   - `AgentLoader.loadAgent(agentName)` returns configured agent
+   - Subagents are available for delegation within the agent
+   - Each agent operates with its configured tools and model
 
 ## Troubleshooting
 
 ### Agent Not Loading
 - Check JSON syntax (use a JSON validator)
-- Verify file location (`.wingman/agents.config.json` or `.wingman/agents/`)
-- Check logs for validation errors
-- Ensure all required fields are present
+- Verify file location (`.wingman/agents/{agent-name}/agent.json`)
+- Ensure the agent directory exists
+- Check logs for validation errors (set `WINGMAN_LOG_LEVEL=debug`)
+- Ensure all required fields are present (`name`, `description`, `systemPrompt`)
 
 ### Tools Not Working
 - Verify tool name spelling (case-sensitive)
@@ -222,11 +251,10 @@ Each file contains a single agent configuration (without the `agents` array wrap
 - Check that model name is valid for the provider
 - Verify API keys are set in environment
 
-### Agent Not Being Used
-- Make description more specific and action-oriented
-- Test delegation explicitly: "Use the [agent-name] agent to..."
-- Check that agent's capabilities match the task
-- Review agent's system prompt for clarity
+### Subagents Not Working
+- Verify subagents don't have their own subagents (only 1 level allowed)
+- Check subagent configurations follow same schema as parent
+- Review logs for subagent validation errors
 
 ## Schema Reference
 
@@ -247,6 +275,16 @@ Full TypeScript schema:
   blockedCommands?: string[];      // Optional: for command_execute
   allowScriptExecution?: boolean;  // Optional: default true
   commandTimeout?: number;         // Optional: default 300000
+  subagents?: Array<{              // Optional: nested subagents (1 level only)
+    name: string;
+    description: string;
+    systemPrompt: string;
+    tools?: string[];
+    model?: string;
+    blockedCommands?: string[];
+    allowScriptExecution?: boolean;
+    commandTimeout?: number;
+  }>;
 }
 ```
 

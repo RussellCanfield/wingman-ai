@@ -1,6 +1,6 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
-import type { LanguageModelLike } from "@langchain/core/language_models/base";
+import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import { createLogger } from "../../logger.js";
 
 const logger = createLogger();
@@ -19,7 +19,7 @@ export class ModelFactory {
 	/**
 	 * Parse and create a model from a string specification
 	 */
-	static createModel(modelString: string): LanguageModelLike {
+	static createModel(modelString: string): BaseLanguageModel {
 		const parts = modelString.split(":");
 		if (parts.length !== 2) {
 			throw new Error(

@@ -32,7 +32,7 @@ export class OutputManager extends EventEmitter {
 	 */
 	emitEvent(event: OutputEvent): void {
 		if (this.mode === "json") {
-			process.stdout.write(JSON.stringify(event) + "\n");
+			process.stdout.write(`${JSON.stringify(event)}\n`);
 		} else {
 			// Emit for Ink components to listen to
 			this.emit("output-event", event);

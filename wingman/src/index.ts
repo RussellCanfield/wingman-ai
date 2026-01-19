@@ -2,8 +2,7 @@
 export * from "./logger.js";
 
 // Export agent components
-export { AgentConfigLoader } from "./agent/config/agentLoader.js";
-export { agent } from "./agent/agents/main.js";
+export { AgentLoader as AgentConfigLoader } from "./agent/config/agentLoader.js";
 
 // Export CLI components (for programmatic usage)
 export { OutputManager } from "./cli/core/outputManager.js";

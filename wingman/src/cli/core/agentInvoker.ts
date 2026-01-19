@@ -1,7 +1,15 @@
-import { createDeepAgent, type SubAgent } from "deepagents";
-import { AgentConfigLoader } from "../../agent/config/agentLoader.js";
+import {
+	CompositeBackend,
+	createDeepAgent,
+	FilesystemBackend,
+} from "deepagents";
+import { join } from "node:path";
+import { AgentLoader } from "../../agent/config/agentLoader.js";
 import type { OutputManager } from "./outputManager.js";
 import type { Logger } from "../../logger.js";
+import { additionalMessageMiddleware } from "@/agent/middleware/additional-messages.js";
+import type { WingmanAgentConfig } from "@/agent/config/agentConfig.js";
+import type { WingmanAgent } from "@/types/agents.js";
 
 export interface AgentInvokerOptions {
 	workspace?: string;
@@ -11,61 +19,68 @@ export interface AgentInvokerOptions {
 }
 
 export class AgentInvoker {
-	private loader: AgentConfigLoader;
+	private loader: AgentLoader;
 	private outputManager: OutputManager;
 	private logger: Logger;
+	private workspace: string;
+	private configDir: string;
 
 	constructor(options: AgentInvokerOptions) {
 		this.outputManager = options.outputManager;
 		this.logger = options.logger;
-		this.loader = new AgentConfigLoader(
-			options.configDir || ".wingman",
-			options.workspace || process.cwd(),
-		);
+		this.workspace = options.workspace || process.cwd();
+		this.configDir = options.configDir || ".wingman";
+		this.loader = new AgentLoader(this.configDir, this.workspace);
 	}
 
-	/**
-	 * Get all available agents
-	 */
-	getAvailableAgents(): SubAgent[] {
-		return this.loader.loadAgentConfigs();
+	findAllAgents(): WingmanAgentConfig[] {
+		const agentConfigs = this.loader.loadAllAgentConfigs();
+		return agentConfigs;
 	}
 
 	/**
 	 * Find an agent by name
 	 */
-	findAgent(name: string): SubAgent | undefined {
-		const agents = this.getAvailableAgents();
-		return agents.find((a) => a.name === name);
+	findAgent(name: string): WingmanAgent | undefined {
+		return this.loader.loadAgent(name);
 	}
 
 	/**
 	 * Invoke a specific agent directly (bypassing main orchestration)
 	 */
 	async invokeAgent(agentName: string, prompt: string): Promise<any> {
-		// Find the agent
-		const targetAgent = this.findAgent(agentName);
-
-		if (!targetAgent) {
-			const available = this.getAvailableAgents()
-				.map((a) => a.name)
-				.join(", ");
-			throw new Error(
-				`Agent "${agentName}" not found. Available agents: ${available}`,
-			);
-		}
-
-		this.logger.info(`Invoking agent: ${agentName}`);
-		this.outputManager.emitAgentStart(agentName, prompt);
-
 		try {
+			// Find the agent
+			const targetAgent = this.findAgent(agentName);
+
+			if (!targetAgent) {
+				throw new Error(`Agent "${agentName}" not found`);
+			}
+
+			this.logger.info(`Invoking agent: ${agentName}`);
+			this.outputManager.emitAgentStart(agentName, prompt);
+
 			// Create a standalone DeepAgent for this specific agent
-			// No subagents, no delegation - direct invocation only
 			const standaloneAgent = createDeepAgent({
 				systemPrompt: targetAgent.systemPrompt,
 				tools: targetAgent.tools,
-				model: targetAgent.model as any, // deepagents uses LanguageModelLike
-				// No subagents - we're invoking this agent directly
+				model: targetAgent.model as any,
+				backend: () =>
+					new CompositeBackend(
+						new FilesystemBackend({
+							rootDir: this.workspace,
+							virtualMode: true,
+						}),
+						{
+							"/memories/": new FilesystemBackend({
+								rootDir: join(this.workspace, this.configDir, "memories"),
+								virtualMode: true,
+							}),
+						},
+					),
+				middleware: [additionalMessageMiddleware()],
+				skills: ["/skills/"],
+				subagents: [...(targetAgent.subagents || [])],
 			});
 
 			this.logger.debug("Agent created, sending message");
@@ -97,7 +112,7 @@ export class AgentInvoker {
 	 * List all available agents with their descriptions
 	 */
 	listAgents(): Array<{ name: string; description: string }> {
-		const agents = this.getAvailableAgents();
+		const agents = this.findAllAgents();
 		return agents.map((a) => ({
 			name: a.name,
 			description: a.description,

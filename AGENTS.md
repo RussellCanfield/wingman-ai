@@ -12,6 +12,9 @@ Wingman is a hierarchical multi-agent AI assistant built on LangChain's deepagen
 - State management with persistent and ephemeral backends
 - Extensible middleware and skills system
 
+## Product Requirements
+All PRD documents can be found under `./docs/requirements/`. Make sure to keep these up to date.
+
 ## Architecture
 
 ### Root Agent (Wingman)
@@ -246,28 +249,22 @@ User → Root Agent → Coder → [Internal: Planner → Implementor → Reviewe
 
 Users can define custom subagents via configuration files without modifying code. For complete details, see [PRD-002: Custom Agents Configuration System](docs/requirements/002-custom-agents-configuration.md).
 
-### Configuration Locations
+### Configuration Location
 
-**Option 1: Single File**
-```json
-// .wingman/agents.config.json
-{
-  "agents": [
-    { /* agent 1 */ },
-    { /* agent 2 */ }
-  ]
-}
-```
+**Path**: `.wingman/agents/{agent-name}/agent.json`
 
-**Option 2: Directory**
+**Structure**:
 ```
 .wingman/agents/
-  data-analyst.json
-  security-researcher.json
-  doc-writer.json
+  coding/
+    agent.json
+  researcher/
+    agent.json
+  data-analyst/
+    agent.json
 ```
 
-**Priority**: Single file checked first, then directory. If both exist, single file is used.
+Each agent is isolated in its own directory with an `agent.json` configuration file. This provides a single source of truth and allows for future expansion (e.g., agent-specific resources, examples, templates).
 
 ### Agent Configuration Schema
 
@@ -286,8 +283,13 @@ Users can define custom subagents via configuration files without modifying code
   blockedCommands?: string[];      // Additional commands to block
   allowScriptExecution?: boolean;  // Default: true
   commandTimeout?: number;         // Default: 300000 (5 minutes)
+
+  // Subagents (1 level deep only)
+  subagents?: AgentConfig[];       // Nested agents for delegation
 }
 ```
+
+**Note**: Agents can define their own subagents for specialized workflows. Subagents cannot have their own subagents (nesting limited to 1 level).
 
 ### Available Tools
 
@@ -305,7 +307,9 @@ Users can define custom subagents via configuration files without modifying code
 | Anthropic | `anthropic:model-name` | `anthropic:claude-opus-4-5`, `anthropic:claude-sonnet-4-5-20250929` |
 | OpenAI | `openai:model-name` | `openai:gpt-4o`, `openai:gpt-4-turbo` |
 
-### Example: Data Analyst Agent
+### Example 1: Data Analyst Agent
+
+**File**: `.wingman/agents/data-analyst/agent.json`
 
 ```json
 {
@@ -320,7 +324,9 @@ Users can define custom subagents via configuration files without modifying code
 }
 ```
 
-### Example: Security Researcher Agent
+### Example 2: Security Researcher Agent
+
+**File**: `.wingman/agents/security-researcher/agent.json`
 
 ```json
 {
@@ -332,17 +338,55 @@ Users can define custom subagents via configuration files without modifying code
 }
 ```
 
+### Example 3: Coding Agent with Subagents
+
+**File**: `.wingman/agents/coding/agent.json`
+
+```json
+{
+  "name": "coding",
+  "description": "Expert full-stack developer with specialized subagents for planning, implementation, and review.",
+  "systemPrompt": "You are an expert full-stack developer...",
+  "tools": [],
+  "model": "anthropic:claude-sonnet-4-5-20250929",
+  "subagents": [
+    {
+      "name": "planner",
+      "description": "Creates detailed implementation plans...",
+      "systemPrompt": "You are a software architect...",
+      "tools": ["command_execute"]
+    },
+    {
+      "name": "implementor",
+      "description": "Executes implementation plans...",
+      "systemPrompt": "You are an expert software engineer...",
+      "tools": ["command_execute"]
+    },
+    {
+      "name": "reviewer",
+      "description": "Reviews code for quality and bugs...",
+      "systemPrompt": "You are a senior code reviewer...",
+      "tools": ["command_execute"]
+    }
+  ]
+}
+```
+
 ### Loading Process
 
-1. On startup, `AgentConfigLoader` scans for configuration files
-2. Priority: `.wingman/agents.config.json` → `.wingman/agents/*.json` → empty array
-3. Each config validated with Zod schema
-4. Invalid configs logged and skipped
-5. Valid configs transformed into SubAgent instances
-6. Custom agents merged with built-in agents
-7. All agents passed to `createDeepAgent()`
+1. `AgentLoader` instantiated with workspace directory (default: `process.cwd()`)
+2. Scans `.wingman/agents/` directory for subdirectories
+3. For each subdirectory, looks for `agent.json` file
+4. Reads and parses JSON configuration
+5. Validates with Zod schema (including subagents if present)
+6. Creates `WingmanAgent` with configured tools and model
+7. Processes subagents recursively (prevents nesting beyond 1 level)
+8. Invalid configs logged and skipped
+9. Returns array of valid `WingmanAgent` instances
 
-**Implementation**: [src/config/agentLoader.ts](src/config/agentLoader.ts)
+**Direct Agent Invocation**: Agents are loaded by name using `AgentLoader.loadAgent(agentName)` which returns the configured agent with all subagents ready.
+
+**Implementation**: [wingman/src/agent/config/agentLoader.ts](wingman/src/agent/config/agentLoader.ts)
 
 ## Backend Architecture
 
@@ -883,9 +927,10 @@ const result = await invoker.invokeAgent('researcher', 'what is TypeScript');
 
 ### Custom Agent Not Loading
 - Check JSON syntax (use validator)
-- Verify file location (`.wingman/agents.config.json` or `.wingman/agents/*.json`)
+- Verify file location (`.wingman/agents/{agent-name}/agent.json`)
 - Check logs for validation errors (set `WINGMAN_LOG_LEVEL=debug`)
 - Ensure required fields present (`name`, `description`, `systemPrompt`)
+- Verify the agent directory exists and contains `agent.json`
 
 ### Tool Not Available
 - Verify tool name spelling (case-sensitive)
