@@ -1,0 +1,7 @@
+#!/usr/bin/env node
+
+// Import the CLI entry point
+import('../dist/cli/index.js').catch((error) => {
+  console.error('Failed to start Wingman CLI:', error.message);
+  process.exit(1);
+});

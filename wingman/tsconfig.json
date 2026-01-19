@@ -1,0 +1,32 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"target": "esnext",
+		"lib": ["ESNext"],
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"outDir": "out",
+		"sourceMap": true,
+		"rootDir": "src",
+		"baseUrl": ".",
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"isolatedModules": true,
+		"jsx": "react",
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": ["src"],
+	"exclude": [
+		"**/node_modules",
+		"/node_modules/",
+		".vscode-test",
+		"scripts",
+		"media",
+		"views-ui",
+		"audio"
+	],
+	"references": [{ "path": "../shared" }]
+}

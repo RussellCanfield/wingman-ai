@@ -1,9 +1,0 @@
-#!/usr/bin/env node
-(async () => {
-  try {
-    await import('../dist/index.js');
-  } catch (error) {
-    console.error('Failed to load the CLI:', error);
-    process.exit(1);
-  }
-})();

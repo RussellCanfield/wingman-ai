@@ -1,6 +1,0 @@
-bin/*
-!bin/wingman
-sample_project
-.wingman/*
-!.wingman/wingman.config.json
-*.tgz
