@@ -9,19 +9,14 @@ jobs:
     build:
         runs-on: ubuntu-latest
 
-        strategy:
-            matrix:
-                node-version: [20.x]
-
         steps:
             - uses: actions/checkout@v3
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
               with:
-                  node-version: ${{ matrix.node-version }}
-                  cache: "npm"
-            - run: npm install --global @vscode/vsce
-            - run: npm install
+                  bun-version: latest
+            - run: bun install --global @vscode/vsce
+            - run: bun install
             - name: Publish
               working-directory: ./extension
               env:

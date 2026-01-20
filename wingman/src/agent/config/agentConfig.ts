@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HooksConfigSchema } from "@/agent/middleware/hooks/types.js";
 
 export const WingmanDirectory = ".wingman";
 
@@ -59,6 +60,7 @@ const BaseAgentConfigSchema = z.object({
 		.optional()
 		.default(300000)
 		.describe("Command execution timeout in milliseconds (default: 300000)"),
+	hooks: HooksConfigSchema.optional().describe("Agent-specific hooks configuration"),
 });
 
 export const AgentConfigSchema = BaseAgentConfigSchema.extend({

@@ -1,0 +1,17 @@
+{
+	"logLevel": "info",
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "write_file|edit_file",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "./tests/test-hooks/log-write.sh",
+						"timeout": 30
+					}
+				]
+			}
+		]
+	}
+}

@@ -6,12 +6,8 @@
 	"author": "Wingman AI",
 	"type": "module",
 	"workspaces": [
-		"agent",
-		"cli",
-		"docs-site",
-		"extension",
-		"shared",
-		"test-install"
+		"wingman",
+		"docs-site"
 	],
 	"scripts": {
 		"build": "rsbuild build",
@@ -24,7 +20,7 @@
 		"preview": "rsbuild preview",
 		"release": "release-it",
 		"test": "vitest",
-		"vscode:prepublish": "npm run build"
+		"vscode:prepublish": "bun run build"
 	},
 	"config": {
 		"commitizen": {
@@ -42,7 +38,7 @@
 		"typescript": "^5.4.5",
 		"vitest": "^3.2.4"
 	},
-	"packageManager": "npm@10.5.2",
+	"packageManager": "bun@1.1.42",
 	"dependencies": {
 		"@types/react": "^18.3.23",
 		"biome": "^0.3.3",

@@ -5,5 +5,6 @@ export default defineConfig({
   test: {
     globals: true,
     root: __dirname,
+    exclude: ['**/node_modules/**', '**/dist/**'],
   },
 });

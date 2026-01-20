@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HooksConfigSchema } from "@/agent/middleware/hooks/types.js";
 
 // Zod schema for search configuration
 export const SearchConfigSchema = z.object({
@@ -46,6 +47,8 @@ export const WingmanConfigSchema = z.object({
 		.optional()
 		.default("info"),
 	defaultAgent: z.string().optional(),
+	recursionLimit: z.number().min(1).max(10).optional().default(100),
+	hooks: HooksConfigSchema.optional().describe("Global hooks configuration"),
 	search: SearchConfigSchema.optional().default({
 		provider: "duckduckgo",
 		maxResults: 5,

@@ -40,12 +40,18 @@ yarn add @wingman-ai/agent
 pnpm add @wingman-ai/agent
 ```
 
+```bash
+bun add @wingman-ai/agent
+```
+
 ### Optional Dependencies
 
 For GitHub pull request creation, install:
 
 ```bash
 npm install @octokit/rest
+# or
+bun add @octokit/rest
 ```
 
 ## Quick Start
@@ -583,8 +589,10 @@ const agent = new WingmanAgent({
 });
 
 // Usage:
-// WINGMAN_LOG_LEVEL=silent npm run cli-tool    # Silent
-// WINGMAN_LOG_LEVEL=debug npm run cli-tool     # Verbose
+// WINGMAN_LOG_LEVEL=silent npm run cli-tool    # Silent (npm)
+// WINGMAN_LOG_LEVEL=silent bun run cli-tool    # Silent (bun)
+// WINGMAN_LOG_LEVEL=debug npm run cli-tool     # Verbose (npm)
+// WINGMAN_LOG_LEVEL=debug bun run cli-tool     # Verbose (bun)
 // npm run cli-tool                             # Default (info)
 ```
 
@@ -642,3 +650,5 @@ Contributions are welcome! Please feel free to open an issue or submit a pull re
 ## License
 
 This package is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+hello world

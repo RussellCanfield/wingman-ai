@@ -572,7 +572,7 @@ cat > .wingman/agents/data-analyst/agent.json << 'EOF'
 EOF
 
 # Start and test
-npm start
+npm start  # or: bun start
 # Invoke: AgentLoader.loadAgent("data-analyst")
 ```
 

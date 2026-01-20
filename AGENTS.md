@@ -13,7 +13,9 @@ Wingman is a hierarchical multi-agent AI assistant built on LangChain's deepagen
 - Extensible middleware and skills system
 
 ## Product Requirements
-All PRD documents can be found under `./docs/requirements/`. Make sure to keep these up to date.
+All PRD documents can be found under `./docs/requirements/`. 
+
+** Critical: Make sure to keep these up to date when modifying the project. **
 
 ## Architecture
 

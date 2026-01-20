@@ -22,11 +22,5 @@
 	"exclude": [
 		"**/node_modules",
 		"/node_modules/",
-		".vscode-test",
-		"scripts",
-		"media",
-		"views-ui",
-		"audio"
-	],
-	"references": [{ "path": "../shared" }]
+	]
 }
