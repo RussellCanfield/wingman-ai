@@ -1,9 +1,3 @@
-# MCP Integration
-Add support to the Wingman Agent for MCP servers using [LangChain adapters](https://docs.langchain.com/oss/javascript/langchain/mcp#model-context-protocol-mcp).
-
-# Test Generation
-Generate robust test coverage for the wingman project under `./wingman/src/tests` with a mix of unit and simple integration tests.
-
 # Wingman Gateway
 Develop a gateway that mimics [ClawdBot's](https://docs.clawd.bot/cli/gateway) with the ability to host it:
 
@@ -23,7 +17,11 @@ The gateway should allow subscribing multiple nodes just like Clawdbots so allow
 Develop methods to communicate with Wingman and view outputs. Allow users the most flexibility when interacting with a Wingman agent.
 The idea is simple, the user may not always want to use the CLI. They may be away from their machine but need to delegate to an agent running back at home, through their gateway.
 
-React Native App using Expo? What are the limitations we may hit with Expo? Can we use module federation with Expo - [read this re-pack plugin](https://re-pack.dev/docs/guides/expo-modules). Is there an easy way to distribute the app without an official app store publish?
+Integration channels:
+- Some sort of remote SSH? Scenario: I'm on my phone away from the house, use tailscale and some phone client?
+- Discord
+- Microsoft Teams
+- React Native App using Expo? What are the limitations we may hit with Expo? Can we use module federation with Expo - [read this re-pack plugin](https://re-pack.dev/docs/guides/expo-modules). Is there an easy way to distribute the app without an official app store publish?
 
 # Onboarding workflow
 Develop an onboarding set of CLI commands to:

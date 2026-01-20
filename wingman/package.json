@@ -20,6 +20,12 @@
 	"packageManager": "bun@1.1.42",
 	"scripts": {
 		"test": "vitest",
+		"test:unit": "vitest run --dir src/tests --exclude '**/*integration*'",
+		"test:integration": "vitest run --dir src/tests/integration",
+		"test:coverage": "vitest run --coverage",
+		"test:watch": "vitest watch",
+		"test:watch:unit": "vitest watch --dir src/tests --exclude '**/*integration*'",
+		"test:watch:integration": "vitest watch --dir src/tests/integration",
 		"build": "rslib build",
 		"int": "bun ./examples/agent-test.ts",
 		"cli": "./bin/wingman",
