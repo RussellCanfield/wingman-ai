@@ -17,6 +17,28 @@ export const SearchConfigSchema = z.object({
 
 export type SearchConfig = z.infer<typeof SearchConfigSchema>;
 
+// Zod schema for skills configuration
+export const SkillsConfigSchema = z.object({
+	repositoryOwner: z
+		.string()
+		.default("anthropics")
+		.describe("GitHub repository owner for skills"),
+	repositoryName: z
+		.string()
+		.default("skills")
+		.describe("GitHub repository name for skills"),
+	githubToken: z
+		.string()
+		.optional()
+		.describe("GitHub personal access token for higher API rate limits"),
+	skillsDirectory: z
+		.string()
+		.default("skills")
+		.describe("Directory to install skills in"),
+});
+
+export type SkillsConfig = z.infer<typeof SkillsConfigSchema>;
+
 // Zod schema for wingman.config.json
 export const WingmanConfigSchema = z.object({
 	logLevel: z
@@ -34,6 +56,11 @@ export const WingmanConfigSchema = z.object({
 			outputMode: z.enum(["auto", "interactive", "json"]).default("auto"),
 		})
 		.default({ theme: "default", outputMode: "auto" }),
+	skills: SkillsConfigSchema.optional().default({
+		repositoryOwner: "anthropics",
+		repositoryName: "skills",
+		skillsDirectory: "skills",
+	}),
 });
 
 export type WingmanConfigType = z.infer<typeof WingmanConfigSchema>;

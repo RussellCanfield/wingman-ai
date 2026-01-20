@@ -62,6 +62,11 @@ export class WingmanConfigLoader {
 				theme: "default",
 				outputMode: "auto",
 			},
+			skills: {
+				repositoryOwner: "anthropics",
+				repositoryName: "skills",
+				skillsDirectory: "skills",
+			},
 		};
 	}
 }

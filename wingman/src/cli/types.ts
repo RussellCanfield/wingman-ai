@@ -13,14 +13,7 @@ export interface WingmanConfig {
 	};
 }
 
-// Output events for multi-process communication
-export type OutputEvent =
-	| LogEvent
-	| AgentStartEvent
-	| AgentStreamEvent
-	| AgentCompleteEvent
-	| AgentErrorEvent;
-
+// Output event interfaces
 export interface LogEvent {
 	type: "log";
 	level: LogLevel;
@@ -54,6 +47,51 @@ export interface AgentErrorEvent {
 	stack?: string;
 	timestamp: string;
 }
+
+export interface SkillBrowseEvent {
+	type: "skill-browse";
+	skills: Array<{ name: string; description: string }>;
+	timestamp: string;
+}
+
+export interface SkillInstallProgressEvent {
+	type: "skill-install-progress";
+	skill: string;
+	status: string;
+	timestamp: string;
+}
+
+export interface SkillInstallCompleteEvent {
+	type: "skill-install-complete";
+	skill: string;
+	path: string;
+	timestamp: string;
+}
+
+export interface SkillListEvent {
+	type: "skill-list";
+	skills: Array<{ name: string; description: string; path: string }>;
+	timestamp: string;
+}
+
+export interface SkillRemoveEvent {
+	type: "skill-remove";
+	skill: string;
+	timestamp: string;
+}
+
+// Output events union type
+export type OutputEvent =
+	| LogEvent
+	| AgentStartEvent
+	| AgentStreamEvent
+	| AgentCompleteEvent
+	| AgentErrorEvent
+	| SkillBrowseEvent
+	| SkillInstallProgressEvent
+	| SkillInstallCompleteEvent
+	| SkillListEvent
+	| SkillRemoveEvent;
 
 // CLI Arguments
 export interface AgentCommandArgs {

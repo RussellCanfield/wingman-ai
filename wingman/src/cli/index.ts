@@ -2,15 +2,19 @@
 
 import type { LogLevel } from "../logger.js";
 import type { OutputMode, AgentCommandArgs } from "./types.js";
+import type { SkillCommandArgs } from "./types/skill.js";
 import { WingmanConfigLoader } from "./config/loader.js";
 import { OutputManager } from "./core/outputManager.js";
 import { executeAgentCommand } from "./commands/agent.js";
+import { executeSkillCommand } from "./commands/skill.js";
 
 /**
  * Parse command line arguments
  */
 function parseArgs(argv: string[]): {
 	command: string;
+	subcommand: string;
+	subcommandArgs: string[];
 	agent?: string;
 	verbosity?: string;
 	help: boolean;
@@ -22,6 +26,8 @@ function parseArgs(argv: string[]): {
 	if (args.includes("--help") || args.includes("-h")) {
 		return {
 			command: "",
+			subcommand: "",
+			subcommandArgs: [],
 			help: true,
 			prompt: "",
 		};
@@ -29,6 +35,8 @@ function parseArgs(argv: string[]): {
 
 	const parsed = {
 		command: args[0] || "",
+		subcommand: args[1] || "",
+		subcommandArgs: args.slice(2),
 		agent: undefined as string | undefined,
 		verbosity: undefined as string | undefined,
 		help: false,
@@ -93,9 +101,14 @@ Wingman CLI - AI coding assistant
 
 Usage:
   wingman agent --agent <name> [options] <prompt>
+  wingman skill <subcommand> [args]
 
 Commands:
-  agent         Invoke a specific agent directly
+  agent                        Invoke a specific agent directly
+  skill browse                 Browse available skills from repository
+  skill install <name>         Install a skill
+  skill list                   List installed skills
+  skill remove <name>          Remove an installed skill
 
 Options:
   --agent <name>      Agent name to invoke (required for agent command)
@@ -106,7 +119,9 @@ Options:
 Examples:
   wingman agent --agent researcher "what is quantum computing"
   wingman agent --agent coder -vv "add a login function"
-  wingman agent --agent planner --verbose=debug "design a REST API"
+  wingman skill browse
+  wingman skill install pdf
+  wingman skill list
 
 Available agents:
   Run "wingman agent" without a prompt to list all available agents.
@@ -151,6 +166,15 @@ async function main() {
 			};
 
 			await executeAgentCommand(commandArgs);
+		} else if (parsed.command === "skill") {
+			const commandArgs: SkillCommandArgs = {
+				subcommand: parsed.subcommand,
+				args: parsed.subcommandArgs,
+				verbosity,
+				outputMode,
+			};
+
+			await executeSkillCommand(commandArgs);
 		} else {
 			console.error(`Unknown command: ${parsed.command}`);
 			console.error('Run "wingman --help" for usage information');
