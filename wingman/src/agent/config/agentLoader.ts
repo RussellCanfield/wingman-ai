@@ -71,7 +71,7 @@ export class AgentLoader {
 	/**
 	 * Load a specific agent configuration by name
 	 */
-	loadAgent(agentName: string): WingmanAgent {
+	async loadAgent(agentName: string): Promise<WingmanAgent> {
 		let agent: WingmanAgent | undefined = undefined;
 
 		const customAgentsDir = join(
@@ -85,7 +85,7 @@ export class AgentLoader {
 			statSync(customAgentsDir).isDirectory()
 		) {
 			logger.info(`Loading agent from directory: ${customAgentsDir}`);
-			agent = this.loadFromDirectory(customAgentsDir);
+			agent = await this.loadFromDirectory(customAgentsDir);
 		}
 
 		if (!agent) {
@@ -98,7 +98,7 @@ export class AgentLoader {
 	/**
 	 * Load agents from individual .json files in a directory
 	 */
-	private loadFromDirectory(dirPath: string): WingmanAgent {
+	private async loadFromDirectory(dirPath: string): Promise<WingmanAgent> {
 		const agentFilePath = join(dirPath, "agent.json");
 
 		try {
@@ -116,8 +116,7 @@ export class AgentLoader {
 				);
 			}
 
-			const agent = this.createAgent(validation.data);
-			const config = validation.data;
+			const agent = await this.createAgent(validation.data);
 
 			// Add subagents if specified (only for top-level agents, not for subagents)
 			if (agent.subagents && agent.subagents.length > 0) {
@@ -145,7 +144,7 @@ export class AgentLoader {
 	/**
 	 * Create a WingmanAgent instance from a user config
 	 */
-	private createAgent(config: WingmanAgentConfig): WingmanAgent {
+	private async createAgent(config: WingmanAgentConfig): Promise<WingmanAgent> {
 		const agent: WingmanAgent = {
 			name: config.name,
 			description: config.description,
@@ -160,9 +159,18 @@ export class AgentLoader {
 				allowScriptExecution: config.allowScriptExecution,
 				timeout: config.commandTimeout,
 				searchConfig: this.wingmanConfig?.search,
+				// Pass both global and agent-specific MCP configs
+				mcpConfigs: [this.wingmanConfig?.mcp, config.mcp].filter(
+					Boolean,
+				) as any[],
 			};
 
-			agent.tools = createTools(config.tools, toolOptions);
+			agent.tools = await createTools(config.tools, toolOptions);
+		}
+
+		// Store MCP config on agent for reference
+		if (config.mcp) {
+			agent.mcpConfig = config.mcp;
 		}
 
 		// Add model override if specified

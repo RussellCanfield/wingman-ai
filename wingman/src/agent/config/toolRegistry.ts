@@ -6,6 +6,8 @@ import { createThinkingTool } from "../tools/think.js";
 import type { AvailableToolName } from "./agentConfig.js";
 import type { SearchConfig } from "../../cli/config/schema.js";
 import { createLogger } from "../../logger.js";
+import { MCPClientManager } from "./mcpClientManager.js";
+import type { MCPServersConfig } from "@/types/mcp.js";
 
 const logger = createLogger();
 
@@ -15,6 +17,7 @@ export interface ToolOptions {
 	allowScriptExecution?: boolean;
 	timeout?: number;
 	searchConfig?: SearchConfig;
+	mcpConfigs?: MCPServersConfig[];
 }
 
 /**
@@ -67,13 +70,15 @@ export function createTool(
 
 /**
  * Create multiple tools from an array of tool names
+ * NOW ALSO includes MCP tools if configured
  */
-export function createTools(
+export async function createTools(
 	toolNames: AvailableToolName[],
 	options: ToolOptions = {},
-): StructuredTool[] {
+): Promise<StructuredTool[]> {
 	const tools: StructuredTool[] = [];
 
+	// Create standard Wingman tools
 	for (const name of toolNames) {
 		const tool = createTool(name, options);
 		if (tool) {
@@ -83,7 +88,31 @@ export function createTools(
 		}
 	}
 
-	logger.info(`Created ${tools.length} tools: ${toolNames.join(", ")}`);
+	// Add MCP tools if configured
+	if (options.mcpConfigs && options.mcpConfigs.length > 0) {
+		try {
+			const mcpManager = new MCPClientManager(options.mcpConfigs, logger);
+			await mcpManager.initialize();
+			const mcpTools = await mcpManager.getTools();
+
+			if (mcpTools.length > 0) {
+				tools.push(...mcpTools);
+				logger.info(`Added ${mcpTools.length} MCP tool(s)`);
+			}
+
+			// Note: We don't cleanup here because tools will be used later
+			// Cleanup should happen in agentInvoker after agent completes
+		} catch (error) {
+			logger.error(
+				`Failed to load MCP tools: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			// Continue with other tools - MCP failure is non-fatal
+		}
+	}
+
+	logger.info(
+		`Created ${tools.length} total tools: ${toolNames.join(", ")}${options.mcpConfigs?.length ? " + MCP tools" : ""}`,
+	);
 	return tools;
 }
 

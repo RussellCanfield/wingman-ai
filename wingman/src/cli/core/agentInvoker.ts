@@ -15,6 +15,8 @@ import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import type { WingmanAgentConfig } from "@/agent/config/agentConfig.js";
 import type { WingmanAgent } from "@/types/agents.js";
 import type { WingmanConfigType } from "../config/schema.js";
+import { MCPClientManager } from "@/agent/config/mcpClientManager.js";
+import type { MCPServersConfig } from "@/types/mcp.js";
 
 export interface AgentInvokerOptions {
 	workspace?: string;
@@ -30,6 +32,7 @@ export class AgentInvoker {
 	private workspace: string;
 	private configDir: string;
 	private wingmanConfig: WingmanConfigType;
+	private mcpManager: MCPClientManager | null = null;
 
 	constructor(options: AgentInvokerOptions) {
 		this.outputManager = options.outputManager;
@@ -58,8 +61,8 @@ export class AgentInvoker {
 	/**
 	 * Find an agent by name
 	 */
-	findAgent(name: string): WingmanAgent | undefined {
-		return this.loader.loadAgent(name);
+	async findAgent(name: string): Promise<WingmanAgent | undefined> {
+		return await this.loader.loadAgent(name);
 	}
 
 	/**
@@ -68,7 +71,7 @@ export class AgentInvoker {
 	async invokeAgent(agentName: string, prompt: string): Promise<any> {
 		try {
 			// Find the agent
-			const targetAgent = this.findAgent(agentName);
+			const targetAgent = await this.findAgent(agentName);
 
 			if (!targetAgent) {
 				throw new Error(`Agent "${agentName}" not found`);
@@ -92,6 +95,25 @@ export class AgentInvoker {
 
 			// Generate session ID for hooks
 			const sessionId = uuidv4();
+
+			// Initialize MCP client if MCP servers configured
+			const mcpConfigs: MCPServersConfig[] = [
+				this.wingmanConfig.mcp,
+				targetAgent.mcpConfig,
+			].filter(Boolean) as MCPServersConfig[];
+
+			if (mcpConfigs.length > 0) {
+				this.logger.debug("Initializing MCP client for agent invocation");
+				this.mcpManager = new MCPClientManager(mcpConfigs, this.logger);
+				await this.mcpManager.initialize();
+
+				// Get MCP tools and add to agent tools
+				const mcpTools = await this.mcpManager.getTools();
+				if (mcpTools.length > 0) {
+					targetAgent.tools = [...(targetAgent.tools || []), ...mcpTools];
+					this.logger.info(`Added ${mcpTools.length} MCP tools to agent`);
+				}
+			}
 
 			// Build middleware array
 			const middleware = [additionalMessageMiddleware()];
@@ -161,6 +183,13 @@ export class AgentInvoker {
 			);
 			this.outputManager.emitAgentError(error as Error);
 			throw error;
+		} finally {
+			// Always cleanup MCP client
+			if (this.mcpManager) {
+				this.logger.debug("Cleaning up MCP client");
+				await this.mcpManager.cleanup();
+				this.mcpManager = null;
+			}
 		}
 	}
 

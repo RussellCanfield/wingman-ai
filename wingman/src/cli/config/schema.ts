@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HooksConfigSchema } from "@/agent/middleware/hooks/types.js";
+import { MCPServersConfigSchema } from "@/types/mcp.js";
 
 // Zod schema for search configuration
 export const SearchConfigSchema = z.object({
@@ -64,6 +65,9 @@ export const WingmanConfigSchema = z.object({
 		repositoryName: "skills",
 		skillsDirectory: "skills",
 	}),
+	mcp: MCPServersConfigSchema.optional().describe(
+		"Global MCP server configurations",
+	),
 });
 
 export type WingmanConfigType = z.infer<typeof WingmanConfigSchema>;

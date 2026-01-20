@@ -60,6 +60,7 @@
 		"@langchain/core": "^1.1.15",
 		"@langchain/google-genai": "^2.1.10",
 		"@langchain/langgraph": "1.1.0",
+		"@langchain/mcp-adapters": "^1.1.1",
 		"@langchain/openai": "^1.2.2",
 		"@langchain/xai": "^1.2.1",
 		"deepagents": "^1.5.0",
