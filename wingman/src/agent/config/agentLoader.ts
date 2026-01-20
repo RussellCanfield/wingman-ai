@@ -9,6 +9,7 @@ import { createTools, type ToolOptions } from "./toolRegistry.js";
 import { ModelFactory } from "./modelFactory.js";
 import { createLogger } from "../../logger.js";
 import type { WingmanAgent } from "@/types/agents.js";
+import type { WingmanConfigType } from "../../cli/config/schema.js";
 
 const logger = createLogger();
 
@@ -19,6 +20,7 @@ export class AgentLoader {
 	constructor(
 		private configDir = WingmanDirectory,
 		private workspace: string = process.cwd(),
+		private wingmanConfig?: WingmanConfigType,
 	) {}
 
 	loadAllAgentConfigs(): WingmanAgentConfig[] {
@@ -157,6 +159,7 @@ export class AgentLoader {
 				blockedCommands: config.blockedCommands,
 				allowScriptExecution: config.allowScriptExecution,
 				timeout: config.commandTimeout,
+				searchConfig: this.wingmanConfig?.search,
 			};
 
 			agent.tools = createTools(config.tools, toolOptions);

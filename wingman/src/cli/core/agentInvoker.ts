@@ -5,6 +5,7 @@ import {
 } from "deepagents";
 import { join } from "node:path";
 import { AgentLoader } from "../../agent/config/agentLoader.js";
+import { WingmanConfigLoader } from "../config/loader.js";
 import type { OutputManager } from "./outputManager.js";
 import type { Logger } from "../../logger.js";
 import { additionalMessageMiddleware } from "@/agent/middleware/additional-messages.js";
@@ -30,7 +31,11 @@ export class AgentInvoker {
 		this.logger = options.logger;
 		this.workspace = options.workspace || process.cwd();
 		this.configDir = options.configDir || ".wingman";
-		this.loader = new AgentLoader(this.configDir, this.workspace);
+
+		// Load wingman config and pass to AgentLoader
+		const configLoader = new WingmanConfigLoader(this.configDir, this.workspace);
+		const wingmanConfig = configLoader.loadConfig();
+		this.loader = new AgentLoader(this.configDir, this.workspace, wingmanConfig);
 	}
 
 	findAllAgents(): WingmanAgentConfig[] {

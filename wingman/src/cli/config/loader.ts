@@ -54,6 +54,10 @@ export class WingmanConfigLoader {
 	private getDefaultConfig(): WingmanConfigType {
 		return {
 			logLevel: "info",
+			search: {
+				provider: "duckduckgo",
+				maxResults: 5,
+			},
 			cli: {
 				theme: "default",
 				outputMode: "auto",

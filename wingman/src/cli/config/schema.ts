@@ -1,5 +1,22 @@
 import { z } from "zod";
 
+// Zod schema for search configuration
+export const SearchConfigSchema = z.object({
+	provider: z
+		.enum(["duckduckgo", "perplexity"])
+		.default("duckduckgo")
+		.describe("Search provider to use"),
+	maxResults: z
+		.number()
+		.min(1)
+		.max(20)
+		.optional()
+		.default(5)
+		.describe("Maximum number of search results to return"),
+});
+
+export type SearchConfig = z.infer<typeof SearchConfigSchema>;
+
 // Zod schema for wingman.config.json
 export const WingmanConfigSchema = z.object({
 	logLevel: z
@@ -7,6 +24,10 @@ export const WingmanConfigSchema = z.object({
 		.optional()
 		.default("info"),
 	defaultAgent: z.string().optional(),
+	search: SearchConfigSchema.optional().default({
+		provider: "duckduckgo",
+		maxResults: 5,
+	}),
 	cli: z
 		.object({
 			theme: z.string().default("default"),

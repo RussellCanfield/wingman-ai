@@ -1,9 +1,10 @@
 import type { StructuredTool } from "@langchain/core/tools";
-import { internetSearch } from "../tools/internet_search.js";
+import { createInternetSearchTool } from "../tools/internet_search.js";
 import { webCrawler } from "../tools/web_crawler.js";
 import { createCommandExecuteTool } from "../tools/command_execute.js";
 import { createThinkingTool } from "../tools/think.js";
 import type { AvailableToolName } from "./agentConfig.js";
+import type { SearchConfig } from "../../cli/config/schema.js";
 import { createLogger } from "../../logger.js";
 
 const logger = createLogger();
@@ -13,6 +14,7 @@ export interface ToolOptions {
 	blockedCommands?: string[];
 	allowScriptExecution?: boolean;
 	timeout?: number;
+	searchConfig?: SearchConfig;
 }
 
 /**
@@ -27,6 +29,7 @@ export function createTool(
 		blockedCommands,
 		allowScriptExecution = true,
 		timeout = 300000,
+		searchConfig = { provider: "duckduckgo", maxResults: 5 },
 	} = options;
 
 	logger.debug(`Creating tool: ${name}`, {
@@ -34,11 +37,12 @@ export function createTool(
 		blockedCommands,
 		allowScriptExecution,
 		timeout,
+		searchConfig,
 	});
 
 	switch (name) {
 		case "internet_search":
-			return internetSearch;
+			return createInternetSearchTool(searchConfig);
 
 		case "web_crawler":
 			return webCrawler;

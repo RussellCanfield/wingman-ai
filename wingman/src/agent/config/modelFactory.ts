@@ -50,9 +50,19 @@ export class ModelFactory {
 					temperature: 0,
 				});
 
+			case "openrouter":
+				return new ChatOpenAI({
+					model,
+					temperature: 0,
+					configuration: {
+						baseURL: "https://openrouter.ai/api/v1",
+						apiKey: process.env.OPENROUTER_API_KEY,
+					},
+				});
+
 			default:
 				throw new Error(
-					`Unknown model provider: "${provider}". Supported providers: anthropic, openai`,
+					`Unknown model provider: "${provider}". Supported providers: anthropic, openai, openrouter`,
 				);
 		}
 	}
@@ -81,7 +91,7 @@ export class ModelFactory {
 			};
 		}
 
-		const supportedProviders = ["anthropic", "openai"];
+		const supportedProviders = ["anthropic", "openai", "openrouter"];
 		if (!supportedProviders.includes(provider.toLowerCase())) {
 			return {
 				valid: false,
