@@ -10,6 +10,7 @@ import { ModelFactory } from "./modelFactory.js";
 import { createLogger } from "../../logger.js";
 import type { WingmanAgent } from "@/types/agents.js";
 import type { WingmanConfigType } from "../../cli/config/schema.js";
+import { MCPServersConfig } from "@/types/mcp.js";
 
 const logger = createLogger();
 
@@ -170,7 +171,7 @@ export class AgentLoader {
 
 		// Store MCP config on agent for reference
 		if (config.mcp) {
-			agent.mcpConfig = config.mcp;
+			agent.mcpConfig = config.mcp as MCPServersConfig;
 		}
 
 		// Add model override if specified

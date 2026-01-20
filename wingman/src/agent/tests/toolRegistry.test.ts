@@ -52,8 +52,8 @@ describe("Tool Registry", () => {
 	});
 
 	describe("createTools", () => {
-		it("should create multiple tools from array", () => {
-			const tools = createTools(["internet_search", "web_crawler", "think"]);
+		it("should create multiple tools from array", async () => {
+			const tools = await createTools(["internet_search", "web_crawler", "think"]);
 
 			expect(tools).toHaveLength(3);
 			expect(tools[0].name).toBe("internet_search");
@@ -61,14 +61,14 @@ describe("Tool Registry", () => {
 			expect(tools[2].name).toBe("think");
 		});
 
-		it("should create empty array for empty input", () => {
-			const tools = createTools([]);
+		it("should create empty array for empty input", async () => {
+			const tools = await createTools([]);
 
 			expect(tools).toHaveLength(0);
 		});
 
-		it("should skip unknown tool names", () => {
-			const tools = createTools([
+		it("should skip unknown tool names", async () => {
+			const tools = await createTools([
 				"internet_search",
 				// @ts-expect-error - Testing invalid input
 				"unknown_tool",
@@ -80,8 +80,8 @@ describe("Tool Registry", () => {
 			expect(tools[1].name).toBe("think");
 		});
 
-		it("should pass options to all tools", () => {
-			const tools = createTools(["command_execute"], {
+		it("should pass options to all tools", async () => {
+			const tools = await createTools(["command_execute"], {
 				workspace: "/test/path",
 				timeout: 30000,
 			});
@@ -90,9 +90,9 @@ describe("Tool Registry", () => {
 			expect(tools[0].name).toBe("command_execute");
 		});
 
-		it("should create all available tools", () => {
+		it("should create all available tools", async () => {
 			const availableTools = getAvailableTools();
-			const tools = createTools(availableTools);
+			const tools = await createTools(availableTools);
 
 			expect(tools).toHaveLength(4);
 		});

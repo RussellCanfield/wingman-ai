@@ -63,7 +63,7 @@ export const MCPStdioConfigSchema = z.object({
 		.min(1)
 		.describe("Command to execute (e.g., 'node', 'python')"),
 	args: z.array(z.string()).optional().describe("Command arguments"),
-	env: z.record(z.string()).optional().describe("Environment variables"),
+	env: z.record(z.string(), z.string()).optional().describe("Environment variables"),
 });
 
 /**
@@ -74,7 +74,7 @@ export const MCPSSEConfigSchema = z.object({
 	transport: z.literal("sse"),
 	url: z.string().url().describe("Server URL"),
 	headers: z
-		.record(z.string())
+		.record(z.string(), z.string())
 		.optional()
 		.describe("HTTP headers for authentication"),
 });
