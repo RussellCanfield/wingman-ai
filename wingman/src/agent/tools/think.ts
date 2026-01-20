@@ -1,5 +1,4 @@
 import { tool } from "@langchain/core/tools";
-import { ToolMessage } from "@langchain/core/messages";
 import { z } from "zod";
 
 export const readFileSchema = z.object({
@@ -14,13 +13,9 @@ export const readFileSchema = z.object({
  */
 export const createThinkingTool = () => {
 	return tool(
-		async (input, config) => {
-			return new ToolMessage({
-				id: config.callbacks.tool_call_id,
-				content: JSON.stringify({
-					input,
-				}),
-				tool_call_id: config.toolCall.id,
+		async (input) => {
+			return JSON.stringify({
+				input,
 			});
 		},
 		{

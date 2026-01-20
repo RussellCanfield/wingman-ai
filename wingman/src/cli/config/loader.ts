@@ -1,12 +1,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { validateConfig, type WingmanConfigType } from "./schema.js";
+import { createLogger, Logger } from "@/logger.js";
 
 export class WingmanConfigLoader {
+	private logger: Logger = createLogger();
+
 	constructor(
 		private configDir = ".wingman",
 		private workspace: string = process.cwd(),
-	) {}
+	) {
+	}
 
 	/**
 	 * Load wingman.config.json from .wingman/ directory
@@ -21,6 +25,9 @@ export class WingmanConfigLoader {
 
 		// Return default config if file doesn't exist
 		if (!existsSync(configPath)) {
+			this.logger.info(
+				`Config file not found at ${configPath}, using default configuration`,
+			);
 			return this.getDefaultConfig();
 		}
 
@@ -30,23 +37,23 @@ export class WingmanConfigLoader {
 
 			const validation = validateConfig(json);
 			if (!validation.success || !validation.data) {
-				console.error(
+				this.logger.error(
 					`Warning: Invalid wingman.config.json: ${validation.error}`,
 				);
-				console.error("Using default configuration");
+				this.logger.error("Using default configuration");
 				return this.getDefaultConfig();
 			}
 
 			return validation.data;
 		} catch (error) {
 			if (error instanceof SyntaxError) {
-				console.error(
+				this.logger.error(
 					`Warning: Invalid JSON in ${configPath}: ${error.message}`,
 				);
 			} else {
-				console.error(`Warning: Failed to load config: ${error}`);
+				this.logger.error(`Warning: Failed to load config: ${error}`);
 			}
-			console.error("Using default configuration");
+			this.logger.error("Using default configuration");
 			return this.getDefaultConfig();
 		}
 	}

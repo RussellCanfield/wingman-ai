@@ -1,3 +1,4 @@
 {
-	"logLevel": "info"
+	"logLevel": "info",
+	"recursionLimit": 5000
 }
