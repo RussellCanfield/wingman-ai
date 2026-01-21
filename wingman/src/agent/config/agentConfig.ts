@@ -12,6 +12,8 @@ export const AvailableToolNames = z.enum([
 	"web_crawler",
 	"command_execute",
 	"think",
+	"code_search",
+	"git_status",
 ]);
 
 export type AvailableToolName = z.infer<typeof AvailableToolNames>;

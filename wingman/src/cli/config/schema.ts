@@ -48,7 +48,7 @@ export const WingmanConfigSchema = z.object({
 		.optional()
 		.default("info"),
 	defaultAgent: z.string().optional(),
-	recursionLimit: z.number().min(1).max(10).optional().default(100),
+	recursionLimit: z.number().min(1).max(1000000).optional().default(5000),
 	hooks: HooksConfigSchema.optional().describe("Global hooks configuration"),
 	search: SearchConfigSchema.optional().default({
 		provider: "duckduckgo",

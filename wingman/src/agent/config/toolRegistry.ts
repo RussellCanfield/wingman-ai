@@ -3,6 +3,8 @@ import { createInternetSearchTool } from "../tools/internet_search.js";
 import { webCrawler } from "../tools/web_crawler.js";
 import { createCommandExecuteTool } from "../tools/command_execute.js";
 import { createThinkingTool } from "../tools/think.js";
+import { createCodeSearchTool } from "../tools/code_search.js";
+import { createGitStatusTool } from "../tools/git_status.js";
 import type { AvailableToolName } from "./agentConfig.js";
 import type { SearchConfig } from "../../cli/config/schema.js";
 import { createLogger } from "../../logger.js";
@@ -62,6 +64,12 @@ export function createTool(
 		case "think":
 			return createThinkingTool();
 
+		case "code_search":
+			return createCodeSearchTool(workspace);
+
+		case "git_status":
+			return createGitStatusTool(workspace);
+
 		default:
 			logger.warn(`Unknown tool name: ${name}`);
 			return null;
@@ -120,5 +128,12 @@ export async function createTools(
  * Get list of all available tool names
  */
 export function getAvailableTools(): AvailableToolName[] {
-	return ["internet_search", "web_crawler", "command_execute", "think"];
+	return [
+		"internet_search",
+		"web_crawler",
+		"command_execute",
+		"think",
+		"code_search",
+		"git_status",
+	];
 }

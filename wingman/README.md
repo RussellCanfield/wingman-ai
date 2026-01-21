@@ -14,6 +14,7 @@ The `@wingman-ai/agent` package provides a powerful and flexible agentic coding 
 - **Stateful Conversations:** Maintains conversation state using a graph-based approach, allowing for complex and multi-turn interactions.
 - **Configurable:** Easily configure the agent with your desired model, tools, and working directory.
 - **Streaming Support:** Supports streaming of responses for real-time interactions.
+- **🆕 Gateway for AI Agent Swarming:** Connect multiple agents for real-time collaboration and distributed problem-solving. [Learn more →](./GATEWAY.md)
 
 ## Supported Providers
 
@@ -532,6 +533,60 @@ In the `.wingman` directory, create a `mcp.json` file with the following schema:
   }
 }
 ```
+
+## Gateway for AI Agent Swarming
+
+The Wingman Gateway enables multiple AI agents to connect and communicate in real-time, allowing for collaborative problem-solving and distributed task execution.
+
+### Quick Start
+
+```bash
+# Start the gateway
+wingman gateway start
+
+# Connect agents
+wingman gateway join ws://localhost:3000/ws --name="agent-1" --group="swarm"
+wingman gateway join ws://localhost:3000/ws --name="agent-2" --group="swarm"
+wingman gateway join ws://localhost:3000/ws --name="agent-3" --group="swarm"
+```
+
+### Programmatic Usage
+
+```typescript
+import { GatewayServer, GatewayClient } from "@wingman-ai/agent/gateway";
+
+// Start a gateway server
+const server = new GatewayServer({ port: 3000 });
+await server.start();
+
+// Connect a client
+const client = new GatewayClient("ws://localhost:3000/ws", "my-agent", {
+  events: {
+    broadcast: (message, fromNodeId, groupId) => {
+      console.log("Received:", message);
+    },
+  },
+});
+
+await client.connect();
+await client.joinGroup("my-group");
+client.broadcast("my-group", { hello: "world" });
+```
+
+### Features
+
+- ✅ WebSocket-based real-time communication
+- ✅ Broadcast groups for multi-agent collaboration
+- ✅ Direct messaging between nodes
+- ✅ Token-based authentication
+- ✅ Daemon mode for background operation
+- ✅ Deploy locally, on LAN, Tailscale, or Cloudflare Workers
+
+### Learn More
+
+- **Quick Start Guide:** [GATEWAY_QUICKSTART.md](./GATEWAY_QUICKSTART.md)
+- **Full Documentation:** [GATEWAY.md](./GATEWAY.md)
+- **Cloudflare Deployment:** [cloudflare/README.md](./cloudflare/README.md)
 
 ## Examples
 

@@ -44,6 +44,8 @@ export class WingmanConfigLoader {
 				return this.getDefaultConfig();
 			}
 
+			this.logger.debug(`Loaded configuration from ${configPath} with values: ${JSON.stringify(validation.data)}`);
+
 			return validation.data;
 		} catch (error) {
 			if (error instanceof SyntaxError) {

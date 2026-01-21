@@ -11,7 +11,7 @@ const logger = createLogger();
  * Format: "provider:model-name"
  * Examples:
  *  - "anthropic:claude-opus-4-5"
- *  - "anthropic:claude-sonnet-4-5-20250929"
+ *  - "anthropic:claude-sonnet-4-5"
  *  - "openai:gpt-4o"
  *  - "openai:gpt-4-turbo"
  */

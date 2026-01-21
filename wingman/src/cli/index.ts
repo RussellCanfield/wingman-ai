@@ -7,6 +7,8 @@ import { WingmanConfigLoader } from "./config/loader.js";
 import { OutputManager } from "./core/outputManager.js";
 import { executeAgentCommand } from "./commands/agent.js";
 import { executeSkillCommand } from "./commands/skill.js";
+import { executeGatewayCommand } from "./commands/gateway.js";
+import type { GatewayCommandArgs } from "./commands/gateway.js";
 
 /**
  * Parse command line arguments
@@ -19,6 +21,7 @@ function parseArgs(argv: string[]): {
 	verbosity?: string;
 	help: boolean;
 	prompt: string;
+	gatewayOptions?: Record<string, unknown>;
 } {
 	const args = argv.slice(2); // Remove 'node' and script path
 
@@ -41,6 +44,7 @@ function parseArgs(argv: string[]): {
 		verbosity: undefined as string | undefined,
 		help: false,
 		prompt: "",
+		gatewayOptions: {} as Record<string, unknown>,
 	};
 
 	const promptParts: string[] = [];
@@ -59,6 +63,17 @@ function parseArgs(argv: string[]): {
 			// Count 'v's for verbosity level
 			const vCount = arg.split("").filter((c) => c === "v").length;
 			parsed.verbosity = vCount >= 2 ? "debug" : "info";
+		} else if (arg.startsWith("--")) {
+			// Parse gateway options
+			const [key, value] = arg.slice(2).split("=");
+			if (value !== undefined) {
+				parsed.gatewayOptions![key] = value;
+			} else if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+				parsed.gatewayOptions![key] = args[i + 1];
+				i++;
+			} else {
+				parsed.gatewayOptions![key] = true;
+			}
 		} else {
 			// Everything else is part of the prompt
 			promptParts.push(arg);
@@ -102,6 +117,7 @@ Wingman CLI - AI coding assistant
 Usage:
   wingman agent --agent <name> [options] <prompt>
   wingman skill <subcommand> [args]
+  wingman gateway <subcommand> [options]
 
 Commands:
   agent                        Invoke a specific agent directly
@@ -109,6 +125,10 @@ Commands:
   skill install <name>         Install a skill
   skill list                   List installed skills
   skill remove <name>          Remove an installed skill
+  gateway start                Start the gateway server
+  gateway stop                 Stop the gateway server
+  gateway status               Show gateway status
+  gateway join <url>           Join a gateway as a node
 
 Options:
   --agent <name>      Agent name to invoke (required for agent command)
@@ -122,9 +142,14 @@ Examples:
   wingman skill browse
   wingman skill install pdf
   wingman skill list
+  wingman gateway start
+  wingman gateway join ws://localhost:3000/ws --name="agent-1"
 
 Available agents:
   Run "wingman agent" without a prompt to list all available agents.
+  
+For gateway help:
+  wingman gateway --help
   `);
 }
 
@@ -175,6 +200,14 @@ async function main() {
 			};
 
 			await executeSkillCommand(commandArgs);
+		} else if (parsed.command === "gateway") {
+			const commandArgs: GatewayCommandArgs = {
+				subcommand: parsed.subcommand,
+				args: parsed.subcommandArgs,
+				options: parsed.gatewayOptions || {},
+			};
+
+			await executeGatewayCommand(commandArgs);
 		} else {
 			console.error(`Unknown command: ${parsed.command}`);
 			console.error('Run "wingman --help" for usage information');

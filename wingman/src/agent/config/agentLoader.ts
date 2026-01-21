@@ -1,5 +1,6 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
+import * as yaml from "js-yaml";
 import {
 	validateAgentConfig,
 	WingmanDirectory,
@@ -37,16 +38,18 @@ export class AgentLoader {
 				.map((dirent) => dirent.name);
 
 			for (const agentDir of agentDirs) {
-				const agentFilePath = join(agentsDir, agentDir, "agent.json");
+				const agentFilePath = join(agentsDir, agentDir, "agent.md");
 
 				if (!existsSync(agentFilePath)) {
-					logger.warn(`Skipping ${agentDir}: agent.json not found`);
+					logger.warn(`Skipping ${agentDir}: agent.md not found`);
 					continue;
 				}
 
 				try {
-					const content = readFileSync(agentFilePath, "utf-8");
-					const json = JSON.parse(content.toString());
+					const json = this.loadFromMarkdown(
+						agentFilePath,
+						join(agentsDir, agentDir),
+					);
 
 					const validation = validateAgentConfig(json);
 					if (!validation.success) {
@@ -67,6 +70,76 @@ export class AgentLoader {
 		}
 
 		return agents;
+	}
+
+	/**
+	 * Parse frontmatter from markdown content
+	 */
+	private parseFrontmatter(content: string): {
+		metadata: Record<string, any>;
+		prompt: string;
+	} {
+		const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
+		const match = content.match(frontmatterRegex);
+
+		if (!match) {
+			throw new Error("Invalid agent.md format: missing frontmatter");
+		}
+
+		const [, frontmatter, prompt] = match;
+
+		try {
+			const metadata = yaml.load(frontmatter) as Record<string, any>;
+
+			if (!metadata || typeof metadata !== "object") {
+				throw new Error("Frontmatter must be a valid YAML object");
+			}
+
+			return { metadata, prompt: prompt.trim() };
+		} catch (error) {
+			throw new Error(`Failed to parse frontmatter: ${error}`);
+		}
+	}
+
+	/**
+	 * Load agent configuration from markdown file
+	 */
+	private loadFromMarkdown(filePath: string, agentDir: string): any {
+		const content = readFileSync(filePath, "utf-8");
+		const { metadata, prompt } = this.parseFrontmatter(content);
+
+		// Build agent config from frontmatter
+		const config: any = {
+			...metadata,
+			systemPrompt: prompt,
+		};
+
+		// Resolve subagent prompts if they use promptFile
+		if (config.subAgents && Array.isArray(config.subAgents)) {
+			for (const subagent of config.subAgents) {
+				if (subagent.promptFile) {
+					const promptPath = join(agentDir, subagent.promptFile);
+					if (!existsSync(promptPath)) {
+						throw new Error(`Subagent prompt file not found: ${promptPath}`);
+					}
+
+					const subagentContent = readFileSync(promptPath, "utf-8");
+
+					// Check if subagent file has frontmatter
+					if (subagentContent.startsWith("---")) {
+						const parsed = this.parseFrontmatter(subagentContent);
+						Object.assign(subagent, parsed.metadata);
+						subagent.systemPrompt = parsed.prompt;
+					} else {
+						subagent.systemPrompt = subagentContent.trim();
+					}
+
+					delete subagent.promptFile;
+				}
+			}
+		}
+
+		return config;
 	}
 
 	/**
@@ -97,18 +170,18 @@ export class AgentLoader {
 	}
 
 	/**
-	 * Load agents from individual .json files in a directory
+	 * Load agents from markdown files in a directory
 	 */
 	private async loadFromDirectory(dirPath: string): Promise<WingmanAgent> {
-		const agentFilePath = join(dirPath, "agent.json");
+		const agentFilePath = join(dirPath, "agent.md");
 
 		try {
 			if (!existsSync(agentFilePath)) {
 				throw new Error(`Agent config file not found: ${agentFilePath}`);
 			}
 
-			const content = readFileSync(agentFilePath, "utf-8");
-			const json = JSON.parse(content.toString());
+			logger.info(`Loading agent from markdown: ${agentFilePath}`);
+			const json = this.loadFromMarkdown(agentFilePath, dirPath);
 
 			const validation = validateAgentConfig(json);
 			if (!validation.success) {
@@ -135,10 +208,10 @@ export class AgentLoader {
 				}
 			}
 
-			logger.info(`Loaded custom agent: ${agent.name} from ${agentFilePath}`);
+			logger.info(`Loaded custom agent: ${agent.name} from ${dirPath}`);
 			return agent;
 		} catch (error) {
-			throw new Error(`Failed to load agent from ${agentFilePath}: ${error}`);
+			throw new Error(`Failed to load agent from ${dirPath}: ${error}`);
 		}
 	}
 
@@ -185,6 +258,11 @@ export class AgentLoader {
 				);
 				logger.info(`Agent "${config.name}" will use default model`);
 			}
+		}
+
+		// Add subagents if specified
+		if (config.subAgents) {
+			agent.subagents = config.subAgents as any;
 		}
 
 		return agent;
