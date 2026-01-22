@@ -60,3 +60,7 @@ venv.bak/
 *~
 
 tsconfig.tsbuildinfo
+
+**/.wingman/wingman.db
+**/.wingman/wingman.db-shm
+**/.wingman/wingman.db-wal

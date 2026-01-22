@@ -1,5 +1,6 @@
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
-import type Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
+import { BunSqliteAdapter } from "./database/bunSqliteAdapter.js";
 import { v4 as uuidv4 } from "uuid";
 
 export interface Session {
@@ -27,7 +28,7 @@ export interface ListSessionsOptions {
  */
 export class SessionManager {
 	private checkpointer: SqliteSaver | null = null;
-	private db: Database.Database | null = null;
+	private db: Database | null = null;
 	private dbPath: string;
 
 	constructor(dbPath: string) {
@@ -38,14 +39,27 @@ export class SessionManager {
 	 * Initialize the SessionManager with SqliteSaver and create custom tables
 	 */
 	async initialize(): Promise<void> {
-		// Initialize SqliteSaver which creates checkpoint tables
-		this.checkpointer = await SqliteSaver.fromConnString(this.dbPath);
+		// Create native bun:sqlite database
+		const bunDb = new Database(this.dbPath, { create: true });
 
-		// Get direct database access for custom queries
-		this.db = this.checkpointer.db;
+		// Wrap for SqliteSaver compatibility
+		const adapter = new BunSqliteAdapter(bunDb);
+
+		// Create SqliteSaver directly with the adapter
+		// Note: SqliteSaver expects a better-sqlite3 Database instance
+		// Our adapter provides the same API surface
+		this.checkpointer = new SqliteSaver(adapter as any);
+
+		// Initialize checkpoint tables (setup is protected but necessary)
+		// @ts-ignore - We need to call setup() to create checkpoint tables
+		await this.checkpointer.setup();
+
+		// Store native database reference for direct queries
+		// Access the actual bun:sqlite database through the adapter
+		this.db = adapter.db;
 
 		// Create custom sessions table for UI/metadata
-		this.db.exec(`
+		this.db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -249,8 +263,9 @@ export class SessionManager {
 		);
 		checkpointStmt.run(sessionId);
 
+		// Note: The table is named 'writes' in newer versions of @langchain/langgraph-checkpoint-sqlite
 		const writesStmt = this.db.prepare(
-			"DELETE FROM checkpoint_writes WHERE thread_id = ?",
+			"DELETE FROM writes WHERE thread_id = ?",
 		);
 		writesStmt.run(sessionId);
 	}

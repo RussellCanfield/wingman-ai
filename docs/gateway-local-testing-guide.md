@@ -344,6 +344,257 @@ Now all three nodes are in the "chat" group. Any broadcast message sent by one w
 
 *Note: Currently, the CLI join command only receives messages. To send test messages, you would need to use the GatewayClient programmatically or extend the CLI.*
 
+## Testing Multiple Agent Types
+
+The gateway supports joining multiple agents of different types as individual nodes. Each agent can have:
+- **Unique name**: Identifies the specific node
+- **Capabilities**: Array of strings describing what the agent can do
+- **Session ID**: Groups agents by session (optional)
+- **Agent Name**: Identifies the agent type (optional)
+
+### Programmatic Multi-Agent Setup
+
+Create a file `multi-agent-test.ts`:
+
+```typescript
+import { GatewayClient } from "./src/gateway/client.js";
+
+async function runMultiAgentTest() {
+  const gatewayUrl = "ws://localhost:3000/ws";
+  const groupName = "ai-swarm";
+
+  // Create a research agent
+  const researchAgent = new GatewayClient(gatewayUrl, "research-agent-1", {
+    capabilities: ["web-search", "data-analysis", "summarization"],
+    events: {
+      registered: (nodeId, name) => {
+        console.log(`[Research] Registered: ${name} (${nodeId})`);
+        researchAgent.joinGroup(groupName);
+      },
+      joinedGroup: (groupId, groupName) => {
+        console.log(`[Research] Joined group: ${groupName}`);
+      },
+      broadcast: (message: any, fromNodeId, groupId) => {
+        console.log(`[Research] Received from ${fromNodeId}:`, message);
+
+        // Research agent responds to research requests
+        if (message.type === "request" && message.capability === "research") {
+          console.log("[Research] Processing research request...");
+          setTimeout(() => {
+            researchAgent.broadcast(groupId, {
+              type: "response",
+              capability: "research",
+              data: "Research completed: Found 10 relevant papers",
+              requestId: message.requestId,
+            });
+          }, 1000);
+        }
+      },
+    },
+  });
+
+  // Create a coding agent
+  const codingAgent = new GatewayClient(gatewayUrl, "coding-agent-1", {
+    capabilities: ["code-generation", "testing", "refactoring"],
+    events: {
+      registered: (nodeId, name) => {
+        console.log(`[Coding] Registered: ${name} (${nodeId})`);
+        codingAgent.joinGroup(groupName);
+      },
+      joinedGroup: (groupId, groupName) => {
+        console.log(`[Coding] Joined group: ${groupName}`);
+      },
+      broadcast: (message: any, fromNodeId, groupId) => {
+        console.log(`[Coding] Received from ${fromNodeId}:`, message);
+
+        // Coding agent responds to code requests
+        if (message.type === "request" && message.capability === "coding") {
+          console.log("[Coding] Processing coding request...");
+          setTimeout(() => {
+            codingAgent.broadcast(groupId, {
+              type: "response",
+              capability: "coding",
+              data: "Code generated: function example() {...}",
+              requestId: message.requestId,
+            });
+          }, 1000);
+        }
+      },
+    },
+  });
+
+  // Create a coordinator agent
+  const coordinatorAgent = new GatewayClient(gatewayUrl, "coordinator-1", {
+    capabilities: ["task-planning", "orchestration"],
+    events: {
+      registered: (nodeId, name) => {
+        console.log(`[Coordinator] Registered: ${name} (${nodeId})`);
+        coordinatorAgent.joinGroup(groupName);
+      },
+      joinedGroup: (groupId, groupName) => {
+        console.log(`[Coordinator] Joined group: ${groupName}`);
+
+        // Coordinator sends tasks to other agents
+        console.log("[Coordinator] Sending task requests...");
+        setTimeout(() => {
+          coordinatorAgent.broadcast(groupId, {
+            type: "request",
+            capability: "research",
+            task: "Find papers on AI agents",
+            requestId: "req-1",
+          });
+        }, 2000);
+
+        setTimeout(() => {
+          coordinatorAgent.broadcast(groupId, {
+            type: "request",
+            capability: "coding",
+            task: "Generate example function",
+            requestId: "req-2",
+          });
+        }, 3000);
+      },
+      broadcast: (message: any, fromNodeId, groupId) => {
+        console.log(`[Coordinator] Received from ${fromNodeId}:`, message);
+
+        if (message.type === "response") {
+          console.log(`[Coordinator] Task ${message.requestId} completed!`);
+        }
+      },
+    },
+  });
+
+  // Connect all agents
+  await Promise.all([
+    researchAgent.connect(),
+    codingAgent.connect(),
+    coordinatorAgent.connect(),
+  ]);
+
+  console.log("\nAll agents connected! Watching for messages...\n");
+
+  // Keep running
+  await new Promise((resolve) => setTimeout(resolve, 10000));
+
+  // Cleanup
+  researchAgent.disconnect();
+  codingAgent.disconnect();
+  coordinatorAgent.disconnect();
+
+  console.log("\nTest completed!");
+  process.exit(0);
+}
+
+runMultiAgentTest().catch(console.error);
+```
+
+**Run it:**
+```bash
+# Terminal 1: Start gateway
+cd wingman
+bun run src/cli/index.ts gateway start
+
+# Terminal 2: Run multi-agent test
+cd wingman
+bun run multi-agent-test.ts
+```
+
+**Expected output:**
+```
+[Research] Registered: research-agent-1 (node-xxx)
+[Coding] Registered: coding-agent-1 (node-xxx)
+[Coordinator] Registered: coordinator-1 (node-xxx)
+[Research] Joined group: ai-swarm
+[Coding] Joined group: ai-swarm
+[Coordinator] Joined group: ai-swarm
+[Coordinator] Sending task requests...
+[Research] Received from node-xxx: { type: 'request', capability: 'research', ... }
+[Research] Processing research request...
+[Coding] Received from node-xxx: { type: 'request', capability: 'coding', ... }
+[Coding] Processing coding request...
+[Coordinator] Received from node-xxx: { type: 'response', ... }
+[Coordinator] Task req-1 completed!
+```
+
+### Session-Based Agent Grouping
+
+You can also group agents by session (useful for multi-user scenarios):
+
+```typescript
+import { GatewayClient } from "./src/gateway/client.js";
+
+async function runSessionBasedTest() {
+  const gatewayUrl = "ws://localhost:3000/ws";
+
+  // Session 1: User Alice's agents
+  const aliceResearch = new GatewayClient(gatewayUrl, "alice-research", {
+    capabilities: ["research"],
+    // Note: sessionId/agentName would need to be added to client registration
+  });
+
+  const aliceCoding = new GatewayClient(gatewayUrl, "alice-coding", {
+    capabilities: ["coding"],
+  });
+
+  // Session 2: User Bob's agents
+  const bobResearch = new GatewayClient(gatewayUrl, "bob-research", {
+    capabilities: ["research"],
+  });
+
+  const bobCoding = new GatewayClient(gatewayUrl, "bob-coding", {
+    capabilities: ["coding"],
+  });
+
+  // Alice's agents join "session-alice" group
+  await aliceResearch.connect();
+  await aliceCoding.connect();
+  await aliceResearch.joinGroup("session-alice");
+  await aliceCoding.joinGroup("session-alice");
+
+  // Bob's agents join "session-bob" group
+  await bobResearch.connect();
+  await bobCoding.connect();
+  await bobResearch.joinGroup("session-bob");
+  await bobCoding.joinGroup("session-bob");
+
+  console.log("Session-based agents connected!");
+  console.log("- Alice's agents in group: session-alice");
+  console.log("- Bob's agents in group: session-bob");
+  console.log("Messages broadcast within each group stay isolated.");
+}
+
+runSessionBasedTest().catch(console.error);
+```
+
+### Real-World Use Cases
+
+**Use Case 1: Development Team Simulation**
+```typescript
+// Planning agent coordinates tasks
+// Research agent gathers requirements
+// Coding agent implements features
+// Testing agent validates code
+// Documentation agent writes docs
+```
+
+**Use Case 2: Data Processing Pipeline**
+```typescript
+// Ingestion agent receives data
+// Processing agent transforms data
+// Analysis agent extracts insights
+// Storage agent persists results
+// Notification agent alerts users
+```
+
+**Use Case 3: Customer Support System**
+```typescript
+// Triage agent categorizes requests
+// Knowledge agent searches documentation
+// Response agent drafts replies
+// Escalation agent handles complex cases
+// Follow-up agent checks satisfaction
+```
+
 ## Programmatic Testing (TypeScript)
 
 Create a test file `test-gateway.ts`:

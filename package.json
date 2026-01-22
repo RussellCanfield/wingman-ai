@@ -45,8 +45,5 @@
 		"ink": "^5.2.1",
 		"ink-text-input": "^6.0.0",
 		"pino-roll": "^3.1.0"
-	},
-	"overrides": {
-		"better-sqlite3": "^12.2.0"
 	}
 }

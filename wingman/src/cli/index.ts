@@ -19,6 +19,7 @@ function parseArgs(argv: string[]): {
 	subcommandArgs: string[];
 	agent?: string;
 	verbosity?: string;
+	outputMode?: string;
 	help: boolean;
 	prompt: string;
 	gatewayOptions?: Record<string, unknown>;
@@ -42,6 +43,7 @@ function parseArgs(argv: string[]): {
 		subcommandArgs: args.slice(2),
 		agent: undefined as string | undefined,
 		verbosity: undefined as string | undefined,
+		outputMode: undefined as string | undefined,
 		help: false,
 		prompt: "",
 		gatewayOptions: {} as Record<string, unknown>,
@@ -59,6 +61,8 @@ function parseArgs(argv: string[]): {
 			parsed.agent = arg.split("=")[1];
 		} else if (arg.startsWith("--verbose=")) {
 			parsed.verbosity = arg.split("=")[1];
+		} else if (arg.startsWith("--output=")) {
+			parsed.outputMode = arg.split("=")[1];
 		} else if (arg.startsWith("-v")) {
 			// Count 'v's for verbosity level
 			const vCount = arg.split("").filter((c) => c === "v").length;
@@ -132,6 +136,7 @@ Commands:
 
 Options:
   --agent <name>      Agent name to invoke (required for agent command)
+  --output=<mode>     Output mode (interactive|json), overrides auto-detect
   -v, -vv             Verbosity level (v=info, vv=debug)
   --verbose=<level>   Set log level (debug|info|warn|error|silent)
   -h, --help          Show this help message
@@ -170,9 +175,14 @@ async function main() {
 		const configLoader = new WingmanConfigLoader();
 		const config = configLoader.loadConfig();
 
-		// Determine output mode
+		// Determine output mode (CLI flag > config > auto-detect)
 		let outputMode: OutputMode;
-		if (config.cli.outputMode === "auto") {
+		if (
+			parsed.outputMode === "interactive" ||
+			parsed.outputMode === "json"
+		) {
+			outputMode = parsed.outputMode;
+		} else if (config.cli.outputMode === "auto") {
 			outputMode = OutputManager.detectMode();
 		} else {
 			outputMode = config.cli.outputMode as OutputMode;

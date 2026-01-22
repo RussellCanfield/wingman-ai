@@ -5,6 +5,7 @@ import { SessionManager } from "../core/sessionManager.js";
 import { createBridgedLogger } from "../core/loggerBridge.js";
 import { createLogger } from "@/logger.js";
 import { join } from "node:path";
+import { processStreamChunk } from "../core/streamParser.js";
 
 export interface AgentCommandOptions {
 	workspace?: string;
@@ -22,6 +23,57 @@ export async function executeAgentCommand(
 ): Promise<void> {
 	// Create output manager
 	const outputManager = new OutputManager(args.outputMode);
+
+	// In interactive mode, listen for streaming output and display it
+	if (args.outputMode === "interactive") {
+		// Track displayed message IDs to avoid duplicates
+		const displayedMessages = new Set<string>();
+
+		outputManager.on("output-event", (event: any) => {
+			if (event.type === "agent-stream") {
+				// Get messages from the same locations the parser checks
+				const chunk = event.chunk || {};
+				const messages =
+					chunk.model_request?.messages ||
+					chunk.agent?.messages ||
+					chunk.messages;
+
+				if (Array.isArray(messages) && messages.length > 0) {
+					// Find the last AIMessage and check for duplicates
+					for (let i = messages.length - 1; i >= 0; i--) {
+						const msg = messages[i];
+						const messageType = msg.id?.[2] || msg.type;
+
+						if (messageType === "AIMessage") {
+							// Get the unique message ID
+							const messageId =
+								msg.kwargs?.id ||
+								(Array.isArray(msg.id) ? msg.id.join("-") : msg.id);
+
+							// Skip if we've already displayed this message
+							if (messageId && displayedMessages.has(messageId)) {
+								return;
+							}
+
+							// Mark as displayed
+							if (messageId) {
+								displayedMessages.add(messageId);
+							}
+							break;
+						}
+					}
+				}
+
+				// Parse and display stream chunks
+				const displayText = processStreamChunk(event.chunk);
+				if (displayText) {
+					process.stdout.write(displayText);
+				}
+			} else if (event.type === "agent-error") {
+				console.error(`\n❌ Error: ${event.error}`);
+			}
+		});
+	}
 
 	// Create bridged logger
 	const logger = createLogger(args.verbosity); //createBridgedLogger(outputManager, args.verbosity);
@@ -98,10 +150,16 @@ export async function executeAgentCommand(
 			});
 		}
 
-		// In interactive mode, display the result (if not streaming)
-		if (outputManager.getMode() === "interactive" && !result.streaming) {
-			console.log("\n--- Agent Response ---");
-			console.log(JSON.stringify(result, null, 2));
+		// In interactive mode, handle output completion
+		if (outputManager.getMode() === "interactive") {
+			if (result.streaming) {
+				// Add newline after streaming output
+				console.log();
+			} else {
+				// Display the full result for non-streaming
+				console.log("\n--- Agent Response ---");
+				console.log(JSON.stringify(result, null, 2));
+			}
 		}
 
 		// Close session manager
