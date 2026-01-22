@@ -31,7 +31,7 @@ export interface AgentStartEvent {
 
 export interface AgentStreamEvent {
 	type: "agent-stream";
-	content: string;
+	chunk: any; // Raw chunk from deepagents/LangGraph for client-side interpretation
 	timestamp: string;
 }
 

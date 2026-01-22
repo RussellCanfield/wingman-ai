@@ -51,6 +51,7 @@ export class GatewayServer {
 			pingInterval: config.pingInterval || 30000, // 30 seconds
 			pingTimeout: config.pingTimeout || 60000, // 60 seconds
 			logLevel: config.logLevel || "info",
+			discovery: config.discovery,
 		};
 
 		this.nodeManager = new NodeManager(this.config.maxNodes);
@@ -304,11 +305,13 @@ export class GatewayServer {
 			return;
 		}
 
-		// Register the node
+		// Register the node with session context
 		const node = this.nodeManager.registerNode(
 			ws,
 			payload.name,
 			payload.capabilities,
+			payload.sessionId,
+			payload.agentName,
 		);
 
 		if (!node) {
@@ -324,11 +327,14 @@ export class GatewayServer {
 			payload: {
 				nodeId: node.id,
 				name: node.name,
+				sessionId: node.sessionId,
+				agentName: node.agentName,
 			},
 			timestamp: Date.now(),
 		});
 
-		this.log("info", `Node registered: ${node.id} (${node.name})`);
+		const sessionInfo = node.sessionId ? ` (session: ${node.sessionId})` : "";
+		this.log("info", `Node registered: ${node.id} (${node.name})${sessionInfo}`);
 	}
 
 	/**
@@ -592,12 +598,15 @@ export class GatewayServer {
 	 * Get gateway statistics
 	 */
 	private getStats(): GatewayStats {
+		const nodeStats = this.nodeManager.getStats();
 		return {
 			uptime: Date.now() - this.startedAt,
-			totalNodes: this.nodeManager.getStats().totalNodes,
+			totalNodes: nodeStats.totalNodes,
 			totalGroups: this.groupManager.getStats().totalGroups,
 			messagesProcessed: this.messagesProcessed,
 			startedAt: this.startedAt,
+			activeSessions: nodeStats.activeSessions,
+			sessionNodes: nodeStats.sessionNodes,
 		};
 	}
 

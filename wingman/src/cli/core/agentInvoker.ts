@@ -17,12 +17,14 @@ import type { WingmanAgent } from "@/types/agents.js";
 import type { WingmanConfigType } from "../config/schema.js";
 import { MCPClientManager } from "@/agent/config/mcpClientManager.js";
 import type { MCPServersConfig } from "@/types/mcp.js";
+import { SessionManager } from "./sessionManager.js";
 
 export interface AgentInvokerOptions {
 	workspace?: string;
 	configDir?: string;
 	outputManager: OutputManager;
 	logger: Logger;
+	sessionManager?: SessionManager;
 }
 
 export class AgentInvoker {
@@ -33,12 +35,14 @@ export class AgentInvoker {
 	private configDir: string;
 	private wingmanConfig: WingmanConfigType;
 	private mcpManager: MCPClientManager | null = null;
+	private sessionManager: SessionManager | null = null;
 
 	constructor(options: AgentInvokerOptions) {
 		this.outputManager = options.outputManager;
 		this.logger = options.logger;
 		this.workspace = options.workspace || process.cwd();
 		this.configDir = options.configDir || ".wingman";
+		this.sessionManager = options.sessionManager || null;
 
 		// Load wingman config and pass to AgentLoader
 		const configLoader = new WingmanConfigLoader(
@@ -68,7 +72,11 @@ export class AgentInvoker {
 	/**
 	 * Invoke a specific agent directly (bypassing main orchestration)
 	 */
-	async invokeAgent(agentName: string, prompt: string): Promise<any> {
+	async invokeAgent(
+		agentName: string,
+		prompt: string,
+		sessionId?: string,
+	): Promise<any> {
 		try {
 			// Find the agent
 			const targetAgent = await this.findAgent(agentName);
@@ -93,8 +101,8 @@ export class AgentInvoker {
 				targetAgent.hooks,
 			);
 
-			// Generate session ID for hooks
-			const sessionId = uuidv4();
+			// Use provided session ID or generate new one for hooks
+			const hookSessionId = sessionId || uuidv4();
 
 			// Initialize MCP client if MCP servers configured
 			const mcpConfigs: MCPServersConfig[] = [
@@ -127,11 +135,14 @@ export class AgentInvoker {
 					createHooksMiddleware(
 						mergedHooks,
 						this.workspace,
-						sessionId,
+						hookSessionId,
 						this.logger,
 					),
 				);
 			}
+
+			// Get checkpointer if session manager is available
+			const checkpointer = this.sessionManager?.getCheckpointer();
 
 			// Create a standalone DeepAgent for this specific agent
 			const standaloneAgent = createDeepAgent({
@@ -154,29 +165,62 @@ export class AgentInvoker {
 				middleware,
 				skills: ["/skills/"],
 				subagents: [...(targetAgent.subagents || [])],
+				checkpointer: checkpointer,
 			});
 
 			this.logger.debug("Agent created, sending message");
 
-			// Invoke the agent
-			const result = await standaloneAgent.invoke(
-				{
-					messages: [
-						{
-							role: "user",
-							content: prompt,
-						},
-					],
-				},
-				{
-					recursionLimit: this.wingmanConfig.recursionLimit,
-				},
-			);
+			// Use streaming if session manager is available, otherwise fall back to invoke
+			if (this.sessionManager && sessionId) {
+				this.logger.debug(`Using streaming with session: ${sessionId}`);
 
-			this.logger.info("Agent completed successfully");
-			this.outputManager.emitAgentComplete(result);
+				// Stream the agent response
+				const stream = await standaloneAgent.stream(
+					{
+						messages: [
+							{
+								role: "user",
+								content: prompt,
+							},
+						],
+					},
+					{
+						recursionLimit: this.wingmanConfig.recursionLimit,
+						configurable: { thread_id: sessionId },
+					},
+				);
 
-			return result;
+				for await (const chunk of stream) {
+					// Forward raw chunks to OutputManager for client-side interpretation
+					this.outputManager.emitAgentStream(chunk);
+				}
+
+				this.logger.info("Agent streaming completed successfully");
+				// Note: No final result to emit, streaming is complete
+				return { streaming: true };
+			} else {
+				// Fall back to blocking invoke for backwards compatibility
+				this.logger.debug("Using blocking invoke (no session manager)");
+
+				const result = await standaloneAgent.invoke(
+					{
+						messages: [
+							{
+								role: "user",
+								content: prompt,
+							},
+						],
+					},
+					{
+						recursionLimit: this.wingmanConfig.recursionLimit,
+					},
+				);
+
+				this.logger.info("Agent completed successfully");
+				this.outputManager.emitAgentComplete(result);
+
+				return result;
+			}
 		} catch (error) {
 			this.logger.error(
 				`Agent invocation failed: ${error instanceof Error ? error.message : String(error)}`,

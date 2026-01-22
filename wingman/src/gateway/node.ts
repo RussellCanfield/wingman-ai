@@ -29,6 +29,8 @@ export class NodeManager {
 		ws: ServerWebSocket<{ nodeId: string }>,
 		name: string,
 		capabilities?: string[],
+		sessionId?: string,
+		agentName?: string,
 	): Node | null {
 		// Check if we've reached max nodes
 		if (this.nodes.size >= this.maxNodes) {
@@ -43,6 +45,8 @@ export class NodeManager {
 			groups: new Set(),
 			connectedAt: Date.now(),
 			ws,
+			sessionId,
+			agentName,
 		};
 
 		// Set the nodeId in the WebSocket data
@@ -101,6 +105,8 @@ export class NodeManager {
 			groups: node.groups,
 			connectedAt: node.connectedAt,
 			lastPing: node.lastPing,
+			sessionId: node.sessionId,
+			agentName: node.agentName,
 		};
 	}
 
@@ -276,18 +282,59 @@ export class NodeManager {
 	}
 
 	/**
+	 * Get nodes by session ID
+	 */
+	getNodesBySession(sessionId: string): Node[] {
+		const nodes: Node[] = [];
+		for (const node of this.nodes.values()) {
+			if (node.sessionId === sessionId) {
+				nodes.push(node);
+			}
+		}
+		return nodes;
+	}
+
+	/**
+	 * Get all active sessions with their nodes
+	 */
+	getSessionNodes(): Map<string, Node[]> {
+		const sessionMap = new Map<string, Node[]>();
+
+		for (const node of this.nodes.values()) {
+			if (node.sessionId) {
+				if (!sessionMap.has(node.sessionId)) {
+					sessionMap.set(node.sessionId, []);
+				}
+				sessionMap.get(node.sessionId)!.push(node);
+			}
+		}
+
+		return sessionMap;
+	}
+
+	/**
 	 * Get statistics
 	 */
 	getStats() {
+		const sessionMap = this.getSessionNodes();
+
 		return {
 			totalNodes: this.nodes.size,
 			maxNodes: this.maxNodes,
+			activeSessions: sessionMap.size,
+			sessionNodes: Array.from(sessionMap.entries()).map(([sessionId, nodes]) => ({
+				sessionId,
+				agentName: nodes[0]?.agentName,
+				nodeIds: nodes.map(n => n.id),
+			})),
 			nodes: Array.from(this.nodes.values()).map((n) => ({
 				id: n.id,
 				name: n.name,
 				groupCount: n.groups.size,
 				connectedAt: n.connectedAt,
 				lastPing: n.lastPing,
+				sessionId: n.sessionId,
+				agentName: n.agentName,
 			})),
 		};
 	}

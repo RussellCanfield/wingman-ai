@@ -42,6 +42,8 @@ export interface NodeMetadata {
 	lastPing?: number;
 	messageCount?: number; // Total messages sent
 	lastMessageTime?: number; // Timestamp of last message
+	sessionId?: string; // Optional session context for session-aware workflows
+	agentName?: string; // Agent name for session tracking
 }
 
 /**
@@ -98,6 +100,12 @@ export interface GatewayStats {
 	totalGroups: number;
 	messagesProcessed: number;
 	startedAt: number;
+	activeSessions?: number; // Count of nodes with active sessions
+	sessionNodes?: Array<{ // Nodes grouped by session
+		sessionId: string;
+		agentName?: string;
+		nodeIds: string[];
+	}>;
 }
 
 /**
@@ -107,6 +115,9 @@ export interface RegisterPayload {
 	name: string;
 	capabilities?: string[];
 	token?: string;
+	sessionId?: string; // Optional session ID for session-aware workflows
+	agentName?: string; // Agent name for session tracking
+	metadata?: Record<string, unknown>; // Additional session/agent metadata
 }
 
 /**

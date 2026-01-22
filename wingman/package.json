@@ -75,6 +75,7 @@
 		"@langchain/core": "^1.1.15",
 		"@langchain/google-genai": "^2.1.10",
 		"@langchain/langgraph": "1.1.0",
+		"@langchain/langgraph-checkpoint-sqlite": "^1.0.0",
 		"@langchain/mcp-adapters": "^1.1.1",
 		"@langchain/openai": "^1.2.2",
 		"@langchain/xai": "^1.2.1",
@@ -90,10 +91,11 @@
 	},
 	"devDependencies": {
 		"@rslib/core": "0.19.2",
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/bun": "1.3.6",
 		"@types/js-yaml": "^4.0.9",
-		"@types/uuid": "^10.0.0",
 		"@types/multicast-dns": "^7.2.4",
+		"@types/uuid": "^10.0.0",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.17"
 	}

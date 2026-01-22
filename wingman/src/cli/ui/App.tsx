@@ -39,7 +39,10 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 					break;
 
 				case "agent-stream":
-					setAgentContent((prev) => prev + event.content);
+					// Parse chunk - for now, just stringify it
+					// TODO: Parse chunk to extract text deltas, tool calls, etc.
+					const chunkStr = JSON.stringify(event.chunk, null, 2);
+					setAgentContent((prev) => prev + "\n" + chunkStr);
 					break;
 
 				case "agent-complete":

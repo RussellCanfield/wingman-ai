@@ -69,12 +69,13 @@ export class OutputManager extends EventEmitter {
 	}
 
 	/**
-	 * Emit agent stream content
+	 * Emit agent stream chunk
+	 * Forwards raw chunks from deepagents/LangGraph for client-side interpretation
 	 */
-	emitAgentStream(content: string): void {
+	emitAgentStream(chunk: any): void {
 		this.emitEvent({
 			type: "agent-stream",
-			content,
+			chunk,
 			timestamp: new Date().toISOString(),
 		});
 	}
