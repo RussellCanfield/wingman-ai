@@ -17,6 +17,9 @@ All PRD documents can be found under `./docs/requirements/`.
 
 ** Critical: Make sure to keep these up to date when modifying the project. **
 
+# Legacy Docs
+**Do not consume docs from docs-site, these are legacy!**
+
 ## Architecture
 
 ### Root Agent (Wingman)

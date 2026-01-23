@@ -93,6 +93,41 @@ export type OutputEvent =
 	| SkillListEvent
 	| SkillRemoveEvent;
 
+// Content Block types for rich UI
+export interface TextBlock {
+	content: string;
+	isStreaming: boolean;
+}
+
+export interface ToolCallBlock {
+	name: string;
+	args: Record<string, any>;
+	status: "running" | "complete" | "error";
+	startTime: number;
+	endTime?: number;
+	result?: {
+		output: string;
+		truncated: boolean;
+		error?: string;
+	};
+}
+
+export interface ToolResultBlock {
+	toolCallId: string;
+	output: string;
+	truncated: boolean;
+	error?: string;
+}
+
+export type ContentBlockData = TextBlock | ToolCallBlock | ToolResultBlock;
+
+export interface ContentBlock {
+	id: string;
+	type: "text" | "tool-call" | "tool-result";
+	timestamp: number;
+	data: ContentBlockData;
+}
+
 // CLI Arguments
 export interface AgentCommandArgs {
 	agent?: string;

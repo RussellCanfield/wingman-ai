@@ -105,14 +105,23 @@ CREATE INDEX idx_sessions_agent ON sessions(agent_name);
 
 **AgentInvoker** ([src/cli/core/agentInvoker.ts](../../wingman/src/cli/core/agentInvoker.ts)):
 - Accepts optional `SessionManager` parameter
-- Uses `agent.stream()` instead of `invoke()` when session available
+- Uses `agent.streamEvents()` instead of `invoke()` when session available
 - Passes `thread_id` to link checkpoints with sessions
+- Uses `streamEvents` with `version: "v2"` for LLM token streaming
 - Falls back to stateless mode if no session manager
 
 **OutputManager** ([src/cli/core/outputManager.ts](../../wingman/src/cli/core/outputManager.ts)):
 - `emitAgentStream(chunk: any)` forwards raw stream chunks
 - Generic architecture - clients interpret chunks for presentation
 - No tool-specific event methods (keep core simple)
+
+**StreamParser** ([src/cli/core/streamParser.ts](../../wingman/src/cli/core/streamParser.ts)):
+- Extracts text, tool calls, and tool results from chunks
+- Handles LangGraph `streamEvents` payloads for `on_chat_model_stream` tokens
+- Handles `on_tool_start`/`on_tool_end` events for tool call display
+- Rolls tool call + result into a single UI block per tool execution
+- Tracks message IDs (or step-based fallbacks) to avoid duplicate AI output
+- Updates tool call arguments when partial tool calls stream in
 
 ### User Experience Flow
 
@@ -200,7 +209,7 @@ $ wingman
 - [ ] Update CLI parsing for interactive mode
 
 ### Phase 4: Enhanced UI
-- [ ] Parse stream chunks for text extraction
+- [x] Parse stream chunks for text extraction
 - [ ] ToolCallDisplay component (optional)
 - [ ] Session info header
 

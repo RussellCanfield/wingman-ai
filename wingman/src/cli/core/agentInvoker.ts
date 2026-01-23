@@ -175,7 +175,7 @@ export class AgentInvoker {
 				this.logger.debug(`Using streaming with session: ${sessionId}`);
 
 				// Stream the agent response
-				const stream = await standaloneAgent.stream(
+				const stream = await standaloneAgent.streamEvents(
 					{
 						messages: [
 							{
@@ -187,6 +187,7 @@ export class AgentInvoker {
 					{
 						recursionLimit: this.wingmanConfig.recursionLimit,
 						configurable: { thread_id: sessionId },
+						version: "v2",
 					},
 				);
 
@@ -196,7 +197,7 @@ export class AgentInvoker {
 				}
 
 				this.logger.info("Agent streaming completed successfully");
-				// Note: No final result to emit, streaming is complete
+				this.outputManager.emitAgentComplete({ streaming: true });
 				return { streaming: true };
 			} else {
 				// Fall back to blocking invoke for backwards compatibility
