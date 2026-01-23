@@ -1,7 +1,12 @@
 # PRD-001: Multi-Agent Architecture
 
+**Version:** 1.1
+**Last Updated:** 2026-01-23
+
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
+
+This document covers the agent architecture for local CLI execution. For distributed multi-agent collaboration, see [Gateway PRD](005-gateway-prd.md).
 
 ## Problem Statement
 Modern AI assistants face several challenges:
@@ -280,6 +285,78 @@ beforeAgent: (input) => {
 - Response formatting
 - Error handling
 
+## Custom Agent Configuration
+
+Users can define custom agents via JSON configuration files without modifying code.
+
+### Configuration Location
+```
+.wingman/agents/
+  my-agent/
+    agent.json
+```
+
+### Agent Schema
+```json
+{
+  "name": "my-agent",
+  "description": "Action-oriented description for delegation",
+  "systemPrompt": "Detailed instructions defining agent behavior",
+  "tools": ["command_execute", "think"],
+  "model": "anthropic:claude-sonnet-4-5",
+  "blockedCommands": ["rm", "mv"],
+  "allowScriptExecution": true,
+  "commandTimeout": 300000,
+  "subagents": []
+}
+```
+
+### Available Tools
+- `internet_search`: Web search (Tavily or DuckDuckGo)
+- `web_crawler`: Multi-page web crawling
+- `command_execute`: Shell command execution
+- `think`: Reasoning without side effects
+
+### Subagent Nesting
+Agents can define subagents for delegation (1 level deep only). This enables workflows like `coder → [planner, implementor, reviewer]`.
+
+---
+
+## Hooks System
+
+Hooks enable users to execute custom shell commands at agent lifecycle points.
+
+### Hook Events
+| Event | Trigger | Blocking |
+|-------|---------|----------|
+| `PreToolUse` | Before tool execution | Yes (exit 2 blocks) |
+| `PostToolUse` | After tool completes | No |
+| `Stop` | Agent completion | No |
+
+### Configuration
+```json
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "command_execute",
+      "hooks": [{
+        "type": "command",
+        "command": "prettier --write $FILE",
+        "timeout": 60000
+      }]
+    }]
+  }
+}
+```
+
+### Use Cases
+- Auto-format code after edits
+- Block dangerous commands
+- Run tests after changes
+- Audit logging
+
+---
+
 ## Skills System
 
 ### Purpose
@@ -381,6 +458,206 @@ description: What the skill does
 - File system access for backend
 - Network access for web tools
 
+---
+
+## Provider Abstraction
+
+### Current Implementation
+
+Wingman currently supports two model providers via API keys:
+
+| Provider | Models | Authentication |
+|----------|--------|----------------|
+| Anthropic | claude-opus-4-5, claude-sonnet-4-5 | `ANTHROPIC_API_KEY` |
+| OpenAI | gpt-4o, gpt-4-turbo | `OPENAI_API_KEY` |
+
+**Model Selection Format:** `provider:model-name`
+
+Examples:
+- `anthropic:claude-opus-4-5`
+- `openai:gpt-4o`
+
+### Planned Provider Support
+
+To maximize adoption, Wingman will support subscription-based model providers alongside API keys:
+
+| Provider | Type | Authentication | Status |
+|----------|------|----------------|--------|
+| Anthropic | API | API Key | ✅ Implemented |
+| OpenAI | API | API Key | ✅ Implemented |
+| GitHub Copilot | Subscription | OAuth | 🔄 Planned |
+| OpenAI Codex | Subscription | OAuth | 🔄 Planned |
+| Claude Max | Subscription | OAuth | 🔄 Planned |
+| Google Gemini | API | API Key | 🔄 Planned |
+
+### Provider Interface
+
+```typescript
+interface ModelProvider {
+  name: string;
+  type: 'api-key' | 'oauth';
+
+  // Check if provider is configured
+  isConfigured(): boolean;
+
+  // Get available models for this provider
+  getAvailableModels(): string[];
+
+  // Create a model instance
+  createModel(modelName: string, options?: ModelOptions): LanguageModelLike;
+
+  // For OAuth providers: initiate auth flow
+  authenticate?(): Promise<void>;
+
+  // For OAuth providers: check token validity
+  isAuthenticated?(): boolean;
+}
+
+interface ModelOptions {
+  temperature?: number;
+  maxTokens?: number;
+  streaming?: boolean;
+}
+```
+
+### OAuth Flow (Future)
+
+For subscription providers like Copilot, users will authenticate via browser:
+
+```
+1. User runs: wingman provider login copilot
+2. CLI opens browser for OAuth consent
+3. User authorizes Wingman
+4. CLI receives token, stores securely
+5. Future invocations use stored credentials
+```
+
+**Token Storage:**
+- Location: `~/.wingman/credentials.json` (encrypted)
+- Rotation: Automatic refresh when tokens expire
+- Revocation: `wingman provider logout copilot`
+
+### Configuration
+
+Users specify providers in agent configuration:
+
+```json
+{
+  "name": "my-agent",
+  "model": "copilot:gpt-4",
+  "fallbackModel": "anthropic:claude-sonnet-4-5"
+}
+```
+
+**Fallback Chain:** If primary provider unavailable, try fallback.
+
+---
+
+## Gateway Integration
+
+When connected to a [Wingman Gateway](005-gateway-prd.md), agents can participate in distributed collaboration.
+
+### Connection Model
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Local CLI                                │
+│  ┌─────────────┐                                            │
+│  │   Agent     │                                            │
+│  │  (coder)    │◀────────────────────┐                      │
+│  └─────────────┘                     │                      │
+│        │                             │                      │
+│        ▼                             │                      │
+│  ┌─────────────┐              ┌──────┴──────┐              │
+│  │  Session    │              │   Gateway   │              │
+│  │  (SQLite)   │              │   Client    │              │
+│  │  (Local)    │              │             │              │
+│  └─────────────┘              └──────┬──────┘              │
+│                                      │                      │
+└──────────────────────────────────────┼──────────────────────┘
+                                       │
+                                       │ WebSocket
+                                       ▼
+                              ┌─────────────────┐
+                              │  Wingman Gateway │
+                              │  (Remote/LAN)   │
+                              └─────────────────┘
+```
+
+### State Ownership
+
+| Component | Owns |
+|-----------|------|
+| Agent | System prompt, tools, reasoning |
+| Session (SQLite) | Conversation history, checkpoints |
+| Gateway | Nothing - pure routing |
+
+**Key Principle:** Gateway is stateless. Agents maintain full conversation context locally. This enables:
+- Offline operation (agent works without gateway)
+- State persistence across gateway restarts
+- Independent agent sessions (no shared state corruption)
+
+### Message Flow
+
+**Receiving from Gateway:**
+```typescript
+gatewayClient.on('message', async (msg) => {
+  // Skip own messages (sender exclusion)
+  if (msg.fromNodeId === gatewayClient.nodeId) return;
+
+  // Agent decides whether to respond (discretion model)
+  const shouldRespond = await agent.shouldHandle(msg.payload.content);
+  if (!shouldRespond) return;
+
+  // Process and stream response
+  for await (const chunk of agent.stream(msg.payload.content)) {
+    gatewayClient.broadcast({
+      type: 'agent-stream',
+      chunk
+    });
+  }
+});
+```
+
+**Sending to Gateway:**
+```typescript
+// User input flows through gateway
+outputManager.on('user-prompt', (prompt) => {
+  gatewayClient.broadcast({
+    type: 'user-message',
+    content: prompt
+  });
+});
+
+// Agent responses flow through gateway
+outputManager.on('agent-stream', (chunk) => {
+  gatewayClient.broadcast({
+    type: 'agent-stream',
+    chunk
+  });
+});
+```
+
+### Multi-Device Scenarios
+
+**Same User, Multiple Devices:**
+- Laptop sends prompt
+- Desktop agent processes
+- Mobile sees both prompt and response
+
+**Team Collaboration:**
+- Team member A's coder agent joins room
+- Team member B's researcher agent joins room
+- Shared prompts processed by both agents
+- All team members see all outputs
+
+### Offline Mode
+
+When gateway is unavailable:
+- Agent continues normal CLI operation
+- Session state preserved locally
+- Reconnection syncs presence only (not history)
+
 ## Future Enhancements
 
 ### Phase 2
@@ -388,11 +665,12 @@ description: What the skill does
 - Custom agent creation via UI
 - Agent-specific conversation history
 - Dynamic tool loading
+- **Provider expansion** (Copilot, Codex, Gemini)
 
 ### Phase 3
 - Multi-modal subagents (image, audio)
 - External agent integration (MCP protocol)
-- Distributed agent execution
+- **Full gateway integration** (distributed collaboration)
 - Agent marketplace
 
 ### Phase 4
@@ -402,6 +680,8 @@ description: What the skill does
 - Real-time streaming
 
 ## References
+- [Architecture Overview](000-architecture-overview.md) - System-wide architecture
+- [Gateway PRD](005-gateway-prd.md) - Distributed agent collaboration
 - [LangChain deepagents Documentation](https://docs.langchain.com/oss/javascript/deepagents)
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraphjs/)
 - [Custom Agents Configuration Guide](../custom-agents.md)

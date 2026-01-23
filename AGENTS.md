@@ -2,7 +2,10 @@
 
 ## Project Overview
 
-Wingman is a hierarchical multi-agent AI assistant built on LangChain's deepagents framework. It implements a sophisticated delegation system where a root orchestrator agent coordinates specialized subagents, each optimized for specific task domains.
+Wingman is a two-part AI agent ecosystem:
+
+1. **Wingman CLI** - A local AI agent framework that runs on your machine, supporting multiple model providers and customizable agent configurations
+2. **Wingman Gateway** - A distributed communication hub that enables multi-agent collaboration across devices, allowing AI agents to communicate as a team
 
 **Key Features**:
 - Intelligent task delegation and orchestration
@@ -10,14 +13,23 @@ Wingman is a hierarchical multi-agent AI assistant built on LangChain's deepagen
 - User-configurable custom agents
 - Flexible autonomous and explicit control modes
 - State management with persistent and ephemeral backends
-- Extensible middleware and skills system
+- Extensible middleware, hooks, and skills system
+- Gateway for distributed multi-agent collaboration
+- Session persistence with SQLite storage
 
 ## Product Requirements
-All PRD documents can be found under `./docs/requirements/`. 
 
-** Critical: Make sure to keep these up to date when modifying the project. **
+All PRD documents can be found under `./docs/requirements/`:
 
-# Legacy Docs
+| Document | Description |
+|----------|-------------|
+| [000-architecture-overview.md](docs/requirements/000-architecture-overview.md) | System-wide architecture and vision |
+| [001-multi-agent-architecture.md](docs/requirements/001-multi-agent-architecture.md) | Agent hierarchy, custom agents, hooks, providers |
+| [005-gateway-prd.md](docs/requirements/005-gateway-prd.md) | Gateway rooms, protocol, consumer patterns |
+
+**Critical: Keep these PRDs up to date when modifying the project.**
+
+## Legacy Docs
 **Do not consume docs from docs-site, these are legacy!**
 
 ## Architecture
@@ -252,7 +264,7 @@ User → Root Agent → Coder → [Internal: Planner → Implementor → Reviewe
 
 ## Custom Agents Configuration
 
-Users can define custom subagents via configuration files without modifying code. For complete details, see [PRD-002: Custom Agents Configuration System](docs/requirements/002-custom-agents-configuration.md).
+Users can define custom subagents via configuration files without modifying code.
 
 ### Configuration Location
 
@@ -605,6 +617,207 @@ export const agent = createDeepAgent({
 - User preferences
 - Output formatting rules
 
+## Hooks System
+
+Hooks enable users to execute custom shell commands at agent lifecycle points, providing extensibility for integrating external tools, enforcing policies, and automating workflows.
+
+### Hook Events
+
+| Event | Trigger | Blocking | Use Cases |
+|-------|---------|----------|-----------|
+| `PreToolUse` | Before tool execution | Yes (exit 2 blocks) | Validation, blocking dangerous commands |
+| `PostToolUse` | After tool completes | No | Formatting, linting, logging |
+| `Stop` | Agent completion | No | Testing, reporting, cleanup |
+
+### Configuration
+
+**Global** (`.wingman/wingman.config.json`):
+```json
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "command_execute",
+      "hooks": [{
+        "type": "command",
+        "command": "prettier --write $FILE",
+        "timeout": 60000
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": "command_execute",
+      "hooks": [{
+        "type": "command",
+        "command": "bash /path/to/validate-command.sh"
+      }]
+    }]
+  }
+}
+```
+
+**Agent-specific** (`.wingman/agents/{name}/agent.json`):
+```json
+{
+  "name": "my-agent",
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "npm test"
+      }]
+    }]
+  }
+}
+```
+
+### Pattern Matching
+
+- Exact match: `"command_execute"`
+- Pipe-separated: `"write_file|edit_file"`
+- Wildcard: `"*"` or `""`
+- Regex: `".*_file"`
+
+### Exit Codes
+
+| Exit Code | PreToolUse | PostToolUse/Stop |
+|-----------|------------|------------------|
+| 0 | Allow tool | Continue |
+| 2 | Block tool | Log error, continue |
+| Other | Log, allow | Log, continue |
+
+### Hook Input (stdin JSON)
+
+```json
+{
+  "session_id": "uuid",
+  "cwd": "/current/dir",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "command_execute",
+  "tool_input": { "command": "npm test" },
+  "tool_output": "..." // PostToolUse only
+}
+```
+
+## Wingman Gateway
+
+The Gateway enables distributed multi-agent collaboration through WebSocket-based communication. Multiple Wingman nodes can connect, form **rooms** (broadcast groups), and collaborate on tasks.
+
+### Core Concepts
+
+**Rooms (Broadcast Groups)**:
+- All members see all messages (user prompts AND agent responses)
+- Agents self-select whether to respond based on their system prompt
+- Multiple agents can respond in parallel as independent streams
+- Gateway is stateless - nodes maintain their own conversation state
+
+**Agent Discretion Model**:
+- No explicit @mention or routing required
+- Agent's system prompt defines when it should respond
+- Senders don't receive their own messages (prevents feedback loops)
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     WINGMAN GATEWAY                          │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │            Room: "project-alpha"                     │    │
+│  │   Members: [laptop-node, mobile-node, server-node]  │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+        ▲               ▲               ▲
+        │ WebSocket     │               │
+┌───────┴───────┐ ┌─────┴─────┐ ┌───────┴───────┐
+│  Laptop CLI   │ │  Mobile   │ │ Server Agent  │
+│  (coder)      │ │  (UI)     │ │ (researcher)  │
+└───────────────┘ └───────────┘ └───────────────┘
+```
+
+### Message Flow
+
+1. User sends message from laptop
+2. Gateway broadcasts to all room members
+3. Each agent evaluates "is this for me?" based on system prompt
+4. Agents that decide to respond stream their output back
+5. Gateway broadcasts responses to all members
+6. All UIs (mobile, CLI, web) display the streams
+
+### CLI Commands
+
+```bash
+# Start gateway
+wingman gateway start [--port 3000] [--auth] [--discovery mdns]
+
+# Stop/restart
+wingman gateway stop
+wingman gateway restart
+
+# Join gateway
+wingman gateway join ws://host:port [--name node-name] [--group room-name]
+
+# Discover gateways
+wingman gateway discover [--tailscale]
+```
+
+### Protocol
+
+Agent stream events match CLI streaming format:
+
+```typescript
+// Agent lifecycle events
+{ type: "agent-start", agent: "coder", prompt: "...", timestamp: ... }
+{ type: "agent-stream", chunk: { /* LangGraph chunk */ }, timestamp: ... }
+{ type: "agent-complete", result: { ... }, timestamp: ... }
+{ type: "agent-error", error: "...", timestamp: ... }
+
+// Tool events
+{ type: "tool-start", toolName: "command_execute", toolInput: {...} }
+{ type: "tool-end", toolName: "command_execute", toolOutput: {...} }
+```
+
+### Use Patterns
+
+**Swarm (Parallel Independent)**:
+- Multiple agents in same room
+- Each produces independent output
+- Best for: diverse perspectives, research, brainstorming
+
+**Orchestrated (Sequential Coordinated)**:
+- Single parent agent with subagents
+- Parent coordinates workflow
+- Best for: complex tasks requiring coordination
+
+For complete Gateway documentation, see [005-gateway-prd.md](docs/requirements/005-gateway-prd.md).
+
+## Session Management
+
+Wingman CLI supports persistent sessions with SQLite storage, enabling continuous conversations across CLI invocations.
+
+### Features
+
+- **Auto-resume**: Sessions resume automatically for each agent
+- **Streaming**: Token-by-token streaming output
+- **Multiple sessions**: Manage parallel tasks with different sessions
+- **Local storage**: `.wingman/wingman.db` (SQLite)
+
+### Usage
+
+```bash
+# First invocation - creates session
+wingman agent --agent coder "implement login"
+
+# Second invocation - auto-resumes session
+wingman agent --agent coder "add tests"
+# Agent has full context from previous message
+```
+
+### State Ownership
+
+| Component | Owns |
+|-----------|------|
+| Agent | System prompt, tools, reasoning |
+| Session (SQLite) | Conversation history, checkpoints |
+| Gateway | Nothing - pure routing (stateless) |
+
 ## Technical Stack
 
 ### Core Dependencies
@@ -685,30 +898,40 @@ wingman/
 │   │   │   ├── toolRegistry.ts     # Tool factory
 │   │   │   └── modelFactory.ts     # Model factory
 │   │   ├── middleware/             # Middleware implementations
-│   │   │   └── additional-messages.ts
+│   │   │   ├── additional-messages.ts
+│   │   │   └── hooks/              # Hooks system
+│   │   │       ├── hooks.ts        # Main middleware
+│   │   │       ├── executor.ts     # Hook execution
+│   │   │       ├── matcher.ts      # Pattern matching
+│   │   │       └── types.ts        # Hook types + Zod
 │   │   └── tests/                  # Unit tests
-│   │       ├── agentConfig.test.ts
-│   │       ├── agentLoader.test.ts
-│   │       ├── toolRegistry.test.ts
-│   │       └── modelFactory.test.ts
-│   ├── cli/                        # CLI system (NEW)
+│   ├── cli/                        # CLI system
 │   │   ├── index.ts                # CLI entry point
 │   │   ├── types.ts                # TypeScript types
 │   │   ├── commands/               # Command handlers
-│   │   │   └── agent.ts            # Agent command
+│   │   │   ├── agent.ts            # Agent command
+│   │   │   └── gateway.ts          # Gateway commands
 │   │   ├── core/                   # Core CLI logic
 │   │   │   ├── agentInvoker.ts     # Direct agent invocation
 │   │   │   ├── outputManager.ts    # Output mode management
-│   │   │   └── loggerBridge.ts     # Logger integration
+│   │   │   ├── sessionManager.ts   # Session persistence
+│   │   │   └── streamParser.ts     # Stream chunk parsing
 │   │   ├── config/                 # CLI configuration
 │   │   │   ├── schema.ts           # wingman.config.json schema
 │   │   │   └── loader.ts           # Config loader
 │   │   └── ui/                     # Ink UI components
 │   │       ├── App.tsx             # Main UI component
-│   │       ├── AgentOutput.tsx     # Agent response display
-│   │       ├── LogDisplay.tsx      # Log event display
-│   │       └── ErrorDisplay.tsx    # Error formatting
-│   ├── logger.ts                   # Logging utilities (with EventLogger)
+│   │       └── AgentOutput.tsx     # Agent response display
+│   ├── gateway/                    # Gateway system
+│   │   ├── server.ts               # WebSocket server
+│   │   ├── client.ts               # Gateway client
+│   │   ├── types.ts                # Message types
+│   │   ├── nodeManager.ts          # Node management
+│   │   ├── broadcastGroup.ts       # Room management
+│   │   └── discovery/              # Discovery mechanisms
+│   │       ├── mdns.ts             # mDNS/Bonjour
+│   │       └── tailscale.ts        # Tailscale integration
+│   ├── logger.ts                   # Logging utilities
 │   └── utils.ts                    # Helper functions
 ├── bin/
 │   └── wingman                     # Executable CLI entry point
@@ -724,15 +947,15 @@ wingman/
 ├── docs/                           # Documentation
 │   ├── custom-agents.md            # Custom agents guide
 │   └── requirements/               # PRDs
+│       ├── 000-architecture-overview.md
 │       ├── 001-multi-agent-architecture.md
-│       ├── 002-custom-agents-configuration.md
-│       └── 003-cli-direct-invocation.md  # (NEW)
+│       └── 005-gateway-prd.md
 ├── examples/                       # Usage examples
 ├── dist/                           # Built output (ESM + CJS)
 ├── package.json                    # Package configuration
-├── tsconfig.json                   # TypeScript config (JSX enabled)
-├── rslib.config.mjs               # Build config
-└── vitest.config.ts               # Test config
+├── tsconfig.json                   # TypeScript config
+├── rslib.config.mjs                # Build config
+└── vitest.config.ts                # Test config
 ```
 
 ## Environment Variables
@@ -806,7 +1029,7 @@ child.stdout.on('data', (data) => {
 });
 ```
 
-For complete CLI documentation, see [PRD-003: CLI Direct Agent Invocation](docs/requirements/003-cli-direct-invocation.md).
+For architecture details, see [001-multi-agent-architecture.md](docs/requirements/001-multi-agent-architecture.md).
 
 ### Programmatic Usage
 
@@ -976,16 +1199,22 @@ const result = await invoker.invokeAgent('researcher', 'what is TypeScript');
 
 ## References
 
+### Project Documentation
+- [Architecture Overview](docs/requirements/000-architecture-overview.md) - System-wide vision
+- [Multi-Agent Architecture PRD](docs/requirements/001-multi-agent-architecture.md) - Agent system, providers, hooks
+- [Gateway PRD](docs/requirements/005-gateway-prd.md) - Distributed collaboration
+- [Custom Agents Guide](docs/custom-agents.md)
+
+### External Documentation
 - [LangChain deepagents Documentation](https://docs.langchain.com/oss/javascript/deepagents)
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraphjs/)
-- [Custom Agents Guide](docs/custom-agents.md)
-- [PRD-001: Multi-Agent Architecture](docs/requirements/001-multi-agent-architecture.md)
-- [PRD-002: Custom Agents Configuration System](docs/requirements/002-custom-agents-configuration.md)
 - [Zod Schema Validation](https://zod.dev/)
+
+### Repository
 - [Project Repository](https://github.com/RussellCanfield/wingman-ai)
 
 ---
 
-**Version**: 1.1.5
-**Last Updated**: 2026-01-19
+**Version**: 1.2.0
+**Last Updated**: 2026-01-23
 **Maintainer**: Russell Canfield (rcanfield86@gmail.com)

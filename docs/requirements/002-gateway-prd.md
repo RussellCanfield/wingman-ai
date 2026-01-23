@@ -2,11 +2,23 @@
 
 ## Overview
 
-The Wingman Gateway enables AI agent swarming by providing a WebSocket-based communication hub that allows multiple Wingman nodes to connect, form broadcast groups, and collaborate on tasks.
+The Wingman Gateway enables AI agent swarming by providing a WebSocket-based communication hub that allows multiple Wingman nodes to connect, form **rooms** (broadcast groups), and collaborate on tasks. The gateway is **stateless** - it routes messages but does not store conversation history. Each node maintains its own state.
 
-**Version:** 1.0
+**Version:** 1.1
 **Status:** In Development
-**Last Updated:** 2026-01-20
+**Last Updated:** 2026-01-23
+
+---
+
+## Vision
+
+The gateway enables "AI agents communicating as a team" through bidirectional rooms where:
+- All members see all messages (user prompts AND agent responses)
+- Agents decide autonomously whether to act based on their system prompt
+- Multiple agents can respond in parallel as independent streams
+- No explicit routing required - agents self-select based on context
+
+See [Architecture Overview](000-architecture-overview.md) for the full system context.
 
 ---
 
@@ -17,12 +29,14 @@ The Wingman Gateway enables AI agent swarming by providing a WebSocket-based com
 2. Support **local network discovery** (LAN/home office scenarios)
 3. Provide **remote connectivity** via Tailscale for distributed teams
 4. Offer **flexible deployment** options (local daemon, Cloudflare Workers)
+5. **Stateless design** - gateway routes messages, nodes own their state
 
 ### Secondary Goals
 1. Support alternative transports (HTTP bridge, SSH tunnels) for firewall traversal
 2. Provide simple authentication and authorization
 3. Enable horizontal scaling via multiple gateway instances
 4. Maintain low latency for real-time agent collaboration
+5. **Protocol-first design** - generic protocol that any UI can consume
 
 ---
 
@@ -78,6 +92,122 @@ The Wingman Gateway enables AI agent swarming by providing a WebSocket-based com
 - SSH tunnel helper command
 - Reverse tunnel support
 - Port forwarding
+
+### 5. Multi-Agent Swarm
+**Scenario:** User wants 3 different agents to process the same request
+**Flow:**
+1. User joins a room with 3 agent nodes (coder, researcher, reviewer)
+2. User sends: "Analyze the auth implementation"
+3. Gateway broadcasts to all room members
+4. Each agent autonomously decides whether to respond based on its system prompt
+5. Coder analyzes code structure
+6. Researcher finds best practices docs
+7. Reviewer identifies security concerns
+8. All 3 responses stream independently to all room members
+9. User sees all perspectives in their UI
+
+**Requirements:**
+- Bidirectional message flow (all see all)
+- Sender exclusion (don't process your own messages)
+- Independent parallel streams
+- Agent discretion (system prompt determines response)
+
+---
+
+## Core Concepts
+
+### Rooms (Broadcast Groups)
+
+A **room** is a named group where all members see all messages. Think of it as a team chat where both humans and AI agents participate.
+
+**Key Properties:**
+- **Bidirectional**: User messages AND agent responses broadcast to everyone
+- **No routing required**: Agents self-select whether to respond based on context
+- **Parallel execution**: Multiple agents can respond simultaneously
+- **Stateless**: Room doesn't store history; nodes maintain their own state
+
+**Message Flow:**
+```
+User (Node A) sends: "Review the auth code"
+        │
+        ▼
+    ┌───────────────────────────────────────────────┐
+    │                    ROOM                        │
+    │                                                │
+    │  Broadcast to: Node B, Node C, Node D         │
+    │  (Node A excluded - sender doesn't receive)   │
+    │                                                │
+    └───────────────────────────────────────────────┘
+        │           │           │
+        ▼           ▼           ▼
+    Node B      Node C      Node D
+    (Mobile)    (Coder)     (Reviewer)
+
+    - Display   - "Is this  - "Is this
+      message     for me?     for me?
+                  YES"        YES"
+                  │           │
+                  ▼           ▼
+                Respond     Respond
+                  │           │
+                  └─────┬─────┘
+                        ▼
+                  Both responses
+                  broadcast back
+                  to room (including
+                  Node A this time)
+```
+
+### Agent Discretion Model
+
+Agents decide autonomously whether to act on incoming messages. There's no explicit @mention or routing - the agent's **system prompt** defines when it should respond.
+
+**Example System Prompts:**
+
+```
+# Coder Agent
+You are a coding expert. Respond when users ask about:
+- Code implementation
+- Bug fixes
+- Refactoring
+- Technical questions about the codebase
+
+If the request is primarily about documentation or security research,
+defer to other team members.
+```
+
+```
+# Reviewer Agent
+You are a code review specialist. Respond when users ask about:
+- Code quality
+- Security vulnerabilities
+- Best practices
+- Performance concerns
+
+Proactively review code changes shared in the room.
+```
+
+**Key Rules:**
+1. Senders don't receive their own messages (prevents feedback loops)
+2. Agent's internal session handles its own context (not gateway's job)
+3. Multiple agents can respond to the same message (independent streams)
+4. Agents can choose NOT to respond if the request isn't relevant
+
+### Swarm vs Orchestrated Patterns
+
+**Swarm (Parallel Independent):**
+- Multiple agents in same room
+- Each produces independent output stream
+- No coordination - UI shows all responses
+- Best for: diverse perspectives, research, brainstorming
+
+**Orchestrated (Sequential Coordinated):**
+- Single parent agent with subagents
+- Parent coordinates workflow (planner → implementor → reviewer)
+- Single output stream from parent
+- Best for: complex tasks requiring coordination
+
+Users choose the pattern based on their needs. Both can use the gateway.
 
 ---
 
@@ -340,6 +470,119 @@ type MessageType =
   | "error" | "ack";
 ```
 
+### Agent Stream Messages
+
+When agents respond through the gateway, they emit lifecycle events that match the CLI streaming format. This enables any UI (mobile, web, terminal) to consume the same protocol.
+
+```typescript
+// Agent starts processing
+interface AgentStartEvent {
+  type: "agent-start";
+  agent: string;                 // Agent name
+  prompt: string;                // User prompt being processed
+  sessionId?: string;            // Agent's local session (optional)
+  timestamp: number;
+}
+
+// Agent streaming content (token by token)
+interface AgentStreamEvent {
+  type: "agent-stream";
+  chunk: unknown;                // Raw LangGraph stream chunk
+  timestamp: number;
+}
+
+// Agent completed successfully
+interface AgentCompleteEvent {
+  type: "agent-complete";
+  result: unknown;               // Final result
+  timestamp: number;
+}
+
+// Agent error
+interface AgentErrorEvent {
+  type: "agent-error";
+  error: string;                 // Error message
+  stack?: string;                // Optional stack trace
+  timestamp: number;
+}
+
+// Tool execution (visible to observers)
+interface ToolStartEvent {
+  type: "tool-start";
+  toolName: string;              // Tool being executed
+  toolInput: unknown;            // Tool arguments
+  timestamp: number;
+}
+
+interface ToolEndEvent {
+  type: "tool-end";
+  toolName: string;
+  toolOutput: unknown;           // Tool result
+  timestamp: number;
+}
+```
+
+**Protocol Design Principles:**
+
+1. **Raw Stream Forwarding**: Gateway forwards agent stream chunks as-is, matching CLI streaming format
+2. **UI Interprets**: Each UI (mobile, web, CLI) parses chunks for its presentation
+3. **Envelope Only**: Gateway adds routing metadata (fromNodeId, groupId) but doesn't modify payload
+4. **Stateless**: Gateway doesn't buffer or persist stream events
+
+**Example: Agent Response Flow**
+
+```json
+// 1. Agent starts
+{
+  "type": "broadcast",
+  "nodeId": "agent-abc",
+  "groupId": "room-xyz",
+  "payload": {
+    "type": "agent-start",
+    "agent": "coder",
+    "prompt": "Review the auth code",
+    "timestamp": 1706000000000
+  }
+}
+
+// 2. Streaming tokens
+{
+  "type": "broadcast",
+  "nodeId": "agent-abc",
+  "groupId": "room-xyz",
+  "payload": {
+    "type": "agent-stream",
+    "chunk": { "event": "on_chat_model_stream", "data": {"chunk": "The"} },
+    "timestamp": 1706000000100
+  }
+}
+
+// 3. Tool execution
+{
+  "type": "broadcast",
+  "nodeId": "agent-abc",
+  "groupId": "room-xyz",
+  "payload": {
+    "type": "tool-start",
+    "toolName": "command_execute",
+    "toolInput": { "command": "cat src/auth.ts" },
+    "timestamp": 1706000001000
+  }
+}
+
+// 4. Agent complete
+{
+  "type": "broadcast",
+  "nodeId": "agent-abc",
+  "groupId": "room-xyz",
+  "payload": {
+    "type": "agent-complete",
+    "result": { "response": "The auth code looks good..." },
+    "timestamp": 1706000005000
+  }
+}
+```
+
 ---
 
 ## API Reference
@@ -529,6 +772,105 @@ Response:
 
 ---
 
+## Consumer Patterns
+
+The gateway protocol is designed to be consumed by any UI. Here are example patterns for different consumers.
+
+### CLI Consumer (Reference Implementation)
+
+The CLI already handles agent streams via `OutputManager` and `StreamParser`. When connected to gateway:
+
+```typescript
+// Pseudocode
+gateway.on('message', (msg) => {
+  if (msg.payload.type === 'agent-stream') {
+    // Parse chunk for text/tool events
+    const parsed = streamParser.parse(msg.payload.chunk);
+    if (parsed.text) outputManager.emitText(parsed.text);
+    if (parsed.toolCall) outputManager.emitToolCall(parsed.toolCall);
+  }
+});
+```
+
+### Mobile App Consumer
+
+A mobile app would parse the same stream for native UI components:
+
+```swift
+// iOS Swift pseudocode
+func handleGatewayMessage(_ msg: GatewayMessage) {
+    switch msg.payload.type {
+    case "agent-start":
+        showTypingIndicator(agent: msg.payload.agent)
+    case "agent-stream":
+        let text = parseTextFromChunk(msg.payload.chunk)
+        appendToChat(text)
+    case "agent-complete":
+        hideTypingIndicator()
+    case "tool-start":
+        showToolExecution(msg.payload.toolName)
+    }
+}
+```
+
+### Web UI Consumer
+
+A React web app might use a custom hook:
+
+```typescript
+// React hook pseudocode
+function useGatewayStream(roomId: string) {
+  const [messages, setMessages] = useState([]);
+  const [activeAgents, setActiveAgents] = useState({});
+
+  useEffect(() => {
+    gateway.subscribe(roomId, (msg) => {
+      if (msg.payload.type === 'agent-start') {
+        setActiveAgents(prev => ({...prev, [msg.nodeId]: msg.payload}));
+      }
+      if (msg.payload.type === 'agent-stream') {
+        // Accumulate text into agent's current message
+      }
+      if (msg.payload.type === 'agent-complete') {
+        setMessages(prev => [...prev, msg.payload.result]);
+        setActiveAgents(prev => {
+          const {[msg.nodeId]: _, ...rest} = prev;
+          return rest;
+        });
+      }
+    });
+  }, [roomId]);
+
+  return { messages, activeAgents };
+}
+```
+
+### Slack/Teams Adapter
+
+Enterprise adapters transform gateway messages to platform format:
+
+```typescript
+// Slack adapter pseudocode
+gateway.on('message', async (msg) => {
+  if (msg.payload.type === 'agent-complete') {
+    await slack.postMessage({
+      channel: mapRoomToChannel(msg.groupId),
+      text: `*${msg.payload.agent}*: ${extractText(msg.payload.result)}`,
+      blocks: formatAsSlackBlocks(msg.payload.result)
+    });
+  }
+});
+```
+
+### Key Design Decisions
+
+1. **Raw Chunks**: Gateway sends raw agent stream chunks, not processed text
+2. **Client Parsing**: Each client implements parsing appropriate for its UI
+3. **Flexible Presentation**: Same data, different presentations (CLI = scrolling text, mobile = chat bubbles, Slack = formatted messages)
+4. **Stateless Gateway**: Clients maintain their own view state and message history
+
+---
+
 ## Performance Requirements
 
 ### Latency
@@ -664,7 +1006,8 @@ wrangler deploy
 
 ## References
 
-- [ClawdBot Gateway Documentation](https://docs.clawd.bot/cli/gateway)
+- [Architecture Overview](000-architecture-overview.md) - System-wide architecture
+- [Multi-Agent Architecture](001-multi-agent-architecture.md) - Agent hierarchy, custom agents, hooks
 - [WebSocket RFC 6455](https://tools.ietf.org/html/rfc6455)
 - [mDNS RFC 6762](https://tools.ietf.org/html/rfc6762)
 - [Tailscale API](https://tailscale.com/api)
