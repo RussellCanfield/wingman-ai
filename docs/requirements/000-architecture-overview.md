@@ -35,7 +35,7 @@ Multiple agents in a room produce separate output streams. There's no built-in a
 The gateway forwards raw agent streams (matching CLI streaming format). UI layers interpret these streams for display. This enables any client (mobile, web, terminal) to consume the same protocol.
 
 ### 6. Flexible Provider Support
-Support for multiple model providers through API keys today, with OAuth/subscription authentication (Copilot, Codex, Claude subscriptions) planned for future.
+Support for multiple model providers via API keys and stored subscription tokens today. OAuth/device-code flows remain planned.
 
 ---
 
@@ -199,19 +199,22 @@ Each agent produces independent output. No built-in aggregation - the UI display
 │                    Provider Interface                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│   │   Anthropic  │  │    OpenAI    │  │   (Future)   │     │
-│   │              │  │              │  │              │     │
-│   │ claude-opus  │  │   gpt-4o     │  │   copilot    │     │
-│   │ claude-sonnet│  │   gpt-4-turbo│  │   codex      │     │
-│   └──────────────┘  └──────────────┘  └──────────────┘     │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────┐│
+│  │   Anthropic  │ │    OpenAI    │ │  OpenRouter  │ │Copilot││
+│  │ claude-opus  │ │   gpt-4o     │ │  any model   │ │ gpt-4o││
+│  │ claude-sonnet│ │   gpt-4-turbo│ │              │ │       ││
+│  └──────────────┘ └──────────────┘ └──────────────┘ └───────┘│
 │                                                              │
-│   Authentication: API Keys (ANTHROPIC_API_KEY, etc.)        │
+│  Authentication:                                             │
+│  - API keys via env: ANTHROPIC_API_KEY, OPENAI_API_KEY,      │
+│    OPENROUTER_API_KEY                                        │
+│  - Subscription tokens stored in ~/.wingman/credentials.json │
+│    (Copilot)                                                 │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Future: Subscription Provider Support
+### OAuth Subscription Flows
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -235,7 +238,7 @@ Each agent produces independent output. No built-in aggregation - the UI display
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The goal is flexible adoption - use what you have, whether that's API keys or existing subscriptions.
+OAuth flows are planned; today, `wingman provider login` stores subscription tokens locally.
 
 ---
 
@@ -376,8 +379,8 @@ Developer's Machine
 
 ### Phase 4: Provider Expansion
 - Provider abstraction layer
-- OAuth flow implementation
-- Copilot/Codex integration
+- Additional OAuth/device-code flow implementation
+- Additional subscription integrations (Codex, Claude Max)
 
 ### Phase 5: Consumer Ecosystem
 - Reference mobile app

@@ -17,6 +17,18 @@ describe("ModelFactory", () => {
 			expect(model).toBeInstanceOf(ChatOpenAI);
 		});
 
+		it("should create an OpenRouter model", () => {
+			const model = ModelFactory.createModel("openrouter:openai/gpt-4o");
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
+
+		it("should create a Copilot model", () => {
+			const model = ModelFactory.createModel("copilot:gpt-4o");
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
+
 		it("should throw error for invalid format (missing colon)", () => {
 			expect(() => {
 				ModelFactory.createModel("anthropic-claude-opus");
@@ -56,6 +68,8 @@ describe("ModelFactory", () => {
 				"anthropic:claude-opus-4-5",
 				"openai:gpt-4o",
 				"anthropic:claude-sonnet-4-5-20250929",
+				"openrouter:openai/gpt-4o",
+				"copilot:gpt-4o",
 			];
 
 			for (const modelString of validModels) {
@@ -96,9 +110,11 @@ describe("ModelFactory", () => {
 		it("should accept case variations of providers", () => {
 			const result1 = ModelFactory.validateModelString("Anthropic:model");
 			const result2 = ModelFactory.validateModelString("OPENAI:model");
+			const result3 = ModelFactory.validateModelString("Copilot:model");
 
 			expect(result1.valid).toBe(true);
 			expect(result2.valid).toBe(true);
+			expect(result3.valid).toBe(true);
 		});
 	});
 });

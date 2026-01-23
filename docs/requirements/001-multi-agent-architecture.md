@@ -464,18 +464,22 @@ description: What the skill does
 
 ### Current Implementation
 
-Wingman currently supports two model providers via API keys:
+Wingman currently supports multiple model providers via API keys and stored tokens:
 
 | Provider | Models | Authentication |
 |----------|--------|----------------|
-| Anthropic | claude-opus-4-5, claude-sonnet-4-5 | `ANTHROPIC_API_KEY` |
-| OpenAI | gpt-4o, gpt-4-turbo | `OPENAI_API_KEY` |
+| Anthropic | claude-opus-4-5, claude-sonnet-4-5 | `ANTHROPIC_API_KEY` (or stored) |
+| OpenAI | gpt-4o, gpt-4-turbo | `OPENAI_API_KEY` (or stored) |
+| OpenRouter | any OpenRouter model | `OPENROUTER_API_KEY` (or stored) |
+| GitHub Copilot | gpt-4o, gpt-4-turbo | `GITHUB_COPILOT_TOKEN` or `wingman provider login` |
 
 **Model Selection Format:** `provider:model-name`
 
 Examples:
 - `anthropic:claude-opus-4-5`
 - `openai:gpt-4o`
+- `openrouter:openai/gpt-4o`
+- `copilot:gpt-4o`
 
 ### Planned Provider Support
 
@@ -485,7 +489,8 @@ To maximize adoption, Wingman will support subscription-based model providers al
 |----------|------|----------------|--------|
 | Anthropic | API | API Key | ✅ Implemented |
 | OpenAI | API | API Key | ✅ Implemented |
-| GitHub Copilot | Subscription | OAuth | 🔄 Planned |
+| OpenRouter | API | API Key | ✅ Implemented |
+| GitHub Copilot | Subscription | Token (manual) | ✅ Implemented |
 | OpenAI Codex | Subscription | OAuth | 🔄 Planned |
 | Claude Max | Subscription | OAuth | 🔄 Planned |
 | Google Gemini | API | API Key | 🔄 Planned |
@@ -520,9 +525,9 @@ interface ModelOptions {
 }
 ```
 
-### OAuth Flow (Future)
+### OAuth Flow (Planned)
 
-For subscription providers like Copilot, users will authenticate via browser:
+For subscription providers like Copilot, users will authenticate via browser once OAuth is available:
 
 ```
 1. User runs: wingman provider login copilot
@@ -533,9 +538,11 @@ For subscription providers like Copilot, users will authenticate via browser:
 ```
 
 **Token Storage:**
-- Location: `~/.wingman/credentials.json` (encrypted)
+- Location: `~/.wingman/credentials.json` (encryption planned)
 - Rotation: Automatic refresh when tokens expire
 - Revocation: `wingman provider logout copilot`
+
+OAuth flows will require provider-specific client configuration and redirect URIs.
 
 ### Configuration
 

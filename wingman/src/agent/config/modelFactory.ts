@@ -2,6 +2,13 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import { createLogger } from "../../logger.js";
+import { resolveProviderToken } from "@/providers/credentials.js";
+import { createCopilotFetch } from "@/providers/copilot.js";
+import {
+	getProviderSpec,
+	listProviderSpecs,
+	normalizeProviderName,
+} from "@/providers/registry.js";
 
 const logger = createLogger();
 
@@ -14,6 +21,8 @@ const logger = createLogger();
  *  - "anthropic:claude-sonnet-4-5"
  *  - "openai:gpt-4o"
  *  - "openai:gpt-4-turbo"
+ *  - "openrouter:openai/gpt-4o"
+ *  - "copilot:gpt-4o"
  */
 export class ModelFactory {
 	/**
@@ -35,35 +44,28 @@ export class ModelFactory {
 			);
 		}
 
-		logger.debug(`Creating model: ${provider}:${model}`);
+		const normalizedProvider = normalizeProviderName(provider);
+		if (!normalizedProvider) {
+			const supported = listProviderSpecs().map((item) => item.name).join(", ");
+			throw new Error(
+				`Unknown model provider: "${provider}". Supported providers: ${supported}`,
+			);
+		}
 
-		switch (provider.toLowerCase()) {
+		logger.debug(`Creating model: ${normalizedProvider}:${model}`);
+
+		switch (normalizedProvider) {
 			case "anthropic":
-				return new ChatAnthropic({
-					model,
-					temperature: 0,
-				});
+				return ModelFactory.createAnthropicModel(model);
 
 			case "openai":
-				return new ChatOpenAI({
-					model,
-					temperature: 0,
-				});
+				return ModelFactory.createOpenAIModel(model);
 
 			case "openrouter":
-				return new ChatOpenAI({
-					model,
-					temperature: 0,
-					configuration: {
-						baseURL: "https://openrouter.ai/api/v1",
-						apiKey: process.env.OPENROUTER_API_KEY,
-					},
-				});
+				return ModelFactory.createOpenRouterModel(model);
 
-			default:
-				throw new Error(
-					`Unknown model provider: "${provider}". Supported providers: anthropic, openai, openrouter`,
-				);
+			case "copilot":
+				return ModelFactory.createCopilotModel(model);
 		}
 	}
 
@@ -91,14 +93,71 @@ export class ModelFactory {
 			};
 		}
 
-		const supportedProviders = ["anthropic", "openai", "openrouter"];
-		if (!supportedProviders.includes(provider.toLowerCase())) {
+		const normalizedProvider = normalizeProviderName(provider);
+		if (!normalizedProvider) {
+			const supported = listProviderSpecs().map((item) => item.name).join(", ");
 			return {
 				valid: false,
-				error: `Unknown provider: "${provider}". Supported: ${supportedProviders.join(", ")}`,
+				error: `Unknown provider: "${provider}". Supported: ${supported}`,
 			};
 		}
 
 		return { valid: true };
+	}
+
+	private static createAnthropicModel(model: string): BaseLanguageModel {
+		const token = resolveProviderToken("anthropic").token;
+		const params: { model: string; temperature: number; apiKey?: string } = {
+			model,
+			temperature: 0,
+		};
+
+		if (token) {
+			params.apiKey = token;
+		}
+
+		return new ChatAnthropic(params);
+	}
+
+	private static createOpenAIModel(model: string): BaseLanguageModel {
+		const token = resolveProviderToken("openai").token;
+		const params: { model: string; temperature: number; apiKey?: string } = {
+			model,
+			temperature: 0,
+		};
+
+		if (token) {
+			params.apiKey = token;
+		}
+
+		return new ChatOpenAI(params);
+	}
+
+	private static createOpenRouterModel(model: string): BaseLanguageModel {
+		const token = resolveProviderToken("openrouter").token ?? "";
+		const provider = getProviderSpec("openrouter");
+
+		return new ChatOpenAI({
+			model,
+			temperature: 0,
+			apiKey: token,
+			configuration: {
+				baseURL: provider?.baseURL,
+			},
+		});
+	}
+
+	private static createCopilotModel(model: string): BaseLanguageModel {
+		const provider = getProviderSpec("copilot");
+
+		return new ChatOpenAI({
+			model,
+			temperature: 0,
+			apiKey: "copilot",
+			configuration: {
+				baseURL: provider?.baseURL,
+				fetch: createCopilotFetch(),
+			},
+		});
 	}
 }

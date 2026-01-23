@@ -9,6 +9,8 @@ import { executeAgentCommand } from "./commands/agent.js";
 import { executeSkillCommand } from "./commands/skill.js";
 import { executeGatewayCommand } from "./commands/gateway.js";
 import type { GatewayCommandArgs } from "./commands/gateway.js";
+import { executeProviderCommand } from "./commands/provider.js";
+import type { ProviderCommandArgs } from "./types/provider.js";
 
 /**
  * Parse command line arguments
@@ -22,7 +24,7 @@ function parseArgs(argv: string[]): {
 	outputMode?: string;
 	help: boolean;
 	prompt: string;
-	gatewayOptions?: Record<string, unknown>;
+	commandOptions?: Record<string, unknown>;
 } {
 	const args = argv.slice(2); // Remove 'node' and script path
 
@@ -46,7 +48,7 @@ function parseArgs(argv: string[]): {
 		outputMode: undefined as string | undefined,
 		help: false,
 		prompt: "",
-		gatewayOptions: {} as Record<string, unknown>,
+		commandOptions: {} as Record<string, unknown>,
 	};
 
 	const promptParts: string[] = [];
@@ -68,15 +70,15 @@ function parseArgs(argv: string[]): {
 			const vCount = arg.split("").filter((c) => c === "v").length;
 			parsed.verbosity = vCount >= 2 ? "debug" : "info";
 		} else if (arg.startsWith("--")) {
-			// Parse gateway options
+			// Parse command options
 			const [key, value] = arg.slice(2).split("=");
 			if (value !== undefined) {
-				parsed.gatewayOptions![key] = value;
+				parsed.commandOptions![key] = value;
 			} else if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
-				parsed.gatewayOptions![key] = args[i + 1];
+				parsed.commandOptions![key] = args[i + 1];
 				i++;
 			} else {
-				parsed.gatewayOptions![key] = true;
+				parsed.commandOptions![key] = true;
 			}
 		} else {
 			// Everything else is part of the prompt
@@ -121,6 +123,7 @@ Wingman CLI - AI coding assistant
 Usage:
   wingman agent --agent <name> [options] <prompt>
   wingman skill <subcommand> [args]
+  wingman provider <subcommand> [options]
   wingman gateway <subcommand> [options]
 
 Commands:
@@ -129,6 +132,9 @@ Commands:
   skill install <name>         Install a skill
   skill list                   List installed skills
   skill remove <name>          Remove an installed skill
+  provider login <provider>    Store provider credentials
+  provider logout <provider>   Remove stored provider credentials
+  provider status              Show provider configuration status
   gateway start                Start the gateway server
   gateway stop                 Stop the gateway server
   gateway status               Show gateway status
@@ -147,6 +153,8 @@ Examples:
   wingman skill browse
   wingman skill install pdf
   wingman skill list
+  wingman provider status
+  wingman provider login copilot --token="<token>"
   wingman gateway start
   wingman gateway join ws://localhost:3000/ws --name="agent-1"
 
@@ -214,10 +222,20 @@ async function main() {
 			const commandArgs: GatewayCommandArgs = {
 				subcommand: parsed.subcommand,
 				args: parsed.subcommandArgs,
-				options: parsed.gatewayOptions || {},
+				options: parsed.commandOptions || {},
 			};
 
 			await executeGatewayCommand(commandArgs);
+		} else if (parsed.command === "provider") {
+			const commandArgs: ProviderCommandArgs = {
+				subcommand: parsed.subcommand,
+				args: parsed.subcommandArgs,
+				verbosity,
+				outputMode,
+				options: parsed.commandOptions || {},
+			};
+
+			await executeProviderCommand(commandArgs);
 		} else {
 			console.error(`Unknown command: ${parsed.command}`);
 			console.error('Run "wingman --help" for usage information');
