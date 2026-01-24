@@ -63,7 +63,7 @@ export class WingmanConfigLoader {
 	private getDefaultConfig(): WingmanConfigType {
 		return {
 			logLevel: "info",
-			recursionLimit: 100,
+			recursionLimit: 5000,
 			search: {
 				provider: "duckduckgo",
 				maxResults: 5,

@@ -21,6 +21,7 @@ import {
 	TailscaleDiscoveryService,
 } from "./discovery/index.js";
 import type { DiscoveryService } from "./discovery/types.js";
+import { createLogger, type Logger, type LogLevel } from "@/logger.js";
 
 /**
  * Wingman Gateway Server
@@ -36,6 +37,7 @@ export class GatewayServer {
 	private messagesProcessed: number = 0;
 	private pingInterval: Timer | null = null;
 	private discoveryService: DiscoveryService | null = null;
+	private logger: Logger;
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -56,6 +58,7 @@ export class GatewayServer {
 
 		this.nodeManager = new NodeManager(this.config.maxNodes);
 		this.groupManager = new BroadcastGroupManager();
+		this.logger = createLogger(this.config.logLevel);
 
 		// Initialize auth with token if provided
 		const initialTokens = this.config.authToken
@@ -641,18 +644,28 @@ export class GatewayServer {
 	/**
 	 * Log a message
 	 */
-	private log(level: string, message: string, data?: unknown): void {
-		const levels = ["debug", "info", "warn", "error", "silent"];
-		const configLevel = this.config.logLevel || "info";
-		const configLevelIndex = levels.indexOf(configLevel);
-		const messageLevelIndex = levels.indexOf(level);
+	private log(level: LogLevel, message: string, data?: unknown): void {
+		if (level === "silent") {
+			return;
+		}
 
-		if (messageLevelIndex >= configLevelIndex) {
-			const timestamp = new Date().toISOString();
-			const logMessage = data
-				? `[${timestamp}] [${level.toUpperCase()}] ${message} ${JSON.stringify(data)}`
-				: `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-			console.log(logMessage);
+		const args = data === undefined ? [] : [data];
+
+		switch (level) {
+			case "debug":
+				this.logger.debug(message, ...args);
+				break;
+			case "info":
+				this.logger.info(message, ...args);
+				break;
+			case "warn":
+				this.logger.warn(message, ...args);
+				break;
+			case "error":
+				this.logger.error(message, ...args);
+				break;
+			case "silent":
+				break;
 		}
 	}
 

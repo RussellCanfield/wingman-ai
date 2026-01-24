@@ -1,5 +1,8 @@
 import type { GatewayMessage } from "../types.js";
 import type { TransportClient, TransportOptions } from "./types.js";
+import { createLogger } from "@/logger.js";
+
+const logger = createLogger();
 
 /**
  * WebSocket transport client
@@ -48,7 +51,7 @@ export class WebSocketTransport implements TransportClient {
 							this.messageHandler(message);
 						}
 					} catch (error) {
-						console.error("Failed to parse message:", error);
+						logger.error("Failed to parse message", error);
 					}
 				};
 
@@ -108,7 +111,7 @@ export class WebSocketTransport implements TransportClient {
 		this.reconnectAttempts++;
 		this.reconnectTimer = setTimeout(() => {
 			this.connect().catch((error) => {
-				console.error("Reconnect failed:", error);
+				logger.error("Reconnect failed", error);
 			});
 		}, this.options.reconnectDelay);
 	}

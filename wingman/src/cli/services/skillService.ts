@@ -7,7 +7,7 @@ import type {
 } from "../types/skill.js";
 import type { SkillRepository } from "./skillRepository.js";
 import type { OutputManager } from "../core/outputManager.js";
-import type { Logger } from "../../logger.js";
+import { getLogFilePath, type Logger } from "../../logger.js";
 
 export class SkillService {
 	private readonly workspace: string;
@@ -76,14 +76,17 @@ export class SkillService {
 		} catch (error) {
 			const errorMsg =
 				error instanceof Error ? error.message : String(error);
+			const logFile = getLogFilePath();
 			this.logger.error(`Failed to browse skills: ${errorMsg}`);
 
 			if (this.outputManager.getMode() === "interactive") {
 				console.error(`\nError: ${errorMsg}`);
+				console.error(`Logs: ${logFile}`);
 			} else {
 				this.outputManager.emitEvent({
 					type: "agent-error",
 					error: errorMsg,
+					logFile,
 					timestamp: new Date().toISOString(),
 				});
 			}
@@ -189,14 +192,17 @@ export class SkillService {
 		} catch (error) {
 			const errorMsg =
 				error instanceof Error ? error.message : String(error);
+			const logFile = getLogFilePath();
 			this.logger.error(`Failed to install skill: ${errorMsg}`);
 
 			if (this.outputManager.getMode() === "interactive") {
 				console.error(`\nError: ${errorMsg}`);
+				console.error(`Logs: ${logFile}`);
 			} else {
 				this.outputManager.emitEvent({
 					type: "agent-error",
 					error: errorMsg,
+					logFile,
 					timestamp: new Date().toISOString(),
 				});
 			}
@@ -293,14 +299,17 @@ export class SkillService {
 		} catch (error) {
 			const errorMsg =
 				error instanceof Error ? error.message : String(error);
+			const logFile = getLogFilePath();
 			this.logger.error(`Failed to list skills: ${errorMsg}`);
 
 			if (this.outputManager.getMode() === "interactive") {
 				console.error(`\nError: ${errorMsg}`);
+				console.error(`Logs: ${logFile}`);
 			} else {
 				this.outputManager.emitEvent({
 					type: "agent-error",
 					error: errorMsg,
+					logFile,
 					timestamp: new Date().toISOString(),
 				});
 			}
@@ -339,14 +348,17 @@ export class SkillService {
 		} catch (error) {
 			const errorMsg =
 				error instanceof Error ? error.message : String(error);
+			const logFile = getLogFilePath();
 			this.logger.error(`Failed to remove skill: ${errorMsg}`);
 
 			if (this.outputManager.getMode() === "interactive") {
 				console.error(`\nError: ${errorMsg}`);
+				console.error(`Logs: ${logFile}`);
 			} else {
 				this.outputManager.emitEvent({
 					type: "agent-error",
 					error: errorMsg,
+					logFile,
 					timestamp: new Date().toISOString(),
 				});
 			}

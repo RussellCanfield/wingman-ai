@@ -104,7 +104,7 @@ import { ChatOpenAI } from "@langchain/openai";
 const agent = new WingmanAgent({
   name: "CLI Assistant",
   model: new ChatOpenAI({ model: "gpt-4" }),
-  logger: createLogger('silent')  // No logs interfere with output
+  logger: createLogger('silent')  // Disable log writes
 });
 
 // Debug mode (verbose logging)
@@ -149,11 +149,38 @@ your-cli-tool
 your-cli-tool
 ```
 
+### Log Files
+
+Logs are written to a rolling file by default:
+
+- Default path: `~/.wingman/logs/wingman.log`
+- Rotation: 5 MB per file, 5 backups (`wingman.log.1`, `wingman.log.2`, ...)
+
+You can customize log output with environment variables:
+
+```bash
+# Custom log file path
+export WINGMAN_LOG_FILE=/path/to/wingman.log
+
+# Or set a log directory (uses wingman.log inside)
+export WINGMAN_LOG_DIR=/path/to/logs
+
+# Rotation settings
+export WINGMAN_LOG_MAX_BYTES=10485760
+export WINGMAN_LOG_MAX_FILES=10
+```
+
+To mirror log events into CLI output streams (interactive or JSON), set:
+
+```bash
+export WINGMAN_LOG_TO_OUTPUT=1
+```
+
 ### CLI-Friendly Design
 
 The logging system is designed specifically for CLI consumption:
 
-- **Logs go to stderr** - Keeps stdout clean for actual output
+- **Logs go to a rolling file** - Keeps stdout clean for actual output
 - **Silent mode available** - Completely disable logging for production
 - **No interference** - Debug logs don't mix with user-facing output
 - **Configurable verbosity** - Users control what they see

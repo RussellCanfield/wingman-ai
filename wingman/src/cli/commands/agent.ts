@@ -4,7 +4,7 @@ import type { AgentCommandArgs } from "../types.js";
 import { AgentInvoker } from "../core/agentInvoker.js";
 import { OutputManager } from "../core/outputManager.js";
 import { SessionManager } from "../core/sessionManager.js";
-import { createLogger } from "@/logger.js";
+import { createLogger, getLogFilePath } from "@/logger.js";
 import { join } from "node:path";
 import { App } from "../ui/App.js";
 
@@ -55,6 +55,8 @@ export async function executeAgentCommand(
 		// If no agent specified, list available agents
 		if (!args.agent) {
 			const agents = invoker.listAgents();
+			const logFile = getLogFilePath();
+			logger.error("No agent specified");
 
 			if (outputManager.getMode() === "interactive") {
 				console.log("\nAvailable agents:");
@@ -62,11 +64,13 @@ export async function executeAgentCommand(
 					console.log(`  ${agent.name}: ${agent.description}`);
 				}
 				console.log('\nUsage: wingman agent --agent <name> "your prompt here"');
+				console.error(`\nLogs: ${logFile}`);
 			} else {
 				// JSON mode
 				outputManager.emitEvent({
 					type: "agent-error",
 					error: "No agent specified",
+					logFile,
 					timestamp: new Date().toISOString(),
 				});
 			}
@@ -115,6 +119,8 @@ export async function executeAgentCommand(
 		}
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
+		const logFile = getLogFilePath();
+		logger.error("Agent command failed", { error: errorMsg });
 
 		sessionManager.close();
 
@@ -125,6 +131,7 @@ export async function executeAgentCommand(
 
 		if (outputManager.getMode() === "interactive") {
 			console.error(`\nError: ${errorMsg}`);
+			console.error(`Logs: ${logFile}`);
 			process.exit(1);
 		} else {
 			outputManager.emitAgentError(error as Error);

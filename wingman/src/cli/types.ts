@@ -45,6 +45,7 @@ export interface AgentErrorEvent {
 	type: "agent-error";
 	error: string;
 	stack?: string;
+	logFile?: string;
 	timestamp: string;
 }
 

@@ -94,7 +94,7 @@ describe("Tool Registry", () => {
 			const availableTools = getAvailableTools();
 			const tools = await createTools(availableTools);
 
-			expect(tools).toHaveLength(4);
+			expect(tools).toHaveLength(availableTools.length);
 		});
 	});
 
@@ -107,6 +107,8 @@ describe("Tool Registry", () => {
 				"web_crawler",
 				"command_execute",
 				"think",
+				"code_search",
+				"git_status",
 			]);
 		});
 

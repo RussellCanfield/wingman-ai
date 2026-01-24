@@ -28,24 +28,18 @@ describe("AgentConfigLoader", () => {
 			expect(agents).toEqual([]);
 		});
 
-		it("should load agents from single config file", () => {
-			mkdirSync(TEST_CONFIG_DIR, { recursive: true });
+		it("should load agent from a single agent directory", () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "test-agent");
+			mkdirSync(agentDir, { recursive: true });
 
 			const config = {
-				agents: [
-					{
-						name: "test-agent",
-						description: "A test agent",
-						systemPrompt: "You are a test agent",
-						tools: ["think"],
-					},
-				],
+				name: "test-agent",
+				description: "A test agent",
+				systemPrompt: "You are a test agent",
+				tools: ["think"],
 			};
 
-			writeFileSync(
-				join(TEST_CONFIG_DIR, "agents.config.json"),
-				JSON.stringify(config),
-			);
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
@@ -57,9 +51,11 @@ describe("AgentConfigLoader", () => {
 			expect(agents[0].tools).toHaveLength(1);
 		});
 
-		it("should load agents from directory of JSON files", () => {
-			const agentsDir = join(TEST_CONFIG_DIR, "agents");
-			mkdirSync(agentsDir, { recursive: true });
+		it("should load agents from a directory of agent.json files", () => {
+			const agent1Dir = join(TEST_CONFIG_DIR, "agents", "agent-1");
+			const agent2Dir = join(TEST_CONFIG_DIR, "agents", "agent-2");
+			mkdirSync(agent1Dir, { recursive: true });
+			mkdirSync(agent2Dir, { recursive: true });
 
 			const agent1 = {
 				name: "agent-1",
@@ -74,8 +70,8 @@ describe("AgentConfigLoader", () => {
 				tools: ["web_crawler"],
 			};
 
-			writeFileSync(join(agentsDir, "agent1.json"), JSON.stringify(agent1));
-			writeFileSync(join(agentsDir, "agent2.json"), JSON.stringify(agent2));
+			writeFileSync(join(agent1Dir, "agent.json"), JSON.stringify(agent1));
+			writeFileSync(join(agent2Dir, "agent.json"), JSON.stringify(agent2));
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
@@ -86,49 +82,37 @@ describe("AgentConfigLoader", () => {
 			expect(agents[1].tools).toHaveLength(1);
 		});
 
-		it("should prioritize single file over directory", () => {
-			mkdirSync(TEST_CONFIG_DIR, { recursive: true });
-			const agentsDir = join(TEST_CONFIG_DIR, "agents");
-			mkdirSync(agentsDir, { recursive: true });
+		it("should prioritize agent.json over agent.md", () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "mixed-agent");
+			mkdirSync(agentDir, { recursive: true });
 
-			// Create both single file and directory
-			const singleFileConfig = {
-				agents: [
-					{
-						name: "from-single-file",
-						description: "From single file",
-						systemPrompt: "Single file agent",
-					},
-				],
+			const jsonConfig = {
+				name: "from-json",
+				description: "From JSON",
+				systemPrompt: "JSON agent",
 			};
 
-			const dirConfig = {
-				name: "from-directory",
-				description: "From directory",
-				systemPrompt: "Directory agent",
-			};
+			const markdownConfig = `---
+name: from-markdown
+description: From Markdown
+---
+Markdown agent`;
 
-			writeFileSync(
-				join(TEST_CONFIG_DIR, "agents.config.json"),
-				JSON.stringify(singleFileConfig),
-			);
-			writeFileSync(join(agentsDir, "agent.json"), JSON.stringify(dirConfig));
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(jsonConfig));
+			writeFileSync(join(agentDir, "agent.md"), markdownConfig);
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
 
-			// Should only load from single file
 			expect(agents).toHaveLength(1);
-			expect(agents[0].name).toBe("from-single-file");
+			expect(agents[0].name).toBe("from-json");
 		});
 
 		it("should handle malformed JSON gracefully", () => {
-			mkdirSync(TEST_CONFIG_DIR, { recursive: true });
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "bad-agent");
+			mkdirSync(agentDir, { recursive: true });
 
-			writeFileSync(
-				join(TEST_CONFIG_DIR, "agents.config.json"),
-				"{ invalid json",
-			);
+			writeFileSync(join(agentDir, "agent.json"), "{ invalid json");
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
@@ -137,8 +121,10 @@ describe("AgentConfigLoader", () => {
 		});
 
 		it("should skip invalid agent configs in directory", () => {
-			const agentsDir = join(TEST_CONFIG_DIR, "agents");
-			mkdirSync(agentsDir, { recursive: true });
+			const validDir = join(TEST_CONFIG_DIR, "agents", "valid-agent");
+			const invalidDir = join(TEST_CONFIG_DIR, "agents", "invalid-agent");
+			mkdirSync(validDir, { recursive: true });
+			mkdirSync(invalidDir, { recursive: true });
 
 			const validAgent = {
 				name: "valid-agent",
@@ -151,11 +137,8 @@ describe("AgentConfigLoader", () => {
 				// missing required fields
 			};
 
-			writeFileSync(join(agentsDir, "valid.json"), JSON.stringify(validAgent));
-			writeFileSync(
-				join(agentsDir, "invalid.json"),
-				JSON.stringify(invalidAgent),
-			);
+			writeFileSync(join(validDir, "agent.json"), JSON.stringify(validAgent));
+			writeFileSync(join(invalidDir, "agent.json"), JSON.stringify(invalidAgent));
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
@@ -166,23 +149,16 @@ describe("AgentConfigLoader", () => {
 		});
 
 		it("should create agent with model override", () => {
-			mkdirSync(TEST_CONFIG_DIR, { recursive: true });
-
 			const config = {
-				agents: [
-					{
-						name: "custom-model-agent",
-						description: "Agent with custom model",
-						systemPrompt: "You are a custom agent",
-						model: "anthropic:claude-opus-4-5",
-					},
-				],
+				name: "custom-model-agent",
+				description: "Agent with custom model",
+				systemPrompt: "You are a custom agent",
+				model: "anthropic:claude-opus-4-5",
 			};
 
-			writeFileSync(
-				join(TEST_CONFIG_DIR, "agents.config.json"),
-				JSON.stringify(config),
-			);
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "custom-model-agent");
+			mkdirSync(agentDir, { recursive: true });
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
@@ -192,26 +168,19 @@ describe("AgentConfigLoader", () => {
 		});
 
 		it("should create agent with command_execute tool and custom options", () => {
-			mkdirSync(TEST_CONFIG_DIR, { recursive: true });
-
 			const config = {
-				agents: [
-					{
-						name: "executor-agent",
-						description: "Executes commands",
-						systemPrompt: "You execute commands",
-						tools: ["command_execute"],
-						blockedCommands: ["rm", "mv"],
-						allowScriptExecution: false,
-						commandTimeout: 60000,
-					},
-				],
+				name: "executor-agent",
+				description: "Executes commands",
+				systemPrompt: "You execute commands",
+				tools: ["command_execute"],
+				blockedCommands: ["rm", "mv"],
+				allowScriptExecution: false,
+				commandTimeout: 60000,
 			};
 
-			writeFileSync(
-				join(TEST_CONFIG_DIR, "agents.config.json"),
-				JSON.stringify(config),
-			);
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "executor-agent");
+			mkdirSync(agentDir, { recursive: true });
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
@@ -222,8 +191,8 @@ describe("AgentConfigLoader", () => {
 		});
 
 		it("should ignore non-JSON files in directory", () => {
-			const agentsDir = join(TEST_CONFIG_DIR, "agents");
-			mkdirSync(agentsDir, { recursive: true });
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "valid-agent");
+			mkdirSync(agentDir, { recursive: true });
 
 			const validAgent = {
 				name: "valid-agent",
@@ -231,9 +200,9 @@ describe("AgentConfigLoader", () => {
 				systemPrompt: "Valid",
 			};
 
-			writeFileSync(join(agentsDir, "valid.json"), JSON.stringify(validAgent));
-			writeFileSync(join(agentsDir, "readme.md"), "# README");
-			writeFileSync(join(agentsDir, "notes.txt"), "Some notes");
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(validAgent));
+			writeFileSync(join(agentDir, "readme.md"), "# README");
+			writeFileSync(join(agentDir, "notes.txt"), "Some notes");
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();

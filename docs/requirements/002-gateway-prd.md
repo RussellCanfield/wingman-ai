@@ -922,7 +922,7 @@ gateway.on('message', async (msg) => {
 wingman gateway start
 # Runs as background daemon
 # PID file: ~/.wingman/gateway.pid
-# Logs: ~/.wingman/gateway.log
+# Logs: ~/.wingman/logs/wingman.log
 ```
 
 ### Docker

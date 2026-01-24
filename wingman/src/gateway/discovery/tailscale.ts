@@ -5,8 +5,10 @@ import type {
 } from "./types.js";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { createLogger } from "@/logger.js";
 
 const execAsync = promisify(exec);
+const logger = createLogger();
 
 /**
  * Tailscale-specific gateway information
@@ -88,7 +90,7 @@ export class TailscaleDiscoveryService implements DiscoveryService {
 
 			return gateways;
 		} catch (error) {
-			console.error("Tailscale discovery failed:", error);
+			logger.error("Tailscale discovery failed", error);
 			return [];
 		}
 	}
@@ -123,7 +125,7 @@ export class TailscaleDiscoveryService implements DiscoveryService {
 			return devices;
 		} catch (error) {
 			// If tailscale CLI is not available or fails, return empty list
-			console.error("Failed to get Tailscale devices:", error);
+			logger.error("Failed to get Tailscale devices", error);
 			return [];
 		}
 	}

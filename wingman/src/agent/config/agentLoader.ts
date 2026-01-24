@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, normalize } from "node:path";
+import { isAbsolute, join, normalize } from "node:path";
 import * as yaml from "js-yaml";
 import {
 	validateAgentConfig,
@@ -25,10 +25,17 @@ export class AgentLoader {
 		private wingmanConfig?: WingmanConfigType,
 	) {}
 
+	private resolveConfigPath(...segments: string[]): string {
+		const baseDir = isAbsolute(this.configDir)
+			? this.configDir
+			: join(this.workspace, this.configDir);
+		return join(baseDir, ...segments);
+	}
+
 	loadAllAgentConfigs(): WingmanAgentConfig[] {
 		const agents: WingmanAgentConfig[] = [];
 
-		const agentsDir = join(this.workspace, this.configDir, "agents");
+		const agentsDir = this.resolveConfigPath("agents");
 
 		if (existsSync(agentsDir) && statSync(agentsDir).isDirectory()) {
 			logger.info(`Loading agents from directory: ${agentsDir}`);
@@ -38,18 +45,21 @@ export class AgentLoader {
 				.map((dirent) => dirent.name);
 
 			for (const agentDir of agentDirs) {
-				const agentFilePath = join(agentsDir, agentDir, "agent.md");
+				const agentDirPath = join(agentsDir, agentDir);
+				const agentJsonPath = join(agentDirPath, "agent.json");
+				const agentMarkdownPath = join(agentDirPath, "agent.md");
 
-				if (!existsSync(agentFilePath)) {
-					logger.warn(`Skipping ${agentDir}: agent.md not found`);
+				if (!existsSync(agentJsonPath) && !existsSync(agentMarkdownPath)) {
+					logger.warn(
+						`Skipping ${agentDir}: agent.json or agent.md not found`,
+					);
 					continue;
 				}
 
 				try {
-					const json = this.loadFromMarkdown(
-						agentFilePath,
-						join(agentsDir, agentDir),
-					);
+					const json = existsSync(agentJsonPath)
+						? this.loadFromJson(agentJsonPath)
+						: this.loadFromMarkdown(agentMarkdownPath, agentDirPath);
 
 					const validation = validateAgentConfig(json);
 					if (!validation.success) {
@@ -62,7 +72,9 @@ export class AgentLoader {
 					agents.push(validation.data);
 					logger.info(`Loaded agent config: ${validation.data.name}`);
 				} catch (error) {
-					logger.error(`Failed to load agent from ${agentFilePath}: ${error}`);
+					logger.error(
+						`Failed to load agent from ${agentDirPath}: ${error}`,
+					);
 				}
 			}
 		} else {
@@ -102,6 +114,36 @@ export class AgentLoader {
 	}
 
 	/**
+	 * Normalize legacy config fields
+	 */
+	private normalizeAgentConfig(config: Record<string, any>): Record<string, any> {
+		if (config.subagents && !config.subAgents) {
+			config.subAgents = config.subagents;
+			delete config.subagents;
+		}
+
+		if (Array.isArray(config.subAgents)) {
+			for (const subagent of config.subAgents) {
+				if (subagent?.subagents && !subagent.subAgents) {
+					subagent.subAgents = subagent.subagents;
+					delete subagent.subagents;
+				}
+			}
+		}
+
+		return config;
+	}
+
+	/**
+	 * Load agent configuration from JSON file
+	 */
+	private loadFromJson(filePath: string): any {
+		const content = readFileSync(filePath, "utf-8");
+		const json = JSON.parse(content);
+		return this.normalizeAgentConfig(json);
+	}
+
+	/**
 	 * Load agent configuration from markdown file
 	 */
 	private loadFromMarkdown(filePath: string, agentDir: string): any {
@@ -109,10 +151,10 @@ export class AgentLoader {
 		const { metadata, prompt } = this.parseFrontmatter(content);
 
 		// Build agent config from frontmatter
-		const config: any = {
+		const config = this.normalizeAgentConfig({
 			...metadata,
 			systemPrompt: prompt,
-		};
+		});
 
 		// Resolve subagent prompts if they use promptFile
 		if (config.subAgents && Array.isArray(config.subAgents)) {
@@ -145,25 +187,16 @@ export class AgentLoader {
 	/**
 	 * Load a specific agent configuration by name
 	 */
-	async loadAgent(agentName: string): Promise<WingmanAgent> {
+	async loadAgent(agentName: string): Promise<WingmanAgent | undefined> {
 		let agent: WingmanAgent | undefined = undefined;
 
-		const customAgentsDir = join(
-			this.workspace,
-			this.configDir,
-			"agents",
-			agentName,
-		);
+		const customAgentsDir = this.resolveConfigPath("agents", agentName);
 		if (
 			existsSync(customAgentsDir) &&
 			statSync(customAgentsDir).isDirectory()
 		) {
 			logger.info(`Loading agent from directory: ${customAgentsDir}`);
 			agent = await this.loadFromDirectory(customAgentsDir);
-		}
-
-		if (!agent) {
-			throw new Error(`Agent "${agentName}" not found in ${this.configDir}`);
 		}
 
 		return agent;
@@ -173,20 +206,32 @@ export class AgentLoader {
 	 * Load agents from markdown files in a directory
 	 */
 	private async loadFromDirectory(dirPath: string): Promise<WingmanAgent> {
-		const agentFilePath = join(dirPath, "agent.md");
+		const agentJsonPath = join(dirPath, "agent.json");
+		const agentMarkdownPath = join(dirPath, "agent.md");
+		const hasJson = existsSync(agentJsonPath);
+		const hasMarkdown = existsSync(agentMarkdownPath);
 
 		try {
-			if (!existsSync(agentFilePath)) {
-				throw new Error(`Agent config file not found: ${agentFilePath}`);
+			if (!hasJson && !hasMarkdown) {
+				throw new Error(
+					`Agent config file not found: ${agentJsonPath} or ${agentMarkdownPath}`,
+				);
 			}
 
-			logger.info(`Loading agent from markdown: ${agentFilePath}`);
-			const json = this.loadFromMarkdown(agentFilePath, dirPath);
+			const json = hasJson
+				? this.loadFromJson(agentJsonPath)
+				: this.loadFromMarkdown(agentMarkdownPath, dirPath);
+
+			logger.info(
+				`Loading agent from ${hasJson ? "JSON" : "markdown"}: ${
+					hasJson ? agentJsonPath : agentMarkdownPath
+				}`,
+			);
 
 			const validation = validateAgentConfig(json);
 			if (!validation.success) {
 				throw new Error(
-					`Failed to validate ${agentFilePath}:\n${validation.error}`,
+					`Failed to validate ${hasJson ? agentJsonPath : agentMarkdownPath}:\n${validation.error}`,
 				);
 			}
 

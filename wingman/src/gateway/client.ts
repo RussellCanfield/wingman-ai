@@ -12,6 +12,7 @@ import {
 	type TransportClient,
 	type TransportType,
 } from "./transport/index.js";
+import { createLogger, type Logger } from "@/logger.js";
 
 /**
  * Event handlers for the gateway client
@@ -55,6 +56,7 @@ export class GatewayClient {
 	private reconnectDelay = 1000;
 	private pingInterval: Timer | null = null;
 	private transportType: TransportType | "auto";
+	private logger: Logger;
 
 	// Legacy WebSocket support (deprecated, use transport instead)
 	private ws: WebSocket | null = null;
@@ -70,6 +72,7 @@ export class GatewayClient {
 		this.capabilities = options.capabilities;
 		this.events = options.events || {};
 		this.transportType = options.transport || "auto";
+		this.logger = createLogger();
 	}
 
 	/**
@@ -94,7 +97,7 @@ export class GatewayClient {
 			this.events.connected?.();
 			this.register();
 		} catch (error) {
-			console.error("Transport connection failed:", error);
+			this.logger.error("Transport connection failed", error);
 			throw error;
 		}
 	}
@@ -288,7 +291,7 @@ export class GatewayClient {
 					break;
 			}
 		} catch (error) {
-			console.error("Failed to handle message:", error);
+			this.logger.error("Failed to handle message", error);
 		}
 	}
 
@@ -360,7 +363,7 @@ export class GatewayClient {
 	private handleError(msg: GatewayMessage): void {
 		const error = msg.payload as ErrorPayload;
 		this.events.error?.(error);
-		console.error(`Gateway error: ${error.code} - ${error.message}`);
+		this.logger.error(`Gateway error: ${error.code} - ${error.message}`);
 	}
 
 	/**
@@ -378,12 +381,12 @@ export class GatewayClient {
 		if (this.reconnectAttempts < this.maxReconnectAttempts) {
 			this.reconnectAttempts++;
 			const delay = this.reconnectDelay * this.reconnectAttempts;
-			console.log(
+			this.logger.info(
 				`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
 			);
 			setTimeout(() => this.connect(), delay);
 		} else {
-			console.error("Max reconnection attempts reached");
+			this.logger.error("Max reconnection attempts reached");
 		}
 	}
 
@@ -416,7 +419,7 @@ export class GatewayClient {
 			return;
 		}
 
-		console.error("No transport is connected");
+		this.logger.error("No transport is connected");
 	}
 
 	/**

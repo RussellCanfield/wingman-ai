@@ -1,5 +1,8 @@
 import { tool } from "langchain";
 import { z } from "zod";
+import { createLogger } from "@/logger.js";
+
+const logger = createLogger();
 
 interface CrawlResult {
 	url: string;
@@ -180,7 +183,7 @@ async function crawlMultiplePages(
 			}
 		} catch (error) {
 			// Log error but continue crawling
-			console.error(`Failed to crawl ${url}:`, error);
+			logger.error(`Failed to crawl ${url}`, error);
 		}
 	}
 

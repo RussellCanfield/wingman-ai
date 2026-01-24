@@ -1,5 +1,8 @@
 import type { GatewayMessage } from "../types.js";
 import type { TransportClient, TransportOptions } from "./types.js";
+import { createLogger } from "@/logger.js";
+
+const logger = createLogger();
 
 /**
  * HTTP bridge transport client
@@ -156,7 +159,7 @@ export class HTTPBridgeTransport implements TransportClient {
 					break;
 				}
 
-				console.error("Polling error:", error);
+				logger.error("Polling error", error);
 
 				// Wait before retrying
 				if (this.polling && this.connected) {

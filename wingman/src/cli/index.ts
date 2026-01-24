@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import type { LogLevel } from "../logger.js";
+import { createLogger, getLogFilePath, type LogLevel } from "../logger.js";
 import type { OutputMode, AgentCommandArgs } from "./types.js";
 import type { SkillCommandArgs } from "./types/skill.js";
 import { WingmanConfigLoader } from "./config/loader.js";
@@ -237,14 +237,23 @@ async function main() {
 
 			await executeProviderCommand(commandArgs);
 		} else {
+			const logFile = getLogFilePath();
+			createLogger(verbosity).error(`Unknown command: ${parsed.command}`);
 			console.error(`Unknown command: ${parsed.command}`);
 			console.error('Run "wingman --help" for usage information');
+			console.error(`Logs: ${logFile}`);
 			process.exit(1);
 		}
 	} catch (error) {
+		const logFile = getLogFilePath();
+		createLogger().error(
+			"Fatal error",
+			error instanceof Error ? error.message : String(error),
+		);
 		console.error(
 			`Fatal error: ${error instanceof Error ? error.message : String(error)}`,
 		);
+		console.error(`Logs: ${logFile}`);
 		process.exit(1);
 	}
 }

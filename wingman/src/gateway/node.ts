@@ -1,6 +1,9 @@
 import type { ServerWebSocket } from "bun";
 import type { Node, NodeMetadata, GatewayMessage } from "./types.js";
 import { randomBytes } from "crypto";
+import { createLogger } from "@/logger.js";
+
+const logger = createLogger();
 
 /**
  * Manages connected nodes in the gateway
@@ -203,7 +206,7 @@ export class NodeManager {
 			node.ws.send(JSON.stringify(message));
 			return true;
 		} catch (error) {
-			console.error(`Failed to send message to node ${nodeId}:`, error);
+			logger.error(`Failed to send message to node ${nodeId}`, error);
 			return false;
 		}
 	}

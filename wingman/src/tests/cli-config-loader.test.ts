@@ -27,7 +27,7 @@ describe("CLI Config Loader", () => {
 
 			expect(config).toEqual({
 				logLevel: "info",
-				recursionLimit: 100,
+				recursionLimit: 5000,
 				search: {
 					provider: "duckduckgo",
 					maxResults: 5,
@@ -51,11 +51,11 @@ describe("CLI Config Loader", () => {
 			expect(config.logLevel).toBe("info");
 		});
 
-		it("should have default recursion limit of 100", () => {
+		it("should have default recursion limit of 5000", () => {
 			const loader = new WingmanConfigLoader(".wingman", testDir);
 			const config = loader.loadConfig();
 
-			expect(config.recursionLimit).toBe(100);
+			expect(config.recursionLimit).toBe(5000);
 		});
 
 		it("should have default search provider as duckduckgo", () => {
@@ -219,12 +219,12 @@ describe("CLI Config Loader", () => {
 			const loader = new WingmanConfigLoader(".wingman", testDir);
 			const config = loader.loadConfig();
 
-			expect(config.recursionLimit).toBe(100);
+			expect(config.recursionLimit).toBe(5000);
 		});
 
 		it("should return default config for invalid recursion limit (too high)", () => {
 			const configData = {
-				recursionLimit: 11,
+				recursionLimit: 1000001,
 			};
 
 			writeFileSync(
@@ -235,7 +235,7 @@ describe("CLI Config Loader", () => {
 			const loader = new WingmanConfigLoader(".wingman", testDir);
 			const config = loader.loadConfig();
 
-			expect(config.recursionLimit).toBe(100);
+			expect(config.recursionLimit).toBe(5000);
 		});
 
 		it("should return default config for invalid search provider", () => {

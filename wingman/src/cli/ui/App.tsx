@@ -30,7 +30,11 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 	const processedToolCallIdsRef = useRef<Set<string>>(new Set());
 	const processedToolResultIdsRef = useRef<Set<string>>(new Set());
 	const [isStreaming, setIsStreaming] = useState(false);
-	const [error, setError] = useState<{ message: string; stack?: string }>();
+	const [error, setError] = useState<{
+		message: string;
+		stack?: string;
+		logFile?: string;
+	}>();
 	const [isComplete, setIsComplete] = useState(false);
 
 	useEffect(() => {
@@ -266,6 +270,7 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 					setError({
 						message: event.error,
 						stack: event.stack,
+						logFile: event.logFile,
 					});
 					break;
 			}
@@ -310,7 +315,11 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 
 			{error && (
 				<Box marginTop={1}>
-					<ErrorDisplay error={error.message} stack={error.stack} />
+					<ErrorDisplay
+						error={error.message}
+						stack={error.stack}
+						logFile={error.logFile}
+					/>
 				</Box>
 			)}
 

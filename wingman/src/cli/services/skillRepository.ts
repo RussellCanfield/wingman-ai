@@ -4,6 +4,9 @@ import type {
 	SkillMetadata,
 	SkillRepositoryOptions,
 } from "../types/skill.js";
+import { createLogger } from "@/logger.js";
+
+const logger = createLogger();
 
 /**
  * GitHub API client for interacting with the skills repository
@@ -87,8 +90,9 @@ export class SkillRepository {
 						});
 					} catch (error) {
 						// Skip skills that can't be read
-						console.warn(
-							`Warning: Could not read skill ${item.name}: ${error instanceof Error ? error.message : String(error)}`,
+						logger.warn(
+							`Could not read skill ${item.name}`,
+							error instanceof Error ? error.message : String(error),
 						);
 					}
 				}

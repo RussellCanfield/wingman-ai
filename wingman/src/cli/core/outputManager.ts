@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { OutputMode, OutputEvent } from "../types.js";
+import { getLogFilePath } from "../../logger.js";
 
 export class OutputManager extends EventEmitter {
 	private mode: OutputMode;
@@ -97,11 +98,13 @@ export class OutputManager extends EventEmitter {
 	emitAgentError(error: Error | string): void {
 		const errorMsg = error instanceof Error ? error.message : error;
 		const stack = error instanceof Error ? error.stack : undefined;
+		const logFile = getLogFilePath();
 
 		this.emitEvent({
 			type: "agent-error",
 			error: errorMsg,
 			stack,
+			logFile,
 			timestamp: new Date().toISOString(),
 		});
 	}

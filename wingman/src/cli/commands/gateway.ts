@@ -1,6 +1,17 @@
 import { GatewayServer, GatewayDaemon, GatewayClient } from "../../gateway/index.js";
 import type { GatewayConfig } from "../../gateway/types.js";
 import { readFileSync } from "fs";
+import { createLogger, getLogFilePath } from "@/logger.js";
+
+const logger = createLogger();
+const logFile = getLogFilePath();
+
+function reportGatewayError(context: string, error: unknown): void {
+	const errorMsg = error instanceof Error ? error.message : String(error);
+	logger.error(context, errorMsg);
+	console.error(`✗ ${context}: ${errorMsg}`);
+	console.error(`Logs: ${logFile}`);
+}
 
 /**
  * Gateway command arguments
@@ -98,9 +109,7 @@ async function handleStart(options: Record<string, unknown>): Promise<void> {
 			);
 		}
 	} catch (error) {
-		console.error(
-			`✗ Failed to start gateway: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Failed to start gateway", error);
 		process.exit(1);
 	}
 }
@@ -115,9 +124,7 @@ async function handleStop(): Promise<void> {
 		await daemon.stop();
 		console.log("✓ Gateway stopped successfully");
 	} catch (error) {
-		console.error(
-			`✗ Failed to stop gateway: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Failed to stop gateway", error);
 		process.exit(1);
 	}
 }
@@ -132,9 +139,7 @@ async function handleRestart(): Promise<void> {
 		await daemon.restart();
 		console.log("✓ Gateway restarted successfully");
 	} catch (error) {
-		console.error(
-			`✗ Failed to restart gateway: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Failed to restart gateway", error);
 		process.exit(1);
 	}
 }
@@ -223,9 +228,7 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 		// Keep the process running
 		await new Promise(() => {});
 	} catch (error) {
-		console.error(
-			`✗ Failed to start gateway: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Failed to start gateway", error);
 		process.exit(1);
 	}
 }
@@ -277,7 +280,9 @@ async function handleJoin(
 				console.log(JSON.stringify(message, null, 2));
 			},
 			error: (error) => {
+				logger.error("Gateway error event", error.message);
 				console.error(`\n✗ Error: ${error.message}`);
+				console.error(`Logs: ${logFile}`);
 			},
 			disconnected: () => {
 				console.log("\n✗ Disconnected from gateway");
@@ -298,9 +303,7 @@ async function handleJoin(
 		// Keep the process running
 		await new Promise(() => {});
 	} catch (error) {
-		console.error(
-			`✗ Failed to connect: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Failed to connect", error);
 		process.exit(1);
 	}
 }
@@ -356,9 +359,7 @@ async function handleDiscover(options: Record<string, unknown>): Promise<void> {
 			console.log("To connect to a gateway:");
 			console.log(`  wingman gateway join <url> --name "my-node"`);
 		} catch (error) {
-			console.error(
-				`✗ Discovery failed: ${error instanceof Error ? error.message : String(error)}`,
-			);
+			reportGatewayError("Discovery failed", error);
 			process.exit(1);
 		}
 		return;
@@ -399,9 +400,7 @@ async function handleDiscover(options: Record<string, unknown>): Promise<void> {
 		console.log("To connect to a gateway:");
 		console.log(`  wingman gateway join <url> --name "my-node"`);
 	} catch (error) {
-		console.error(
-			`✗ Discovery failed: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Discovery failed", error);
 		process.exit(1);
 	}
 }
@@ -442,9 +441,7 @@ async function handleHealth(options: Record<string, unknown>): Promise<void> {
 		console.log("Gateway Health:");
 		console.log(JSON.stringify(health, null, 2));
 	} catch (error) {
-		console.error(
-			`✗ Failed to check health: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Failed to check health", error);
 		process.exit(1);
 	}
 }
@@ -458,7 +455,9 @@ async function handleTunnel(
 ): Promise<void> {
 	const sshHost = args[0];
 	if (!sshHost) {
+		logger.error("SSH host required");
 		console.error("✗ SSH host required");
+		console.error(`Logs: ${logFile}`);
 		console.log("\nUsage:");
 		console.log("  wingman gateway tunnel user@host [options]");
 		console.log("\nOptions:");
@@ -503,7 +502,9 @@ async function handleTunnel(
 	await new Promise((resolve) => setTimeout(resolve, 2000));
 
 	if (sshProcess.exitCode !== null) {
+		logger.error("Failed to create SSH tunnel");
 		console.error("✗ Failed to create SSH tunnel");
+		console.error(`Logs: ${logFile}`);
 		process.exit(1);
 	}
 
@@ -543,7 +544,9 @@ async function handleTunnel(
 					console.log(JSON.stringify(message, null, 2));
 				},
 				error: (error) => {
+					logger.error("Gateway error event", error.message);
 					console.error(`\n✗ Error: ${error.message}`);
+					console.error(`Logs: ${logFile}`);
 				},
 				disconnected: () => {
 					console.log("\n✗ Disconnected from gateway");
@@ -573,9 +576,7 @@ async function handleTunnel(
 		// Keep the process running
 		await new Promise(() => {});
 	} catch (error) {
-		console.error(
-			`✗ Failed to connect: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		reportGatewayError("Failed to connect", error);
 		sshProcess.kill();
 		process.exit(1);
 	}

@@ -11,8 +11,8 @@ export function createBridgedLogger(
 	level: LogLevel = "info",
 ) {
 	return createEventLogger((event) => {
-		// Don't emit if level is silent
-		if (event.level !== "silent") {
+		const emitToOutput = process.env.WINGMAN_LOG_TO_OUTPUT === "1";
+		if (emitToOutput && event.level !== "silent") {
 			outputManager.emitLog(event.level, event.message, event.args);
 		}
 	}, level);

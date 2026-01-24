@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import type { GatewayConfig, DaemonStatus } from "./types.js";
+import { getLogFilePath, writeToLogFile } from "@/logger.js";
 
 /**
  * Daemon manager for running the gateway in the background
@@ -15,7 +16,7 @@ export class GatewayDaemon {
 	constructor() {
 		const wingmanDir = join(homedir(), ".wingman");
 		this.pidFile = join(wingmanDir, "gateway.pid");
-		this.logFile = join(wingmanDir, "gateway.log");
+		this.logFile = getLogFilePath();
 		this.configFile = join(wingmanDir, "gateway.json");
 	}
 
@@ -52,12 +53,11 @@ export class GatewayDaemon {
 		writeFileSync(this.pidFile, child.pid!.toString());
 
 		// Redirect output to log file
-		const logStream = Bun.file(this.logFile).writer();
 		child.stdout?.on("data", (data) => {
-			logStream.write(data);
+			writeToLogFile(data);
 		});
 		child.stderr?.on("data", (data) => {
-			logStream.write(data);
+			writeToLogFile(data);
 		});
 
 		// Unref the child process so parent can exit

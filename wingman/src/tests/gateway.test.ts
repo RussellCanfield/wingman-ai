@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { GatewayServer, GatewayClient } from "../gateway/index.js";
 
-describe("Gateway", () => {
+const isBun = typeof (globalThis as any).Bun !== "undefined";
+const describeIfBun = isBun ? describe : describe.skip;
+
+describeIfBun("Gateway", () => {
 	let server: GatewayServer;
 	const port = 3002;
 

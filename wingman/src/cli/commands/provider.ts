@@ -10,6 +10,7 @@ import {
 } from "@/providers/credentials.js";
 import { getProviderSpec, listProviderSpecs } from "@/providers/registry.js";
 import { loginWithLocalCallback } from "@/providers/oauth.js";
+import { createLogger, getLogFilePath } from "@/logger.js";
 
 /**
  * Execute provider command
@@ -44,9 +45,12 @@ export async function executeProviderCommand(
 		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		const logFile = getLogFilePath();
+		createLogger().error("Provider command failed", { error: message });
 
 		if (outputManager.getMode() === "interactive") {
 			console.error(`\nError: ${message}`);
+			console.error(`Logs: ${logFile}`);
 			process.exit(1);
 		} else {
 			outputManager.emitAgentError(error as Error);

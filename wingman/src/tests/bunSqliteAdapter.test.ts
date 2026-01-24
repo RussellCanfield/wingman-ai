@@ -1,11 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { BunSqliteAdapter } from "../cli/core/database/bunSqliteAdapter.js";
-import { Database } from "bun:sqlite";
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { unlink } from "node:fs/promises";
 
-describe("BunSqliteAdapter", () => {
+const isBun = typeof (globalThis as any).Bun !== "undefined";
+const describeIfBun = isBun ? describe : describe.skip;
+
+describeIfBun("BunSqliteAdapter", () => {
 	const testDbPath = "./test-adapter.db";
-	let adapter: BunSqliteAdapter;
+	let BunSqliteAdapter: any;
+	let Database: any;
+	let adapter: any;
+
+	beforeAll(async () => {
+		const module = await import("../cli/core/database/bunSqliteAdapter.js");
+		BunSqliteAdapter = module.BunSqliteAdapter;
+		const sqliteModule = await import("bun:sqlite");
+		Database = sqliteModule.Database;
+	});
 
 	beforeEach(() => {
 		// Create a new adapter for each test

@@ -4,6 +4,7 @@ import { SkillService } from "../services/skillService.js";
 import { OutputManager } from "../core/outputManager.js";
 import { createBridgedLogger } from "../core/loggerBridge.js";
 import { WingmanConfigLoader } from "../config/loader.js";
+import { getLogFilePath } from "@/logger.js";
 
 export interface SkillCommandOptions {
 	workspace?: string;
@@ -95,9 +96,12 @@ export async function executeSkillCommand(
 	} catch (error) {
 		const errorMsg =
 			error instanceof Error ? error.message : String(error);
+		const logFile = getLogFilePath();
+		logger.error("Skill command failed", { error: errorMsg });
 
 		if (outputManager.getMode() === "interactive") {
 			console.error(`\nError: ${errorMsg}`);
+			console.error(`Logs: ${logFile}`);
 			process.exit(1);
 		} else {
 			outputManager.emitAgentError(error as Error);
