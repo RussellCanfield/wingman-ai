@@ -2,6 +2,7 @@ import { GatewayServer, GatewayDaemon, GatewayClient } from "../../gateway/index
 import type { GatewayConfig } from "../../gateway/types.js";
 import { readFileSync } from "fs";
 import { createLogger, getLogFilePath } from "@/logger.js";
+import { WingmanConfigLoader } from "../config/loader.js";
 
 const logger = createLogger();
 const logFile = getLogFilePath();
@@ -71,11 +72,30 @@ export async function executeGatewayCommand(
  * Start the gateway as a daemon
  */
 async function handleStart(options: Record<string, unknown>): Promise<void> {
+	const configLoader = new WingmanConfigLoader();
+	const wingmanConfig = configLoader.loadConfig();
+	const gatewayDefaults = wingmanConfig.gateway;
+
+	const authFlag = Boolean(options.auth);
+	const authMode = (options["auth-mode"] || options.authMode || (authFlag ? "token" : undefined)) as
+		| "token"
+		| "password"
+		| "none"
+		| undefined;
+	const auth = authMode
+		? {
+				mode: authMode,
+				token: options.token as string | undefined,
+				password: options.password as string | undefined,
+			}
+		: gatewayDefaults.auth;
+
 	const config: GatewayConfig = {
-		port: (options.port as number) || 3000,
-		host: (options.host as string) || "0.0.0.0",
-		requireAuth: (options.auth as boolean) || false,
-		authToken: options.token as string | undefined,
+		port: (options.port as number) || gatewayDefaults.port || 18789,
+		host: (options.host as string) || gatewayDefaults.host || "127.0.0.1",
+		requireAuth: auth?.mode !== "none",
+		authToken: auth?.token,
+		auth,
 		maxNodes: (options.maxNodes as number) || 1000,
 		pingInterval: (options.pingInterval as number) || 30000,
 		pingTimeout: (options.pingTimeout as number) || 60000,
@@ -98,11 +118,16 @@ async function handleStart(options: Record<string, unknown>): Promise<void> {
 		console.log("✓ Gateway started successfully");
 		console.log(`  URL: ws://${config.host}:${config.port}/ws`);
 		console.log(`  Health: http://${config.host}:${config.port}/health`);
+		const controlUi = wingmanConfig.gateway?.controlUi;
+		if (controlUi?.enabled) {
+			const uiPort = controlUi.port || 18790;
+			console.log(`  Control UI: http://${config.host}:${uiPort}/`);
+		}
 		console.log(`  Logs: ${daemon.getLogFile()}`);
 
-		if (config.requireAuth && !config.authToken) {
+		if (config.auth?.mode === "token" && !config.auth.token) {
 			console.log(
-				"\n⚠ Authentication is enabled but no token was provided.",
+				"\n⚠ Token auth is enabled but no token was provided.",
 			);
 			console.log(
 				'  Run "wingman gateway token --generate" to create a token.',
@@ -168,7 +193,8 @@ async function handleStatus(): Promise<void> {
 	if (status.config) {
 		console.log(`  Host: ${status.config.host}`);
 		console.log(`  Port: ${status.config.port}`);
-		console.log(`  Auth Required: ${status.config.requireAuth}`);
+		const authMode = status.config.auth?.mode || "none";
+		console.log(`  Auth Mode: ${authMode}`);
 		console.log(`  Max Nodes: ${status.config.maxNodes}`);
 	}
 	console.log(`  Log File: ${daemon.getLogFile()}`);
@@ -188,11 +214,29 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 		);
 		config = JSON.parse(configStr);
 	} else {
+		const configLoader = new WingmanConfigLoader();
+		const wingmanConfig = configLoader.loadConfig();
+		const gatewayDefaults = wingmanConfig.gateway;
+		const authFlag = Boolean(options.auth);
+		const authMode = (options["auth-mode"] || options.authMode || (authFlag ? "token" : undefined)) as
+			| "token"
+			| "password"
+			| "none"
+			| undefined;
+		const auth = authMode
+			? {
+					mode: authMode,
+					token: options.token as string | undefined,
+					password: options.password as string | undefined,
+				}
+			: gatewayDefaults.auth;
+
 		config = {
-			port: (options.port as number) || 3000,
-			host: (options.host as string) || "0.0.0.0",
-			requireAuth: (options.auth as boolean) || false,
-			authToken: options.token as string | undefined,
+			port: (options.port as number) || gatewayDefaults.port || 18789,
+			host: (options.host as string) || gatewayDefaults.host || "127.0.0.1",
+			requireAuth: auth?.mode !== "none",
+			authToken: auth?.token,
+			auth,
 			maxNodes: (options.maxNodes as number) || 1000,
 			pingInterval: (options.pingInterval as number) || 30000,
 			pingTimeout: (options.pingTimeout as number) || 60000,
@@ -221,8 +265,8 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 		console.log(`  URL: ws://${config.host}:${config.port}/ws`);
 		console.log(`  Health: http://${config.host}:${config.port}/health`);
 
-		if (config.requireAuth && config.authToken) {
-			console.log(`  Auth Token: ${config.authToken}`);
+		if (config.auth?.mode === "token" && config.auth.token) {
+			console.log(`  Auth Token: ${config.auth.token}`);
 		}
 
 		// Keep the process running
@@ -240,7 +284,7 @@ async function handleJoin(
 	args: string[],
 	options: Record<string, unknown>,
 ): Promise<void> {
-	const url = args[0] || `ws://localhost:3000/ws`;
+	const url = args[0] || `ws://localhost:18789/ws`;
 	const name = (options.name as string) || `node-${Date.now()}`;
 	const token = options.token as string | undefined;
 	const group = options.group as string | undefined;
@@ -428,7 +472,7 @@ async function handleToken(options: Record<string, unknown>): Promise<void> {
  */
 async function handleHealth(options: Record<string, unknown>): Promise<void> {
 	const host = (options.host as string) || "localhost";
-	const port = (options.port as number) || 3000;
+	const port = (options.port as number) || 18789;
 	const url = `http://${host}:${port}/health`;
 
 	try {
@@ -468,7 +512,7 @@ async function handleTunnel(
 		process.exit(1);
 	}
 
-	const remotePort = (options.port as number) || 3000;
+	const remotePort = (options.port as number) || 18789;
 	const localPort = (options.localPort as number) || 0; // 0 = random port
 	const name = (options.name as string) || `tunnel-node-${Date.now()}`;
 	const group = options.group as string | undefined;
@@ -626,10 +670,12 @@ Subcommands:
   health               Check gateway health
 
 Start Options:
-  --port <number>      Port to listen on (default: 3000)
-  --host <string>      Host to bind to (default: 0.0.0.0)
-  --auth               Enable authentication
-  --token <string>     Authentication token
+  --port <number>      Port to listen on (default: 18789)
+  --host <string>      Host to bind to (default: 127.0.0.1)
+  --auth               Enable token authentication (legacy shortcut)
+  --auth-mode <mode>   token | password | none
+  --token <string>     Authentication token (token mode)
+  --password <string>  Authentication password (password mode)
   --max-nodes <number> Maximum number of nodes (default: 1000)
   --log-level <level>  Log level (debug|info|warn|error|silent)
   --discovery <method> Discovery method: mdns, tailscale
@@ -647,7 +693,7 @@ Discover Options:
   --tailscale          Discover on Tailscale network instead of LAN
 
 Tunnel Options:
-  --port <number>      Gateway port on remote host (default: 3000)
+  --port <number>      Gateway port on remote host (default: 18789)
   --local-port <number> Local port for tunnel (default: random)
   --name <string>      Node name after connecting
   --group <string>     Auto-join broadcast group
@@ -657,7 +703,7 @@ Token Options:
 
 Health Options:
   --host <string>      Gateway host (default: localhost)
-  --port <number>      Gateway port (default: 3000)
+  --port <number>      Gateway port (default: 18789)
 
 Examples:
   # Start gateway locally
@@ -685,17 +731,17 @@ Examples:
   wingman gateway discover --tailscale --verbose
 
   # Join a gateway
-  wingman gateway join ws://localhost:3000/ws --name="agent-1" --group="swarm"
+  wingman gateway join ws://localhost:18789/ws --name="agent-1" --group="swarm"
 
   # Join via HTTP bridge (firewall traversal)
-  wingman gateway join http://localhost:3000 --transport http --name="agent-1"
+  wingman gateway join http://localhost:18789 --transport http --name="agent-1"
 
   # Auto-select transport
-  wingman gateway join http://localhost:3000 --transport auto --name="agent-1"
+  wingman gateway join http://localhost:18789 --transport auto --name="agent-1"
 
   # Connect via SSH tunnel
   wingman gateway tunnel user@remote-host --name="tunnel-node"
-  wingman gateway tunnel user@remote-host --port 3000 --group="swarm"
+  wingman gateway tunnel user@remote-host --port 18789 --group="swarm"
 
   # Check status
   wingman gateway status

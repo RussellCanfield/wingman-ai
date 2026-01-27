@@ -1,5 +1,5 @@
-import { spawn } from "child_process";
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
+import { spawn, spawnSync } from "child_process";
+import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import type { GatewayConfig, DaemonStatus } from "./types.js";
@@ -20,6 +20,22 @@ export class GatewayDaemon {
 		this.configFile = join(wingmanDir, "gateway.json");
 	}
 
+	private resolveRuntime(): string {
+		const isBunRuntime = typeof (globalThis as any).Bun !== "undefined";
+		if (isBunRuntime) {
+			return process.execPath;
+		}
+
+		const probe = spawnSync("bun", ["--version"], { stdio: "ignore" });
+		if (probe.error || probe.status !== 0) {
+			throw new Error(
+				"Bun runtime is required to start the gateway. Install Bun from https://bun.sh and retry.",
+			);
+		}
+
+		return "bun";
+	}
+
 	/**
 	 * Start the gateway as a daemon
 	 */
@@ -36,8 +52,9 @@ export class GatewayDaemon {
 		const scriptPath = process.argv[1];
 
 		// Spawn the daemon process
+		const runtime = this.resolveRuntime();
 		const child = spawn(
-			process.execPath,
+			runtime,
 			[scriptPath, "gateway", "run", "--daemon"],
 			{
 				detached: true,
@@ -187,12 +204,9 @@ export class GatewayDaemon {
 	 */
 	private getProcessUptime(pid: number): number | undefined {
 		try {
-			// This is a simple implementation
-			// On Unix systems, you could read /proc/[pid]/stat for more accurate uptime
-			const stats = readFileSync(this.pidFile, "utf-8");
-			const pidFileStats = Bun.file(this.pidFile);
-			// Return time since PID file was created as approximation
-			return Date.now() - pidFileStats.lastModified;
+			// Approximate uptime by PID file creation time.
+			const pidFileStats = statSync(this.pidFile);
+			return Date.now() - pidFileStats.mtimeMs;
 		} catch (error) {
 			return undefined;
 		}

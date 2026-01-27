@@ -41,6 +41,24 @@ describe("CLI Config Loader", () => {
 					repositoryName: "skills",
 					skillsDirectory: "skills",
 				},
+				gateway: {
+					host: "127.0.0.1",
+					port: 18789,
+					auth: {
+						mode: "none",
+						allowTailscale: false,
+					},
+					controlUi: {
+						enabled: true,
+						port: 18790,
+						pairingRequired: true,
+						allowInsecureAuth: false,
+					},
+				},
+				agents: {
+					list: [],
+					bindings: [],
+				},
 			});
 		});
 
@@ -118,7 +136,7 @@ describe("CLI Config Loader", () => {
 			const loader = new WingmanConfigLoader(".wingman", testDir);
 			const config = loader.loadConfig();
 
-			expect(config).toEqual(configData);
+			expect(config).toMatchObject(configData);
 		});
 
 		it("should handle all valid log levels", () => {

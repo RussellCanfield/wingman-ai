@@ -1,0 +1,107 @@
+import React from "react";
+import { CommandDeckPanel } from "../components/CommandDeckPanel";
+import { EventLogPanel } from "../components/EventLogPanel";
+import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
+import type { ProviderStatus } from "../types";
+
+type CommandDeckPageProps = {
+	wsUrl: string;
+	token: string;
+	password: string;
+	connecting: boolean;
+	connected: boolean;
+	authHint: string;
+	autoConnect: boolean;
+	autoConnectStatus?: string;
+	onAutoConnectChange: (value: boolean) => void;
+	deviceId: string;
+	eventLog: string[];
+	providers: ProviderStatus[];
+	providersLoading: boolean;
+	providersUpdatedAt?: string;
+	credentialsPath?: string;
+	onWsUrlChange: (value: string) => void;
+	onTokenChange: (value: string) => void;
+	onPasswordChange: (value: string) => void;
+	onConnect: () => void;
+	onDisconnect: () => void;
+	onRefresh: () => void;
+	onResetDevice: () => void;
+	onRefreshProviders: () => void;
+	onSaveProviderToken: (providerName: string, token: string) => Promise<boolean>;
+	onClearProviderToken: (providerName: string) => Promise<boolean>;
+};
+
+export const CommandDeckPage: React.FC<CommandDeckPageProps> = ({
+	wsUrl,
+	token,
+	password,
+	connecting,
+	connected,
+	authHint,
+	autoConnect,
+	autoConnectStatus,
+	onAutoConnectChange,
+	deviceId,
+	eventLog,
+	providers,
+	providersLoading,
+	providersUpdatedAt,
+	credentialsPath,
+	onWsUrlChange,
+	onTokenChange,
+	onPasswordChange,
+	onConnect,
+	onDisconnect,
+	onRefresh,
+	onResetDevice,
+	onRefreshProviders,
+	onSaveProviderToken,
+	onClearProviderToken,
+}) => {
+	return (
+		<section className="grid gap-6 lg:grid-cols-[360px_1fr]">
+			<CommandDeckPanel
+				wsUrl={wsUrl}
+				token={token}
+				password={password}
+				connecting={connecting}
+				connected={connected}
+				authHint={authHint}
+				autoConnect={autoConnect}
+				autoConnectStatus={autoConnectStatus}
+				onAutoConnectChange={onAutoConnectChange}
+				deviceId={deviceId}
+				onWsUrlChange={onWsUrlChange}
+				onTokenChange={onTokenChange}
+				onPasswordChange={onPasswordChange}
+				onConnect={onConnect}
+				onDisconnect={onDisconnect}
+				onRefresh={onRefresh}
+				onResetDevice={onResetDevice}
+			/>
+			<div className="space-y-6">
+				<EventLogPanel eventLog={eventLog} />
+				<ProviderConfigPanel
+					providers={providers}
+					loading={providersLoading}
+					credentialsPath={credentialsPath}
+					updatedAt={providersUpdatedAt}
+					onRefresh={onRefreshProviders}
+					onSaveToken={onSaveProviderToken}
+					onClearToken={onClearProviderToken}
+				/>
+				<section className="panel-card animate-rise space-y-3 p-5">
+					<h3 className="text-lg font-semibold">Security Notes</h3>
+					<p className="text-sm text-slate-600">
+						Keep your gateway bound to localhost unless you are tunneling through a trusted network such as
+						Tailscale or SSH. Tokens remain the safest option for remote access.
+					</p>
+					<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-slate-600">
+						Device ID: <span className="font-mono">{deviceId || "--"}</span>
+					</div>
+				</section>
+			</div>
+		</section>
+	);
+};

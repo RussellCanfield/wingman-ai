@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Wingman Gateway enables AI agent swarming by providing a WebSocket-based communication hub that allows multiple Wingman nodes to connect, form **rooms** (broadcast groups), and collaborate on tasks. The gateway is **stateless** - it routes messages but does not store conversation history. Each node maintains its own state.
+The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
 **Version:** 1.1
 **Status:** In Development
@@ -12,11 +12,12 @@ The Wingman Gateway enables AI agent swarming by providing a WebSocket-based com
 
 ## Vision
 
-The gateway enables "AI agents communicating as a team" through bidirectional rooms where:
-- All members see all messages (user prompts AND agent responses)
-- Agents decide autonomously whether to act based on their system prompt
-- Multiple agents can respond in parallel as independent streams
-- No explicit routing required - agents self-select based on context
+The gateway enables a single, stateful runtime where:
+- Inbound messages are routed deterministically to one agent by bindings
+- Sessions are durable and owned by the gateway
+- Multiple agents and channel accounts can run side-by-side with isolation
+- Broadcast rooms are explicit for parallel responses
+- Clients consume a shared streaming protocol for UI consistency
 
 See [Architecture Overview](000-architecture-overview.md) for the full system context.
 
@@ -25,317 +26,186 @@ See [Architecture Overview](000-architecture-overview.md) for the full system co
 ## Goals
 
 ### Primary Goals
-1. Enable **AI agent swarming** - multiple agents working together on shared tasks
-2. Support **local network discovery** (LAN/home office scenarios)
-3. Provide **remote connectivity** via Tailscale for distributed teams
-4. Offer **flexible deployment** options (local daemon, Cloudflare Workers)
-5. **Stateless design** - gateway routes messages, nodes own their state
+1. Provide a **stateful runtime** for agents, sessions, routing, and channels
+2. Enable **deterministic routing** with bindings (one agent per inbound message by default)
+3. Support **multiple isolated agents** and multiple channel accounts in one gateway
+4. Deliver a **Control UI** for chat and session creation (MVP)
+5. Offer **secure access** with token auth and Tailscale-friendly deployment
 
 ### Secondary Goals
 1. Support alternative transports (HTTP bridge, SSH tunnels) for firewall traversal
-2. Provide simple authentication and authorization
-3. Enable horizontal scaling via multiple gateway instances
-4. Maintain low latency for real-time agent collaboration
+2. Enable horizontal scaling via multiple gateway instances
+3. Maintain low latency for real-time agent collaboration
+4. Optional discovery (mDNS, Tailscale)
 5. **Protocol-first design** - generic protocol that any UI can consume
 
 ---
 
 ## Use Cases
 
-### 1. Home Office Multi-Device Setup
-**Scenario:** Developer with desktop, laptop, and server
+### 1. Local Gateway + Control UI
+**Scenario:** Developer runs the gateway on desktop and chats from phone via Control UI
 **Flow:**
-1. Start gateway on desktop: `wingman gateway start --discovery mdns`
-2. Laptop auto-discovers gateway on LAN
-3. Both devices join same broadcast group for collaborative coding
+1. Start gateway on desktop: `wingman gateway start`
+2. Open Control UI from local or tailnet address
+3. Create a session and send a message
+4. Gateway routes to the bound agent and streams the response
 
 **Requirements:**
-- mDNS/Bonjour discovery
-- WebSocket transport (low latency)
-- Optional authentication
-
-### 2. Distributed Team Collaboration
-**Scenario:** Remote team across different locations using Tailscale
-**Flow:**
-1. Team lead starts gateway with Tailscale discovery
-2. Team members discover gateway via Tailscale network
-3. All join "project-alpha" broadcast group
-4. Agents collaborate on shared tasks (code review, documentation, testing)
-
-**Requirements:**
-- Tailscale discovery integration
-- Secure WebSocket over Tailscale network
-- Broadcast group management
+- Control UI with chat and streaming output
 - Token-based authentication
+- Tailscale-friendly access patterns
 
-### 3. Corporate Network with Firewall
-**Scenario:** Enterprise environment where WebSocket is blocked
+### 2. Multi-Agent, Multi-Account Routing
+**Scenario:** Two agents handle different channel accounts on one gateway
 **Flow:**
-1. Gateway running on server with HTTP bridge enabled
+1. Configure agents and bindings in `wingman.config.json`
+2. Inbound messages are normalized with channel + account identity
+3. Router selects one agent using most-specific-first matching
+4. Gateway loads the agent's session and runs the turn
+
+**Requirements:**
+- Deterministic routing bindings
+- Per-agent isolation (workspace, agentDir, sessions)
+- Durable session store
+
+### 3. Explicit Broadcast Swarm
+**Scenario:** User requests parallel review from multiple agents
+**Flow:**
+1. User issues a broadcast to a room
+2. Gateway fans out to room members
+3. Each agent runs and streams independently
+4. UI shows multiple streams in parallel
+
+**Requirements:**
+- Broadcast rooms
+- Sender exclusion (do not reprocess own messages)
+- Independent parallel streams
+
+### 4. Corporate Network with Firewall (Planned)
+**Scenario:** WebSocket is blocked
+**Flow:**
+1. Gateway runs with HTTP bridge enabled
 2. Client connects via HTTP long-polling
-3. Messages routed through HTTP transport layer
+3. Messages route through the bridge
 
 **Requirements:**
 - HTTP bridge transport
 - HTTPS support
 - CORS handling
-- Session management
 
-### 4. SSH Tunnel Access
-**Scenario:** Gateway behind NAT/firewall, SSH access available
+### 5. Remote Tool Nodes (Planned)
+**Scenario:** Gateway calls tools on a paired device
 **Flow:**
-1. User creates SSH tunnel to gateway host
-2. Connects to localhost through tunnel
-3. Standard WebSocket communication over tunnel
+1. Node pairs with the gateway and advertises capabilities
+2. Gateway issues a node invoke request
+3. Node runs the command and streams results back
 
 **Requirements:**
-- SSH tunnel helper command
-- Reverse tunnel support
-- Port forwarding
-
-### 5. Multi-Agent Swarm
-**Scenario:** User wants 3 different agents to process the same request
-**Flow:**
-1. User joins a room with 3 agent nodes (coder, researcher, reviewer)
-2. User sends: "Analyze the auth implementation"
-3. Gateway broadcasts to all room members
-4. Each agent autonomously decides whether to respond based on its system prompt
-5. Coder analyzes code structure
-6. Researcher finds best practices docs
-7. Reviewer identifies security concerns
-8. All 3 responses stream independently to all room members
-9. User sees all perspectives in their UI
-
-**Requirements:**
-- Bidirectional message flow (all see all)
-- Sender exclusion (don't process your own messages)
-- Independent parallel streams
-- Agent discretion (system prompt determines response)
+- Node pairing and approval flow
+- Node invoke protocol
 
 ---
 
 ## Core Concepts
 
+### Agents and Isolation
+
+An agent is a fully scoped brain with its own workspace, agentDir, and session store. Auth profiles and sessions are not shared by default.
+
+### Bindings and Routing
+
+Bindings map message metadata to an agentId. Routing is deterministic and most-specific-first. One agent is selected per inbound message unless an explicit broadcast is requested.
+
+**Routing priority (most to least specific):**
+```
+1. peer match (exact DM/group/channel id)
+2. guildId or teamId match
+3. accountId match for a channel
+4. channel match
+5. default agent (agents.list[].default or first entry)
+```
+
+Routing happens before agent execution. Replies always return to the originating channel or thread.
+
+### Sessions and Session Keys
+
+The gateway derives a session key from agentId plus channel identity. Sessions are durable and stored per agent.
+
+### Routines (Scheduled Runs)
+
+Routines allow users to run an agent prompt on a CRON schedule. Each run creates or appends to a routine thread so results can be reviewed and followed up via chat.
+
+**Behavior**
+- A routine defines: `name`, `agentId`, `cron`, `prompt`, `enabled`.
+- When a routine fires, the gateway uses a routine session key:
+  - `agent:<agentId>:routine:<routineId>`
+- Each run appends a new message in the routine thread.
+- Users can open the routine thread in the Control UI and continue the conversation after runs.
+
+**MVP Scope**
+- Validate CRON strings server-side.
+- Persist routines in gateway state storage.
+- UI supports create/edit/delete and enable/disable.
+
+**Examples:**
+| Message Source | Session Key Example |
+|----------------|-------------------|
+| DM (default main) | `agent:main:main` |
+| Discord channel | `agent:main:discord:channel:123456` |
+| Discord thread | `agent:main:discord:channel:123456:thread:789` |
+| WhatsApp group | `agent:support:whatsapp:group:1203...@g.us` |
+
+Notes:
+- If a channel supports multiple accounts, include `account:<accountId>` in the session key to avoid collisions.
+- DMs can collapse to the agent main session. For true isolation per person, use one agent per person.
+
+### Channels and Accounts
+
+Channels normalize inbound messages into a common shape (channel, accountId, peer, thread). Multiple accounts per channel are supported via accountId and bindings.
+
 ### Rooms (Broadcast Groups)
 
-A **room** is a named group where all members see all messages. Think of it as a team chat where both humans and AI agents participate.
+Rooms are explicit broadcast groups for swarm-style responses. They do not replace deterministic routing and are only used when broadcast is requested.
 
-**Key Properties:**
-- **Bidirectional**: User messages AND agent responses broadcast to everyone
-- **No routing required**: Agents self-select whether to respond based on context
-- **Parallel execution**: Multiple agents can respond simultaneously
-- **Stateless**: Room doesn't store history; nodes maintain their own state
+### Nodes (Planned)
 
-**Message Flow:**
-```
-User (Node A) sends: "Review the auth code"
-        │
-        ▼
-    ┌───────────────────────────────────────────────┐
-    │                    ROOM                        │
-    │                                                │
-    │  Broadcast to: Node B, Node C, Node D         │
-    │  (Node A excluded - sender doesn't receive)   │
-    │                                                │
-    └───────────────────────────────────────────────┘
-        │           │           │
-        ▼           ▼           ▼
-    Node B      Node C      Node D
-    (Mobile)    (Coder)     (Reviewer)
-
-    - Display   - "Is this  - "Is this
-      message     for me?     for me?
-                  YES"        YES"
-                  │           │
-                  ▼           ▼
-                Respond     Respond
-                  │           │
-                  └─────┬─────┘
-                        ▼
-                  Both responses
-                  broadcast back
-                  to room (including
-                  Node A this time)
-```
-
-### Agent Discretion Model
-
-Agents decide autonomously whether to act on incoming messages. There's no explicit @mention or routing - the agent's **system prompt** defines when it should respond.
-
-**Example System Prompts:**
-
-```
-# Coder Agent
-You are a coding expert. Respond when users ask about:
-- Code implementation
-- Bug fixes
-- Refactoring
-- Technical questions about the codebase
-
-If the request is primarily about documentation or security research,
-defer to other team members.
-```
-
-```
-# Reviewer Agent
-You are a code review specialist. Respond when users ask about:
-- Code quality
-- Security vulnerabilities
-- Best practices
-- Performance concerns
-
-Proactively review code changes shared in the room.
-```
-
-**Key Rules:**
-1. Senders don't receive their own messages (prevents feedback loops)
-2. Agent's internal session handles its own context (not gateway's job)
-3. Multiple agents can respond to the same message (independent streams)
-4. Agents can choose NOT to respond if the request isn't relevant
+Nodes are remote tool executors that connect to the gateway and expose capabilities. Nodes require a pairing flow and are not in MVP.
 
 ### Swarm vs Orchestrated Patterns
 
 **Swarm (Parallel Independent):**
-- Multiple agents in same room
-- Each produces independent output stream
-- No coordination - UI shows all responses
-- Best for: diverse perspectives, research, brainstorming
+- Broadcast room with multiple agents
+- Each produces an independent output stream
+- Best for: diverse perspectives and brainstorming
 
 **Orchestrated (Sequential Coordinated):**
 - Single parent agent with subagents
-- Parent coordinates workflow (planner → implementor → reviewer)
-- Single output stream from parent
+- Parent coordinates workflow (planner -> implementor -> reviewer)
 - Best for: complex tasks requiring coordination
-
-Users choose the pattern based on their needs. Both can use the gateway.
 
 ---
 
 ## Features
 
-### Core Features (Implemented)
+### MVP Scope
+- Gateway-hosted agent runtime and registry
+- Deterministic routing bindings (most-specific-first)
+- Durable session store (SQLite)
+- WebSocket API for clients (CLI and Control UI)
+- Control UI with chat and streaming output (served on `gateway.controlUi.port`)
+- Token or password authentication
+- Basic health and stats endpoints (gateway + Control UI API proxy)
 
-#### ✅ WebSocket Communication
-- Native Bun WebSocket server
-- Ping/pong heartbeat mechanism
-- Auto-reconnection on client side
-- Binary and text message support
-
-#### ✅ Node Management
-- Registration/unregistration
-- Unique node IDs (hex)
-- Node metadata (name, capabilities, groups)
-- Stale node cleanup
-
-#### ✅ Broadcast Groups
-- Dynamic group creation
-- Join/leave operations
-- Group-based message routing
-- Parallel/sequential processing strategies
-
-#### ✅ Authentication
-- Token-based authentication
-- Optional auth mode
-- Token generation utility
-
-#### ✅ Daemon Support
-- Background process management
-- Start/stop/restart/status commands
-- PID file management
-- Log file output
-
-#### ✅ Health Monitoring
-- `/health` HTTP endpoint
-- `/stats` HTTP endpoint
-- Uptime tracking
-- Node/group statistics
-
-#### ✅ Rate Limiting
-- Per-node message rate limits (100 msg/min default)
-- Time window-based (60s)
-- Configurable limits
-- Rate limit error messages
-
-#### ✅ Message Validation
-- Zod schema validation
-- Payload validation for all message types
-- Validation error responses
-
-### New Features (Planned)
-
-#### 🔄 mDNS/Bonjour Discovery
-**Priority:** High
-**Effort:** Medium
-
-**Description:** Auto-discover gateways on local network
-
-**Requirements:**
-- Service type: `_wingman-gateway._tcp.local`
-- TXT records: version, auth status, capabilities
-- Discovery timeout (5s default)
-- Multiple gateway discovery
-- CLI commands: `discover`, `--discovery mdns`, `--auto-discover`
-
-**Acceptance Criteria:**
-- Gateway announces itself on LAN start
-- Clients can discover all gateways on network within 5s
-- Discovery shows gateway name, URL, auth requirements
-- Auto-connect to first discovered gateway works
-
-#### 🔄 Tailscale Discovery
-**Priority:** High
-**Effort:** Medium
-
-**Description:** Discover gateways across Tailscale VPN network
-
-**Requirements:**
-- Query local tailscaled daemon (no API key needed)
-- Fall back to Tailscale API if daemon unavailable
-- Filter by device tags
-- MagicDNS name resolution
-- CLI commands: `discover --tailscale`
-
-**Acceptance Criteria:**
-- Discovers all Tailscale devices running gateway
-- Shows Tailscale IP and MagicDNS name
-- Can connect using either IP or MagicDNS name
-- Works without Tailscale API key (local mode)
-
-#### 🔄 HTTP Bridge Transport
-**Priority:** Medium
-**Effort:** High
-
-**Description:** HTTP-based transport for firewall traversal
-
-**Requirements:**
-- Three endpoints: `/bridge/send` (POST), `/bridge/poll` (GET), `/bridge/sse` (SSE)
-- Long-polling with 30s timeout
-- Session-based message queuing
-- Automatic fallback from WebSocket
-
-**Acceptance Criteria:**
-- Can connect when WebSocket is blocked
-- Messages delivered with <2s latency
-- Auto-reconnect on connection loss
-- HTTPS support for production
-
-#### 🔄 SSH Tunnel Helper
-**Priority:** Low
-**Effort:** Low
-
-**Description:** Helper command for SSH tunnel creation
-
-**Requirements:**
-- Forward tunnel: `wingman gateway tunnel user@host`
-- Reverse tunnel: `wingman gateway tunnel reverse`
-- Auto-cleanup on exit
-- Port selection
-
-**Acceptance Criteria:**
-- Creates SSH tunnel with single command
-- Auto-connects after tunnel established
-- Cleans up tunnel on Ctrl+C
-- Works with SSH keys and SSH agent
+### Planned / Later
+- Broadcast rooms for explicit swarm workflows
+- Node pairing and remote tool execution
+- mDNS discovery
+- Tailscale discovery
+- HTTP bridge transport
+- SSH tunnel helper
+- External channel adapters (Discord, Slack, etc.)
+- Rate limiting and message validation
 
 ---
 
@@ -347,65 +217,56 @@ Users choose the pattern based on their needs. Both can use the gateway.
 ┌─────────────────────────────────────────────────────────────┐
 │                     Wingman Gateway                          │
 ├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   WebSocket  │  │  HTTP Bridge │  │     SSH      │      │
-│  │   Transport  │  │   Transport  │  │   Transport  │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                  │                  │               │
-│         └──────────────────┴──────────────────┘               │
-│                           │                                   │
-│                  ┌────────▼────────┐                         │
-│                  │  Message Router │                         │
-│                  └────────┬────────┘                         │
-│                           │                                   │
-│         ┌─────────────────┼─────────────────┐               │
-│         │                 │                 │               │
-│  ┌──────▼───────┐  ┌─────▼──────┐  ┌──────▼──────┐        │
-│  │     Node     │  │  Broadcast │  │    Auth     │        │
-│  │   Manager    │  │   Groups   │  │  Manager    │        │
-│  └──────────────┘  └────────────┘  └─────────────┘        │
-│                                                               │
+│  Control UI + WebSocket API                                  │
+│  Channel Adapters                                            │
+│                  │                                           │
+│                  ▼                                           │
+│           Router (bindings)                                  │
+│                  │                                           │
+│                  ▼                                           │
+│           Session Store (SQLite)                             │
+│                  │                                           │
+│                  ▼                                           │
+│           Agent Runtime                                      │
+│                                                              │
 └─────────────────────────────────────────────────────────────┘
-         │                  │                  │
-         │                  │                  │
-    ┌────▼────┐       ┌────▼────┐       ┌────▼────┐
-    │  Node 1 │       │  Node 2 │       │  Node 3 │
-    │ (Agent) │       │ (Agent) │       │ (Agent) │
-    └─────────┘       └─────────┘       └─────────┘
 ```
 
 ### Message Flow
 
-#### Registration Flow
+#### Connect / Auth Flow
 ```
-Client                Gateway               NodeManager
-  │                      │                      │
-  │──register──────────▶ │                      │
-  │  {name, token}       │                      │
-  │                      │──validate token─────▶│
-  │                      │                      │
-  │                      │◀─node created────────│
-  │◀─────ack────────────│  {nodeId}            │
-  │  {nodeId, name}      │                      │
+Client                Gateway
+  │                      │
+  │──connect────────────▶│  {client, auth}
+  │                      │
+  │◀────res─────────────│  {ok: true}
 ```
 
-#### Broadcast Flow
+#### Routed Agent Flow
 ```
-Node1              Gateway            BroadcastGroup         Node2, Node3
-  │                   │                     │                    │
-  │─broadcast────────▶│                     │                    │
-  │ {groupId, msg}    │                     │                    │
-  │                   │─get members────────▶│                    │
-  │                   │◀─[node2, node3]─────│                    │
-  │                   │                     │                    │
-  │                   │─────────broadcast message──────────────▶ │
-  │                   │                {msg, fromNodeId}         │
+Inbound Message      Gateway Router        Session Store       Agent Runtime
+  │                       │                     │                  │
+  │──normalize──────────▶ │                     │                  │
+  │                       │──select agent──────▶│                  │
+  │                       │                     │──load session──▶ │
+  │                       │                     │◀─session state── │
+  │                       │◀──stream chunks─────│                  │
+  │◀────response─────────│                     │                  │
+```
+
+#### Explicit Broadcast Flow (Optional)
+```
+Client              Gateway            Room Members
+  │                   │                     │
+  │─broadcast────────▶│                     │
+  │ {roomId, msg}     │                     │
+  │                   │────────fanout──────▶│
 ```
 
 ### Discovery Flow
 
-#### mDNS Discovery
+#### mDNS Discovery (Planned)
 ```
 Client              Network               Gateway
   │                    │                     │
@@ -421,7 +282,45 @@ Client              Network               Gateway
 
 ## Data Models
 
-### Node
+### Agent
+```typescript
+interface AgentConfig {
+  id: string;                    // Unique agentId
+  name?: string;                 // Display name
+  workspace: string;             // Agent workspace path
+  agentDir: string;              // Per-agent state directory
+  model?: string;                // provider:model-name
+  tools?: string[];              // Allowed tools
+}
+```
+
+### Binding
+```typescript
+interface Binding {
+  agentId: string;
+  match: {
+    channel: string;
+    accountId?: string;
+    guildId?: string;
+    teamId?: string;
+    peer?: { kind: "dm" | "group" | "channel"; id: string };
+  };
+}
+```
+
+### SessionKey
+```typescript
+interface SessionKey {
+  key: string;                   // agent:<agentId>:...
+  agentId: string;
+  channel: string;
+  accountId?: string;
+  peerId?: string;
+  threadId?: string;
+}
+```
+
+### Node (Planned)
 ```typescript
 interface Node {
   id: string;                    // Unique ID (hex)
@@ -436,7 +335,7 @@ interface Node {
 }
 ```
 
-### Broadcast Group
+### Broadcast Group (Planned)
 ```typescript
 interface BroadcastGroup {
   id: string;                    // Unique ID (hex)
@@ -454,20 +353,19 @@ interface BroadcastGroup {
 ```typescript
 interface GatewayMessage {
   type: MessageType;             // Message type
-  nodeId?: string;               // Sender node ID
-  groupId?: string;              // Target group ID
-  targetNodeId?: string;         // Target node ID (direct)
+  id?: string;                   // Request/response correlation
+  clientId?: string;             // Sender client ID
+  roomId?: string;               // Target room (broadcast)
+  targetNodeId?: string;         // Target node ID (future)
   payload?: unknown;             // Message payload
   timestamp: number;             // Message timestamp
-  messageId?: string;            // Optional message ID
 }
 
 type MessageType =
-  | "register" | "unregister"
-  | "join_group" | "leave_group"
-  | "broadcast" | "direct"
-  | "ping" | "pong"
-  | "error" | "ack";
+  | "connect" | "res"
+  | "req:agent" | "event:agent"
+  | "broadcast"
+  | "error";
 ```
 
 ### Agent Stream Messages
@@ -526,17 +424,16 @@ interface ToolEndEvent {
 
 1. **Raw Stream Forwarding**: Gateway forwards agent stream chunks as-is, matching CLI streaming format
 2. **UI Interprets**: Each UI (mobile, web, CLI) parses chunks for its presentation
-3. **Envelope Only**: Gateway adds routing metadata (fromNodeId, groupId) but doesn't modify payload
-4. **Stateless**: Gateway doesn't buffer or persist stream events
+3. **Envelope Only**: Gateway adds routing metadata (clientId, roomId) but doesn't modify payload
+4. **Stateful Sessions**: Gateway persists session state but does not buffer stream events
 
 **Example: Agent Response Flow**
 
 ```json
 // 1. Agent starts
 {
-  "type": "broadcast",
-  "nodeId": "agent-abc",
-  "groupId": "room-xyz",
+  "type": "event:agent",
+  "clientId": "gateway",
   "payload": {
     "type": "agent-start",
     "agent": "coder",
@@ -547,9 +444,8 @@ interface ToolEndEvent {
 
 // 2. Streaming tokens
 {
-  "type": "broadcast",
-  "nodeId": "agent-abc",
-  "groupId": "room-xyz",
+  "type": "event:agent",
+  "clientId": "gateway",
   "payload": {
     "type": "agent-stream",
     "chunk": { "event": "on_chat_model_stream", "data": {"chunk": "The"} },
@@ -559,9 +455,8 @@ interface ToolEndEvent {
 
 // 3. Tool execution
 {
-  "type": "broadcast",
-  "nodeId": "agent-abc",
-  "groupId": "room-xyz",
+  "type": "event:agent",
+  "clientId": "gateway",
   "payload": {
     "type": "tool-start",
     "toolName": "command_execute",
@@ -572,9 +467,8 @@ interface ToolEndEvent {
 
 // 4. Agent complete
 {
-  "type": "broadcast",
-  "nodeId": "agent-abc",
-  "groupId": "room-xyz",
+  "type": "event:agent",
+  "clientId": "gateway",
   "payload": {
     "type": "agent-complete",
     "result": { "response": "The auth code looks good..." },
@@ -593,11 +487,11 @@ interface ToolEndEvent {
 ```bash
 # Start gateway
 wingman gateway start [options]
-  --port <number>         Port (default: 3000)
-  --host <string>         Host (default: 0.0.0.0)
-  --auth                  Enable authentication
-  --token <string>        Auth token
-  --discovery <method>    Discovery: mdns, tailscale
+  --port <number>         Port (default: 18789)
+  --host <string>         Host (default: 127.0.0.1)
+  --auth-mode <mode>      token | password | none
+  --token <string>        Auth token (token mode)
+  --password <string>     Auth password (password mode)
   --name <string>         Gateway name
 
 # Stop gateway
@@ -613,22 +507,15 @@ wingman gateway status
 wingman gateway run [options]
 ```
 
-#### Node Connection
+#### Agent Invocation (CLI)
 ```bash
-# Join gateway
-wingman gateway join <url> [options]
-  --name <string>         Node name
+# Run via gateway (default)
+wingman agent --agent <id> "prompt"
+  --gateway <url>         Gateway URL (optional if configured)
   --token <string>        Auth token
-  --group <string>        Auto-join group
-  --transport <type>      Transport: websocket, http
-  --auto-transport        Auto-detect transport
-  --auto-discover         Join first discovered gateway
 
-# Discover gateways
-wingman gateway discover [options]
-  --tailscale             Discover via Tailscale
-  --timeout <ms>          Timeout (default: 5000)
-  --verbose               Show details
+# Run locally (no gateway)
+wingman agent --local --agent <id> "prompt"
 ```
 
 #### Utilities
@@ -640,12 +527,6 @@ wingman gateway token --generate
 wingman gateway health [options]
   --host <string>         Gateway host
   --port <number>         Gateway port
-
-# SSH tunnel
-wingman gateway tunnel <user@host> [options]
-  --port <number>         Gateway port
-  --name <string>         Node name
-  reverse                 Reverse tunnel
 ```
 
 ### HTTP Endpoints
@@ -660,10 +541,11 @@ Response:
   "version": "1.0.0",
   "stats": {
     "uptime": 123456,
-    "totalNodes": 5,
+    "totalNodes": 3,
     "totalGroups": 2,
     "messagesProcessed": 1000,
-    "startedAt": 1234567890
+    "startedAt": 1234567890,
+    "activeSessions": 2
   },
   "timestamp": 1234567890
 }
@@ -677,12 +559,12 @@ Response:
 {
   "gateway": {
     "uptime": 123456,
-    "totalNodes": 5,
+    "totalNodes": 3,
     "totalGroups": 2,
     "messagesProcessed": 1000
   },
   "nodes": {
-    "totalNodes": 5,
+    "totalNodes": 3,
     "nodes": [...]
   },
   "groups": {
@@ -692,46 +574,69 @@ Response:
 }
 ```
 
+#### Control UI Endpoints (on `gateway.controlUi.port`)
+```
+GET /
+GET /api/health
+GET /api/stats
+GET /api/agents
+POST /api/agents
+GET /api/routines
+POST /api/routines
+DELETE /api/routines/:id
+```
+The Control UI serves HTML on `/` and proxies gateway health/stats via `/api/*`
+to avoid cross-origin issues when the UI is on a different port.
+
 ### WebSocket Messages
 
-#### Register
+#### Connect
 ```json
 {
-  "type": "register",
+  "type": "connect",
+  "id": "connect-1",
+  "client": {
+    "instanceId": "cli-1",
+    "clientType": "cli",
+    "version": "0.1.0"
+  },
+  "auth": { "token": "sk-..." },
+  "timestamp": 1234567890
+}
+```
+
+#### Response
+```json
+{
+  "type": "res",
+  "id": "connect-1",
+  "ok": true,
+  "payload": "gateway-ready",
+  "timestamp": 1234567890
+}
+```
+
+#### Request Agent
+```json
+{
+  "type": "req:agent",
+  "id": "req-1",
   "payload": {
-    "name": "agent-1",
-    "capabilities": ["coding", "research"],
-    "token": "abc123"
+    "content": "Review the auth code",
+    "routing": { "channel": "webui" }
   },
   "timestamp": 1234567890
 }
 ```
 
-#### Join Group
-```json
-{
-  "type": "join_group",
-  "nodeId": "abc123",
-  "payload": {
-    "groupName": "swarm-1",
-    "createIfNotExists": true,
-    "description": "Collaborative coding"
-  },
-  "timestamp": 1234567890
-}
-```
-
-#### Broadcast
+#### Broadcast (Optional)
 ```json
 {
   "type": "broadcast",
-  "nodeId": "abc123",
+  "id": "req-2",
+  "roomId": "swarm-1",
   "payload": {
-    "groupId": "xyz789",
-    "message": {
-      "type": "task",
-      "content": "Review code in PR #123"
-    }
+    "content": "Review code in PR #123"
   },
   "timestamp": 1234567890
 }
@@ -741,21 +646,52 @@ Response:
 
 ## Configuration
 
-### Gateway Config
+### Gateway Config (wingman.config.json)
 ```json
 {
-  "port": 3000,
-  "host": "0.0.0.0",
-  "requireAuth": false,
-  "authToken": "secret-token",
-  "maxNodes": 1000,
-  "pingInterval": 30000,
-  "pingTimeout": 60000,
-  "logLevel": "info"
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18789,
+    "stateDir": "~/.wingman",
+    "fsRoots": ["~/Projects", "~/.wingman/outputs"],
+    "auth": {
+      "mode": "token",
+      "token": "sk-...",
+      "allowTailscale": true
+    },
+    "controlUi": {
+      "enabled": true,
+      "port": 18790,
+      "pairingRequired": true,
+      "allowInsecureAuth": false
+    }
+  }
 }
 ```
 
-### Discovery Config
+### Session Working Folder (Control UI)
+- Each session can optionally set a working folder for output files.
+- The gateway validates the path against `gateway.fsRoots`.
+- If no session folder is set, the agent defaults to `~/.wingman/outputs/<agentId>/`.
+- The working folder is injected into agent context via hidden middleware, not the system prompt.
+
+### Agents and Routing
+```json
+{
+  "agents": {
+    "list": [
+      { "id": "main", "default": true, "workspace": "~/wingman-main" },
+      { "id": "support", "workspace": "~/wingman-support" }
+    ],
+    "bindings": [
+      { "agentId": "support", "match": { "channel": "webui", "peer": { "kind": "dm", "id": "user-123" } } },
+      { "agentId": "main", "match": { "channel": "webui" } }
+    ]
+  }
+}
+```
+
+### Discovery (Planned)
 ```json
 {
   "discovery": {
@@ -763,7 +699,6 @@ Response:
     "method": "mdns",
     "name": "My Gateway",
     "tailscale": {
-      "apiKey": "optional",
       "tags": ["wingman-gateway"]
     }
   }
@@ -881,35 +816,37 @@ gateway.on('message', async (msg) => {
 
 ### Throughput
 - Messages per second: 1000+ (per gateway)
-- Concurrent nodes: 1000+ (per gateway)
-- Broadcast groups: 100+ (per gateway)
+- Concurrent clients: 1000+ (per gateway)
+- Broadcast rooms: 100+ (per gateway)
 
 ### Scalability
 - Horizontal scaling via multiple gateway instances
 - No single point of failure
-- Stateless design (future: shared state via Redis/KV)
+- Future: shared session store for multi-gateway operation
 
 ---
 
 ## Security
 
 ### Authentication
-- Token-based authentication (HMAC-SHA256)
-- Optional auth mode for trusted networks
+- Token or password authentication
+- Optional local-only mode for trusted environments
 - Token rotation support
+- Control UI pairing (optional)
+- Optional tailnet allowlist for trusted peers
 
 ### Network Security
-- mDNS: Local network only (inherent security)
-- Tailscale: Uses Tailscale ACLs
-- Public: Requires auth token + HTTPS
+- Local bind by default
+- Tailscale for remote access
+- Public exposure requires TLS and auth
 
 ### Rate Limiting
-- 100 messages per minute per node (default)
-- Configurable per gateway
+- 100 messages per minute per client (default)
+- Configurable per gateway (planned)
 - Blocks on rate limit exceeded
 
 ### Message Validation
-- Zod schema validation for all messages
+- Payload validation for all message types (planned)
 - Payload size limits
 - Type safety enforcement
 
@@ -945,19 +882,19 @@ wrangler deploy
 ## Testing Strategy
 
 ### Unit Tests
-- Message validation
-- Rate limiting logic
-- Node management
-- Broadcast group operations
+- Routing bindings and match order
+- Session store behavior
+- Auth handshake
+- Broadcast room operations (if enabled)
 
 ### Integration Tests
-- Multi-node scenarios
-- Broadcast group messaging
-- Discovery mechanisms
-- Transport fallback
+- Multi-client scenarios
+- Control UI chat flow
+- Broadcast room messaging
+- Transport fallback (planned)
 
 ### Load Tests
-- 1000 concurrent nodes
+- 1000 concurrent clients
 - 100 messages/sec sustained
 - Memory usage < 500MB
 

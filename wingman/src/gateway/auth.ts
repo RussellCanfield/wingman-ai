@@ -1,15 +1,27 @@
 import { randomBytes } from "crypto";
+import type { GatewayAuthConfig, GatewayAuthPayload } from "./types.js";
 
 /**
  * Simple token-based authentication for the gateway
  */
 export class GatewayAuth {
 	private tokens: Set<string>;
-	private requireAuth: boolean;
+	private mode: GatewayAuthConfig["mode"];
+	private password?: string;
+	private allowTailscale: boolean;
 
-	constructor(requireAuth = false, initialTokens: string[] = []) {
-		this.requireAuth = requireAuth;
+	constructor(
+		config: GatewayAuthConfig = { mode: "none" },
+		initialTokens: string[] = [],
+	) {
+		this.mode = config.mode;
+		this.password = config.password;
+		this.allowTailscale = config.allowTailscale ?? false;
 		this.tokens = new Set(initialTokens);
+
+		if (config.token) {
+			this.tokens.add(config.token);
+		}
 	}
 
 	/**
@@ -24,18 +36,30 @@ export class GatewayAuth {
 	/**
 	 * Validate an authentication token
 	 */
-	validateToken(token?: string): boolean {
-		// If auth is not required, always return true
-		if (!this.requireAuth) {
+	validate(auth?: GatewayAuthPayload, tailscaleUser?: string): boolean {
+		if (this.mode === "none") {
 			return true;
 		}
 
-		// If auth is required but no token provided, return false
-		if (!token) {
-			return false;
+		if (this.allowTailscale && tailscaleUser) {
+			return true;
 		}
 
-		return this.tokens.has(token);
+		if (this.mode === "token") {
+			if (!auth?.token) {
+				return false;
+			}
+			return this.tokens.has(auth.token);
+		}
+
+		if (this.mode === "password") {
+			if (!auth?.password || !this.password) {
+				return false;
+			}
+			return auth.password === this.password;
+		}
+
+		return false;
 	}
 
 	/**
@@ -63,13 +87,10 @@ export class GatewayAuth {
 	 * Check if authentication is required
 	 */
 	isAuthRequired(): boolean {
-		return this.requireAuth;
+		return this.mode !== "none";
 	}
 
-	/**
-	 * Set whether authentication is required
-	 */
 	setAuthRequired(required: boolean): void {
-		this.requireAuth = required;
+		this.mode = required ? "token" : "none";
 	}
 }

@@ -10,26 +10,26 @@
 
 Wingman is a two-part AI agent ecosystem:
 
-1. **Wingman CLI** - A local AI agent framework that runs on your machine, supporting multiple model providers and customizable agent configurations
-2. **Wingman Gateway** - A distributed communication hub that enables multi-agent collaboration across devices, allowing AI agents to communicate as a team
+1. **Wingman Gateway** - A central runtime that hosts agents, sessions, routing, and channels with durable state
+2. **Wingman CLI** - A control plane for configuration and invocation; defaults to gateway execution with a `--local` override
 
-The vision is simple: run AI agents locally with full control, and optionally connect them through a gateway to collaborate with other agents and devices.
+The vision is simple: run agents through a local gateway with durable state, and optionally connect additional devices and channels for collaboration.
 
 ---
 
 ## Core Principles
 
-### 1. Stateless Gateway, Stateful Nodes
-The gateway is a pure message router. It does not store conversation history or agent state. Each node (CLI, agent, UI) maintains its own state, enabling horizontal scaling and fault tolerance.
+### 1. Stateful Gateway, Durable Sessions
+The gateway hosts the agent runtime and owns the session store. Durable state lives in the gateway, not in clients.
 
-### 2. Bidirectional Rooms
-When devices join a broadcast group (room), all members see all messages - user prompts AND agent responses. This creates a shared workspace where multiple agents can observe and collaborate.
+### 2. Deterministic Routing
+Inbound messages are routed by bindings using most-specific-first matching. One agent is selected per message unless an explicit broadcast is requested.
 
-### 3. Agent Discretion Model
-Agents decide autonomously whether to act on messages based on their system prompt. There's no explicit routing or @mentions required - agents self-select based on context, enabling natural team-like behavior.
+### 3. Agent Isolation
+Each agent has its own workspace, agent directory, auth profiles, and session store. Credentials are not shared by default.
 
-### 4. Independent Agent Streams
-Multiple agents in a room produce separate output streams. There's no built-in aggregation - each agent's response flows independently. Orchestration is opt-in via parent agents with subagents.
+### 4. Broadcast Is Explicit
+Rooms enable parallel agent responses, but broadcasts are opt-in. The default path is a single agent per inbound message.
 
 ### 5. Protocol-First Design
 The gateway forwards raw agent streams (matching CLI streaming format). UI layers interpret these streams for display. This enables any client (mobile, web, terminal) to consume the same protocol.
@@ -80,34 +80,37 @@ Support for multiple model providers via API keys and stored subscription tokens
 
 ## Component Overview
 
+Default operation uses the gateway runtime. Local execution remains available through `--local` for CLI-only workflows.
+
 ### Part 1: Wingman CLI
 
-The CLI is the primary interface for running agents locally.
+The CLI is the primary interface for configuring the gateway and invoking agents.
 
 | Component | Purpose | Documentation |
 |-----------|---------|---------------|
-| **Multi-Agent System** | Root orchestrator + specialized subagents (coder, researcher, planner, implementor, reviewer) | [PRD-001](001-multi-agent-architecture.md) |
-| **Custom Agents** | User-defined agents via declarative JSON configuration | [PRD-002](002-custom-agents-configuration.md) |
-| **Direct Invocation** | CLI commands for running specific agents without orchestration | [PRD-003](003-cli-direct-invocation.md) |
-| **Hooks System** | Custom shell commands at agent lifecycle points | [PRD-004](004-hooks-system.md) |
-| **Session Management** | Persistent conversations with SQLite storage | [PRD-002](002-session-based-cli.md) |
+| **Gateway Control** | Start/stop, status, auth, and connection management | [PRD-002](002-gateway-prd.md) |
+| **Agent Invocation** | Run agents via gateway (default) or locally with `--local` | [PRD-001](001-multi-agent-architecture.md) |
+| **Custom Agents** | User-defined agents via declarative JSON configuration | [Custom Agents Guide](../custom-agents.md) |
+| **Hooks System** | Custom shell commands at agent lifecycle points | [PRD-001](001-multi-agent-architecture.md) |
+| **Session Management** | Local sessions when running with `--local` | [PRD-001](001-multi-agent-architecture.md) |
 
 ### Part 2: Wingman Gateway
 
-The Gateway enables distributed agent collaboration.
+The Gateway is the central runtime for agents, sessions, routing, and channels.
 
 | Component | Purpose | Documentation |
 |-----------|---------|---------------|
-| **WebSocket Server** | Real-time bidirectional communication | [PRD-005](005-gateway-prd.md) |
-| **Broadcast Groups (Rooms)** | Message routing to group members | [PRD-005](005-gateway-prd.md) |
-| **Node Management** | Registration, heartbeat, capabilities | [PRD-005](005-gateway-prd.md) |
-| **Discovery** | mDNS (LAN) and Tailscale (VPN) discovery | [PRD-005](005-gateway-prd.md) |
+| **Agent Runtime** | Host agent instances and subagents | [PRD-002](002-gateway-prd.md) |
+| **Routing Bindings** | Deterministic agent selection per message | [PRD-002](002-gateway-prd.md) |
+| **Session Store** | Durable session storage (SQLite) | [PRD-002](002-gateway-prd.md) |
+| **Channels + Control UI** | Inbound/outbound message adapters and web chat | [PRD-002](002-gateway-prd.md) |
+| **Broadcast Rooms** | Explicit parallel responses when requested | [PRD-002](002-gateway-prd.md) |
 
 ---
 
 ## Message Flow Patterns
 
-### Pattern 1: Local Agent Execution (CLI Only)
+### Pattern 1: Local Agent Execution (CLI --local)
 
 ```
 User ──▶ CLI ──▶ Agent ──▶ Tool Execution ──▶ Response ──▶ User
@@ -115,55 +118,35 @@ User ──▶ CLI ──▶ Agent ──▶ Tool Execution ──▶ Response �
                    └──▶ Session (SQLite) - State persisted locally
 ```
 
-No gateway involved. Agent runs locally with full context from session.
+No gateway involved. Agent runs locally with a local session store.
 
-### Pattern 2: Multi-Agent Collaboration (Gateway)
+### Pattern 2: Gateway Routed Execution (Default)
 
 ```
-User (Laptop)
-     │
-     │ "Review the auth code"
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        GATEWAY                               │
-│                                                              │
-│    Room: "project-alpha"                                     │
-│    ┌─────────────────────────────────────────────────────┐  │
-│    │  Broadcast to all members                            │  │
-│    │                                                      │  │
-│    │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │  │
-│    │  │ Mobile   │  │ Desktop  │  │ Server   │          │  │
-│    │  │ (UI)     │  │ (review) │  │ (research)│          │  │
-│    │  └────┬─────┘  └────┬─────┘  └────┬─────┘          │  │
-│    │       │              │              │                │  │
-│    └───────┼──────────────┼──────────────┼────────────────┘  │
-│            │              │              │                    │
-└────────────┼──────────────┼──────────────┼────────────────────┘
-             │              │              │
-             ▼              ▼              ▼
-         Display     "Is this for    "Is this for
-         message       me? YES"        me? YES"
-                          │              │
-                          ▼              ▼
-                    Review code    Research auth
-                          │        best practices
-                          │              │
-                          └──────┬───────┘
-                                 │
-                                 ▼
-                          Both responses
-                          broadcast back
-                          to all members
+Inbound message (UI/channel/CLI)
+            |
+            v
+┌───────────────────────────────────────────────┐
+│                    GATEWAY                    │
+│  - bindings router (most-specific-first)      │
+│  - session store (SQLite)                     │
+│  - agent runtime                              │
+└───────────────────────────────────────────────┘
+            |
+            v
+Selected agent executes and streams response
+            |
+            v
+Reply returns to the originating channel/thread
 ```
 
 **Key behaviors:**
-1. User message broadcasts to all room members
-2. Each agent autonomously decides whether to respond
-3. Agent responses stream back through gateway
-4. All members see all responses (including the originating laptop)
-5. Senders ignore their own messages to prevent feedback loops
+1. Message is normalized by the channel and routed by bindings
+2. Session key is derived from agent + channel identity
+3. Gateway loads session and runs the selected agent
+4. Response streams back to the same channel or UI
 
-### Pattern 3: Agent Swarm (Parallel Processing)
+### Pattern 3: Explicit Broadcast (Rooms)
 
 ```
                     User Prompt: "Optimize this function"
@@ -278,26 +261,27 @@ OAuth flows are planned; today, `wingman provider login` stores subscription tok
 │                       GATEWAY                                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│   Node A ──▶ WebSocket ──▶ Message Router ──▶ Room Lookup   │
-│              Server            │                  │          │
-│                                │                  ▼          │
-│                                │           Get Room Members  │
-│                                │                  │          │
-│                                ▼                  ▼          │
-│                           Rate Limiter ──▶ Broadcast to      │
-│                                │           Members           │
-│                                │           (except sender)   │
-│                                │                  │          │
-│                                │          ┌──────┴──────┐   │
-│                                │          ▼             ▼   │
-│                                │      Node B        Node C   │
-│                                │                             │
-│                                └─────────────────────────────┤
+│  Inbound Message                                              │
+│       │                                                      │
+│       ▼                                                      │
+│  Channel Adapter / Control UI                                │
+│       │                                                      │
+│       ▼                                                      │
+│  Router (bindings, most-specific-first)                      │
+│       │                                                      │
+│       ▼                                                      │
+│  Session Store (SQLite)                                      │
+│       │                                                      │
+│       ▼                                                      │
+│  Agent Runtime                                               │
+│       │                                                      │
+│       ▼                                                      │
+│  Response to originating channel/thread                      │
 │                                                              │
-│   Note: Gateway is STATELESS                                │
-│   - No conversation history                                 │
-│   - No message persistence                                  │
-│   - Pure routing                                            │
+│  Note: Gateway is STATEFUL                                   │
+│  - Durable sessions                                          │
+│  - Routing bindings and agent registry                       │
+│  - Channel and UI adapters                                   │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -313,7 +297,7 @@ Developer's Machine
 ┌─────────────────────────────────┐
 │                                  │
 │   Terminal                       │
-│   $ wingman agent --agent coder │
+│   $ wingman agent --local --agent coder │
 │                                  │
 │   ┌────────────────────────────┐│
 │   │ Wingman CLI                ││
@@ -330,7 +314,7 @@ Developer's Machine
 ```
 ┌───────────────┐    ┌───────────────┐    ┌───────────────┐
 │    Desktop    │    │    Laptop     │    │    Mobile     │
-│   (Gateway)   │◀──▶│   (Agent)     │◀──▶│    (UI)       │
+│   (Gateway)   │◀──▶│    (CLI)      │◀──▶│    (UI)       │
 └───────────────┘    └───────────────┘    └───────────────┘
         │                    │                    │
         └────────────────────┴────────────────────┘
@@ -345,7 +329,7 @@ Developer's Machine
 │                                                              │
 │   Location A           Location B           Location C       │
 │   ┌──────────┐        ┌──────────┐        ┌──────────┐      │
-│   │ Gateway  │◀──────▶│  Agent   │◀──────▶│  Agent   │      │
+│   │ Gateway  │◀──────▶│  Client  │◀──────▶│  Client  │      │
 │   │ (server) │        │ (laptop) │        │ (mobile) │      │
 │   └──────────┘        └──────────┘        └──────────┘      │
 │                                                              │
@@ -365,16 +349,16 @@ Developer's Machine
 - Hooks system
 - Direct agent invocation
 
-### Phase 2: Gateway Core (In Progress)
-- WebSocket communication
-- Broadcast groups (rooms)
-- Node management
-- Authentication
-- Rate limiting
+### Phase 2: Gateway Runtime (In Progress)
+- Agent registry and runtime
+- Deterministic routing and bindings
+- Session store (SQLite)
+- Control UI (web chat)
+- WebSocket API + authentication
 
 ### Phase 3: Discovery & Connectivity
+- Tailscale-friendly access patterns
 - mDNS/Bonjour discovery
-- Tailscale integration
 - HTTP bridge (firewall traversal)
 
 ### Phase 4: Provider Expansion
@@ -400,11 +384,8 @@ Developer's Machine
 | Document | Description |
 |----------|-------------|
 | [PRD-001: Multi-Agent Architecture](001-multi-agent-architecture.md) | Agent hierarchy and orchestration |
-| [PRD-002: Custom Agents](002-custom-agents-configuration.md) | Declarative agent configuration |
-| [PRD-002: Session-Based CLI](002-session-based-cli.md) | Persistent conversations |
-| [PRD-003: CLI Direct Invocation](003-cli-direct-invocation.md) | Command-line interface |
-| [PRD-004: Hooks System](004-hooks-system.md) | Lifecycle hooks |
-| [PRD-005: Gateway](005-gateway-prd.md) | Distributed communication |
+| [PRD-002: Gateway](002-gateway-prd.md) | Gateway runtime, routing, sessions, and channels |
+| [Custom Agents Guide](../custom-agents.md) | Declarative agent configuration |
 
 ---
 

@@ -6,7 +6,7 @@
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
 
-This document covers the agent architecture for local CLI execution. For distributed multi-agent collaboration, see [Gateway PRD](005-gateway-prd.md).
+This document covers the agent architecture shared by the gateway and local CLI execution. The gateway is the default runtime; the CLI can run locally with `--local`. For gateway routing and sessions, see [Gateway PRD](002-gateway-prd.md).
 
 ## Problem Statement
 Modern AI assistants face several challenges:
@@ -172,6 +172,25 @@ Modern AI assistants face several challenges:
 - Security audits
 - Quality gates
 
+## Agent Isolation and Storage
+
+An agent is a fully scoped brain with its own workspace, agent directory, and session store. This keeps personas, credentials, and history isolated.
+
+**Isolation rules:**
+- Each agent has a dedicated workspace that acts as the default cwd; relative paths resolve inside the workspace. Sandboxing is optional and configured per agent.
+- Each agent has a dedicated agentDir for auth profiles and per-agent config. Do not reuse agentDir across agents to avoid auth/session collisions.
+- Sessions are stored per agent under the gateway state directory.
+
+**Default paths (configurable):**
+- Config: `.wingman/wingman.config.json` (workspace)
+- Agent workspace: `~/wingman-<agentId>` (example)
+- Agent dir: `~/.wingman/agents/<agentId>/agent`
+- Sessions: `~/.wingman/agents/<agentId>/sessions`
+- Auth profiles: `~/.wingman/agents/<agentId>/agent/auth-profiles.json`
+- Shared skills: `~/.wingman/skills` and per-workspace `skills/`
+
+Per-agent sandbox and tool allow/deny policies can further restrict what an agent is allowed to execute. These policies are enforced by the gateway runtime.
+
 ## Orchestration Patterns
 
 ### Pattern 1: Direct Handling
@@ -236,6 +255,14 @@ User → Root Agent → Coder → [Internal: Planner → Implementor → Reviewe
 - User preferences
 - Learned patterns
 - Historical context
+- Durable project context, decisions, and research notes (stored under `/memories/`)
+
+**Agent Guidance**:
+- Agents receive a hidden middleware note describing the memory structure and what to store.
+
+**Deferred Semantic Recall**:
+- Semantic memory retrieval (vector search over long-term memory) is deferred.
+- MVP relies on explicit `/memories/` reads and agent self-management.
 
 ### Composite Backend
 **Strategy**: Route operations based on path prefix
@@ -562,108 +589,74 @@ Users specify providers in agent configuration:
 
 ## Gateway Integration
 
-When connected to a [Wingman Gateway](005-gateway-prd.md), agents can participate in distributed collaboration.
+The gateway is the default runtime for agents, sessions, and channels. The CLI connects as a client, with `--local` available for standalone runs. For routing and session details, see [Gateway PRD](002-gateway-prd.md).
 
 ### Connection Model
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Local CLI                                │
-│  ┌─────────────┐                                            │
-│  │   Agent     │                                            │
-│  │  (coder)    │◀────────────────────┐                      │
-│  └─────────────┘                     │                      │
-│        │                             │                      │
-│        ▼                             │                      │
-│  ┌─────────────┐              ┌──────┴──────┐              │
-│  │  Session    │              │   Gateway   │              │
-│  │  (SQLite)   │              │   Client    │              │
-│  │  (Local)    │              │             │              │
-│  └─────────────┘              └──────┬──────┘              │
-│                                      │                      │
-└──────────────────────────────────────┼──────────────────────┘
-                                       │
-                                       │ WebSocket
-                                       ▼
-                              ┌─────────────────┐
-                              │  Wingman Gateway │
-                              │  (Remote/LAN)   │
-                              └─────────────────┘
+│                        Clients                               │
+│  CLI, Control UI, Channels, Future Nodes                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ WebSocket / internal adapters
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Wingman Gateway                         │
+│  - Routing bindings                                           │
+│  - Session store (SQLite)                                     │
+│  - Agent runtime                                              │
+│  - Channel adapters                                           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### State Ownership
 
 | Component | Owns |
 |-----------|------|
-| Agent | System prompt, tools, reasoning |
-| Session (SQLite) | Conversation history, checkpoints |
-| Gateway | Nothing - pure routing |
+| Gateway | Agent registry, routing bindings, session store, channel adapters |
+| Agent | System prompt, tools, reasoning (hosted inside gateway) |
+| CLI (client) | UI, config, optional local sessions |
 
-**Key Principle:** Gateway is stateless. Agents maintain full conversation context locally. This enables:
-- Offline operation (agent works without gateway)
-- State persistence across gateway restarts
-- Independent agent sessions (no shared state corruption)
+**Key Principle:** Gateway is stateful. Sessions and routing live in the gateway; clients do not own conversation state unless running with `--local`.
 
 ### Message Flow
 
-**Receiving from Gateway:**
+**Inbound message to agent:**
 ```typescript
-gatewayClient.on('message', async (msg) => {
-  // Skip own messages (sender exclusion)
-  if (msg.fromNodeId === gatewayClient.nodeId) return;
+gateway.on("inboundMessage", async (msg) => {
+  const agentId = router.match(msg);
+  const sessionKey = sessionKeys.for(msg, agentId);
+  const agent = agentRegistry.get(agentId);
+  const session = await sessionStore.load(sessionKey);
 
-  // Agent decides whether to respond (discretion model)
-  const shouldRespond = await agent.shouldHandle(msg.payload.content);
-  if (!shouldRespond) return;
-
-  // Process and stream response
-  for await (const chunk of agent.stream(msg.payload.content)) {
-    gatewayClient.broadcast({
-      type: 'agent-stream',
-      chunk
-    });
+  for await (const chunk of agent.stream(msg.content, session)) {
+    channelAdapter.sendStream(msg.replyTo, chunk);
   }
 });
 ```
 
-**Sending to Gateway:**
+**CLI default invocation:**
 ```typescript
-// User input flows through gateway
-outputManager.on('user-prompt', (prompt) => {
-  gatewayClient.broadcast({
-    type: 'user-message',
-    content: prompt
-  });
-});
-
-// Agent responses flow through gateway
-outputManager.on('agent-stream', (chunk) => {
-  gatewayClient.broadcast({
-    type: 'agent-stream',
-    chunk
-  });
+cli.send({
+  type: "req:agent",
+  payload: { content: prompt }
 });
 ```
 
 ### Multi-Device Scenarios
 
 **Same User, Multiple Devices:**
-- Laptop sends prompt
-- Desktop agent processes
-- Mobile sees both prompt and response
-
-**Team Collaboration:**
-- Team member A's coder agent joins room
-- Team member B's researcher agent joins room
-- Shared prompts processed by both agents
-- All team members see all outputs
+- Laptop sends prompt via CLI or Control UI
+- Gateway runs the selected agent and streams output
+- Mobile UI sees the same stream
 
 ### Offline Mode
 
 When gateway is unavailable:
-- Agent continues normal CLI operation
-- Session state preserved locally
-- Reconnection syncs presence only (not history)
+- Run locally with `wingman agent --local`
+- Session state is stored locally
+- Channel routing is unavailable until gateway reconnects
 
 ## Future Enhancements
 
@@ -677,7 +670,7 @@ When gateway is unavailable:
 ### Phase 3
 - Multi-modal subagents (image, audio)
 - External agent integration (MCP protocol)
-- **Full gateway integration** (distributed collaboration)
+- External channel adapters and control UI expansion
 - Agent marketplace
 
 ### Phase 4
@@ -688,7 +681,7 @@ When gateway is unavailable:
 
 ## References
 - [Architecture Overview](000-architecture-overview.md) - System-wide architecture
-- [Gateway PRD](005-gateway-prd.md) - Distributed agent collaboration
+- [Gateway PRD](002-gateway-prd.md) - Gateway runtime and routing
 - [LangChain deepagents Documentation](https://docs.langchain.com/oss/javascript/deepagents)
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraphjs/)
 - [Custom Agents Configuration Guide](../custom-agents.md)

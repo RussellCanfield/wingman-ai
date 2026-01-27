@@ -25,6 +25,8 @@ export interface AgentInvokerOptions {
 	outputManager: OutputManager;
 	logger: Logger;
 	sessionManager?: SessionManager;
+	workdir?: string | null;
+	defaultOutputDir?: string | null;
 }
 
 export class AgentInvoker {
@@ -36,6 +38,8 @@ export class AgentInvoker {
 	private wingmanConfig: WingmanConfigType;
 	private mcpManager: MCPClientManager | null = null;
 	private sessionManager: SessionManager | null = null;
+	private workdir: string | null = null;
+	private defaultOutputDir: string | null = null;
 
 	constructor(options: AgentInvokerOptions) {
 		this.outputManager = options.outputManager;
@@ -43,6 +47,8 @@ export class AgentInvoker {
 		this.workspace = options.workspace || process.cwd();
 		this.configDir = options.configDir || ".wingman";
 		this.sessionManager = options.sessionManager || null;
+		this.workdir = options.workdir || null;
+		this.defaultOutputDir = options.defaultOutputDir || null;
 
 		// Load wingman config and pass to AgentLoader
 		const configLoader = new WingmanConfigLoader(
@@ -124,7 +130,12 @@ export class AgentInvoker {
 			}
 
 			// Build middleware array
-			const middleware = [additionalMessageMiddleware()];
+			const middleware = [
+				additionalMessageMiddleware({
+					workdir: this.workdir,
+					defaultOutputDir: this.defaultOutputDir,
+				}),
+			];
 
 			// Add hooks middleware if hooks are configured
 			if (mergedHooks) {

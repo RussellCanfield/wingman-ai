@@ -4,6 +4,10 @@ import type { ServerWebSocket } from "bun";
  * Message types for gateway communication
  */
 export type MessageType =
+	| "connect" // Client handshake
+	| "res" // Response to request
+	| "req:agent" // Request agent execution
+	| "event:agent" // Agent stream events
 	| "register" // Node registration
 	| "registered" // Registration confirmation
 	| "unregister" // Node leaving
@@ -22,12 +26,51 @@ export type MessageType =
  */
 export interface GatewayMessage {
 	type: MessageType;
+	id?: string;
+	client?: GatewayClientInfo;
+	auth?: GatewayAuthPayload;
+	ok?: boolean;
+	clientId?: string;
 	nodeId?: string;
 	groupId?: string;
+	roomId?: string;
 	targetNodeId?: string;
 	payload?: unknown;
 	timestamp: number;
 	messageId?: string;
+}
+
+export interface GatewayClientInfo {
+	instanceId: string;
+	clientType: string;
+	version?: string;
+}
+
+export interface GatewayAuthPayload {
+	token?: string;
+	password?: string;
+	deviceId?: string;
+}
+
+export interface AgentRequestPayload {
+	agentId?: string;
+	content: string;
+	routing?: RoutingInfo;
+	sessionKey?: string;
+}
+
+export interface RoutingPeer {
+	kind: "dm" | "group" | "channel";
+	id: string;
+}
+
+export interface RoutingInfo {
+	channel: string;
+	accountId?: string;
+	guildId?: string;
+	teamId?: string;
+	peer?: RoutingPeer;
+	threadId?: string;
 }
 
 /**
@@ -79,7 +122,12 @@ export interface GatewayConfig {
 	port: number;
 	host: string;
 	authToken?: string;
-	requireAuth: boolean;
+	requireAuth?: boolean;
+	auth?: GatewayAuthConfig;
+	stateDir?: string;
+	workspace?: string;
+	configDir?: string;
+	fsRoots?: string[];
 	maxNodes?: number;
 	pingInterval?: number;
 	pingTimeout?: number;
@@ -89,6 +137,13 @@ export interface GatewayConfig {
 		method: "mdns" | "tailscale";
 		name: string;
 	};
+}
+
+export interface GatewayAuthConfig {
+	mode: "token" | "password" | "none";
+	token?: string;
+	password?: string;
+	allowTailscale?: boolean;
 }
 
 /**

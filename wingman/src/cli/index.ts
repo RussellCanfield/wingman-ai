@@ -142,6 +142,10 @@ Commands:
 
 Options:
   --agent <name>      Agent name to invoke (required for agent command)
+  --local             Run agent locally instead of via gateway
+  --gateway <url>     Gateway URL (default from config)
+  --token <token>     Gateway auth token
+  --password <value>  Gateway auth password
   --output=<mode>     Output mode (interactive|json), overrides auto-detect
   -v, -vv             Verbosity level (v=info, vv=debug)
   --verbose=<level>   Set log level (debug|info|warn|error|silent)
@@ -150,6 +154,8 @@ Options:
 Examples:
   wingman agent --agent researcher "what is quantum computing"
   wingman agent --agent coder -vv "add a login function"
+  wingman agent --agent coder --local "fix the tests"
+  wingman agent --agent coder --gateway ws://localhost:18789/ws --token sk-... "ship it"
   wingman skill browse
   wingman skill install pdf
   wingman skill list
@@ -208,7 +214,26 @@ async function main() {
 				prompt: parsed.prompt,
 			};
 
-			await executeAgentCommand(commandArgs);
+			const gatewayConfig = config.gateway;
+			const gatewayUrl =
+				(parsed.commandOptions?.gateway as string | undefined) ||
+				(parsed.commandOptions?.gatewayUrl as string | undefined) ||
+				(gatewayConfig
+					? `ws://${gatewayConfig.host}:${gatewayConfig.port}/ws`
+					: undefined);
+			const token =
+				(parsed.commandOptions?.token as string | undefined) ||
+				gatewayConfig?.auth?.token;
+			const password =
+				(parsed.commandOptions?.password as string | undefined) ||
+				gatewayConfig?.auth?.password;
+
+			await executeAgentCommand(commandArgs, {
+				local: Boolean(parsed.commandOptions?.local),
+				gatewayUrl,
+				token,
+				password,
+			});
 		} else if (parsed.command === "skill") {
 			const commandArgs: SkillCommandArgs = {
 				subcommand: parsed.subcommand,

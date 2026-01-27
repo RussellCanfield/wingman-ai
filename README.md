@@ -84,6 +84,10 @@ To see the latest release notes - [check out our releases page](https://github.c
 
 ---
 
+## Development
+
+For local development setup, see `docs/dev-setup.md`.
+
 If you like the extension, please leave a review! If you don't, open an issue and we'd be happy to assist!
 
 **Enjoy!**

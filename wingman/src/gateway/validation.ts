@@ -11,6 +11,10 @@ import type {
  * Message type enum for validation
  */
 export const MessageTypeSchema = z.enum([
+	"connect",
+	"res",
+	"req:agent",
+	"event:agent",
 	"register",
 	"registered",
 	"unregister",
@@ -29,8 +33,26 @@ export const MessageTypeSchema = z.enum([
  */
 export const GatewayMessageSchema = z.object({
 	type: MessageTypeSchema,
+	id: z.string().optional(),
+	client: z
+		.object({
+			instanceId: z.string().min(1),
+			clientType: z.string().min(1),
+			version: z.string().optional(),
+		})
+		.optional(),
+	auth: z
+		.object({
+			token: z.string().optional(),
+			password: z.string().optional(),
+			deviceId: z.string().optional(),
+		})
+		.optional(),
+	ok: z.boolean().optional(),
+	clientId: z.string().optional(),
 	nodeId: z.string().optional(),
 	groupId: z.string().optional(),
+	roomId: z.string().optional(),
 	targetNodeId: z.string().optional(),
 	payload: z.unknown().optional(),
 	timestamp: z.number(),

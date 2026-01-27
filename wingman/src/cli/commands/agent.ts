@@ -7,11 +7,16 @@ import { SessionManager } from "../core/sessionManager.js";
 import { createLogger, getLogFilePath } from "@/logger.js";
 import { join } from "node:path";
 import { App } from "../ui/App.js";
+import { GatewayRpcClient } from "@/gateway/rpcClient.js";
 
 export interface AgentCommandOptions {
 	workspace?: string;
 	configDir?: string;
 	sessionId?: string; // Optional session ID for resumption
+	local?: boolean;
+	gatewayUrl?: string;
+	token?: string;
+	password?: string;
 }
 
 /**
@@ -33,27 +38,17 @@ export async function executeAgentCommand(
 
 	// Create bridged logger
 	const logger = createLogger(args.verbosity); //createBridgedLogger(outputManager, args.verbosity);
-
-	// Initialize session manager
-	const workspace = options.workspace || process.cwd();
-	const configDir = options.configDir || ".wingman";
-	const dbPath = join(workspace, configDir, "wingman.db");
-
-	const sessionManager = new SessionManager(dbPath);
-	await sessionManager.initialize();
-
-	// Create agent invoker with session manager
-	const invoker = new AgentInvoker({
-		workspace,
-		configDir,
-		outputManager,
-		logger,
-		sessionManager,
-	});
+	let sessionManager: SessionManager | null = null;
 
 	try {
 		// If no agent specified, list available agents
 		if (!args.agent) {
+			const invoker = new AgentInvoker({
+				workspace: options.workspace,
+				configDir: options.configDir,
+				outputManager,
+				logger,
+			});
 			const agents = invoker.listAgents();
 			const logFile = getLogFilePath();
 			logger.error("No agent specified");
@@ -74,9 +69,64 @@ export async function executeAgentCommand(
 					timestamp: new Date().toISOString(),
 				});
 			}
-			sessionManager.close();
 			process.exit(1);
 		}
+
+		if (!options.local) {
+			if (!options.gatewayUrl) {
+				throw new Error(
+					"Gateway URL not configured. Use --gateway or set gateway.host/port in wingman.config.json.",
+				);
+			}
+
+			const client = new GatewayRpcClient(options.gatewayUrl, {
+				token: options.token,
+				password: options.password,
+				clientType: "cli",
+			});
+
+			await client.connect();
+
+			await client.requestAgent(
+				{
+					agentId: args.agent,
+					content: args.prompt,
+					routing: {
+						channel: "cli",
+						peer: { kind: "channel", id: "cli" },
+					},
+					sessionKey: options.sessionId,
+				},
+				(event) => {
+					outputManager.emitEvent(event as any);
+				},
+			);
+
+			client.disconnect();
+
+			if (inkInstance) {
+				inkInstance.unmount();
+			}
+
+			return;
+		}
+
+		// Initialize session manager
+		const workspace = options.workspace || process.cwd();
+		const configDir = options.configDir || ".wingman";
+		const dbPath = join(workspace, configDir, "wingman.db");
+
+		sessionManager = new SessionManager(dbPath);
+		await sessionManager.initialize();
+
+		// Create agent invoker with session manager
+		const invoker = new AgentInvoker({
+			workspace,
+			configDir,
+			outputManager,
+			logger,
+			sessionManager,
+		});
 
 		// Get or create session
 		let sessionId = options.sessionId;
@@ -112,6 +162,7 @@ export async function executeAgentCommand(
 
 		// Close session manager
 		sessionManager.close();
+		sessionManager = null;
 
 		// Unmount Ink UI in interactive mode
 		if (inkInstance) {
@@ -122,7 +173,10 @@ export async function executeAgentCommand(
 		const logFile = getLogFilePath();
 		logger.error("Agent command failed", { error: errorMsg });
 
-		sessionManager.close();
+		if (sessionManager) {
+			sessionManager.close();
+			sessionManager = null;
+		}
 
 		// Unmount Ink UI before error handling
 		if (inkInstance) {
@@ -134,7 +188,12 @@ export async function executeAgentCommand(
 			console.error(`Logs: ${logFile}`);
 			process.exit(1);
 		} else {
-			outputManager.emitAgentError(error as Error);
+			const isAgentError = Boolean(
+				error instanceof Error && (error as any).isAgentError,
+			);
+			if (!isAgentError) {
+				outputManager.emitAgentError(error as Error);
+			}
 			process.exit(1);
 		}
 	}

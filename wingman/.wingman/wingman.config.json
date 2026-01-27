@@ -1,4 +1,28 @@
 {
 	"logLevel": "info",
-	"recursionLimit": 5000
+	"recursionLimit": 5000,
+	"defaultAgent": "main",
+	"gateway": {
+		"host": "0.0.0.0",
+		"port": 18789,
+		"auth": { "mode": "token", "token": "c0284175b023bd92aa257a2b08e303e219c921efc9874ca126c55ad994666d40" },
+		"fsRoots": [
+			"~/.wingman/outputs",
+			"~/Projects"
+		],
+		"controlUi": {
+			"enabled": true,
+			"port": 18789
+		}
+	},
+	"agents": {
+		"list": [
+			{ "id": "main", "name": "Main", "default": true },
+			{ "id": "coding", "name": "Coding" },
+			{ "id": "researcher", "name": "Researcher" }
+		],
+		"bindings": [
+			{ "agentId": "main", "match": { "channel": "webui" } }
+		]
+	}
 }

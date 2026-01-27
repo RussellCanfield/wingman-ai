@@ -1,7 +1,17 @@
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
-import { Database } from "bun:sqlite";
-import { BunSqliteAdapter } from "./database/bunSqliteAdapter.js";
 import { v4 as uuidv4 } from "uuid";
+
+type DatabaseLike = {
+	prepare: (sql: string) => {
+		get: (...params: any[]) => any;
+		all: (...params: any[]) => any[];
+		run: (...params: any[]) => any;
+	};
+	run: (sql: string, ...params: any[]) => any;
+	close: () => void;
+};
+
+const isBunRuntime = typeof (globalThis as any).Bun !== "undefined";
 
 export interface Session {
 	id: string;
@@ -22,13 +32,20 @@ export interface ListSessionsOptions {
 	agentName?: string;
 }
 
+export interface SessionMessage {
+	id: string;
+	role: "user" | "assistant";
+	content: string;
+	createdAt: number;
+}
+
 /**
  * SessionManager handles session metadata and provides unified access to
  * both the custom sessions table and LangGraph's SqliteSaver checkpointer.
  */
 export class SessionManager {
 	private checkpointer: SqliteSaver | null = null;
-	private db: Database | null = null;
+	private db: DatabaseLike | null = null;
 	private dbPath: string;
 
 	constructor(dbPath: string) {
@@ -39,11 +56,18 @@ export class SessionManager {
 	 * Initialize the SessionManager with SqliteSaver and create custom tables
 	 */
 	async initialize(): Promise<void> {
-		// Create native bun:sqlite database
-		const bunDb = new Database(this.dbPath, { create: true });
+		if (!isBunRuntime) {
+			throw new Error(
+				"SessionManager requires Bun runtime (bun:sqlite not available)",
+			);
+		}
 
-		// Wrap for SqliteSaver compatibility
-		const adapter = new BunSqliteAdapter(bunDb);
+		const { BunSqliteAdapter } = await import(
+			"./database/bunSqliteAdapter.js"
+		);
+
+		// Create native bun:sqlite database via adapter
+		const adapter = new BunSqliteAdapter(this.dbPath);
 
 		// Create SqliteSaver directly with the adapter
 		// Note: SqliteSaver expects a better-sqlite3 Database instance
@@ -56,7 +80,7 @@ export class SessionManager {
 
 		// Store native database reference for direct queries
 		// Access the actual bun:sqlite database through the adapter
-		this.db = adapter.db;
+		this.db = adapter.db as DatabaseLike;
 
 		// Create custom sessions table for UI/metadata
 		this.db.run(`
@@ -98,6 +122,40 @@ export class SessionManager {
 
 		return {
 			id,
+			name: sessionName,
+			agentName,
+			createdAt: new Date(now),
+			updatedAt: new Date(now),
+			status: "active",
+			messageCount: 0,
+		};
+	}
+
+	/**
+	 * Get or create a session with a fixed ID
+	 */
+	getOrCreateSession(sessionId: string, agentName: string, name?: string): Session {
+		if (!this.db) {
+			throw new Error("SessionManager not initialized");
+		}
+
+		const existing = this.getSession(sessionId);
+		if (existing) {
+			return existing;
+		}
+
+		const now = Date.now();
+		const sessionName = name || `Session ${new Date().toLocaleString()}`;
+
+		const stmt = this.db.prepare(`
+      INSERT INTO sessions (id, name, agent_name, created_at, updated_at, status, message_count)
+      VALUES (?, ?, ?, ?, ?, 'active', 0)
+    `);
+
+		stmt.run(sessionId, sessionName, agentName, now, now);
+
+		return {
+			id: sessionId,
 			name: sessionName,
 			agentName,
 			createdAt: new Date(now),
@@ -239,6 +297,32 @@ export class SessionManager {
 	}
 
 	/**
+	 * Merge and update session metadata
+	 */
+	updateSessionMetadata(
+		sessionId: string,
+		metadata: Record<string, any>,
+	): void {
+		if (!this.db) {
+			throw new Error("SessionManager not initialized");
+		}
+
+		const existing = this.getSession(sessionId);
+		const nextMetadata = {
+			...(existing?.metadata || {}),
+			...metadata,
+		};
+
+		const stmt = this.db.prepare(`
+      UPDATE sessions
+      SET metadata = ?, updated_at = ?
+      WHERE id = ?
+    `);
+
+		stmt.run(JSON.stringify(nextMetadata), Date.now(), sessionId);
+	}
+
+	/**
 	 * Archive a session (soft delete)
 	 */
 	archiveSession(sessionId: string): void {
@@ -281,6 +365,47 @@ export class SessionManager {
 	}
 
 	/**
+	 * List messages for a session by reading the latest checkpoint.
+	 */
+	async listMessages(sessionId: string): Promise<SessionMessage[]> {
+		if (!this.checkpointer) {
+			throw new Error("SessionManager not initialized");
+		}
+
+		const tuple = await this.checkpointer.getTuple({
+			configurable: { thread_id: sessionId },
+		});
+		if (!tuple?.checkpoint) {
+			return [];
+		}
+
+		const checkpoint = tuple.checkpoint as any;
+		const channelValues =
+			checkpoint?.channel_values ||
+			checkpoint?.channelValues ||
+			checkpoint?.state?.channel_values ||
+			checkpoint?.state?.channelValues ||
+			{};
+
+		const candidates: any[][] = [];
+		if (Array.isArray(channelValues?.messages)) {
+			candidates.push(channelValues.messages);
+		}
+		for (const value of Object.values(channelValues)) {
+			if (Array.isArray(value)) {
+				candidates.push(value);
+			}
+		}
+
+		const messages = candidates.find((arr) => arr.some(isMessageLike)) || [];
+		const baseTime = parseCheckpointTimestamp(checkpoint?.ts);
+
+		return messages
+			.map((message, index) => toSessionMessage(message, index, baseTime))
+			.filter(Boolean) as SessionMessage[];
+	}
+
+	/**
 	 * Convert database row to Session object
 	 */
 	private rowToSession(row: any): Session {
@@ -305,4 +430,86 @@ export class SessionManager {
 			this.db.close();
 		}
 	}
+}
+
+function isMessageLike(entry: any): boolean {
+	if (!entry || typeof entry !== "object") return false;
+	return (
+		typeof entry.role === "string" ||
+		typeof entry.type === "string" ||
+		typeof entry?.kwargs?.role === "string" ||
+		typeof entry?.additional_kwargs?.role === "string"
+	);
+}
+
+function toSessionMessage(
+	entry: any,
+	index: number,
+	baseTime: number,
+): SessionMessage | null {
+	if (!entry || typeof entry !== "object") return null;
+	if (entry?.additional_kwargs?.ui_hidden || entry?.additional_kwargs?.uiHidden) {
+		return null;
+	}
+	if (entry?.metadata?.ui_hidden || entry?.metadata?.uiHidden) {
+		return null;
+	}
+
+	const role =
+		(entry.role as string | undefined) ||
+		(entry?.kwargs?.role as string | undefined) ||
+		(entry?.additional_kwargs?.role as string | undefined) ||
+		mapMessageType(entry?.type as string | undefined);
+
+	if (role !== "user" && role !== "assistant") {
+		return null;
+	}
+
+	const content =
+		typeof entry.content === "string"
+			? entry.content
+			: typeof entry?.kwargs?.content === "string"
+				? entry.kwargs.content
+				: typeof entry?.additional_kwargs?.content === "string"
+					? entry.additional_kwargs.content
+					: typeof entry?.data?.content === "string"
+						? entry.data.content
+						: Array.isArray(entry?.content)
+							? entry.content
+									.filter((block: any) => block && block.type === "text" && block.text)
+									.map((block: any) => block.text)
+									.join("")
+							: "";
+
+	if (role === "user" && isUiHiddenContent(content)) {
+		return null;
+	}
+
+	return {
+		id: `msg-${index}`,
+		role,
+		content,
+		createdAt: baseTime + index,
+	};
+}
+
+function mapMessageType(type?: string): "user" | "assistant" | null {
+	if (!type) return null;
+	if (type === "human" || type === "user") return "user";
+	if (type === "ai" || type === "assistant") return "assistant";
+	return null;
+}
+
+function parseCheckpointTimestamp(ts?: string): number {
+	if (!ts) return Date.now();
+	const parsed = Date.parse(ts);
+	return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+function isUiHiddenContent(content: string): boolean {
+	if (!content) return false;
+	return (
+		content.includes("Current Date Time (UTC):") ||
+		content.startsWith("# User's Machine Information")
+	);
 }

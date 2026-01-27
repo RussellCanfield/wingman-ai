@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Sora", system-ui, -apple-system, sans-serif;
+    color: #12110f;
+    background:
+      radial-gradient(1200px 600px at 12% 12%, #ffe4c8 0%, transparent 60%),
+      radial-gradient(900px 620px at 90% 6%, #c6f3e7 0%, transparent 55%),
+      radial-gradient(1200px 900px at 40% 100%, #f7f2e6 0%, transparent 60%),
+      linear-gradient(135deg, #f7f1e7 0%, #efe6da 100%);
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/80 backdrop-blur-2xl border border-black/10 shadow-[0_22px_60px_rgba(18,14,12,0.18)];
+  }
+
+  .glass-edge {
+    @apply border border-white/60 bg-white/70 shadow-[0_25px_80px_rgba(10,70,60,0.18)] backdrop-blur-2xl;
+  }
+
+  .panel-card {
+    @apply rounded-2xl border border-black/10 bg-white/70 shadow-[0_12px_24px_rgba(18,14,12,0.12)] backdrop-blur-xl;
+  }
+
+  .stat-card {
+    @apply rounded-2xl border border-black/10 bg-gradient-to-br from-white/90 to-white/70 shadow-[0_12px_24px_rgba(18,14,12,0.12)];
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-emerald-600 via-emerald-400 to-orange-400 bg-clip-text text-transparent;
+  }
+
+  .pill {
+    @apply rounded-full border border-dashed border-black/20 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .button-primary {
+    @apply rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(0,141,115,0.26)] transition;
+  }
+
+  .button-secondary {
+    @apply rounded-full border border-black/10 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900 shadow-none transition;
+  }
+
+  .button-ghost {
+    @apply rounded-full border border-dashed border-black/20 bg-transparent px-4 py-2 text-sm font-semibold text-slate-500 shadow-none transition;
+  }
+}
+
+.gridlines {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(transparent 0%, rgba(0, 0, 0, 0.03) 100%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 64px 64px, 64px 64px;
+  mask-image: radial-gradient(circle at top left, rgba(0, 0, 0, 0.6), transparent 70%);
+}
+
+.noise {
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.aurora {
+  position: absolute;
+  inset: -20% -10%;
+  background: conic-gradient(from 180deg, rgba(0, 141, 115, 0.18), rgba(255, 122, 61, 0.12), rgba(0, 141, 115, 0.2), rgba(255, 255, 255, 0));
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: auroraShift 18s ease-in-out infinite;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(32px);
+  opacity: 0.65;
+  mix-blend-mode: multiply;
+}
+
+.orb-a {
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(0, 141, 115, 0.5) 0%, transparent 70%);
+  top: -120px;
+  left: -80px;
+}
+
+.orb-b {
+  width: 440px;
+  height: 440px;
+  background: radial-gradient(circle, rgba(255, 122, 61, 0.4) 0%, transparent 70%);
+  bottom: -180px;
+  right: -120px;
+  animation-delay: -3s;
+}
+
+.orb-c {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(185, 230, 213, 0.55) 0%, transparent 70%);
+  top: 120px;
+  right: 10%;
+  animation-delay: -6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes auroraShift {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(40px, -30px, 0) rotate(30deg); }
+}

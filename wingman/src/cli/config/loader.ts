@@ -77,6 +77,25 @@ export class WingmanConfigLoader {
 				repositoryName: "skills",
 				skillsDirectory: "skills",
 			},
+			gateway: {
+				host: "127.0.0.1",
+				port: 18789,
+				fsRoots: [],
+				auth: {
+					mode: "none",
+					allowTailscale: false,
+				},
+				controlUi: {
+					enabled: true,
+					port: 18790,
+					pairingRequired: true,
+					allowInsecureAuth: false,
+				},
+			},
+			agents: {
+				list: [],
+				bindings: [],
+			},
 		};
 	}
 }

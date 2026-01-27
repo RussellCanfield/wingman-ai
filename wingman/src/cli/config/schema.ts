@@ -41,6 +41,106 @@ export const SkillsConfigSchema = z.object({
 
 export type SkillsConfig = z.infer<typeof SkillsConfigSchema>;
 
+const GatewayAuthSchema = z
+	.object({
+		mode: z.enum(["token", "password", "none"]).default("none"),
+		token: z.string().optional(),
+		password: z.string().optional(),
+		allowTailscale: z.boolean().optional().default(false),
+	})
+	.default({
+		mode: "none",
+		allowTailscale: false,
+	});
+
+const GatewayControlUiSchema = z
+	.object({
+		enabled: z.boolean().default(true),
+		port: z.number().min(1).max(65535).default(18790),
+		pairingRequired: z.boolean().default(true),
+		allowInsecureAuth: z.boolean().default(false),
+	})
+	.default({
+		enabled: true,
+		port: 18790,
+		pairingRequired: true,
+		allowInsecureAuth: false,
+	});
+
+export const GatewayConfigSchema = z
+	.object({
+		host: z.string().default("127.0.0.1"),
+		port: z.number().min(1).max(65535).default(18789),
+		stateDir: z.string().optional(),
+		fsRoots: z.array(z.string()).optional().default([]),
+		auth: GatewayAuthSchema.optional().default({
+			mode: "none",
+			allowTailscale: false,
+		}),
+		controlUi: GatewayControlUiSchema.optional().default({
+			enabled: true,
+			port: 18790,
+			pairingRequired: true,
+			allowInsecureAuth: false,
+		}),
+	})
+	.default({
+		host: "127.0.0.1",
+		port: 18789,
+		fsRoots: [],
+		auth: {
+			mode: "none",
+			allowTailscale: false,
+		},
+		controlUi: {
+			enabled: true,
+			port: 18790,
+			pairingRequired: true,
+			allowInsecureAuth: false,
+		},
+	});
+
+export type GatewayConfig = z.infer<typeof GatewayConfigSchema>;
+
+const AgentListItemSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().optional(),
+	default: z.boolean().optional(),
+	workspace: z.string().optional(),
+	agentDir: z.string().optional(),
+	model: z.string().optional(),
+});
+
+const BindingPeerSchema = z.object({
+	kind: z.enum(["dm", "group", "channel"]),
+	id: z.string().min(1),
+});
+
+const BindingMatchSchema = z.object({
+	channel: z.string().min(1),
+	accountId: z.string().optional(),
+	guildId: z.string().optional(),
+	teamId: z.string().optional(),
+	peer: BindingPeerSchema.optional(),
+});
+
+const BindingSchema = z.object({
+	agentId: z.string().min(1),
+	match: BindingMatchSchema,
+});
+
+export const AgentsConfigSchema = z
+	.object({
+		list: z.array(AgentListItemSchema).default([]),
+		bindings: z.array(BindingSchema).default([]),
+	})
+	.default({
+		list: [],
+		bindings: [],
+	});
+
+export type AgentsConfig = z.infer<typeof AgentsConfigSchema>;
+
 // Zod schema for wingman.config.json
 export const WingmanConfigSchema = z.object({
 	logLevel: z
@@ -64,6 +164,25 @@ export const WingmanConfigSchema = z.object({
 		repositoryOwner: "anthropics",
 		repositoryName: "skills",
 		skillsDirectory: "skills",
+	}),
+	gateway: GatewayConfigSchema.optional().default({
+		host: "127.0.0.1",
+		port: 18789,
+		fsRoots: [],
+		auth: {
+			mode: "none",
+			allowTailscale: false,
+		},
+		controlUi: {
+			enabled: true,
+			port: 18790,
+			pairingRequired: true,
+			allowInsecureAuth: false,
+		},
+	}),
+	agents: AgentsConfigSchema.optional().default({
+		list: [],
+		bindings: [],
 	}),
 	mcp: MCPServersConfigSchema.optional().describe(
 		"Global MCP server configurations",

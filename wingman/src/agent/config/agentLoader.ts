@@ -48,8 +48,10 @@ export class AgentLoader {
 				const agentDirPath = join(agentsDir, agentDir);
 				const agentJsonPath = join(agentDirPath, "agent.json");
 				const agentMarkdownPath = join(agentDirPath, "agent.md");
+				const hasJson = existsSync(agentJsonPath);
+				const hasMarkdown = existsSync(agentMarkdownPath);
 
-				if (!existsSync(agentJsonPath) && !existsSync(agentMarkdownPath)) {
+				if (!hasJson && !hasMarkdown) {
 					logger.warn(
 						`Skipping ${agentDir}: agent.json or agent.md not found`,
 					);
@@ -57,7 +59,8 @@ export class AgentLoader {
 				}
 
 				try {
-					const json = existsSync(agentJsonPath)
+					const agentFilePath = hasJson ? agentJsonPath : agentMarkdownPath;
+					const json = hasJson
 						? this.loadFromJson(agentJsonPath)
 						: this.loadFromMarkdown(agentMarkdownPath, agentDirPath);
 

@@ -7,6 +7,43 @@ export type OutputMode = "interactive" | "json";
 export interface WingmanConfig {
 	logLevel?: LogLevel;
 	defaultAgent?: string;
+	gateway?: {
+		host?: string;
+		port?: number;
+		stateDir?: string;
+		auth?: {
+			mode?: "token" | "password" | "none";
+			token?: string;
+			password?: string;
+			allowTailscale?: boolean;
+		};
+		controlUi?: {
+			enabled?: boolean;
+			port?: number;
+			pairingRequired?: boolean;
+			allowInsecureAuth?: boolean;
+		};
+	};
+	agents?: {
+		list?: Array<{
+			id: string;
+			name?: string;
+			default?: boolean;
+			workspace?: string;
+			agentDir?: string;
+			model?: string;
+		}>;
+		bindings?: Array<{
+			agentId: string;
+			match: {
+				channel: string;
+				accountId?: string;
+				guildId?: string;
+				teamId?: string;
+				peer?: { kind: "dm" | "group" | "channel"; id: string };
+			};
+		}>;
+	};
 	cli?: {
 		theme?: string;
 		outputMode?: "auto" | OutputMode;
