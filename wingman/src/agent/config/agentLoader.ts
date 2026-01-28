@@ -275,16 +275,21 @@ export class AgentLoader {
 
 		// Add tools if specified
 		if (config.tools && config.tools.length > 0) {
+			const mcpConfigs: MCPServersConfig[] = [];
+			if (config.mcp) {
+				mcpConfigs.push(config.mcp as MCPServersConfig);
+			}
+			if (config.mcpUseGlobal && this.wingmanConfig?.mcp) {
+				mcpConfigs.push(this.wingmanConfig.mcp);
+			}
+
 			const toolOptions: ToolOptions = {
 				workspace: this.workspace,
 				blockedCommands: config.blockedCommands,
 				allowScriptExecution: config.allowScriptExecution,
 				timeout: config.commandTimeout,
 				searchConfig: this.wingmanConfig?.search,
-				// Pass both global and agent-specific MCP configs
-				mcpConfigs: [this.wingmanConfig?.mcp, config.mcp].filter(
-					Boolean,
-				) as any[],
+				mcpConfigs,
 			};
 
 			agent.tools = await createTools(config.tools, toolOptions);
@@ -293,6 +298,9 @@ export class AgentLoader {
 		// Store MCP config on agent for reference
 		if (config.mcp) {
 			agent.mcpConfig = config.mcp as MCPServersConfig;
+		}
+		if (config.mcpUseGlobal) {
+			agent.mcpUseGlobal = true;
 		}
 
 		// Add model override if specified

@@ -34,12 +34,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	onOpenCommandDeck,
 }) => {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
-	const hasToolEvents = toolEvents.length > 0;
-
 	const activeToolCount = useMemo(
 		() => toolEvents.filter((event) => event.status === "running").length,
 		[toolEvents],
 	);
+
+	const toolTimestamp = useMemo(() => {
+		if (toolEvents.length === 0) return undefined;
+		return toolEvents.reduce((latest, event) => {
+			const candidate = event.completedAt ?? event.startedAt ?? 0;
+			return candidate > latest ? candidate : latest;
+		}, 0);
+	}, [toolEvents]);
 
 	useEffect(() => {
 		const el = scrollRef.current;
@@ -88,42 +94,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						</div>
 					</div>
 				) : (
-					activeThread.messages.map((msg) => (
-						<div
-							key={msg.id}
-							className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-						>
+					<>
+						{activeThread.messages.map((msg) => (
 							<div
-								className={`w-fit max-w-[78%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] ${msg.role === "user"
-									? "border-orange-200/60 bg-orange-100/40 text-slate-800"
-									: "border-emerald-200/60 bg-emerald-100/30 text-slate-700"
-									}`}
+								key={msg.id}
+								className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
 							>
-								<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
-									<span>{msg.role === "user" ? "You" : "Wingman"}</span>
-									<span>{formatTime(msg.createdAt)}</span>
-								</div>
-								{msg.role === "assistant" && !msg.content ? (
-									<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-										<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-										<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:150ms]" />
-										<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:300ms]" />
-										<span>{isStreaming ? "Streaming..." : "Waiting..."}</span>
+								<div
+									className={`w-fit max-w-[78%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] ${msg.role === "user"
+										? "border-orange-200/60 bg-orange-100/40 text-slate-800"
+										: "border-emerald-200/60 bg-emerald-100/30 text-slate-700"
+										}`}
+								>
+									<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
+										<span>{msg.role === "user" ? "You" : "Wingman"}</span>
+										<span>{formatTime(msg.createdAt)}</span>
 									</div>
-								) : (
-									<p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
-										{msg.content}
-									</p>
-								)}
+									{msg.role === "assistant" && !msg.content ? (
+										<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:150ms]" />
+											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:300ms]" />
+											<span>{isStreaming ? "Streaming..." : "Waiting..."}</span>
+										</div>
+									) : (
+										<p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
+											{msg.content}
+										</p>
+									)}
+								</div>
 							</div>
-						</div>
-					))
+						))}
+						{toolEvents.length > 0 ? (
+							<div className="flex justify-start">
+								<div className="w-full max-w-[78%] rounded-2xl border border-emerald-200/60 bg-emerald-100/20 px-4 py-3 text-sm text-slate-700 shadow-[0_10px_18px_rgba(18,14,12,0.08)]">
+									<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
+										<span>Tool Activity</span>
+										<span>{formatTime(toolTimestamp)}</span>
+									</div>
+									<div className="mt-2">
+										<ToolEventPanel
+											toolEvents={toolEvents}
+											activeCount={activeToolCount}
+											variant="inline"
+										/>
+									</div>
+								</div>
+							</div>
+						) : null}
+					</>
 				)}
 			</div>
-
-			{hasToolEvents ? (
-				<ToolEventPanel toolEvents={toolEvents} activeCount={activeToolCount} />
-			) : null}
 
 			<div className="rounded-2xl border border-black/10 bg-white/80 p-4">
 				{!connected ? (
@@ -161,7 +182,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						))}
 					</div>
 					<div className="flex items-center gap-3 text-xs text-slate-500">
-						{isStreaming ? <span>Streaming response...</span> : null}
 						<button
 							className="button-primary"
 							onClick={onSendPrompt}

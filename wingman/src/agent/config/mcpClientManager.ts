@@ -107,8 +107,9 @@ export class MCPClientManager {
 		try {
 			this.logger.debug("Retrieving tools from MCP servers");
 			const tools = await this.client.getTools();
-			this.logger.info(`Retrieved ${tools.length} tool(s) from MCP servers`);
-			return tools;
+			const sanitized = this.sanitizeToolNames(tools);
+			this.logger.info(`Retrieved ${sanitized.length} tool(s) from MCP servers`);
+			return sanitized;
 		} catch (error) {
 			this.logger.error(
 				`Failed to retrieve MCP tools: ${error instanceof Error ? error.message : String(error)}`,
@@ -116,6 +117,43 @@ export class MCPClientManager {
 			// Non-fatal: return empty array to allow agent to continue with other tools
 			return [];
 		}
+	}
+
+	private sanitizeToolNames(tools: StructuredTool[]): StructuredTool[] {
+		const used = new Map<string, number>();
+		const sanitize = (name: string) => {
+			const base = name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 128);
+			return base.length > 0 ? base : "tool";
+		};
+
+		const uniqueName = (name: string) => {
+			let candidate = sanitize(name);
+			let counter = used.get(candidate) || 0;
+			while (used.has(candidate)) {
+				counter += 1;
+				const suffix = `_${counter}`;
+				candidate = `${sanitize(name).slice(0, 128 - suffix.length)}${suffix}`;
+			}
+			used.set(candidate, counter);
+			return candidate;
+		};
+
+		return tools.map((tool) => {
+			const original = tool.name;
+			const sanitized = uniqueName(original);
+			if (sanitized !== original) {
+				try {
+					tool.name = sanitized;
+				} catch {
+					// ignore if tool name is read-only
+				}
+				const originalLabel = `Original tool name: ${original}`;
+				tool.description = tool.description
+					? `${tool.description}\n\n${originalLabel}`
+					: originalLabel;
+			}
+			return tool;
+		});
 	}
 
 	/**

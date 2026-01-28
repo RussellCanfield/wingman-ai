@@ -9,4 +9,5 @@ export type WingmanAgent = Pick<
 	description?: string;
 	toolHooks?: HooksConfig;
 	mcpConfig?: MCPServersConfig;
+	mcpUseGlobal?: boolean;
 };

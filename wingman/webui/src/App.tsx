@@ -1263,6 +1263,7 @@ export const App: React.FC = () => {
 										agents={agentCatalog}
 										availableTools={availableTools}
 										builtInTools={builtInTools}
+										providers={providers}
 										loading={agentsLoading}
 										onCreateAgent={createAgent}
 										onUpdateAgent={updateAgent}

@@ -4,11 +4,13 @@ import type { ToolEvent } from "../types";
 type ToolEventPanelProps = {
 	toolEvents: ToolEvent[];
 	activeCount: number;
+	variant?: "panel" | "inline";
 };
 
 export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 	toolEvents,
 	activeCount,
+	variant = "panel",
 }) => {
 	const sorted = [...toolEvents].sort((a, b) => {
 		const aTime = a.startedAt ?? 0;
@@ -16,20 +18,28 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 		return aTime - bTime;
 	});
 
+	const showHeader = variant === "panel";
+	const containerClass =
+		variant === "panel"
+			? "rounded-2xl border border-black/10 bg-white/80 p-4"
+			: "space-y-2";
+
 	return (
-		<section className="rounded-2xl border border-black/10 bg-white/80 p-4">
-			<div className="flex items-center justify-between">
-				<div>
-					<h3 className="text-sm font-semibold text-slate-700">Tool activity</h3>
-					<p className="text-xs text-slate-500">
-						{activeCount > 0
-							? `${activeCount} tool${activeCount === 1 ? "" : "s"} running`
-							: "Recent tool calls"}
-					</p>
+		<section className={containerClass}>
+			{showHeader ? (
+				<div className="flex items-center justify-between">
+					<div>
+						<h3 className="text-sm font-semibold text-slate-700">Tool activity</h3>
+						<p className="text-xs text-slate-500">
+							{activeCount > 0
+								? `${activeCount} tool${activeCount === 1 ? "" : "s"} running`
+								: "Recent tool calls"}
+						</p>
+					</div>
+					<span className="pill">{sorted.length}</span>
 				</div>
-				<span className="pill">{sorted.length}</span>
-			</div>
-			<div className="mt-3 space-y-2">
+			) : null}
+			<div className={showHeader ? "mt-3 space-y-2" : "space-y-2"}>
 				{sorted.map((event) => (
 					<ToolEventCard key={event.id} event={event} />
 				))}

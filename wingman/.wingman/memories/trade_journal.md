@@ -1,0 +1,1 @@
+# Trade Journal\n\nNo trades yet.

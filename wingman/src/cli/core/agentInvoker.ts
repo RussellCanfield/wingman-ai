@@ -111,10 +111,13 @@ export class AgentInvoker {
 			const hookSessionId = sessionId || uuidv4();
 
 			// Initialize MCP client if MCP servers configured
-			const mcpConfigs: MCPServersConfig[] = [
-				this.wingmanConfig.mcp,
-				targetAgent.mcpConfig,
-			].filter(Boolean) as MCPServersConfig[];
+			const mcpConfigs: MCPServersConfig[] = [];
+			if (targetAgent.mcpConfig) {
+				mcpConfigs.push(targetAgent.mcpConfig);
+			}
+			if (targetAgent.mcpUseGlobal && this.wingmanConfig.mcp) {
+				mcpConfigs.push(this.wingmanConfig.mcp);
+			}
 
 			if (mcpConfigs.length > 0) {
 				this.logger.debug("Initializing MCP client for agent invocation");
@@ -124,8 +127,12 @@ export class AgentInvoker {
 				// Get MCP tools and add to agent tools
 				const mcpTools = await this.mcpManager.getTools();
 				if (mcpTools.length > 0) {
-					targetAgent.tools = [...(targetAgent.tools || []), ...mcpTools];
-					this.logger.info(`Added ${mcpTools.length} MCP tools to agent`);
+					const existing = new Set(
+						(targetAgent.tools || []).map((tool) => tool.name),
+					);
+					const unique = mcpTools.filter((tool) => !existing.has(tool.name));
+					targetAgent.tools = [...(targetAgent.tools || []), ...unique];
+					this.logger.info(`Added ${unique.length} MCP tools to agent`);
 				}
 			}
 

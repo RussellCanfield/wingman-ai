@@ -69,6 +69,13 @@ const BaseAgentConfigSchema = z.object({
 	mcp: MCPServersConfigSchema.optional().describe(
 		"Agent-specific MCP server configurations",
 	),
+	mcpUseGlobal: z
+		.boolean()
+		.optional()
+		.default(false)
+		.describe(
+			"Whether this agent should also load global MCP servers from wingman.config.json",
+		),
 });
 
 export const AgentConfigSchema = BaseAgentConfigSchema.extend({
