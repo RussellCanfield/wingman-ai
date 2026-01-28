@@ -1,5 +1,10 @@
 export type ProviderAuthType = "api-key" | "oauth";
-export type ProviderName = "anthropic" | "openai" | "openrouter" | "copilot";
+export type ProviderName =
+	| "anthropic"
+	| "openai"
+	| "openrouter"
+	| "copilot"
+	| "xai";
 
 export interface ProviderOAuthConfig {
 	authorizationUrl: string;
@@ -53,6 +58,12 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		type: "api-key",
 		envVars: ["GITHUB_COPILOT_TOKEN", "COPILOT_TOKEN", "COPILOT_API_KEY"],
 		baseURL: "https://api.githubcopilot.com",
+	},
+	xai: {
+		name: "xai",
+		label: "xAI",
+		type: "api-key",
+		envVars: ["XAI_API_KEY"],
 	},
 };
 

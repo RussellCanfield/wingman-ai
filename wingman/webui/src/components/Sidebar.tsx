@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
+import { FiEdit2, FiMessageSquare, FiPlus, FiTrash2, FiUser } from "react-icons/fi";
 import type { ControlUiAgent, Thread } from "../types";
 
 type SidebarProps = {
@@ -12,6 +13,7 @@ type SidebarProps = {
 	onSelectThread: (threadId: string) => void;
 	onCreateThread: (agentId: string, name?: string) => Promise<Thread | null> | void;
 	onDeleteThread: (threadId: string) => void;
+	onRenameThread: (threadId: string) => void;
 	hostLabel: string;
 	deviceId: string;
 	getAgentLabel: (agentId: string) => string;
@@ -27,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 	onSelectThread,
 	onCreateThread,
 	onDeleteThread,
+	onRenameThread,
 	hostLabel,
 	deviceId,
 	getAgentLabel,
@@ -54,6 +57,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 				<NavLink to="/agents" className={({ isActive }) => navClass(isActive)}>
 					<span>Agents</span>
 				</NavLink>
+				<NavLink to="/webhooks" className={({ isActive }) => navClass(isActive)}>
+					<span>Webhooks</span>
+				</NavLink>
 				<NavLink to="/routines" className={({ isActive }) => navClass(isActive)}>
 					<span>Routines</span>
 				</NavLink>
@@ -78,10 +84,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 					</div>
 					<button
 						type="button"
-						className="button-secondary px-3 py-2 text-xs"
+						className="button-secondary flex items-center gap-2 px-3 py-2 text-xs"
 						onClick={() => onCreateThread(selectedAgentId)}
+						title="New thread"
 					>
-						New
+						<FiPlus />
+						<span>New</span>
 					</button>
 				</div>
 				<div className="max-h-[45vh] space-y-2 overflow-auto pr-1 lg:max-h-[420px]">
@@ -97,31 +105,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
 						threads.map((thread) => (
 							<div
 								key={thread.id}
-								className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${thread.id === activeThreadId
+								className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+									thread.id === activeThreadId
 										? "border-emerald-500/40 bg-emerald-100/50 text-emerald-700"
 										: "border-black/10 bg-white/70 text-slate-600 hover:border-emerald-200/60"
-									}`}
+								}`}
 							>
-								<button
-									type="button"
-									onClick={() => onSelectThread(thread.id)}
-									className="min-w-0 flex-1 text-left"
-								>
-									<div className="truncate">{thread.name}</div>
-									<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-										<span className="pill px-2 py-0.5 text-[9px]">
-											{getAgentLabel(thread.agentId)}
-										</span>
-										<span>{thread.messageCount ?? thread.messages.length} msgs</span>
+								<div className="flex items-start justify-between gap-2">
+									<button
+										type="button"
+										onClick={() => onSelectThread(thread.id)}
+										className="min-w-0 flex-1 text-left"
+									>
+										<div className="truncate">{thread.name}</div>
+										<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+											<span className="pill flex items-center gap-1 px-2 py-0.5 text-[9px]">
+												<FiUser className="text-[11px]" />
+												{getAgentLabel(thread.agentId)}
+											</span>
+											<span className="flex items-center gap-1">
+												<FiMessageSquare className="text-[11px]" />
+												{thread.messageCount ?? thread.messages.length}
+											</span>
+										</div>
+									</button>
+									<div className="flex items-center gap-1">
+										<button
+											type="button"
+											className="rounded-full border border-transparent p-2 text-[12px] text-slate-400 transition hover:border-emerald-200/60 hover:text-emerald-600"
+											onClick={() => onRenameThread(thread.id)}
+											title="Rename"
+										>
+											<FiEdit2 />
+										</button>
+										<button
+											type="button"
+											className="rounded-full border border-transparent p-2 text-[12px] text-slate-400 transition hover:border-rose-200/60 hover:text-rose-500"
+											onClick={() => onDeleteThread(thread.id)}
+											title="Delete"
+										>
+											<FiTrash2 />
+										</button>
 									</div>
-								</button>
-								<button
-									type="button"
-									className="rounded-full border border-transparent px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-400 transition hover:border-rose-200/60 hover:text-rose-500"
-									onClick={() => onDeleteThread(thread.id)}
-								>
-									Delete
-								</button>
+								</div>
 							</div>
 						))
 					)}

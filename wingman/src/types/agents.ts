@@ -7,6 +7,6 @@ export type WingmanAgent = Pick<
 	"name" | "systemPrompt" | "tools" | "skills" | "model" | "subagents"
 > & {
 	description?: string;
-	hooks?: HooksConfig;
+	toolHooks?: HooksConfig;
 	mcpConfig?: MCPServersConfig;
 };

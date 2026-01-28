@@ -6,7 +6,7 @@ The Wingman Gateway is the central runtime for agents, sessions, routing, and ch
 
 **Version:** 1.1
 **Status:** In Development
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-27
 
 ---
 
@@ -105,6 +105,20 @@ See [Architecture Overview](000-architecture-overview.md) for the full system co
 - Node pairing and approval flow
 - Node invoke protocol
 
+### 6. Webhook-Driven Automations (MVP)
+**Scenario:** External systems trigger agents via webhooks (e.g., new email, form submissions, CI alerts)
+**Flow:**
+1. User configures a webhook with agentId + secret
+2. External system sends HTTP POST payload
+3. Gateway validates the secret and normalizes payload
+4. Gateway routes to the configured agent and creates/updates a webhook thread
+
+**Requirements:**
+- Webhook registry with per-webhook secret
+- Deterministic agent selection per webhook
+- Thread creation that mirrors routines (human-readable name + session key)
+- Basic access control (shared secret + optional allowlist)
+
 ---
 
 ## Core Concepts
@@ -131,6 +145,7 @@ Routing happens before agent execution. Replies always return to the originating
 ### Sessions and Session Keys
 
 The gateway derives a session key from agentId plus channel identity. Sessions are durable and stored per agent.
+Sessions can be named on creation and renamed later via the Control UI or API.
 
 ### Routines (Scheduled Runs)
 
@@ -138,6 +153,7 @@ Routines allow users to run an agent prompt on a CRON schedule. Each run creates
 
 **Behavior**
 - A routine defines: `name`, `agentId`, `cron`, `prompt`, `enabled`.
+- Routines may optionally target an existing session (`sessionId`) to deliver output into an ongoing chat.
 - When a routine fires, the gateway uses a routine session key:
   - `agent:<agentId>:routine:<routineId>`
 - Each run appends a new message in the routine thread.
@@ -159,6 +175,29 @@ Routines allow users to run an agent prompt on a CRON schedule. Each run creates
 Notes:
 - If a channel supports multiple accounts, include `account:<accountId>` in the session key to avoid collisions.
 - DMs can collapse to the agent main session. For true isolation per person, use one agent per person.
+
+### Webhooks (MVP)
+
+Webhooks allow external systems to invoke agents over HTTP. Each webhook is a long-lived integration tied to a specific agent and produces a durable thread, similar to routines.
+
+**Behavior**
+- A webhook defines: `id`, `name`, `agentId`, `secret`, `enabled`, optional `eventLabel`.
+- Webhooks can optionally declare a preset. MVP includes `gog-gmail` for Gmail watch payloads from gogcli.
+- Webhooks may optionally target an existing session (`sessionId`) to deliver output into an ongoing chat.
+- Incoming webhook payloads become a new user message in the webhook thread.
+- Gateway assigns a session key:
+  - `agent:<agentId>:webhook:<webhookId>`
+- The webhook thread appears in the Control UI and can be continued like any other session.
+
+**Security**
+- Webhooks require a shared secret (header or query parameter).
+- Optional IP allowlists can further restrict access.
+  - Default: deny if no secret provided.
+
+**Preset: gog-gmail (MVP)**
+- Purpose: Normalize gogcli Gmail watch payloads without relying on gcloud.
+- Expected usage: `gog gmail watch serve` posts payloads to `/webhooks/<id>` with the webhook secret.
+- Result: Gateway formats a readable Gmail summary for the selected agent, and stores the payload in the webhook thread.
 
 ### Channels and Accounts
 
@@ -196,6 +235,7 @@ Nodes are remote tool executors that connect to the gateway and expose capabilit
 - Control UI with chat and streaming output (served on `gateway.controlUi.port`)
 - Token or password authentication
 - Basic health and stats endpoints (gateway + Control UI API proxy)
+- Webhook registry + invocation endpoint (create/manage via Control UI)
 
 ### Planned / Later
 - Broadcast rooms for explicit swarm workflows
@@ -318,6 +358,19 @@ interface SessionKey {
   peerId?: string;
   threadId?: string;
 }
+
+### Webhook (MVP)
+```typescript
+interface WebhookConfig {
+  id: string;                    // Unique webhook id
+  name: string;                  // Display name
+  agentId: string;               // Target agent
+  secret: string;                // Shared secret for auth
+  enabled: boolean;              // Toggle
+  eventLabel?: string;           // Optional label for UI
+  createdAt: number;
+}
+```
 ```
 
 ### Node (Planned)

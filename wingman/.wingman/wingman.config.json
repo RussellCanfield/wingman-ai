@@ -19,10 +19,24 @@
 		"list": [
 			{ "id": "main", "name": "Main", "default": true },
 			{ "id": "coding", "name": "Coding" },
-			{ "id": "researcher", "name": "Researcher" }
+			{ "id": "researcher", "name": "Researcher" },
+			{ "id": "stock-trader", "name": "Stock Trader" }
 		],
 		"bindings": [
 			{ "agentId": "main", "match": { "channel": "webui" } }
+		]
+	},
+	"mcp": {
+		"servers": [
+			{
+				"name": "finnhub",
+				"transport": "stdio",
+				"command": "bun",
+				"args": ["./src/tools/mcp-finance.ts"],
+				"env": {
+					"FINNHUB_API_KEY": "${FINNHUB_API_KEY}"
+				}
+			}
 		]
 	}
 }

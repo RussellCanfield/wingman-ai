@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from "react";
-import type { ControlUiAgent, Routine } from "../types";
+import type { ControlUiAgent, Routine, Thread } from "../types";
 
 type RoutinesPageProps = {
 	agents: ControlUiAgent[];
 	routines: Routine[];
+	threads: Thread[];
 	onCreateRoutine: (routine: Omit<Routine, "id" | "createdAt">) => void;
 	onDeleteRoutine: (id: string) => void;
 };
@@ -18,6 +19,7 @@ const PRESET_CRONS = [
 export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 	agents,
 	routines,
+	threads,
 	onCreateRoutine,
 	onDeleteRoutine,
 }) => {
@@ -26,6 +28,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 	const [agentId, setAgentId] = useState(agents[0]?.id || "main");
 	const [prompt, setPrompt] = useState("");
 	const [enabled, setEnabled] = useState(true);
+	const [targetSessionId, setTargetSessionId] = useState("");
 
 	const canSubmit = name.trim() && cron.trim() && prompt.trim();
 
@@ -37,12 +40,14 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 			agentId,
 			cron: cron.trim(),
 			prompt: prompt.trim(),
+			sessionId: targetSessionId || undefined,
 			enabled,
 		});
 		setName("");
 		setCron("0 9 * * *");
 		setPrompt("");
 		setEnabled(true);
+		setTargetSessionId("");
 	};
 
 	const agentOptions = useMemo(() => {
@@ -51,6 +56,14 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 		}
 		return agents;
 	}, [agents]);
+
+	const threadOptions = useMemo(() => {
+		return threads.map((thread) => ({
+			id: thread.id,
+			label: `${thread.name} · ${thread.agentId}`,
+			agentId: thread.agentId,
+		}));
+	}, [threads]);
 
 	return (
 		<section className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -110,7 +123,20 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 						<select
 							className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
 							value={agentId}
-							onChange={(event) => setAgentId(event.target.value)}
+							onChange={(event) => {
+								const nextAgent = event.target.value;
+								setAgentId(nextAgent);
+								if (
+									targetSessionId &&
+									!threads.some(
+										(thread) =>
+											thread.id === targetSessionId &&
+											thread.agentId === nextAgent,
+									)
+								) {
+									setTargetSessionId("");
+								}
+							}}
 						>
 							{agentOptions.map((agent) => (
 								<option key={agent.id} value={agent.id}>
@@ -118,6 +144,33 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 								</option>
 							))}
 						</select>
+					</div>
+					<div className="space-y-2">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+							Target Session (optional)
+						</label>
+						<select
+							className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+							value={targetSessionId}
+							onChange={(event) => {
+								const next = event.target.value;
+								setTargetSessionId(next);
+								const match = threads.find((thread) => thread.id === next);
+								if (match && match.agentId !== agentId) {
+									setAgentId(match.agentId);
+								}
+							}}
+						>
+							<option value="">Create a routine thread</option>
+							{threadOptions.map((thread) => (
+								<option key={thread.id} value={thread.id}>
+									{thread.label}
+								</option>
+							))}
+						</select>
+						<p className="text-xs text-slate-500">
+							Send routine output to an existing chat.
+						</p>
 					</div>
 					<div className="space-y-2">
 						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
@@ -180,6 +233,17 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 											<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Cron</span>
 											<div className="mt-1 font-mono">{routine.cron}</div>
 										</div>
+										{routine.sessionId ? (
+											<div className="mt-2">
+												<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+													Target Session
+												</span>
+												<div className="mt-1">
+													{threads.find((thread) => thread.id === routine.sessionId)
+														?.name || routine.sessionId}
+												</div>
+											</div>
+										) : null}
 										<div className="mt-2">
 											<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Prompt</span>
 											<div className="mt-1 line-clamp-2">{routine.prompt}</div>

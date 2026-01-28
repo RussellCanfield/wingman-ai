@@ -91,9 +91,23 @@ export type Routine = {
 	agentId: string;
 	cron: string;
 	prompt: string;
+	sessionId?: string;
 	createdAt: number;
 	lastRunAt?: number;
 	enabled: boolean;
+};
+
+export type Webhook = {
+	id: string;
+	name: string;
+	agentId: string;
+	secret: string;
+	enabled: boolean;
+	eventLabel?: string;
+	preset?: string;
+	sessionId?: string;
+	createdAt: number;
+	lastTriggeredAt?: number;
 };
 
 export type GatewayHealth = {

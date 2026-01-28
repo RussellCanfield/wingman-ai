@@ -63,8 +63,8 @@ const BaseAgentConfigSchema = z.object({
 		.optional()
 		.default(300000)
 		.describe("Command execution timeout in milliseconds (default: 300000)"),
-	hooks: HooksConfigSchema.optional().describe(
-		"Agent-specific hooks configuration",
+	toolHooks: HooksConfigSchema.optional().describe(
+		"Agent-specific tool hooks configuration",
 	),
 	mcp: MCPServersConfigSchema.optional().describe(
 		"Agent-specific MCP server configurations",

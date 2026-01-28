@@ -14,6 +14,7 @@ import type {
 	ToolEvent,
 	Thread,
 	Routine,
+	Webhook,
 } from "./types";
 import { parseStreamEvents } from "./utils/streaming";
 import { Sidebar } from "./components/Sidebar";
@@ -22,6 +23,7 @@ import { ChatPage } from "./pages/ChatPage";
 import { CommandDeckPage } from "./pages/CommandDeckPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { RoutinesPage } from "./pages/RoutinesPage";
+import { WebhooksPage } from "./pages/WebhooksPage";
 import { buildRoutineAgents } from "./utils/agentOptions";
 
 const DEFAULT_CONFIG: ControlUiConfig = {
@@ -68,6 +70,8 @@ export const App: React.FC = () => {
 	const [agentsLoading, setAgentsLoading] = useState<boolean>(false);
 	const [routines, setRoutines] = useState<Routine[]>([]);
 	const [autoConnectStatus, setAutoConnectStatus] = useState<string>("");
+	const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+	const [webhooksLoading, setWebhooksLoading] = useState<boolean>(false);
 
 	const wsRef = useRef<WebSocket | null>(null);
 	const connectRequestIdRef = useRef<string | null>(null);
@@ -641,6 +645,50 @@ export const App: React.FC = () => {
 		[activeThread?.id, activeThreadId, isStreaming, logEvent, threads],
 	);
 
+	const renameThread = useCallback(
+		async (threadId: string) => {
+			const target = threads.find((thread) => thread.id === threadId);
+			if (!target) return;
+			const nextName = window.prompt("Rename session", target.name);
+			if (!nextName || !nextName.trim()) {
+				return;
+			}
+			try {
+				const params = new URLSearchParams({ agentId: target.agentId });
+				const res = await fetch(
+					`/api/sessions/${encodeURIComponent(threadId)}?${params.toString()}`,
+					{
+						method: "PUT",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ name: nextName.trim() }),
+					},
+				);
+				if (!res.ok) {
+					logEvent("Failed to rename session");
+					return;
+				}
+				const updated = (await res.json()) as {
+					name?: string;
+					updatedAt?: number;
+				};
+				setThreads((prev) =>
+					prev.map((thread) =>
+						thread.id === threadId
+							? {
+								...thread,
+								name: updated.name || nextName.trim(),
+								updatedAt: updated.updatedAt ?? thread.updatedAt,
+							}
+							: thread,
+					),
+				);
+			} catch {
+				logEvent("Failed to rename session");
+			}
+		},
+		[logEvent, threads],
+	);
+
 	const setThreadWorkdir = useCallback(
 		async (threadId: string, workdir: string | null) => {
 			const target = threads.find((thread) => thread.id === threadId);
@@ -760,6 +808,23 @@ export const App: React.FC = () => {
 		}
 	}, [logEvent]);
 
+	const refreshWebhooks = useCallback(async () => {
+		setWebhooksLoading(true);
+		try {
+			const res = await fetch("/api/webhooks");
+			if (!res.ok) {
+				logEvent("Failed to load webhooks");
+				return;
+			}
+			const data = (await res.json()) as Webhook[];
+			setWebhooks(data || []);
+		} catch {
+			logEvent("Failed to load webhooks");
+		} finally {
+			setWebhooksLoading(false);
+		}
+	}, [logEvent]);
+
 	const loadAgentDetail = useCallback(
 		async (agentId: string): Promise<AgentDetail | null> => {
 			try {
@@ -820,7 +885,8 @@ export const App: React.FC = () => {
 		fetchThreads();
 		refreshProviders();
 		refreshAgents();
-	}, [fetchThreads, refreshAgents, refreshProviders, refreshStats]);
+		refreshWebhooks();
+	}, [fetchThreads, refreshAgents, refreshProviders, refreshStats, refreshWebhooks]);
 
 	useEffect(() => {
 		if (threads.length === 0) return;
@@ -831,7 +897,7 @@ export const App: React.FC = () => {
 
 	useEffect(() => {
 		if (!activeThread) return;
-		if (activeThread.messagesLoaded || !activeThread.messageCount) return;
+		if (activeThread.messagesLoaded) return;
 		void loadThreadMessages(activeThread);
 	}, [activeThread, loadThreadMessages]);
 
@@ -928,6 +994,124 @@ export const App: React.FC = () => {
 		setRoutines((prev) => prev.filter((routine) => routine.id !== id));
 	}, []);
 
+	const createWebhook = useCallback(
+		async (payload: Omit<Webhook, "createdAt" | "lastTriggeredAt">) => {
+			try {
+				const res = await fetch("/api/webhooks", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload),
+				});
+				if (!res.ok) {
+					const message = await res.text();
+					logEvent(`Failed to create webhook: ${message || "unknown error"}`);
+					return false;
+				}
+				await refreshWebhooks();
+				logEvent(`Created webhook: ${payload.id}`);
+				return true;
+			} catch {
+				logEvent("Failed to create webhook");
+				return false;
+			}
+		},
+		[logEvent, refreshWebhooks],
+	);
+
+	const updateWebhook = useCallback(
+		async (
+			webhookId: string,
+			payload: Partial<Omit<Webhook, "id" | "createdAt">>,
+		) => {
+			try {
+				const res = await fetch(`/api/webhooks/${encodeURIComponent(webhookId)}`, {
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload),
+				});
+				if (!res.ok) {
+					const message = await res.text();
+					logEvent(`Failed to update webhook: ${message || "unknown error"}`);
+					return false;
+				}
+				await refreshWebhooks();
+				logEvent(`Updated webhook: ${webhookId}`);
+				return true;
+			} catch {
+				logEvent("Failed to update webhook");
+				return false;
+			}
+		},
+		[logEvent, refreshWebhooks],
+	);
+
+	const deleteWebhook = useCallback(
+		async (webhookId: string) => {
+			try {
+				const res = await fetch(`/api/webhooks/${encodeURIComponent(webhookId)}`, {
+					method: "DELETE",
+				});
+				if (!res.ok) {
+					const message = await res.text();
+					logEvent(`Failed to delete webhook: ${message || "unknown error"}`);
+					return false;
+				}
+				await refreshWebhooks();
+				logEvent(`Deleted webhook: ${webhookId}`);
+				return true;
+			} catch {
+				logEvent("Failed to delete webhook");
+				return false;
+			}
+		},
+		[logEvent, refreshWebhooks],
+	);
+
+	const testWebhook = useCallback(
+		async (webhookId: string) => {
+			const webhook = webhooks.find((item) => item.id === webhookId);
+			if (!webhook) {
+				return { ok: false, message: "Webhook not found" };
+			}
+			const testPayload =
+				webhook.preset === "gog-gmail"
+					? {
+							event: "gmail.received",
+							messages: [
+								{
+									id: "demo-message-id",
+									from: "alerts@example.com",
+									subject: "Test Gmail webhook",
+									snippet: "Gog sent a Gmail event payload.",
+									body: "This is a sample message body from gog gmail watch.",
+								},
+							],
+						}
+					: {
+							event: "test",
+							prompt: "Test webhook from Control UI.",
+						};
+			try {
+				const res = await fetch(`/webhooks/${encodeURIComponent(webhookId)}`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"x-wingman-secret": webhook.secret,
+					},
+					body: JSON.stringify(testPayload),
+				});
+				if (!res.ok) {
+					const message = await res.text();
+					return { ok: false, message: message || "Test failed" };
+				}
+				return { ok: true };
+			} catch {
+				return { ok: false, message: "Test failed" };
+			}
+		},
+		[webhooks],
+	);
+
 	const saveProviderToken = useCallback(
 		async (providerName: string, tokenValue: string) => {
 			try {
@@ -996,6 +1180,7 @@ export const App: React.FC = () => {
 						onSelectThread={handleSelectThread}
 						onCreateThread={handleCreateThread}
 						onDeleteThread={deleteThread}
+						onRenameThread={renameThread}
 						hostLabel={hostLabel}
 						deviceId={deviceId}
 						getAgentLabel={(id) =>
@@ -1092,8 +1277,26 @@ export const App: React.FC = () => {
 									<RoutinesPage
 										agents={agentOptions}
 										routines={routines}
+										threads={threads}
 										onCreateRoutine={createRoutine}
 										onDeleteRoutine={deleteRoutine}
+									/>
+								}
+							/>
+							<Route
+								path="/webhooks"
+								element={
+									<WebhooksPage
+										agents={agentOptions}
+										webhooks={webhooks}
+										threads={threads}
+										loading={webhooksLoading}
+										baseUrl={window.location.origin}
+										onCreateWebhook={createWebhook}
+										onUpdateWebhook={updateWebhook}
+										onDeleteWebhook={deleteWebhook}
+										onTestWebhook={testWebhook}
+										onRefresh={refreshWebhooks}
 									/>
 								}
 							/>

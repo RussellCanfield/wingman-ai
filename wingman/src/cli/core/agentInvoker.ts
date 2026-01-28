@@ -95,16 +95,16 @@ export class AgentInvoker {
 			this.outputManager.emitAgentStart(agentName, prompt);
 
 			this.logger.debug(
-				`Found ${this.wingmanConfig.hooks ? "global hooks" : "no global hooks"}`,
+				`Found ${this.wingmanConfig.toolHooks ? "global hooks" : "no global hooks"}`,
 			);
 			this.logger.debug(
-				`Found ${targetAgent.hooks ? "agent-specific hooks" : "no agent-specific hooks"}`,
+				`Found ${targetAgent.toolHooks ? "agent-specific hooks" : "no agent-specific hooks"}`,
 			);
 
 			// Merge global and agent-specific hooks
 			const mergedHooks = mergeHooks(
-				this.wingmanConfig.hooks,
-				targetAgent.hooks,
+				this.wingmanConfig.toolHooks,
+				targetAgent.toolHooks,
 			);
 
 			// Use provided session ID or generate new one for hooks

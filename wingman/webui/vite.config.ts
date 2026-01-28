@@ -11,6 +11,10 @@ export default defineConfig({
 				target: "http://127.0.0.1:18789",
 				changeOrigin: true,
 			},
+			"/webhooks": {
+				target: "http://127.0.0.1:18789",
+				changeOrigin: true,
+			},
 			"/ws": {
 				target: "http://127.0.0.1:18789",
 				ws: true,

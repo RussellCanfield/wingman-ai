@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Status:** Active
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-27
 
 ---
 
@@ -36,6 +36,9 @@ The gateway forwards raw agent streams (matching CLI streaming format). UI layer
 
 ### 6. Flexible Provider Support
 Support for multiple model providers via API keys and stored subscription tokens today. OAuth/device-code flows remain planned.
+
+### 7. Extensible Ingress
+Inbound triggers can come from Control UI, channels, scheduled routines, and planned webhook integrations.
 
 ---
 
@@ -105,6 +108,7 @@ The Gateway is the central runtime for agents, sessions, routing, and channels.
 | **Session Store** | Durable session storage (SQLite) | [PRD-002](002-gateway-prd.md) |
 | **Channels + Control UI** | Inbound/outbound message adapters and web chat | [PRD-002](002-gateway-prd.md) |
 | **Broadcast Rooms** | Explicit parallel responses when requested | [PRD-002](002-gateway-prd.md) |
+| **Webhook Ingress (Planned)** | External systems trigger agent runs | [PRD-002](002-gateway-prd.md) |
 
 ---
 

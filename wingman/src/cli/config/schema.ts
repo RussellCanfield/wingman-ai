@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HooksConfigSchema } from "@/agent/middleware/hooks/types.js";
+import { InternalHooksConfigSchema } from "@/gateway/hooks/types.js";
 import { MCPServersConfigSchema } from "@/types/mcp.js";
 
 // Zod schema for search configuration
@@ -149,7 +150,8 @@ export const WingmanConfigSchema = z.object({
 		.default("info"),
 	defaultAgent: z.string().optional(),
 	recursionLimit: z.number().min(1).max(1000000).optional().default(5000),
-	hooks: HooksConfigSchema.optional().describe("Global hooks configuration"),
+	toolHooks: HooksConfigSchema.optional().describe("Global tool hooks configuration"),
+	hooks: InternalHooksConfigSchema.optional().describe("Internal hook configuration"),
 	search: SearchConfigSchema.optional().default({
 		provider: "duckduckgo",
 		maxResults: 5,

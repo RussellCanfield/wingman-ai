@@ -30,22 +30,17 @@ import { GatewayRouter } from "./router.js";
 import { OutputManager } from "@/cli/core/outputManager.js";
 import { AgentInvoker } from "@/cli/core/agentInvoker.js";
 import { SessionManager } from "@/cli/core/sessionManager.js";
-import { AgentLoader } from "@/agent/config/agentLoader.js";
-import { getAvailableTools } from "@/agent/config/toolRegistry.js";
-import {
-	deleteProviderCredentials,
-	getCredentialsPath,
-	readCredentialsFile,
-	resolveProviderToken,
-	saveProviderToken,
-} from "@/providers/credentials.js";
-import { getProviderSpec, listProviderSpecs } from "@/providers/registry.js";
+import { handleAgentsApi } from "./http/agents.js";
+import { handleFsApi } from "./http/fs.js";
+import { handleProvidersApi } from "./http/providers.js";
+import { handleSessionsApi } from "./http/sessions.js";
+import { createWebhookStore, handleWebhookInvoke, handleWebhooksApi } from "./http/webhooks.js";
+import type { GatewayHttpContext } from "./http/types.js";
+import { InternalHookRegistry } from "./hooks/registry.js";
 import { homedir } from "node:os";
 import { join, isAbsolute, normalize, dirname, sep } from "node:path";
-import { randomUUID } from "node:crypto";
-import { mkdirSync, existsSync, statSync, readdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, existsSync, statSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import * as yaml from "js-yaml";
 
 type GatewaySocketData = {
 	nodeId: string;
@@ -88,6 +83,8 @@ export class GatewayServer {
 	private controlUiPort: number = 18790;
 	private controlUiSamePort: boolean = false;
 	private uiDistDir: string | null = null;
+	private webhookStore: ReturnType<typeof createWebhookStore>;
+	private internalHooks: InternalHookRegistry | null = null;
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -103,6 +100,7 @@ export class GatewayServer {
 		);
 		this.wingmanConfig = configLoader.loadConfig();
 		this.router = new GatewayRouter(this.wingmanConfig);
+		this.webhookStore = createWebhookStore(() => this.resolveConfigDirPath());
 
 		const gatewayDefaults = this.wingmanConfig.gateway;
 		const authConfig: GatewayAuthConfig | undefined = config.auth
@@ -154,12 +152,17 @@ export class GatewayServer {
 			);
 		}
 		this.startedAt = Date.now();
+		this.internalHooks = new InternalHookRegistry(
+			this.getHttpContext(),
+			this.wingmanConfig.hooks,
+		);
+		await this.internalHooks.load();
 
 		this.server = Bun.serve({
 			port: this.config.port,
 			hostname: this.config.host,
 
-			fetch: (req, server) => {
+			fetch: async (req, server) => {
 				const url = new URL(req.url);
 
 				// Health check endpoint
@@ -199,6 +202,16 @@ export class GatewayServer {
 					}
 
 					return undefined;
+				}
+
+				const webhookResponse = await handleWebhookInvoke(
+					this.getHttpContext(),
+					this.webhookStore,
+					req,
+					url,
+				);
+				if (webhookResponse) {
+					return webhookResponse;
 				}
 
 				if (this.controlUiSamePort) {
@@ -257,6 +270,11 @@ export class GatewayServer {
 			"info",
 			`Gateway started on ${this.config.host}:${this.config.port}`,
 		);
+		this.internalHooks?.emit({
+			type: "gateway",
+			action: "startup",
+			timestamp: new Date(),
+		});
 	}
 
 	/**
@@ -508,11 +526,34 @@ export class GatewayServer {
 			payload.sessionKey || this.router.buildSessionKey(agentId, payload.routing);
 
 		const sessionManager = await this.getSessionManager(agentId);
-		const session = sessionManager.getOrCreateSession(sessionKey, agentId);
+		const existingSession = sessionManager.getSession(sessionKey);
+		const session =
+			existingSession || sessionManager.getOrCreateSession(sessionKey, agentId);
 		const workdir = session.metadata?.workdir ?? null;
 		const defaultOutputDir = this.resolveDefaultOutputDir(agentId);
 		sessionManager.updateSession(session.id, {
 			lastMessagePreview: payload.content.substring(0, 200),
+		});
+
+		if (!existingSession) {
+			this.internalHooks?.emit({
+				type: "session",
+				action: "start",
+				timestamp: new Date(),
+				agentId,
+				sessionKey,
+				routing: payload.routing,
+			});
+		}
+
+		this.internalHooks?.emit({
+			type: "message",
+			action: "received",
+			timestamp: new Date(),
+			agentId,
+			sessionKey,
+			routing: payload.routing,
+			payload: { content: payload.content },
 		});
 
 		const outputManager = new OutputManager("interactive");
@@ -874,60 +915,38 @@ export class GatewayServer {
 			: join(this.workspace, this.configDir);
 	}
 
+	private getHttpContext(): GatewayHttpContext {
+		return {
+			workspace: this.workspace,
+			configDir: this.configDir,
+			getWingmanConfig: () => this.wingmanConfig,
+			setWingmanConfig: (config) => {
+				this.wingmanConfig = config;
+			},
+			persistWingmanConfig: () => this.persistWingmanConfig(),
+			router: this.router,
+			setRouter: (router) => {
+				this.router = router;
+			},
+			auth: this.auth,
+			logger: this.logger,
+			getSessionManager: (agentId) => this.getSessionManager(agentId),
+			resolveConfigDirPath: () => this.resolveConfigDirPath(),
+			resolveOutputRoot: () => this.resolveOutputRoot(),
+			resolveDefaultOutputDir: (agentId) => this.resolveDefaultOutputDir(agentId),
+			resolveAgentWorkspace: (agentId) => this.resolveAgentWorkspace(agentId),
+			resolveFsRoots: () => this.resolveFsRoots(),
+			resolveFsPath: (path) => this.resolveFsPath(path),
+			isPathWithinRoots: (path, roots) => this.isPathWithinRoots(path, roots),
+			getBuiltInTools: () => this.getBuiltInTools(),
+		};
+	}
+
 	private persistWingmanConfig(): void {
 		const configDir = this.resolveConfigDirPath();
 		mkdirSync(configDir, { recursive: true });
 		const configPath = join(configDir, "wingman.config.json");
 		writeFileSync(configPath, JSON.stringify(this.wingmanConfig, null, 2));
-	}
-
-	private buildAgentMarkdown(params: {
-		id: string;
-		description?: string;
-		tools: string[];
-		model?: string;
-		prompt?: string;
-	}): string {
-		const { id, description, tools, model, prompt } = params;
-		const safe = (value: string) => `"${value.replace(/"/g, '\\"')}"`;
-		const lines = [
-			"---",
-			`name: ${safe(id)}`,
-			description
-				? `description: ${safe(description)}`
-				: `description: ${safe("New Wingman agent")}`,
-			tools.length > 0
-				? `tools:\n${tools.map((tool) => `  - ${tool}`).join("\n")}`
-				: "tools: []",
-		];
-		if (model) {
-			lines.push(`model: ${safe(model)}`);
-		}
-		lines.push("---", "", prompt || "You are a Wingman agent.");
-		return lines.join("\n");
-	}
-
-	private parseAgentMarkdown(content: string): {
-		metadata: Record<string, any>;
-		prompt: string;
-	} {
-		const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
-		const match = content.match(frontmatterRegex);
-		if (!match) {
-			throw new Error("Invalid agent.md format: missing frontmatter");
-		}
-		const [, rawFrontmatter, prompt] = match;
-		const metadata = (yaml.load(rawFrontmatter) as Record<string, any>) || {};
-		return { metadata, prompt: prompt?.trim() || "" };
-	}
-
-	private serializeAgentMarkdown(
-		metadata: Record<string, any>,
-		prompt: string,
-	): string {
-		const frontmatter = yaml.dump(metadata, { lineWidth: 120 });
-		const safePrompt = prompt?.trim() || "You are a Wingman agent.";
-		return `---\n${frontmatter}---\n\n${safePrompt}\n`;
 	}
 
 	private getBuiltInTools(): string[] {
@@ -1133,22 +1152,20 @@ export class GatewayServer {
 		}
 	}
 
-	private isUiPath(pathname: string): boolean {
-		if (
-			pathname === "/health" ||
-			pathname === "/stats" ||
-			pathname.startsWith("/ws") ||
-			pathname.startsWith("/bridge")
-		) {
-			return false;
-		}
-
-		return true;
-	}
-
 	private async handleUiRequest(req: Request): Promise<Response> {
 
 		const url = new URL(req.url);
+
+		const ctx = this.getHttpContext();
+		const webhookResponse = await handleWebhookInvoke(
+			ctx,
+			this.webhookStore,
+			req,
+			url,
+		);
+		if (webhookResponse) {
+			return webhookResponse;
+		}
 
 		if (url.pathname.startsWith("/api/")) {
 			if (url.pathname === "/api/config") {
@@ -1180,580 +1197,22 @@ export class GatewayServer {
 				);
 			}
 
+			const apiResponse =
+				(await handleWebhooksApi(ctx, this.webhookStore, req, url)) ||
+				(await handleAgentsApi(ctx, req, url)) ||
+				(await handleProvidersApi(ctx, req, url)) ||
+				(await handleFsApi(ctx, req, url)) ||
+				(await handleSessionsApi(ctx, req, url));
+			if (apiResponse) {
+				return apiResponse;
+			}
+
 			if (url.pathname === "/api/health") {
 				return this.handleHealthCheck();
 			}
 
 			if (url.pathname === "/api/stats") {
 				return this.handleStats();
-			}
-
-			if (url.pathname === "/api/fs/roots" && req.method === "GET") {
-				const roots = this.resolveFsRoots();
-				return new Response(JSON.stringify({ roots }, null, 2), {
-					headers: { "Content-Type": "application/json" },
-				});
-			}
-
-			if (url.pathname === "/api/fs/list" && req.method === "GET") {
-				const rawPath = url.searchParams.get("path");
-				if (!rawPath) {
-					return new Response("path required", { status: 400 });
-				}
-				const resolved = this.resolveFsPath(rawPath);
-				const roots = this.resolveFsRoots();
-				if (!this.isPathWithinRoots(resolved, roots)) {
-					return new Response("path not allowed", { status: 403 });
-				}
-				if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
-					return new Response("path not found", { status: 404 });
-				}
-
-				const entries = readdirSync(resolved, { withFileTypes: true })
-					.filter((entry) => entry.isDirectory())
-					.map((entry) => ({
-						name: entry.name,
-						path: join(resolved, entry.name),
-					}))
-					.sort((a, b) => a.name.localeCompare(b.name));
-
-				const parent = normalize(join(resolved, ".."));
-				const parentAllowed =
-					parent !== resolved && this.isPathWithinRoots(parent, roots)
-						? parent
-						: null;
-
-				return new Response(
-					JSON.stringify(
-						{
-							path: resolved,
-							parent: parentAllowed,
-							entries,
-						},
-						null,
-						2,
-					),
-					{
-						headers: { "Content-Type": "application/json" },
-					},
-				);
-			}
-
-			if (url.pathname === "/api/providers") {
-				if (req.method === "GET") {
-					const credentials = readCredentialsFile();
-					const providers = listProviderSpecs().map((provider) => {
-						const resolved = resolveProviderToken(provider.name);
-						return {
-							name: provider.name,
-							label: provider.label,
-							type: provider.type,
-							envVars: provider.envVars,
-							source: resolved.source,
-							envVar: resolved.envVar,
-						};
-					});
-
-					return new Response(
-						JSON.stringify(
-							{
-								providers,
-								credentialsPath: getCredentialsPath(),
-								updatedAt: credentials?.updatedAt,
-							},
-							null,
-							2,
-						),
-						{
-							headers: { "Content-Type": "application/json" },
-						},
-					);
-				}
-
-				return new Response("Method Not Allowed", { status: 405 });
-			}
-
-			const agentDetailMatch = url.pathname.match(/^\/api\/agents\/([^/]+)$/);
-			if (agentDetailMatch) {
-				const agentId = decodeURIComponent(agentDetailMatch[1]);
-				const loader = new AgentLoader(
-					this.configDir,
-					this.workspace,
-					this.wingmanConfig,
-				);
-				const configs = loader.loadAllAgentConfigs();
-				const config = configs.find((item) => item.name === agentId);
-				const displayName =
-					this.wingmanConfig.agents?.list?.find((agent) => agent.id === agentId)
-						?.name || agentId;
-
-				if (req.method === "GET") {
-					if (!config) {
-						return new Response("Agent not found", { status: 404 });
-					}
-
-					return new Response(
-						JSON.stringify(
-							{
-								id: config.name,
-								displayName,
-								description: config.description,
-								tools: config.tools || [],
-								model: config.model,
-								prompt: config.systemPrompt,
-							},
-							null,
-							2,
-						),
-						{ headers: { "Content-Type": "application/json" } },
-					);
-				}
-
-				if (req.method === "PUT") {
-					if (!config) {
-						return new Response("Agent not found", { status: 404 });
-					}
-
-					const body = (await req.json()) as {
-						displayName?: string;
-						description?: string;
-						model?: string;
-						tools?: string[];
-						prompt?: string;
-					};
-
-					const tools = Array.isArray(body.tools)
-						? body.tools.filter((tool) =>
-								getAvailableTools().includes(tool as any),
-							)
-						: config.tools || [];
-
-					const nextDescription = body.description ?? config.description;
-					const nextModel = body.model ?? config.model;
-					const nextPrompt = body.prompt ?? config.systemPrompt;
-
-					const agentsDir = join(this.resolveConfigDirPath(), "agents", agentId);
-					const agentJsonPath = join(agentsDir, "agent.json");
-					const agentMarkdownPath = join(agentsDir, "agent.md");
-					const hasJson = existsSync(agentJsonPath);
-					const hasMarkdown = existsSync(agentMarkdownPath);
-
-					if (!hasJson && !hasMarkdown) {
-						return new Response("Agent not found", { status: 404 });
-					}
-
-					if (hasJson) {
-						const raw = readFileSync(agentJsonPath, "utf-8");
-						const parsed = JSON.parse(raw) as Record<string, any>;
-						parsed.name = agentId;
-						parsed.description = nextDescription;
-						parsed.tools = tools;
-						if (nextModel) {
-							parsed.model = nextModel;
-						} else {
-							delete parsed.model;
-						}
-						parsed.systemPrompt = nextPrompt;
-						writeFileSync(agentJsonPath, JSON.stringify(parsed, null, 2));
-					} else if (hasMarkdown) {
-						const raw = readFileSync(agentMarkdownPath, "utf-8");
-						const { metadata } = this.parseAgentMarkdown(raw);
-						metadata.name = agentId;
-						metadata.description = nextDescription;
-						metadata.tools = tools;
-						if (nextModel) {
-							metadata.model = nextModel;
-						} else {
-							delete metadata.model;
-						}
-						const updatedMarkdown = this.serializeAgentMarkdown(
-							metadata,
-							nextPrompt,
-						);
-						writeFileSync(agentMarkdownPath, updatedMarkdown);
-					}
-
-					if (this.wingmanConfig.agents?.list) {
-						const nextList = this.wingmanConfig.agents.list.map((agent) =>
-							agent.id === agentId
-								? { ...agent, name: body.displayName || agent.name || agentId }
-								: agent,
-						);
-						this.wingmanConfig = {
-							...this.wingmanConfig,
-							agents: {
-								list: nextList,
-								bindings: this.wingmanConfig.agents?.bindings || [],
-							},
-						};
-						this.persistWingmanConfig();
-					}
-
-					return new Response(
-						JSON.stringify(
-							{
-								id: agentId,
-								displayName: body.displayName || displayName || agentId,
-								description: nextDescription,
-								tools,
-								model: nextModel,
-								prompt: nextPrompt,
-							},
-							null,
-							2,
-						),
-						{ headers: { "Content-Type": "application/json" } },
-					);
-				}
-
-				return new Response("Method Not Allowed", { status: 405 });
-			}
-
-			if (url.pathname === "/api/agents") {
-				if (req.method === "GET") {
-					const loader = new AgentLoader(
-						this.configDir,
-						this.workspace,
-						this.wingmanConfig,
-					);
-					const configs = loader.loadAllAgentConfigs();
-					const displayNames =
-						this.wingmanConfig.agents?.list?.reduce<Record<string, string>>(
-							(acc, agent) => {
-								if (agent.name) {
-									acc[agent.id] = agent.name;
-								}
-								return acc;
-							},
-							{},
-						) || {};
-
-					const agents = configs.map((config) => ({
-						id: config.name,
-						displayName: displayNames[config.name] || config.name,
-						description: config.description,
-						tools: config.tools || [],
-						model: config.model,
-						subAgents:
-							config.subAgents?.map((sub) => ({
-								id: sub.name,
-								displayName: sub.name,
-								description: sub.description,
-								tools: sub.tools || [],
-								model: sub.model,
-							})) || [],
-					}));
-
-					return new Response(
-						JSON.stringify(
-							{
-								agents,
-								tools: getAvailableTools(),
-								builtInTools: this.getBuiltInTools(),
-							},
-							null,
-							2,
-						),
-						{ headers: { "Content-Type": "application/json" } },
-					);
-				}
-
-				if (req.method === "POST") {
-					const body = (await req.json()) as {
-						id?: string;
-						displayName?: string;
-						description?: string;
-						model?: string;
-						tools?: string[];
-						prompt?: string;
-					};
-
-					const id = body?.id?.trim();
-					if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
-						return new Response("Invalid agent id", { status: 400 });
-					}
-
-					const tools = Array.isArray(body.tools)
-						? body.tools.filter((tool) =>
-								getAvailableTools().includes(tool as any),
-							)
-						: [];
-
-					const agentsDir = join(this.resolveConfigDirPath(), "agents", id);
-					if (existsSync(agentsDir)) {
-						return new Response("Agent already exists", { status: 409 });
-					}
-
-					mkdirSync(agentsDir, { recursive: true });
-					const agentMarkdown = this.buildAgentMarkdown({
-						id,
-						description: body.description,
-						tools,
-						model: body.model,
-						prompt: body.prompt,
-					});
-					writeFileSync(join(agentsDir, "agent.md"), agentMarkdown);
-
-					const agentList = this.wingmanConfig.agents?.list || [];
-					agentList.push({
-						id,
-						name: body.displayName || id,
-					});
-					this.wingmanConfig = {
-						...this.wingmanConfig,
-						agents: {
-							list: agentList,
-							bindings: this.wingmanConfig.agents?.bindings || [],
-						},
-					};
-					this.router = new GatewayRouter(this.wingmanConfig);
-					this.persistWingmanConfig();
-
-					return new Response(
-						JSON.stringify(
-							{
-								id,
-								displayName: body.displayName || id,
-								description: body.description,
-								tools,
-								model: body.model,
-							},
-							null,
-							2,
-						),
-						{ headers: { "Content-Type": "application/json" } },
-					);
-				}
-
-				return new Response("Method Not Allowed", { status: 405 });
-			}
-
-			const providerMatch = url.pathname.match(/^\/api\/providers\/([^/]+)$/);
-			if (providerMatch) {
-				const providerName = decodeURIComponent(providerMatch[1]);
-				const provider = getProviderSpec(providerName);
-				if (!provider) {
-					return new Response("Unknown provider", { status: 404 });
-				}
-
-				if (req.method === "POST") {
-					const body = (await req.json()) as { token?: string; apiKey?: string };
-					const token = (body?.token || body?.apiKey || "").trim();
-					if (!token) {
-						return new Response("Token required", { status: 400 });
-					}
-					saveProviderToken(provider.name, token);
-					const resolved = resolveProviderToken(provider.name);
-					return new Response(
-						JSON.stringify(
-							{
-								name: provider.name,
-								label: provider.label,
-								type: provider.type,
-								envVars: provider.envVars,
-								source: resolved.source,
-								envVar: resolved.envVar,
-							},
-							null,
-							2,
-						),
-						{
-							headers: { "Content-Type": "application/json" },
-						},
-					);
-				}
-
-				if (req.method === "DELETE") {
-					deleteProviderCredentials(provider.name);
-					const resolved = resolveProviderToken(provider.name);
-					return new Response(
-						JSON.stringify(
-							{
-								name: provider.name,
-								label: provider.label,
-								type: provider.type,
-								envVars: provider.envVars,
-								source: resolved.source,
-								envVar: resolved.envVar,
-							},
-							null,
-							2,
-						),
-						{
-							headers: { "Content-Type": "application/json" },
-						},
-					);
-				}
-
-				return new Response("Method Not Allowed", { status: 405 });
-			}
-
-			if (url.pathname === "/api/sessions") {
-				if (req.method === "GET") {
-					const limit = Number(url.searchParams.get("limit") || "100");
-					const status =
-						(url.searchParams.get("status") as "active" | "archived" | "deleted" | null) ||
-						"active";
-					const agentId = url.searchParams.get("agentId") || undefined;
-					const agents = agentId
-						? [agentId]
-						: this.wingmanConfig.agents?.list?.map((agent) => agent.id) || ["main"];
-
-					const sessions: Array<Record<string, unknown>> = [];
-					for (const agent of agents) {
-						const manager = await this.getSessionManager(agent);
-						const list = manager.listSessions({
-							status,
-							limit,
-							agentName: agent,
-						});
-						for (const session of list) {
-							sessions.push({
-								id: session.id,
-								name: session.name,
-								agentId: session.agentName,
-								createdAt: session.createdAt.getTime(),
-								updatedAt: session.updatedAt.getTime(),
-								messageCount: session.messageCount,
-								lastMessagePreview: session.lastMessagePreview,
-								workdir: session.metadata?.workdir ?? null,
-							});
-						}
-					}
-
-					const sorted = sessions.sort((a, b) => {
-						const aUpdated = typeof a.updatedAt === "number" ? a.updatedAt : 0;
-						const bUpdated = typeof b.updatedAt === "number" ? b.updatedAt : 0;
-						return bUpdated - aUpdated;
-					});
-
-					return new Response(JSON.stringify(sorted.slice(0, limit), null, 2), {
-						headers: { "Content-Type": "application/json" },
-					});
-				}
-
-				if (req.method === "POST") {
-					const body = (await req.json()) as {
-						agentId?: string;
-						name?: string;
-						sessionId?: string;
-					};
-					const selectedAgent = this.router.selectAgent(body.agentId);
-					if (!selectedAgent) {
-						return new Response("Invalid agent", { status: 400 });
-					}
-					const sessionId =
-						body.sessionId ||
-						`agent:${selectedAgent}:webui:thread:${randomUUID()}`;
-
-					const manager = await this.getSessionManager(selectedAgent);
-					const session = manager.getOrCreateSession(sessionId, selectedAgent, body.name);
-
-					return new Response(
-						JSON.stringify(
-							{
-								id: session.id,
-								name: session.name,
-								agentId: session.agentName,
-								createdAt: session.createdAt.getTime(),
-								updatedAt: session.updatedAt.getTime(),
-								messageCount: session.messageCount,
-								lastMessagePreview: session.lastMessagePreview,
-								workdir: session.metadata?.workdir ?? null,
-							},
-							null,
-							2,
-						),
-						{ headers: { "Content-Type": "application/json" } },
-					);
-				}
-
-				return new Response("Method Not Allowed", { status: 405 });
-			}
-
-			const sessionMessagesMatch = url.pathname.match(
-				/^\/api\/sessions\/(.+)\/messages$/,
-			);
-			if (sessionMessagesMatch && req.method === "GET") {
-				const sessionId = decodeURIComponent(sessionMessagesMatch[1]);
-				const agentId = url.searchParams.get("agentId");
-				if (!agentId) {
-					return new Response("agentId required", { status: 400 });
-				}
-				const manager = await this.getSessionManager(agentId);
-				const messages = await manager.listMessages(sessionId);
-				return new Response(JSON.stringify(messages, null, 2), {
-					headers: { "Content-Type": "application/json" },
-				});
-			}
-
-			const sessionWorkdirMatch = url.pathname.match(
-				/^\/api\/sessions\/(.+)\/workdir$/,
-			);
-			if (sessionWorkdirMatch && req.method === "POST") {
-				const sessionId = decodeURIComponent(sessionWorkdirMatch[1]);
-				const agentId = url.searchParams.get("agentId");
-				if (!agentId) {
-					return new Response("agentId required", { status: 400 });
-				}
-				const body = (await req.json()) as { workdir?: string | null };
-				const manager = await this.getSessionManager(agentId);
-				const session = manager.getSession(sessionId);
-				if (!session) {
-					return new Response("session not found", { status: 404 });
-				}
-
-				const rawWorkdir = body?.workdir;
-				if (!rawWorkdir) {
-					manager.updateSessionMetadata(sessionId, { workdir: null });
-					return new Response(
-						JSON.stringify(
-							{
-								id: session.id,
-								workdir: null,
-							},
-							null,
-							2,
-						),
-						{ headers: { "Content-Type": "application/json" } },
-					);
-				}
-
-				const resolved = this.resolveFsPath(rawWorkdir);
-				const roots = this.resolveFsRoots();
-				if (!this.isPathWithinRoots(resolved, roots)) {
-					return new Response("workdir not allowed", { status: 403 });
-				}
-				if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
-					return new Response("workdir not found", { status: 404 });
-				}
-
-				manager.updateSessionMetadata(sessionId, { workdir: resolved });
-				return new Response(
-					JSON.stringify(
-						{
-							id: session.id,
-							workdir: resolved,
-						},
-						null,
-						2,
-					),
-					{ headers: { "Content-Type": "application/json" } },
-				);
-			}
-
-			const sessionDeleteMatch = url.pathname.match(/^\/api\/sessions\/(.+)$/);
-			if (sessionDeleteMatch && req.method === "DELETE") {
-				const sessionId = decodeURIComponent(sessionDeleteMatch[1]);
-				const agentId = url.searchParams.get("agentId");
-				if (!agentId) {
-					return new Response("agentId required", { status: 400 });
-				}
-				const manager = await this.getSessionManager(agentId);
-				manager.deleteSession(sessionId);
-				return new Response(JSON.stringify({ ok: true }), {
-					headers: { "Content-Type": "application/json" },
-				});
 			}
 
 			return new Response("Not Found", { status: 404 });
@@ -1971,25 +1430,6 @@ export class GatewayServer {
 					headers: { "Content-Type": "application/json" },
 				},
 			);
-		}
-	}
-
-	/**
-	 * Queue a message for an HTTP bridge client
-	 */
-	private queueBridgeMessage(nodeId: string, message: GatewayMessage): void {
-		const queue = this.bridgeQueues.get(nodeId);
-		if (queue) {
-			queue.push(message);
-
-			// Notify waiting poller if present
-			const waiter = this.bridgePollWaiters.get(nodeId);
-			if (waiter) {
-				this.bridgePollWaiters.delete(nodeId);
-				const messages = [...queue];
-				queue.length = 0;
-				waiter(messages);
-			}
 		}
 	}
 

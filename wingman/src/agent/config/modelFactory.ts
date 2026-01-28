@@ -1,5 +1,6 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
+import { ChatXAI } from "@langchain/xai";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import { createLogger } from "../../logger.js";
 import { resolveProviderToken } from "@/providers/credentials.js";
@@ -66,6 +67,9 @@ export class ModelFactory {
 
 			case "copilot":
 				return ModelFactory.createCopilotModel(model);
+
+			case "xai":
+				return ModelFactory.createXAIModel(model);
 		}
 	}
 
@@ -159,5 +163,19 @@ export class ModelFactory {
 				fetch: createCopilotFetch(),
 			},
 		});
+	}
+
+	private static createXAIModel(model: string): BaseLanguageModel {
+		const token = resolveProviderToken("xai").token;
+		const params: { model: string; temperature: number; apiKey?: string } = {
+			model,
+			temperature: 0,
+		};
+
+		if (token) {
+			params.apiKey = token;
+		}
+
+		return new ChatXAI(params);
 	}
 }
