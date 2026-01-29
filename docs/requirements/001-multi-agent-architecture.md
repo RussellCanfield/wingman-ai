@@ -1,6 +1,6 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.1
+**Version:** 1.2
 **Last Updated:** 2026-01-29
 
 ## Overview
@@ -171,6 +171,25 @@ Modern AI assistants face several challenges:
 - Pre-merge code review
 - Security audits
 - Quality gates
+
+#### 6. Custom Domain Agents (Example: Stock Trader)
+**Domain**: Specialized workflows with external data sources and stateful memory
+
+**Capabilities**:
+- Prompt-driven multi-stage funnels (seed -> filter -> validate -> output)
+- External data via MCP tools with strict call budgets
+- Checkpointing and resume logic to handle rate limits
+- Persistent memory for caches, watchlists, and run state
+
+**Tools**:
+- MCP tools for domain data (e.g., Finnhub candles, news, options)
+- `think` for structured reasoning
+- Optional `web_crawler` for user-supplied URLs
+
+**Use Cases**:
+- Market scans seeded by sentiment and validated by fundamentals
+- Policy/theme tracking with low-call budgets
+- Actionable plans with explicit "no trade" outcomes when signals are weak
 
 ## Agent Isolation and Storage
 

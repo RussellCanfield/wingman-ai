@@ -50,14 +50,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 }) => {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
+	const autoScrollRef = useRef<boolean>(true);
 	const [previewAttachment, setPreviewAttachment] = useState<ChatAttachment | null>(null);
 	const canSend = connected && !isStreaming && (prompt.trim() || attachments.length > 0);
 
 	useEffect(() => {
 		const el = scrollRef.current;
 		if (!el) return;
-		el.scrollTop = el.scrollHeight;
+		if (autoScrollRef.current) {
+			el.scrollTop = el.scrollHeight;
+		}
 	}, [activeThread?.messages, isStreaming]);
+
+	useEffect(() => {
+		autoScrollRef.current = true;
+	}, [activeThread?.id]);
 
 	useEffect(() => {
 		if (!previewAttachment) return;
@@ -101,6 +108,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		}
 	};
 
+	const handleScroll = () => {
+		const el = scrollRef.current;
+		if (!el) return;
+		const threshold = 40;
+		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+		autoScrollRef.current = distanceFromBottom <= threshold;
+	};
+
 	return (
 		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-6 p-6">
 			<header className="flex flex-wrap items-center justify-between gap-4">
@@ -119,6 +134,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
 			<div
 				ref={scrollRef}
+				onScroll={handleScroll}
 				className="flex-1 min-h-0 space-y-4 overflow-auto rounded-2xl border border-black/10 bg-gradient-to-b from-white/80 to-white/95 p-4"
 			>
 				{loading ? (

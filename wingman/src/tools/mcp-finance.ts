@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import {
+	buildTechnicalSnapshot,
+} from "./finance/technicalIndicators.js";
 
 const DEFAULT_RATE_LIMIT_PER_MIN = 60;
 const DEFAULT_WINDOW_MS = 60_000;
@@ -129,6 +132,27 @@ const buildUrl = (path: string, params: Record<string, string>) => {
 	}
 	url.searchParams.set("token", FINNHUB_API_KEY!);
 	return url.toString();
+};
+
+const toUnixSeconds = (date: Date) => Math.floor(date.getTime() / 1000);
+
+const resolveCandleRange = ({
+	from,
+	to,
+	lookbackDays,
+}: {
+	from?: number;
+	to?: number;
+	lookbackDays?: number;
+}) => {
+	const now = new Date();
+	const end = typeof to === "number" ? to : toUnixSeconds(now);
+	const fallbackLookback = Math.max(1, lookbackDays ?? 365);
+	const start =
+		typeof from === "number"
+			? from
+			: end - fallbackLookback * 24 * 60 * 60;
+	return { from: start, to: end };
 };
 
 const parseRetryAfter = (value: string | null): number | null => {
@@ -308,6 +332,132 @@ server.registerTool(
 			symbol,
 			from: fromDate,
 			to: toDate,
+		});
+		return toResult(data);
+	},
+);
+
+server.registerTool(
+	"finnhub.marketNews",
+	{
+		title: "Finnhub Market News",
+		description: "Get broad market news (general category) for theme detection.",
+		inputSchema: z.object({
+			category: z.string().min(1).optional().default("general"),
+		}),
+	},
+	async ({ category }) => {
+		const data = await fetchFinnhub("/news", {
+			category: category || "general",
+		});
+		return toResult(data);
+	},
+);
+
+server.registerTool(
+	"finnhub.peers",
+	{
+		title: "Finnhub Stock Peers",
+		description: "Get peer symbols for a company.",
+		inputSchema: z.object({
+			symbol: z.string().min(1),
+		}),
+	},
+	async ({ symbol }) => {
+		const data = await fetchFinnhub("/stock/peers", { symbol });
+		return toResult(data);
+	},
+);
+
+server.registerTool(
+	"finnhub.candles",
+	{
+		title: "Finnhub Candles",
+		description: "Get OHLCV candles for a symbol.",
+		inputSchema: z.object({
+			symbol: z.string().min(1),
+			resolution: z.string().optional().default("D"),
+			from: z.number().int().optional(),
+			to: z.number().int().optional(),
+			lookbackDays: z.number().int().positive().optional(),
+		}),
+	},
+	async ({ symbol, resolution, from, to, lookbackDays }) => {
+		const range = resolveCandleRange({ from, to, lookbackDays });
+		const data = await fetchFinnhub("/stock/candle", {
+			symbol,
+			resolution: resolution || "D",
+			from: String(range.from),
+			to: String(range.to),
+		});
+		return toResult(data);
+	},
+);
+
+server.registerTool(
+	"finnhub.technicalSnapshot",
+	{
+		title: "Finnhub Technical Snapshot",
+		description: "Fetch candles and compute RSI/EMA/ATR locally.",
+		inputSchema: z.object({
+			symbol: z.string().min(1),
+			resolution: z.string().optional().default("D"),
+			from: z.number().int().optional(),
+			to: z.number().int().optional(),
+			lookbackDays: z.number().int().positive().optional(),
+		}),
+	},
+	async ({ symbol, resolution, from, to, lookbackDays }) => {
+		const range = resolveCandleRange({ from, to, lookbackDays });
+		const data = await fetchFinnhub("/stock/candle", {
+			symbol,
+			resolution: resolution || "D",
+			from: String(range.from),
+			to: String(range.to),
+		});
+
+		if (!data || data.s !== "ok" || !Array.isArray(data.c)) {
+			return toResult({
+				symbol,
+				status: data?.s ?? "no_data",
+				from: range.from,
+				to: range.to,
+			});
+		}
+
+		const snapshot = buildTechnicalSnapshot({
+			closes: data.c,
+			highs: data.h ?? [],
+			lows: data.l ?? [],
+		});
+
+		return toResult({
+			symbol,
+			resolution: resolution || "D",
+			from: range.from,
+			to: range.to,
+			status: data.s,
+			points: data.c.length,
+			lastTimestamp: data.t?.at(-1) ?? null,
+			...snapshot,
+		});
+	},
+);
+
+server.registerTool(
+	"finnhub.optionChain",
+	{
+		title: "Finnhub Option Chain",
+		description: "Get option chain data for a symbol (date optional).",
+		inputSchema: z.object({
+			symbol: z.string().min(1),
+			date: z.string().optional(),
+		}),
+	},
+	async ({ symbol, date }) => {
+		const data = await fetchFinnhub("/stock/option-chain", {
+			symbol,
+			...(date ? { date } : {}),
 		});
 		return toResult(data);
 	},

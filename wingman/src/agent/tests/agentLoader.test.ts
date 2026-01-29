@@ -77,9 +77,10 @@ describe("AgentConfigLoader", () => {
 			const agents = loader.loadAllAgentConfigs();
 
 			expect(agents).toHaveLength(2);
-			expect(agents[0].name).toBe("agent-1");
-			expect(agents[1].name).toBe("agent-2");
-			expect(agents[1].tools).toHaveLength(1);
+			expect(agents.map((agent) => agent.name)).toContain("agent-1");
+			expect(agents.map((agent) => agent.name)).toContain("agent-2");
+			const agentWithTools = agents.find((agent) => agent.name === "agent-2");
+			expect(agentWithTools?.tools).toHaveLength(1);
 		});
 
 		it("should prioritize agent.json over agent.md", () => {
@@ -209,6 +210,39 @@ Markdown agent`;
 
 			expect(agents).toHaveLength(1);
 			expect(agents[0].name).toBe("valid-agent");
+		});
+	});
+
+	describe("loadAgent", () => {
+		it("should hydrate subagent tools for runtime use", async () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "parent-agent");
+			mkdirSync(agentDir, { recursive: true });
+
+			const config = {
+				name: "parent-agent",
+				description: "Parent agent",
+				systemPrompt: "You are the parent",
+				subAgents: [
+					{
+						name: "researcher",
+						description: "Research subagent",
+						systemPrompt: "You research things",
+						tools: ["think"],
+					},
+				],
+			};
+
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
+
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agent = await loader.loadAgent("parent-agent");
+
+			expect(agent).toBeDefined();
+			expect(agent?.subagents).toBeDefined();
+			expect(agent?.subagents?.length).toBe(1);
+			const sub = agent?.subagents?.[0] as any;
+			expect(Array.isArray(sub.tools)).toBe(true);
+			expect(sub.tools?.[0]).toHaveProperty("name", "think");
 		});
 	});
 });

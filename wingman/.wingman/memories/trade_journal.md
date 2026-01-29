@@ -1,1 +1,4 @@
 # Trade Journal\n\nNo trades yet.
+
+2026-01-29: Portfolio updated from user screenshot (unconfirmed symbols IRON/GOSE/COPK skipped). Added positions as above, avgCost=0 placeholder (unknown). Current values (Finnhub ~18:25 UTC): RKLB~19k, ONDS~11.5k, CIFR~18k, TE~11.6k, MU~10.4k, UAMY~5k, SOFI~17k, SNDL~0.03k. Total ~92k + cash 10k. Screenshot % vs current dp diverged (market moved).
+2026-01-29T19:55: Updated from new screenshot. Changes: RKLB 220->2000, CIFR 1010->1470, TE 1300->1000, MU 24->200, UAMY 600 same, added IREN:1700, SOS:550, LUMN:25, SATL:700, OCGN:100; removed SOFI, SNDL. Cash 10k. Fresh quotes ~20:00 UTC (Finnhub ts ~176971675x): RKLB: $86 ($172k), ONDS: $11 ($11k), IREN: $60 ($102k), CIFR: $18 ($26k), SOS: $2 ($1k), TE: $9 ($9k), MU: $433 ($87k), LUMN: $9 (0k), UAMY: $8 ($5k), SATL: $5 ($4k), OCGN: $2 (0k). Total positions value ~$417k + cash $10k = $427k.

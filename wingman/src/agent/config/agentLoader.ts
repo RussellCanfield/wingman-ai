@@ -273,26 +273,28 @@ export class AgentLoader {
 			systemPrompt: config.systemPrompt,
 		};
 
-		// Add tools if specified
-		if (config.tools && config.tools.length > 0) {
+		const buildToolOptions = (source: WingmanAgentConfig): ToolOptions => {
 			const mcpConfigs: MCPServersConfig[] = [];
-			if (config.mcp) {
-				mcpConfigs.push(config.mcp as MCPServersConfig);
+			if (source.mcp) {
+				mcpConfigs.push(source.mcp as MCPServersConfig);
 			}
-			if (config.mcpUseGlobal && this.wingmanConfig?.mcp) {
+			if (source.mcpUseGlobal && this.wingmanConfig?.mcp) {
 				mcpConfigs.push(this.wingmanConfig.mcp);
 			}
 
-			const toolOptions: ToolOptions = {
+			return {
 				workspace: this.workspace,
-				blockedCommands: config.blockedCommands,
-				allowScriptExecution: config.allowScriptExecution,
-				timeout: config.commandTimeout,
+				blockedCommands: source.blockedCommands,
+				allowScriptExecution: source.allowScriptExecution,
+				timeout: source.commandTimeout,
 				searchConfig: this.wingmanConfig?.search,
 				mcpConfigs,
 			};
+		};
 
-			agent.tools = await createTools(config.tools, toolOptions);
+		// Add tools if specified
+		if (config.tools && config.tools.length > 0) {
+			agent.tools = await createTools(config.tools, buildToolOptions(config));
 		}
 
 		// Store MCP config on agent for reference
@@ -318,7 +320,38 @@ export class AgentLoader {
 
 		// Add subagents if specified
 		if (config.subAgents) {
-			agent.subagents = config.subAgents as any;
+			const subagents: WingmanAgent[] = [];
+			for (const subagent of config.subAgents) {
+				const sub: WingmanAgent = {
+					name: subagent.name,
+					description: subagent.description,
+					systemPrompt: subagent.systemPrompt,
+				};
+
+				if (subagent.tools && subagent.tools.length > 0) {
+					sub.tools = await createTools(
+						subagent.tools,
+						buildToolOptions(subagent as WingmanAgentConfig),
+					);
+				}
+
+				if (subagent.model) {
+					try {
+						sub.model = ModelFactory.createModel(subagent.model);
+						logger.info(
+							`Subagent "${subagent.name}" using model: ${subagent.model}`,
+						);
+					} catch (error) {
+						logger.error(
+							`Failed to create model for subagent "${subagent.name}": ${error}`,
+						);
+					}
+				}
+
+				subagents.push(sub);
+			}
+
+			agent.subagents = subagents as any;
 		}
 
 		return agent;

@@ -22,6 +22,16 @@ export const additionalMessageMiddleware = (
 		}): Promise<{
 			messages: BaseMessage[];
 		}> => {
+			const alreadyInjected = input.messages.some(
+				(message) =>
+					(message as { additional_kwargs?: { source?: string } })
+						?.additional_kwargs?.source === "additional-message-middleware",
+			);
+
+			if (alreadyInjected) {
+				return input;
+			}
+
 			const lines = [
 				getMachineDetails(),
 				`** Current Date Time (UTC): ${new Date().toISOString()} **`,

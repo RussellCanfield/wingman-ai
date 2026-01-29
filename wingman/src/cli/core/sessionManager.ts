@@ -1,4 +1,5 @@
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
+import { createDeepAgent } from "deepagents";
 import { v4 as uuidv4 } from "uuid";
 
 type DatabaseLike = {
@@ -48,12 +49,17 @@ export interface SessionAttachment {
 	size?: number;
 }
 
+type CheckpointRow = {
+	checkpoint?: string | Uint8Array;
+};
+
 /**
  * SessionManager handles session metadata and provides unified access to
  * both the custom sessions table and LangGraph's SqliteSaver checkpointer.
  */
 export class SessionManager {
 	private checkpointer: SqliteSaver | null = null;
+	private stateReaderAgent: ReturnType<typeof createDeepAgent> | null = null;
 	private db: DatabaseLike | null = null;
 	private dbPath: string;
 
@@ -407,37 +413,66 @@ export class SessionManager {
 			throw new Error("SessionManager not initialized");
 		}
 
-		const tuple = await this.checkpointer.getTuple({
-			configurable: { thread_id: sessionId },
-		});
-		if (!tuple?.checkpoint) {
-			return [];
+		const stateMessages = await this.loadMessagesFromState(sessionId);
+		if (stateMessages !== null) {
+			return stateMessages;
 		}
 
-		const checkpoint = tuple.checkpoint as any;
-		const channelValues =
-			checkpoint?.channel_values ||
-			checkpoint?.channelValues ||
-			checkpoint?.state?.channel_values ||
-			checkpoint?.state?.channelValues ||
-			{};
+		const rawCheckpoints = this.loadRecentCheckpoints(sessionId, 25);
+		const fallbackTuple =
+			rawCheckpoints.length === 0
+				? await this.checkpointer.getTuple({
+						configurable: { thread_id: sessionId },
+					})
+				: null;
 
-		const candidates: any[][] = [];
-		if (Array.isArray(channelValues?.messages)) {
-			candidates.push(channelValues.messages);
-		}
-		for (const value of Object.values(channelValues)) {
-			if (Array.isArray(value)) {
-				candidates.push(value);
+		const checkpoints = [
+			...rawCheckpoints,
+			...(fallbackTuple?.checkpoint ? [fallbackTuple.checkpoint as any] : []),
+		];
+		if (checkpoints.length === 0) return [];
+
+		let bestScore = -1;
+		let bestMessages: SessionMessage[] = [];
+
+		for (const checkpoint of checkpoints) {
+			const channelValues =
+				checkpoint?.channel_values ||
+				checkpoint?.channelValues ||
+				checkpoint?.state?.channel_values ||
+				checkpoint?.state?.channelValues ||
+				{};
+
+			const candidates: any[][] = [];
+			if (Array.isArray(channelValues?.messages)) {
+				candidates.push(channelValues.messages);
+			}
+			for (const value of Object.values(channelValues)) {
+				if (Array.isArray(value)) {
+					candidates.push(value);
+				}
+			}
+
+			const relevantCandidates = candidates.filter((arr) =>
+				arr.some(isMessageLike),
+			);
+			if (relevantCandidates.length === 0) continue;
+
+			const baseTime = parseTimestamp(checkpoint?.ts);
+			const scored = relevantCandidates.map((candidate) =>
+				scoreMessages(candidate, baseTime),
+			);
+			scored.sort((a, b) => b.score - a.score);
+
+			if (scored[0] && scored[0].score > bestScore) {
+				bestScore = scored[0].score;
+				bestMessages = scored[0].messages;
 			}
 		}
 
-		const messages = candidates.find((arr) => arr.some(isMessageLike)) || [];
-		const baseTime = parseCheckpointTimestamp(checkpoint?.ts);
+		if (bestMessages.length === 0) return [];
 
-		return messages
-			.map((message, index) => toSessionMessage(message, index, baseTime))
-			.filter(Boolean) as SessionMessage[];
+		return filterEmptyAssistantMessages(bestMessages);
 	}
 
 	/**
@@ -465,6 +500,76 @@ export class SessionManager {
 			this.db.close();
 		}
 	}
+
+	private loadRecentCheckpoints(sessionId: string, limit: number): any[] {
+		if (!this.db) return [];
+		const stmt = this.db.prepare(`
+      SELECT checkpoint
+      FROM checkpoints
+      WHERE thread_id = ?
+      ORDER BY rowid DESC
+      LIMIT ?
+    `);
+		const rows = stmt.all(sessionId, limit) as CheckpointRow[];
+		const checkpoints: any[] = [];
+
+		for (const row of rows) {
+			if (!row?.checkpoint) continue;
+			const raw = row.checkpoint;
+			let text: string | null = null;
+			if (typeof raw === "string") {
+				text = raw;
+			} else if (raw instanceof Uint8Array) {
+				text = new TextDecoder().decode(raw);
+			} else if (typeof Buffer !== "undefined" && Buffer.isBuffer(raw)) {
+				text = raw.toString("utf-8");
+			}
+
+			if (!text) continue;
+			try {
+				checkpoints.push(JSON.parse(text));
+			} catch {
+				continue;
+			}
+		}
+
+		return checkpoints;
+	}
+
+	private getStateReaderAgent(): ReturnType<typeof createDeepAgent> {
+		if (!this.checkpointer) {
+			throw new Error("SessionManager not initialized");
+		}
+
+		if (!this.stateReaderAgent) {
+			this.stateReaderAgent = createDeepAgent({
+				checkpointer: this.checkpointer,
+			});
+		}
+
+		return this.stateReaderAgent;
+	}
+
+	private async loadMessagesFromState(
+		sessionId: string,
+	): Promise<SessionMessage[] | null> {
+		if (!this.checkpointer) return null;
+
+		try {
+			const agent = this.getStateReaderAgent() as any;
+			if (typeof agent.getState !== "function") {
+				return null;
+			}
+
+			const state = await agent.getState({
+				configurable: { thread_id: sessionId },
+			});
+
+			return extractMessagesFromState(state);
+		} catch {
+			return null;
+		}
+	}
 }
 
 function isMessageLike(entry: any): boolean {
@@ -490,11 +595,7 @@ function toSessionMessage(
 		return null;
 	}
 
-	const role =
-		(entry.role as string | undefined) ||
-		(entry?.kwargs?.role as string | undefined) ||
-		(entry?.additional_kwargs?.role as string | undefined) ||
-		mapMessageType(entry?.type as string | undefined);
+	const role = resolveMessageRole(entry);
 
 	if (role !== "user" && role !== "assistant") {
 		return null;
@@ -530,6 +631,42 @@ function toSessionMessage(
 		attachments: attachments.length > 0 ? attachments : undefined,
 		createdAt: baseTime + index,
 	};
+}
+
+export function extractMessagesFromState(
+	state: any,
+): SessionMessage[] | null {
+	if (!state || typeof state !== "object") return null;
+
+	const values = state?.values ?? state?.value ?? state?.state ?? {};
+	const candidates = [
+		values?.messages,
+		values?.channel_values?.messages,
+		values?.channelValues?.messages,
+		state?.channel_values?.messages,
+		state?.channelValues?.messages,
+	];
+	const messages = candidates.find((candidate) =>
+		Array.isArray(candidate),
+	) as any[] | undefined;
+
+	if (!messages) {
+		return null;
+	}
+
+	const baseTime = parseTimestamp(
+		state?.createdAt ??
+			values?.createdAt ??
+			state?.metadata?.createdAt ??
+			state?.metadata?.created_at ??
+			state?.ts,
+	);
+
+	const mapped = messages
+		.map((message, index) => toSessionMessage(message, index, baseTime))
+		.filter(Boolean) as SessionMessage[];
+
+	return filterEmptyAssistantMessages(mapped);
 }
 
 function extractContentBlocks(entry: any): any[] {
@@ -589,10 +726,35 @@ function mapMessageType(type?: string): "user" | "assistant" | null {
 	return null;
 }
 
-function parseCheckpointTimestamp(ts?: string): number {
-	if (!ts) return Date.now();
-	const parsed = Date.parse(ts);
-	return Number.isNaN(parsed) ? Date.now() : parsed;
+function mapMessageTypeFromId(id?: unknown): "user" | "assistant" | null {
+	if (!Array.isArray(id) || id.length === 0) return null;
+	const last = String(id[id.length - 1] || "").toLowerCase();
+	if (last.includes("human") || last.includes("user")) return "user";
+	if (last.includes("ai") || last.includes("assistant")) return "assistant";
+	return null;
+}
+
+export function resolveMessageRole(entry: any): "user" | "assistant" | null {
+	return (
+		(entry?.role as string | undefined) ||
+		(entry?.kwargs?.role as string | undefined) ||
+		(entry?.additional_kwargs?.role as string | undefined) ||
+		mapMessageType(entry?.type as string | undefined) ||
+		mapMessageTypeFromId(entry?.id ?? entry?.lc_id ?? entry?.kwargs?.id)
+	) as "user" | "assistant" | null;
+}
+
+function parseTimestamp(value?: unknown): number {
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return value;
+	}
+	if (typeof value === "string") {
+		const parsed = Date.parse(value);
+		if (!Number.isNaN(parsed)) {
+			return parsed;
+		}
+	}
+	return Date.now();
 }
 
 function isUiHiddenContent(content: string): boolean {
@@ -601,4 +763,33 @@ function isUiHiddenContent(content: string): boolean {
 		content.includes("Current Date Time (UTC):") ||
 		content.startsWith("# User's Machine Information")
 	);
+}
+
+function scoreMessages(candidate: any[], baseTime: number): {
+	score: number;
+	messages: SessionMessage[];
+} {
+	const messages = candidate
+		.map((message, index) => toSessionMessage(message, index, baseTime))
+		.filter(Boolean) as SessionMessage[];
+	const contentful = messages.filter(
+		(msg) => msg.content.trim().length > 0 || (msg.attachments?.length ?? 0) > 0,
+	).length;
+	const assistantContentful = messages.filter(
+		(msg) => msg.role === "assistant" && msg.content.trim().length > 0,
+	).length;
+	const score = assistantContentful * 3 + contentful * 2 + messages.length;
+	return { score, messages };
+}
+
+function filterEmptyAssistantMessages(
+	messages: SessionMessage[],
+): SessionMessage[] {
+	const filtered = messages.filter(
+		(message) =>
+			message.role !== "assistant" ||
+			message.content.trim().length > 0 ||
+			(message.attachments?.length ?? 0) > 0,
+	);
+	return filtered.length > 0 ? filtered : messages;
 }
