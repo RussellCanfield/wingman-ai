@@ -36,7 +36,16 @@ export interface SessionMessage {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
+	attachments?: SessionAttachment[];
 	createdAt: number;
+}
+
+export interface SessionAttachment {
+	kind: "image";
+	dataUrl: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
 }
 
 /**
@@ -355,6 +364,32 @@ export class SessionManager {
 	}
 
 	/**
+	 * Clear session messages while preserving the session record
+	 */
+	clearSessionMessages(sessionId: string): void {
+		if (!this.db || !this.checkpointer) {
+			throw new Error("SessionManager not initialized");
+		}
+
+		const checkpointStmt = this.db.prepare(
+			"DELETE FROM checkpoints WHERE thread_id = ?",
+		);
+		checkpointStmt.run(sessionId);
+
+		const writesStmt = this.db.prepare(
+			"DELETE FROM writes WHERE thread_id = ?",
+		);
+		writesStmt.run(sessionId);
+
+		const sessionStmt = this.db.prepare(`
+      UPDATE sessions
+      SET message_count = 0, last_message_preview = NULL, updated_at = ?
+      WHERE id = ?
+    `);
+		sessionStmt.run(Date.now(), sessionId);
+	}
+
+	/**
 	 * Get the checkpointer for use with DeepAgents
 	 */
 	getCheckpointer(): SqliteSaver {
@@ -465,6 +500,7 @@ function toSessionMessage(
 		return null;
 	}
 
+	const blocks = extractContentBlocks(entry);
 	const content =
 		typeof entry.content === "string"
 			? entry.content
@@ -474,8 +510,8 @@ function toSessionMessage(
 					? entry.additional_kwargs.content
 					: typeof entry?.data?.content === "string"
 						? entry.data.content
-						: Array.isArray(entry?.content)
-							? entry.content
+						: blocks.length > 0
+							? blocks
 									.filter((block: any) => block && block.type === "text" && block.text)
 									.map((block: any) => block.text)
 									.join("")
@@ -485,12 +521,65 @@ function toSessionMessage(
 		return null;
 	}
 
+	const attachments = extractImageAttachments(blocks);
+
 	return {
 		id: `msg-${index}`,
 		role,
 		content,
+		attachments: attachments.length > 0 ? attachments : undefined,
 		createdAt: baseTime + index,
 	};
+}
+
+function extractContentBlocks(entry: any): any[] {
+	if (!entry || typeof entry !== "object") return [];
+	const candidates = [
+		entry?.content,
+		entry?.kwargs?.content,
+		entry?.additional_kwargs?.content,
+		entry?.data?.content,
+	];
+	for (const candidate of candidates) {
+		if (Array.isArray(candidate)) {
+			return candidate;
+		}
+	}
+	return [];
+}
+
+export function extractImageAttachments(blocks: any[]): SessionAttachment[] {
+	const attachments: SessionAttachment[] = [];
+	for (const block of blocks) {
+		if (!block || typeof block !== "object") continue;
+		const imageUrl = extractImageUrl(block);
+		if (!imageUrl) continue;
+		attachments.push({
+			kind: "image",
+			dataUrl: imageUrl,
+		});
+	}
+	return attachments;
+}
+
+export function extractImageUrl(block: any): string | null {
+	if (block.type === "image_url") {
+		if (typeof block.image_url === "string") return block.image_url;
+		if (typeof block.image_url?.url === "string") return block.image_url.url;
+	}
+	if (block.type === "input_image") {
+		if (typeof block.image_url === "string") return block.image_url;
+		if (typeof block.image_url?.url === "string") return block.image_url.url;
+		if (typeof block.url === "string") return block.url;
+	}
+	if (block.type === "image" && block.source) {
+		const mediaType = block.source.media_type || block.source.mediaType;
+		const data = block.source.data;
+		if (mediaType && data) {
+			return `data:${mediaType};base64,${data}`;
+		}
+	}
+	return null;
 }
 
 function mapMessageType(type?: string): "user" | "assistant" | null {

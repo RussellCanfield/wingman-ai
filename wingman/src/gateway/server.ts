@@ -110,7 +110,7 @@ export class GatewayServer {
 				: gatewayDefaults.auth;
 
 		this.config = {
-			port: config.port || gatewayDefaults.port || 18789,
+			port: config.port ?? gatewayDefaults.port ?? 18789,
 			host: config.host || gatewayDefaults.host || "127.0.0.1",
 			authToken: config.authToken,
 			requireAuth: config.requireAuth ?? false,
@@ -511,7 +511,13 @@ export class GatewayServer {
 		}
 
 		const payload = msg.payload as AgentRequestPayload;
-		if (!payload?.content) {
+		const content = typeof payload?.content === "string" ? payload.content : "";
+		const attachments = Array.isArray(payload?.attachments)
+			? payload.attachments
+			: [];
+		const hasContent = content.trim().length > 0;
+		const hasAttachments = attachments.length > 0;
+		if (!hasContent && !hasAttachments) {
 			this.sendAgentError(ws, msg.id, "Missing agent content");
 			return;
 		}
@@ -531,8 +537,9 @@ export class GatewayServer {
 			existingSession || sessionManager.getOrCreateSession(sessionKey, agentId);
 		const workdir = session.metadata?.workdir ?? null;
 		const defaultOutputDir = this.resolveDefaultOutputDir(agentId);
+		const preview = hasContent ? content.trim() : "Image attachment";
 		sessionManager.updateSession(session.id, {
-			lastMessagePreview: payload.content.substring(0, 200),
+			lastMessagePreview: preview.substring(0, 200),
 		});
 
 		if (!existingSession) {
@@ -553,7 +560,7 @@ export class GatewayServer {
 			agentId,
 			sessionKey,
 			routing: payload.routing,
-			payload: { content: payload.content },
+			payload: { content, attachments },
 		});
 
 		const outputManager = new OutputManager("interactive");
@@ -581,7 +588,7 @@ export class GatewayServer {
 		});
 
 		try {
-			await invoker.invokeAgent(agentId, payload.content, sessionKey);
+			await invoker.invokeAgent(agentId, content, sessionKey, attachments);
 
 			const updated = sessionManager.getSession(sessionKey);
 			if (updated) {

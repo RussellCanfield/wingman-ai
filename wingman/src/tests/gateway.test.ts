@@ -6,22 +6,42 @@ const describeIfBun = isBun ? describe : describe.skip;
 
 describeIfBun("Gateway", () => {
 	let server: GatewayServer;
-	const port = 3002;
+	let port = 0;
 
 	beforeAll(async () => {
-		server = new GatewayServer({
-			port,
-			host: "localhost",
-			requireAuth: false,
-			logLevel: "silent",
-		});
-		await server.start();
+		const startPort = 23000;
+		const attempts = 50;
+		let lastError: unknown = null;
+		for (let i = 0; i < attempts; i += 1) {
+			const candidate = startPort + i;
+			try {
+				const instance = new GatewayServer({
+					port: candidate,
+					host: "localhost",
+					requireAuth: false,
+					logLevel: "silent",
+				});
+				await instance.start();
+				server = instance;
+				port = candidate;
+				lastError = null;
+				break;
+			} catch (error) {
+				lastError = error;
+			}
+		}
+
+		if (!server || !port) {
+			throw lastError ?? new Error("Unable to start gateway server for tests");
+		}
 		// Wait for server to be ready
 		await new Promise((resolve) => setTimeout(resolve, 500));
 	});
 
 	afterAll(async () => {
-		await server.stop();
+		if (server) {
+			await server.stop();
+		}
 	});
 
 	it("should start the gateway server", async () => {
@@ -198,5 +218,33 @@ describeIfBun("Gateway", () => {
 
 			setTimeout(() => reject(new Error("Ping/pong timeout")), 5000);
 		});
+	});
+
+	it("should clear session messages via API", async () => {
+		const createRes = await fetch(`http://localhost:${port}/api/sessions`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ agentId: "main", name: "Clear Test" }),
+		});
+		expect(createRes.ok).toBe(true);
+		const session = (await createRes.json()) as { id: string };
+
+		const manager = await (server as any).getSessionManager("main");
+		manager.updateSession(session.id, {
+			messageCount: 3,
+			lastMessagePreview: "Hello",
+		});
+
+		const clearRes = await fetch(
+			`http://localhost:${port}/api/sessions/${encodeURIComponent(session.id)}/messages?agentId=main`,
+			{ method: "DELETE" },
+		);
+		expect(clearRes.ok).toBe(true);
+		const cleared = await clearRes.json();
+		expect(cleared.messageCount).toBe(0);
+
+		const updated = manager.getSession(session.id);
+		expect(updated?.messageCount).toBe(0);
+		expect(updated?.lastMessagePreview).toBeNull();
 	});
 });

@@ -1,4 +1,5 @@
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
+import { tool as createTool } from "@langchain/core/tools";
 import type { StructuredTool } from "@langchain/core/tools";
 import type {
 	MCPServersConfig,
@@ -49,11 +50,15 @@ export class MCPClientManager {
 		for (const server of this.serverConfigs) {
 			if (server.transport === "stdio") {
 				const stdioServer = server as MCPStdioConfig;
+				const resolvedEnv: Record<string, string> = {};
+				for (const [key, value] of Object.entries(stdioServer.env || {})) {
+					resolvedEnv[key] = resolveEnvValue(value);
+				}
 				clientConfig[server.name] = {
 					transport: "stdio",
 					command: stdioServer.command,
 					args: stdioServer.args || [],
-					env: stdioServer.env || {},
+					env: resolvedEnv,
 				};
 			} else if (server.transport === "sse") {
 				const sseServer = server as MCPSSEConfig;
@@ -141,18 +146,31 @@ export class MCPClientManager {
 		return tools.map((tool) => {
 			const original = tool.name;
 			const sanitized = uniqueName(original);
-			if (sanitized !== original) {
+			if (sanitized === original) {
+				return tool;
+			}
+
+			const originalLabel = `Original tool name: ${original}`;
+			const description = tool.description
+				? `${tool.description}\n\n${originalLabel}`
+				: originalLabel;
+
+			const schema = (tool as any).schema ?? (tool as any).inputSchema;
+			if (!schema) {
 				try {
 					tool.name = sanitized;
+					tool.description = description;
+					return tool;
 				} catch {
-					// ignore if tool name is read-only
+					return tool;
 				}
-				const originalLabel = `Original tool name: ${original}`;
-				tool.description = tool.description
-					? `${tool.description}\n\n${originalLabel}`
-					: originalLabel;
 			}
-			return tool;
+
+			return createTool(async (input) => tool.invoke(input), {
+				name: sanitized,
+				description,
+				schema,
+			});
 		});
 	}
 
@@ -184,4 +202,11 @@ export class MCPClientManager {
 	hasServers(): boolean {
 		return this.serverConfigs.length > 0;
 	}
+}
+
+function resolveEnvValue(value: string): string {
+	const match = value.match(/^\$\{([A-Z0-9_]+)\}$/);
+	if (!match) return value;
+	const envValue = process.env[match[1]];
+	return envValue ?? "";
 }

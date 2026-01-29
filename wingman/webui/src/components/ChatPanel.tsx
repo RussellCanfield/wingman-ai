@@ -1,16 +1,25 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import type { Thread, ToolEvent } from "../types";
-import { ToolEventPanel } from "./ToolEventPanel";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { ChatAttachment, Thread, ToolEvent, ThinkingEvent } from "../types";
+import { ThinkingPanel } from "./ThinkingPanel";
+import { extractImageFiles } from "../utils/attachments";
 
 type ChatPanelProps = {
 	activeThread?: Thread;
 	prompt: string;
+	attachments: ChatAttachment[];
+	attachmentError?: string;
 	isStreaming: boolean;
 	connected: boolean;
 	loading: boolean;
 	toolEvents: ToolEvent[];
+	thinkingEvents: ThinkingEvent[];
 	onPromptChange: (value: string) => void;
 	onSendPrompt: () => void;
+	onAddAttachments: (files: FileList | File[] | null) => void;
+	onRemoveAttachment: (id: string) => void;
+	onClearAttachments: () => void;
 	onClearChat: () => void;
 	onOpenCommandDeck: () => void;
 };
@@ -24,28 +33,25 @@ const QUICK_PROMPTS = [
 export const ChatPanel: React.FC<ChatPanelProps> = ({
 	activeThread,
 	prompt,
+	attachments,
+	attachmentError,
 	isStreaming,
 	connected,
 	loading,
 	toolEvents,
+	thinkingEvents,
 	onPromptChange,
 	onSendPrompt,
+	onAddAttachments,
+	onRemoveAttachment,
+	onClearAttachments,
 	onClearChat,
 	onOpenCommandDeck,
 }) => {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
-	const activeToolCount = useMemo(
-		() => toolEvents.filter((event) => event.status === "running").length,
-		[toolEvents],
-	);
-
-	const toolTimestamp = useMemo(() => {
-		if (toolEvents.length === 0) return undefined;
-		return toolEvents.reduce((latest, event) => {
-			const candidate = event.completedAt ?? event.startedAt ?? 0;
-			return candidate > latest ? candidate : latest;
-		}, 0);
-	}, [toolEvents]);
+	const fileInputRef = useRef<HTMLInputElement | null>(null);
+	const [previewAttachment, setPreviewAttachment] = useState<ChatAttachment | null>(null);
+	const canSend = connected && !isStreaming && (prompt.trim() || attachments.length > 0);
 
 	useEffect(() => {
 		const el = scrollRef.current;
@@ -53,10 +59,45 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		el.scrollTop = el.scrollHeight;
 	}, [activeThread?.messages, isStreaming]);
 
+	useEffect(() => {
+		if (!previewAttachment) return;
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setPreviewAttachment(null);
+			}
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [previewAttachment]);
+
 	const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
 			onSendPrompt();
+		}
+	};
+
+	const handlePickFiles = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+		onAddAttachments(event.target.files);
+		if (event.target) {
+			event.target.value = "";
+		}
+	};
+
+	const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+		if (isStreaming) return;
+		const items = event.clipboardData?.items;
+		const imageFiles = extractImageFiles(items);
+		if (imageFiles.length === 0) return;
+		event.preventDefault();
+		onAddAttachments(imageFiles);
+		const text = event.clipboardData?.getData("text/plain");
+		if (text) {
+			onPromptChange(`${prompt}${text}`);
 		}
 	};
 
@@ -118,27 +159,90 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											<span>{isStreaming ? "Streaming..." : "Waiting..."}</span>
 										</div>
 									) : (
-										<p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
+										<ReactMarkdown
+											remarkPlugins={[remarkGfm]}
+											className="markdown-content mt-2 text-sm leading-relaxed"
+											components={{
+												a: ({ node, ...props }) => (
+													<a
+														{...props}
+														className="text-emerald-600 underline decoration-emerald-200 underline-offset-4"
+														target="_blank"
+														rel="noreferrer"
+													/>
+												),
+												code: ({ node, inline, className, children, ...props }) =>
+													inline ? (
+														<code
+															{...props}
+															className="rounded bg-black/5 px-1 py-0.5 text-[0.85em]"
+														>
+															{children}
+														</code>
+													) : (
+														<pre className="mt-3 overflow-auto rounded-lg border border-black/10 bg-black/5 p-3 text-xs">
+															<code {...props} className={className}>
+																{children}
+															</code>
+														</pre>
+													),
+												ul: ({ node, ...props }) => (
+													<ul {...props} className="ml-5 list-disc space-y-1" />
+												),
+												ol: ({ node, ...props }) => (
+													<ol {...props} className="ml-5 list-decimal space-y-1" />
+												),
+												blockquote: ({ node, ...props }) => (
+													<blockquote
+														{...props}
+														className="border-l-2 border-emerald-200 pl-3 text-slate-600"
+													/>
+												),
+											}}
+										>
 											{msg.content}
-										</p>
+										</ReactMarkdown>
 									)}
+									{msg.attachments && msg.attachments.length > 0 ? (
+										<div className="mt-3 grid gap-2 sm:grid-cols-2">
+											{msg.attachments.map((attachment) => (
+												<div
+													key={attachment.id}
+													className="overflow-hidden rounded-xl border border-black/10 bg-white/70"
+												>
+													<button
+														type="button"
+														className="group relative block w-full"
+														onClick={() => setPreviewAttachment(attachment)}
+													>
+														<img
+															src={attachment.dataUrl}
+															alt={attachment.name || "Attachment"}
+															className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
+															loading="lazy"
+														/>
+														<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/5" />
+													</button>
+													{attachment.name ? (
+														<div className="truncate border-t border-black/10 px-2 py-1 text-[11px] text-slate-500">
+															{attachment.name}
+														</div>
+													) : null}
+												</div>
+											))}
+										</div>
+									) : null}
 								</div>
 							</div>
 						))}
-						{toolEvents.length > 0 ? (
+						{toolEvents.length > 0 || thinkingEvents.length > 0 ? (
 							<div className="flex justify-start">
-								<div className="w-full max-w-[78%] rounded-2xl border border-emerald-200/60 bg-emerald-100/20 px-4 py-3 text-sm text-slate-700 shadow-[0_10px_18px_rgba(18,14,12,0.08)]">
-									<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
-										<span>Tool Activity</span>
-										<span>{formatTime(toolTimestamp)}</span>
-									</div>
-									<div className="mt-2">
-										<ToolEventPanel
-											toolEvents={toolEvents}
-											activeCount={activeToolCount}
-											variant="inline"
-										/>
-									</div>
+								<div className="w-full max-w-[78%]">
+									<ThinkingPanel
+										thinkingEvents={thinkingEvents}
+										toolEvents={toolEvents}
+										isStreaming={isStreaming}
+									/>
 								</div>
 							</div>
 						) : null}
@@ -158,13 +262,71 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						</button>
 					</div>
 				) : null}
-				<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Prompt</label>
+				<div className="flex items-center justify-between">
+					<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Prompt</label>
+					<div className="flex items-center gap-2 text-xs text-slate-500">
+						<button
+							type="button"
+							className="button-secondary px-3 py-1 text-xs"
+							onClick={handlePickFiles}
+							disabled={isStreaming}
+						>
+							Add Images
+						</button>
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept="image/*"
+							multiple
+							className="hidden"
+							onChange={handleFileChange}
+						/>
+					</div>
+				</div>
+				{attachments.length > 0 ? (
+					<div className="mt-3 flex flex-wrap gap-2">
+						{attachments.map((attachment) => (
+							<div
+								key={attachment.id}
+								className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-black/10 bg-white/80 pr-2 text-xs"
+							>
+								<img
+									src={attachment.dataUrl}
+									alt={attachment.name || "Attachment"}
+									className="h-12 w-12 cursor-zoom-in object-cover"
+									onClick={() => setPreviewAttachment(attachment)}
+								/>
+								<span className="max-w-[160px] truncate text-slate-600">
+									{attachment.name || "Image"}
+								</span>
+								<button
+									type="button"
+									className="text-slate-400 transition hover:text-rose-500"
+									onClick={() => onRemoveAttachment(attachment.id)}
+								>
+									×
+								</button>
+							</div>
+						))}
+						<button
+							type="button"
+							className="text-xs text-slate-400 underline decoration-slate-300 underline-offset-4"
+							onClick={onClearAttachments}
+						>
+							Clear all
+						</button>
+					</div>
+				) : null}
+				{attachmentError ? (
+					<div className="mt-2 text-xs text-rose-500">{attachmentError}</div>
+				) : null}
 				<textarea
 					className="mt-2 w-full rounded-xl border border-black/10 bg-white/90 px-3 py-3 text-sm focus:shadow-glow"
 					rows={3}
 					value={prompt}
 					onChange={(event) => onPromptChange(event.target.value)}
 					onKeyDown={handleKeyDown}
+					onPaste={handlePaste}
 					placeholder="Ask Wingman to do something..."
 					disabled={isStreaming}
 				/>
@@ -186,13 +348,40 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							className="button-primary"
 							onClick={onSendPrompt}
 							type="button"
-							disabled={isStreaming || !connected}
+							disabled={!canSend}
 						>
 							Send Prompt
 						</button>
 					</div>
 				</div>
 			</div>
+			{previewAttachment ? (
+				<div
+					className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-6"
+					onClick={() => setPreviewAttachment(null)}
+				>
+					<div
+						className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-white shadow-2xl"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<img
+							src={previewAttachment.dataUrl}
+							alt={previewAttachment.name || "Attachment preview"}
+							className="max-h-[85vh] max-w-[90vw] object-contain"
+						/>
+						<div className="flex items-center justify-between gap-4 border-t border-black/10 px-4 py-2 text-xs text-slate-500">
+							<span className="truncate">{previewAttachment.name || "Image preview"}</span>
+							<button
+								type="button"
+								className="text-slate-400 transition hover:text-slate-600"
+								onClick={() => setPreviewAttachment(null)}
+							>
+								Close
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
 		</section>
 	);
 };

@@ -29,6 +29,14 @@ export interface AgentInvokerOptions {
 	defaultOutputDir?: string | null;
 }
 
+export type ImageAttachment = {
+	kind?: "image";
+	dataUrl: string;
+	mimeType?: string;
+	name?: string;
+	size?: number;
+};
+
 export class AgentInvoker {
 	private loader: AgentLoader;
 	private outputManager: OutputManager;
@@ -82,6 +90,7 @@ export class AgentInvoker {
 		agentName: string,
 		prompt: string,
 		sessionId?: string,
+		attachments?: ImageAttachment[],
 	): Promise<any> {
 		try {
 			// Find the agent
@@ -92,7 +101,9 @@ export class AgentInvoker {
 			}
 
 			this.logger.info(`Invoking agent: ${agentName}`);
-			this.outputManager.emitAgentStart(agentName, prompt);
+			const preview =
+				prompt.trim() || (attachments && attachments.length > 0 ? "[image]" : "");
+			this.outputManager.emitAgentStart(agentName, preview);
 
 			this.logger.debug(
 				`Found ${this.wingmanConfig.toolHooks ? "global hooks" : "no global hooks"}`,
@@ -188,6 +199,8 @@ export class AgentInvoker {
 
 			this.logger.debug("Agent created, sending message");
 
+			const userContent = buildUserContent(prompt, attachments);
+
 			// Use streaming if session manager is available, otherwise fall back to invoke
 			if (this.sessionManager && sessionId) {
 				this.logger.debug(`Using streaming with session: ${sessionId}`);
@@ -198,7 +211,7 @@ export class AgentInvoker {
 						messages: [
 							{
 								role: "user",
-								content: prompt,
+								content: userContent,
 							},
 						],
 					},
@@ -226,7 +239,7 @@ export class AgentInvoker {
 						messages: [
 							{
 								role: "user",
-								content: prompt,
+								content: userContent,
 							},
 						],
 					},
@@ -266,4 +279,28 @@ export class AgentInvoker {
 			description: a.description,
 		}));
 	}
+}
+
+export function buildUserContent(
+	prompt: string,
+	attachments?: ImageAttachment[],
+): string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> {
+	const text = prompt?.trim() ?? "";
+	if (!attachments || attachments.length === 0) {
+		return text;
+	}
+
+	const parts: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [];
+	if (text) {
+		parts.push({ type: "text", text });
+	}
+	for (const attachment of attachments) {
+		if (!attachment?.dataUrl) continue;
+		parts.push({ type: "image_url", image_url: { url: attachment.dataUrl } });
+	}
+
+	if (parts.length === 0) {
+		return text;
+	}
+	return parts;
 }

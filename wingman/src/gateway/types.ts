@@ -52,9 +52,18 @@ export interface GatewayAuthPayload {
 	deviceId?: string;
 }
 
+export interface ImageAttachment {
+	kind: "image";
+	dataUrl: string;
+	mimeType?: string;
+	name?: string;
+	size?: number;
+}
+
 export interface AgentRequestPayload {
 	agentId?: string;
-	content: string;
+	content?: string;
+	attachments?: ImageAttachment[];
 	routing?: RoutingInfo;
 	sessionKey?: string;
 }

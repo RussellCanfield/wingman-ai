@@ -53,10 +53,20 @@ export type GatewayMessage = {
 	timestamp?: number;
 };
 
+export type ChatAttachment = {
+	id: string;
+	kind: "image";
+	dataUrl: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+};
+
 export type ChatMessage = {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
+	attachments?: ChatAttachment[];
 	createdAt: number;
 };
 
@@ -71,12 +81,20 @@ export type ToolEvent = {
 	completedAt?: number;
 };
 
+export type ThinkingEvent = {
+	id: string;
+	node?: string;
+	content: string;
+	updatedAt: number;
+};
+
 export type Thread = {
 	id: string;
 	name: string;
 	agentId: string;
 	messages: ChatMessage[];
 	toolEvents?: ToolEvent[];
+	thinkingEvents?: ThinkingEvent[];
 	createdAt: number;
 	updatedAt?: number;
 	messageCount?: number;

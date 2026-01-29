@@ -2,6 +2,11 @@ import React from "react";
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
 import type { ToolCallBlock } from "../../types.js";
+import {
+	extractSubagentName,
+	extractTaskSummary,
+	isTaskTool,
+} from "../toolDisplayHelpers.js";
 
 interface ToolCallDisplayProps {
 	tool: ToolCallBlock;
@@ -25,7 +30,7 @@ const TOOL_STYLES: Record<string, ToolStyle> = {
 	Grep: { icon: "🔎", color: "blue", label: "Searching" },
 	Glob: { icon: "🔍", color: "magenta", label: "Finding" },
 	Bash: { icon: "⚙️", color: "yellow", label: "Running" },
-	Task: { icon: "🚀", color: "cyan", label: "Launching" },
+	Task: { icon: "🧠", color: "magenta", label: "Delegating" },
 	WebFetch: { icon: "🌐", color: "blue", label: "Fetching" },
 	WebSearch: { icon: "🔍", color: "blue", label: "Searching" },
 	AskUserQuestion: { icon: "❓", color: "magenta", label: "Asking" },
@@ -100,6 +105,9 @@ function formatArgs(args: Record<string, any>): string {
 export const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({ tool }) => {
 	const style = getToolStyle(tool.name);
 	const duration = formatDuration(tool.startTime, tool.endTime);
+	const isTask = isTaskTool(tool.name);
+	const taskTarget = isTask ? extractSubagentName(tool.args) : null;
+	const taskSummary = isTask ? extractTaskSummary(tool.args) : null;
 	const hasArgs = Object.keys(tool.args).length > 0;
 	const argsText = hasArgs ? formatArgs(tool.args) : "";
 	const result = tool.result;
@@ -122,18 +130,30 @@ export const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({ tool }) => {
 						<Text>
 							{style.icon}{" "}
 							<Text bold color={style.color as any}>
-								{tool.name}
+								{isTask ? "Subagent" : tool.name}
 							</Text>{" "}
+							{isTask && taskTarget ? (
+								<Text dimColor>→ {taskTarget}</Text>
+							) : null}{" "}
 							{duration && <Text dimColor>{duration}</Text>}{" "}
 							{getStatusIndicator(tool.status)}
 						</Text>
 					</Box>
 
-					{hasArgs && (
+					{isTask ? (
+						<Box marginTop={1}>
+							<Text dimColor>
+								{taskTarget ? `target: ${taskTarget}` : "delegating subtask"}
+								{taskSummary
+									? ` • task: ${formatArgValue(taskSummary, MAX_PREVIEW_LENGTH)}`
+									: ""}
+							</Text>
+						</Box>
+					) : hasArgs ? (
 						<Box marginTop={1}>
 							<Text dimColor>args: {argsText}</Text>
 						</Box>
-					)}
+					) : null}
 
 					{hasResult && (
 						<Box flexDirection="column" marginTop={1}>

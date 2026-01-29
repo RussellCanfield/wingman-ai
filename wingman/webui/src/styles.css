@@ -57,6 +57,37 @@
   .button-ghost {
     @apply rounded-full border border-dashed border-black/20 bg-transparent px-4 py-2 text-sm font-semibold text-slate-500 shadow-none transition;
   }
+
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4 {
+    @apply mt-4 mb-2 font-semibold text-slate-800;
+  }
+
+  .markdown-content p {
+    @apply mb-3;
+  }
+
+  .markdown-content h1 {
+    @apply text-lg;
+  }
+
+  .markdown-content h2 {
+    @apply text-base;
+  }
+
+  .markdown-content h3 {
+    @apply text-sm;
+  }
+
+  .markdown-content h4 {
+    @apply text-sm;
+  }
+
+  .markdown-content hr {
+    @apply my-4 border-black/10;
+  }
 }
 
 .gridlines {

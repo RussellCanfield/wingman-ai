@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import type {
+	ChatAttachment,
 	ChatMessage,
 	ControlUiConfig,
 	GatewayHealth,
@@ -12,6 +13,7 @@ import type {
 	ProviderStatus,
 	ProviderStatusResponse,
 	ToolEvent,
+	ThinkingEvent,
 	Thread,
 	Routine,
 	Webhook,
@@ -39,6 +41,8 @@ const PASSWORD_KEY = "wingman_webui_password";
 const DEVICE_KEY = "wingman_webui_device";
 const AUTO_CONNECT_KEY = "wingman_webui_autoconnect";
 const DEFAULT_THREAD_NAME = "New Thread";
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_ATTACHMENTS = 6;
 
 export const App: React.FC = () => {
 	const navigate = useNavigate();
@@ -52,6 +56,8 @@ export const App: React.FC = () => {
 	const [connected, setConnected] = useState<boolean>(false);
 	const [connecting, setConnecting] = useState<boolean>(false);
 	const [prompt, setPrompt] = useState<string>("");
+	const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+	const [attachmentError, setAttachmentError] = useState<string>("");
 	const [eventLog, setEventLog] = useState<string[]>([]);
 	const [health, setHealth] = useState<GatewayHealth>({});
 	const [stats, setStats] = useState<GatewayStats>({});
@@ -76,7 +82,9 @@ export const App: React.FC = () => {
 	const wsRef = useRef<WebSocket | null>(null);
 	const connectRequestIdRef = useRef<string | null>(null);
 	const buffersRef = useRef<Map<string, string>>(new Map());
+	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(new Map());
 	const requestThreadRef = useRef<Map<string, string>>(new Map());
+	const requestAgentRef = useRef<Map<string, string>>(new Map());
 	const autoConnectAttemptsRef = useRef<number>(0);
 	const autoConnectTimerRef = useRef<number | null>(null);
 	const autoConnectFailureRef = useRef<boolean>(false);
@@ -90,11 +98,29 @@ export const App: React.FC = () => {
 		[agentCatalog, config.agents],
 	);
 
+	const subagentMap = useMemo(() => {
+		const map = new Map<string, Set<string>>();
+		for (const agent of agentCatalog) {
+			const set = new Set<string>();
+			for (const subagent of agent.subAgents || []) {
+				if (subagent.id) set.add(normalizeName(subagent.id));
+				if (subagent.displayName) set.add(normalizeName(subagent.displayName));
+			}
+			map.set(agent.id, set);
+		}
+		return map;
+	}, [agentCatalog]);
+
 	const activeThread = useMemo(() => {
 		return threads.find((thread) => thread.id === activeThreadId) || threads[0];
 	}, [activeThreadId, threads]);
 
 	const currentAgentId = activeThread?.agentId || agentId;
+
+	useEffect(() => {
+		setAttachments([]);
+		setAttachmentError("");
+	}, [activeThreadId]);
 
 	const logEvent = useCallback((message: string) => {
 		setEventLog((prev) => {
@@ -178,6 +204,7 @@ export const App: React.FC = () => {
 							messages: existing.messages,
 							messagesLoaded: true,
 							toolEvents: existing.toolEvents || [],
+							thinkingEvents: existing.thinkingEvents || [],
 						};
 					}
 					return thread;
@@ -230,6 +257,51 @@ export const App: React.FC = () => {
 		[logEvent],
 	);
 
+	const addAttachments = useCallback(async (files: FileList | File[] | null) => {
+		setAttachmentError("");
+		if (!files || files.length === 0) return;
+		const selected = Array.from(files);
+		const next: ChatAttachment[] = [];
+
+		for (const file of selected) {
+			if (!file.type.startsWith("image/")) {
+				setAttachmentError("Only image files are supported.");
+				continue;
+			}
+			if (file.size > MAX_IMAGE_BYTES) {
+				setAttachmentError("Image is too large. Max size is 8MB.");
+				continue;
+			}
+			const dataUrl = await readFileAsDataUrl(file);
+			next.push({
+				id: createAttachmentId(),
+				kind: "image",
+				dataUrl,
+				name: file.name,
+				mimeType: file.type,
+				size: file.size,
+			});
+		}
+
+		setAttachments((prev) => {
+			const combined = [...prev, ...next];
+			if (combined.length > MAX_ATTACHMENTS) {
+				setAttachmentError(`Limit is ${MAX_ATTACHMENTS} images per message.`);
+				return combined.slice(0, MAX_ATTACHMENTS);
+			}
+			return combined;
+		});
+	}, []);
+
+	const removeAttachment = useCallback((id: string) => {
+		setAttachments((prev) => prev.filter((item) => item.id !== id));
+	}, []);
+
+	const clearAttachments = useCallback(() => {
+		setAttachments([]);
+		setAttachmentError("");
+	}, []);
+
 	const updateAssistant = useCallback((requestId: string, text: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
 		if (!threadId) return;
@@ -258,9 +330,14 @@ export const App: React.FC = () => {
 				for (const event of events) {
 					const index = existing.findIndex((item) => item.id === event.id);
 					if (index >= 0) {
+						const resolvedName =
+							event.name && event.name !== "tool"
+								? event.name
+								: existing[index].name;
 						existing[index] = {
 							...existing[index],
 							...event,
+							name: resolvedName,
 							startedAt: existing[index].startedAt || event.timestamp,
 							completedAt:
 								event.status === "completed" || event.status === "error"
@@ -291,6 +368,36 @@ export const App: React.FC = () => {
 		);
 	}, []);
 
+	const updateThinkingEvents = useCallback(
+		(requestId: string, events: ThinkingEvent[]) => {
+			const threadId = requestThreadRef.current.get(requestId);
+			if (!threadId || events.length === 0) return;
+
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+					const existing = thread.thinkingEvents ? [...thread.thinkingEvents] : [];
+					for (const event of events) {
+						const index = existing.findIndex((item) => item.id === event.id);
+						if (index >= 0) {
+							existing[index] = {
+								...existing[index],
+								...event,
+							};
+						} else {
+							existing.push(event);
+						}
+					}
+					return {
+						...thread,
+						thinkingEvents: existing,
+					};
+				}),
+			);
+		},
+		[],
+	);
+
 	const finalizeAssistant = useCallback((requestId: string, fallback?: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
 		if (!threadId) return;
@@ -310,7 +417,9 @@ export const App: React.FC = () => {
 			}),
 		);
 		buffersRef.current.delete(requestId);
+		thinkingBuffersRef.current.delete(requestId);
 		requestThreadRef.current.delete(requestId);
+		requestAgentRef.current.delete(requestId);
 		setIsStreaming(false);
 	}, []);
 
@@ -322,15 +431,50 @@ export const App: React.FC = () => {
 				return;
 			}
 			if (payload.type === "agent-stream") {
-				const { texts, toolEvents } = parseStreamEvents(payload.chunk);
-				if (texts.length > 0) {
+				const { textEvents, toolEvents } = parseStreamEvents(payload.chunk);
+				const agentForRequest = requestAgentRef.current.get(requestId);
+				const subagents =
+					agentForRequest ? subagentMap.get(agentForRequest) : undefined;
+				const assistantTexts: string[] = [];
+				const thinkingUpdates: ThinkingEvent[] = [];
+
+				for (const event of textEvents) {
+					const nodeLabel = event.node?.trim();
+					const normalizedNode = nodeLabel ? normalizeName(nodeLabel) : "";
+					const isKnownSubagent =
+						nodeLabel && subagents ? subagents.has(normalizedNode) : false;
+
+					if (isKnownSubagent) {
+						const buffer =
+							thinkingBuffersRef.current.get(requestId) || new Map<string, string>();
+						const previous = buffer.get(normalizedNode) || "";
+						const next = mergeStreamText(previous, event.text);
+						buffer.set(normalizedNode, next);
+						thinkingBuffersRef.current.set(requestId, buffer);
+						thinkingUpdates.push({
+							id: `think-${requestId}-${normalizedNode}`,
+							node: nodeLabel || "Subagent",
+							content: next,
+							updatedAt: Date.now(),
+						});
+					} else {
+						assistantTexts.push(event.text);
+					}
+				}
+
+				if (assistantTexts.length > 0) {
 					const existing = buffersRef.current.get(requestId) || "";
-					const next = texts.reduce((acc, text) => {
-						if (text.startsWith(acc)) return text;
-						return acc + text;
-					}, existing);
+					const next = assistantTexts.reduce(
+						(acc, text) => mergeStreamText(acc, text),
+						existing,
+					);
 					buffersRef.current.set(requestId, next);
 					updateAssistant(requestId, next);
+					setIsStreaming(true);
+				}
+
+				if (thinkingUpdates.length > 0) {
+					updateThinkingEvents(requestId, thinkingUpdates);
 					setIsStreaming(true);
 				}
 
@@ -355,7 +499,14 @@ export const App: React.FC = () => {
 				finalizeAssistant(requestId, payload.error || "Agent error");
 			}
 		},
-		[finalizeAssistant, logEvent, updateAssistant],
+		[
+			finalizeAssistant,
+			logEvent,
+			subagentMap,
+			updateAssistant,
+			updateThinkingEvents,
+			updateToolEvents,
+		],
 	);
 
 	const disconnect = useCallback(() => {
@@ -536,7 +687,7 @@ export const App: React.FC = () => {
 			logEvent("Connect to the gateway before sending prompts");
 			return;
 		}
-		if (!prompt.trim()) return;
+		if (!prompt.trim() && attachments.length === 0) return;
 		if (isStreaming) {
 			logEvent("Wait for the current response to finish");
 			return;
@@ -556,10 +707,12 @@ export const App: React.FC = () => {
 
 		const requestId = `req-${Date.now()}`;
 		const now = Date.now();
+		const userMessageText = prompt.trim();
 		const userMessage: ChatMessage = {
 			id: `user-${now}`,
 			role: "user",
-			content: prompt.trim(),
+			content: userMessageText,
+			attachments: attachments.length > 0 ? attachments : undefined,
 			createdAt: now,
 		};
 		const assistantMessage: ChatMessage = {
@@ -575,23 +728,28 @@ export const App: React.FC = () => {
 						...thread,
 						name:
 							thread.name === DEFAULT_THREAD_NAME
-								? userMessage.content.slice(0, 32)
+								? (userMessage.content || "Image attachment").slice(0, 32)
 								: thread.name,
 						messages: [...thread.messages, userMessage, assistantMessage],
 						messageCount: (thread.messageCount ?? thread.messages.length) + 1,
-						lastMessagePreview: userMessage.content.slice(0, 200),
+						lastMessagePreview: (userMessage.content || "Image attachment").slice(0, 200),
 						updatedAt: now,
+						thinkingEvents: [],
 					}
 					: thread,
 			),
 		);
 		setPrompt("");
+		setAttachments([]);
+		setAttachmentError("");
 		setIsStreaming(true);
 		requestThreadRef.current.set(requestId, targetThread.id);
+		requestAgentRef.current.set(requestId, targetThread.agentId);
 
 		const payload = {
 			agentId: targetThread.agentId,
 			content: userMessage.content,
+			attachments: attachments.length > 0 ? attachments : undefined,
 			routing: {
 				channel: "webui",
 				peer: { kind: "channel", id: deviceId },
@@ -607,18 +765,54 @@ export const App: React.FC = () => {
 		};
 
 		wsRef.current.send(JSON.stringify(message));
-	}, [activeThread, agentId, createThread, deviceId, isStreaming, loadThreadMessages, logEvent, prompt]);
+	}, [
+		activeThread,
+		agentId,
+		attachments,
+		createThread,
+		deviceId,
+		isStreaming,
+		loadThreadMessages,
+		logEvent,
+		prompt,
+	]);
 
-	const clearChat = useCallback(() => {
+	const clearChat = useCallback(async () => {
 		if (!activeThread) return;
+		if (isStreaming) {
+			logEvent("Wait for the current response to finish");
+			return;
+		}
+		try {
+			const params = new URLSearchParams({ agentId: activeThread.agentId });
+			const res = await fetch(
+				`/api/sessions/${encodeURIComponent(activeThread.id)}/messages?${params.toString()}`,
+				{ method: "DELETE" },
+			);
+			if (!res.ok) {
+				logEvent("Failed to clear session messages");
+				return;
+			}
+		} catch {
+			logEvent("Failed to clear session messages");
+			return;
+		}
+
 		setThreads((prev) =>
 			prev.map((thread) =>
 				thread.id === activeThread.id
-					? { ...thread, messages: [], messageCount: 0, messagesLoaded: true }
+					? {
+						...thread,
+						messages: [],
+						messageCount: 0,
+						lastMessagePreview: undefined,
+						messagesLoaded: true,
+						thinkingEvents: [],
+					}
 					: thread,
 			),
 		);
-	}, [activeThread]);
+	}, [activeThread, isStreaming, logEvent]);
 
 	const deleteThread = useCallback(
 		async (threadId: string) => {
@@ -1206,13 +1400,19 @@ export const App: React.FC = () => {
 										agentId={currentAgentId}
 										activeThread={activeThread}
 										prompt={prompt}
+										attachments={attachments}
+										attachmentError={attachmentError}
 										isStreaming={isStreaming}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
 										outputRoot={config.outputRoot}
 										toolEvents={activeThread?.toolEvents || []}
+										thinkingEvents={activeThread?.thinkingEvents || []}
 										onPromptChange={setPrompt}
 										onSendPrompt={sendPrompt}
+										onAddAttachments={addAttachments}
+										onRemoveAttachment={removeAttachment}
+										onClearAttachments={clearAttachments}
 										onClearChat={clearChat}
 										onDeleteThread={deleteThread}
 										onOpenCommandDeck={() => navigate("/command")}
@@ -1309,6 +1509,16 @@ export const App: React.FC = () => {
 	);
 };
 
+function normalizeName(value: string): string {
+	return value.trim().toLowerCase();
+}
+
+function mergeStreamText(existing: string, next: string): string {
+	if (!next) return existing;
+	if (next.startsWith(existing)) return next;
+	return existing + next;
+}
+
 function mapSessionToThread(session: {
 	id: string;
 	name: string;
@@ -1325,6 +1535,7 @@ function mapSessionToThread(session: {
 		agentId: session.agentId,
 		messages: [],
 		toolEvents: [],
+		thinkingEvents: [],
 		createdAt: session.createdAt || Date.now(),
 		updatedAt: session.updatedAt,
 		messageCount: session.messageCount ?? 0,
@@ -1332,4 +1543,20 @@ function mapSessionToThread(session: {
 		messagesLoaded: false,
 		workdir: session.workdir ?? null,
 	};
+}
+
+function createAttachmentId(): string {
+	if (typeof window !== "undefined" && typeof window.crypto?.randomUUID === "function") {
+		return window.crypto.randomUUID();
+	}
+	return `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result || ""));
+		reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+		reader.readAsDataURL(file);
+	});
 }

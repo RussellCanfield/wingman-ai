@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
 **Version:** 1.1
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-29
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -643,6 +643,10 @@ cli.send({
   payload: { content: prompt }
 });
 ```
+
+### Control UI Streaming UX
+- Main assistant output streams directly into the chat transcript.
+- Subagent output and tool activity are grouped into a collapsible "Thinking" section so users can feel progress without clutter.
 
 ### Multi-Device Scenarios
 

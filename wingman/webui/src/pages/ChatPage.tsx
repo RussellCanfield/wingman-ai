@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import type { Thread } from "../types";
+import type { ChatAttachment, Thread } from "../types";
 import { ChatPanel } from "../components/ChatPanel";
 import { WorkdirModal } from "../components/WorkdirModal";
 
@@ -7,13 +7,19 @@ type ChatPageProps = {
 	agentId: string;
 	activeThread?: Thread;
 	prompt: string;
+	attachments: ChatAttachment[];
+	attachmentError?: string;
 	isStreaming: boolean;
 	connected: boolean;
 	loadingThread: boolean;
 	outputRoot?: string;
 	toolEvents: Thread["toolEvents"];
+	thinkingEvents: Thread["thinkingEvents"];
 	onPromptChange: (value: string) => void;
 	onSendPrompt: () => void;
+	onAddAttachments: (files: FileList | File[] | null) => void;
+	onRemoveAttachment: (id: string) => void;
+	onClearAttachments: () => void;
 	onClearChat: () => void;
 	onDeleteThread: (threadId: string) => void;
 	onOpenCommandDeck: () => void;
@@ -24,13 +30,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	agentId,
 	activeThread,
 	prompt,
+	attachments,
+	attachmentError,
 	isStreaming,
 	connected,
 	loadingThread,
 	outputRoot,
 	toolEvents,
+	thinkingEvents,
 	onPromptChange,
 	onSendPrompt,
+	onAddAttachments,
+	onRemoveAttachment,
+	onClearAttachments,
 	onClearChat,
 	onDeleteThread,
 	onOpenCommandDeck,
@@ -65,12 +77,18 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 			<ChatPanel
 				activeThread={activeThread}
 				prompt={prompt}
+				attachments={attachments}
+				attachmentError={attachmentError}
 				isStreaming={isStreaming}
 				connected={connected}
 				loading={loadingThread}
 				toolEvents={toolEvents || []}
+				thinkingEvents={thinkingEvents || []}
 				onPromptChange={onPromptChange}
 				onSendPrompt={onSendPrompt}
+				onAddAttachments={onAddAttachments}
+				onRemoveAttachment={onRemoveAttachment}
+				onClearAttachments={onClearAttachments}
 				onClearChat={onClearChat}
 				onOpenCommandDeck={onOpenCommandDeck}
 			/>

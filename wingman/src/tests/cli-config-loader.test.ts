@@ -44,6 +44,7 @@ describe("CLI Config Loader", () => {
 				gateway: {
 					host: "127.0.0.1",
 					port: 18789,
+					fsRoots: [],
 					auth: {
 						mode: "none",
 						allowTailscale: false,

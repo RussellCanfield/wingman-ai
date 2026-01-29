@@ -90,17 +90,41 @@ export const handleSessionsApi = async (
 	}
 
 	const sessionMessagesMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/messages$/);
-	if (sessionMessagesMatch && req.method === "GET") {
+	if (sessionMessagesMatch) {
 		const sessionId = decodeURIComponent(sessionMessagesMatch[1]);
 		const agentId = url.searchParams.get("agentId");
 		if (!agentId) {
 			return new Response("agentId required", { status: 400 });
 		}
 		const manager = await ctx.getSessionManager(agentId);
-		const messages = await manager.listMessages(sessionId);
-		return new Response(JSON.stringify(messages, null, 2), {
-			headers: { "Content-Type": "application/json" },
-		});
+
+		if (req.method === "GET") {
+			const messages = await manager.listMessages(sessionId);
+			return new Response(JSON.stringify(messages, null, 2), {
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		if (req.method === "DELETE") {
+			const session = manager.getSession(sessionId);
+			if (!session) {
+				return new Response("session not found", { status: 404 });
+			}
+			manager.clearSessionMessages(sessionId);
+			const updated = manager.getSession(sessionId);
+			return new Response(
+				JSON.stringify(
+					{
+						id: sessionId,
+						messageCount: updated?.messageCount ?? 0,
+						lastMessagePreview: updated?.lastMessagePreview ?? null,
+					},
+					null,
+					2,
+				),
+				{ headers: { "Content-Type": "application/json" } },
+			);
+		}
 	}
 
 	const sessionWorkdirMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/workdir$/);
