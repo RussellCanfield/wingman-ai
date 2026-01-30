@@ -1,0 +1,48 @@
+name: Website Deploy
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - website/**
+    workflow_dispatch:
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            deployments: write
+        name: Deploy Website
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install Dependencies
+              working-directory: ./website
+              run: bun install
+
+            - name: Build Website
+              working-directory: ./website
+              run: bun run build
+
+            - name: Publish to Cloudflare Pages
+              uses: cloudflare/pages-action@v1
+              with:
+                  apiToken: ${{ secrets.CLOUD_FLARE_API_TOKEN }}
+                  accountId: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+                  projectName: wingman-website
+                  directory: website/dist
+
+            - name: Outputs
+              run: |
+                  echo "ID: ${{ steps.publish.outputs.id }}"
+                  echo "URL: ${{ steps.publish.outputs.url }}"
+                  echo "Environment: ${{ steps.publish.outputs.environment }}"
+                  echo "Alias: ${{ steps.publish.outputs.alias }}"

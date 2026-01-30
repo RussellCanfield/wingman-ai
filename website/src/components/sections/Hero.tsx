@@ -12,7 +12,7 @@ const Hero = () => {
 	const [copied, setCopied] = useState(false);
 
 	const copyToClipboard = () => {
-		navigator.clipboard.writeText("npm install -g @wingman-ai/agent");
+		navigator.clipboard.writeText("npm install -g @wingman-ai/gateway");
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
 	};
@@ -88,7 +88,7 @@ const Hero = () => {
 									<>✓ Copied!</>
 								) : (
 									<>
-										<FiDownload /> npm install -g @wingman-ai/agent
+										<FiDownload /> npm install -g @wingman-ai/gateway
 									</>
 								)}
 							</button>

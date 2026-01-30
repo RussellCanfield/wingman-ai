@@ -16,7 +16,7 @@ const HowItWorks = () => {
 			description:
 				"Get started with a simple npm install. Initialize your workspace with interactive setup.",
 			icon: FiDownload,
-			command: "npm install -g @wingman-ai/agent && wingman init",
+			command: "npm install -g @wingman-ai/gateway && wingman init",
 		},
 		{
 			number: "02",

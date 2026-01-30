@@ -15,7 +15,7 @@ const QuickStart = () => {
 		{
 			number: "1",
 			title: "Install",
-			command: "npm install -g @wingman-ai/agent",
+			command: "npm install -g @wingman-ai/gateway",
 		},
 		{
 			number: "2",

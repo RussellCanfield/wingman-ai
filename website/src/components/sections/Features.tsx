@@ -1,56 +1,80 @@
 import { motion } from "framer-motion";
 import {
+	FiBook,
 	FiClock,
+	FiCpu,
 	FiDatabase,
+	FiGlobe,
+	FiLayers,
 	FiLink,
-	FiMonitor,
-	FiShare2,
-	FiShield,
+	FiPackage,
+	FiZap,
 } from "react-icons/fi";
 
 const Features = () => {
 	const features = [
 		{
 			icon: FiDatabase,
-			title: "Persistent Sessions",
+			title: "Long-Term Memory",
 			description:
-				"Sessions survive restarts. Pick up where you left off, from any client.",
+				"Agents remember context across sessions with persistent memory. Build knowledge over time.",
 			color: "sky",
 		},
 		{
-			icon: FiMonitor,
-			title: "Multi-Client Architecture",
+			icon: FiCpu,
+			title: "Automatic Parallelization",
 			description:
-				"CLI for automation, WebUI for mobile, VSCode for development. One gateway powers all.",
+				"Agents automatically spawn subagents for parallel task execution. Complex workflows made simple.",
 			color: "blue",
 		},
 		{
-			icon: FiShare2,
-			title: "Agent Collaboration",
+			icon: FiPackage,
+			title: "Agent Skills System",
 			description:
-				"Multiple agents work together on complex tasks with coordinated workflows.",
+				"Extend agent capabilities with custom skills. Reusable, composable tools for any workflow.",
 			color: "sky",
 		},
 		{
-			icon: FiClock,
-			title: "Routine Automation",
+			icon: FiZap,
+			title: "Quick Agent Setup",
 			description:
-				"Schedule agent runs via CRON. Review results in persistent threads.",
+				"Stand up new agents in seconds with declarative JSON config. No boilerplate required.",
 			color: "blue",
 		},
 		{
 			icon: FiLink,
-			title: "Webhook Integration",
+			title: "MCP Integration",
 			description:
-				"Trigger agents from external systems: GitHub, email, CI/CD pipelines.",
+				"Full Model Context Protocol support. Connect to external tools, APIs, and data sources seamlessly.",
 			color: "sky",
 		},
 		{
-			icon: FiShield,
-			title: "Local & Private Options",
+			icon: FiGlobe,
+			title: "Tailscale Support",
 			description:
-				"Run 100% locally with Ollama or LMStudio. Your code never leaves your machine.",
+				"Secure remote access to your gateway. Run agents from anywhere with encrypted connections.",
 			color: "blue",
+		},
+		{
+			icon: FiLayers,
+			title: "Multi-Agent Orchestration",
+			description:
+				"Coordinate multiple specialized agents working together on complex problems with shared context.",
+			color: "sky",
+		},
+		{
+			icon: FiClock,
+			title: "Scheduled Routines",
+			description:
+				"Automate agent workflows with CRON schedules. Set it and forget it.",
+			color: "blue",
+		},
+		{
+			icon: FiBook,
+			title: "Persistent Sessions",
+			description:
+				"All conversations and state stored in durable SQLite. Pick up where you left off, always.",
+			color: "sky",
 		},
 	];
 
@@ -76,7 +100,7 @@ const Features = () => {
 						transition={{ duration: 0.6, delay: 0.1 }}
 					>
 						Built on a foundation of persistent state, WebSocket communication,
-						and multi-agent orchestration.
+						and intelligent agent orchestration.
 					</motion.p>
 				</div>
 
@@ -118,16 +142,16 @@ const Features = () => {
 				>
 					<div className="flex flex-col items-center gap-6 text-center md:flex-row md:text-left">
 						<div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-sky-500/20">
-							<FiDatabase className="h-8 w-8 text-sky-400" />
+							<FiPackage className="h-8 w-8 text-sky-400" />
 						</div>
 						<div className="flex-1">
 							<h3 className="mb-2 text-2xl font-semibold text-white">
-								Everything persists. Nothing gets lost.
+								Extensible by design. Built for developers.
 							</h3>
 							<p className="text-gray-400">
-								Your conversations, context, and agent state are stored in a
-								durable SQLite database. Close your laptop, come back tomorrow,
-								and pick up exactly where you left off.
+								Create custom agent skills, integrate with external APIs via MCP,
+								and orchestrate complex workflows. Everything is configurable,
+								composable, and built on open standards.
 							</p>
 						</div>
 					</div>

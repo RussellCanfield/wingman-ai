@@ -61,7 +61,7 @@ const Footer = () => {
 							</li>
 							<li>
 								<a
-									href="https://www.npmjs.com/package/@wingman-ai/agent"
+									href="https://www.npmjs.com/package/@wingman-ai/gateway"
 									className="text-gray-400 hover:text-white transition-colors flex items-center text-sm"
 									target="_blank"
 									rel="noopener noreferrer"
@@ -155,7 +155,7 @@ const Footer = () => {
 						<h3 className="text-lg font-semibold mb-4">Quick Start</h3>
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg font-mono text-sm border border-gray-700">
-								npm install -g @wingman-ai/agent
+								npm install -g @wingman-ai/gateway
 							</div>
 							<a
 								href="#quick-start"

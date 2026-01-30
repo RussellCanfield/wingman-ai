@@ -1,0 +1,45 @@
+name: Publish Gateway to npm
+
+on:
+    workflow_dispatch:
+    release:
+        types: [published]
+
+jobs:
+    publish-npm:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install Dependencies
+              working-directory: ./wingman
+              run: bun install
+
+            - name: Run Tests
+              working-directory: ./wingman
+              run: bun run test:unit
+
+            - name: Build Package
+              working-directory: ./wingman
+              run: bun run build
+
+            - name: Setup Node for npm Publishing
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20.x'
+                  registry-url: 'https://registry.npmjs.org'
+
+            - name: Publish to npm
+              working-directory: ./wingman
+              run: npm publish --provenance --access public
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

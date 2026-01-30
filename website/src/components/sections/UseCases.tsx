@@ -1,40 +1,40 @@
 import { motion } from "framer-motion";
 import {
 	FiArrowRight,
-	FiClock,
-	FiShare2,
-	FiSmartphone,
-	FiUsers,
+	FiCloud,
+	FiCpu,
+	FiGitBranch,
+	FiLayers,
 } from "react-icons/fi";
 
 const UseCases = () => {
 	const cases = [
 		{
-			icon: FiSmartphone,
-			title: "Code from Phone, Continue in IDE",
+			icon: FiLayers,
+			title: "Multi-Agent Code Review",
 			description:
-				"Start a coding session on your phone via WebUI, pick up in VSCode later. Sessions persist across devices.",
+				"Spawn specialized agents for security, performance, and style reviews. Get comprehensive feedback from different perspectives in parallel.",
 			gradient: "from-sky-400 to-blue-500",
 		},
 		{
-			icon: FiShare2,
-			title: "Agent Swarms for Complex Tasks",
+			icon: FiCpu,
+			title: "Autonomous Feature Development",
 			description:
-				"Launch specialized agents that collaborate on architecture, implementation, and testing in parallel.",
+				"Agents automatically break down features into tasks, parallelize implementation, run tests, and create PRs—all while you focus on architecture.",
 			gradient: "from-blue-400 to-indigo-500",
 		},
 		{
-			icon: FiClock,
-			title: "Automated Routines & Webhooks",
+			icon: FiGitBranch,
+			title: "Continuous Background Processing",
 			description:
-				"Schedule agents via CRON, trigger from GitHub events, or integrate with email workflows.",
+				"Schedule agents to monitor repositories, analyze codebases, generate documentation, and prepare reports on a schedule.",
 			gradient: "from-sky-500 to-cyan-500",
 		},
 		{
-			icon: FiUsers,
-			title: "Team Collaboration",
+			icon: FiCloud,
+			title: "Remote Team Collaboration",
 			description:
-				"Multiple developers connect to the same gateway instance for shared context and knowledge.",
+				"Deploy gateway on a server with Tailscale. Your entire team accesses shared agent context from anywhere, securely.",
 			gradient: "from-blue-500 to-sky-600",
 		},
 	];
@@ -59,7 +59,7 @@ const UseCases = () => {
 						viewport={{ once: true }}
 						transition={{ duration: 0.6, delay: 0.1 }}
 					>
-						The distributed architecture enables scenarios that single-client
+						The distributed architecture enables scenarios that single-agent
 						tools can't handle.
 					</motion.p>
 				</div>

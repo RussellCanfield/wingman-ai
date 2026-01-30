@@ -6,7 +6,7 @@ const CTA = () => {
 	const [copied, setCopied] = useState(false);
 
 	const copyToClipboard = () => {
-		navigator.clipboard.writeText("npm install -g @wingman-ai/agent");
+		navigator.clipboard.writeText("npm install -g @wingman-ai/gateway");
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
 	};
@@ -70,7 +70,7 @@ const CTA = () => {
 								) : (
 									<>
 										<FiDownload className="h-5 w-5" />
-										npm install -g @wingman-ai/agent
+										npm install -g @wingman-ai/gateway
 									</>
 								)}
 							</button>
