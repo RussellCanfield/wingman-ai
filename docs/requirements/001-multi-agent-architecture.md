@@ -333,16 +333,18 @@ beforeAgent: (input) => {
 
 ## Custom Agent Configuration
 
-Users can define custom agents via JSON configuration files without modifying code.
+Users can define custom agents via JSON or Markdown configuration files without modifying code.
 
 ### Configuration Location
 ```
 .wingman/agents/
   my-agent/
     agent.json
+    # or
+    agent.md
 ```
 
-### Agent Schema
+### Agent Schema (JSON)
 ```json
 {
   "name": "my-agent",
@@ -353,9 +355,33 @@ Users can define custom agents via JSON configuration files without modifying co
   "blockedCommands": ["rm", "mv"],
   "allowScriptExecution": true,
   "commandTimeout": 300000,
-  "subagents": []
+  "subAgents": []
 }
 ```
+
+### Agent Schema (Markdown)
+```markdown
+---
+name: my-agent
+description: Action-oriented description for delegation
+tools:
+  - command_execute
+  - think
+model: anthropic:claude-sonnet-4-5
+subAgents:
+  - name: helper
+    description: Focused subagent
+    tools: [think]
+    promptFile: ./helper.md
+---
+
+You are the main agent prompt...
+```
+
+Notes:
+- `agent.md` uses YAML frontmatter with the same schema as JSON plus `promptFile` for subagents.
+- `promptFile` is resolved relative to the agent directory and is inlined into `systemPrompt`.
+- `subagents` (lowercase) is accepted for backward compatibility but normalized to `subAgents`.
 
 ### Available Tools
 - `internet_search`: Web search (Tavily or DuckDuckGo)

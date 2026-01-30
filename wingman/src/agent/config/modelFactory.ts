@@ -70,6 +70,12 @@ export class ModelFactory {
 
 			case "xai":
 				return ModelFactory.createXAIModel(model);
+
+			case "lmstudio":
+				return ModelFactory.createLMStudioModel(model);
+
+			case "ollama":
+				return ModelFactory.createOllamaModel(model);
 		}
 	}
 
@@ -177,5 +183,39 @@ export class ModelFactory {
 		}
 
 		return new ChatXAI(params);
+	}
+
+	private static createLMStudioModel(model: string): BaseLanguageModel {
+		const tokenResult = resolveProviderToken("lmstudio");
+		const provider = getProviderSpec("lmstudio");
+
+		// Use fallback API key if no token configured (local servers often don't require auth)
+		const apiKey = tokenResult.token ?? "lm-studio";
+
+		return new ChatOpenAI({
+			model,
+			temperature: 0,
+			apiKey: apiKey,
+			configuration: {
+				baseURL: provider?.baseURL,
+			},
+		});
+	}
+
+	private static createOllamaModel(model: string): BaseLanguageModel {
+		const tokenResult = resolveProviderToken("ollama");
+		const provider = getProviderSpec("ollama");
+
+		// Use fallback API key if no token configured (local servers often don't require auth)
+		const apiKey = tokenResult.token ?? "ollama";
+
+		return new ChatOpenAI({
+			model,
+			temperature: 0,
+			apiKey: apiKey,
+			configuration: {
+				baseURL: provider?.baseURL,
+			},
+		});
 	}
 }

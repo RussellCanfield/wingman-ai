@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
 	buildTechnicalSnapshot,
 } from "./finance/technicalIndicators.js";
+import { analyzeOptionStructure } from "./finance/optionsAnalytics.js";
 import {
 	DEFAULT_CANDLE_MAX_DAYS_DAILY,
 	DEFAULT_CANDLE_MAX_DAYS_INTRADAY,
@@ -593,6 +594,38 @@ server.registerTool(
 			symbol,
 			...(date ? { date } : {}),
 		});
+		return toResult(data);
+	},
+);
+
+server.registerTool(
+	"options.analyze",
+	{
+		title: "Options Structure Analyzer",
+		description:
+			"Compute payoff metrics and optional Greeks for an options structure using supplied leg prices.",
+		inputSchema: z.object({
+			underlyingPrice: z.number().positive(),
+			daysToExpiry: z.number().positive().optional(),
+			riskFreeRate: z.number().optional().default(0),
+			dividendYield: z.number().optional().default(0),
+			legs: z
+				.array(
+					z.object({
+						type: z.enum(["call", "put"]),
+						side: z.enum(["buy", "sell"]),
+						strike: z.number().positive(),
+						premium: z.number().nonnegative(),
+						qty: z.number().int().positive().optional(),
+						contractMultiplier: z.number().positive().optional(),
+						impliedVol: z.number().positive().optional(),
+					}),
+				)
+				.min(1),
+		}),
+	},
+	async (input) => {
+		const data = analyzeOptionStructure(input);
 		return toResult(data);
 	},
 );

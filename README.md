@@ -1,93 +1,158 @@
 <p align="center" width="100%">
-    <img src="./docs/Logo.png">
+  <img src="./docs/Logo.png" alt="Wingman logo" />
 </p>
 
-<h2 align="center">Wingman AI Coding Assistant</h2>
+# Wingman AI Agent System
 
-<center>
+Wingman is a **stateful, multi-agent runtime** with a **local CLI control plane** and a **gateway** for routing, sessions, and collaboration. It is designed for more than coding: use it for research, operations, support, planning, and any workflow where agents, tools, and durable context matter.
 
-<b>
+## What Wingman Is
 
-[Wingman-AI](https://getwingmanai.com/) brings high quality AI agentic coding right to your computer. We support most major AI providers - OpenAI, Anthropic and Ollama which is 100% free and private.
+- **Gateway-first runtime**: The gateway hosts agents, routing, and durable sessions by default.
+- **Local control plane**: The CLI configures, invokes, and connects to the gateway, with an optional `--local` execution mode.
+- **Multi-agent orchestration**: A root agent can delegate to specialized subagents with clear roles.
+- **Protocol-first**: The gateway streams raw agent events so any client (web, mobile, terminal) can render them.
+- **Extensible**: Custom agents, hooks, skills, and MCP tools let you tailor workflows to your team.
 
-Wingman is also supports [Model Context Protocol](https://modelcontextprotocol.io/introduction) tools, allowing you to extend and integrate with a number of servers already available such as Figma or even [your own browser](https://github.com/AgentDeskAI/browser-tools-mcp)!
+## What It’s For (Not Just Coding)
 
-Have a specific question? Simply highlight text in the editor and Wingman will focus there. Want Wingman to work on it's own? Give it requirements and even attach an image and let it implement complete features for you - even executing commands.
+Wingman is an agent system, not a single “coding assistant.” Example use cases:
 
-</b>
+- **Engineering**: design reviews, refactors, dependency audits, multi-file changes, test automation
+- **Research**: technology evaluations, competitive analysis, documentation synthesis
+- **Operations**: scheduled routines, webhook-driven triage, incident summaries
+- **Support**: channel routing, account-specific agents, structured responses
+- **Custom domains**: finance, legal, data pipelines, or any workflow with tool integrations
 
-</center>
+## Architecture at a Glance
 
-<p align="center">
-  <img src="./docs-site/docs/public/Wingman_ChatVideo.gif" alt="Chat Demo">
-</p>
+- **Wingman Gateway**: stateful runtime for agents, routing, sessions, and channels
+- **Wingman CLI**: local control plane for onboarding, config, and agent invocation
+- **Control UI**: chat + streaming interface (served by the gateway)
 
-<p align="center">
-  <img src="./docs-site/docs/public/Wingman_ComposeVideo.gif" alt="Compose Demo">
-</p>
+By default, the CLI connects to a local gateway. For isolated, local-only runs, use `--local`.
 
-<h2 align="center">Documentation</h2>
+## Documentation Gate (Source of Truth)
 
-<center>
+**All product requirements live in `docs/requirements/`.** These PRDs are the source of truth and act as a documentation gate:
 
-<b> Want a new feature? Need to report an issue? [visit our GitHub](https://github.com/RussellCanfield/wingman-ai).
+- Any product or behavior change must update the relevant PRD(s).
+- PRs are expected to keep requirements and implementation in sync.
+- Legacy docs outside `docs/requirements/` (including any historical docs-site content) should not be used for product decisions.
 
-</center>
+Key docs:
+- `docs/requirements/000-architecture-overview.md`
+- `docs/requirements/001-multi-agent-architecture.md`
+- `docs/requirements/002-gateway-prd.md`
+- `docs/custom-agents.md`
 
-<h2 align="center">Features</h2>
+## Quick Start
 
-<center>
+### Install
 
-<b> [Wingman-AI](https://getwingmanai.com/) supports advanced features such as: </b>
+```bash
+npm install -g @wingman-ai/gateway
+```
 
-<h3>Code completion</h3>
-Real-time code suggestions as you type
-<h3>Chat</h3>
-Agent based chat and complete code writing experience
-<h3>MCP Integration</h3>
-Integrate with MCP tools directly in Wingman, giving you the ability to extend its capabilities
-<h3>Threads</h3>
-Start a session, create new ones and even branch off an existing - allowing you to organize flows
-<h3>Document Generation</h3>
-Generate documentation for code with one click
-<h3>Refactor</h3>
-Refactor code quickly with one click
+### Initialize a Workspace
 
-</center>
+```bash
+wingman init
+```
 
-<br />
-<br />
+### Start the Gateway
 
-<p align="center">
-  <img src="./docs-site/docs/public/Chat.png" width="400" alt="Chat">
-</p>
+```bash
+wingman gateway start
+```
 
-<p align="center">
-  <img src="./docs-site/docs/public/ChatWithImage.png" width="400" alt="Chat">
-</p>
+### Connect
 
-<p align="center">
-  <img src="./docs-site/docs/public/SettingsMCP.png" width="400" alt="Indexer">
-</p>
+- **CLI**: `wingman chat`
+- **Control UI**: `http://localhost:18790` (default)
+- **VS Code**: Install the Wingman extension (see project repo)
 
-<p align="center">
-  <img src="./docs-site/docs/public/Threads.png" width="400" alt="Indexer">
-</p>
+### Provider Auth
 
-<p align="center">
-  <img src="./docs-site/docs/public/ThreadRelationships.png" width="400" alt="Indexer">
-</p>
+```bash
+wingman provider login anthropic
+wingman provider login openai
+```
 
-## Release Notes
+### Local-only (No Gateway)
 
-To see the latest release notes - [check out our releases page](https://github.com/RussellCanfield/wingman-ai/releases).
+```bash
+wingman agent --local --agent <id> "prompt"
+```
 
----
+## Core Concepts
+
+- **Deterministic routing**: bindings map inbound messages to a single agent by default.
+- **Durable sessions**: sessions live in the gateway and persist across clients/devices.
+- **Agent isolation**: each agent has its own workspace, config, and session store.
+- **Explicit broadcast**: rooms enable parallel agent responses when requested.
+
+## Capabilities
+
+- **Channels + bindings** for deterministic routing across accounts and peers.
+- **Routines** for scheduled runs and repeatable workflows.
+- **Webhooks** to trigger agents from external systems.
+- **Hooks** for pre/post tool automation.
+- **Skills** for reusable, domain-specific instruction sets.
+- **MCP tools** to connect external systems and custom integrations.
 
 ## Development
 
-For local development setup, see `docs/dev-setup.md`.
+### Prerequisites
 
-If you like the extension, please leave a review! If you don't, open an issue and we'd be happy to assist!
+- Bun (required for `bun:sqlite` support)
+- Node.js (for tools outside Bun)
 
-**Enjoy!**
+### Install
+
+```bash
+bun install
+```
+
+### Build
+
+```bash
+cd wingman
+bun run build
+```
+
+### Run Gateway (with Control UI)
+
+```bash
+cd wingman
+./bin/wingman gateway start
+```
+
+### Run Gateway + Web UI (hot reload)
+
+```bash
+cd wingman
+bun run dev
+```
+
+### Tests
+
+```bash
+cd wingman
+bun run test
+```
+
+### Config and Logs
+
+- Config: `wingman/.wingman/wingman.config.json`
+- Logs: `~/.wingman/logs/wingman.log`
+
+## Contributing Expectations
+
+- Keep `docs/requirements/` current for any behavior changes.
+- Add tests for new functionality.
+- Ensure all tests and builds pass before submitting.
+
+## License
+
+See `LICENSE.txt`.

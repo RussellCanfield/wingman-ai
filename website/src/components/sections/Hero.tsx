@@ -42,7 +42,7 @@ const Hero = () => {
 							transition={{ duration: 0.6, delay: 0.2 }}
 						>
 							Wingman Gateway powers your AI coding workflow with a persistent
-							runtime that connects CLI, WebUI, and VSCode. One installation.
+							runtime that you can access anywhere.
 							Endless possibilities.
 						</motion.p>
 

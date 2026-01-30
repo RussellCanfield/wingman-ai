@@ -67,6 +67,8 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			{ id: "openrouter", example: "openrouter:openai/gpt-4o" },
 			{ id: "xai", example: "xai:grok-beta" },
 			{ id: "copilot", example: "copilot:gpt-4o" },
+			{ id: "lmstudio", example: "lmstudio:llama-3.1-8b" },
+			{ id: "ollama", example: "ollama:llama3.2" },
 		],
 		[],
 	);

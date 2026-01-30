@@ -29,6 +29,18 @@ describe("ModelFactory", () => {
 			expect(model).toBeInstanceOf(ChatOpenAI);
 		});
 
+		it("should create an LMStudio model", () => {
+			const model = ModelFactory.createModel("lmstudio:llama-3.1-8b");
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
+
+		it("should create an Ollama model", () => {
+			const model = ModelFactory.createModel("ollama:llama3.2");
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
+
 		it("should throw error for invalid format (missing colon)", () => {
 			expect(() => {
 				ModelFactory.createModel("anthropic-claude-opus");
@@ -70,6 +82,8 @@ describe("ModelFactory", () => {
 				"anthropic:claude-sonnet-4-5-20250929",
 				"openrouter:openai/gpt-4o",
 				"copilot:gpt-4o",
+				"lmstudio:llama-3.1-8b",
+				"ollama:llama3.2",
 			];
 
 			for (const modelString of validModels) {
@@ -111,10 +125,14 @@ describe("ModelFactory", () => {
 			const result1 = ModelFactory.validateModelString("Anthropic:model");
 			const result2 = ModelFactory.validateModelString("OPENAI:model");
 			const result3 = ModelFactory.validateModelString("Copilot:model");
+			const result4 = ModelFactory.validateModelString("LMStudio:model");
+			const result5 = ModelFactory.validateModelString("OLLAMA:model");
 
 			expect(result1.valid).toBe(true);
 			expect(result2.valid).toBe(true);
 			expect(result3.valid).toBe(true);
+			expect(result4.valid).toBe(true);
+			expect(result5.valid).toBe(true);
 		});
 	});
 });

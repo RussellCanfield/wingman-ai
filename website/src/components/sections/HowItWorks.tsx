@@ -111,10 +111,6 @@ const HowItWorks = () => {
 										<FiMonitor className="h-4 w-4 text-blue-400" />
 										<span>WebUI: localhost:18789</span>
 									</div>
-									<div className="flex items-center gap-2 text-sm text-gray-400">
-										<FiSmartphone className="h-4 w-4 text-blue-400" />
-										<span>VSCode extension</span>
-									</div>
 								</div>
 							)}
 						</motion.div>

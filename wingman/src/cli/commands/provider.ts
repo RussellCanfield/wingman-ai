@@ -187,6 +187,8 @@ Examples:
   wingman provider status
   wingman provider login copilot
   wingman provider login openrouter --api-key="<key>"
+  wingman provider login lmstudio
+  wingman provider login ollama
 
 Options:
   --token <token>          Store a token directly
@@ -199,6 +201,8 @@ Environment Variables:
   GITHUB_COPILOT_TOKEN  GitHub Copilot token
   COPILOT_TOKEN         GitHub Copilot token
   COPILOT_API_KEY       GitHub Copilot token
+  LMSTUDIO_API_KEY      LM Studio API key (optional)
+  OLLAMA_API_KEY        Ollama API key (optional)
 `);
 	} else {
 		outputManager.emitLog("info", "Provider help requested");

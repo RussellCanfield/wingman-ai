@@ -4,7 +4,9 @@ export type ProviderName =
 	| "openai"
 	| "openrouter"
 	| "copilot"
-	| "xai";
+	| "xai"
+	| "lmstudio"
+	| "ollama";
 
 export interface ProviderOAuthConfig {
 	authorizationUrl: string;
@@ -64,6 +66,20 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		label: "xAI",
 		type: "api-key",
 		envVars: ["XAI_API_KEY"],
+	},
+	lmstudio: {
+		name: "lmstudio",
+		label: "LM Studio",
+		type: "api-key",
+		envVars: ["LMSTUDIO_API_KEY", "LM_STUDIO_API_KEY"],
+		baseURL: "http://localhost:1234/v1",
+	},
+	ollama: {
+		name: "ollama",
+		label: "Ollama",
+		type: "api-key",
+		envVars: ["OLLAMA_API_KEY"],
+		baseURL: "http://localhost:11434/v1",
 	},
 };
 
