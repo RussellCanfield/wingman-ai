@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
+import { FiMenu, FiX } from "react-icons/fi";
 import type {
 	ChatAttachment,
 	ChatMessage,
@@ -27,6 +28,8 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { RoutinesPage } from "./pages/RoutinesPage";
 import { WebhooksPage } from "./pages/WebhooksPage";
 import { buildRoutineAgents } from "./utils/agentOptions";
+import wingmanIcon from "./assets/wingman_icon.webp";
+import wingmanLogo from "./assets/wingman_logo.webp";
 
 const DEFAULT_CONFIG: ControlUiConfig = {
 	gatewayHost: "127.0.0.1",
@@ -46,6 +49,8 @@ const MAX_ATTACHMENTS = 6;
 
 export const App: React.FC = () => {
 	const navigate = useNavigate();
+	const location = useLocation();
+	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [config, setConfig] = useState<ControlUiConfig>(DEFAULT_CONFIG);
 	const [agentId, setAgentId] = useState<string>("main");
 	const [wsUrl, setWsUrl] = useState<string>("");
@@ -1129,6 +1134,48 @@ export const App: React.FC = () => {
 		void loadThreadMessages(activeThread);
 	}, [activeThread, loadThreadMessages]);
 
+	// Auto-close mobile drawer on route change
+	useEffect(() => {
+		setMobileMenuOpen(false);
+	}, [location.pathname]);
+
+	// Lock body scroll when drawer open
+	useEffect(() => {
+		if (mobileMenuOpen) {
+			document.body.style.overflow = "hidden";
+		} else {
+			document.body.style.overflow = "";
+		}
+		return () => {
+			document.body.style.overflow = "";
+		};
+	}, [mobileMenuOpen]);
+
+	// Close drawer on escape key
+	useEffect(() => {
+		if (!mobileMenuOpen) return;
+
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				setMobileMenuOpen(false);
+			}
+		};
+
+		document.addEventListener("keydown", handleEscape);
+		return () => document.removeEventListener("keydown", handleEscape);
+	}, [mobileMenuOpen]);
+
+	// Close drawer when crossing desktop breakpoint
+	useEffect(() => {
+		const handleResize = () => {
+			if (window.innerWidth >= 1024) {
+				setMobileMenuOpen(false);
+			}
+		};
+		window.addEventListener("resize", handleResize);
+		return () => window.removeEventListener("resize", handleResize);
+	}, []);
+
 	const statusLabel = connected ? "Connected" : connecting ? "Connecting" : "Disconnected";
 	const authHint = config.requireAuth
 		? "Auth required by gateway. Provide a token or password."
@@ -1425,23 +1472,126 @@ export const App: React.FC = () => {
 			<div className="noise z-[1]" />
 			<main className="relative z-10 mx-auto max-w-screen-2xl px-6 pb-16 pt-8">
 				<div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-					<Sidebar
-						activeAgents={agentOptions}
-						selectedAgentId={agentId}
-						threads={threads}
-						activeThreadId={activeThread?.id || ""}
-						loadingThreads={loadingThreads}
-						onSelectAgent={setAgentId}
-						onSelectThread={handleSelectThread}
-						onCreateThread={handleCreateThread}
-						onDeleteThread={deleteThread}
-						onRenameThread={renameThread}
-						hostLabel={hostLabel}
-						deviceId={deviceId}
-						getAgentLabel={(id) =>
-							agentOptions.find((agent) => agent.id === id)?.name || id
-						}
-					/>
+					{/* Desktop Sidebar - Hidden on mobile */}
+					<div className="hidden lg:block">
+						<Sidebar
+							variant="default"
+							currentRoute={location.pathname}
+							activeAgents={agentOptions}
+							selectedAgentId={agentId}
+							threads={threads}
+							activeThreadId={activeThread?.id || ""}
+							loadingThreads={loadingThreads}
+							onSelectAgent={setAgentId}
+							onSelectThread={handleSelectThread}
+							onCreateThread={handleCreateThread}
+							onDeleteThread={deleteThread}
+							onRenameThread={renameThread}
+							hostLabel={hostLabel}
+							deviceId={deviceId}
+							getAgentLabel={(id) =>
+								agentOptions.find((agent) => agent.id === id)?.name || id
+							}
+						/>
+					</div>
+
+					{/* Mobile Hamburger Button - Visible only on mobile */}
+					<button
+						type="button"
+						onClick={() => setMobileMenuOpen(true)}
+						className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-[0_14px_30px_rgba(37,99,235,0.45)] transition hover:shadow-[0_18px_36px_rgba(37,99,235,0.55)] active:scale-95 lg:hidden"
+						aria-label="Open navigation menu"
+					>
+						<FiMenu className="h-6 w-6" />
+					</button>
+
+					{/* Mobile Drawer */}
+					{mobileMenuOpen && (
+						<>
+							{/* Backdrop */}
+							<div
+								className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm transition-opacity duration-300 lg:hidden"
+								onClick={() => setMobileMenuOpen(false)}
+								aria-label="Close menu"
+							/>
+
+							{/* Drawer Panel */}
+							<aside
+								className="fixed inset-y-0 left-0 z-[70] w-[280px] overflow-y-auto border-r border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-[0_25px_80px_rgba(10,25,60,0.5)] animate-slideInFromLeft lg:hidden"
+								role="dialog"
+								aria-modal="true"
+								aria-label="Navigation menu"
+							>
+								{/* Header with Logo and Close Button */}
+								<div className="sticky top-0 z-10 border-b border-white/10 bg-slate-900/95 px-5 py-4 backdrop-blur-xl">
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-3">
+											<img
+												src={wingmanIcon}
+												alt="Wingman"
+												className="h-12 rounded-xl border border-white/10 bg-slate-950/60 p-1.5"
+											/>
+											<div>
+												<p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+													Menu
+												</p>
+												<h2 className="text-base font-semibold text-slate-100">
+													Navigation
+												</h2>
+											</div>
+										</div>
+										<button
+											type="button"
+											onClick={() => setMobileMenuOpen(false)}
+											className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-900/70 text-slate-300 transition hover:border-sky-400/50 hover:text-sky-300 active:scale-95"
+											aria-label="Close menu"
+										>
+											<FiX className="h-5 w-5" />
+										</button>
+									</div>
+								</div>
+
+								{/* Sidebar Content */}
+								<div className="p-5">
+									<Sidebar
+										variant="mobile-drawer"
+										currentRoute={location.pathname}
+										activeAgents={agentOptions}
+										selectedAgentId={agentId}
+										threads={threads}
+										activeThreadId={activeThread?.id || ""}
+										loadingThreads={loadingThreads}
+										onSelectAgent={setAgentId}
+										onSelectThread={handleSelectThread}
+										onCreateThread={handleCreateThread}
+										onDeleteThread={deleteThread}
+										onRenameThread={renameThread}
+										hostLabel={hostLabel}
+										deviceId={deviceId}
+										getAgentLabel={(id) =>
+											agentOptions.find((agent) => agent.id === id)?.name || id
+										}
+									/>
+								</div>
+
+								{/* Footer */}
+								<div className="sticky bottom-0 border-t border-white/10 bg-slate-900/95 px-5 py-4 backdrop-blur-xl">
+									<div className="space-y-2 text-xs text-slate-400">
+										<div className="pill">host: {hostLabel}</div>
+										<div className="pill">device: {deviceId || "--"}</div>
+									</div>
+									<div className="mt-3 flex items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
+										<img
+											src={wingmanLogo}
+											alt="Wingman logo"
+											className="h-16 w-auto opacity-95"
+										/>
+									</div>
+								</div>
+							</aside>
+						</>
+					)}
+
 					<section className="space-y-6">
 						<HeroPanel
 							agentId={currentAgentId}

@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import type { GatewayHealth, GatewayStats } from "../types";
+
+const HERO_PANEL_EXPANDED_KEY = "wingman_hero_panel_expanded";
 
 type HeroPanelProps = {
 	agentId: string;
@@ -20,9 +23,72 @@ export const HeroPanel: React.FC<HeroPanelProps> = ({
 	stats,
 	formatDuration,
 }) => {
+	const [isExpanded, setIsExpanded] = useState<boolean>(() => {
+		if (typeof window === "undefined") return true;
+		const stored = localStorage.getItem(HERO_PANEL_EXPANDED_KEY);
+		if (stored !== null) return stored === "true";
+		return window.innerWidth >= 1024; // lg breakpoint
+	});
+
+	useEffect(() => {
+		localStorage.setItem(HERO_PANEL_EXPANDED_KEY, String(isExpanded));
+	}, [isExpanded]);
+
+	const toggleExpanded = () => setIsExpanded((prev) => !prev);
+
 	return (
-		<section className="glass-edge animate-floatIn relative overflow-hidden rounded-[32px] px-7 py-7">
-			<div className="relative z-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+		<section className="glass-edge animate-floatIn relative overflow-hidden rounded-2xl px-4 py-3 lg:rounded-[32px] lg:px-7 lg:py-7 transition-all duration-300 ease-in-out">
+			{/* Mobile Compact View - Only shown when collapsed on mobile */}
+			<div className="lg:hidden">
+				{!isExpanded && (
+					<div className="space-y-2">
+						{/* Line 1: Status and key metrics */}
+						<div className="flex items-center justify-between gap-3">
+							<div className="flex items-center gap-2 flex-wrap">
+								<span
+									className={`h-2.5 w-2.5 rounded-full ${
+										connected
+											? "bg-sky-500 animate-pulseSoft"
+											: "bg-slate-600"
+									}`}
+								/>
+								<span className="text-sm font-semibold text-ink">
+									Gateway
+								</span>
+								<span className="text-slate-400">•</span>
+								<span className="text-xs text-slate-300">
+									{statusLabel}
+								</span>
+								<span className="text-slate-400">•</span>
+								<span className="text-xs text-slate-300">
+									Health: {health.status || "--"}
+								</span>
+							</div>
+							<button
+								type="button"
+								onClick={toggleExpanded}
+								aria-expanded={false}
+								aria-label="Expand mission console"
+								className="text-slate-400 hover:text-slate-200 transition-colors flex-shrink-0"
+							>
+								<FiChevronDown className="h-4 w-4" />
+							</button>
+						</div>
+						{/* Line 2: Agent, thread, uptime */}
+						<div className="flex items-center gap-2 text-xs text-slate-400 flex-wrap">
+							<span>agent: {agentId}</span>
+							<span>•</span>
+							<span>thread: {activeThreadName || "--"}</span>
+							<span>•</span>
+							<span>uptime: {formatDuration(health.stats?.uptime)}</span>
+						</div>
+					</div>
+				)}
+			</div>
+
+			{/* Full View - Always on desktop, conditional on mobile */}
+			<div className={isExpanded ? "block" : "hidden lg:block"}>
+				<div className="relative z-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
 				<div className="space-y-4">
 					<p className="text-xs uppercase tracking-[0.3em] text-slate-400">
 						Wingman Control Core
@@ -70,6 +136,18 @@ export const HeroPanel: React.FC<HeroPanelProps> = ({
 						</div>
 					</div>
 				</div>
+				</div>
+
+				{/* Collapse button - Mobile only, only when expanded */}
+				<button
+					type="button"
+					onClick={toggleExpanded}
+					aria-expanded={true}
+					aria-label="Collapse mission console"
+					className="lg:hidden absolute top-3 right-3 text-slate-400 hover:text-slate-200 transition-colors z-20"
+				>
+					<FiChevronUp className="h-4 w-4" />
+				</button>
 			</div>
 		</section>
 	);

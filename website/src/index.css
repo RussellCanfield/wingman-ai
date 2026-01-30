@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+@layer base {
+	:root {
+		color-scheme: dark;
+	}
+
+	body {
+		margin: 0;
+		min-height: 100vh;
+		font-family: "Sora", system-ui, -apple-system, sans-serif;
+		color: #e2e8f0;
+		background: radial-gradient(
+					1200px 600px at 12% 12%,
+					rgba(56, 189, 248, 0.14) 0%,
+					transparent 60%
+				),
+			radial-gradient(
+				900px 620px at 88% 8%,
+				rgba(59, 130, 246, 0.2) 0%,
+				transparent 55%
+			),
+			radial-gradient(
+				1200px 900px at 42% 100%,
+				rgba(15, 23, 42, 0.85) 0%,
+				transparent 60%
+			),
+			linear-gradient(135deg, #0b0f14 0%, #101826 55%, #0b1120 100%);
+	}
+}
+
+@layer components {
+	.glass {
+		@apply bg-slate-900/60 backdrop-blur-2xl border border-white/10 shadow-[0_22px_60px_rgba(2,12,27,0.55)];
+	}
+
+	.panel-card {
+		@apply rounded-2xl border border-white/10 bg-slate-900/60 shadow-[0_12px_24px_rgba(2,10,25,0.45)] backdrop-blur-xl;
+	}
+
+	.text-gradient {
+		@apply bg-gradient-to-r from-sky-300 via-sky-400 to-blue-500 bg-clip-text text-transparent;
+	}
+
+	.gradient-text {
+		@apply bg-gradient-to-r from-sky-300 via-sky-400 to-blue-500 bg-clip-text text-transparent;
+	}
+
+	.btn-primary {
+		@apply rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(37,99,235,0.35)] transition-all;
+	}
+
+	.btn-primary:hover {
+		transform: translateY(-1px);
+		box-shadow:
+			0 0 0 1px rgba(56, 189, 248, 0.15),
+			0 18px 42px rgba(59, 130, 246, 0.4);
+	}
+
+	.btn-primary:focus {
+		outline: 2px solid rgba(56, 189, 248, 0.5);
+		outline-offset: 2px;
+	}
+}
+
+/* Custom scrollbar - sky blue theme */
+.custom-scrollbar::-webkit-scrollbar {
+	width: 5px;
+	background: rgba(17, 24, 39, 0.3);
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+	background: rgba(31, 41, 55, 0.2);
+	border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+	background: rgba(56, 189, 248, 0.5);
+	border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+	background: rgba(56, 189, 248, 0.7);
+}
+
+/* For Firefox */
+.custom-scrollbar {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(56, 189, 248, 0.5) rgba(31, 41, 55, 0.2);
+}
+
+/* Aurora and orb effects */
+.aurora {
+	position: absolute;
+	inset: -20% -10%;
+	background: conic-gradient(
+		from 180deg,
+		rgba(56, 189, 248, 0.22),
+		rgba(59, 130, 246, 0.12),
+		rgba(14, 165, 233, 0.2),
+		rgba(255, 255, 255, 0)
+	);
+	filter: blur(60px);
+	opacity: 0.55;
+	animation: auroraShift 18s ease-in-out infinite;
+}
+
+.orb {
+	position: absolute;
+	border-radius: 999px;
+	filter: blur(32px);
+	opacity: 0.65;
+	mix-blend-mode: multiply;
+}
+
+.orb-a {
+	width: 420px;
+	height: 420px;
+	background: radial-gradient(
+		circle,
+		rgba(56, 189, 248, 0.5) 0%,
+		transparent 70%
+	);
+	top: -120px;
+	left: -80px;
+}
+
+.orb-b {
+	width: 440px;
+	height: 440px;
+	background: radial-gradient(circle, rgba(37, 99, 235, 0.4) 0%, transparent 70%);
+	bottom: -180px;
+	right: -120px;
+	animation: drift 14s ease-in-out infinite;
+	animation-delay: -3s;
+}
+
+.orb-c {
+	width: 320px;
+	height: 320px;
+	background: radial-gradient(circle, rgba(14, 165, 233, 0.4) 0%, transparent 70%);
+	top: 120px;
+	right: 10%;
+	animation: drift 14s ease-in-out infinite;
+	animation-delay: -6s;
+}
+
+.gridlines {
+	position: absolute;
+	inset: 0;
+	background-image: linear-gradient(transparent 0%, rgba(148, 163, 184, 0.08) 100%),
+		linear-gradient(
+			to right,
+			rgba(148, 163, 184, 0.12) 1px,
+			transparent 1px
+		),
+		linear-gradient(
+			to bottom,
+			rgba(148, 163, 184, 0.12) 1px,
+			transparent 1px
+		);
+	background-size:
+		100% 100%,
+		64px 64px,
+		64px 64px;
+	mask-image: radial-gradient(
+		circle at top left,
+		rgba(2, 6, 23, 0.8),
+		transparent 70%
+	);
+}
+
+.noise {
+	position: fixed;
+	inset: 0;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
+	mix-blend-mode: soft-light;
+	opacity: 0.35;
+	pointer-events: none;
+}
+
+/* Smooth scroll */
+html {
+	scroll-behavior: smooth;
+}
+
+/* Better text selection - sky blue */
+::selection {
+	background-color: rgba(56, 189, 248, 0.3);
+	color: white;
+}
+
+/* Enhanced focus states for accessibility */
+a:focus {
+	outline: 2px solid rgba(56, 189, 248, 0.5);
+	outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation: none !important;
+		transition: none !important;
+	}
+}
+
+/* Better spacing for mobile */
+@media (max-width: 768px) {
+	.container {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+}

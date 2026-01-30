@@ -11,6 +11,8 @@ import { executeGatewayCommand } from "./commands/gateway.js";
 import type { GatewayCommandArgs } from "./commands/gateway.js";
 import { executeProviderCommand } from "./commands/provider.js";
 import type { ProviderCommandArgs } from "./types/provider.js";
+import { executeInitCommand } from "./commands/init.js";
+import type { InitCommandArgs } from "./types/init.js";
 
 /**
  * Parse command line arguments
@@ -122,12 +124,14 @@ Wingman CLI - AI coding assistant
 
 Usage:
   wingman agent --agent <name> [options] <prompt>
+  wingman init [options]
   wingman skill <subcommand> [args]
   wingman provider <subcommand> [options]
   wingman gateway <subcommand> [options]
 
 Commands:
   agent                        Invoke a specific agent directly
+  init                         Create a starter config + agent (onboarding)
   skill browse                 Browse available skills from repository
   skill install <name>         Install a skill
   skill list                   List installed skills
@@ -156,6 +160,7 @@ Examples:
   wingman agent --agent coder -vv "add a login function"
   wingman agent --agent coder --local "fix the tests"
   wingman agent --agent coder --gateway ws://localhost:18789/ws --token sk-... "ship it"
+  wingman init
   wingman skill browse
   wingman skill install pdf
   wingman skill list
@@ -261,6 +266,17 @@ async function main() {
 			};
 
 			await executeProviderCommand(commandArgs);
+		} else if (parsed.command === "init" || parsed.command === "onboard") {
+			const commandArgs: InitCommandArgs = {
+				subcommand: parsed.subcommand,
+				args: parsed.subcommandArgs,
+				verbosity,
+				outputMode,
+				options: parsed.commandOptions || {},
+				agent: parsed.agent,
+			};
+
+			await executeInitCommand(commandArgs);
 		} else {
 			const logFile = getLogFilePath();
 			createLogger(verbosity).error(`Unknown command: ${parsed.command}`);

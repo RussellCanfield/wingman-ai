@@ -1,20 +1,17 @@
-const path = require("node:path");
-
-module.exports = {
-	content: [
-		path.join(__dirname, "index.html"),
-		path.join(__dirname, "src/**/*.{ts,tsx}"),
-	],
+/** @type {import('tailwindcss').Config} */
+export default {
+	content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
 	theme: {
 		extend: {
 			colors: {
 				ink: "#e2e8f0",
 				sand: "#0b1120",
-				accent: "#38bdf8",
-				accentWarm: "#3b82f6",
+				accent: "#38bdf8", // Sky blue (replaces indigo)
+				accentWarm: "#3b82f6", // Blue (replaces emerald)
 			},
 			fontFamily: {
 				display: ["Sora", "system-ui", "-apple-system", "sans-serif"],
+				sans: ["Sora", "system-ui", "-apple-system", "sans-serif"],
 				mono: [
 					"JetBrains Mono",
 					"ui-monospace",
@@ -45,9 +42,9 @@ module.exports = {
 					"70%": { boxShadow: "0 0 0 8px rgba(56, 189, 248, 0)" },
 					"100%": { boxShadow: "0 0 0 0 rgba(56, 189, 248, 0)" },
 				},
-				slideInFromLeft: {
-					"0%": { transform: "translateX(-100%)", opacity: "0" },
-					"100%": { transform: "translateX(0)", opacity: "1" },
+				auroraShift: {
+					"0%, 100%": { transform: "translate3d(0, 0, 0) rotate(0deg)" },
+					"50%": { transform: "translate3d(40px, -30px, 0) rotate(30deg)" },
 				},
 			},
 			animation: {
@@ -55,7 +52,7 @@ module.exports = {
 				floatIn: "floatIn 0.7s cubic-bezier(0.22, 0.61, 0.36, 1)",
 				rise: "rise 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)",
 				pulseSoft: "pulseSoft 1.6s ease-in-out infinite",
-				slideInFromLeft: "slideInFromLeft 300ms cubic-bezier(0.22, 0.61, 0.36, 1)",
+				auroraShift: "auroraShift 18s ease-in-out infinite",
 			},
 		},
 	},

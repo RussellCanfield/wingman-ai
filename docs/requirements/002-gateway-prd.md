@@ -571,6 +571,19 @@ wingman agent --agent <id> "prompt"
 wingman agent --local --agent <id> "prompt"
 ```
 
+#### Onboarding (CLI)
+```bash
+# Bootstrap workspace config + starter agent
+wingman init [options]
+  --agent <name>          Agent name (default: wingman)
+  --agents <list>         Copy only bundled agents (comma-separated)
+  --model <provider:model>  Set model for the starter agent
+  --provider <name>       Configure provider credentials
+  --token <string>        Provider token (non-interactive)
+  --skip-config           Skip config setup
+  --skip-agent            Skip agent scaffolding
+```
+
 #### Utilities
 ```bash
 # Generate token

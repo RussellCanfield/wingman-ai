@@ -93,9 +93,20 @@ The CLI is the primary interface for configuring the gateway and invoking agents
 |-----------|---------|---------------|
 | **Gateway Control** | Start/stop, status, auth, and connection management | [PRD-002](002-gateway-prd.md) |
 | **Agent Invocation** | Run agents via gateway (default) or locally with `--local` | [PRD-001](001-multi-agent-architecture.md) |
+| **Onboarding** | Bootstrap workspace config + starter agent with `wingman init` | This document |
 | **Custom Agents** | User-defined agents via declarative JSON configuration | [Custom Agents Guide](../custom-agents.md) |
 | **Hooks System** | Custom shell commands at agent lifecycle points | [PRD-001](001-multi-agent-architecture.md) |
 | **Session Management** | Local sessions when running with `--local` | [PRD-001](001-multi-agent-architecture.md) |
+
+### CLI Onboarding (wingman init)
+
+`wingman init` creates a workspace `.wingman/wingman.config.json`, adds the current
+workspace to `gateway.fsRoots`, and copies bundled agent templates from the package
+`.wingman/agents/` into `.wingman/agents/` in the workspace. It can optionally store
+provider credentials and set a default model.
+
+When run interactively, the init wizard lets users pick a default agent and choose
+which bundled agents to copy.
 
 ### Part 2: Wingman Gateway
 
