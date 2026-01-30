@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatAttachment, Thread } from "../types";
-import { ThinkingPanel } from "./ThinkingPanel";
 import { extractImageFiles } from "../utils/attachments";
+import { ThinkingPanel } from "./ThinkingPanel";
 
 type ChatPanelProps = {
 	activeThread?: Thread;
@@ -47,8 +48,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const autoScrollRef = useRef<boolean>(true);
-	const [previewAttachment, setPreviewAttachment] = useState<ChatAttachment | null>(null);
-	const canSend = connected && !isStreaming && (prompt.trim() || attachments.length > 0);
+	const [previewAttachment, setPreviewAttachment] =
+		useState<ChatAttachment | null>(null);
+	const canSend =
+		connected && !isStreaming && (prompt.trim() || attachments.length > 0);
 
 	useEffect(() => {
 		const el = scrollRef.current;
@@ -56,11 +59,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		if (autoScrollRef.current) {
 			el.scrollTop = el.scrollHeight;
 		}
-	}, [activeThread?.messages, isStreaming]);
+	}, []);
 
 	useEffect(() => {
 		autoScrollRef.current = true;
-	}, [activeThread?.id]);
+	}, []);
 
 	useEffect(() => {
 		if (!previewAttachment) return;
@@ -131,11 +134,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				<div>
 					<h2 className="text-lg font-semibold">Mission Stream</h2>
 					<p className="mt-1 text-sm text-slate-400">
-						Thread: <span className="font-semibold text-slate-200">{activeThread?.name || "--"}</span>
+						Thread:{" "}
+						<span className="font-semibold text-slate-200">
+							{activeThread?.name || "--"}
+						</span>
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
-					<button className="button-secondary" onClick={onClearChat} type="button">
+					<button
+						className="button-secondary"
+						onClick={onClearChat}
+						type="button"
+					>
 						Clear
 					</button>
 				</div>
@@ -153,145 +163,160 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				) : !activeThread || activeThread.messages.length === 0 ? (
 					<div className="grid h-full place-items-center text-sm text-slate-400">
 						<div className="max-w-sm text-center">
-							<p className="text-base font-semibold text-slate-200">Launch a new mission.</p>
+							<p className="text-base font-semibold text-slate-200">
+								Launch a new mission.
+							</p>
 							<p className="mt-2 text-sm text-slate-400">
-								Send a prompt to begin, or pick a quick prompt below to shape the session.
+								Send a prompt to begin, or pick a quick prompt below to shape
+								the session.
 							</p>
 						</div>
 					</div>
 				) : (
-					<>
-						{activeThread.messages.map((msg) => {
-							const hasLegacyEvents =
-								msg.id === lastAssistantId &&
-								(legacyToolEvents.length > 0 || legacyThinkingEvents.length > 0);
-							const toolEvents =
-								msg.toolEvents && msg.toolEvents.length > 0
-									? msg.toolEvents
-									: hasLegacyEvents
-										? legacyToolEvents
-										: [];
-							const thinkingEvents =
-								msg.thinkingEvents && msg.thinkingEvents.length > 0
-									? msg.thinkingEvents
-									: hasLegacyEvents
-										? legacyThinkingEvents
-										: [];
-							const hasNestedActivity =
-								msg.role === "assistant" &&
-								(toolEvents.length > 0 || thinkingEvents.length > 0);
-							const isActiveMessage =
-								msg.role === "assistant" && isStreaming && msg.id === lastAssistantId;
+					activeThread.messages.map((msg) => {
+						const hasLegacyEvents =
+							msg.id === lastAssistantId &&
+							(legacyToolEvents.length > 0 || legacyThinkingEvents.length > 0);
+						const toolEvents =
+							msg.toolEvents && msg.toolEvents.length > 0
+								? msg.toolEvents
+								: hasLegacyEvents
+									? legacyToolEvents
+									: [];
+						const thinkingEvents =
+							msg.thinkingEvents && msg.thinkingEvents.length > 0
+								? msg.thinkingEvents
+								: hasLegacyEvents
+									? legacyThinkingEvents
+									: [];
+						const hasNestedActivity =
+							msg.role === "assistant" &&
+							(toolEvents.length > 0 || thinkingEvents.length > 0);
+						const isActiveMessage =
+							msg.role === "assistant" &&
+							isStreaming &&
+							msg.id === lastAssistantId;
 
-							return (
+						return (
+							<div
+								key={msg.id}
+								className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+							>
 								<div
-									key={msg.id}
-									className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-								>
-									<div
-										className={`w-fit max-w-[90%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${msg.role === "user"
+									className={`w-fit max-w-[90%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${
+										msg.role === "user"
 											? "border-white/10 bg-slate-950/60 text-slate-100"
 											: "border-sky-400/40 bg-sky-500/10 text-slate-100"
-											}`}
-									>
-										<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-400">
-											<span>{msg.role === "user" ? "You" : "Wingman"}</span>
-											<span>{formatTime(msg.createdAt)}</span>
+									}`}
+								>
+									<div className="flex items-center justify-between gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+										<span>{msg.role === "user" ? "You" : "Wingman"}</span>
+										<span className="whitespace-nowrap">
+											{formatTime(msg.createdAt)}
+										</span>
+									</div>
+									{msg.role === "assistant" && !msg.content ? (
+										<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+											<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+											<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
+											<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
 										</div>
-										{msg.role === "assistant" && !msg.content ? (
-											<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-												<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-												<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
-												<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
-											</div>
-										) : (
-											<ReactMarkdown
-												remarkPlugins={[remarkGfm]}
-												className="markdown-content mt-2 text-sm leading-relaxed"
-												components={{
-													a: ({ node, ...props }) => (
-														<a
+									) : (
+										<ReactMarkdown
+											remarkPlugins={[remarkGfm]}
+											className="markdown-content mt-2 text-sm leading-relaxed"
+											components={{
+												a: ({ node, ...props }) => (
+													<a
+														{...props}
+														className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
+														target="_blank"
+														rel="noreferrer"
+													/>
+												),
+												code: ({
+													node,
+													inline,
+													className,
+													children,
+													...props
+												}) =>
+													inline ? (
+														<code
 															{...props}
-															className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
-															target="_blank"
-															rel="noreferrer"
-														/>
-													),
-													code: ({ node, inline, className, children, ...props }) =>
-														inline ? (
-															<code
-																{...props}
-																className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
-															>
+															className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
+														>
+															{children}
+														</code>
+													) : (
+														<pre className="mt-3 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-3 text-xs">
+															<code {...props} className={className}>
 																{children}
 															</code>
-														) : (
-															<pre className="mt-3 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-3 text-xs">
-																<code {...props} className={className}>
-																	{children}
-																</code>
-															</pre>
-														),
-													ul: ({ node, ...props }) => (
-														<ul {...props} className="ml-5 list-disc space-y-1" />
+														</pre>
 													),
-													ol: ({ node, ...props }) => (
-														<ol {...props} className="ml-5 list-decimal space-y-1" />
-													),
-													blockquote: ({ node, ...props }) => (
-														<blockquote
-															{...props}
-															className="border-l-2 border-sky-400/60 pl-3 text-slate-300"
-														/>
-													),
-												}}
-											>
-												{msg.content}
-											</ReactMarkdown>
-										)}
-										{msg.attachments && msg.attachments.length > 0 ? (
-											<div className="mt-3 grid gap-2 sm:grid-cols-2">
-												{msg.attachments.map((attachment) => (
-													<div
-														key={attachment.id}
-														className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50"
+												ul: ({ node, ...props }) => (
+													<ul {...props} className="ml-5 list-disc space-y-1" />
+												),
+												ol: ({ node, ...props }) => (
+													<ol
+														{...props}
+														className="ml-5 list-decimal space-y-1"
+													/>
+												),
+												blockquote: ({ node, ...props }) => (
+													<blockquote
+														{...props}
+														className="border-l-2 border-sky-400/60 pl-3 text-slate-300"
+													/>
+												),
+											}}
+										>
+											{msg.content}
+										</ReactMarkdown>
+									)}
+									{msg.attachments && msg.attachments.length > 0 ? (
+										<div className="mt-3 grid gap-2 sm:grid-cols-2">
+											{msg.attachments.map((attachment) => (
+												<div
+													key={attachment.id}
+													className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50"
+												>
+													<button
+														type="button"
+														className="group relative block w-full"
+														onClick={() => setPreviewAttachment(attachment)}
 													>
-														<button
-															type="button"
-															className="group relative block w-full"
-															onClick={() => setPreviewAttachment(attachment)}
-														>
-															<img
-																src={attachment.dataUrl}
-																alt={attachment.name || "Attachment"}
-																className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
-																loading="lazy"
-															/>
-															<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-white/5" />
-														</button>
-														{attachment.name ? (
-															<div className="truncate border-t border-white/10 px-2 py-1 text-[11px] text-slate-400">
-																{attachment.name}
-															</div>
-														) : null}
-													</div>
-												))}
-											</div>
-										) : null}
-										{hasNestedActivity ? (
-											<div className="mt-3">
-												<ThinkingPanel
-													thinkingEvents={thinkingEvents}
-													toolEvents={toolEvents}
-													isStreaming={isActiveMessage}
-												/>
-											</div>
-										) : null}
-									</div>
+														<img
+															src={attachment.dataUrl}
+															alt={attachment.name || "Attachment"}
+															className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
+															loading="lazy"
+														/>
+														<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-white/5" />
+													</button>
+													{attachment.name ? (
+														<div className="truncate border-t border-white/10 px-2 py-1 text-[11px] text-slate-400">
+															{attachment.name}
+														</div>
+													) : null}
+												</div>
+											))}
+										</div>
+									) : null}
+									{hasNestedActivity ? (
+										<div className="mt-3">
+											<ThinkingPanel
+												thinkingEvents={thinkingEvents}
+												toolEvents={toolEvents}
+												isStreaming={isActiveMessage}
+											/>
+										</div>
+									) : null}
 								</div>
-							);
-						})}
-					</>
+							</div>
+						);
+					})
 				)}
 			</div>
 
@@ -299,16 +324,25 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				{!connected ? (
 					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
 						<div>
-							<span className="font-semibold">Gateway not connected.</span>{" "}
-							Open the Command Deck to connect before sending prompts.
+							<span className="font-semibold">Gateway not connected.</span> Open
+							the Command Deck to connect before sending prompts.
 						</div>
-						<button className="button-secondary px-3 py-1 text-xs" type="button" onClick={onOpenCommandDeck}>
+						<button
+							className="button-secondary px-3 py-1 text-xs"
+							type="button"
+							onClick={onOpenCommandDeck}
+						>
 							Open Command Deck
 						</button>
 					</div>
 				) : null}
 				<div className="flex items-center justify-between">
-					<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Prompt</label>
+					<label
+						htmlFor="prompt-textarea"
+						className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+					>
+						Prompt
+					</label>
 					<div className="flex items-center gap-2 text-xs text-slate-400">
 						<button
 							type="button"
@@ -335,12 +369,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								key={attachment.id}
 								className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
 							>
-								<img
-									src={attachment.dataUrl}
-									alt={attachment.name || "Attachment"}
-									className="h-12 w-12 cursor-zoom-in object-cover"
+								<button
+									type="button"
+									className="h-12 w-12 cursor-zoom-in p-0"
 									onClick={() => setPreviewAttachment(attachment)}
-								/>
+								>
+									<img
+										src={attachment.dataUrl}
+										alt={attachment.name || "Attachment"}
+										className="h-full w-full object-cover"
+									/>
+								</button>
 								<span className="max-w-[160px] truncate text-slate-300">
 									{attachment.name || "Image"}
 								</span>
@@ -366,6 +405,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					<div className="mt-2 text-xs text-rose-500">{attachmentError}</div>
 				) : null}
 				<textarea
+					id="prompt-textarea"
 					className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-3 text-sm focus:shadow-glow"
 					rows={3}
 					value={prompt}
@@ -401,13 +441,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				</div>
 			</div>
 			{previewAttachment ? (
+				// biome-ignore lint/a11y/useSemanticElements: modal overlay backdrop requires grid layout for centering
 				<div
+					role="button"
+					tabIndex={0}
 					className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-6"
 					onClick={() => setPreviewAttachment(null)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							setPreviewAttachment(null);
+						}
+					}}
 				>
 					<div
+						role="dialog"
+						aria-modal="true"
 						className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-slate-950 shadow-2xl"
 						onClick={(event) => event.stopPropagation()}
+						onKeyDown={(event) => event.stopPropagation()}
 					>
 						<img
 							src={previewAttachment.dataUrl}
@@ -415,7 +466,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							className="max-h-[85vh] max-w-[90vw] object-contain"
 						/>
 						<div className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-2 text-xs text-slate-400">
-							<span className="truncate">{previewAttachment.name || "Image preview"}</span>
+							<span className="truncate">
+								{previewAttachment.name || "Image preview"}
+							</span>
 							<button
 								type="button"
 								className="text-slate-400 transition hover:text-slate-300"
