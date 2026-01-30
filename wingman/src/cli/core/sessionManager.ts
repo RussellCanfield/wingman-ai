@@ -521,8 +521,6 @@ export class SessionManager {
 				text = raw;
 			} else if (raw instanceof Uint8Array) {
 				text = new TextDecoder().decode(raw);
-			} else if (typeof Buffer !== "undefined" && Buffer.isBuffer(raw)) {
-				text = raw.toString("utf-8");
 			}
 
 			if (!text) continue;
@@ -544,7 +542,7 @@ export class SessionManager {
 		if (!this.stateReaderAgent) {
 			this.stateReaderAgent = createDeepAgent({
 				checkpointer: this.checkpointer,
-			});
+			}) as ReturnType<typeof createDeepAgent>;
 		}
 
 		return this.stateReaderAgent;

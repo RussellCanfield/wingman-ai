@@ -26,7 +26,7 @@
 		"test:watch": "vitest watch",
 		"test:watch:unit": "vitest watch --dir src/tests --exclude '**/*integration*'",
 		"test:watch:integration": "vitest watch --dir src/tests/integration",
-		"build": "bun run webui:build && rslib build",
+		"build": "rslib build && bun run webui:build",
 		"dev": "concurrently -n gateway,webui -c emerald,orange \"bun --watch ./src/cli/index.ts gateway run\" \"bun run webui:dev\"",
 		"dev:gateway": "bun --watch ./src/cli/index.ts gateway run",
 		"dev:webui": "bun run webui:dev",

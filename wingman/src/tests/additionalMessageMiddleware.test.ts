@@ -7,7 +7,16 @@ describe("additionalMessageMiddleware", () => {
 		const middleware = additionalMessageMiddleware();
 		const input = { messages: [new HumanMessage("Hello")] };
 
-		const result = await middleware.beforeAgent!(input);
+		const beforeAgent =
+			typeof middleware.beforeAgent === "function"
+				? middleware.beforeAgent
+				: middleware.beforeAgent?.hook;
+		if (!beforeAgent) {
+			throw new Error("beforeAgent hook not configured");
+		}
+		const result = (await (beforeAgent as any)(input, {})) as {
+			messages: unknown[];
+		};
 
 		expect(result.messages).toHaveLength(2);
 		const injected = result.messages[0] as unknown as {
@@ -22,14 +31,30 @@ describe("additionalMessageMiddleware", () => {
 		const middleware = additionalMessageMiddleware();
 		const input = { messages: [new HumanMessage("Hello")] };
 
-		const first = await middleware.beforeAgent!(input);
-		const second = await middleware.beforeAgent!({
-			messages: first.messages,
-		});
+		const beforeAgent =
+			typeof middleware.beforeAgent === "function"
+				? middleware.beforeAgent
+				: middleware.beforeAgent?.hook;
+		if (!beforeAgent) {
+			throw new Error("beforeAgent hook not configured");
+		}
+		const first = (await (beforeAgent as any)(input, {})) as {
+			messages: unknown[];
+		};
+		const second = (await (beforeAgent as any)(
+			{
+				messages: first.messages,
+			},
+			{},
+		)) as {
+			messages: unknown[];
+		};
 
-		const injectedCount = second.messages.filter((message) => {
-			const source = (message as { additional_kwargs?: { source?: string } })
-				?.additional_kwargs?.source;
+		const messages = second.messages as Array<{
+			additional_kwargs?: { source?: string };
+		}>;
+		const injectedCount = messages.filter((message) => {
+			const source = message.additional_kwargs?.source;
 			return source === "additional-message-middleware";
 		}).length;
 

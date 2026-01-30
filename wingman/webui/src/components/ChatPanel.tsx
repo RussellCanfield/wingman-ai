@@ -126,7 +126,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const legacyThinkingEvents = activeThread?.thinkingEvents || [];
 
 	return (
-		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-6 p-6">
+		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-4 p-4 sm:gap-6 sm:p-6">
 			<header className="flex flex-wrap items-center justify-between gap-4">
 				<div>
 					<h2 className="text-lg font-semibold">Mission Stream</h2>
@@ -144,7 +144,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			<div
 				ref={scrollRef}
 				onScroll={handleScroll}
-				className="flex-1 min-h-0 space-y-4 overflow-auto rounded-2xl border border-black/10 bg-gradient-to-b from-white/80 to-white/95 p-4"
+				className="flex-1 min-h-0 space-y-4 overflow-auto rounded-2xl border border-black/10 bg-gradient-to-b from-white/80 to-white/95 p-3 sm:p-4"
 			>
 				{loading ? (
 					<div className="grid h-full place-items-center text-sm text-slate-500">
@@ -184,118 +184,118 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								msg.role === "assistant" && isStreaming && msg.id === lastAssistantId;
 
 							return (
-							<div
-								key={msg.id}
-								className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-							>
 								<div
-									className={`w-fit max-w-[78%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] ${msg.role === "user"
-										? "border-orange-200/60 bg-orange-100/40 text-slate-800"
-										: "border-emerald-200/60 bg-emerald-100/30 text-slate-700"
-										}`}
+									key={msg.id}
+									className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
 								>
-									<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
-										<span>{msg.role === "user" ? "You" : "Wingman"}</span>
-										<span>{formatTime(msg.createdAt)}</span>
-									</div>
-									{msg.role === "assistant" && !msg.content ? (
-										<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:150ms]" />
-											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:300ms]" />
+									<div
+										className={`w-fit max-w-[90%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${msg.role === "user"
+											? "border-orange-200/60 bg-orange-100/40 text-slate-800"
+											: "border-emerald-200/60 bg-emerald-100/30 text-slate-700"
+											}`}
+									>
+										<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
+											<span>{msg.role === "user" ? "You" : "Wingman"}</span>
+											<span>{formatTime(msg.createdAt)}</span>
 										</div>
-									) : (
-										<ReactMarkdown
-											remarkPlugins={[remarkGfm]}
-											className="markdown-content mt-2 text-sm leading-relaxed"
-											components={{
-												a: ({ node, ...props }) => (
-													<a
-														{...props}
-														className="text-emerald-600 underline decoration-emerald-200 underline-offset-4"
-														target="_blank"
-														rel="noreferrer"
-													/>
-												),
-												code: ({ node, inline, className, children, ...props }) =>
-													inline ? (
-														<code
+										{msg.role === "assistant" && !msg.content ? (
+											<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+												<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+												<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:150ms]" />
+												<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:300ms]" />
+											</div>
+										) : (
+											<ReactMarkdown
+												remarkPlugins={[remarkGfm]}
+												className="markdown-content mt-2 text-sm leading-relaxed"
+												components={{
+													a: ({ node, ...props }) => (
+														<a
 															{...props}
-															className="rounded bg-black/5 px-1 py-0.5 text-[0.85em]"
-														>
-															{children}
-														</code>
-													) : (
-														<pre className="mt-3 overflow-auto rounded-lg border border-black/10 bg-black/5 p-3 text-xs">
-															<code {...props} className={className}>
+															className="text-emerald-600 underline decoration-emerald-200 underline-offset-4"
+															target="_blank"
+															rel="noreferrer"
+														/>
+													),
+													code: ({ node, inline, className, children, ...props }) =>
+														inline ? (
+															<code
+																{...props}
+																className="rounded bg-black/5 px-1 py-0.5 text-[0.85em]"
+															>
 																{children}
 															</code>
-														</pre>
+														) : (
+															<pre className="mt-3 overflow-auto rounded-lg border border-black/10 bg-black/5 p-3 text-xs">
+																<code {...props} className={className}>
+																	{children}
+																</code>
+															</pre>
+														),
+													ul: ({ node, ...props }) => (
+														<ul {...props} className="ml-5 list-disc space-y-1" />
 													),
-												ul: ({ node, ...props }) => (
-													<ul {...props} className="ml-5 list-disc space-y-1" />
-												),
-												ol: ({ node, ...props }) => (
-													<ol {...props} className="ml-5 list-decimal space-y-1" />
-												),
-												blockquote: ({ node, ...props }) => (
-													<blockquote
-														{...props}
-														className="border-l-2 border-emerald-200 pl-3 text-slate-600"
-													/>
-												),
-											}}
-										>
-											{msg.content}
-										</ReactMarkdown>
-									)}
-									{msg.attachments && msg.attachments.length > 0 ? (
-										<div className="mt-3 grid gap-2 sm:grid-cols-2">
-											{msg.attachments.map((attachment) => (
-												<div
-													key={attachment.id}
-													className="overflow-hidden rounded-xl border border-black/10 bg-white/70"
-												>
-													<button
-														type="button"
-														className="group relative block w-full"
-														onClick={() => setPreviewAttachment(attachment)}
-													>
-														<img
-															src={attachment.dataUrl}
-															alt={attachment.name || "Attachment"}
-															className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
-															loading="lazy"
+													ol: ({ node, ...props }) => (
+														<ol {...props} className="ml-5 list-decimal space-y-1" />
+													),
+													blockquote: ({ node, ...props }) => (
+														<blockquote
+															{...props}
+															className="border-l-2 border-emerald-200 pl-3 text-slate-600"
 														/>
-														<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/5" />
-													</button>
-													{attachment.name ? (
-														<div className="truncate border-t border-black/10 px-2 py-1 text-[11px] text-slate-500">
-															{attachment.name}
-														</div>
-													) : null}
-												</div>
-											))}
-										</div>
-									) : null}
-									{hasNestedActivity ? (
-										<div className="mt-3">
-											<ThinkingPanel
-												thinkingEvents={thinkingEvents}
-												toolEvents={toolEvents}
-												isStreaming={isActiveMessage}
-											/>
-										</div>
-									) : null}
+													),
+												}}
+											>
+												{msg.content}
+											</ReactMarkdown>
+										)}
+										{msg.attachments && msg.attachments.length > 0 ? (
+											<div className="mt-3 grid gap-2 sm:grid-cols-2">
+												{msg.attachments.map((attachment) => (
+													<div
+														key={attachment.id}
+														className="overflow-hidden rounded-xl border border-black/10 bg-white/70"
+													>
+														<button
+															type="button"
+															className="group relative block w-full"
+															onClick={() => setPreviewAttachment(attachment)}
+														>
+															<img
+																src={attachment.dataUrl}
+																alt={attachment.name || "Attachment"}
+																className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
+																loading="lazy"
+															/>
+															<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/5" />
+														</button>
+														{attachment.name ? (
+															<div className="truncate border-t border-black/10 px-2 py-1 text-[11px] text-slate-500">
+																{attachment.name}
+															</div>
+														) : null}
+													</div>
+												))}
+											</div>
+										) : null}
+										{hasNestedActivity ? (
+											<div className="mt-3">
+												<ThinkingPanel
+													thinkingEvents={thinkingEvents}
+													toolEvents={toolEvents}
+													isStreaming={isActiveMessage}
+												/>
+											</div>
+										) : null}
+									</div>
 								</div>
-							</div>
-						);
+							);
 						})}
 					</>
 				)}
 			</div>
 
-			<div className="rounded-2xl border border-black/10 bg-white/80 p-4">
+			<div className="rounded-2xl border border-black/10 bg-white/80 p-3 sm:p-4">
 				{!connected ? (
 					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
 						<div>

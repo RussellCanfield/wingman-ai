@@ -240,7 +240,7 @@ describeIfBun("Gateway", () => {
 			{ method: "DELETE" },
 		);
 		expect(clearRes.ok).toBe(true);
-		const cleared = await clearRes.json();
+		const cleared = (await clearRes.json()) as { messageCount: number };
 		expect(cleared.messageCount).toBe(0);
 
 		const updated = manager.getSession(session.id);

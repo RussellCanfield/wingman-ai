@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractImageFiles } from "../../webui/src/utils/attachments.js";
+import { extractImageFiles } from "../utils/attachments.js";
 
 describe("extractImageFiles", () => {
 	it("returns only image files from clipboard items", () => {
