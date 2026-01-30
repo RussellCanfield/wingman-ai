@@ -161,7 +161,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 				<div className="flex items-center justify-between gap-3">
 					<div>
 						<h2 className="text-lg font-semibold">Webhooks</h2>
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-slate-400">
 							Trigger agents from external systems with a secure endpoint.
 						</p>
 					</div>
@@ -177,11 +177,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 
 				<form className="space-y-4" onSubmit={handleSubmit}>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Webhook Name
 						</label>
 						<input
-							className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 							value={name}
 							onChange={(event) => {
 								setName(event.target.value);
@@ -194,11 +194,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 						/>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Webhook ID
 						</label>
 						<input
-							className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 							value={id}
 							onChange={(event) => setId(event.target.value)}
 							placeholder="gmail-inbox"
@@ -206,17 +206,17 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 							disabled={Boolean(editingId)}
 						/>
 						{editingId ? (
-							<p className="text-xs text-slate-500">
+							<p className="text-xs text-slate-400">
 								Webhook ID cannot be changed once created.
 							</p>
 						) : null}
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Agent
 						</label>
 						<select
-							className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm"
 							value={agentId}
 							onChange={(event) => {
 								const nextAgent = event.target.value;
@@ -241,11 +241,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 						</select>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Target Session (optional)
 						</label>
 						<select
-							className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm"
 							value={targetSessionId}
 							onChange={(event) => {
 								const next = event.target.value;
@@ -263,17 +263,17 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 								</option>
 							))}
 						</select>
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-slate-400">
 							Choose an existing chat to receive webhook output.
 						</p>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Secret
 						</label>
 						<div className="flex gap-2">
 							<input
-								className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm font-mono"
+								className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm font-mono"
 								value={secret}
 								onChange={(event) => setSecret(event.target.value)}
 								placeholder="auto-generated secret"
@@ -289,11 +289,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 						</div>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Preset
 						</label>
 						<select
-							className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm"
 							value={preset}
 							onChange={(event) => {
 								const next = event.target.value;
@@ -309,23 +309,23 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 								</option>
 							))}
 						</select>
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-slate-400">
 							{presetOptions.find((option) => option.id === preset)?.description}
 						</p>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Event Label (optional)
 						</label>
 						<input
-							className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 							value={eventLabel}
 							onChange={(event) => setEventLabel(event.target.value)}
 							placeholder="e.g. email.received"
 						/>
 					</div>
 					{endpointUrl ? (
-						<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-slate-600">
+						<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-300">
 							<div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
 								Endpoint
 							</div>
@@ -333,11 +333,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 						</div>
 					) : null}
 					{preset === "gog-gmail" && endpointUrl ? (
-						<div className="rounded-xl border border-dashed border-emerald-200/60 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
-							<div className="text-[10px] uppercase tracking-[0.2em] text-emerald-600">
+						<div className="rounded-xl border border-dashed border-sky-400/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
+							<div className="text-[10px] uppercase tracking-[0.2em] text-sky-300">
 								Gog Gmail Hook
 							</div>
-							<div className="mt-2 space-y-1 font-mono text-[11px] text-emerald-700">
+							<div className="mt-2 space-y-1 font-mono text-[11px] text-sky-300">
 								<div>gog gmail watch serve \</div>
 								<div>  --hook-url {endpointUrl} \</div>
 								<div>  --hook-token {secret || "YOUR_SECRET"} \</div>
@@ -345,14 +345,14 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 							</div>
 						</div>
 					) : null}
-					<div className="flex items-center justify-between rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-slate-600">
+					<div className="flex items-center justify-between rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-300">
 						<span>Enabled</span>
 						<button
 							type="button"
 							className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
 								enabled
-									? "border-emerald-500/40 bg-emerald-100/60 text-emerald-700"
-									: "border-black/10 bg-white/70 text-slate-500"
+									? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+									: "border-white/10 bg-slate-950/50 text-slate-400"
 							}`}
 							onClick={() => setEnabled(!enabled)}
 						>
@@ -376,11 +376,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 					<div className="flex items-center justify-between">
 						<h3 className="text-lg font-semibold">Configured Webhooks</h3>
 						{loading ? (
-							<span className="text-xs text-slate-500">Loading...</span>
+							<span className="text-xs text-slate-400">Loading...</span>
 						) : null}
 					</div>
 					{webhooks.length === 0 ? (
-						<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-sm text-slate-500">
+						<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-sm text-slate-400">
 							No webhooks configured yet.
 						</div>
 					) : (
@@ -388,20 +388,20 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 							{webhooks.map((webhook) => (
 								<div
 									key={webhook.id}
-									className="rounded-2xl border border-black/10 bg-white/80 p-4"
+									className="rounded-2xl border border-white/10 bg-slate-900/60 p-4"
 								>
 									<div className="flex flex-wrap items-start justify-between gap-3">
 										<div>
-											<h4 className="text-sm font-semibold text-slate-800">
+											<h4 className="text-sm font-semibold text-slate-100">
 												{webhook.name}
 											</h4>
-											<p className="text-xs text-slate-500">
+											<p className="text-xs text-slate-400">
 												Agent: {webhook.agentId}
 											</p>
 										</div>
 										<span className="pill">{webhook.enabled ? "enabled" : "disabled"}</span>
 									</div>
-									<div className="mt-3 space-y-2 text-xs text-slate-600">
+									<div className="mt-3 space-y-2 text-xs text-slate-300">
 										<div>
 											<span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
 												Endpoint
@@ -448,7 +448,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 											</div>
 										) : null}
 									</div>
-									<div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+									<div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
 										<div className="flex items-center gap-2">
 											<button
 												type="button"
@@ -466,7 +466,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 											</button>
 											<button
 												type="button"
-												className="rounded-full border border-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-rose-500 transition hover:border-rose-200/60"
+												className="rounded-full border border-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-rose-500 transition hover:border-rose-400/40"
 												onClick={() => onDeleteWebhook(webhook.id)}
 											>
 												Delete

@@ -130,8 +130,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			<header className="flex flex-wrap items-center justify-between gap-4">
 				<div>
 					<h2 className="text-lg font-semibold">Mission Stream</h2>
-					<p className="mt-1 text-sm text-slate-500">
-						Thread: <span className="font-semibold text-slate-700">{activeThread?.name || "--"}</span>
+					<p className="mt-1 text-sm text-slate-400">
+						Thread: <span className="font-semibold text-slate-200">{activeThread?.name || "--"}</span>
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
@@ -144,17 +144,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			<div
 				ref={scrollRef}
 				onScroll={handleScroll}
-				className="flex-1 min-h-0 space-y-4 overflow-auto rounded-2xl border border-black/10 bg-gradient-to-b from-white/80 to-white/95 p-3 sm:p-4"
+				className="flex-1 min-h-0 space-y-4 overflow-auto rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-3 sm:p-4"
 			>
 				{loading ? (
-					<div className="grid h-full place-items-center text-sm text-slate-500">
+					<div className="grid h-full place-items-center text-sm text-slate-400">
 						Loading messages...
 					</div>
 				) : !activeThread || activeThread.messages.length === 0 ? (
-					<div className="grid h-full place-items-center text-sm text-slate-500">
+					<div className="grid h-full place-items-center text-sm text-slate-400">
 						<div className="max-w-sm text-center">
-							<p className="text-base font-semibold text-slate-700">Launch a new mission.</p>
-							<p className="mt-2 text-sm text-slate-500">
+							<p className="text-base font-semibold text-slate-200">Launch a new mission.</p>
+							<p className="mt-2 text-sm text-slate-400">
 								Send a prompt to begin, or pick a quick prompt below to shape the session.
 							</p>
 						</div>
@@ -190,19 +190,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								>
 									<div
 										className={`w-fit max-w-[90%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${msg.role === "user"
-											? "border-orange-200/60 bg-orange-100/40 text-slate-800"
-											: "border-emerald-200/60 bg-emerald-100/30 text-slate-700"
+											? "border-white/10 bg-slate-950/60 text-slate-100"
+											: "border-sky-400/40 bg-sky-500/10 text-slate-100"
 											}`}
 									>
-										<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
+										<div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-400">
 											<span>{msg.role === "user" ? "You" : "Wingman"}</span>
 											<span>{formatTime(msg.createdAt)}</span>
 										</div>
 										{msg.role === "assistant" && !msg.content ? (
 											<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-												<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-												<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:150ms]" />
-												<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:300ms]" />
+												<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+												<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
+												<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
 											</div>
 										) : (
 											<ReactMarkdown
@@ -212,7 +212,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 													a: ({ node, ...props }) => (
 														<a
 															{...props}
-															className="text-emerald-600 underline decoration-emerald-200 underline-offset-4"
+															className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
 															target="_blank"
 															rel="noreferrer"
 														/>
@@ -221,12 +221,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 														inline ? (
 															<code
 																{...props}
-																className="rounded bg-black/5 px-1 py-0.5 text-[0.85em]"
+																className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
 															>
 																{children}
 															</code>
 														) : (
-															<pre className="mt-3 overflow-auto rounded-lg border border-black/10 bg-black/5 p-3 text-xs">
+															<pre className="mt-3 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-3 text-xs">
 																<code {...props} className={className}>
 																	{children}
 																</code>
@@ -241,7 +241,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 													blockquote: ({ node, ...props }) => (
 														<blockquote
 															{...props}
-															className="border-l-2 border-emerald-200 pl-3 text-slate-600"
+															className="border-l-2 border-sky-400/60 pl-3 text-slate-300"
 														/>
 													),
 												}}
@@ -254,7 +254,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												{msg.attachments.map((attachment) => (
 													<div
 														key={attachment.id}
-														className="overflow-hidden rounded-xl border border-black/10 bg-white/70"
+														className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50"
 													>
 														<button
 															type="button"
@@ -267,10 +267,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 																className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
 																loading="lazy"
 															/>
-															<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/5" />
+															<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-white/5" />
 														</button>
 														{attachment.name ? (
-															<div className="truncate border-t border-black/10 px-2 py-1 text-[11px] text-slate-500">
+															<div className="truncate border-t border-white/10 px-2 py-1 text-[11px] text-slate-400">
 																{attachment.name}
 															</div>
 														) : null}
@@ -295,9 +295,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				)}
 			</div>
 
-			<div className="rounded-2xl border border-black/10 bg-white/80 p-3 sm:p-4">
+			<div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
 				{!connected ? (
-					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
+					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
 						<div>
 							<span className="font-semibold">Gateway not connected.</span>{" "}
 							Open the Command Deck to connect before sending prompts.
@@ -308,8 +308,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					</div>
 				) : null}
 				<div className="flex items-center justify-between">
-					<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Prompt</label>
-					<div className="flex items-center gap-2 text-xs text-slate-500">
+					<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Prompt</label>
+					<div className="flex items-center gap-2 text-xs text-slate-400">
 						<button
 							type="button"
 							className="button-secondary px-3 py-1 text-xs"
@@ -333,7 +333,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						{attachments.map((attachment) => (
 							<div
 								key={attachment.id}
-								className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-black/10 bg-white/80 pr-2 text-xs"
+								className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
 							>
 								<img
 									src={attachment.dataUrl}
@@ -341,7 +341,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									className="h-12 w-12 cursor-zoom-in object-cover"
 									onClick={() => setPreviewAttachment(attachment)}
 								/>
-								<span className="max-w-[160px] truncate text-slate-600">
+								<span className="max-w-[160px] truncate text-slate-300">
 									{attachment.name || "Image"}
 								</span>
 								<button
@@ -366,7 +366,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					<div className="mt-2 text-xs text-rose-500">{attachmentError}</div>
 				) : null}
 				<textarea
-					className="mt-2 w-full rounded-xl border border-black/10 bg-white/90 px-3 py-3 text-sm focus:shadow-glow"
+					className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-3 text-sm focus:shadow-glow"
 					rows={3}
 					value={prompt}
 					onChange={(event) => onPromptChange(event.target.value)}
@@ -381,14 +381,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							<button
 								key={item}
 								type="button"
-								className="rounded-full border border-black/10 bg-white/80 px-3 py-1 text-xs text-slate-600 transition hover:border-emerald-200/60"
+								className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 transition hover:border-sky-400/50"
 								onClick={() => onPromptChange(item)}
 							>
 								{item}
 							</button>
 						))}
 					</div>
-					<div className="flex items-center gap-3 text-xs text-slate-500">
+					<div className="flex items-center gap-3 text-xs text-slate-400">
 						<button
 							className="button-primary"
 							onClick={onSendPrompt}
@@ -406,7 +406,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					onClick={() => setPreviewAttachment(null)}
 				>
 					<div
-						className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-white shadow-2xl"
+						className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-slate-950 shadow-2xl"
 						onClick={(event) => event.stopPropagation()}
 					>
 						<img
@@ -414,11 +414,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							alt={previewAttachment.name || "Attachment preview"}
 							className="max-h-[85vh] max-w-[90vw] object-contain"
 						/>
-						<div className="flex items-center justify-between gap-4 border-t border-black/10 px-4 py-2 text-xs text-slate-500">
+						<div className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-2 text-xs text-slate-400">
 							<span className="truncate">{previewAttachment.name || "Image preview"}</span>
 							<button
 								type="button"
-								className="text-slate-400 transition hover:text-slate-600"
+								className="text-slate-400 transition hover:text-slate-300"
 								onClick={() => setPreviewAttachment(null)}
 							>
 								Close

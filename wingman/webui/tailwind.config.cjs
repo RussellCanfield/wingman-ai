@@ -8,10 +8,10 @@ module.exports = {
 	theme: {
 		extend: {
 			colors: {
-				ink: "#12110f",
-				sand: "#f2ece4",
-				accent: "#008d73",
-				accentWarm: "#ff7a3d",
+				ink: "#e2e8f0",
+				sand: "#0b1120",
+				accent: "#38bdf8",
+				accentWarm: "#3b82f6",
 			},
 			fontFamily: {
 				display: ["Sora", "system-ui", "-apple-system", "sans-serif"],
@@ -25,7 +25,7 @@ module.exports = {
 				],
 			},
 			boxShadow: {
-				glow: "0 0 0 1px rgba(0, 141, 115, 0.12), 0 18px 42px rgba(0, 141, 115, 0.18)",
+				glow: "0 0 0 1px rgba(56, 189, 248, 0.15), 0 18px 42px rgba(59, 130, 246, 0.24)",
 			},
 			keyframes: {
 				drift: {
@@ -41,9 +41,9 @@ module.exports = {
 					"100%": { opacity: "1", transform: "translateY(0)" },
 				},
 				pulseSoft: {
-					"0%": { boxShadow: "0 0 0 0 rgba(0, 141, 115, 0.4)" },
-					"70%": { boxShadow: "0 0 0 8px rgba(0, 141, 115, 0)" },
-					"100%": { boxShadow: "0 0 0 0 rgba(0, 141, 115, 0)" },
+					"0%": { boxShadow: "0 0 0 0 rgba(56, 189, 248, 0.5)" },
+					"70%": { boxShadow: "0 0 0 8px rgba(56, 189, 248, 0)" },
+					"100%": { boxShadow: "0 0 0 0 rgba(56, 189, 248, 0)" },
 				},
 			},
 			animation: {

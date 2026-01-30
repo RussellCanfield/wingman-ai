@@ -61,7 +61,7 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<h3 className="text-lg font-semibold">LLM Providers</h3>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-slate-400">
 						Manage API keys for model providers used by your agents.
 					</p>
 				</div>
@@ -71,13 +71,13 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 			</div>
 
 			{loading ? (
-				<div className="rounded-xl border border-dashed border-black/10 bg-white/70 px-3 py-2 text-xs text-slate-500">
+				<div className="rounded-xl border border-dashed border-white/10 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
 					Loading provider status...
 				</div>
 			) : null}
 
 			{sortedProviders.length === 0 ? (
-				<div className="rounded-xl border border-dashed border-black/10 bg-white/70 px-3 py-2 text-xs text-slate-500">
+				<div className="rounded-xl border border-dashed border-white/10 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
 					No providers configured.
 				</div>
 			) : (
@@ -87,8 +87,8 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 							provider.source === "missing" ? "Missing" : "Configured";
 						const statusTone =
 							provider.source === "missing"
-								? "border-rose-200 bg-rose-50 text-rose-600"
-								: "border-emerald-200 bg-emerald-50 text-emerald-700";
+								? "border-rose-400/50 bg-rose-500/15 text-rose-200"
+								: "border-sky-400/60 bg-sky-500/10 text-sky-300";
 						const sourceLabel =
 							provider.source === "env"
 								? `Env (${provider.envVar || provider.envVars[0] || "set"})`
@@ -100,14 +100,14 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 							<details
 								key={provider.name}
 								open={provider.source === "missing"}
-								className="rounded-xl border border-black/10 bg-white/80 px-3 py-2"
+								className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2"
 							>
 								<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
 									<div>
-										<div className="text-sm font-semibold text-slate-900">
+										<div className="text-sm font-semibold text-slate-100">
 											{provider.label}
 										</div>
-										<div className="text-xs text-slate-500">
+										<div className="text-xs text-slate-400">
 											{sourceLabel}
 										</div>
 									</div>
@@ -118,12 +118,12 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 									</span>
 								</summary>
 								<div className="mt-4 space-y-3">
-									<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+									<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 										{provider.type === "oauth" ? "Access Token" : "API Key"}
 									</label>
 									<input
 										type="password"
-										className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm focus:shadow-glow"
+										className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm focus:shadow-glow"
 										placeholder={`Paste ${provider.label} ${
 											provider.type === "oauth" ? "token" : "API key"
 										}`}
@@ -156,7 +156,7 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 											Clear
 										</button>
 									</div>
-									<div className="text-xs text-slate-500">
+									<div className="text-xs text-slate-400">
 										Env: {provider.envVars.join(", ")}
 									</div>
 								</div>
@@ -166,7 +166,7 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 				</div>
 			)}
 
-			<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-slate-600">
+			<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-300">
 				<div>Credentials file: {credentialsPath || "--"}</div>
 				<div>Last updated: {updatedAt || "--"}</div>
 			</div>

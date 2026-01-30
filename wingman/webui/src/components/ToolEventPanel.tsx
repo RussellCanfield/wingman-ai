@@ -21,7 +21,7 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 	const showHeader = variant === "panel";
 	const containerClass =
 		variant === "panel"
-			? "rounded-2xl border border-black/10 bg-white/80 p-4"
+			? "rounded-2xl border border-white/10 bg-slate-900/60 p-4"
 			: "space-y-2";
 
 	return (
@@ -29,8 +29,8 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 			{showHeader ? (
 				<div className="flex items-center justify-between">
 					<div>
-						<h3 className="text-sm font-semibold text-slate-700">Tool activity</h3>
-						<p className="text-xs text-slate-500">
+						<h3 className="text-sm font-semibold text-slate-200">Tool activity</h3>
+						<p className="text-xs text-slate-400">
 							{activeCount > 0
 								? `${activeCount} tool${activeCount === 1 ? "" : "s"} running`
 								: "Recent tool calls"}
@@ -57,10 +57,10 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 				: "Completed";
 	const statusTone =
 		event.status === "running"
-			? "border-amber-200/60 bg-amber-50/70 text-amber-700"
+			? "border-amber-400/40 bg-amber-500/12 text-amber-200"
 			: event.status === "error"
-				? "border-rose-200/60 bg-rose-50/70 text-rose-600"
-				: "border-emerald-200/60 bg-emerald-50/70 text-emerald-700";
+				? "border-rose-400/40 bg-rose-500/15 text-rose-200"
+				: "border-sky-400/40 bg-sky-500/12 text-sky-300";
 
 	const argsText = stringifyPreview(event.args);
 	const outputText = stringifyPreview(
@@ -68,10 +68,10 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 	);
 
 	return (
-		<details className="rounded-xl border border-black/10 bg-white/90 px-3 py-2">
+		<details className="rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2">
 			<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
 				<div>
-					<div className="text-sm font-semibold text-slate-800">{event.name}</div>
+					<div className="text-sm font-semibold text-slate-100">{event.name}</div>
 					{event.startedAt ? (
 						<div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
 							{formatTime(event.startedAt)}
@@ -82,11 +82,11 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 					{statusLabel}
 				</span>
 			</summary>
-			<div className="mt-3 space-y-3 text-xs text-slate-600">
+			<div className="mt-3 space-y-3 text-xs text-slate-300">
 				{argsText ? (
 					<div>
 						<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Args</span>
-						<pre className="mt-2 max-h-32 overflow-auto rounded-lg border border-black/5 bg-slate-50/70 p-2 text-[11px] text-slate-600">
+						<pre className="mt-2 max-h-32 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-2 text-[11px] text-slate-300">
 							{argsText}
 						</pre>
 					</div>
@@ -96,7 +96,7 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 						<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							{event.error ? "Error" : "Output"}
 						</span>
-						<pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-black/5 bg-slate-50/70 p-2 text-[11px] text-slate-600">
+						<pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-2 text-[11px] text-slate-300">
 							{outputText}
 						</pre>
 					</div>

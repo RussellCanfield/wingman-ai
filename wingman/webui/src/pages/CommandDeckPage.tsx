@@ -93,11 +93,11 @@ export const CommandDeckPage: React.FC<CommandDeckPageProps> = ({
 				/>
 				<section className="panel-card animate-rise space-y-3 p-5">
 					<h3 className="text-lg font-semibold">Security Notes</h3>
-					<p className="text-sm text-slate-600">
+					<p className="text-sm text-slate-300">
 						Keep your gateway bound to localhost unless you are tunneling through a trusted network such as
 						Tailscale or SSH. Tokens remain the safest option for remote access.
 					</p>
-					<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-slate-600">
+					<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-300">
 						Device ID: <span className="font-mono">{deviceId || "--"}</span>
 					</div>
 				</section>

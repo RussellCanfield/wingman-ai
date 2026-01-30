@@ -88,8 +88,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 			/>
 
 			<aside className="panel-card animate-rise space-y-4 p-5 lg:order-none order-last">
-				<div className="rounded-2xl border border-dashed border-black/10 bg-white/70 px-4 py-3">
-					<div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+				<div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
+					<div className="flex items-center justify-between text-sm font-semibold text-slate-200">
 						<span>Working Folder</span>
 						<button
 							type="button"
@@ -100,7 +100,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 							{activeThread?.workdir ? "Change" : "Set"}
 						</button>
 					</div>
-					<div className="mt-3 text-xs text-slate-600">
+					<div className="mt-3 text-xs text-slate-300">
 						{activeThread?.workdir ? (
 							<div className="break-all font-mono">{activeThread.workdir}</div>
 						) : (
@@ -112,11 +112,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 					</div>
 				</div>
 
-				<details className="group rounded-2xl border border-dashed border-black/10 bg-white/70 px-4 py-3">
-					<summary className="cursor-pointer list-none text-sm font-semibold text-slate-700">
+				<details className="group rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
+					<summary className="cursor-pointer list-none text-sm font-semibold text-slate-200">
 						Session Snapshot
 					</summary>
-					<div className="mt-4 space-y-3 text-xs text-slate-600">
+					<div className="mt-4 space-y-3 text-xs text-slate-300">
 						<div className="flex items-center justify-between">
 							<span>Agent</span>
 							<span className="pill">{agentId}</span>
@@ -134,26 +134,26 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 							<span className="pill">{createdAt}</span>
 						</div>
 						<div>
-							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Session Key</span>
-							<div className="mt-2 break-all rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 font-mono text-[11px] text-slate-500">
+							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Session Key</span>
+							<div className="mt-2 break-all rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 font-mono text-[11px] text-slate-400">
 								{sessionKey}
 							</div>
 						</div>
 					</div>
 				</details>
 
-				<details className="group rounded-2xl border border-dashed border-black/10 bg-white/70 px-4 py-3">
-					<summary className="cursor-pointer list-none text-sm font-semibold text-slate-700">
+				<details className="group rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
+					<summary className="cursor-pointer list-none text-sm font-semibold text-slate-200">
 						Guidance
 					</summary>
-					<ul className="mt-4 space-y-2 text-xs text-slate-600">
-						<li className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2">
+					<ul className="mt-4 space-y-2 text-xs text-slate-300">
+						<li className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2">
 							Use the command deck to refresh stats or rotate credentials.
 						</li>
-						<li className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2">
+						<li className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2">
 							Create separate threads for each mission to keep context clean.
 						</li>
-						<li className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2">
+						<li className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2">
 							Shift + Enter inserts a new line in prompts.
 						</li>
 					</ul>
@@ -161,7 +161,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 
 				<button
 					type="button"
-					className="rounded-full border border-rose-200/60 bg-rose-50/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-300"
+					className="rounded-full border border-rose-400/40 bg-rose-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-200 transition hover:border-rose-400/60"
 					onClick={() => activeThread && onDeleteThread(activeThread.id)}
 					disabled={!activeThread}
 				>

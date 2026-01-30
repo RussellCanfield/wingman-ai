@@ -24,48 +24,48 @@ export const HeroPanel: React.FC<HeroPanelProps> = ({
 		<section className="glass-edge animate-floatIn relative overflow-hidden rounded-[32px] px-7 py-7">
 			<div className="relative z-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
 				<div className="space-y-4">
-					<p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+					<p className="text-xs uppercase tracking-[0.3em] text-slate-400">
 						Wingman Control Core
 					</p>
 					<h1 className="text-4xl font-semibold tracking-tight text-ink">
 						<span className="text-gradient">Gateway</span> Mission Console
 					</h1>
-					<p className="text-sm text-slate-600">
+					<p className="text-sm text-slate-300">
 						Run your agent fleet, inspect runtime state, and stream intelligence through a single command deck.
 					</p>
-					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
 						<span className="pill">channel: webui</span>
 						<span className="pill">active agent: {agentId}</span>
 						<span className="pill">thread: {activeThreadName || "--"}</span>
 					</div>
 				</div>
 				<div className="space-y-4">
-					<div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/90 px-4 py-3 shadow-[0_10px_24px_rgba(18,14,12,0.12)]">
+					<div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 shadow-[0_10px_24px_rgba(18,14,12,0.12)]">
 						<div>
-							<p className="text-xs uppercase tracking-[0.2em] text-slate-500">Status</p>
+							<p className="text-xs uppercase tracking-[0.2em] text-slate-400">Status</p>
 							<p className="text-lg font-semibold">{statusLabel}</p>
 						</div>
 						<span
 							className={`h-3 w-3 rounded-full ${
-								connected ? "bg-emerald-500 animate-pulseSoft" : "bg-slate-300"
+								connected ? "bg-sky-500/100 animate-pulseSoft" : "bg-slate-600"
 							}`}
 						/>
 					</div>
 					<div className="grid grid-cols-2 gap-3">
 						<div className="stat-card p-3">
-							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Health</span>
+							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Health</span>
 							<strong className="mt-2 block text-lg">{health.status || "--"}</strong>
 						</div>
 						<div className="stat-card p-3">
-							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Uptime</span>
+							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Uptime</span>
 							<strong className="mt-2 block text-lg">{formatDuration(health.stats?.uptime)}</strong>
 						</div>
 						<div className="stat-card p-3">
-							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Nodes</span>
+							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Nodes</span>
 							<strong className="mt-2 block text-lg">{stats.nodes?.totalNodes ?? "--"}</strong>
 						</div>
 						<div className="stat-card p-3">
-							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Groups</span>
+							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Groups</span>
 							<strong className="mt-2 block text-lg">{stats.groups?.totalGroups ?? "--"}</strong>
 						</div>
 					</div>

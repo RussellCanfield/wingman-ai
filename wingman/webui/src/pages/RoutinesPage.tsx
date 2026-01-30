@@ -73,18 +73,18 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 			<aside className="panel-card animate-rise space-y-6 p-5">
 				<div>
 					<h2 className="text-lg font-semibold">Routines</h2>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-slate-400">
 						Schedule recurring runs for any agent using cron.
 					</p>
 				</div>
 
 				<form className="space-y-4" onSubmit={handleSubmit}>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Routine Name
 						</label>
 						<input
-							className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 							value={name}
 							onChange={(event) => setName(event.target.value)}
 							placeholder="Daily status report"
@@ -92,11 +92,11 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 						/>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Schedule (CRON)
 						</label>
 						<input
-							className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 							value={cron}
 							onChange={(event) => setCron(event.target.value)}
 							placeholder="0 9 * * *"
@@ -107,24 +107,24 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 								<button
 									key={preset.value}
 									type="button"
-									className="rounded-full border border-black/10 bg-white/80 px-3 py-1 text-xs text-slate-600 transition hover:border-emerald-200/60"
+									className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 transition hover:border-sky-400/50"
 									onClick={() => setCron(preset.value)}
 								>
 									{preset.label}
 								</button>
 							))}
 						</div>
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-slate-400">
 							Use standard 5‑field cron syntax. Example:{" "}
 							<span className="font-mono">0 9 * * 1-5</span>.
 						</p>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Agent
 						</label>
 						<select
-							className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm"
 							value={agentId}
 							onChange={(event) => {
 								const nextAgent = event.target.value;
@@ -149,11 +149,11 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 						</select>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Target Session (optional)
 						</label>
 						<select
-							className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm"
 							value={targetSessionId}
 							onChange={(event) => {
 								const next = event.target.value;
@@ -171,16 +171,16 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 								</option>
 							))}
 						</select>
-						<p className="text-xs text-slate-500">
+						<p className="text-xs text-slate-400">
 							Send routine output to an existing chat.
 						</p>
 					</div>
 					<div className="space-y-2">
-						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Prompt
 						</label>
 						<textarea
-							className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+							className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 							rows={4}
 							value={prompt}
 							onChange={(event) => setPrompt(event.target.value)}
@@ -188,14 +188,14 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 							required
 						/>
 					</div>
-					<div className="flex items-center justify-between rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-slate-600">
+					<div className="flex items-center justify-between rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-300">
 						<span>Enabled</span>
 						<button
 							type="button"
 							className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
 								enabled
-									? "border-emerald-500/40 bg-emerald-100/60 text-emerald-700"
-									: "border-black/10 bg-white/70 text-slate-500"
+									? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+									: "border-white/10 bg-slate-950/50 text-slate-400"
 							}`}
 							onClick={() => setEnabled(!enabled)}
 						>
@@ -212,11 +212,11 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 				<div className="panel-card animate-rise space-y-4 p-5">
 					<h3 className="text-lg font-semibold">Scheduled Runs</h3>
 					{loading ? (
-						<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-sm text-slate-500">
+						<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-sm text-slate-400">
 							Loading routines...
 						</div>
 					) : routines.length === 0 ? (
-						<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-sm text-slate-500">
+						<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-sm text-slate-400">
 							No routines created yet.
 						</div>
 					) : (
@@ -224,18 +224,18 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 							{routines.map((routine) => (
 								<div
 									key={routine.id}
-									className="rounded-2xl border border-black/10 bg-white/80 p-4"
+									className="rounded-2xl border border-white/10 bg-slate-900/60 p-4"
 								>
 									<div className="flex items-center justify-between gap-3">
 										<div>
-											<h4 className="text-sm font-semibold text-slate-800">{routine.name}</h4>
-											<p className="text-xs text-slate-500">
+											<h4 className="text-sm font-semibold text-slate-100">{routine.name}</h4>
+											<p className="text-xs text-slate-400">
 												Agent: {routine.agentId}
 											</p>
 										</div>
 										<span className="pill">{routine.enabled ? "enabled" : "disabled"}</span>
 									</div>
-									<div className="mt-3 text-xs text-slate-600">
+									<div className="mt-3 text-xs text-slate-300">
 										<div>
 											<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Cron</span>
 											<div className="mt-1 font-mono">{routine.cron}</div>
@@ -256,13 +256,13 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 											<div className="mt-1 line-clamp-2">{routine.prompt}</div>
 										</div>
 									</div>
-									<div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+									<div className="mt-3 flex items-center justify-between text-xs text-slate-400">
 										<span>
 											Created {new Date(routine.createdAt).toLocaleDateString()}
 										</span>
 											<button
 												type="button"
-												className="rounded-full border border-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-rose-500 transition hover:border-rose-200/60"
+												className="rounded-full border border-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-rose-500 transition hover:border-rose-400/40"
 												onClick={() => void onDeleteRoutine(routine.id)}
 											>
 											Delete

@@ -45,43 +45,43 @@ export const CommandDeckPanel: React.FC<CommandDeckPanelProps> = ({
 		<aside className="panel-card animate-rise space-y-6 p-5">
 			<div className="space-y-2">
 				<h2 className="text-lg font-semibold">Command Deck</h2>
-				<p className="text-xs uppercase tracking-[0.2em] text-slate-500">Connection + identity</p>
-				<div className="flex items-center gap-2 text-xs text-slate-500">
+				<p className="text-xs uppercase tracking-[0.2em] text-slate-400">Connection + identity</p>
+				<div className="flex items-center gap-2 text-xs text-slate-400">
 					<span className="pill">status: {statusLabel}</span>
 				</div>
 			</div>
 
 			<div className="space-y-3">
-				<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">WebSocket URL</label>
+				<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">WebSocket URL</label>
 				<input
-					className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm shadow-[0_0_0_1px_rgba(0,0,0,0.03)] focus:shadow-glow"
+					className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm shadow-[0_0_0_1px_rgba(0,0,0,0.03)] focus:shadow-glow"
 					value={wsUrl}
 					onChange={(event) => onWsUrlChange(event.target.value)}
 				/>
-				<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Token (optional)</label>
+				<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Token (optional)</label>
 				<input
 					type="password"
-					className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm focus:shadow-glow"
+					className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm focus:shadow-glow"
 					value={token}
 					onChange={(event) => onTokenChange(event.target.value)}
 					autoComplete="off"
 				/>
-				<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Password (optional)</label>
+				<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Password (optional)</label>
 				<input
 					type="password"
-					className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm focus:shadow-glow"
+					className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm focus:shadow-glow"
 					value={password}
 					onChange={(event) => onPasswordChange(event.target.value)}
 					autoComplete="off"
 				/>
-				<div className="flex items-center justify-between rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-slate-600">
+				<div className="flex items-center justify-between rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-300">
 					<span>Auto-connect</span>
 					<button
 						type="button"
 						className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
 							autoConnect
-								? "border-emerald-500/40 bg-emerald-100/60 text-emerald-700"
-								: "border-black/10 bg-white/70 text-slate-500"
+								? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+								: "border-white/10 bg-slate-950/50 text-slate-400"
 						}`}
 						onClick={() => onAutoConnectChange(!autoConnect)}
 					>
@@ -89,7 +89,7 @@ export const CommandDeckPanel: React.FC<CommandDeckPanelProps> = ({
 					</button>
 				</div>
 				{autoConnectStatus ? (
-					<div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
+					<div className="rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
 						{autoConnectStatus}
 					</div>
 				) : null}
@@ -104,19 +104,19 @@ export const CommandDeckPanel: React.FC<CommandDeckPanelProps> = ({
 						Refresh
 					</button>
 				</div>
-				<p className="text-xs text-slate-500">{authHint}</p>
+				<p className="text-xs text-slate-400">{authHint}</p>
 			</div>
 
 			<div className="space-y-3">
-				<h3 className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Identity</h3>
-				<div className="flex items-center gap-2 text-sm text-slate-600">
+				<h3 className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Identity</h3>
+				<div className="flex items-center gap-2 text-sm text-slate-300">
 					<span>Device</span>
 					<span className="pill">{deviceId || "--"}</span>
 					<button className="button-secondary" onClick={onResetDevice} type="button">
 						Reset
 					</button>
 				</div>
-				<div className="flex items-center gap-2 text-sm text-slate-600">
+				<div className="flex items-center gap-2 text-sm text-slate-300">
 					<span>Routing</span>
 					<span className="pill">webui / channel / {deviceId || "--"}</span>
 				</div>

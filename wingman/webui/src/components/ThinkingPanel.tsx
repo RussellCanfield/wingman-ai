@@ -42,20 +42,20 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 
 	return (
 		<details
-			className="rounded-2xl border border-emerald-200/60 bg-emerald-100/20 px-4 py-3 text-sm text-slate-700 shadow-[0_10px_18px_rgba(18,14,12,0.08)]"
+			className="rounded-2xl border border-sky-400/40 bg-sky-500/10 px-4 py-3 text-sm text-slate-200 shadow-[0_10px_18px_rgba(18,14,12,0.08)]"
 			defaultOpen={isStreaming && (hasThinking || activeTools > 0)}
 		>
 			<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
 				<div className="flex items-center gap-3">
-					<span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+					<span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
 						Thinking
 					</span>
-					<span className="text-xs text-slate-500">{summary}</span>
+					<span className="text-xs text-slate-400">{summary}</span>
 				</div>
-				<div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+				<div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
 					{isStreaming ? (
 						<span className="flex items-center gap-1">
-							<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+							<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
 							<span>Streaming</span>
 						</span>
 					) : (
@@ -69,22 +69,22 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 						{sortedThinking.map((event) => (
 							<details
 								key={event.id}
-								className="rounded-xl border border-black/10 bg-white/80 px-3 py-2"
+								className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2"
 							>
 								<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
 									<div>
-										<div className="text-sm font-semibold text-slate-800">
+										<div className="text-sm font-semibold text-slate-100">
 											{event.node ? event.node : "Subagent"}
 										</div>
 										<div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
 											{formatTime(event.updatedAt)}
 										</div>
 									</div>
-									<span className="rounded-full border border-emerald-200/60 bg-emerald-50/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
+									<span className="rounded-full border border-sky-400/40 bg-sky-500/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-300">
 										Insight
 									</span>
 								</summary>
-								<div className="mt-3 whitespace-pre-wrap text-xs text-slate-600">
+								<div className="mt-3 whitespace-pre-wrap text-xs text-slate-300">
 									{event.content}
 								</div>
 							</details>
@@ -92,7 +92,7 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 					</div>
 				) : null}
 				{hasTools ? (
-					<div className="rounded-xl border border-black/10 bg-white/80 px-3 py-2">
+					<div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
 						<ToolEventPanel
 							toolEvents={toolEvents}
 							activeCount={activeTools}

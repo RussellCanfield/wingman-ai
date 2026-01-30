@@ -134,12 +134,12 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	return (
 		<section className="space-y-6">
 			<div className="flex items-center justify-between gap-3 lg:hidden">
-				<div className="flex items-center gap-2 rounded-full border border-black/10 bg-white/80 p-1 text-xs font-semibold text-slate-600">
+				<div className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 p-1 text-xs font-semibold text-slate-300">
 					<button
 						type="button"
 						className={`rounded-full px-3 py-1 transition ${mobilePanel === "editor"
-							? "bg-emerald-100/80 text-emerald-700"
-							: "text-slate-500"
+							? "bg-sky-500/20 text-sky-300"
+							: "text-slate-400"
 							}`}
 						onClick={() => setMobilePanel("editor")}
 					>
@@ -148,8 +148,8 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 					<button
 						type="button"
 						className={`rounded-full px-3 py-1 transition ${mobilePanel === "topology"
-							? "bg-emerald-100/80 text-emerald-700"
-							: "text-slate-500"
+							? "bg-sky-500/20 text-sky-300"
+							: "text-slate-400"
 							}`}
 						onClick={() => setMobilePanel("topology")}
 					>
@@ -166,7 +166,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 					<div className="flex items-center justify-between gap-3">
 						<div>
 							<h2 className="text-lg font-semibold">Agents</h2>
-							<p className="text-xs text-slate-500">Create and inspect agent configs.</p>
+							<p className="text-xs text-slate-400">Create and inspect agent configs.</p>
 						</div>
 						<div className="flex items-center gap-2">
 							<button className="button-ghost" type="button" onClick={resetForm}>
@@ -179,7 +179,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 					</div>
 
 					<div className="space-y-3">
-						<p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+						<p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 							Built-in Tools (always available)
 						</p>
 						<div className="flex flex-wrap gap-2">
@@ -193,11 +193,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 
 					<form className="space-y-4" onSubmit={handleSubmit}>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 								Agent ID
 							</label>
 							<input
-								className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+								className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 								value={id}
 								onChange={(event) => setId(event.target.value)}
 								placeholder="e.g. design-lead"
@@ -205,7 +205,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								disabled={isEditing}
 							/>
 							{isEditing ? (
-								<p className="text-xs text-slate-500">
+								<p className="text-xs text-slate-400">
 									Editing agent <span className="font-mono">{editingAgentId}</span>. Agent
 									ID cannot be changed.
 								</p>
@@ -213,27 +213,27 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 						</div>
 						<div className="space-y-4">
 							<div className="space-y-2">
-								<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+								<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 									Display Name
 								</label>
 								<input
-									className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+									className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 									value={displayName}
 									onChange={(event) => setDisplayName(event.target.value)}
 									placeholder="Agent label"
 								/>
 							</div>
 							<div className="space-y-2">
-								<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+								<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 									Model
 								</label>
 								<input
-									className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+									className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 									value={model}
 									onChange={(event) => setModel(event.target.value)}
 									placeholder="(Example) provider:model-name"
 								/>
-								<div className="rounded-xl border border-dashed border-black/10 bg-white/70 px-3 py-2 text-[11px] text-slate-600">
+								<div className="rounded-xl border border-dashed border-white/10 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-300">
 									<div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
 										Model Format
 									</div>
@@ -254,11 +254,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 													return (
 														<div
 															key={provider.name}
-															className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/10 bg-white/80 px-2 py-1 text-[11px]"
+															className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-[11px]"
 														>
 															<span className="pill">{provider.label}</span>
 															{example ? (
-																<span className="font-mono text-slate-600">{example}</span>
+																<span className="font-mono text-slate-300">{example}</span>
 															) : (
 																<span className="text-slate-400">example coming soon</span>
 															)}
@@ -272,11 +272,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							</div>
 						</div>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 								Description
 							</label>
 							<textarea
-								className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+								className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 								rows={2}
 								value={description}
 								onChange={(event) => setDescription(event.target.value)}
@@ -284,11 +284,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							/>
 						</div>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 								System Prompt
 							</label>
 							<textarea
-								className="w-full rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-sm"
+								className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 								rows={4}
 								value={prompt}
 								onChange={(event) => setPrompt(event.target.value)}
@@ -297,7 +297,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							/>
 						</div>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 								Tools
 							</label>
 							<div className="flex flex-wrap gap-2">
@@ -306,8 +306,8 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										key={tool}
 										type="button"
 										className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${selectedTools.includes(tool)
-											? "border-emerald-500/40 bg-emerald-100/60 text-emerald-700"
-											: "border-black/10 bg-white/80 text-slate-600"
+											? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+											: "border-white/10 bg-slate-900/60 text-slate-300"
 											}`}
 										onClick={() => toggleTool(tool)}
 									>
@@ -336,16 +336,16 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 						<div className="flex items-center justify-between">
 							<h3 className="text-lg font-semibold">Agent Topology</h3>
 							{loading ? (
-								<span className="text-xs text-slate-500">Loading...</span>
+								<span className="text-xs text-slate-400">Loading...</span>
 							) : null}
 						</div>
-						<div className="rounded-2xl border border-black/10 bg-white/80 p-4">
+						<div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
 							{selectedAgent ? (
 								<div className="space-y-2">
 									<div className="flex items-center justify-between gap-3">
 										<div>
-											<div className="text-sm font-semibold text-slate-800">{selectedAgent.displayName}</div>
-											<div className="text-xs text-slate-500">{selectedAgent.id}</div>
+											<div className="text-sm font-semibold text-slate-100">{selectedAgent.displayName}</div>
+											<div className="text-xs text-slate-400">{selectedAgent.id}</div>
 										</div>
 										<button
 											type="button"
@@ -357,10 +357,10 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										</button>
 									</div>
 									{selectedAgent.description ? (
-										<p className="text-xs text-slate-600">{selectedAgent.description}</p>
+										<p className="text-xs text-slate-300">{selectedAgent.description}</p>
 									) : null}
 									{selectedAgent.model ? (
-										<div className="text-xs text-slate-500">
+										<div className="text-xs text-slate-400">
 											Model: <span className="font-mono">{selectedAgent.model}</span>
 										</div>
 									) : null}
@@ -372,14 +372,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										))}
 									</div>
 									{selectedAgent.parentId ? (
-										<div className="text-xs text-slate-500">
+										<div className="text-xs text-slate-400">
 											Subagent of{" "}
 											<span className="font-mono">{selectedAgent.parentId}</span>
 										</div>
 									) : null}
 								</div>
 							) : (
-								<div className="text-xs text-slate-500">
+								<div className="text-xs text-slate-400">
 									Select an agent node to see details.
 								</div>
 							)}
