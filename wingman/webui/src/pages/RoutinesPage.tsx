@@ -5,8 +5,9 @@ type RoutinesPageProps = {
 	agents: ControlUiAgent[];
 	routines: Routine[];
 	threads: Thread[];
-	onCreateRoutine: (routine: Omit<Routine, "id" | "createdAt">) => void;
-	onDeleteRoutine: (id: string) => void;
+	loading: boolean;
+	onCreateRoutine: (routine: Omit<Routine, "id" | "createdAt">) => Promise<boolean>;
+	onDeleteRoutine: (id: string) => Promise<boolean>;
 };
 
 const PRESET_CRONS = [
@@ -20,6 +21,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 	agents,
 	routines,
 	threads,
+	loading,
 	onCreateRoutine,
 	onDeleteRoutine,
 }) => {
@@ -32,10 +34,10 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 
 	const canSubmit = name.trim() && cron.trim() && prompt.trim();
 
-	const handleSubmit = (event: React.FormEvent) => {
+	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
 		if (!canSubmit) return;
-		onCreateRoutine({
+		const ok = await onCreateRoutine({
 			name: name.trim(),
 			agentId,
 			cron: cron.trim(),
@@ -43,6 +45,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 			sessionId: targetSessionId || undefined,
 			enabled,
 		});
+		if (!ok) return;
 		setName("");
 		setCron("0 9 * * *");
 		setPrompt("");
@@ -208,7 +211,11 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 			<section className="space-y-6">
 				<div className="panel-card animate-rise space-y-4 p-5">
 					<h3 className="text-lg font-semibold">Scheduled Runs</h3>
-					{routines.length === 0 ? (
+					{loading ? (
+						<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-sm text-slate-500">
+							Loading routines...
+						</div>
+					) : routines.length === 0 ? (
 						<div className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-sm text-slate-500">
 							No routines created yet.
 						</div>
@@ -253,11 +260,11 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 										<span>
 											Created {new Date(routine.createdAt).toLocaleDateString()}
 										</span>
-										<button
-											type="button"
-											className="rounded-full border border-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-rose-500 transition hover:border-rose-200/60"
-											onClick={() => onDeleteRoutine(routine.id)}
-										>
+											<button
+												type="button"
+												className="rounded-full border border-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-rose-500 transition hover:border-rose-200/60"
+												onClick={() => void onDeleteRoutine(routine.id)}
+											>
 											Delete
 										</button>
 									</div>

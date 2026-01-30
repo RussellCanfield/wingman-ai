@@ -75,6 +75,7 @@ export const App: React.FC = () => {
 	const [builtInTools, setBuiltInTools] = useState<string[]>([]);
 	const [agentsLoading, setAgentsLoading] = useState<boolean>(false);
 	const [routines, setRoutines] = useState<Routine[]>([]);
+	const [routinesLoading, setRoutinesLoading] = useState<boolean>(false);
 	const [autoConnectStatus, setAutoConnectStatus] = useState<string>("");
 	const [webhooks, setWebhooks] = useState<Webhook[]>([]);
 	const [webhooksLoading, setWebhooksLoading] = useState<boolean>(false);
@@ -1027,6 +1028,23 @@ export const App: React.FC = () => {
 		}
 	}, [logEvent]);
 
+	const refreshRoutines = useCallback(async () => {
+		setRoutinesLoading(true);
+		try {
+			const res = await fetch("/api/routines");
+			if (!res.ok) {
+				logEvent("Failed to load routines");
+				return;
+			}
+			const data = (await res.json()) as Routine[];
+			setRoutines(data || []);
+		} catch {
+			logEvent("Failed to load routines");
+		} finally {
+			setRoutinesLoading(false);
+		}
+	}, [logEvent]);
+
 	const loadAgentDetail = useCallback(
 		async (agentId: string): Promise<AgentDetail | null> => {
 			try {
@@ -1088,7 +1106,15 @@ export const App: React.FC = () => {
 		refreshProviders();
 		refreshAgents();
 		refreshWebhooks();
-	}, [fetchThreads, refreshAgents, refreshProviders, refreshStats, refreshWebhooks]);
+		refreshRoutines();
+	}, [
+		fetchThreads,
+		refreshAgents,
+		refreshProviders,
+		refreshStats,
+		refreshWebhooks,
+		refreshRoutines,
+	]);
 
 	useEffect(() => {
 		if (threads.length === 0) return;
@@ -1178,23 +1204,50 @@ export const App: React.FC = () => {
 	);
 
 	const createRoutine = useCallback(
-		(routine: Omit<Routine, "id" | "createdAt">) => {
-			const id = `routine-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-			setRoutines((prev) => [
-				{
-					id,
-					createdAt: Date.now(),
-					...routine,
-				},
-				...prev,
-			]);
+		async (routine: Omit<Routine, "id" | "createdAt">) => {
+			try {
+				const res = await fetch("/api/routines", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(routine),
+				});
+				if (!res.ok) {
+					const message = await res.text();
+					logEvent(`Failed to create routine: ${message || "unknown error"}`);
+					return false;
+				}
+				await refreshRoutines();
+				logEvent(`Created routine: ${routine.name}`);
+				return true;
+			} catch {
+				logEvent("Failed to create routine");
+				return false;
+			}
 		},
-		[],
+		[logEvent, refreshRoutines],
 	);
 
-	const deleteRoutine = useCallback((id: string) => {
-		setRoutines((prev) => prev.filter((routine) => routine.id !== id));
-	}, []);
+	const deleteRoutine = useCallback(
+		async (id: string) => {
+			try {
+				const res = await fetch(`/api/routines/${encodeURIComponent(id)}`, {
+					method: "DELETE",
+				});
+				if (!res.ok) {
+					const message = await res.text();
+					logEvent(`Failed to delete routine: ${message || "unknown error"}`);
+					return false;
+				}
+				await refreshRoutines();
+				logEvent(`Deleted routine: ${id}`);
+				return true;
+			} catch {
+				logEvent("Failed to delete routine");
+				return false;
+			}
+		},
+		[logEvent, refreshRoutines],
+	);
 
 	const createWebhook = useCallback(
 		async (payload: Omit<Webhook, "createdAt" | "lastTriggeredAt">) => {
@@ -1478,18 +1531,19 @@ export const App: React.FC = () => {
 									/>
 								}
 							/>
-							<Route
-								path="/routines"
-								element={
-									<RoutinesPage
-										agents={agentOptions}
-										routines={routines}
-										threads={threads}
-										onCreateRoutine={createRoutine}
-										onDeleteRoutine={deleteRoutine}
-									/>
-								}
-							/>
+								<Route
+									path="/routines"
+									element={
+										<RoutinesPage
+											agents={agentOptions}
+											routines={routines}
+											threads={threads}
+											loading={routinesLoading}
+											onCreateRoutine={createRoutine}
+											onDeleteRoutine={deleteRoutine}
+										/>
+									}
+								/>
 							<Route
 								path="/webhooks"
 								element={

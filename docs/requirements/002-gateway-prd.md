@@ -161,7 +161,7 @@ Routines allow users to run an agent prompt on a CRON schedule. Each run creates
 
 **MVP Scope**
 - Validate CRON strings server-side.
-- Persist routines in gateway state storage.
+- Persist routines in gateway state storage (current implementation uses `routines.json` in the gateway config directory).
 - UI supports create/edit/delete and enable/disable.
 
 **Examples:**

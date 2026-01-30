@@ -35,6 +35,7 @@ import { handleFsApi } from "./http/fs.js";
 import { handleProvidersApi } from "./http/providers.js";
 import { handleSessionsApi } from "./http/sessions.js";
 import { createWebhookStore, handleWebhookInvoke, handleWebhooksApi } from "./http/webhooks.js";
+import { createRoutineStore, handleRoutinesApi } from "./http/routines.js";
 import type { GatewayHttpContext } from "./http/types.js";
 import { InternalHookRegistry } from "./hooks/registry.js";
 import { homedir } from "node:os";
@@ -84,6 +85,7 @@ export class GatewayServer {
 	private controlUiSamePort: boolean = false;
 	private uiDistDir: string | null = null;
 	private webhookStore: ReturnType<typeof createWebhookStore>;
+	private routineStore: ReturnType<typeof createRoutineStore>;
 	private internalHooks: InternalHookRegistry | null = null;
 
 	// HTTP bridge support
@@ -101,6 +103,7 @@ export class GatewayServer {
 		this.wingmanConfig = configLoader.loadConfig();
 		this.router = new GatewayRouter(this.wingmanConfig);
 		this.webhookStore = createWebhookStore(() => this.resolveConfigDirPath());
+		this.routineStore = createRoutineStore(() => this.resolveConfigDirPath());
 
 		const gatewayDefaults = this.wingmanConfig.gateway;
 		const authConfig: GatewayAuthConfig | undefined = config.auth
@@ -1206,6 +1209,7 @@ export class GatewayServer {
 
 			const apiResponse =
 				(await handleWebhooksApi(ctx, this.webhookStore, req, url)) ||
+				(await handleRoutinesApi(ctx, this.routineStore, req, url)) ||
 				(await handleAgentsApi(ctx, req, url)) ||
 				(await handleProvidersApi(ctx, req, url)) ||
 				(await handleFsApi(ctx, req, url)) ||
