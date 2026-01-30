@@ -68,3 +68,5 @@ tsconfig.tsbuildinfo
 **/.wingman/webhooks.json
 
 .tmp
+
+**/large_tool_results

@@ -59,6 +59,8 @@ export type ChatMessage = {
     role: "user" | "assistant";
     content: string;
     attachments?: ChatAttachment[];
+    toolEvents?: ToolEvent[];
+    thinkingEvents?: ThinkingEvent[];
     createdAt: number;
 };
 export type ToolEvent = {
@@ -68,6 +70,7 @@ export type ToolEvent = {
     status: "running" | "completed" | "error";
     output?: any;
     error?: string;
+    timestamp?: number;
     startedAt?: number;
     completedAt?: number;
 };

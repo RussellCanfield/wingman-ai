@@ -13,8 +13,6 @@ type ChatPageProps = {
 	connected: boolean;
 	loadingThread: boolean;
 	outputRoot?: string;
-	toolEvents: Thread["toolEvents"];
-	thinkingEvents: Thread["thinkingEvents"];
 	onPromptChange: (value: string) => void;
 	onSendPrompt: () => void;
 	onAddAttachments: (files: FileList | File[] | null) => void;
@@ -36,8 +34,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	connected,
 	loadingThread,
 	outputRoot,
-	toolEvents,
-	thinkingEvents,
 	onPromptChange,
 	onSendPrompt,
 	onAddAttachments,
@@ -82,8 +78,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 				isStreaming={isStreaming}
 				connected={connected}
 				loading={loadingThread}
-				toolEvents={toolEvents || []}
-				thinkingEvents={thinkingEvents || []}
 				onPromptChange={onPromptChange}
 				onSendPrompt={onSendPrompt}
 				onAddAttachments={onAddAttachments}

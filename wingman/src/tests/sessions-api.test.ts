@@ -5,7 +5,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-describe("sessions API", () => {
+const isBunRuntime = typeof (globalThis as any).Bun !== "undefined";
+const describeIfBun = isBunRuntime ? describe : describe.skip;
+
+describeIfBun("sessions API", () => {
 	let manager: SessionManager;
 	let tempDir: string;
 

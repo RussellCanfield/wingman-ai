@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatAttachment, Thread, ToolEvent, ThinkingEvent } from "../types";
+import type { ChatAttachment, Thread } from "../types";
 import { ThinkingPanel } from "./ThinkingPanel";
 import { extractImageFiles } from "../utils/attachments";
 
@@ -13,8 +13,6 @@ type ChatPanelProps = {
 	isStreaming: boolean;
 	connected: boolean;
 	loading: boolean;
-	toolEvents: ToolEvent[];
-	thinkingEvents: ThinkingEvent[];
 	onPromptChange: (value: string) => void;
 	onSendPrompt: () => void;
 	onAddAttachments: (files: FileList | File[] | null) => void;
@@ -38,8 +36,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	isStreaming,
 	connected,
 	loading,
-	toolEvents,
-	thinkingEvents,
 	onPromptChange,
 	onSendPrompt,
 	onAddAttachments,
@@ -116,6 +112,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		autoScrollRef.current = distanceFromBottom <= threshold;
 	};
 
+	const lastAssistantId = useMemo(() => {
+		if (!activeThread) return undefined;
+		for (let i = activeThread.messages.length - 1; i >= 0; i -= 1) {
+			const msg = activeThread.messages[i];
+			if (msg.role === "assistant") {
+				return msg.id;
+			}
+		}
+		return undefined;
+	}, [activeThread]);
+	const legacyToolEvents = activeThread?.toolEvents || [];
+	const legacyThinkingEvents = activeThread?.thinkingEvents || [];
+
 	return (
 		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-6 p-6">
 			<header className="flex flex-wrap items-center justify-between gap-4">
@@ -152,7 +161,29 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					</div>
 				) : (
 					<>
-						{activeThread.messages.map((msg) => (
+						{activeThread.messages.map((msg) => {
+							const hasLegacyEvents =
+								msg.id === lastAssistantId &&
+								(legacyToolEvents.length > 0 || legacyThinkingEvents.length > 0);
+							const toolEvents =
+								msg.toolEvents && msg.toolEvents.length > 0
+									? msg.toolEvents
+									: hasLegacyEvents
+										? legacyToolEvents
+										: [];
+							const thinkingEvents =
+								msg.thinkingEvents && msg.thinkingEvents.length > 0
+									? msg.thinkingEvents
+									: hasLegacyEvents
+										? legacyThinkingEvents
+										: [];
+							const hasNestedActivity =
+								msg.role === "assistant" &&
+								(toolEvents.length > 0 || thinkingEvents.length > 0);
+							const isActiveMessage =
+								msg.role === "assistant" && isStreaming && msg.id === lastAssistantId;
+
+							return (
 							<div
 								key={msg.id}
 								className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
@@ -172,7 +203,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
 											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:150ms]" />
 											<span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 [animation-delay:300ms]" />
-											<span>{isStreaming ? "Streaming..." : "Waiting..."}</span>
 										</div>
 									) : (
 										<ReactMarkdown
@@ -248,20 +278,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											))}
 										</div>
 									) : null}
+									{hasNestedActivity ? (
+										<div className="mt-3">
+											<ThinkingPanel
+												thinkingEvents={thinkingEvents}
+												toolEvents={toolEvents}
+												isStreaming={isActiveMessage}
+											/>
+										</div>
+									) : null}
 								</div>
 							</div>
-						))}
-						{toolEvents.length > 0 || thinkingEvents.length > 0 ? (
-							<div className="flex justify-start">
-								<div className="w-full max-w-[78%]">
-									<ThinkingPanel
-										thinkingEvents={thinkingEvents}
-										toolEvents={toolEvents}
-										isStreaming={isStreaming}
-									/>
-								</div>
-							</div>
-						) : null}
+						);
+						})}
 					</>
 				)}
 			</div>

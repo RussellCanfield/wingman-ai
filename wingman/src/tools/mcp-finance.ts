@@ -4,6 +4,18 @@ import { z } from "zod";
 import {
 	buildTechnicalSnapshot,
 } from "./finance/technicalIndicators.js";
+import {
+	DEFAULT_CANDLE_MAX_DAYS_DAILY,
+	DEFAULT_CANDLE_MAX_DAYS_INTRADAY,
+	resolveCandleRange,
+} from "./finance/candleRange.js";
+import {
+	buildYahooChartUrl,
+	extractYahooCandles,
+	mapYahooInterval,
+	type CandleSeries,
+	type YahooChartResponse,
+} from "./finance/yahooCandles.js";
 
 const DEFAULT_RATE_LIMIT_PER_MIN = 60;
 const DEFAULT_WINDOW_MS = 60_000;
@@ -13,7 +25,14 @@ const DEFAULT_BACKOFF_MAX_MS = 8_000;
 
 const FINNHUB_BASE_URL =
 	process.env.FINNHUB_BASE_URL?.trim() || "https://finnhub.io/api/v1";
+const YAHOO_FINANCE_BASE_URL =
+	process.env.YAHOO_FINANCE_BASE_URL?.trim() ||
+	"https://query1.finance.yahoo.com";
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY?.trim();
+const candleProvider =
+	process.env.FINNHUB_CANDLES_PROVIDER?.trim().toLowerCase() || "yahoo";
+const yahooIncludePrePost =
+	process.env.YAHOO_INCLUDE_PREPOST?.trim() === "1";
 
 if (!FINNHUB_API_KEY) {
 	console.error("FINNHUB_API_KEY is required to run the MCP finance server.");
@@ -63,6 +82,39 @@ const backoffBaseMs =
 const backoffMaxMs =
 	Number.parseInt(process.env.FINNHUB_BACKOFF_MAX_MS || "", 10) ||
 	DEFAULT_BACKOFF_MAX_MS;
+
+const parsePositiveInt = (value?: string): number | undefined => {
+	const parsed = Number.parseInt(value ?? "", 10);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const maxIntradayDays =
+	parsePositiveInt(process.env.FINNHUB_CANDLE_MAX_DAYS_INTRADAY) ??
+	DEFAULT_CANDLE_MAX_DAYS_INTRADAY;
+const maxDailyDays =
+	parsePositiveInt(process.env.FINNHUB_CANDLE_MAX_DAYS_DAILY) ??
+	DEFAULT_CANDLE_MAX_DAYS_DAILY;
+const candleCapSummary = `Intraday capped to ${maxIntradayDays}d; daily+ capped to ${maxDailyDays}d.`;
+const candleSourceSummary =
+	candleProvider === "finnhub"
+		? "Source: Finnhub."
+		: candleProvider === "auto"
+			? "Source: Finnhub with Yahoo fallback."
+			: "Source: Yahoo Finance (best effort).";
+const candleSessionSummary = yahooIncludePrePost
+	? "Includes pre/post market data."
+	: "Regular session only.";
+
+type FinnhubCandleResponse = {
+	c?: number[];
+	h?: number[];
+	l?: number[];
+	o?: number[];
+	t?: number[];
+	v?: number[];
+	s?: string;
+	error?: string;
+};
 
 class RateLimiter {
 	private tokens: number;
@@ -134,26 +186,6 @@ const buildUrl = (path: string, params: Record<string, string>) => {
 	return url.toString();
 };
 
-const toUnixSeconds = (date: Date) => Math.floor(date.getTime() / 1000);
-
-const resolveCandleRange = ({
-	from,
-	to,
-	lookbackDays,
-}: {
-	from?: number;
-	to?: number;
-	lookbackDays?: number;
-}) => {
-	const now = new Date();
-	const end = typeof to === "number" ? to : toUnixSeconds(now);
-	const fallbackLookback = Math.max(1, lookbackDays ?? 365);
-	const start =
-		typeof from === "number"
-			? from
-			: end - fallbackLookback * 24 * 60 * 60;
-	return { from: start, to: end };
-};
 
 const parseRetryAfter = (value: string | null): number | null => {
 	if (!value) return null;
@@ -195,10 +227,10 @@ const fetchWithBackoff = async (url: string): Promise<Response> => {
 	}
 };
 
-const fetchFinnhub = async (
+const fetchFinnhub = async <T = unknown>(
 	path: string,
 	params: Record<string, string>,
-) => {
+): Promise<T> => {
 	await rateLimiter.wait();
 	const url = buildUrl(path, params);
 	const response = await fetchWithBackoff(url);
@@ -208,7 +240,88 @@ const fetchFinnhub = async (
 		throw new Error(`Finnhub error ${response.status}: ${errorBody}`);
 	}
 
-	return await response.json();
+	return (await response.json()) as T;
+};
+
+const fetchYahooCandles = async ({
+	symbol,
+	resolution,
+	from,
+	to,
+}: {
+	symbol: string;
+	resolution?: string;
+	from: number;
+	to: number;
+}): Promise<CandleSeries> => {
+	const interval = mapYahooInterval(resolution);
+	const url = buildYahooChartUrl({
+		baseUrl: YAHOO_FINANCE_BASE_URL,
+		symbol,
+		from,
+		to,
+		interval,
+		includePrePost: yahooIncludePrePost,
+	});
+	const response = await fetchWithBackoff(url);
+
+	if (!response.ok) {
+		const errorBody = await response.text();
+		return {
+			s: "error",
+			source: "yahoo",
+			error: `Yahoo error ${response.status}: ${errorBody}`,
+		};
+	}
+
+	const payload = (await response.json()) as YahooChartResponse;
+	return extractYahooCandles(payload);
+};
+
+const isFinnhubForbidden = (error: unknown): boolean =>
+	error instanceof Error && /\b403\b/.test(error.message);
+
+const fetchCandlesWithFallback = async ({
+	symbol,
+	resolution,
+	from,
+	to,
+}: {
+	symbol: string;
+	resolution?: string;
+	from: number;
+	to: number;
+}): Promise<{ data: FinnhubCandleResponse | CandleSeries; source: "finnhub" | "yahoo" }> => {
+	if (candleProvider === "yahoo") {
+		const data = await fetchYahooCandles({ symbol, resolution, from, to });
+		return { data, source: "yahoo" };
+	}
+
+	if (candleProvider === "finnhub") {
+		const data = await fetchFinnhub<FinnhubCandleResponse>("/stock/candle", {
+			symbol,
+			resolution: resolution || "D",
+			from: String(from),
+			to: String(to),
+		});
+		return { data, source: "finnhub" };
+	}
+
+	try {
+		const data = await fetchFinnhub<FinnhubCandleResponse>("/stock/candle", {
+			symbol,
+			resolution: resolution || "D",
+			from: String(from),
+			to: String(to),
+		});
+		return { data, source: "finnhub" };
+	} catch (error) {
+		if (!isFinnhubForbidden(error)) {
+			throw error;
+		}
+		const data = await fetchYahooCandles({ symbol, resolution, from, to });
+		return { data, source: "yahoo" };
+	}
 };
 
 const toResult = (data: unknown) => ({
@@ -373,7 +486,7 @@ server.registerTool(
 	"finnhub.candles",
 	{
 		title: "Finnhub Candles",
-		description: "Get OHLCV candles for a symbol.",
+		description: `Get OHLCV candles for a symbol. ${candleCapSummary} ${candleSourceSummary} ${candleSessionSummary}`,
 		inputSchema: z.object({
 			symbol: z.string().min(1),
 			resolution: z.string().optional().default("D"),
@@ -383,14 +496,25 @@ server.registerTool(
 		}),
 	},
 	async ({ symbol, resolution, from, to, lookbackDays }) => {
-		const range = resolveCandleRange({ from, to, lookbackDays });
-		const data = await fetchFinnhub("/stock/candle", {
-			symbol,
-			resolution: resolution || "D",
-			from: String(range.from),
-			to: String(range.to),
+		const range = resolveCandleRange({
+			from,
+			to,
+			lookbackDays,
+			resolution,
+			maxIntradayDays,
+			maxDailyDays,
 		});
-		return toResult(data);
+		const { data, source } = await fetchCandlesWithFallback({
+			symbol,
+			resolution,
+			from: range.from,
+			to: range.to,
+		});
+		const result =
+			source === "yahoo" && !(data as CandleSeries).source
+				? { ...data, source }
+				: data;
+		return toResult(result);
 	},
 );
 
@@ -398,7 +522,7 @@ server.registerTool(
 	"finnhub.technicalSnapshot",
 	{
 		title: "Finnhub Technical Snapshot",
-		description: "Fetch candles and compute RSI/EMA/ATR locally.",
+		description: `Fetch candles and compute RSI/EMA/ATR locally. ${candleCapSummary} ${candleSourceSummary} ${candleSessionSummary}`,
 		inputSchema: z.object({
 			symbol: z.string().min(1),
 			resolution: z.string().optional().default("D"),
@@ -408,18 +532,27 @@ server.registerTool(
 		}),
 	},
 	async ({ symbol, resolution, from, to, lookbackDays }) => {
-		const range = resolveCandleRange({ from, to, lookbackDays });
-		const data = await fetchFinnhub("/stock/candle", {
+		const range = resolveCandleRange({
+			from,
+			to,
+			lookbackDays,
+			resolution,
+			maxIntradayDays,
+			maxDailyDays,
+		});
+		const { data, source } = await fetchCandlesWithFallback({
 			symbol,
-			resolution: resolution || "D",
-			from: String(range.from),
-			to: String(range.to),
+			resolution,
+			from: range.from,
+			to: range.to,
 		});
 
 		if (!data || data.s !== "ok" || !Array.isArray(data.c)) {
 			return toResult({
 				symbol,
+				source,
 				status: data?.s ?? "no_data",
+				error: (data as CandleSeries | FinnhubCandleResponse).error,
 				from: range.from,
 				to: range.to,
 			});
@@ -436,6 +569,7 @@ server.registerTool(
 			resolution: resolution || "D",
 			from: range.from,
 			to: range.to,
+			source,
 			status: data.s,
 			points: data.c.length,
 			lastTimestamp: data.t?.at(-1) ?? null,
@@ -467,5 +601,5 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 
 console.error(
-	`wingman-mcp-finance ready | Finnhub rate limit: ${rateLimitPerMin}/min | base: ${FINNHUB_BASE_URL}`,
+	`wingman-mcp-finance ready | Finnhub rate limit: ${rateLimitPerMin}/min | base: ${FINNHUB_BASE_URL} | candle caps: ${candleCapSummary} | candle source: ${candleProvider} | sessions: ${candleSessionSummary}`,
 );

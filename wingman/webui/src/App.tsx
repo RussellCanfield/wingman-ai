@@ -326,43 +326,47 @@ export const App: React.FC = () => {
 		setThreads((prev) =>
 			prev.map((thread) => {
 				if (thread.id !== threadId) return thread;
-				const existing = thread.toolEvents ? [...thread.toolEvents] : [];
-				for (const event of events) {
-					const index = existing.findIndex((item) => item.id === event.id);
-					if (index >= 0) {
-						const resolvedName =
-							event.name && event.name !== "tool"
-								? event.name
-								: existing[index].name;
-						existing[index] = {
-							...existing[index],
-							...event,
-							name: resolvedName,
-							startedAt: existing[index].startedAt || event.timestamp,
-							completedAt:
-								event.status === "completed" || event.status === "error"
-									? event.timestamp
-									: existing[index].completedAt,
-						};
-					} else {
-						existing.push({
-							id: event.id,
-							name: event.name,
-							args: event.args,
-							status: event.status,
-							output: event.output,
-							error: event.error,
-							startedAt: event.timestamp,
-							completedAt:
-								event.status === "completed" || event.status === "error"
-									? event.timestamp
-									: undefined,
-						});
+				const messages = thread.messages.map((msg) => {
+					if (msg.id !== requestId) return msg;
+					const existing = msg.toolEvents ? [...msg.toolEvents] : [];
+					for (const event of events) {
+						const index = existing.findIndex((item) => item.id === event.id);
+						if (index >= 0) {
+							const resolvedName =
+								event.name && event.name !== "tool"
+									? event.name
+									: existing[index].name;
+							existing[index] = {
+								...existing[index],
+								...event,
+								name: resolvedName,
+								startedAt: existing[index].startedAt || event.timestamp,
+								completedAt:
+									event.status === "completed" || event.status === "error"
+										? event.timestamp
+										: existing[index].completedAt,
+							};
+						} else {
+							existing.push({
+								id: event.id,
+								name: event.name,
+								args: event.args,
+								status: event.status,
+								output: event.output,
+								error: event.error,
+								startedAt: event.timestamp,
+								completedAt:
+									event.status === "completed" || event.status === "error"
+										? event.timestamp
+										: undefined,
+							});
+						}
 					}
-				}
+					return { ...msg, toolEvents: existing };
+				});
 				return {
 					...thread,
-					toolEvents: existing,
+					messages,
 				};
 			}),
 		);
@@ -376,21 +380,25 @@ export const App: React.FC = () => {
 			setThreads((prev) =>
 				prev.map((thread) => {
 					if (thread.id !== threadId) return thread;
-					const existing = thread.thinkingEvents ? [...thread.thinkingEvents] : [];
-					for (const event of events) {
-						const index = existing.findIndex((item) => item.id === event.id);
-						if (index >= 0) {
-							existing[index] = {
-								...existing[index],
-								...event,
-							};
-						} else {
-							existing.push(event);
+					const messages = thread.messages.map((msg) => {
+						if (msg.id !== requestId) return msg;
+						const existing = msg.thinkingEvents ? [...msg.thinkingEvents] : [];
+						for (const event of events) {
+							const index = existing.findIndex((item) => item.id === event.id);
+							if (index >= 0) {
+								existing[index] = {
+									...existing[index],
+									...event,
+								};
+							} else {
+								existing.push(event);
+							}
 						}
-					}
+						return { ...msg, thinkingEvents: existing };
+					});
 					return {
 						...thread,
-						thinkingEvents: existing,
+						messages,
 					};
 				}),
 			);
@@ -1406,8 +1414,6 @@ export const App: React.FC = () => {
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
 										outputRoot={config.outputRoot}
-										toolEvents={activeThread?.toolEvents || []}
-										thinkingEvents={activeThread?.thinkingEvents || []}
 										onPromptChange={setPrompt}
 										onSendPrompt={sendPrompt}
 										onAddAttachments={addAttachments}

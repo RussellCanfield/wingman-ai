@@ -182,7 +182,7 @@ Modern AI assistants face several challenges:
 - Persistent memory for caches, watchlists, and run state
 
 **Tools**:
-- MCP tools for domain data (e.g., Finnhub candles, news, options)
+- MCP tools for domain data (e.g., Finnhub candles, news, options); candle tools enforce conservative lookback caps (intraday default 180 days, daily default 365 days) to stay within plan limits and can fall back to Yahoo Finance chart data when Finnhub denies access
 - `think` for structured reasoning
 - Optional `web_crawler` for user-supplied URLs
 
