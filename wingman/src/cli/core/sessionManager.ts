@@ -42,7 +42,7 @@ export interface SessionMessage {
 }
 
 export interface SessionAttachment {
-	kind: "image";
+	kind: "image" | "audio";
 	dataUrl: string;
 	name?: string;
 	mimeType?: string;
@@ -620,7 +620,7 @@ function toSessionMessage(
 		return null;
 	}
 
-	const attachments = extractImageAttachments(blocks);
+	const attachments = extractAttachments(blocks);
 
 	return {
 		id: `msg-${index}`,
@@ -683,18 +683,30 @@ function extractContentBlocks(entry: any): any[] {
 	return [];
 }
 
-export function extractImageAttachments(blocks: any[]): SessionAttachment[] {
+export function extractAttachments(blocks: any[]): SessionAttachment[] {
 	const attachments: SessionAttachment[] = [];
 	for (const block of blocks) {
 		if (!block || typeof block !== "object") continue;
 		const imageUrl = extractImageUrl(block);
-		if (!imageUrl) continue;
+		if (imageUrl) {
+			attachments.push({
+				kind: "image",
+				dataUrl: imageUrl,
+			});
+			continue;
+		}
+		const audioUrl = extractAudioUrl(block);
+		if (!audioUrl) continue;
 		attachments.push({
-			kind: "image",
-			dataUrl: imageUrl,
+			kind: "audio",
+			dataUrl: audioUrl,
 		});
 	}
 	return attachments;
+}
+
+export function extractImageAttachments(blocks: any[]): SessionAttachment[] {
+	return extractAttachments(blocks).filter((attachment) => attachment.kind === "image");
 }
 
 export function extractImageUrl(block: any): string | null {
@@ -715,6 +727,51 @@ export function extractImageUrl(block: any): string | null {
 		}
 	}
 	return null;
+}
+
+function extractAudioUrl(block: any): string | null {
+	if (block.type === "audio_url") {
+		if (typeof block.audio_url === "string") return block.audio_url;
+		if (typeof block.audio_url?.url === "string") return block.audio_url.url;
+	}
+	if (block.type === "input_audio") {
+		const input = block.input_audio || block.audio;
+		const data = typeof input?.data === "string" ? input.data : null;
+		const format =
+			typeof input?.format === "string" ? input.format : undefined;
+		if (data) {
+			const mimeType = format ? resolveAudioMimeType(format) : "audio/wav";
+			return `data:${mimeType};base64,${data}`;
+		}
+	}
+	if (block.type === "audio" && block.source) {
+		const mediaType = block.source.media_type || block.source.mediaType;
+		const data = block.source.data;
+		if (mediaType && data) {
+			return `data:${mediaType};base64,${data}`;
+		}
+	}
+	return null;
+}
+
+function resolveAudioMimeType(format: string): string {
+	const normalized = format.toLowerCase();
+	switch (normalized) {
+		case "mp3":
+		case "mpeg":
+			return "audio/mpeg";
+		case "wav":
+			return "audio/wav";
+		case "m4a":
+		case "mp4":
+			return "audio/mp4";
+		case "ogg":
+			return "audio/ogg";
+		case "webm":
+			return "audio/webm";
+		default:
+			return `audio/${normalized}`;
+	}
 }
 
 function mapMessageType(type?: string): "user" | "assistant" | null {

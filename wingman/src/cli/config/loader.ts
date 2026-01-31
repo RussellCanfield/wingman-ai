@@ -91,6 +91,12 @@ export class WingmanConfigLoader {
 				provider: "duckduckgo",
 				maxResults: 5,
 			},
+			voice: {
+				provider: "web_speech",
+				defaultPolicy: "off",
+				webSpeech: {},
+				elevenlabs: {},
+			},
 			cli: {
 				theme: "default",
 				outputMode: "auto",

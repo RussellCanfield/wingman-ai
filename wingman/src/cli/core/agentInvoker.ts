@@ -37,6 +37,16 @@ export type ImageAttachment = {
 	size?: number;
 };
 
+export type AudioAttachment = {
+	kind: "audio";
+	dataUrl: string;
+	mimeType?: string;
+	name?: string;
+	size?: number;
+};
+
+export type MediaAttachment = ImageAttachment | AudioAttachment;
+
 export class AgentInvoker {
 	private loader: AgentLoader;
 	private outputManager: OutputManager;
@@ -90,7 +100,7 @@ export class AgentInvoker {
 		agentName: string,
 		prompt: string,
 		sessionId?: string,
-		attachments?: ImageAttachment[],
+		attachments?: MediaAttachment[],
 	): Promise<any> {
 		try {
 			// Find the agent
@@ -102,7 +112,9 @@ export class AgentInvoker {
 
 			this.logger.info(`Invoking agent: ${agentName}`);
 			const preview =
-				prompt.trim() || (attachments && attachments.length > 0 ? "[image]" : "");
+				prompt.trim() || (attachments && attachments.length > 0
+					? buildAttachmentPreview(attachments)
+					: "");
 			this.outputManager.emitAgentStart(agentName, preview);
 
 			this.logger.debug(
@@ -286,19 +298,36 @@ export class AgentInvoker {
 
 export function buildUserContent(
 	prompt: string,
-	attachments?: ImageAttachment[],
-): string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> {
+	attachments?: MediaAttachment[],
+): string | Array<
+	| { type: "text"; text: string }
+	| { type: "image_url"; image_url: { url: string } }
+	| { type: "input_audio"; input_audio: { data: string; format: string } }
+	| { type: "audio_url"; audio_url: { url: string } }
+> {
 	const text = prompt?.trim() ?? "";
 	if (!attachments || attachments.length === 0) {
 		return text;
 	}
 
-	const parts: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [];
+	const parts: Array<
+		| { type: "text"; text: string }
+		| { type: "image_url"; image_url: { url: string } }
+		| { type: "input_audio"; input_audio: { data: string; format: string } }
+		| { type: "audio_url"; audio_url: { url: string } }
+	> = [];
 	if (text) {
 		parts.push({ type: "text", text });
 	}
 	for (const attachment of attachments) {
 		if (!attachment?.dataUrl) continue;
+		if (isAudioAttachment(attachment)) {
+			const audioPart = buildAudioPart(attachment);
+			if (audioPart) {
+				parts.push(audioPart);
+			}
+			continue;
+		}
 		parts.push({ type: "image_url", image_url: { url: attachment.dataUrl } });
 	}
 
@@ -306,4 +335,84 @@ export function buildUserContent(
 		return text;
 	}
 	return parts;
+}
+
+function isAudioAttachment(attachment: MediaAttachment): attachment is AudioAttachment {
+	if ((attachment as AudioAttachment).kind === "audio") return true;
+	if (attachment.mimeType?.startsWith("audio/")) return true;
+	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
+	return false;
+}
+
+function buildAudioPart(
+	attachment: AudioAttachment,
+):
+	| { type: "input_audio"; input_audio: { data: string; format: string } }
+	| { type: "audio_url"; audio_url: { url: string } }
+	| null {
+	if (!attachment.dataUrl) return null;
+	const parsed = parseDataUrl(attachment.dataUrl);
+	const mimeType = attachment.mimeType || parsed.mimeType;
+	if (parsed.data) {
+		return {
+			type: "input_audio",
+			input_audio: {
+				data: parsed.data,
+				format: resolveAudioFormat(mimeType),
+			},
+		};
+	}
+	return {
+		type: "audio_url",
+		audio_url: { url: attachment.dataUrl },
+	};
+}
+
+function parseDataUrl(dataUrl: string): { mimeType?: string; data?: string } {
+	if (!dataUrl.startsWith("data:")) return {};
+	const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+	if (!match) return {};
+	return { mimeType: match[1], data: match[2] };
+}
+
+function resolveAudioFormat(mimeType?: string): string {
+	if (!mimeType) return "wav";
+	const normalized = mimeType.toLowerCase();
+	if (!normalized.startsWith("audio/")) {
+		return "wav";
+	}
+	const subtype = normalized.split("/")[1]?.split(";")[0] ?? "";
+	switch (subtype) {
+		case "mpeg":
+		case "mp3":
+			return "mp3";
+		case "wav":
+		case "x-wav":
+			return "wav";
+		case "mp4":
+		case "x-m4a":
+			return "m4a";
+		case "ogg":
+			return "ogg";
+		case "webm":
+			return "webm";
+		default:
+			return subtype || "wav";
+	}
+}
+
+function buildAttachmentPreview(attachments: MediaAttachment[]): string {
+	let hasAudio = false;
+	let hasImage = false;
+	for (const attachment of attachments) {
+		if (isAudioAttachment(attachment)) {
+			hasAudio = true;
+		} else {
+			hasImage = true;
+		}
+	}
+	if (hasAudio && hasImage) return "[attachments]";
+	if (hasAudio) return "[audio]";
+	if (hasImage) return "[image]";
+	return "";
 }

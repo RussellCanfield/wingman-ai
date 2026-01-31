@@ -10,6 +10,7 @@ import type {
 	DirectPayload,
 	ErrorPayload,
 	AgentRequestPayload,
+	MediaAttachment,
 	GatewayAuthConfig,
 } from "./types.js";
 import { NodeManager } from "./node.js";
@@ -34,6 +35,7 @@ import { SessionManager } from "@/cli/core/sessionManager.js";
 import { handleAgentsApi } from "./http/agents.js";
 import { handleFsApi } from "./http/fs.js";
 import { handleProvidersApi } from "./http/providers.js";
+import { handleVoiceApi } from "./http/voice.js";
 import { handleSessionsApi } from "./http/sessions.js";
 import { createWebhookStore, handleWebhookInvoke, handleWebhooksApi } from "./http/webhooks.js";
 import { createRoutineStore, handleRoutinesApi } from "./http/routines.js";
@@ -607,7 +609,7 @@ export class GatewayServer {
 			existingSession || sessionManager.getOrCreateSession(sessionKey, agentId);
 		const workdir = session.metadata?.workdir ?? null;
 		const defaultOutputDir = this.resolveDefaultOutputDir(agentId);
-		const preview = hasContent ? content.trim() : "Image attachment";
+		const preview = hasContent ? content.trim() : buildAttachmentPreview(attachments);
 		sessionManager.updateSession(session.id, {
 			lastMessagePreview: preview.substring(0, 200),
 		});
@@ -1263,6 +1265,7 @@ export class GatewayServer {
 							requireAuth: this.auth.isAuthRequired(),
 							defaultAgentId,
 							outputRoot: this.resolveOutputRoot(),
+							voice: this.wingmanConfig.voice,
 							agents,
 						},
 						null,
@@ -1279,6 +1282,7 @@ export class GatewayServer {
 				(await handleRoutinesApi(ctx, this.routineStore, req, url)) ||
 				(await handleAgentsApi(ctx, req, url)) ||
 				(await handleProvidersApi(ctx, req, url)) ||
+				(await handleVoiceApi(ctx, req, url)) ||
 				(await handleFsApi(ctx, req, url)) ||
 				(await handleSessionsApi(ctx, req, url));
 			if (apiResponse) {
@@ -1517,4 +1521,32 @@ export class GatewayServer {
 	private generateNodeId(): string {
 		return `node-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 	}
+}
+
+function buildAttachmentPreview(attachments: MediaAttachment[] | undefined): string {
+	if (!attachments || attachments.length === 0) return "Attachment";
+	let hasAudio = false;
+	let hasImage = false;
+	for (const attachment of attachments) {
+		if (isAudioAttachment(attachment)) {
+			hasAudio = true;
+		} else {
+			hasImage = true;
+		}
+	}
+	const count = attachments.length;
+	if (hasAudio && hasImage) {
+		return count > 1 ? "Media attachments" : "Media attachment";
+	}
+	if (hasAudio) {
+		return count > 1 ? "Audio attachments" : "Audio attachment";
+	}
+	return count > 1 ? "Image attachments" : "Image attachment";
+}
+
+function isAudioAttachment(attachment: MediaAttachment): boolean {
+	if (attachment.kind === "audio") return true;
+	if (attachment.mimeType?.startsWith("audio/")) return true;
+	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
+	return false;
 }

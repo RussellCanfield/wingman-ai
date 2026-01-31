@@ -5,6 +5,7 @@ import type { GatewayHttpContext } from "./types.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as yaml from "js-yaml";
+import { AgentVoiceConfigSchema } from "@/types/voice.js";
 
 const buildAgentMarkdown = (params: {
 	id: string;
@@ -12,24 +13,21 @@ const buildAgentMarkdown = (params: {
 	tools: string[];
 	model?: string;
 	prompt?: string;
+	voice?: Record<string, any>;
 }): string => {
-	const { id, description, tools, model, prompt } = params;
-	const safe = (value: string) => `"${value.replace(/"/g, '\\"')}"`;
-	const lines = [
-		"---",
-		`name: ${safe(id)}`,
-		description
-			? `description: ${safe(description)}`
-			: `description: ${safe("New Wingman agent")}`,
-		tools.length > 0
-			? `tools:\n${tools.map((tool) => `  - ${tool}`).join("\n")}`
-			: "tools: []",
-	];
+	const { id, description, tools, model, prompt, voice } = params;
+	const metadata: Record<string, any> = {
+		name: id,
+		description: description || "New Wingman agent",
+		tools: tools || [],
+	};
 	if (model) {
-		lines.push(`model: ${safe(model)}`);
+		metadata.model = model;
 	}
-	lines.push("---", "", prompt || "You are a Wingman agent.");
-	return lines.join("\n");
+	if (voice) {
+		metadata.voice = voice;
+	}
+	return serializeAgentMarkdown(metadata, prompt || "You are a Wingman agent.");
 };
 
 const parseAgentMarkdown = (content: string): {
@@ -80,6 +78,7 @@ export const handleAgentsApi = async (
 				description: agent.description,
 				tools: agent.tools || [],
 				model: agent.model,
+				voice: agent.voice,
 				subAgents:
 					agent.subAgents?.map((sub) => ({
 						id: sub.name,
@@ -112,7 +111,16 @@ export const handleAgentsApi = async (
 				model?: string;
 				tools?: string[];
 				prompt?: string;
+				voice?: Record<string, any>;
 			};
+			let parsedVoice: Record<string, any> | undefined;
+			if (body?.voice !== undefined && body.voice !== null) {
+				const voiceResult = AgentVoiceConfigSchema.safeParse(body.voice);
+				if (!voiceResult.success) {
+					return new Response("Invalid voice configuration", { status: 400 });
+				}
+				parsedVoice = voiceResult.data;
+			}
 
 			const id = body?.id?.trim();
 			if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
@@ -137,6 +145,7 @@ export const handleAgentsApi = async (
 				tools,
 				model: body.model,
 				prompt: body.prompt,
+				voice: parsedVoice,
 			});
 			writeFileSync(join(agentsDir, "agent.md"), agentMarkdown);
 
@@ -163,12 +172,13 @@ export const handleAgentsApi = async (
 						displayName: body.displayName || id,
 						description: body.description,
 						tools,
-						model: body.model,
-					},
-					null,
-					2,
-				),
-				{ headers: { "Content-Type": "application/json" } },
+					model: body.model,
+					voice: parsedVoice,
+				},
+				null,
+				2,
+			),
+			{ headers: { "Content-Type": "application/json" } },
 			);
 		}
 
@@ -200,6 +210,7 @@ export const handleAgentsApi = async (
 					description: agentConfig.description,
 					tools: agentConfig.tools || [],
 					model: agentConfig.model,
+					voice: agentConfig.voice,
 					prompt: agentConfig.systemPrompt,
 				},
 				null,
@@ -219,7 +230,18 @@ export const handleAgentsApi = async (
 			model?: string;
 			tools?: string[];
 			prompt?: string;
+			voice?: Record<string, any>;
 		};
+		let parsedVoice: Record<string, any> | undefined | null = undefined;
+		if (body?.voice === null) {
+			parsedVoice = null;
+		} else if (body?.voice !== undefined) {
+			const voiceResult = AgentVoiceConfigSchema.safeParse(body.voice);
+			if (!voiceResult.success) {
+				return new Response("Invalid voice configuration", { status: 400 });
+			}
+			parsedVoice = voiceResult.data;
+		}
 
 		const tools = Array.isArray(body.tools)
 			? body.tools.filter((tool) => getAvailableTools().includes(tool as any))
@@ -228,6 +250,8 @@ export const handleAgentsApi = async (
 		const nextDescription = body.description ?? agentConfig.description;
 		const nextModel = body.model ?? agentConfig.model;
 		const nextPrompt = body.prompt ?? agentConfig.systemPrompt;
+		const nextVoice =
+			parsedVoice === undefined ? agentConfig.voice : parsedVoice;
 
 		const agentsDir = join(ctx.resolveConfigDirPath(), "agents", agentId);
 		const agentJsonPath = join(agentsDir, "agent.json");
@@ -251,6 +275,11 @@ export const handleAgentsApi = async (
 				delete parsed.model;
 			}
 			parsed.systemPrompt = nextPrompt;
+			if (nextVoice) {
+				parsed.voice = nextVoice;
+			} else {
+				delete parsed.voice;
+			}
 			writeFileSync(agentJsonPath, JSON.stringify(parsed, null, 2));
 		} else if (hasMarkdown) {
 			const raw = readFileSync(agentMarkdownPath, "utf-8");
@@ -262,6 +291,11 @@ export const handleAgentsApi = async (
 				metadata.model = nextModel;
 			} else {
 				delete metadata.model;
+			}
+			if (nextVoice) {
+				metadata.voice = nextVoice;
+			} else {
+				delete metadata.voice;
 			}
 			const updatedMarkdown = serializeAgentMarkdown(metadata, nextPrompt);
 			writeFileSync(agentMarkdownPath, updatedMarkdown);
@@ -293,6 +327,7 @@ export const handleAgentsApi = async (
 					description: nextDescription,
 					tools,
 					model: nextModel,
+					voice: nextVoice,
 					prompt: nextPrompt,
 				},
 				null,

@@ -352,6 +352,10 @@ Users can define custom agents via JSON or Markdown configuration files without 
   "systemPrompt": "Detailed instructions defining agent behavior",
   "tools": ["command_execute", "think"],
   "model": "anthropic:claude-sonnet-4-5",
+  "voice": {
+    "provider": "elevenlabs",
+    "elevenlabs": { "voiceId": "voice-id" }
+  },
   "blockedCommands": ["rm", "mv"],
   "allowScriptExecution": true,
   "commandTimeout": 300000,
@@ -368,6 +372,10 @@ tools:
   - command_execute
   - think
 model: anthropic:claude-sonnet-4-5
+voice:
+  provider: elevenlabs
+  elevenlabs:
+    voiceId: voice-id
 subAgents:
   - name: helper
     description: Focused subagent
@@ -382,6 +390,7 @@ Notes:
 - `agent.md` uses YAML frontmatter with the same schema as JSON plus `promptFile` for subagents.
 - `promptFile` is resolved relative to the agent directory and is inlined into `systemPrompt`.
 - `subagents` (lowercase) is accepted for backward compatibility but normalized to `subAgents`.
+- `voice` can override the gateway default TTS provider and settings for this agent.
 
 ### Available Tools
 - `internet_search`: Web search (Tavily or DuckDuckGo)

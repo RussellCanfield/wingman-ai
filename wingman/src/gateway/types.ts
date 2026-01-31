@@ -53,17 +53,27 @@ export interface GatewayAuthPayload {
 }
 
 export interface ImageAttachment {
-	kind: "image";
+	kind?: "image";
 	dataUrl: string;
 	mimeType?: string;
 	name?: string;
 	size?: number;
 }
 
+export interface AudioAttachment {
+	kind: "audio";
+	dataUrl: string;
+	mimeType?: string;
+	name?: string;
+	size?: number;
+}
+
+export type MediaAttachment = ImageAttachment | AudioAttachment;
+
 export interface AgentRequestPayload {
 	agentId?: string;
 	content?: string;
-	attachments?: ImageAttachment[];
+	attachments?: MediaAttachment[];
 	routing?: RoutingInfo;
 	sessionKey?: string;
 }

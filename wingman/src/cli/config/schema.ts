@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HooksConfigSchema } from "@/agent/middleware/hooks/types.js";
 import { InternalHooksConfigSchema } from "@/gateway/hooks/types.js";
 import { MCPServersConfigSchema } from "@/types/mcp.js";
+import { VoiceConfigSchema } from "@/types/voice.js";
 
 // Zod schema for search configuration
 export const SearchConfigSchema = z.object({
@@ -187,6 +188,12 @@ export const WingmanConfigSchema = z.object({
 	search: SearchConfigSchema.optional().default({
 		provider: "duckduckgo",
 		maxResults: 5,
+	}),
+	voice: VoiceConfigSchema.optional().default({
+		provider: "web_speech",
+		defaultPolicy: "off",
+		webSpeech: {},
+		elevenlabs: {},
 	}),
 	cli: z
 		.object({

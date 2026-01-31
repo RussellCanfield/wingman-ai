@@ -60,9 +60,9 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 		<section className="panel-card animate-rise space-y-4 p-5">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<h3 className="text-lg font-semibold">LLM Providers</h3>
+					<h3 className="text-lg font-semibold">Providers</h3>
 					<p className="text-xs text-slate-400">
-						Manage API keys for model providers used by your agents.
+						Manage API keys for model and voice providers.
 					</p>
 				</div>
 				<button className="button-ghost" type="button" onClick={onRefresh}>

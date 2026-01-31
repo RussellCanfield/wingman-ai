@@ -13,6 +13,8 @@ import type {
 	AgentDetail,
 	ProviderStatus,
 	ProviderStatusResponse,
+	AgentVoiceConfig,
+	VoiceConfig,
 	ToolEvent,
 	ThinkingEvent,
 	Thread,
@@ -28,14 +30,23 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { RoutinesPage } from "./pages/RoutinesPage";
 import { WebhooksPage } from "./pages/WebhooksPage";
 import { buildRoutineAgents } from "./utils/agentOptions";
+import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./utils/voice";
 import wingmanIcon from "./assets/wingman_icon.webp";
 import wingmanLogo from "./assets/wingman_logo.webp";
+
+const DEFAULT_VOICE_CONFIG: VoiceConfig = {
+	provider: "web_speech",
+	defaultPolicy: "off",
+	webSpeech: {},
+	elevenlabs: {},
+};
 
 const DEFAULT_CONFIG: ControlUiConfig = {
 	gatewayHost: "127.0.0.1",
 	gatewayPort: 18789,
 	requireAuth: false,
 	outputRoot: "",
+	voice: DEFAULT_VOICE_CONFIG,
 	agents: [],
 };
 
@@ -45,6 +56,7 @@ const DEVICE_KEY = "wingman_webui_device";
 const AUTO_CONNECT_KEY = "wingman_webui_autoconnect";
 const DEFAULT_THREAD_NAME = "New Thread";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 const MAX_ATTACHMENTS = 6;
 
 export const App: React.FC = () => {
@@ -84,6 +96,11 @@ export const App: React.FC = () => {
 	const [autoConnectStatus, setAutoConnectStatus] = useState<string>("");
 	const [webhooks, setWebhooks] = useState<Webhook[]>([]);
 	const [webhooksLoading, setWebhooksLoading] = useState<boolean>(false);
+	const [voiceSessions, setVoiceSessions] = useState<Record<string, boolean>>({});
+	const [voicePlayback, setVoicePlayback] = useState<{
+		status: "idle" | "loading" | "playing";
+		messageId?: string;
+	}>({ status: "idle" });
 
 	const wsRef = useRef<WebSocket | null>(null);
 	const connectRequestIdRef = useRef<string | null>(null);
@@ -91,6 +108,10 @@ export const App: React.FC = () => {
 	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(new Map());
 	const requestThreadRef = useRef<Map<string, string>>(new Map());
 	const requestAgentRef = useRef<Map<string, string>>(new Map());
+	const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+	const voiceUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+	const voiceAbortRef = useRef<AbortController | null>(null);
+	const spokenMessagesRef = useRef<Map<string, Set<string>>>(new Map());
 	const autoConnectAttemptsRef = useRef<number>(0);
 	const autoConnectTimerRef = useRef<number | null>(null);
 	const autoConnectFailureRef = useRef<boolean>(false);
@@ -113,6 +134,14 @@ export const App: React.FC = () => {
 				if (subagent.displayName) set.add(normalizeName(subagent.displayName));
 			}
 			map.set(agent.id, set);
+		}
+		return map;
+	}, [agentCatalog]);
+
+	const agentVoiceMap = useMemo(() => {
+		const map = new Map<string, AgentVoiceConfig | undefined>();
+		for (const agent of agentCatalog) {
+			map.set(agent.id, agent.voice);
 		}
 		return map;
 	}, [agentCatalog]);
@@ -270,18 +299,23 @@ export const App: React.FC = () => {
 		const next: ChatAttachment[] = [];
 
 		for (const file of selected) {
-			if (!file.type.startsWith("image/")) {
-				setAttachmentError("Only image files are supported.");
+			const isImage = file.type.startsWith("image/");
+			const isAudio = file.type.startsWith("audio/");
+			if (!isImage && !isAudio) {
+				setAttachmentError("Only image or audio files are supported.");
 				continue;
 			}
-			if (file.size > MAX_IMAGE_BYTES) {
-				setAttachmentError("Image is too large. Max size is 8MB.");
+			const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_AUDIO_BYTES;
+			if (file.size > maxBytes) {
+				setAttachmentError(
+					isImage ? "Image is too large. Max size is 8MB." : "Audio is too large. Max size is 20MB.",
+				);
 				continue;
 			}
 			const dataUrl = await readFileAsDataUrl(file);
 			next.push({
 				id: createAttachmentId(),
-				kind: "image",
+				kind: isAudio ? "audio" : "image",
 				dataUrl,
 				name: file.name,
 				mimeType: file.type,
@@ -292,7 +326,7 @@ export const App: React.FC = () => {
 		setAttachments((prev) => {
 			const combined = [...prev, ...next];
 			if (combined.length > MAX_ATTACHMENTS) {
-				setAttachmentError(`Limit is ${MAX_ATTACHMENTS} images per message.`);
+				setAttachmentError(`Limit is ${MAX_ATTACHMENTS} attachments per message.`);
 				return combined.slice(0, MAX_ATTACHMENTS);
 			}
 			return combined;
@@ -307,6 +341,185 @@ export const App: React.FC = () => {
 		setAttachments([]);
 		setAttachmentError("");
 	}, []);
+
+	const isVoiceAutoEnabled = useCallback(
+		(threadId: string) => {
+			const stored = voiceSessions[threadId];
+			if (stored !== undefined) return stored;
+			return (config.voice?.defaultPolicy || "off") === "auto";
+		},
+		[config.voice?.defaultPolicy, voiceSessions],
+	);
+
+	const toggleVoiceAuto = useCallback(
+		(threadId: string) => {
+			setVoiceSessions((prev) => {
+				const current =
+					prev[threadId] ??
+					((config.voice?.defaultPolicy || "off") === "auto");
+				return { ...prev, [threadId]: !current };
+			});
+		},
+		[config.voice?.defaultPolicy],
+	);
+
+	const stopVoicePlayback = useCallback(() => {
+		if (voiceAbortRef.current) {
+			voiceAbortRef.current.abort();
+			voiceAbortRef.current = null;
+		}
+		if (voiceAudioRef.current) {
+			if (voiceAudioRef.current.src.startsWith("blob:")) {
+				URL.revokeObjectURL(voiceAudioRef.current.src);
+			}
+			voiceAudioRef.current.pause();
+			voiceAudioRef.current.src = "";
+			voiceAudioRef.current = null;
+		}
+		if (voiceUtteranceRef.current) {
+			if ("speechSynthesis" in window) {
+				window.speechSynthesis.cancel();
+			}
+			voiceUtteranceRef.current = null;
+		}
+		setVoicePlayback({ status: "idle" });
+	}, []);
+
+	const speakVoice = useCallback(
+		async (input: {
+			messageId: string;
+			text: string;
+			agentId?: string;
+		}) => {
+			const { messageId, text, agentId } = input;
+			const cleaned = sanitizeForSpeech(text);
+			if (!cleaned) return;
+			const resolved = resolveVoiceConfig(config.voice, agentId ? agentVoiceMap.get(agentId) : undefined);
+
+			stopVoicePlayback();
+
+			if (resolved.provider === "web_speech") {
+				if (!("speechSynthesis" in window)) {
+					logEvent("Speech synthesis is not supported in this browser.");
+					return;
+				}
+				const utterance = new SpeechSynthesisUtterance(cleaned);
+				const voice = resolveSpeechVoice(resolved.webSpeech.voiceName, resolved.webSpeech.lang);
+				if (voice) {
+					utterance.voice = voice;
+				}
+				if (resolved.webSpeech.lang) {
+					utterance.lang = resolved.webSpeech.lang;
+				}
+				if (typeof resolved.webSpeech.rate === "number") {
+					utterance.rate = resolved.webSpeech.rate;
+				}
+				if (typeof resolved.webSpeech.pitch === "number") {
+					utterance.pitch = resolved.webSpeech.pitch;
+				}
+				if (typeof resolved.webSpeech.volume === "number") {
+					utterance.volume = resolved.webSpeech.volume;
+				}
+				utterance.onend = () => {
+					setVoicePlayback({ status: "idle" });
+				};
+				utterance.onerror = () => {
+					logEvent("Voice playback failed.");
+					setVoicePlayback({ status: "idle" });
+				};
+				voiceUtteranceRef.current = utterance;
+				setVoicePlayback({ status: "playing", messageId });
+				window.speechSynthesis.speak(utterance);
+				return;
+			}
+
+			if (resolved.provider === "elevenlabs") {
+				if (!resolved.elevenlabs.voiceId) {
+					logEvent("ElevenLabs voiceId is not configured.");
+					return;
+				}
+				const controller = new AbortController();
+				voiceAbortRef.current = controller;
+				setVoicePlayback({ status: "loading", messageId });
+				try {
+					const res = await fetch("/api/voice/speak", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							text: cleaned,
+							agentId,
+						}),
+						signal: controller.signal,
+					});
+					if (!res.ok) {
+						const errorText = await res.text();
+						logEvent(`Voice request failed: ${errorText || res.statusText}`);
+						setVoicePlayback({ status: "idle" });
+						return;
+					}
+					const blob = await res.blob();
+					const url = URL.createObjectURL(blob);
+					const audio = new Audio(url);
+					voiceAudioRef.current = audio;
+					audio.onended = () => {
+						URL.revokeObjectURL(url);
+						setVoicePlayback({ status: "idle" });
+					};
+					audio.onerror = () => {
+						URL.revokeObjectURL(url);
+						logEvent("Voice playback failed.");
+						setVoicePlayback({ status: "idle" });
+					};
+					const playPromise = audio.play();
+					if (playPromise) {
+						await playPromise;
+					}
+					setVoicePlayback({ status: "playing", messageId });
+				} catch (error) {
+					if ((error as Error)?.name !== "AbortError") {
+						logEvent("Voice playback failed.");
+					}
+					setVoicePlayback({ status: "idle" });
+				} finally {
+					voiceAbortRef.current = null;
+				}
+			}
+		},
+		[agentVoiceMap, config.voice, logEvent, stopVoicePlayback],
+	);
+
+	const activeVoiceAutoEnabled = activeThread
+		? isVoiceAutoEnabled(activeThread.id)
+		: false;
+
+	const handleToggleVoiceAuto = useCallback(() => {
+		if (!activeThread) return;
+		const next = !isVoiceAutoEnabled(activeThread.id);
+		toggleVoiceAuto(activeThread.id);
+		if (!next) {
+			stopVoicePlayback();
+		}
+	}, [activeThread, isVoiceAutoEnabled, stopVoicePlayback, toggleVoiceAuto]);
+
+	const handleSpeakVoice = useCallback(
+		(messageId: string, text: string) => {
+			if (!activeThread) return;
+			void speakVoice({
+				messageId,
+				text,
+				agentId: activeThread.agentId,
+			});
+		},
+		[activeThread, speakVoice],
+	);
+
+	const handleStopVoice = useCallback(() => {
+		stopVoicePlayback();
+	}, [stopVoicePlayback]);
+
+	useEffect(() => {
+		stopVoicePlayback();
+	}, [activeThreadId, stopVoicePlayback]);
 
 	const updateAssistant = useCallback((requestId: string, text: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
@@ -415,6 +628,20 @@ export const App: React.FC = () => {
 	const finalizeAssistant = useCallback((requestId: string, fallback?: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
 		if (!threadId) return;
+		const finalText = buffersRef.current.get(requestId) || fallback || "";
+		if (finalText.trim() && isVoiceAutoEnabled(threadId)) {
+			const spoken = spokenMessagesRef.current.get(threadId) || new Set<string>();
+			if (!spoken.has(requestId)) {
+				spoken.add(requestId);
+				spokenMessagesRef.current.set(threadId, spoken);
+				const agentForRequest = requestAgentRef.current.get(requestId);
+				void speakVoice({
+					messageId: requestId,
+					text: finalText,
+					agentId: agentForRequest,
+				});
+			}
+		}
 		setThreads((prev) =>
 			prev.map((thread) => {
 				if (thread.id !== threadId) return thread;
@@ -435,7 +662,7 @@ export const App: React.FC = () => {
 		requestThreadRef.current.delete(requestId);
 		requestAgentRef.current.delete(requestId);
 		setIsStreaming(false);
-	}, []);
+	}, [isVoiceAutoEnabled, speakVoice]);
 
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
@@ -722,6 +949,7 @@ export const App: React.FC = () => {
 		const requestId = `req-${Date.now()}`;
 		const now = Date.now();
 		const userMessageText = prompt.trim();
+		const attachmentPreview = buildAttachmentPreviewText(attachments);
 		const userMessage: ChatMessage = {
 			id: `user-${now}`,
 			role: "user",
@@ -742,11 +970,11 @@ export const App: React.FC = () => {
 						...thread,
 						name:
 							thread.name === DEFAULT_THREAD_NAME
-								? (userMessage.content || "Image attachment").slice(0, 32)
+								? (userMessage.content || attachmentPreview).slice(0, 32)
 								: thread.name,
 						messages: [...thread.messages, userMessage, assistantMessage],
 						messageCount: (thread.messageCount ?? thread.messages.length) + 1,
-						lastMessagePreview: (userMessage.content || "Image attachment").slice(0, 200),
+						lastMessagePreview: (userMessage.content || attachmentPreview).slice(0, 200),
 						updatedAt: now,
 						thinkingEvents: [],
 					}
@@ -797,6 +1025,7 @@ export const App: React.FC = () => {
 			logEvent("Wait for the current response to finish");
 			return;
 		}
+		stopVoicePlayback();
 		try {
 			const params = new URLSearchParams({ agentId: activeThread.agentId });
 			const res = await fetch(
@@ -826,7 +1055,7 @@ export const App: React.FC = () => {
 					: thread,
 			),
 		);
-	}, [activeThread, isStreaming, logEvent]);
+	}, [activeThread, isStreaming, logEvent, stopVoicePlayback]);
 
 	const deleteThread = useCallback(
 		async (threadId: string) => {
@@ -845,12 +1074,20 @@ export const App: React.FC = () => {
 				logEvent("Failed to delete session");
 			}
 			setThreads((prev) => prev.filter((thread) => thread.id !== threadId));
+			setVoiceSessions((prev) => {
+				if (!prev[threadId]) return prev;
+				const next = { ...prev };
+				delete next[threadId];
+				return next;
+			});
+			spokenMessagesRef.current.delete(threadId);
 			if (activeThreadId === threadId) {
 				const remaining = threads.filter((thread) => thread.id !== threadId);
 				setActiveThreadId(remaining[0]?.id || "");
+				stopVoicePlayback();
 			}
 		},
-		[activeThread?.id, activeThreadId, isStreaming, logEvent, threads],
+		[activeThread?.id, activeThreadId, isStreaming, logEvent, stopVoicePlayback, threads],
 	);
 
 	const renameThread = useCallback(
@@ -987,11 +1224,42 @@ export const App: React.FC = () => {
 			const res = await fetch("/api/config");
 			if (!res.ok) return;
 			const data = (await res.json()) as ControlUiConfig;
-			setConfig(data);
+			setConfig({
+				...data,
+				voice: data.voice || DEFAULT_VOICE_CONFIG,
+			});
 		} catch {
 			logEvent("Failed to load gateway config");
 		}
 	}, [logEvent]);
+
+	const updateVoiceConfig = useCallback(
+		async (voice: Partial<VoiceConfig>) => {
+			try {
+				const res = await fetch("/api/voice", {
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(voice),
+				});
+				if (!res.ok) {
+					const message = await res.text();
+					logEvent(`Failed to update voice config: ${message || "unknown error"}`);
+					return false;
+				}
+				const data = (await res.json()) as { voice?: VoiceConfig };
+				setConfig((prev) => ({
+					...prev,
+					voice: data.voice || prev.voice || DEFAULT_VOICE_CONFIG,
+				}));
+				logEvent("Updated voice configuration");
+				return true;
+			} catch {
+				logEvent("Failed to update voice config");
+				return false;
+			}
+		},
+		[logEvent],
+	);
 
 	useEffect(() => {
 		refreshConfig();
@@ -1190,6 +1458,7 @@ export const App: React.FC = () => {
 			model?: string;
 			tools: string[];
 			prompt?: string;
+			voice?: AgentVoiceConfig | null;
 		}) => {
 			try {
 				const res = await fetch("/api/agents", {
@@ -1223,6 +1492,7 @@ export const App: React.FC = () => {
 				model?: string;
 				tools: string[];
 				prompt?: string;
+				voice?: AgentVoiceConfig | null;
 			},
 		) => {
 			try {
@@ -1617,6 +1887,11 @@ export const App: React.FC = () => {
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
 										outputRoot={config.outputRoot}
+										voiceAutoEnabled={activeVoiceAutoEnabled}
+										voicePlayback={voicePlayback}
+										onToggleVoiceAuto={handleToggleVoiceAuto}
+										onSpeakVoice={handleSpeakVoice}
+										onStopVoice={handleStopVoice}
 										onPromptChange={setPrompt}
 										onSendPrompt={sendPrompt}
 										onAddAttachments={addAttachments}
@@ -1646,6 +1921,7 @@ export const App: React.FC = () => {
 										providersLoading={providersLoading}
 										providersUpdatedAt={providersUpdatedAt}
 										credentialsPath={credentialsPath}
+										voiceConfig={config.voice}
 										autoConnect={autoConnect}
 										onAutoConnectChange={setAutoConnect}
 										onWsUrlChange={setWsUrl}
@@ -1662,6 +1938,7 @@ export const App: React.FC = () => {
 										onRefreshProviders={refreshProviders}
 										onSaveProviderToken={saveProviderToken}
 										onClearProviderToken={clearProviderToken}
+										onSaveVoiceConfig={updateVoiceConfig}
 									/>
 								}
 							/>
@@ -1769,4 +2046,32 @@ function readFileAsDataUrl(file: File): Promise<string> {
 		reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
 		reader.readAsDataURL(file);
 	});
+}
+
+function buildAttachmentPreviewText(attachments: ChatAttachment[]): string {
+	if (!attachments || attachments.length === 0) return "";
+	let hasAudio = false;
+	let hasImage = false;
+	for (const attachment of attachments) {
+		if (isAudioAttachment(attachment)) {
+			hasAudio = true;
+		} else {
+			hasImage = true;
+		}
+	}
+	const count = attachments.length;
+	if (hasAudio && hasImage) {
+		return count > 1 ? "Media attachments" : "Media attachment";
+	}
+	if (hasAudio) {
+		return count > 1 ? "Audio attachments" : "Audio attachment";
+	}
+	return count > 1 ? "Image attachments" : "Image attachment";
+}
+
+function isAudioAttachment(attachment: ChatAttachment): boolean {
+	if (attachment.kind === "audio") return true;
+	if (attachment.mimeType?.startsWith("audio/")) return true;
+	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
+	return false;
 }

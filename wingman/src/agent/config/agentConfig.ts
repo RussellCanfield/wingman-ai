@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HooksConfigSchema } from "@/agent/middleware/hooks/types.js";
 import { MCPServersConfigSchema } from "@/types/mcp.js";
+import { AgentVoiceConfigSchema } from "@/types/voice.js";
 
 export const WingmanDirectory = ".wingman";
 
@@ -76,6 +77,9 @@ const BaseAgentConfigSchema = z.object({
 		.describe(
 			"Whether this agent should also load global MCP servers from wingman.config.json",
 		),
+	voice: AgentVoiceConfigSchema.optional().describe(
+		"Agent-specific voice configuration",
+	),
 });
 
 export const AgentConfigSchema = BaseAgentConfigSchema.extend({

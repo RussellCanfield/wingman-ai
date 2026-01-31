@@ -735,7 +735,7 @@ async function resolveProviderSelection(input: {
 		return undefined;
 	}
 
-	const providers = listProviderSpecs();
+	const providers = listProviderSpecs("model");
 	const options = [
 		{ value: "__skip__", label: "Skip for now" },
 		...providers.map((provider) => ({
@@ -779,7 +779,7 @@ async function resolveModelSelection(input: {
 		return explicitModel;
 	}
 
-	const providers = listProviderSpecs();
+	const providers = listProviderSpecs("model");
 	const configuredProvider = providers.find(
 		(provider) => resolveProviderToken(provider.name).source !== "missing",
 	);

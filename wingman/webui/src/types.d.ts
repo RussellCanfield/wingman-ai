@@ -3,12 +3,44 @@ export type ControlUiAgent = {
     name?: string;
     default?: boolean;
 };
+export type VoiceProvider = "web_speech" | "elevenlabs";
+export type VoicePolicy = "off" | "manual" | "auto";
+export type WebSpeechOptions = {
+    voiceName?: string;
+    lang?: string;
+    rate?: number;
+    pitch?: number;
+    volume?: number;
+};
+export type ElevenLabsOptions = {
+    voiceId?: string;
+    modelId?: string;
+    stability?: number;
+    similarityBoost?: number;
+    style?: number;
+    speakerBoost?: boolean;
+    speed?: number;
+    outputFormat?: string;
+    optimizeStreamingLatency?: number;
+};
+export type VoiceConfig = {
+    provider: VoiceProvider;
+    defaultPolicy?: VoicePolicy;
+    webSpeech?: WebSpeechOptions;
+    elevenlabs?: ElevenLabsOptions;
+};
+export type AgentVoiceConfig = {
+    provider?: VoiceProvider;
+    webSpeech?: WebSpeechOptions;
+    elevenlabs?: ElevenLabsOptions;
+};
 export type AgentSummary = {
     id: string;
     displayName: string;
     description?: string;
     tools: string[];
     model?: string;
+    voice?: AgentVoiceConfig;
     subAgents?: Array<{
         id: string;
         displayName: string;
@@ -16,6 +48,15 @@ export type AgentSummary = {
         tools: string[];
         model?: string;
     }>;
+};
+export type AgentDetail = {
+    id: string;
+    displayName: string;
+    description?: string;
+    tools: string[];
+    model?: string;
+    voice?: AgentVoiceConfig;
+    prompt: string;
 };
 export type AgentsResponse = {
     agents: AgentSummary[];
@@ -28,6 +69,7 @@ export type ControlUiConfig = {
     requireAuth: boolean;
     defaultAgentId?: string;
     outputRoot?: string;
+    voice?: VoiceConfig;
     agents: ControlUiAgent[];
 };
 export type GatewayMessage = {
@@ -48,7 +90,7 @@ export type GatewayMessage = {
 };
 export type ChatAttachment = {
     id: string;
-    kind: "image";
+    kind: "image" | "audio";
     dataUrl: string;
     name?: string;
     mimeType?: string;
@@ -135,8 +177,10 @@ export type ProviderStatus = {
     label: string;
     type: "api-key" | "oauth";
     envVars: string[];
+    category?: "model" | "voice";
     source: "env" | "credentials" | "missing";
     envVar?: string;
+    requiresAuth?: boolean;
 };
 export type ProviderStatusResponse = {
     providers: ProviderStatus[];

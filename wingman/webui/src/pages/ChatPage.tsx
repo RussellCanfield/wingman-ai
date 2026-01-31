@@ -13,6 +13,11 @@ type ChatPageProps = {
 	connected: boolean;
 	loadingThread: boolean;
 	outputRoot?: string;
+	voiceAutoEnabled: boolean;
+	voicePlayback: { status: "idle" | "loading" | "playing"; messageId?: string };
+	onToggleVoiceAuto: () => void;
+	onSpeakVoice: (messageId: string, text: string) => void;
+	onStopVoice: () => void;
 	onPromptChange: (value: string) => void;
 	onSendPrompt: () => void;
 	onAddAttachments: (files: FileList | File[] | null) => void;
@@ -34,6 +39,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	connected,
 	loadingThread,
 	outputRoot,
+	voiceAutoEnabled,
+	voicePlayback,
+	onToggleVoiceAuto,
+	onSpeakVoice,
+	onStopVoice,
 	onPromptChange,
 	onSendPrompt,
 	onAddAttachments,
@@ -78,6 +88,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 				isStreaming={isStreaming}
 				connected={connected}
 				loading={loadingThread}
+				voiceAutoEnabled={voiceAutoEnabled}
+				voicePlayback={voicePlayback}
+				onToggleVoiceAuto={onToggleVoiceAuto}
+				onSpeakVoice={onSpeakVoice}
+				onStopVoice={onStopVoice}
 				onPromptChange={onPromptChange}
 				onSendPrompt={onSendPrompt}
 				onAddAttachments={onAddAttachments}

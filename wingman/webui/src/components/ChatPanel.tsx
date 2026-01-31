@@ -2,6 +2,7 @@ import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { FiLoader, FiMic, FiStopCircle, FiVolume2 } from "react-icons/fi";
 import type { ChatAttachment, Thread } from "../types";
 import { extractImageFiles } from "../utils/attachments";
 import { ThinkingPanel } from "./ThinkingPanel";
@@ -14,6 +15,11 @@ type ChatPanelProps = {
 	isStreaming: boolean;
 	connected: boolean;
 	loading: boolean;
+	voiceAutoEnabled: boolean;
+	voicePlayback: { status: "idle" | "loading" | "playing"; messageId?: string };
+	onToggleVoiceAuto: () => void;
+	onSpeakVoice: (messageId: string, text: string) => void;
+	onStopVoice: () => void;
 	onPromptChange: (value: string) => void;
 	onSendPrompt: () => void;
 	onAddAttachments: (files: FileList | File[] | null) => void;
@@ -37,6 +43,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	isStreaming,
 	connected,
 	loading,
+	voiceAutoEnabled,
+	voicePlayback,
+	onToggleVoiceAuto,
+	onSpeakVoice,
+	onStopVoice,
 	onPromptChange,
 	onSendPrompt,
 	onAddAttachments,
@@ -48,10 +59,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const autoScrollRef = useRef<boolean>(true);
+	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+	const mediaStreamRef = useRef<MediaStream | null>(null);
+	const recordChunksRef = useRef<Blob[]>([]);
+	const recordTimerRef = useRef<number | null>(null);
+	const recordStartRef = useRef<number>(0);
+	const recordingCancelledRef = useRef(false);
+	const audioContextRef = useRef<AudioContext | null>(null);
+	const analyserRef = useRef<AnalyserNode | null>(null);
+	const analyserDataRef = useRef<Uint8Array | null>(null);
+	const analyserRafRef = useRef<number | null>(null);
 	const [previewAttachment, setPreviewAttachment] =
 		useState<ChatAttachment | null>(null);
+	const [recording, setRecording] = useState(false);
+	const [recordingDuration, setRecordingDuration] = useState(0);
+	const [recordingError, setRecordingError] = useState("");
+	const [inputLevel, setInputLevel] = useState(0);
 	const canSend =
-		connected && !isStreaming && (prompt.trim() || attachments.length > 0);
+		connected && !isStreaming && !recording && (prompt.trim() || attachments.length > 0);
 
 	useEffect(() => {
 		const el = scrollRef.current;
@@ -76,9 +101,166 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [previewAttachment]);
 
+	useEffect(() => {
+		return () => {
+			recordingCancelledRef.current = true;
+			if (recordTimerRef.current !== null) {
+				window.clearInterval(recordTimerRef.current);
+				recordTimerRef.current = null;
+			}
+			stopAudioMeter();
+			if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+				mediaRecorderRef.current.stop();
+			}
+			if (mediaStreamRef.current) {
+				for (const track of mediaStreamRef.current.getTracks()) {
+					track.stop();
+				}
+				mediaStreamRef.current = null;
+			}
+		};
+	}, []);
+
+	const startAudioMeter = (stream: MediaStream) => {
+		stopAudioMeter();
+		const AudioContextCtor =
+			window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+		if (!AudioContextCtor) return;
+		const audioContext = new AudioContextCtor();
+		const analyser = audioContext.createAnalyser();
+		analyser.fftSize = 256;
+		const source = audioContext.createMediaStreamSource(stream);
+		source.connect(analyser);
+		const data = new Uint8Array(analyser.fftSize);
+		audioContextRef.current = audioContext;
+		analyserRef.current = analyser;
+		analyserDataRef.current = data;
+
+		const tick = () => {
+			if (!analyserRef.current || !analyserDataRef.current) return;
+			analyserRef.current.getByteTimeDomainData(analyserDataRef.current);
+			let sumSquares = 0;
+			for (let i = 0; i < analyserDataRef.current.length; i += 1) {
+				const normalized = (analyserDataRef.current[i] - 128) / 128;
+				sumSquares += normalized * normalized;
+			}
+			const rms = Math.sqrt(sumSquares / analyserDataRef.current.length);
+			setInputLevel(rms);
+			analyserRafRef.current = window.requestAnimationFrame(tick);
+		};
+
+		analyserRafRef.current = window.requestAnimationFrame(tick);
+	};
+
+	const stopAudioMeter = () => {
+		if (analyserRafRef.current !== null) {
+			window.cancelAnimationFrame(analyserRafRef.current);
+			analyserRafRef.current = null;
+		}
+		if (audioContextRef.current) {
+			audioContextRef.current.close();
+			audioContextRef.current = null;
+		}
+		analyserRef.current = null;
+		analyserDataRef.current = null;
+		setInputLevel(0);
+	};
+
+	const startRecording = async () => {
+		if (recording || isStreaming) return;
+		setRecordingError("");
+		recordingCancelledRef.current = false;
+		if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+			setRecordingError("Audio recording is not supported in this browser.");
+			return;
+		}
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			const mimeType = pickSupportedAudioMimeType();
+			const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+			mediaStreamRef.current = stream;
+			mediaRecorderRef.current = recorder;
+			recordChunksRef.current = [];
+			startAudioMeter(stream);
+
+			recorder.ondataavailable = (event) => {
+				if (event.data && event.data.size > 0) {
+					recordChunksRef.current.push(event.data);
+				}
+			};
+			recorder.onerror = () => {
+				setRecordingError("Recording failed.");
+			};
+			recorder.onstop = () => {
+				if (recordingCancelledRef.current) {
+					cleanupRecording();
+					return;
+				}
+				const blob = new Blob(recordChunksRef.current, {
+					type: recorder.mimeType || "audio/webm",
+				});
+				if (!blob || blob.size === 0) {
+					setRecordingError("No audio captured.");
+					cleanupRecording();
+					return;
+				}
+				const extension = resolveAudioExtension(blob.type || recorder.mimeType);
+				const filename = `voice-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
+				const file = new File([blob], filename, {
+					type: blob.type || recorder.mimeType || "audio/webm",
+				});
+				onAddAttachments([file]);
+				cleanupRecording();
+			};
+
+			recorder.start();
+			recordStartRef.current = Date.now();
+			setRecording(true);
+			setRecordingDuration(0);
+			recordTimerRef.current = window.setInterval(() => {
+				setRecordingDuration(Date.now() - recordStartRef.current);
+			}, 250);
+		} catch (error) {
+			setRecordingError("Microphone access was denied.");
+			cleanupRecording();
+		}
+	};
+
+	const stopRecording = () => {
+		if (recordTimerRef.current !== null) {
+			window.clearInterval(recordTimerRef.current);
+			recordTimerRef.current = null;
+		}
+		setRecording(false);
+		stopAudioMeter();
+		const recorder = mediaRecorderRef.current;
+		if (recorder && recorder.state !== "inactive") {
+			recorder.stop();
+		}
+	};
+
+	const cleanupRecording = () => {
+		if (recordTimerRef.current !== null) {
+			window.clearInterval(recordTimerRef.current);
+			recordTimerRef.current = null;
+		}
+		stopAudioMeter();
+		if (mediaStreamRef.current) {
+			for (const track of mediaStreamRef.current.getTracks()) {
+				track.stop();
+			}
+			mediaStreamRef.current = null;
+		}
+		mediaRecorderRef.current = null;
+		recordChunksRef.current = [];
+		setRecording(false);
+		setRecordingDuration(0);
+	};
+
 	const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
+			if (recording) return;
 			onSendPrompt();
 		}
 	};
@@ -127,6 +309,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	}, [activeThread]);
 	const legacyToolEvents = activeThread?.toolEvents || [];
 	const legacyThinkingEvents = activeThread?.thinkingEvents || [];
+	const audioLevel = Math.min(1, inputLevel * 4);
+	const audioGlow = recording
+		? `0 0 ${8 + audioLevel * 18}px rgba(248, 113, 113, ${0.25 + audioLevel * 0.45})`
+		: undefined;
+	const canToggleVoice = Boolean(activeThread);
 
 	return (
 		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-4 p-4 sm:gap-6 sm:p-6">
@@ -141,6 +328,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
+					<button
+						className={`button-secondary ${voiceAutoEnabled ? "border-sky-400/60 text-sky-200" : ""}`}
+						onClick={onToggleVoiceAuto}
+						type="button"
+						disabled={!canToggleVoice}
+					>
+						{voiceAutoEnabled ? "Voice: Auto" : "Voice: Off"}
+					</button>
+					{voicePlayback.status !== "idle" ? (
+						<button
+							className="button-secondary"
+							onClick={onStopVoice}
+							type="button"
+						>
+							Stop Voice
+						</button>
+					) : null}
 					<button
 						className="button-secondary"
 						onClick={onClearChat}
@@ -203,17 +407,46 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
 							>
 								<div
-									className={`w-fit max-w-[90%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${
-										msg.role === "user"
-											? "border-white/10 bg-slate-950/60 text-slate-100"
-											: "border-sky-400/40 bg-sky-500/10 text-slate-100"
-									}`}
+									className={`w-fit max-w-[90%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${msg.role === "user"
+										? "border-white/10 bg-slate-950/60 text-slate-100"
+										: "border-sky-400/40 bg-sky-500/10 text-slate-100"
+										}`}
 								>
 									<div className="flex items-center justify-between gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400">
 										<span>{msg.role === "user" ? "You" : "Wingman"}</span>
-										<span className="whitespace-nowrap">
-											{formatTime(msg.createdAt)}
-										</span>
+										<div className="flex items-center gap-2">
+											<span className="whitespace-nowrap">
+												{formatTime(msg.createdAt)}
+											</span>
+											{msg.role === "assistant" && msg.content ? (
+												<button
+													type="button"
+													onClick={() =>
+														voicePlayback.messageId === msg.id &&
+														voicePlayback.status !== "idle"
+															? onStopVoice()
+															: onSpeakVoice(msg.id, msg.content)
+													}
+													className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-slate-300 transition hover:border-sky-400/60 hover:text-sky-100"
+												>
+													{voicePlayback.messageId === msg.id &&
+													voicePlayback.status === "loading" ? (
+														<FiLoader className="h-3 w-3 animate-spin" />
+													) : voicePlayback.messageId === msg.id &&
+														voicePlayback.status === "playing" ? (
+														<FiStopCircle className="h-3 w-3" />
+													) : (
+														<FiVolume2 className="h-3 w-3" />
+													)}
+													<span>
+														{voicePlayback.messageId === msg.id &&
+														voicePlayback.status === "playing"
+															? "Stop"
+															: "Play"}
+													</span>
+												</button>
+											) : null}
+										</div>
 									</div>
 									{msg.role === "assistant" && !msg.content ? (
 										<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
@@ -277,31 +510,51 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									)}
 									{msg.attachments && msg.attachments.length > 0 ? (
 										<div className="mt-3 grid gap-2 sm:grid-cols-2">
-											{msg.attachments.map((attachment) => (
-												<div
-													key={attachment.id}
-													className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50"
-												>
-													<button
-														type="button"
-														className="group relative block w-full"
-														onClick={() => setPreviewAttachment(attachment)}
+											{msg.attachments.map((attachment) => {
+												const isAudio = isAudioAttachment(attachment);
+												return (
+													<div
+														key={attachment.id}
+														className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50"
 													>
-														<img
-															src={attachment.dataUrl}
-															alt={attachment.name || "Attachment"}
-															className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
-															loading="lazy"
-														/>
-														<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-white/5" />
-													</button>
-													{attachment.name ? (
-														<div className="truncate border-t border-white/10 px-2 py-1 text-[11px] text-slate-400">
-															{attachment.name}
-														</div>
-													) : null}
-												</div>
-											))}
+														{isAudio ? (
+															<div className="p-4">
+																<audio
+																	controls
+																	src={attachment.dataUrl}
+																	className="w-full"
+																/>
+																{attachment.name ? (
+																	<div className="mt-2 truncate text-[11px] text-slate-400">
+																		{attachment.name}
+																	</div>
+																) : null}
+															</div>
+														) : (
+															<>
+																<button
+																	type="button"
+																	className="group relative block w-full"
+																	onClick={() => setPreviewAttachment(attachment)}
+																>
+																	<img
+																		src={attachment.dataUrl}
+																		alt={attachment.name || "Attachment"}
+																		className="h-36 w-full cursor-zoom-in object-cover transition duration-200 group-hover:scale-[1.02]"
+																		loading="lazy"
+																	/>
+																	<span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-white/5" />
+																</button>
+																{attachment.name ? (
+																	<div className="truncate border-t border-white/10 px-2 py-1 text-[11px] text-slate-400">
+																		{attachment.name}
+																	</div>
+																) : null}
+															</>
+														)}
+													</div>
+												);
+											})}
 										</div>
 									) : null}
 									{hasNestedActivity ? (
@@ -343,19 +596,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					>
 						Prompt
 					</label>
-					<div className="flex items-center gap-2 text-xs text-slate-400">
+					<div className="flex items-center gap-3 text-xs text-slate-400">
 						<button
 							type="button"
-							className="button-secondary px-3 py-1 text-xs"
+							className="button-secondary px-3 py-2 text-xs"
 							onClick={handlePickFiles}
 							disabled={isStreaming}
 						>
-							Add Images
+							Add Media
 						</button>
+						<button
+							type="button"
+							aria-pressed={recording}
+							aria-label={recording ? "Stop recording" : "Record audio"}
+							className={`relative flex h-9 w-9 items-center justify-center rounded-full border text-xs transition ${recording
+								? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+								: "border-white/10 bg-slate-900/70 text-slate-100"
+								}`}
+							style={audioGlow ? { boxShadow: audioGlow } : undefined}
+							onClick={recording ? stopRecording : startRecording}
+							disabled={isStreaming}
+						>
+							{recording ? <FiStopCircle size={16} /> : <FiMic size={16} />}
+							{recording ? (
+								<span className="pointer-events-none absolute inset-0 rounded-full border border-rose-400/40 animate-ping" />
+							) : null}
+							{recording ? (
+								<span className="pointer-events-none absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-end gap-0.5">
+									<span
+										className="w-1 rounded-full bg-rose-300/80 transition-all"
+										style={{ height: `${6 + audioLevel * 10}px` }}
+									/>
+									<span
+										className="w-1 rounded-full bg-rose-200/80 transition-all"
+										style={{ height: `${4 + audioLevel * 14}px` }}
+									/>
+									<span
+										className="w-1 rounded-full bg-rose-300/80 transition-all"
+										style={{ height: `${6 + audioLevel * 8}px` }}
+									/>
+								</span>
+							) : null}
+						</button>
+						{recording ? (
+							<span className="text-[11px] uppercase tracking-[0.2em] text-rose-200">
+								{formatDuration(recordingDuration)}
+							</span>
+						) : null}
 						<input
 							ref={fileInputRef}
 							type="file"
-							accept="image/*"
+							accept="image/*,audio/*"
 							multiple
 							className="hidden"
 							onChange={handleFileChange}
@@ -364,34 +655,47 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				</div>
 				{attachments.length > 0 ? (
 					<div className="mt-3 flex flex-wrap gap-2">
-						{attachments.map((attachment) => (
-							<div
-								key={attachment.id}
-								className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
-							>
-								<button
-									type="button"
-									className="h-12 w-12 cursor-zoom-in p-0"
-									onClick={() => setPreviewAttachment(attachment)}
+						{attachments.map((attachment) => {
+							const isAudio = isAudioAttachment(attachment);
+							return (
+								<div
+									key={attachment.id}
+									className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
 								>
-									<img
-										src={attachment.dataUrl}
-										alt={attachment.name || "Attachment"}
-										className="h-full w-full object-cover"
-									/>
-								</button>
-								<span className="max-w-[160px] truncate text-slate-300">
-									{attachment.name || "Image"}
-								</span>
-								<button
-									type="button"
-									className="text-slate-400 transition hover:text-rose-500"
-									onClick={() => onRemoveAttachment(attachment.id)}
-								>
-									×
-								</button>
-							</div>
-						))}
+									{isAudio ? (
+										<div className="flex items-center gap-2 px-2 py-1">
+											<audio
+												controls
+												src={attachment.dataUrl}
+												className="h-8 w-40"
+											/>
+										</div>
+									) : (
+										<button
+											type="button"
+											className="h-12 w-12 cursor-zoom-in p-0"
+											onClick={() => setPreviewAttachment(attachment)}
+										>
+											<img
+												src={attachment.dataUrl}
+												alt={attachment.name || "Attachment"}
+												className="h-full w-full object-cover"
+											/>
+										</button>
+									)}
+									<span className="max-w-[160px] truncate text-slate-300">
+										{attachment.name || (isAudio ? "Audio" : "Image")}
+									</span>
+									<button
+										type="button"
+										className="text-slate-400 transition hover:text-rose-500"
+										onClick={() => onRemoveAttachment(attachment.id)}
+									>
+										×
+									</button>
+								</div>
+							);
+						})}
 						<button
 							type="button"
 							className="text-xs text-slate-400 underline decoration-slate-300 underline-offset-4"
@@ -403,6 +707,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				) : null}
 				{attachmentError ? (
 					<div className="mt-2 text-xs text-rose-500">{attachmentError}</div>
+				) : null}
+				{recordingError ? (
+					<div className="mt-2 text-xs text-rose-500">{recordingError}</div>
 				) : null}
 				<textarea
 					id="prompt-textarea"
@@ -494,4 +801,49 @@ function formatTime(timestamp?: number): string {
 	} catch {
 		return "--";
 	}
+}
+
+function formatDuration(durationMs: number): string {
+	const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	if (minutes > 0) {
+		return `${minutes}:${String(seconds).padStart(2, "0")}`;
+	}
+	return `0:${String(seconds).padStart(2, "0")}`;
+}
+
+function isAudioAttachment(attachment: ChatAttachment): boolean {
+	if (attachment.kind === "audio") return true;
+	if (attachment.mimeType?.startsWith("audio/")) return true;
+	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
+	return false;
+}
+
+function pickSupportedAudioMimeType(): string | undefined {
+	if (typeof MediaRecorder === "undefined") return undefined;
+	const candidates = [
+		"audio/webm;codecs=opus",
+		"audio/ogg;codecs=opus",
+		"audio/webm",
+		"audio/ogg",
+		"audio/mp4",
+	];
+	for (const candidate of candidates) {
+		if (MediaRecorder.isTypeSupported(candidate)) {
+			return candidate;
+		}
+	}
+	return undefined;
+}
+
+function resolveAudioExtension(mimeType?: string): string {
+	if (!mimeType) return "webm";
+	const normalized = mimeType.toLowerCase();
+	if (normalized.includes("ogg")) return "ogg";
+	if (normalized.includes("mp4") || normalized.includes("m4a")) return "m4a";
+	if (normalized.includes("wav")) return "wav";
+	if (normalized.includes("mpeg") || normalized.includes("mp3")) return "mp3";
+	if (normalized.includes("webm")) return "webm";
+	return "webm";
 }

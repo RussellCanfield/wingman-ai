@@ -40,6 +40,12 @@ describe("CLI Config Loader", () => {
 					provider: "duckduckgo",
 					maxResults: 5,
 				},
+				voice: {
+					provider: "web_speech",
+					defaultPolicy: "off",
+					webSpeech: {},
+					elevenlabs: {},
+				},
 				cli: {
 					theme: "default",
 					outputMode: "auto",
@@ -63,6 +69,7 @@ describe("CLI Config Loader", () => {
 						pairingRequired: true,
 						allowInsecureAuth: false,
 					},
+					adapters: {},
 				},
 				agents: {
 					list: [],

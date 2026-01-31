@@ -26,4 +26,14 @@ describe("buildUserContent", () => {
 			{ type: "image_url", image_url: { url: "data:image/png;base64,xyz" } },
 		]);
 	});
+
+	it("builds audio parts when audio attachments are provided", () => {
+		const result = buildUserContent("", [
+			{ kind: "audio", dataUrl: "data:audio/wav;base64,abc", mimeType: "audio/wav" },
+		]);
+		expect(Array.isArray(result)).toBe(true);
+		expect(result).toEqual([
+			{ type: "input_audio", input_audio: { data: "abc", format: "wav" } },
+		]);
+	});
 });

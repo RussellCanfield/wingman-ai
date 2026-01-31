@@ -203,6 +203,8 @@ Environment Variables:
   COPILOT_API_KEY       GitHub Copilot token
   LMSTUDIO_API_KEY      LM Studio API key (optional)
   OLLAMA_API_KEY        Ollama API key (optional)
+  ELEVENLABS_API_KEY    ElevenLabs API key
+  XI_API_KEY            ElevenLabs API key
 `);
 	} else {
 		outputManager.emitLog("info", "Provider help requested");

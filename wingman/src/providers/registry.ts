@@ -1,4 +1,5 @@
 export type ProviderAuthType = "api-key" | "oauth";
+export type ProviderCategory = "model" | "voice";
 export type ProviderName =
 	| "anthropic"
 	| "openai"
@@ -6,7 +7,8 @@ export type ProviderName =
 	| "copilot"
 	| "xai"
 	| "lmstudio"
-	| "ollama";
+	| "ollama"
+	| "elevenlabs";
 
 export interface ProviderOAuthConfig {
 	authorizationUrl: string;
@@ -30,6 +32,7 @@ export interface ProviderSpec {
 	label: string;
 	type: ProviderAuthType;
 	envVars: string[];
+	category: ProviderCategory;
 	baseURL?: string;
 	oauth?: ProviderOAuthConfig;
 	requiresAuth?: boolean; // If false, API key is optional (e.g., local providers)
@@ -41,12 +44,14 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		label: "Anthropic",
 		type: "api-key",
 		envVars: ["ANTHROPIC_API_KEY"],
+		category: "model",
 	},
 	openai: {
 		name: "openai",
 		label: "OpenAI",
 		type: "api-key",
 		envVars: ["OPENAI_API_KEY"],
+		category: "model",
 	},
 	openrouter: {
 		name: "openrouter",
@@ -54,6 +59,7 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		type: "api-key",
 		envVars: ["OPENROUTER_API_KEY"],
 		baseURL: "https://openrouter.ai/api/v1",
+		category: "model",
 	},
 	copilot: {
 		name: "copilot",
@@ -61,12 +67,14 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		type: "api-key",
 		envVars: ["GITHUB_COPILOT_TOKEN", "COPILOT_TOKEN", "COPILOT_API_KEY"],
 		baseURL: "https://api.githubcopilot.com",
+		category: "model",
 	},
 	xai: {
 		name: "xai",
 		label: "xAI",
 		type: "api-key",
 		envVars: ["XAI_API_KEY"],
+		category: "model",
 	},
 	lmstudio: {
 		name: "lmstudio",
@@ -75,6 +83,7 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		envVars: ["LMSTUDIO_API_KEY", "LM_STUDIO_API_KEY"],
 		baseURL: "http://localhost:1234/v1",
 		requiresAuth: false,
+		category: "model",
 	},
 	ollama: {
 		name: "ollama",
@@ -83,6 +92,14 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		envVars: ["OLLAMA_API_KEY"],
 		baseURL: "http://localhost:11434/v1",
 		requiresAuth: false,
+		category: "model",
+	},
+	elevenlabs: {
+		name: "elevenlabs",
+		label: "ElevenLabs",
+		type: "api-key",
+		envVars: ["ELEVENLABS_API_KEY", "XI_API_KEY"],
+		category: "voice",
 	},
 };
 
@@ -96,6 +113,10 @@ export function getProviderSpec(provider: string): ProviderSpec | undefined {
 	return normalized ? PROVIDERS[normalized] : undefined;
 }
 
-export function listProviderSpecs(): ProviderSpec[] {
-	return Object.values(PROVIDERS);
+export function listProviderSpecs(category?: ProviderCategory): ProviderSpec[] {
+	const providers = Object.values(PROVIDERS);
+	if (!category) {
+		return providers;
+	}
+	return providers.filter((provider) => provider.category === category);
 }

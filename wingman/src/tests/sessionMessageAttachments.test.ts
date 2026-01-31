@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractImageAttachments } from "../cli/core/sessionManager.js";
+import { extractAttachments, extractImageAttachments } from "../cli/core/sessionManager.js";
 
 describe("extractImageAttachments", () => {
 	it("extracts image_url blocks", () => {
@@ -29,6 +29,26 @@ describe("extractImageAttachments", () => {
 		];
 		expect(extractImageAttachments(blocks)).toEqual([
 			{ kind: "image", dataUrl: "data:image/png;base64,zzz" },
+		]);
+	});
+});
+
+describe("extractAttachments", () => {
+	it("extracts input_audio blocks", () => {
+		const blocks = [
+			{ type: "input_audio", input_audio: { data: "abc", format: "wav" } },
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{ kind: "audio", dataUrl: "data:audio/wav;base64,abc" },
+		]);
+	});
+
+	it("extracts audio_url blocks", () => {
+		const blocks = [
+			{ type: "audio_url", audio_url: { url: "https://cdn.example/audio.mp3" } },
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{ kind: "audio", dataUrl: "https://cdn.example/audio.mp3" },
 		]);
 	});
 });

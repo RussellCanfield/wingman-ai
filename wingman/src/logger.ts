@@ -27,11 +27,15 @@ const DEFAULT_MAX_FILES = parsePositiveInt(
 );
 
 function serializeLogArg(arg: unknown): unknown {
-	if (Error.isError(arg)) {
+	const isError =
+		typeof Error.isError === "function"
+			? Error.isError(arg)
+			: arg instanceof Error;
+	if (isError) {
 		return {
-			name: arg.name,
-			message: arg.message,
-			stack: arg.stack,
+			name: (arg as Error).name,
+			message: (arg as Error).message,
+			stack: (arg as Error).stack,
 		};
 	}
 	return arg;

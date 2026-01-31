@@ -46,8 +46,13 @@ export class ModelFactory {
 		}
 
 		const normalizedProvider = normalizeProviderName(provider);
-		if (!normalizedProvider) {
-			const supported = listProviderSpecs().map((item) => item.name).join(", ");
+		const providerSpec = normalizedProvider
+			? getProviderSpec(normalizedProvider)
+			: undefined;
+		if (!providerSpec || providerSpec.category !== "model") {
+			const supported = listProviderSpecs("model")
+				.map((item) => item.name)
+				.join(", ");
 			throw new Error(
 				`Unknown model provider: "${provider}". Supported providers: ${supported}`,
 			);
@@ -55,7 +60,7 @@ export class ModelFactory {
 
 		logger.debug(`Creating model: ${normalizedProvider}:${model}`);
 
-		switch (normalizedProvider) {
+		switch (providerSpec.name) {
 			case "anthropic":
 				return ModelFactory.createAnthropicModel(model);
 
@@ -104,8 +109,13 @@ export class ModelFactory {
 		}
 
 		const normalizedProvider = normalizeProviderName(provider);
-		if (!normalizedProvider) {
-			const supported = listProviderSpecs().map((item) => item.name).join(", ");
+		const providerSpec = normalizedProvider
+			? getProviderSpec(normalizedProvider)
+			: undefined;
+		if (!providerSpec || providerSpec.category !== "model") {
+			const supported = listProviderSpecs("model")
+				.map((item) => item.name)
+				.join(", ");
 			return {
 				valid: false,
 				error: `Unknown provider: "${provider}". Supported: ${supported}`,

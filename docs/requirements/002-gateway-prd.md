@@ -6,7 +6,7 @@ The Wingman Gateway is the central runtime for agents, sessions, routing, and ch
 
 **Version:** 1.1
 **Status:** In Development
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-01-31
 
 ---
 
@@ -52,7 +52,7 @@ See [Architecture Overview](000-architecture-overview.md) for the full system co
 4. Gateway routes to the bound agent and streams the response
 
 **Requirements:**
-- Control UI with chat and streaming output
+- Control UI with chat, streaming output, and media attachments (image/audio, voice capture)
 - Token-based authentication
 - Tailscale-friendly access patterns
 
@@ -146,6 +146,19 @@ Routing happens before agent execution. Replies always return to the originating
 
 The gateway derives a session key from agentId plus channel identity. Sessions are durable and stored per agent.
 Sessions can be named on creation and renamed later via the Control UI or API.
+
+### Voice Providers (TTS)
+
+The gateway exposes a voice provider configuration that clients can use for text-to-speech playback.
+Voice is configured at the gateway level, with optional per-agent overrides.
+
+- Global defaults live under `voice` in wingman.config.json (provider + default settings).
+- Per-agent overrides can set provider or specific options in agent config (`voice` block).
+- Control UI provides per-session auto-speak toggles (default off).
+- Providers:
+  - `web_speech`: client-side browser synthesis (no server TTS).
+  - `elevenlabs`: gateway-proxied TTS using ElevenLabs API keys.
+- ElevenLabs API keys are stored in the credentials file or env vars (`ELEVENLABS_API_KEY`, `XI_API_KEY`).
 
 ### Routines (Scheduled Runs)
 
@@ -624,6 +637,17 @@ GET /stats
 
 Response:
 {
+  "voice": {
+    "provider": "web_speech",
+    "defaultPolicy": "off",
+    "webSpeech": { "voiceName": "Samantha", "lang": "en-US", "rate": 1 },
+    "elevenlabs": {
+      "voiceId": "VOICE_ID",
+      "modelId": "eleven_multilingual_v2",
+      "stability": 0.4,
+      "similarityBoost": 0.7
+    }
+  },
   "gateway": {
     "uptime": 123456,
     "totalNodes": 3,
@@ -646,8 +670,13 @@ Response:
 GET /
 GET /api/health
 GET /api/stats
+GET /api/config
+GET /api/providers
 GET /api/agents
 POST /api/agents
+GET /api/voice
+PUT /api/voice
+POST /api/voice/speak
 GET /api/routines
 POST /api/routines
 DELETE /api/routines/:id
@@ -690,6 +719,12 @@ to avoid cross-origin issues when the UI is on a different port.
   "id": "req-1",
   "payload": {
     "content": "Review the auth code",
+    "attachments": [
+      {
+        "kind": "audio",
+        "dataUrl": "data:audio/wav;base64,AAA..."
+      }
+    ],
     "routing": { "channel": "webui" }
   },
   "timestamp": 1234567890

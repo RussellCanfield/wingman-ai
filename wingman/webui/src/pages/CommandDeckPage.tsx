@@ -2,7 +2,8 @@ import React from "react";
 import { CommandDeckPanel } from "../components/CommandDeckPanel";
 import { EventLogPanel } from "../components/EventLogPanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
-import type { ProviderStatus } from "../types";
+import { VoiceConfigPanel } from "../components/VoiceConfigPanel";
+import type { ProviderStatus, VoiceConfig } from "../types";
 
 type CommandDeckPageProps = {
 	wsUrl: string;
@@ -20,6 +21,7 @@ type CommandDeckPageProps = {
 	providersLoading: boolean;
 	providersUpdatedAt?: string;
 	credentialsPath?: string;
+	voiceConfig?: VoiceConfig;
 	onWsUrlChange: (value: string) => void;
 	onTokenChange: (value: string) => void;
 	onPasswordChange: (value: string) => void;
@@ -30,6 +32,7 @@ type CommandDeckPageProps = {
 	onRefreshProviders: () => void;
 	onSaveProviderToken: (providerName: string, token: string) => Promise<boolean>;
 	onClearProviderToken: (providerName: string) => Promise<boolean>;
+	onSaveVoiceConfig: (voice: Partial<VoiceConfig>) => Promise<boolean>;
 };
 
 export const CommandDeckPage: React.FC<CommandDeckPageProps> = ({
@@ -48,6 +51,7 @@ export const CommandDeckPage: React.FC<CommandDeckPageProps> = ({
 	providersLoading,
 	providersUpdatedAt,
 	credentialsPath,
+	voiceConfig,
 	onWsUrlChange,
 	onTokenChange,
 	onPasswordChange,
@@ -58,6 +62,7 @@ export const CommandDeckPage: React.FC<CommandDeckPageProps> = ({
 	onRefreshProviders,
 	onSaveProviderToken,
 	onClearProviderToken,
+	onSaveVoiceConfig,
 }) => {
 	return (
 		<section className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -91,6 +96,7 @@ export const CommandDeckPage: React.FC<CommandDeckPageProps> = ({
 					onSaveToken={onSaveProviderToken}
 					onClearToken={onClearProviderToken}
 				/>
+				<VoiceConfigPanel voiceConfig={voiceConfig} onSave={onSaveVoiceConfig} />
 				<section className="panel-card animate-rise space-y-3 p-5">
 					<h3 className="text-lg font-semibold">Security Notes</h3>
 					<p className="text-sm text-slate-300">
