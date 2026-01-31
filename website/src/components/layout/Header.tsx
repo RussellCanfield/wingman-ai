@@ -105,6 +105,7 @@ const NavLinks = ({ mobile, onClick }: NavLinksProps) => {
 					{link.text}
 				</a>
 			))}
+			{/* biome-ignore lint/a11y/useValidAnchor: This is a valid anchor for navigation to #quick-start section */}
 			<a
 				href="#quick-start"
 				className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg font-medium hover:opacity-90 transition-all"

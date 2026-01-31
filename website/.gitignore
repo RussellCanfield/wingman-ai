@@ -1,0 +1,72 @@
+out
+dist
+node_modules/
+.vscode-test/
+*.vsix
+webview-ui/build
+.vscode/settings.json
+
+test-install
+
+# C extensions
+*.so
+
+node-llama-cpp/dist/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest
+.pytest_cache/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.idea/
+
+# OS generated files
+.DS_Store
+*.pyc
+*~
+
+tsconfig.tsbuildinfo
+
+**/.wingman/wingman.db
+**/.wingman/wingman.db-shm
+**/.wingman/wingman.db-wal
+**/.wingman/wingman.config.json
+**/.wingman/webhooks.json
+
+.tmp
+
+**/large_tool_results

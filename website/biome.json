@@ -1,13 +1,13 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
 	"vcs": {
-		"enabled": false,
+		"enabled": true,
 		"clientKind": "git",
 		"useIgnoreFile": false
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+		"includes": ["src/**"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -25,6 +25,13 @@
 			"correctness": {
 				"useExhaustiveDependencies": "warn"
 			}
+		}
+	},
+	"css": {
+		"parser": {
+			"cssModules": false,
+			"allowWrongLineComments": false,
+			"tailwindDirectives": true
 		}
 	},
 	"javascript": {

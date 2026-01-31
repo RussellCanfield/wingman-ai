@@ -16,8 +16,7 @@ function App() {
 			const closestAnchor = target.closest("a");
 
 			if (
-				closestAnchor &&
-				closestAnchor.getAttribute("href")?.startsWith("#") &&
+				closestAnchor?.getAttribute("href")?.startsWith("#") &&
 				!closestAnchor.getAttribute("href")?.includes("://")
 			) {
 				e.preventDefault();

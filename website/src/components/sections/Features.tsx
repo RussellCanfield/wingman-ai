@@ -149,9 +149,9 @@ const Features = () => {
 								Extensible by design. Built for developers.
 							</h3>
 							<p className="text-gray-400">
-								Create custom agent skills, integrate with external APIs via MCP,
-								and orchestrate complex workflows. Everything is configurable,
-								composable, and built on open standards.
+								Create custom agent skills, integrate with external APIs via
+								MCP, and orchestrate complex workflows. Everything is
+								configurable, composable, and built on open standards.
 							</p>
 						</div>
 					</div>
