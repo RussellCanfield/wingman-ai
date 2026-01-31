@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 import { createLogger, getLogFilePath } from "@/logger.js";
 import { WingmanConfigLoader } from "../config/loader.js";
 import { getGatewayTokenFromEnv } from "@/gateway/env.js";
+import { getLogFilePath } from "@/logger.js";
 
 const logger = createLogger();
 const logFile = getLogFilePath();
@@ -275,6 +276,7 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 		console.log("✓ Gateway running");
 		console.log(`  URL: ws://${config.host}:${config.port}/ws`);
 		console.log(`  Health: http://${config.host}:${config.port}/health`);
+		console.log(`  Logs: ${getLogFilePath()}`);
 
 		if (config.auth?.mode === "token" && config.auth.token) {
 			console.log(`  Auth Token: ${config.auth.token}`);

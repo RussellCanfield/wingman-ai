@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Status:** Active
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-01-30
 
 ---
 
@@ -197,17 +197,31 @@ Each agent produces independent output. No built-in aggregation - the UI display
 │                    Provider Interface                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────┐│
-│  │   Anthropic  │ │    OpenAI    │ │  OpenRouter  │ │Copilot││
-│  │ claude-opus  │ │   gpt-4o     │ │  any model   │ │ gpt-4o││
-│  │ claude-sonnet│ │   gpt-4-turbo│ │              │ │       ││
-│  └──────────────┘ └──────────────┘ └──────────────┘ └───────┘│
+│  Cloud Providers:                                            │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────┐│
+│  │   Anthropic  │ │    OpenAI    │ │  OpenRouter  │ │ xAI ││
+│  │ claude-opus  │ │   gpt-4o     │ │  any model   │ │grok ││
+│  │ claude-sonnet│ │   gpt-4-turbo│ │              │ │     ││
+│  └──────────────┘ └──────────────┘ └──────────────┘ └─────┘│
+│                                                              │
+│  Subscription:                                               │
+│  ┌──────────────┐                                            │
+│  │GitHub Copilot│                                            │
+│  │   gpt-4o     │                                            │
+│  └──────────────┘                                            │
+│                                                              │
+│  Local Inference:                                            │
+│  ┌──────────────┐ ┌──────────────┐                          │
+│  │  LM Studio   │ │    Ollama    │                          │
+│  │ localhost:   │ │ localhost:   │                          │
+│  │   1234       │ │   11434      │                          │
+│  └──────────────┘ └──────────────┘                          │
 │                                                              │
 │  Authentication:                                             │
 │  - API keys via env: ANTHROPIC_API_KEY, OPENAI_API_KEY,      │
-│    OPENROUTER_API_KEY                                        │
-│  - Subscription tokens stored in ~/.wingman/credentials.json │
-│    (Copilot)                                                 │
+│    OPENROUTER_API_KEY, XAI_API_KEY                          │
+│  - Subscription tokens in ~/.wingman/credentials.json        │
+│  - Local providers: Optional (no auth required)              │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```

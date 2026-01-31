@@ -26,12 +26,28 @@ const DEFAULT_MAX_FILES = parsePositiveInt(
 	5,
 );
 
+function serializeLogArg(arg: unknown): unknown {
+	if (Error.isError(arg)) {
+		return {
+			name: arg.name,
+			message: arg.message,
+			stack: arg.stack,
+		};
+	}
+	return arg;
+}
+
 function parsePositiveInt(value: string | undefined, fallback: number): number {
 	if (!value) {
 		return fallback;
 	}
 	const parsed = Number.parseInt(value, 10);
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function resolveDefaultLogFileName(): string {
+	const isoDate = new Date().toISOString().slice(0, 10);
+	return `wingman-${isoDate}.log`;
 }
 
 function resolveLogFilePath(): string {
@@ -41,7 +57,7 @@ function resolveLogFilePath(): string {
 	}
 
 	const logDir = process.env.WINGMAN_LOG_DIR?.trim() || DEFAULT_LOG_DIR;
-	return join(logDir, DEFAULT_LOG_FILE_NAME);
+	return join(logDir, resolveDefaultLogFileName() || DEFAULT_LOG_FILE_NAME);
 }
 
 export function getLogFilePath(): string {
@@ -157,7 +173,8 @@ export class WingmanLogger implements Logger {
 		this.output.write(`${prefix} ${message}\n`);
 
 		if (args.length > 0) {
-			this.output.write(`${JSON.stringify(args, null, 2)}\n`);
+			const serialized = args.map((arg) => serializeLogArg(arg));
+			this.output.write(`${JSON.stringify(serialized, null, 2)}\n`);
 		}
 	}
 

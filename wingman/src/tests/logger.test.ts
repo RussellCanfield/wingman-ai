@@ -88,6 +88,17 @@ describe("Logger System", () => {
 				expect(mockStream.data).toContain('"value"');
 			});
 
+			it("should serialize error arguments with message and stack", () => {
+				const logger = new WingmanLogger("info", mockStream as any);
+				const err = new Error("boom");
+
+				logger.error("test error", err);
+
+				expect(mockStream.data).toContain("test error");
+				expect(mockStream.data).toContain('"message"');
+				expect(mockStream.data).toContain("boom");
+			});
+
 			it("should not include args when none provided", () => {
 				const logger = new WingmanLogger("info", mockStream as any);
 

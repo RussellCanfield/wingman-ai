@@ -38,6 +38,7 @@ import { handleSessionsApi } from "./http/sessions.js";
 import { createWebhookStore, handleWebhookInvoke, handleWebhooksApi } from "./http/webhooks.js";
 import { createRoutineStore, handleRoutinesApi } from "./http/routines.js";
 import type { GatewayHttpContext } from "./http/types.js";
+import { DiscordGatewayAdapter } from "./adapters/discord.js";
 import { InternalHookRegistry } from "./hooks/registry.js";
 import { homedir } from "node:os";
 import { join, isAbsolute, normalize, dirname, sep } from "node:path";
@@ -88,6 +89,7 @@ export class GatewayServer {
 	private webhookStore: ReturnType<typeof createWebhookStore>;
 	private routineStore: ReturnType<typeof createRoutineStore>;
 	private internalHooks: InternalHookRegistry | null = null;
+	private discordAdapter: DiscordGatewayAdapter | null = null;
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -278,6 +280,8 @@ export class GatewayServer {
 			await this.startDiscovery();
 		}
 
+		await this.startAdapters();
+
 		this.log(
 			"info",
 			`Gateway started on ${this.config.host}:${this.config.port}`,
@@ -293,6 +297,8 @@ export class GatewayServer {
 	 * Stop the gateway server
 	 */
 	async stop(): Promise<void> {
+		await this.stopAdapters();
+
 		// Stop discovery
 		if (this.discoveryService) {
 			await this.discoveryService.stopAnnouncing();
@@ -315,6 +321,58 @@ export class GatewayServer {
 		}
 
 		this.log("info", "Gateway stopped");
+	}
+
+	private async startAdapters(): Promise<void> {
+		const discordConfig = this.wingmanConfig.gateway?.adapters?.discord;
+		if (discordConfig?.enabled) {
+			const resolvedHost =
+				this.config.host === "0.0.0.0" || this.config.host === "::"
+					? "127.0.0.1"
+					: this.config.host;
+			const url =
+				discordConfig.gatewayUrl ||
+				`ws://${resolvedHost}:${this.config.port}/ws`;
+			const token =
+				discordConfig.gatewayToken ||
+				(this.config.auth?.mode === "token" ? this.config.authToken : undefined);
+			const password =
+				discordConfig.gatewayPassword ||
+				(this.config.auth?.mode === "password" ? this.config.auth?.password : undefined);
+
+			this.discordAdapter = new DiscordGatewayAdapter(
+				{
+					enabled: discordConfig.enabled,
+					token: discordConfig.token,
+					mentionOnly: discordConfig.mentionOnly ?? true,
+					allowBots: discordConfig.allowBots ?? false,
+					allowedGuilds: discordConfig.allowedGuilds ?? [],
+					allowedChannels: discordConfig.allowedChannels ?? [],
+					sessionCommand: discordConfig.sessionCommand || "!session",
+					gatewayUrl: discordConfig.gatewayUrl,
+					gatewayToken: discordConfig.gatewayToken,
+					gatewayPassword: discordConfig.gatewayPassword,
+					responseChunkSize: discordConfig.responseChunkSize || 1900,
+				},
+				{ url, token, password },
+				this.logger,
+			);
+
+			try {
+				await this.discordAdapter.start();
+				this.log("info", "Discord adapter started");
+			} catch (error) {
+				this.log("error", "Failed to start Discord adapter", error);
+				this.discordAdapter = null;
+			}
+		}
+	}
+
+	private async stopAdapters(): Promise<void> {
+		if (this.discordAdapter) {
+			await this.discordAdapter.stop();
+			this.discordAdapter = null;
+		}
 	}
 
 	/**

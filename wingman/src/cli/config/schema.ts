@@ -68,6 +68,36 @@ const GatewayControlUiSchema = z
 		allowInsecureAuth: false,
 	});
 
+const DiscordAdapterSchema = z
+	.object({
+		enabled: z.boolean().default(false),
+		token: z.string().optional(),
+		mentionOnly: z.boolean().default(true),
+		allowBots: z.boolean().default(false),
+		allowedGuilds: z.array(z.string()).default([]),
+		allowedChannels: z.array(z.string()).default([]),
+		sessionCommand: z.string().default("!session"),
+		gatewayUrl: z.string().optional(),
+		gatewayToken: z.string().optional(),
+		gatewayPassword: z.string().optional(),
+		responseChunkSize: z.number().min(500).max(2000).default(1900),
+	})
+	.default({
+		enabled: false,
+		mentionOnly: true,
+		allowBots: false,
+		allowedGuilds: [],
+		allowedChannels: [],
+		sessionCommand: "!session",
+		responseChunkSize: 1900,
+	});
+
+const GatewayAdaptersSchema = z
+	.object({
+		discord: DiscordAdapterSchema.optional(),
+	})
+	.default({});
+
 export const GatewayConfigSchema = z
 	.object({
 		host: z.string().default("127.0.0.1"),
@@ -84,6 +114,7 @@ export const GatewayConfigSchema = z
 			pairingRequired: true,
 			allowInsecureAuth: false,
 		}),
+		adapters: GatewayAdaptersSchema.optional().default({}),
 	})
 	.default({
 		host: "127.0.0.1",
@@ -99,6 +130,7 @@ export const GatewayConfigSchema = z
 			pairingRequired: true,
 			allowInsecureAuth: false,
 		},
+		adapters: {},
 	});
 
 export type GatewayConfig = z.infer<typeof GatewayConfigSchema>;

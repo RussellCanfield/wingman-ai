@@ -236,6 +236,7 @@ Nodes are remote tool executors that connect to the gateway and expose capabilit
 - Token or password authentication
 - Basic health and stats endpoints (gateway + Control UI API proxy)
 - Webhook registry + invocation endpoint (create/manage via Control UI)
+- Discord channel adapter (gateway-hosted)
 
 ### Planned / Later
 - Broadcast rooms for explicit swarm workflows
@@ -244,7 +245,7 @@ Nodes are remote tool executors that connect to the gateway and expose capabilit
 - Tailscale discovery
 - HTTP bridge transport
 - SSH tunnel helper
-- External channel adapters (Discord, Slack, etc.)
+- Additional channel adapters (Slack, Teams, etc.)
 - Rate limiting and message validation
 
 ---
@@ -730,6 +731,18 @@ to avoid cross-origin issues when the UI is on a different port.
       "port": 18790,
       "pairingRequired": true,
       "allowInsecureAuth": false
+    },
+    "adapters": {
+      "discord": {
+        "enabled": true,
+        "token": "discord-bot-token",
+        "mentionOnly": true,
+        "allowBots": false,
+        "allowedGuilds": ["123456789012345678"],
+        "allowedChannels": ["987654321098765432"],
+        "sessionCommand": "!session",
+        "responseChunkSize": 1900
+      }
     }
   }
 }
@@ -737,6 +750,12 @@ to avoid cross-origin issues when the UI is on a different port.
 
 Environment overrides:
 - `WINGMAN_GATEWAY_TOKEN` can supply the auth token at runtime so you can keep `auth.mode` set to `token` without storing the token in config.
+
+Discord adapter notes:
+- The adapter runs inside the gateway process and connects back to the gateway WebSocket API.
+- By default it only responds to mentions (DMs always route).
+- Use `!session <sessionKey> <message>` to target an existing session; omit to let the gateway derive a session key from routing (channel/thread).
+- Optional overrides: `gatewayUrl`, `gatewayToken`, `gatewayPassword`.
 
 ### Session Working Folder (Control UI)
 - Each session can optionally set a working folder for output files.

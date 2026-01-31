@@ -82,8 +82,16 @@ wingman gateway start --auth
 ### Provider Auth
 
 ```bash
+# Cloud providers
 wingman provider login anthropic
 wingman provider login openai
+wingman provider login openrouter
+wingman provider login xai
+wingman provider login copilot
+
+# Local providers (optional - work without auth)
+wingman provider login lmstudio  # Optional
+wingman provider login ollama     # Optional
 ```
 
 ### Local-only (No Gateway)

@@ -23,6 +23,21 @@ export interface WingmanConfig {
 			pairingRequired?: boolean;
 			allowInsecureAuth?: boolean;
 		};
+		adapters?: {
+			discord?: {
+				enabled?: boolean;
+				token?: string;
+				mentionOnly?: boolean;
+				allowBots?: boolean;
+				allowedGuilds?: string[];
+				allowedChannels?: string[];
+				sessionCommand?: string;
+				gatewayUrl?: string;
+				gatewayToken?: string;
+				gatewayPassword?: string;
+				responseChunkSize?: number;
+			};
+		};
 	};
 	agents?: {
 		list?: Array<{
