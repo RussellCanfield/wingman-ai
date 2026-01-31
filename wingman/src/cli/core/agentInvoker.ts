@@ -142,7 +142,10 @@ export class AgentInvoker {
 						(targetAgent.tools || []).map((tool) => tool.name),
 					);
 					const unique = mcpTools.filter((tool) => !existing.has(tool.name));
-					targetAgent.tools = [...(targetAgent.tools || []), ...unique];
+					targetAgent.tools = [
+						...(targetAgent.tools || []),
+						...unique,
+					] as any;
 					this.logger.info(`Added ${unique.length} MCP tools to agent`);
 				}
 			}
@@ -176,7 +179,7 @@ export class AgentInvoker {
 			// Create a standalone DeepAgent for this specific agent
 			const standaloneAgent = createDeepAgent({
 				systemPrompt: targetAgent.systemPrompt,
-				tools: targetAgent.tools,
+				tools: targetAgent.tools as any,
 				model: targetAgent.model as any,
 				backend: () =>
 					new CompositeBackend(
@@ -194,7 +197,7 @@ export class AgentInvoker {
 				middleware,
 				skills: ["/skills/"],
 				subagents: [...(targetAgent.subagents || [])],
-				checkpointer: checkpointer,
+				checkpointer: checkpointer as any,
 			});
 
 			this.logger.debug("Agent created, sending message");

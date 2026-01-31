@@ -541,7 +541,7 @@ export class SessionManager {
 
 		if (!this.stateReaderAgent) {
 			this.stateReaderAgent = createDeepAgent({
-				checkpointer: this.checkpointer,
+				checkpointer: this.checkpointer as any,
 			}) as ReturnType<typeof createDeepAgent>;
 		}
 

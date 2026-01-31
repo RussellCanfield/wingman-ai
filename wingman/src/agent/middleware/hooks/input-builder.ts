@@ -25,12 +25,12 @@ export function buildHookInput(
 	};
 
 	// Add tool-specific data for PreToolUse and PostToolUse
-	if (eventName === "PreToolUse" || eventName === "PostToolUse") {
-		if (context.toolCallRequest) {
-			const { tool, toolCall } = context.toolCallRequest;
+		if (eventName === "PreToolUse" || eventName === "PostToolUse") {
+			if (context.toolCallRequest?.tool) {
+				const { tool, toolCall } = context.toolCallRequest;
 
-			input.tool_name = String(tool.name);
-			input.tool_use_id = toolCall.id;
+				input.tool_name = String(tool.name);
+				input.tool_use_id = toolCall.id;
 
 			// Add tool input parameters
 			if (toolCall.args) {

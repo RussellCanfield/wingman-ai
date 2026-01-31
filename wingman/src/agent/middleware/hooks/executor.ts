@@ -58,7 +58,7 @@ export class HookExecutor {
 		}
 
 		// Extract tool name from context
-		const toolName = context.toolCallRequest?.tool.name;
+		const toolName = context.toolCallRequest?.tool?.name;
 		if (!toolName || typeof toolName !== "string") {
 			this.logger.debug("No tool name in context, skipping hook execution");
 			return;

@@ -294,7 +294,10 @@ export class AgentLoader {
 
 		// Add tools if specified
 		if (config.tools && config.tools.length > 0) {
-			agent.tools = await createTools(config.tools, buildToolOptions(config));
+			agent.tools = (await createTools(
+				config.tools,
+				buildToolOptions(config),
+			)) as any;
 		}
 
 		// Store MCP config on agent for reference
@@ -308,7 +311,7 @@ export class AgentLoader {
 		// Add model override if specified
 		if (config.model) {
 			try {
-				agent.model = ModelFactory.createModel(config.model);
+				agent.model = ModelFactory.createModel(config.model) as any;
 				logger.info(`Agent "${config.name}" using model: ${config.model}`);
 			} catch (error) {
 				logger.error(
@@ -332,12 +335,12 @@ export class AgentLoader {
 					sub.tools = await createTools(
 						subagent.tools,
 						buildToolOptions(subagent as WingmanAgentConfig),
-					);
+					) as any;
 				}
 
 				if (subagent.model) {
 					try {
-						sub.model = ModelFactory.createModel(subagent.model);
+						sub.model = ModelFactory.createModel(subagent.model) as any;
 						logger.info(
 							`Subagent "${subagent.name}" using model: ${subagent.model}`,
 						);

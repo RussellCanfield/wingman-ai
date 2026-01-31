@@ -114,6 +114,7 @@ export class WingmanConfigLoader {
 					pairingRequired: true,
 					allowInsecureAuth: false,
 				},
+				adapters: {},
 			},
 			agents: {
 				list: [],

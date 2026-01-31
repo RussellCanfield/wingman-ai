@@ -1,7 +1,7 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatXAI } from "@langchain/xai";
-import type { BaseLanguageModel } from "@langchain/core/language_models/base";
+import type { BaseLanguageModel, BaseLanguageModelCallOptions } from "@langchain/core/language_models/base";
 import { createLogger } from "../../logger.js";
 import { resolveProviderToken } from "@/providers/credentials.js";
 import { createCopilotFetch } from "@/providers/copilot.js";
@@ -29,7 +29,7 @@ export class ModelFactory {
 	/**
 	 * Parse and create a model from a string specification
 	 */
-	static createModel(modelString: string): BaseLanguageModel {
+	static createModel(modelString: string): string | BaseLanguageModel<any, BaseLanguageModelCallOptions> | undefined {
 		const parts = modelString.split(":");
 		if (parts.length !== 2) {
 			throw new Error(

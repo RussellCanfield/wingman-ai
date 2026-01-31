@@ -4,11 +4,17 @@ import {
 	GatewayIntentBits,
 	Partials,
 	type Message,
+	type TextBasedChannel,
 } from "discord.js";
 import { createLogger, type Logger } from "@/logger.js";
 import type { AgentRequestPayload, RoutingInfo } from "../types.js";
 import { GatewayRpcClient } from "../rpcClient.js";
 import { parseStreamChunk } from "../../cli/core/streamParser.js";
+
+type SendableChannel = {
+	send: (content: string) => Promise<unknown>;
+	sendTyping?: () => Promise<unknown>;
+};
 
 export interface DiscordAdapterConfig {
 	enabled: boolean;
@@ -207,6 +213,15 @@ export class DiscordGatewayAdapter {
 			return;
 		}
 
+		if (!message.channel.isTextBased()) {
+			return;
+		}
+		const channel = message.channel as TextBasedChannel;
+		if (!("send" in channel)) {
+			return;
+		}
+		const sendChannel = channel as SendableChannel;
+
 		if (this.config.allowedGuilds.length > 0 && message.guildId) {
 			if (!this.config.allowedGuilds.includes(message.guildId)) {
 				return;
@@ -242,7 +257,7 @@ export class DiscordGatewayAdapter {
 		if (matched) {
 			content = nextContent.trim();
 			if (!sessionKey) {
-				await message.channel.send(
+				await sendChannel.send(
 					`Provide a session key after \`${this.config.sessionCommand}\`.`,
 				);
 				return;
@@ -260,7 +275,9 @@ export class DiscordGatewayAdapter {
 		};
 
 		try {
-			await message.channel.sendTyping();
+			if (sendChannel.sendTyping) {
+				await sendChannel.sendTyping();
+			}
 
 			let fallbackText = "";
 			const textByMessageId = new Map<string, string>();
@@ -312,13 +329,13 @@ export class DiscordGatewayAdapter {
 				responseText,
 				this.config.responseChunkSize,
 			);
-			for (const chunk of chunks) {
-				await message.channel.send(chunk);
-			}
+				for (const chunk of chunks) {
+					await sendChannel.send(chunk);
+				}
 		} catch (error) {
 			this.logger.error("Discord adapter failed to handle message", error);
 			try {
-				await message.channel.send("Sorry, I hit an error running that request.");
+				await sendChannel.send("Sorry, I hit an error running that request.");
 			} catch {
 				// Ignore failures when reporting the error.
 			}

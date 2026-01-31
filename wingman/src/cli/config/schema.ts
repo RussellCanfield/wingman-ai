@@ -213,6 +213,7 @@ export const WingmanConfigSchema = z.object({
 			pairingRequired: true,
 			allowInsecureAuth: false,
 		},
+		adapters: {},
 	}),
 	agents: AgentsConfigSchema.optional().default({
 		list: [],

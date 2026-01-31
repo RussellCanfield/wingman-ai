@@ -4,7 +4,6 @@ import { readFileSync } from "fs";
 import { createLogger, getLogFilePath } from "@/logger.js";
 import { WingmanConfigLoader } from "../config/loader.js";
 import { getGatewayTokenFromEnv } from "@/gateway/env.js";
-import { getLogFilePath } from "@/logger.js";
 
 const logger = createLogger();
 const logFile = getLogFilePath();
