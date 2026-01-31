@@ -146,6 +146,7 @@ Routing happens before agent execution. Replies always return to the originating
 
 The gateway derives a session key from agentId plus channel identity. Sessions are durable and stored per agent.
 Sessions can be named on creation and renamed later via the Control UI or API.
+Channel adapters may override the derived key for specific sources (e.g., Discord channel-to-session mappings).
 
 ### Voice Providers (TTS)
 
@@ -775,6 +776,9 @@ to avoid cross-origin issues when the UI is on a different port.
         "allowBots": false,
         "allowedGuilds": ["123456789012345678"],
         "allowedChannels": ["987654321098765432"],
+        "channelSessions": {
+          "discord-channel123": "agent:main:123"
+        },
         "sessionCommand": "!session",
         "responseChunkSize": 1900
       }
@@ -790,6 +794,8 @@ Discord adapter notes:
 - The adapter runs inside the gateway process and connects back to the gateway WebSocket API.
 - By default it only responds to mentions (DMs always route).
 - Use `!session <sessionKey> <message>` to target an existing session; omit to let the gateway derive a session key from routing (channel/thread).
+- `channelSessions` can map a Discord channel ID to a fixed session ID. If set, it overrides the derived session key unless a `!session` command is used.
+- If the mapped session ID (or `!session` override) starts with `agent:<id>:`, the adapter will set `agentId` to that `<id>` so the gateway routes to the intended agent without requiring a separate binding.
 - Optional overrides: `gatewayUrl`, `gatewayToken`, `gatewayPassword`.
 
 ### Session Working Folder (Control UI)

@@ -353,6 +353,7 @@ export class GatewayServer {
 					allowBots: discordConfig.allowBots ?? false,
 					allowedGuilds: discordConfig.allowedGuilds ?? [],
 					allowedChannels: discordConfig.allowedChannels ?? [],
+					channelSessions: discordConfig.channelSessions ?? {},
 					sessionCommand: discordConfig.sessionCommand || "!session",
 					gatewayUrl: discordConfig.gatewayUrl,
 					gatewayToken: discordConfig.gatewayToken,

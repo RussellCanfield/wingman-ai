@@ -77,6 +77,7 @@ const DiscordAdapterSchema = z
 		allowBots: z.boolean().default(false),
 		allowedGuilds: z.array(z.string()).default([]),
 		allowedChannels: z.array(z.string()).default([]),
+		channelSessions: z.record(z.string(), z.string()).default({}),
 		sessionCommand: z.string().default("!session"),
 		gatewayUrl: z.string().optional(),
 		gatewayToken: z.string().optional(),
@@ -89,6 +90,7 @@ const DiscordAdapterSchema = z
 		allowBots: false,
 		allowedGuilds: [],
 		allowedChannels: [],
+		channelSessions: {},
 		sessionCommand: "!session",
 		responseChunkSize: 1900,
 	});

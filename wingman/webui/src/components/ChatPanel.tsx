@@ -349,15 +349,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					>
 						{voiceAutoEnabled ? "Voice: Auto" : "Voice: Off"}
 					</button>
-					{voicePlayback.status !== "idle" ? (
-						<button
-							className="button-secondary"
-							onClick={onStopVoice}
-							type="button"
-						>
-							Stop Voice
-						</button>
-					) : null}
 					<button
 						className="button-secondary"
 						onClick={onClearChat}

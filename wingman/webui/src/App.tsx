@@ -32,6 +32,7 @@ import { RoutinesPage } from "./pages/RoutinesPage";
 import { WebhooksPage } from "./pages/WebhooksPage";
 import { buildRoutineAgents } from "./utils/agentOptions";
 import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./utils/voice";
+import { shouldAutoSpeak } from "./utils/voiceAuto";
 import wingmanIcon from "./assets/wingman_icon.webp";
 import wingmanLogo from "./assets/wingman_logo.webp";
 
@@ -353,6 +354,10 @@ export const App: React.FC = () => {
 		},
 		[config.voice?.defaultPolicy, voiceSessions],
 	);
+	const isVoiceAutoEnabledRef = useRef(isVoiceAutoEnabled);
+	useEffect(() => {
+		isVoiceAutoEnabledRef.current = isVoiceAutoEnabled;
+	}, [isVoiceAutoEnabled]);
 
 	const toggleVoiceAuto = useCallback(
 		(threadId: string) => {
@@ -529,6 +534,10 @@ export const App: React.FC = () => {
 		},
 		[agentVoiceMap, config.voice, logEvent, stopVoicePlayback],
 	);
+	const speakVoiceRef = useRef(speakVoice);
+	useEffect(() => {
+		speakVoiceRef.current = speakVoice;
+	}, [speakVoice]);
 
 	const activeVoiceAutoEnabled = activeThread
 		? isVoiceAutoEnabled(activeThread.id)
@@ -671,18 +680,23 @@ export const App: React.FC = () => {
 		const threadId = requestThreadRef.current.get(requestId);
 		if (!threadId) return;
 		const finalText = buffersRef.current.get(requestId) || fallback || "";
-		if (finalText.trim() && isVoiceAutoEnabled(threadId)) {
-			const spoken = spokenMessagesRef.current.get(threadId) || new Set<string>();
-			if (!spoken.has(requestId)) {
-				spoken.add(requestId);
-				spokenMessagesRef.current.set(threadId, spoken);
-				const agentForRequest = requestAgentRef.current.get(requestId);
-				void speakVoice({
-					messageId: requestId,
-					text: finalText,
-					agentId: agentForRequest,
-				});
-			}
+		const spoken = spokenMessagesRef.current.get(threadId) || new Set<string>();
+		if (
+			shouldAutoSpeak({
+				text: finalText,
+				enabled: isVoiceAutoEnabledRef.current(threadId),
+				spokenMessages: spoken,
+				requestId,
+			})
+		) {
+			spoken.add(requestId);
+			spokenMessagesRef.current.set(threadId, spoken);
+			const agentForRequest = requestAgentRef.current.get(requestId);
+			void speakVoiceRef.current({
+				messageId: requestId,
+				text: finalText,
+				agentId: agentForRequest,
+			});
 		}
 		setThreads((prev) =>
 			prev.map((thread) => {
@@ -704,7 +718,7 @@ export const App: React.FC = () => {
 		requestThreadRef.current.delete(requestId);
 		requestAgentRef.current.delete(requestId);
 		setIsStreaming(false);
-	}, [isVoiceAutoEnabled, speakVoice]);
+	}, []);
 
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {

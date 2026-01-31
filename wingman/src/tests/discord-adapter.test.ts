@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	extractSessionOverride,
+	parseAgentIdFromSessionKey,
+	resolveDiscordChannelSessionKey,
 	splitDiscordMessage,
 	stripDiscordBotMention,
 } from "../gateway/adapters/discord.js";
@@ -25,6 +27,29 @@ describe("discord adapter helpers", () => {
 		expect(result.matched).toBe(true);
 		expect(result.sessionKey).toBeUndefined();
 		expect(result.content).toBe("");
+	});
+
+	it("resolves channel session mapping with thread fallback", () => {
+		const map = {
+			"123": "session-a",
+			"parent-1": "session-parent",
+		};
+		expect(resolveDiscordChannelSessionKey("123", map)).toBe("session-a");
+		expect(resolveDiscordChannelSessionKey("missing", map, "parent-1")).toBe(
+			"session-parent",
+		);
+		expect(resolveDiscordChannelSessionKey("missing", map)).toBeUndefined();
+	});
+
+	it("parses agent id from session key", () => {
+		expect(parseAgentIdFromSessionKey("agent:main:webui:thread:abc")).toBe(
+			"main",
+		);
+		expect(parseAgentIdFromSessionKey("agent:stock-trader:discord:channel:1")).toBe(
+			"stock-trader",
+		);
+		expect(parseAgentIdFromSessionKey("session-plain")).toBeUndefined();
+		expect(parseAgentIdFromSessionKey(undefined)).toBeUndefined();
 	});
 
 	it("strips bot mention variants", () => {

@@ -31,6 +31,7 @@ export interface WingmanConfig {
 				allowBots?: boolean;
 				allowedGuilds?: string[];
 				allowedChannels?: string[];
+				channelSessions?: Record<string, string>;
 				sessionCommand?: string;
 				gatewayUrl?: string;
 				gatewayToken?: string;

@@ -23,6 +23,7 @@ export interface DiscordAdapterConfig {
 	allowBots: boolean;
 	allowedGuilds: string[];
 	allowedChannels: string[];
+	channelSessions?: Record<string, string>;
 	sessionCommand: string;
 	gatewayUrl?: string;
 	gatewayToken?: string;
@@ -80,6 +81,32 @@ export function extractSessionOverride(
 	}
 	const [sessionKey, ...rest] = withoutCommand.split(/\s+/);
 	return { sessionKey, content: rest.join(" "), matched: true };
+}
+
+export function resolveDiscordChannelSessionKey(
+	channelId: string,
+	channelSessions?: Record<string, string>,
+	parentChannelId?: string,
+): string | undefined {
+	if (!channelSessions) {
+		return undefined;
+	}
+	const direct = channelSessions[channelId];
+	if (direct) {
+		return direct;
+	}
+	if (parentChannelId) {
+		return channelSessions[parentChannelId];
+	}
+	return undefined;
+}
+
+export function parseAgentIdFromSessionKey(sessionKey?: string): string | undefined {
+	if (!sessionKey) {
+		return undefined;
+	}
+	const match = sessionKey.match(/^agent:([^:]+):/);
+	return match?.[1];
 }
 
 function buildRoutingInfo(message: Message, botUserId: string): RoutingInfo {
@@ -254,6 +281,8 @@ export class DiscordGatewayAdapter {
 			content,
 			this.config.sessionCommand,
 		);
+		let resolvedSessionKey = sessionKey;
+		let usedChannelMapping = false;
 		if (matched) {
 			content = nextContent.trim();
 			if (!sessionKey) {
@@ -263,15 +292,35 @@ export class DiscordGatewayAdapter {
 				return;
 			}
 		}
+		if (!matched) {
+			const parentChannelId = message.channel.isThread()
+				? message.channel.parentId ?? undefined
+				: undefined;
+			resolvedSessionKey = resolveDiscordChannelSessionKey(
+				message.channelId,
+				this.config.channelSessions,
+				parentChannelId,
+			);
+			usedChannelMapping = Boolean(resolvedSessionKey);
+		}
+		const inferredAgentId = parseAgentIdFromSessionKey(resolvedSessionKey);
+		if (usedChannelMapping && !inferredAgentId) {
+			this.logger.warn(
+				`Discord channel session mapping for channel ${message.channelId} does not include an agent prefix. ` +
+					'Use "agent:<id>:..." to auto-select an agent.',
+				{ sessionKey: resolvedSessionKey },
+			);
+		}
 
 		if (!content) {
 			return;
 		}
 
 		const payload: AgentRequestPayload = {
+			agentId: inferredAgentId,
 			content,
 			routing: buildRoutingInfo(message, botUserId),
-			sessionKey,
+			sessionKey: resolvedSessionKey,
 		};
 
 		try {
