@@ -37,7 +37,7 @@ jobs:
               with:
                   apiToken: ${{ secrets.CLOUD_FLARE_API_TOKEN }}
                   accountId: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-                  projectName: wingman-website
+                  projectName: wingman-site
                   directory: website/dist
 
             - name: Outputs
