@@ -1,8 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { GatewayServer, GatewayClient } from "../gateway/index.js";
 
 const isBun = typeof (globalThis as any).Bun !== "undefined";
 const describeIfBun = isBun ? describe : describe.skip;
+
+vi.mock("@/cli/core/agentInvoker.js", () => ({
+	AgentInvoker: class {
+		constructor() {}
+		async invokeAgent() {
+			return { streaming: true };
+		}
+	},
+}));
 
 describeIfBun("Gateway", () => {
 	let server: GatewayServer;
@@ -43,6 +52,68 @@ describeIfBun("Gateway", () => {
 			await server.stop();
 		}
 	});
+
+	const connectClient = (instanceId: string, clientType = "test") =>
+		new Promise<WebSocket>((resolve, reject) => {
+			const ws = new WebSocket(`ws://localhost:${port}/ws`);
+			const connectId = `connect-${instanceId}-${Date.now()}`;
+			const timeout = setTimeout(
+				() => reject(new Error("Connect timeout")),
+				5000,
+			);
+
+			ws.addEventListener("open", () => {
+				const message = {
+					type: "connect",
+					id: connectId,
+					client: { instanceId, clientType },
+					timestamp: Date.now(),
+				};
+				ws.send(JSON.stringify(message));
+			});
+
+			ws.addEventListener("message", (event) => {
+				const msg = JSON.parse(event.data as string) as {
+					type?: string;
+					id?: string;
+					ok?: boolean;
+				};
+				if (msg.type === "res" && msg.id === connectId && msg.ok) {
+					clearTimeout(timeout);
+					resolve(ws);
+				}
+			});
+
+			ws.addEventListener("error", () => {
+				clearTimeout(timeout);
+				reject(new Error("WebSocket error"));
+			});
+		});
+
+	const waitForMessage = (
+		ws: WebSocket,
+		predicate: (msg: any) => boolean,
+		timeoutMs = 5000,
+	) =>
+		new Promise<any>((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error("Message timeout")),
+				timeoutMs,
+			);
+			const handler = (event: any) => {
+				let msg: any;
+				try {
+					msg = JSON.parse(event.data as string);
+				} catch {
+					return;
+				}
+				if (!predicate(msg)) return;
+				clearTimeout(timeout);
+				ws.removeEventListener("message", handler);
+				resolve(msg);
+			};
+			ws.addEventListener("message", handler);
+		});
 
 	it("should start the gateway server", async () => {
 		const response = await fetch(`http://localhost:${port}/health`);
@@ -221,64 +292,6 @@ describeIfBun("Gateway", () => {
 	});
 
 	it("should stream agent events to session subscribers", async () => {
-		const connectClient = (instanceId: string) =>
-			new Promise<WebSocket>((resolve, reject) => {
-				const ws = new WebSocket(`ws://localhost:${port}/ws`);
-				const connectId = `connect-${instanceId}-${Date.now()}`;
-				const timeout = setTimeout(
-					() => reject(new Error("Connect timeout")),
-					5000,
-				);
-
-				ws.addEventListener("open", () => {
-					const message = {
-						type: "connect",
-						id: connectId,
-						client: { instanceId, clientType: "test" },
-						timestamp: Date.now(),
-					};
-					ws.send(JSON.stringify(message));
-				});
-
-				ws.addEventListener("message", (event) => {
-					const msg = JSON.parse(event.data as string) as { type?: string; id?: string; ok?: boolean };
-					if (msg.type === "res" && msg.id === connectId && msg.ok) {
-						clearTimeout(timeout);
-						resolve(ws);
-					}
-				});
-
-				ws.addEventListener("error", () => {
-					clearTimeout(timeout);
-					reject(new Error("WebSocket error"));
-				});
-			});
-
-		const waitForMessage = (
-			ws: WebSocket,
-			predicate: (msg: any) => boolean,
-			timeoutMs = 5000,
-		) =>
-			new Promise<any>((resolve, reject) => {
-				const timeout = setTimeout(
-					() => reject(new Error("Message timeout")),
-					timeoutMs,
-				);
-				const handler = (event: any) => {
-					let msg: any;
-					try {
-						msg = JSON.parse(event.data as string);
-					} catch {
-						return;
-					}
-					if (!predicate(msg)) return;
-					clearTimeout(timeout);
-					ws.removeEventListener("message", handler);
-					resolve(msg);
-				};
-				ws.addEventListener("message", handler);
-			});
-
 		const subscriber = await connectClient("session-subscriber");
 		const sessionId = "session-test";
 
@@ -321,6 +334,92 @@ describeIfBun("Gateway", () => {
 		expect(eventMsg.payload?.sessionId).toBe(sessionId);
 
 		subscriber.close();
+	});
+
+	it("should broadcast user messages to session subscribers", async () => {
+		const subscriber = await connectClient("session-input-subscriber");
+		const requester = await connectClient("session-input-requester");
+		const sessionId = "session-input-test";
+
+		subscriber.send(
+			JSON.stringify({
+				type: "session_subscribe",
+				payload: { sessionId },
+				timestamp: Date.now(),
+			}),
+		);
+
+		await waitForMessage(
+			subscriber,
+			(msg) =>
+				msg.type === "ack" &&
+				msg.payload?.action === "session_subscribe" &&
+				msg.payload?.sessionId === sessionId,
+		);
+
+		const eventPromise = waitForMessage(
+			subscriber,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.payload?.type === "session-message" &&
+				msg.payload?.role === "user",
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: "req-session-input",
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "Hello from test",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const eventMsg = await eventPromise;
+		expect(eventMsg.payload?.content).toBe("Hello from test");
+		expect(eventMsg.payload?.sessionId).toBe(sessionId);
+		expect(eventMsg.payload?.agentId).toBe("main");
+
+		subscriber.close();
+		requester.close();
+	});
+
+	it("should broadcast user messages to webui clients without session subscribe", async () => {
+		const webuiClient = await connectClient("session-webui-listener", "webui");
+		const requester = await connectClient("session-webui-requester");
+		const sessionId = "session-webui-test";
+
+		const eventPromise = waitForMessage(
+			webuiClient,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.payload?.type === "session-message" &&
+				msg.payload?.role === "user" &&
+				msg.payload?.sessionId === sessionId,
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: "req-session-webui",
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "Hello webui",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const eventMsg = await eventPromise;
+		expect(eventMsg.payload?.content).toBe("Hello webui");
+		expect(eventMsg.payload?.agentId).toBe("main");
+
+		webuiClient.close();
+		requester.close();
 	});
 
 	it("should clear session messages via API", async () => {

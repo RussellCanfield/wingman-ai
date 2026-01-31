@@ -12,6 +12,7 @@ import type { Logger } from "../../logger.js";
 import { additionalMessageMiddleware } from "@/agent/middleware/additional-messages.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
 import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
+import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
 import type { WingmanAgentConfig } from "@/agent/config/agentConfig.js";
 import type { WingmanAgent } from "@/types/agents.js";
 import type { WingmanConfigType } from "../config/schema.js";
@@ -164,6 +165,7 @@ export class AgentInvoker {
 
 			// Build middleware array
 			const middleware = [
+				mediaCompatibilityMiddleware({ model: targetAgent.model }),
 				additionalMessageMiddleware({
 					workdir: this.workdir,
 					defaultOutputDir: this.defaultOutputDir,
@@ -352,7 +354,6 @@ function buildAudioPart(
 ):
 	| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
 	| { type: "audio"; source_type: "url"; url: string; mime_type?: string } {
-	if (!attachment.dataUrl) return null;
 	const parsed = parseDataUrl(attachment.dataUrl);
 	const mimeType = attachment.mimeType || parsed.mimeType;
 	if (parsed.data) {

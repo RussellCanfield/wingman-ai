@@ -129,7 +129,7 @@ export class ModelFactory {
 		const token = resolveProviderToken("anthropic").token;
 		const params: { model: string; temperature: number; apiKey?: string } = {
 			model,
-			temperature: 0,
+			temperature: 1,
 		};
 
 		if (token) {
@@ -143,7 +143,7 @@ export class ModelFactory {
 		const token = resolveProviderToken("openai").token;
 		const params: { model: string; temperature: number; apiKey?: string } = {
 			model,
-			temperature: 0,
+			temperature: 1,
 		};
 
 		if (token) {
@@ -159,7 +159,7 @@ export class ModelFactory {
 
 		return new ChatOpenAI({
 			model,
-			temperature: 0,
+			temperature: 1,
 			apiKey: token,
 			configuration: {
 				baseURL: provider?.baseURL,
@@ -172,7 +172,7 @@ export class ModelFactory {
 
 		return new ChatOpenAI({
 			model,
-			temperature: 0,
+			temperature: 1,
 			apiKey: "copilot",
 			configuration: {
 				baseURL: provider?.baseURL,
@@ -185,7 +185,7 @@ export class ModelFactory {
 		const token = resolveProviderToken("xai").token;
 		const params: { model: string; temperature: number; apiKey?: string } = {
 			model,
-			temperature: 0,
+			temperature: 1,
 		};
 
 		if (token) {
@@ -204,7 +204,7 @@ export class ModelFactory {
 
 		return new ChatOpenAI({
 			model,
-			temperature: 0,
+			temperature: 1,
 			apiKey: apiKey,
 			configuration: {
 				baseURL: provider?.baseURL,
@@ -221,7 +221,7 @@ export class ModelFactory {
 
 		return new ChatOpenAI({
 			model,
-			temperature: 0,
+			temperature: 1,
 			apiKey: apiKey,
 			configuration: {
 				baseURL: provider?.baseURL,

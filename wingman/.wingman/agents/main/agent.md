@@ -8,7 +8,7 @@ tools:
   - command_execute
   - code_search
   - git_status
-model: anthropic:claude-sonnet-4-5-20250929
+model: openai:gpt-5-mini
 ---
 
 You are the primary Wingman agent. Handle a wide range of coding, research, and reasoning tasks directly.

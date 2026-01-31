@@ -2,10 +2,11 @@ import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FiLoader, FiMic, FiStopCircle, FiVolume2 } from "react-icons/fi";
+import { FiAlertTriangle, FiLoader, FiMic, FiStopCircle, FiVolume2 } from "react-icons/fi";
 import type { ChatAttachment, Thread } from "../types";
 import { extractImageFiles } from "../utils/attachments";
 import { getVoicePlaybackLabel, type VoicePlaybackStatus } from "../utils/voicePlayback";
+import { getAudioAvailability } from "../utils/media";
 import { ThinkingPanel } from "./ThinkingPanel";
 
 type ChatPanelProps = {
@@ -548,6 +549,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										<div className="mt-3 grid gap-2 sm:grid-cols-2">
 											{msg.attachments.map((attachment) => {
 												const isAudio = isAudioAttachment(attachment);
+												const audioAvailability = isAudio
+													? getAudioAvailability(attachment)
+													: null;
 												return (
 													<div
 														key={attachment.id}
@@ -555,11 +559,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 													>
 														{isAudio ? (
 															<div className="p-4">
-																<audio
-																	controls
-																	src={attachment.dataUrl}
-																	className="w-full"
-																/>
+																{audioAvailability?.playable ? (
+																	<audio
+																		controls
+																		src={attachment.dataUrl}
+																		className="w-full min-w-[200px] max-w-[360px] sm:min-w-[240px]"
+																	/>
+																) : (
+																	<div className="flex items-center gap-3 rounded-xl border border-dashed border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+																		<FiAlertTriangle className="h-4 w-4" />
+																		<div>
+																			<div className="font-semibold">Audio unavailable</div>
+																			<div className="text-[11px] text-amber-200/80">
+																				{audioAvailability?.reason ||
+																					"Audio was not stored for this session."}
+																			</div>
+																		</div>
+																	</div>
+																)}
 																{attachment.name ? (
 																	<div className="mt-2 truncate text-[11px] text-slate-400">
 																		{attachment.name}
@@ -693,6 +710,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					<div className="mt-3 flex flex-wrap gap-2">
 						{attachments.map((attachment) => {
 							const isAudio = isAudioAttachment(attachment);
+							const audioAvailability = isAudio
+								? getAudioAvailability(attachment)
+								: null;
 							return (
 								<div
 									key={attachment.id}
@@ -700,11 +720,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								>
 									{isAudio ? (
 										<div className="flex items-center gap-2 px-2 py-1">
-											<audio
-												controls
-												src={attachment.dataUrl}
-												className="h-8 w-40"
-											/>
+											{audioAvailability?.playable ? (
+												<audio
+													controls
+													src={attachment.dataUrl}
+													className="h-8 w-[200px] min-w-[180px]"
+												/>
+											) : (
+												<div className="flex items-center gap-2 rounded-lg border border-dashed border-amber-400/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100">
+													<FiAlertTriangle className="h-3 w-3" />
+													<span>Audio unavailable</span>
+												</div>
+											)}
 										</div>
 									) : (
 										<button

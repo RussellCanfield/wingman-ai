@@ -86,7 +86,9 @@ export const AgentConfigSchema = BaseAgentConfigSchema.extend({
 	subAgents: z
 		.array(BaseAgentConfigSchema)
 		.optional()
-		.describe("List of sub-agents that this agent can delegate to"),
+		.describe(
+			"List of sub-agents that this agent can delegate to (each may include its own model override)",
+		),
 });
 
 export type WingmanAgentConfig = z.infer<typeof AgentConfigSchema>;

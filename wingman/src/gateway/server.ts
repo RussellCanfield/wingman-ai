@@ -94,6 +94,7 @@ export class GatewayServer {
 	private discordAdapter: DiscordGatewayAdapter | null = null;
 	private sessionSubscriptions: Map<string, Set<GatewaySocket>> = new Map();
 	private socketSubscriptions: Map<GatewaySocket, Set<string>> = new Map();
+	private connectedClients: Set<GatewaySocket> = new Set();
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -515,6 +516,7 @@ export class GatewayServer {
 			this.nodeManager.unregisterNode(nodeId);
 			this.log("info", `Node disconnected: ${nodeId}`);
 		}
+		this.connectedClients.delete(ws);
 		this.clearSessionSubscriptions(ws);
 	}
 
@@ -564,6 +566,7 @@ export class GatewayServer {
 		ws.data.clientId = msg.client.instanceId;
 		ws.data.clientType = msg.client.clientType;
 		ws.data.authenticated = true;
+		this.connectedClients.add(ws);
 
 		this.sendMessage(ws, {
 			type: "res",
@@ -642,6 +645,30 @@ export class GatewayServer {
 			sessionKey,
 			routing: payload.routing,
 			payload: { content, attachments },
+		});
+
+		const sessionMessage: GatewayMessage = {
+			type: "event:agent",
+			id: msg.id,
+			payload: this.attachSessionContext(
+				{
+					type: "session-message",
+					role: "user",
+					content,
+					attachments,
+					routing: payload.routing,
+				},
+				sessionKey,
+				agentId,
+			),
+			timestamp: Date.now(),
+		};
+
+		this.broadcastSessionEvent(sessionKey, sessionMessage, ws);
+		this.broadcastToClients(sessionMessage, {
+			exclude: ws,
+			clientType: "webui",
+			skipSessionId: sessionKey,
 		});
 
 		const outputManager = new OutputManager("interactive");
@@ -1073,6 +1100,34 @@ export class GatewayServer {
 		for (const ws of subscribers) {
 			if (exclude && ws === exclude) {
 				continue;
+			}
+			this.sendMessage(ws, message);
+			sent++;
+		}
+		return sent;
+	}
+
+	private broadcastToClients(
+		message: GatewayMessage,
+		options?: {
+			exclude?: GatewaySocket;
+			clientType?: string;
+			skipSessionId?: string;
+		},
+	): number {
+		let sent = 0;
+		for (const ws of this.connectedClients) {
+			if (options?.exclude && ws === options.exclude) {
+				continue;
+			}
+			if (options?.clientType && ws.data.clientType !== options.clientType) {
+				continue;
+			}
+			if (options?.skipSessionId) {
+				const subscribers = this.sessionSubscriptions.get(options.skipSessionId);
+				if (subscribers?.has(ws)) {
+					continue;
+				}
 			}
 			this.sendMessage(ws, message);
 			sent++;

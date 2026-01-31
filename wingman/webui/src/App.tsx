@@ -711,6 +711,98 @@ export const App: React.FC = () => {
 			if (!payload) return;
 			const sessionId =
 				typeof payload?.sessionId === "string" ? payload.sessionId : undefined;
+			if (payload.type === "session-message" && payload.role === "user") {
+				if (!sessionId) return;
+				const now = Date.now();
+				const rawAttachments = Array.isArray(payload.attachments)
+					? payload.attachments
+					: [];
+				const mappedAttachments = rawAttachments
+					.map((attachment: any) => {
+						if (!attachment || typeof attachment !== "object") return null;
+						const dataUrl =
+							typeof attachment.dataUrl === "string" ? attachment.dataUrl : "";
+						if (!dataUrl) return null;
+						const mimeType =
+							typeof attachment.mimeType === "string"
+								? attachment.mimeType
+								: undefined;
+						const name =
+							typeof attachment.name === "string" ? attachment.name : undefined;
+						const size =
+							typeof attachment.size === "number" ? attachment.size : undefined;
+						const isAudio =
+							attachment.kind === "audio" ||
+							mimeType?.startsWith("audio/") ||
+							dataUrl.startsWith("data:audio/");
+						return {
+							id: createAttachmentId(),
+							kind: isAudio ? "audio" : "image",
+							dataUrl,
+							mimeType,
+							name,
+							size,
+						};
+					})
+					.filter(Boolean) as ChatAttachment[];
+				const userMessage: ChatMessage = {
+					id: `user-${requestId || now}`,
+					role: "user",
+					content: typeof payload.content === "string" ? payload.content : "",
+					attachments:
+						mappedAttachments.length > 0 ? mappedAttachments : undefined,
+					createdAt: now,
+				};
+				const attachmentPreview =
+					mappedAttachments.length > 0
+						? buildAttachmentPreviewText(mappedAttachments)
+						: "";
+				setThreads((prev) => {
+					const existing = prev.find((thread) => thread.id === sessionId);
+					if (!existing) {
+						const newThread: Thread = {
+							id: sessionId,
+							name: sessionId,
+							agentId:
+								typeof payload?.agentId === "string" ? payload.agentId : agentId,
+							messages: [userMessage],
+							toolEvents: [],
+							thinkingEvents: [],
+							createdAt: now,
+							updatedAt: now,
+							messageCount: 1,
+							lastMessagePreview: (userMessage.content || attachmentPreview).slice(
+								0,
+								200,
+							),
+							messagesLoaded: false,
+						};
+						return [newThread, ...prev];
+					}
+
+					const hasMessage = existing.messages.some(
+						(message) => message.id === userMessage.id,
+					);
+					if (hasMessage) {
+						return prev;
+					}
+
+					return prev.map((thread) => {
+						if (thread.id !== sessionId) return thread;
+						return {
+							...thread,
+							messages: [...thread.messages, userMessage],
+							messageCount: (thread.messageCount ?? thread.messages.length) + 1,
+							lastMessagePreview: (userMessage.content || attachmentPreview).slice(
+								0,
+								200,
+							),
+							updatedAt: now,
+						};
+					});
+				});
+				return;
+			}
 			if (sessionId && !requestThreadRef.current.has(requestId)) {
 				requestThreadRef.current.set(requestId, sessionId);
 				if (typeof payload?.agentId === "string") {

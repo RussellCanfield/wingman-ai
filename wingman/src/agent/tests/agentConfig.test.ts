@@ -45,6 +45,28 @@ describe("Agent Configuration Schema", () => {
 			}
 		});
 
+		it("should allow subagents to override models", () => {
+			const config = {
+				name: "parent-agent",
+				description: "Parent agent",
+				systemPrompt: "You are the parent agent",
+				subAgents: [
+					{
+						name: "research-agent",
+						description: "Researches topics",
+						systemPrompt: "You are a researcher",
+						model: "openai:gpt-4o",
+					},
+				],
+			};
+
+			const result = validateAgentConfig(config);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.subAgents?.[0].model).toBe("openai:gpt-4o");
+			}
+		});
+
 		it("should fail validation for missing required fields", () => {
 			const config = {
 				name: "test-agent",

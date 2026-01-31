@@ -28,7 +28,8 @@ Each agent configuration file follows this schema:
       "name": "subagent-1",
       "description": "Description of subagent",
       "systemPrompt": "Instructions for subagent...",
-      "tools": ["tool1"]
+      "tools": ["tool1"],
+      "model": "provider:model-name"
     }
   ]
 }
@@ -43,11 +44,12 @@ Each agent configuration file follows this schema:
 ### Optional Fields
 
 - **tools**: Array of tool names the agent can use
-  - Available tools: `internet_search`, `web_crawler`, `command_execute`, `think`
+  - Available tools: `internet_search`, `web_crawler`, `command_execute`, `think`, `code_search`, `git_status`
 - **model**: Override the default model (format: `provider:model-name`)
   - Anthropic: `anthropic:claude-opus-4-5`, `anthropic:claude-sonnet-4-5-20250929`
   - OpenAI: `openai:gpt-4o`, `openai:gpt-4-turbo`
 - **subagents**: Array of subagent configurations (see [Hierarchical Agents](#hierarchical-agents) below)
+  - Subagents may also set their own `model` to override the parent/default model
 
 ### Tool-Specific Options
 
