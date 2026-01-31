@@ -5,7 +5,7 @@
 	"gateway": {
 		"host": "0.0.0.0",
 		"port": 18789,
-		"auth": { "mode": "token", "token": "c0284175b023bd92aa257a2b08e303e219c921efc9874ca126c55ad994666d40" },
+		"auth": { "mode": "token" },
 		"fsRoots": [
 			"~/.wingman/outputs",
 			"~/Projects"

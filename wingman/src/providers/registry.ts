@@ -32,6 +32,7 @@ export interface ProviderSpec {
 	envVars: string[];
 	baseURL?: string;
 	oauth?: ProviderOAuthConfig;
+	requiresAuth?: boolean; // If false, API key is optional (e.g., local providers)
 }
 
 const PROVIDERS: Record<ProviderName, ProviderSpec> = {
@@ -73,6 +74,7 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		type: "api-key",
 		envVars: ["LMSTUDIO_API_KEY", "LM_STUDIO_API_KEY"],
 		baseURL: "http://localhost:1234/v1",
+		requiresAuth: false,
 	},
 	ollama: {
 		name: "ollama",
@@ -80,6 +82,7 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		type: "api-key",
 		envVars: ["OLLAMA_API_KEY"],
 		baseURL: "http://localhost:11434/v1",
+		requiresAuth: false,
 	},
 };
 

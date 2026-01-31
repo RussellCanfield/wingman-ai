@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
 **Version:** 1.2
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-01-30
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -182,7 +182,7 @@ Modern AI assistants face several challenges:
 - Persistent memory for caches, watchlists, and run state
 
 **Tools**:
-- MCP tools for domain data (e.g., Finnhub candles, news, options); candle tools enforce conservative lookback caps (intraday default 180 days, daily default 365 days) to stay within plan limits and can fall back to Yahoo Finance chart data when Finnhub denies access
+- MCP tools for domain data (e.g., Finnhub quotes/news/options); candle tools enforce conservative lookback caps (intraday default 180 days, daily default 365 days). Candle sourcing defaults to Yahoo Finance chart data (non‑premium Finnhub) and can fall back to Finnhub when configured.
 - `think` for structured reasoning
 - Optional `web_crawler` for user-supplied URLs
 
@@ -538,12 +538,15 @@ description: What the skill does
 
 Wingman currently supports multiple model providers via API keys and stored tokens:
 
-| Provider | Models | Authentication |
-|----------|--------|----------------|
-| Anthropic | claude-opus-4-5, claude-sonnet-4-5 | `ANTHROPIC_API_KEY` (or stored) |
-| OpenAI | gpt-4o, gpt-4-turbo | `OPENAI_API_KEY` (or stored) |
-| OpenRouter | any OpenRouter model | `OPENROUTER_API_KEY` (or stored) |
-| GitHub Copilot | gpt-4o, gpt-4-turbo | `GITHUB_COPILOT_TOKEN` or `wingman provider login` |
+| Provider | Models | Authentication | Type |
+|----------|--------|----------------|------|
+| Anthropic | claude-opus-4-5, claude-sonnet-4-5 | `ANTHROPIC_API_KEY` (or stored) | Cloud API |
+| OpenAI | gpt-4o, gpt-4-turbo | `OPENAI_API_KEY` (or stored) | Cloud API |
+| OpenRouter | any OpenRouter model | `OPENROUTER_API_KEY` (or stored) | Cloud API |
+| xAI | grok-beta | `XAI_API_KEY` (or stored) | Cloud API |
+| GitHub Copilot | gpt-4o, gpt-4-turbo | `GITHUB_COPILOT_TOKEN` or `wingman provider login` | Subscription |
+| LM Studio | any loaded model | Optional: `LMSTUDIO_API_KEY` | Local Server |
+| Ollama | any pulled model | Optional: `OLLAMA_API_KEY` | Local Server |
 
 **Model Selection Format:** `provider:model-name`
 
@@ -551,21 +554,32 @@ Examples:
 - `anthropic:claude-opus-4-5`
 - `openai:gpt-4o`
 - `openrouter:openai/gpt-4o`
+- `xai:grok-beta`
 - `copilot:gpt-4o`
+- `lmstudio:llama-3.1-8b`
+- `ollama:llama3.2`
 
 ### Planned Provider Support
 
-To maximize adoption, Wingman will support subscription-based model providers alongside API keys:
+To maximize adoption, Wingman will support subscription-based model providers alongside API keys and local inference:
 
 | Provider | Type | Authentication | Status |
 |----------|------|----------------|--------|
 | Anthropic | API | API Key | ✅ Implemented |
 | OpenAI | API | API Key | ✅ Implemented |
 | OpenRouter | API | API Key | ✅ Implemented |
+| xAI | API | API Key | ✅ Implemented |
 | GitHub Copilot | Subscription | Token (manual) | ✅ Implemented |
+| LM Studio | Local | Optional API Key | ✅ Implemented |
+| Ollama | Local | Optional API Key | ✅ Implemented |
 | OpenAI Codex | Subscription | OAuth | 🔄 Planned |
 | Claude Max | Subscription | OAuth | 🔄 Planned |
 | Google Gemini | API | API Key | 🔄 Planned |
+
+**Local Provider Notes:**
+- **LM Studio**: Runs OpenAI-compatible API on `localhost:1234`. No authentication required by default.
+- **Ollama**: Runs OpenAI-compatible API on `localhost:11434`. No authentication required by default.
+- Both local providers work immediately without API keys when the server is running.
 
 ### Provider Interface
 
@@ -625,6 +639,15 @@ Users specify providers in agent configuration:
   "name": "my-agent",
   "model": "copilot:gpt-4",
   "fallbackModel": "anthropic:claude-sonnet-4-5"
+}
+```
+
+**Local Provider Example:**
+```json
+{
+  "name": "local-dev-agent",
+  "model": "ollama:llama3.2",
+  "fallbackModel": "lmstudio:llama-3.1-8b"
 }
 ```
 

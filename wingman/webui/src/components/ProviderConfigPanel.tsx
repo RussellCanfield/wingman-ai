@@ -83,23 +83,36 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 			) : (
 				<div className="space-y-3">
 					{sortedProviders.map((provider) => {
+						const isLocalProvider = provider.requiresAuth === false;
+						const isMissing = provider.source === "missing";
+
 						const statusLabel =
-							provider.source === "missing" ? "Missing" : "Configured";
+							isMissing
+								? isLocalProvider
+									? "Ready"
+									: "Missing"
+								: "Configured";
+
 						const statusTone =
-							provider.source === "missing"
-								? "border-rose-400/50 bg-rose-500/15 text-rose-200"
+							isMissing
+								? isLocalProvider
+									? "border-emerald-400/60 bg-emerald-500/10 text-emerald-300"
+									: "border-rose-400/50 bg-rose-500/15 text-rose-200"
 								: "border-sky-400/60 bg-sky-500/10 text-sky-300";
+
 						const sourceLabel =
 							provider.source === "env"
 								? `Env (${provider.envVar || provider.envVars[0] || "set"})`
 								: provider.source === "credentials"
 									? "Stored credentials"
-									: "No credentials saved";
+									: isLocalProvider
+										? "Local server (no auth required)"
+										: "No credentials saved";
 
 						return (
 							<details
 								key={provider.name}
-								open={provider.source === "missing"}
+								open={isMissing && !isLocalProvider}
 								className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2"
 							>
 								<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
@@ -119,14 +132,20 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 								</summary>
 								<div className="mt-4 space-y-3">
 									<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-										{provider.type === "oauth" ? "Access Token" : "API Key"}
+										{provider.type === "oauth"
+											? "Access Token"
+											: isLocalProvider
+												? "API Key (Optional)"
+												: "API Key"}
 									</label>
 									<input
 										type="password"
 										className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm focus:shadow-glow"
-										placeholder={`Paste ${provider.label} ${
-											provider.type === "oauth" ? "token" : "API key"
-										}`}
+										placeholder={
+											isLocalProvider
+												? `Optional: Custom API key for ${provider.label}`
+												: `Paste ${provider.label} ${provider.type === "oauth" ? "token" : "API key"}`
+										}
 										value={drafts[provider.name] || ""}
 										onChange={(event) =>
 											handleDraftChange(provider.name, event.target.value)
@@ -159,6 +178,19 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 									<div className="text-xs text-slate-400">
 										Env: {provider.envVars.join(", ")}
 									</div>
+									{isLocalProvider && (
+										<div className="rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
+											<div className="font-semibold">Local Provider</div>
+											<div className="mt-1 text-emerald-300/80">
+												{provider.name === "lmstudio"
+													? "Start LM Studio server (default: localhost:1234)"
+													: "Start Ollama server (default: localhost:11434)"}
+											</div>
+											<div className="mt-1 text-emerald-300/60">
+												No API key required for local inference
+											</div>
+										</div>
+									)}
 								</div>
 							</details>
 						);

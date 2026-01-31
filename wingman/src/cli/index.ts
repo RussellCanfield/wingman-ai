@@ -4,6 +4,7 @@ import { createLogger, getLogFilePath, type LogLevel } from "../logger.js";
 import type { OutputMode, AgentCommandArgs } from "./types.js";
 import type { SkillCommandArgs } from "./types/skill.js";
 import { WingmanConfigLoader } from "./config/loader.js";
+import { getGatewayTokenFromEnv } from "@/gateway/env.js";
 import { OutputManager } from "./core/outputManager.js";
 import { executeAgentCommand } from "./commands/agent.js";
 import { executeSkillCommand } from "./commands/skill.js";
@@ -228,7 +229,8 @@ async function main() {
 					: undefined);
 			const token =
 				(parsed.commandOptions?.token as string | undefined) ||
-				gatewayConfig?.auth?.token;
+				gatewayConfig?.auth?.token ||
+				getGatewayTokenFromEnv();
 			const password =
 				(parsed.commandOptions?.password as string | undefined) ||
 				gatewayConfig?.auth?.password;

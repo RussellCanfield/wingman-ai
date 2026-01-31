@@ -735,6 +735,9 @@ to avoid cross-origin issues when the UI is on a different port.
 }
 ```
 
+Environment overrides:
+- `WINGMAN_GATEWAY_TOKEN` can supply the auth token at runtime so you can keep `auth.mode` set to `token` without storing the token in config.
+
 ### Session Working Folder (Control UI)
 - Each session can optionally set a working folder for output files.
 - The gateway validates the path against `gateway.fsRoots`.

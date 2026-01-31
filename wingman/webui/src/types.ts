@@ -163,6 +163,7 @@ export type ProviderStatus = {
 	envVars: string[];
 	source: "env" | "credentials" | "missing";
 	envVar?: string;
+	requiresAuth?: boolean;
 };
 
 export type ProviderStatusResponse = {

@@ -66,6 +66,13 @@ wingman init
 wingman gateway start
 ```
 
+### Gateway Auth (Environment Token)
+
+```bash
+export WINGMAN_GATEWAY_TOKEN=sk-...
+wingman gateway start --auth
+```
+
 ### Connect
 
 - **CLI**: `wingman chat`

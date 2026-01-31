@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { validateConfig, type WingmanConfigType } from "./schema.js";
+import { getGatewayTokenFromEnv } from "@/gateway/env.js";
 import { createLogger, Logger } from "@/logger.js";
 
 export class WingmanConfigLoader {
@@ -28,7 +29,7 @@ export class WingmanConfigLoader {
 			this.logger.info(
 				`Config file not found at ${configPath}, using default configuration`,
 			);
-			return this.getDefaultConfig();
+			return this.applyGatewayAuthEnvOverrides(this.getDefaultConfig());
 		}
 
 		try {
@@ -46,7 +47,7 @@ export class WingmanConfigLoader {
 
 			this.logger.debug(`Loaded configuration from ${configPath} with values: ${JSON.stringify(validation.data)}`);
 
-			return validation.data;
+			return this.applyGatewayAuthEnvOverrides(validation.data);
 		} catch (error) {
 			if (error instanceof SyntaxError) {
 				this.logger.error(
@@ -56,8 +57,30 @@ export class WingmanConfigLoader {
 				this.logger.error(`Warning: Failed to load config: ${error}`);
 			}
 			this.logger.error("Using default configuration");
-			return this.getDefaultConfig();
+			return this.applyGatewayAuthEnvOverrides(this.getDefaultConfig());
 		}
+	}
+
+	private applyGatewayAuthEnvOverrides(config: WingmanConfigType): WingmanConfigType {
+		const token = getGatewayTokenFromEnv();
+		if (
+			token &&
+			config.gateway?.auth?.mode === "token" &&
+			!config.gateway.auth.token
+		) {
+			return {
+				...config,
+				gateway: {
+					...config.gateway,
+					auth: {
+						...config.gateway.auth,
+						token,
+					},
+				},
+			};
+		}
+
+		return config;
 	}
 
 	private getDefaultConfig(): WingmanConfigType {

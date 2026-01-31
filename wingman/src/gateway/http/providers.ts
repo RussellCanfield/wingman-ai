@@ -25,6 +25,7 @@ export const handleProvidersApi = async (
 					envVars: provider.envVars,
 					source: resolved.source,
 					envVar: resolved.envVar,
+					requiresAuth: provider.requiresAuth,
 				};
 			});
 
@@ -73,6 +74,7 @@ export const handleProvidersApi = async (
 					envVars: provider.envVars,
 					source: resolved.source,
 					envVar: resolved.envVar,
+					requiresAuth: provider.requiresAuth,
 				},
 				null,
 				2,
@@ -93,6 +95,7 @@ export const handleProvidersApi = async (
 					envVars: provider.envVars,
 					source: resolved.source,
 					envVar: resolved.envVar,
+					requiresAuth: provider.requiresAuth,
 				},
 				null,
 				2,

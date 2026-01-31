@@ -3,6 +3,7 @@ import type { GatewayConfig } from "../../gateway/types.js";
 import { readFileSync } from "fs";
 import { createLogger, getLogFilePath } from "@/logger.js";
 import { WingmanConfigLoader } from "../config/loader.js";
+import { getGatewayTokenFromEnv } from "@/gateway/env.js";
 
 const logger = createLogger();
 const logFile = getLogFilePath();
@@ -75,6 +76,7 @@ async function handleStart(options: Record<string, unknown>): Promise<void> {
 	const configLoader = new WingmanConfigLoader();
 	const wingmanConfig = configLoader.loadConfig();
 	const gatewayDefaults = wingmanConfig.gateway;
+	const envToken = getGatewayTokenFromEnv();
 
 	const authFlag = Boolean(options.auth);
 	const authMode = (options["auth-mode"] || options.authMode || (authFlag ? "token" : undefined)) as
@@ -82,10 +84,14 @@ async function handleStart(options: Record<string, unknown>): Promise<void> {
 		| "password"
 		| "none"
 		| undefined;
+	const resolvedToken =
+		authMode === "token"
+			? (options.token as string | undefined) || envToken
+			: undefined;
 	const auth = authMode
 		? {
 				mode: authMode,
-				token: options.token as string | undefined,
+				token: resolvedToken,
 				password: options.password as string | undefined,
 			}
 		: gatewayDefaults.auth;
@@ -217,16 +223,21 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 		const configLoader = new WingmanConfigLoader();
 		const wingmanConfig = configLoader.loadConfig();
 		const gatewayDefaults = wingmanConfig.gateway;
+		const envToken = getGatewayTokenFromEnv();
 		const authFlag = Boolean(options.auth);
 		const authMode = (options["auth-mode"] || options.authMode || (authFlag ? "token" : undefined)) as
 			| "token"
 			| "password"
 			| "none"
 			| undefined;
+		const resolvedToken =
+			authMode === "token"
+				? (options.token as string | undefined) || envToken
+				: undefined;
 		const auth = authMode
 			? {
 					mode: authMode,
-					token: options.token as string | undefined,
+					token: resolvedToken,
 					password: options.password as string | undefined,
 				}
 			: gatewayDefaults.auth;
@@ -286,7 +297,7 @@ async function handleJoin(
 ): Promise<void> {
 	const url = args[0] || `ws://localhost:18789/ws`;
 	const name = (options.name as string) || `node-${Date.now()}`;
-	const token = options.token as string | undefined;
+	const token = (options.token as string | undefined) || getGatewayTokenFromEnv();
 	const group = options.group as string | undefined;
 	const transport = (options.transport as "websocket" | "http" | "auto") || "auto";
 

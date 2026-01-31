@@ -18,6 +18,7 @@ import { GatewayAuth } from "./auth.js";
 import {
 	validateGatewayMessage,
 } from "./validation.js";
+import { getGatewayTokenFromEnv } from "./env.js";
 import {
 	MDNSDiscoveryService,
 	TailscaleDiscoveryService,
@@ -106,16 +107,24 @@ export class GatewayServer {
 		this.routineStore = createRoutineStore(() => this.resolveConfigDirPath());
 
 		const gatewayDefaults = this.wingmanConfig.gateway;
-		const authConfig: GatewayAuthConfig | undefined = config.auth
-			? config.auth
+		const envToken = getGatewayTokenFromEnv();
+		const authFromConfig =
+			config.auth?.mode === "token"
+				? { ...config.auth, token: config.auth.token ?? envToken }
+				: config.auth;
+		const legacyToken = config.authToken ?? envToken;
+		const authConfig: GatewayAuthConfig | undefined = authFromConfig
+			? authFromConfig
 			: config.requireAuth || config.authToken
-				? { mode: "token", token: config.authToken }
+				? { mode: "token", token: legacyToken }
 				: gatewayDefaults.auth;
+		const resolvedAuthToken =
+			authConfig?.mode === "token" ? authConfig.token ?? legacyToken : undefined;
 
 		this.config = {
 			port: config.port ?? gatewayDefaults.port ?? 18789,
 			host: config.host || gatewayDefaults.host || "127.0.0.1",
-			authToken: config.authToken,
+			authToken: resolvedAuthToken,
 			requireAuth: config.requireAuth ?? false,
 			auth: authConfig,
 			stateDir: config.stateDir || gatewayDefaults.stateDir,

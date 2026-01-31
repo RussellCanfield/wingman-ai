@@ -7,14 +7,22 @@ import { tmpdir } from "os";
 describe("CLI Config Loader", () => {
 	let testDir: string;
 	let configDir: string;
+	let originalGatewayToken: string | undefined;
 
 	beforeEach(() => {
+		originalGatewayToken = process.env.WINGMAN_GATEWAY_TOKEN;
+		delete process.env.WINGMAN_GATEWAY_TOKEN;
 		testDir = join(tmpdir(), `wingman-test-${Date.now()}`);
 		configDir = join(testDir, ".wingman");
 		mkdirSync(configDir, { recursive: true });
 	});
 
 	afterEach(() => {
+		if (typeof originalGatewayToken === "string") {
+			process.env.WINGMAN_GATEWAY_TOKEN = originalGatewayToken;
+		} else {
+			delete process.env.WINGMAN_GATEWAY_TOKEN;
+		}
 		if (existsSync(testDir)) {
 			rmSync(testDir, { recursive: true, force: true });
 		}
@@ -394,6 +402,72 @@ describe("CLI Config Loader", () => {
 			const config = loader.loadConfig();
 
 			expect(config.logLevel).toBe("info");
+		});
+	});
+
+	describe("Environment overrides", () => {
+		it("should apply WINGMAN_GATEWAY_TOKEN when auth mode is token", () => {
+			process.env.WINGMAN_GATEWAY_TOKEN = "env-token";
+			const configData = {
+				gateway: {
+					auth: {
+						mode: "token",
+					},
+				},
+			};
+
+			writeFileSync(
+				join(configDir, "wingman.config.json"),
+				JSON.stringify(configData)
+			);
+
+			const loader = new WingmanConfigLoader(".wingman", testDir);
+			const config = loader.loadConfig();
+
+			expect(config.gateway.auth.token).toBe("env-token");
+		});
+
+		it("should not override token when auth mode is none", () => {
+			process.env.WINGMAN_GATEWAY_TOKEN = "env-token";
+			const configData = {
+				gateway: {
+					auth: {
+						mode: "none",
+					},
+				},
+			};
+
+			writeFileSync(
+				join(configDir, "wingman.config.json"),
+				JSON.stringify(configData)
+			);
+
+			const loader = new WingmanConfigLoader(".wingman", testDir);
+			const config = loader.loadConfig();
+
+			expect(config.gateway.auth.token).toBeUndefined();
+		});
+
+		it("should prefer config token over environment token", () => {
+			process.env.WINGMAN_GATEWAY_TOKEN = "env-token";
+			const configData = {
+				gateway: {
+					auth: {
+						mode: "token",
+						token: "config-token",
+					},
+				},
+			};
+
+			writeFileSync(
+				join(configDir, "wingman.config.json"),
+				JSON.stringify(configData)
+			);
+
+			const loader = new WingmanConfigLoader(".wingman", testDir);
+			const config = loader.loadConfig();
+
+			expect(config.gateway.auth.token).toBe("config-token");
 		});
 	});
 });
