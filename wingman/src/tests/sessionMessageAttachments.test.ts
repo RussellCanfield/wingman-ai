@@ -51,4 +51,13 @@ describe("extractAttachments", () => {
 			{ kind: "audio", dataUrl: "https://cdn.example/audio.mp3" },
 		]);
 	});
+
+	it("extracts base64 audio blocks", () => {
+		const blocks = [
+			{ type: "audio", source_type: "base64", data: "abc", mime_type: "audio/wav" },
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{ kind: "audio", dataUrl: "data:audio/wav;base64,abc" },
+		]);
+	});
 });

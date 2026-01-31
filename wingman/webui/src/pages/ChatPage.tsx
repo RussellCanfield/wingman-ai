@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { ChatAttachment, Thread } from "../types";
 import { ChatPanel } from "../components/ChatPanel";
 import { WorkdirModal } from "../components/WorkdirModal";
+import type { VoicePlaybackStatus } from "../utils/voicePlayback";
 
 type ChatPageProps = {
 	agentId: string;
@@ -14,7 +15,7 @@ type ChatPageProps = {
 	loadingThread: boolean;
 	outputRoot?: string;
 	voiceAutoEnabled: boolean;
-	voicePlayback: { status: "idle" | "loading" | "playing"; messageId?: string };
+	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
 	onToggleVoiceAuto: () => void;
 	onSpeakVoice: (messageId: string, text: string) => void;
 	onStopVoice: () => void;

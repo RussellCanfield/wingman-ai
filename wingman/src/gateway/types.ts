@@ -8,6 +8,8 @@ export type MessageType =
 	| "res" // Response to request
 	| "req:agent" // Request agent execution
 	| "event:agent" // Agent stream events
+	| "session_subscribe" // Subscribe to session events
+	| "session_unsubscribe" // Unsubscribe from session events
 	| "register" // Node registration
 	| "registered" // Registration confirmation
 	| "unregister" // Node leaving
@@ -192,6 +194,10 @@ export interface RegisterPayload {
 	sessionId?: string; // Optional session ID for session-aware workflows
 	agentName?: string; // Agent name for session tracking
 	metadata?: Record<string, unknown>; // Additional session/agent metadata
+}
+
+export interface SessionSubscriptionPayload {
+	sessionId: string;
 }
 
 /**

@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { FiLoader, FiMic, FiStopCircle, FiVolume2 } from "react-icons/fi";
 import type { ChatAttachment, Thread } from "../types";
 import { extractImageFiles } from "../utils/attachments";
+import { getVoicePlaybackLabel, type VoicePlaybackStatus } from "../utils/voicePlayback";
 import { ThinkingPanel } from "./ThinkingPanel";
 
 type ChatPanelProps = {
@@ -16,7 +17,7 @@ type ChatPanelProps = {
 	connected: boolean;
 	loading: boolean;
 	voiceAutoEnabled: boolean;
-	voicePlayback: { status: "idle" | "loading" | "playing"; messageId?: string };
+	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
 	onToggleVoiceAuto: () => void;
 	onSpeakVoice: (messageId: string, text: string) => void;
 	onStopVoice: () => void;
@@ -75,6 +76,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const [recordingDuration, setRecordingDuration] = useState(0);
 	const [recordingError, setRecordingError] = useState("");
 	const [inputLevel, setInputLevel] = useState(0);
+	const lastVoiceMessageIdRef = useRef<string | null>(null);
+
+	useEffect(() => {
+		if (voicePlayback.status === "idle") {
+			lastVoiceMessageIdRef.current = null;
+		} else if (voicePlayback.messageId) {
+			lastVoiceMessageIdRef.current = voicePlayback.messageId;
+		}
+	}, [voicePlayback.messageId, voicePlayback.status]);
 	const canSend =
 		connected && !isStreaming && !recording && (prompt.trim() || attachments.length > 0);
 
@@ -313,6 +323,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const audioGlow = recording
 		? `0 0 ${8 + audioLevel * 18}px rgba(248, 113, 113, ${0.25 + audioLevel * 0.45})`
 		: undefined;
+	const resolvedVoiceMessageId =
+		voicePlayback.messageId || lastVoiceMessageIdRef.current;
 	const canToggleVoice = Boolean(activeThread);
 
 	return (
@@ -419,32 +431,56 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												{formatTime(msg.createdAt)}
 											</span>
 											{msg.role === "assistant" && msg.content ? (
-												<button
-													type="button"
-													onClick={() =>
-														voicePlayback.messageId === msg.id &&
-														voicePlayback.status !== "idle"
-															? onStopVoice()
-															: onSpeakVoice(msg.id, msg.content)
-													}
-													className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-slate-300 transition hover:border-sky-400/60 hover:text-sky-100"
-												>
-													{voicePlayback.messageId === msg.id &&
-													voicePlayback.status === "loading" ? (
-														<FiLoader className="h-3 w-3 animate-spin" />
-													) : voicePlayback.messageId === msg.id &&
-														voicePlayback.status === "playing" ? (
-														<FiStopCircle className="h-3 w-3" />
-													) : (
-														<FiVolume2 className="h-3 w-3" />
-													)}
-													<span>
-														{voicePlayback.messageId === msg.id &&
-														voicePlayback.status === "playing"
-															? "Stop"
-															: "Play"}
-													</span>
-												</button>
+												(() => {
+													const playbackStatus =
+														resolvedVoiceMessageId === msg.id
+															? voicePlayback.status
+															: "idle";
+													const playbackLabel = getVoicePlaybackLabel(playbackStatus);
+													const isBusy =
+														playbackStatus === "pending" ||
+														playbackStatus === "loading";
+													const isPlaying = playbackStatus === "playing";
+													return (
+														<button
+															type="button"
+															onClick={() =>
+																resolvedVoiceMessageId === msg.id &&
+																voicePlayback.status !== "idle"
+																	? onStopVoice()
+																	: (() => {
+																			lastVoiceMessageIdRef.current = msg.id;
+																			onSpeakVoice(msg.id, msg.content);
+																		})()
+															}
+															className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] transition hover:border-sky-400/60 hover:text-sky-100 ${
+																isBusy
+																	? "border-sky-400/40 text-sky-100"
+																	: isPlaying
+																		? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
+																		: "border-white/10 text-slate-300"
+															}`}
+														>
+															{isBusy ? (
+																<FiLoader
+																	className={`h-3 w-3 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
+																/>
+															) : playbackStatus === "playing" ? (
+																<FiStopCircle className="h-3 w-3 animate-pulse" />
+															) : (
+																<FiVolume2 className="h-3 w-3" />
+															)}
+															<span>{playbackLabel}</span>
+															{isPlaying ? (
+																<span className="flex items-end gap-0.5">
+																	<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80" />
+																	<span className="h-3 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:120ms]" />
+																	<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:240ms]" />
+																</span>
+															) : null}
+														</button>
+													);
+												})()
 											) : null}
 										</div>
 									</div>

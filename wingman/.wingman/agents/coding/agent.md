@@ -6,10 +6,10 @@ tools:
   - code_search
   - command_execute
   - git_status
-model: anthropic:claude-sonnet-4-5-20250929
+model: openai:gpt-5.2-codex
 subAgents:
   - name: researcher
-    description: Research subagent (shared prompt with the standalone researcher).
+    description: Research subagent
     promptFile: ../researcher/agent.md
   - name: coding
     description: Executes assigned coding tasks with strict scope control and reports results clearly.

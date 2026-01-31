@@ -33,7 +33,7 @@ describe("buildUserContent", () => {
 		]);
 		expect(Array.isArray(result)).toBe(true);
 		expect(result).toEqual([
-			{ type: "input_audio", input_audio: { data: "abc", format: "wav" } },
+			{ type: "audio", source_type: "base64", data: "abc", mime_type: "audio/wav" },
 		]);
 	});
 });

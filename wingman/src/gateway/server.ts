@@ -92,6 +92,8 @@ export class GatewayServer {
 	private routineStore: ReturnType<typeof createRoutineStore>;
 	private internalHooks: InternalHookRegistry | null = null;
 	private discordAdapter: DiscordGatewayAdapter | null = null;
+	private sessionSubscriptions: Map<string, Set<GatewaySocket>> = new Map();
+	private socketSubscriptions: Map<GatewaySocket, Set<string>> = new Map();
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -467,6 +469,12 @@ export class GatewayServer {
 				case "register":
 					this.handleRegister(ws, msg);
 					break;
+				case "session_subscribe":
+					this.handleSessionSubscribe(ws, msg);
+					break;
+				case "session_unsubscribe":
+					this.handleSessionUnsubscribe(ws, msg);
+					break;
 				case "unregister":
 					this.handleUnregister(ws, msg);
 					break;
@@ -507,6 +515,7 @@ export class GatewayServer {
 			this.nodeManager.unregisterNode(nodeId);
 			this.log("info", `Node disconnected: ${nodeId}`);
 		}
+		this.clearSessionSubscriptions(ws);
 	}
 
 	/**
@@ -637,13 +646,20 @@ export class GatewayServer {
 
 		const outputManager = new OutputManager("interactive");
 		const outputHandler = (event: unknown) => {
-			this.sendMessage(ws, {
+			const payloadWithSession = this.attachSessionContext(event, sessionKey, agentId);
+			const baseMessage: GatewayMessage = {
 				type: "event:agent",
 				id: msg.id,
-				clientId: ws.data.clientId,
-				payload: event,
+				payload: payloadWithSession,
 				timestamp: Date.now(),
+			};
+
+			this.sendMessage(ws, {
+				...baseMessage,
+				clientId: ws.data.clientId,
 			});
+
+			this.broadcastSessionEvent(sessionKey, baseMessage, ws);
 		};
 
 		outputManager.on("output-event", outputHandler);
@@ -721,6 +737,68 @@ export class GatewayServer {
 
 		const sessionInfo = node.sessionId ? ` (session: ${node.sessionId})` : "";
 		this.log("info", `Node registered: ${node.id} (${node.name})${sessionInfo}`);
+	}
+
+	/**
+	 * Handle session subscription request
+	 */
+	private handleSessionSubscribe(
+		ws: GatewaySocket,
+		msg: GatewayMessage,
+	): void {
+		if (!ws.data.authenticated) {
+			this.sendError(ws, "AUTH_REQUIRED", "Client is not authenticated");
+			return;
+		}
+
+		const payload = msg.payload as { sessionId?: string };
+		const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "";
+		if (!sessionId) {
+			this.sendError(ws, "INVALID_REQUEST", "Missing sessionId");
+			return;
+		}
+
+		this.addSessionSubscription(ws, sessionId);
+
+		this.sendMessage(ws, {
+			type: "ack",
+			payload: {
+				action: "session_subscribe",
+				sessionId,
+			},
+			timestamp: Date.now(),
+		});
+	}
+
+	/**
+	 * Handle session unsubscription request
+	 */
+	private handleSessionUnsubscribe(
+		ws: GatewaySocket,
+		msg: GatewayMessage,
+	): void {
+		if (!ws.data.authenticated) {
+			this.sendError(ws, "AUTH_REQUIRED", "Client is not authenticated");
+			return;
+		}
+
+		const payload = msg.payload as { sessionId?: string };
+		const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "";
+		if (!sessionId) {
+			this.sendError(ws, "INVALID_REQUEST", "Missing sessionId");
+			return;
+		}
+
+		this.removeSessionSubscription(ws, sessionId);
+
+		this.sendMessage(ws, {
+			type: "ack",
+			payload: {
+				action: "session_unsubscribe",
+				sessionId,
+			},
+			timestamp: Date.now(),
+		});
 	}
 
 	/**
@@ -963,6 +1041,96 @@ export class GatewayServer {
 			},
 			timestamp: Date.now(),
 		});
+	}
+
+	private attachSessionContext(
+		event: unknown,
+		sessionId: string,
+		agentId: string,
+	): unknown {
+		if (event && typeof event === "object" && !Array.isArray(event)) {
+			return { ...(event as Record<string, unknown>), sessionId, agentId };
+		}
+		return {
+			type: "agent-event",
+			data: event,
+			sessionId,
+			agentId,
+		};
+	}
+
+	private broadcastSessionEvent(
+		sessionId: string,
+		message: GatewayMessage,
+		exclude?: GatewaySocket,
+	): number {
+		const subscribers = this.sessionSubscriptions.get(sessionId);
+		if (!subscribers || subscribers.size === 0) {
+			return 0;
+		}
+
+		let sent = 0;
+		for (const ws of subscribers) {
+			if (exclude && ws === exclude) {
+				continue;
+			}
+			this.sendMessage(ws, message);
+			sent++;
+		}
+		return sent;
+	}
+
+	private addSessionSubscription(ws: GatewaySocket, sessionId: string): void {
+		let subscribers = this.sessionSubscriptions.get(sessionId);
+		if (!subscribers) {
+			subscribers = new Set();
+			this.sessionSubscriptions.set(sessionId, subscribers);
+		}
+		subscribers.add(ws);
+
+		let socketSessions = this.socketSubscriptions.get(ws);
+		if (!socketSessions) {
+			socketSessions = new Set();
+			this.socketSubscriptions.set(ws, socketSessions);
+		}
+		socketSessions.add(sessionId);
+	}
+
+	private removeSessionSubscription(ws: GatewaySocket, sessionId: string): void {
+		const subscribers = this.sessionSubscriptions.get(sessionId);
+		if (subscribers) {
+			subscribers.delete(ws);
+			if (subscribers.size === 0) {
+				this.sessionSubscriptions.delete(sessionId);
+			}
+		}
+
+		const socketSessions = this.socketSubscriptions.get(ws);
+		if (socketSessions) {
+			socketSessions.delete(sessionId);
+			if (socketSessions.size === 0) {
+				this.socketSubscriptions.delete(ws);
+			}
+		}
+	}
+
+	private clearSessionSubscriptions(ws: GatewaySocket): void {
+		const sessions = this.socketSubscriptions.get(ws);
+		if (!sessions) {
+			return;
+		}
+
+		for (const sessionId of sessions) {
+			const subscribers = this.sessionSubscriptions.get(sessionId);
+			if (subscribers) {
+				subscribers.delete(ws);
+				if (subscribers.size === 0) {
+					this.sessionSubscriptions.delete(sessionId);
+				}
+			}
+		}
+
+		this.socketSubscriptions.delete(ws);
 	}
 
 	private resolveStateDir(): string {

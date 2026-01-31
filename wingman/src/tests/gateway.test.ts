@@ -220,6 +220,109 @@ describeIfBun("Gateway", () => {
 		});
 	});
 
+	it("should stream agent events to session subscribers", async () => {
+		const connectClient = (instanceId: string) =>
+			new Promise<WebSocket>((resolve, reject) => {
+				const ws = new WebSocket(`ws://localhost:${port}/ws`);
+				const connectId = `connect-${instanceId}-${Date.now()}`;
+				const timeout = setTimeout(
+					() => reject(new Error("Connect timeout")),
+					5000,
+				);
+
+				ws.addEventListener("open", () => {
+					const message = {
+						type: "connect",
+						id: connectId,
+						client: { instanceId, clientType: "test" },
+						timestamp: Date.now(),
+					};
+					ws.send(JSON.stringify(message));
+				});
+
+				ws.addEventListener("message", (event) => {
+					const msg = JSON.parse(event.data as string) as { type?: string; id?: string; ok?: boolean };
+					if (msg.type === "res" && msg.id === connectId && msg.ok) {
+						clearTimeout(timeout);
+						resolve(ws);
+					}
+				});
+
+				ws.addEventListener("error", () => {
+					clearTimeout(timeout);
+					reject(new Error("WebSocket error"));
+				});
+			});
+
+		const waitForMessage = (
+			ws: WebSocket,
+			predicate: (msg: any) => boolean,
+			timeoutMs = 5000,
+		) =>
+			new Promise<any>((resolve, reject) => {
+				const timeout = setTimeout(
+					() => reject(new Error("Message timeout")),
+					timeoutMs,
+				);
+				const handler = (event: any) => {
+					let msg: any;
+					try {
+						msg = JSON.parse(event.data as string);
+					} catch {
+						return;
+					}
+					if (!predicate(msg)) return;
+					clearTimeout(timeout);
+					ws.removeEventListener("message", handler);
+					resolve(msg);
+				};
+				ws.addEventListener("message", handler);
+			});
+
+		const subscriber = await connectClient("session-subscriber");
+		const sessionId = "session-test";
+
+		subscriber.send(
+			JSON.stringify({
+				type: "session_subscribe",
+				payload: { sessionId },
+				timestamp: Date.now(),
+			}),
+		);
+
+		await waitForMessage(
+			subscriber,
+			(msg) =>
+				msg.type === "ack" &&
+				msg.payload?.action === "session_subscribe" &&
+				msg.payload?.sessionId === sessionId,
+		);
+
+		const eventPromise = waitForMessage(
+			subscriber,
+			(msg) => msg.type === "event:agent" && msg.id === "req-session",
+		);
+
+		const sent = (server as any).broadcastSessionEvent(sessionId, {
+			type: "event:agent",
+			id: "req-session",
+			payload: {
+				type: "agent-stream",
+				sessionId,
+				agentId: "main",
+				chunk: { content: "hello" },
+			},
+			timestamp: Date.now(),
+		});
+
+		expect(sent).toBe(1);
+
+		const eventMsg = await eventPromise;
+		expect(eventMsg.payload?.sessionId).toBe(sessionId);
+
+		subscriber.close();
+	});
+
 	it("should clear session messages via API", async () => {
 		const createRes = await fetch(`http://localhost:${port}/api/sessions`, {
 			method: "POST",

@@ -751,6 +751,27 @@ function extractAudioUrl(block: any): string | null {
 			return `data:${mediaType};base64,${data}`;
 		}
 	}
+	if (block.type === "audio") {
+		const sourceType = block.source_type || block.sourceType;
+		const data = block.data;
+		if (sourceType === "base64" && typeof data === "string") {
+			const rawFormat =
+				block.mime_type ||
+				block.media_type ||
+				block.mediaType ||
+				block.format;
+			const mimeType =
+				typeof rawFormat === "string"
+					? rawFormat.includes("/")
+						? rawFormat
+						: resolveAudioMimeType(rawFormat)
+					: "audio/wav";
+			return `data:${mimeType};base64,${data}`;
+		}
+		if (sourceType === "url" && typeof block.url === "string") {
+			return block.url;
+		}
+	}
 	return null;
 }
 

@@ -22,6 +22,7 @@ import type {
 	Webhook,
 } from "./types";
 import { parseStreamEvents } from "./utils/streaming";
+import type { VoicePlaybackStatus } from "./utils/voicePlayback";
 import { Sidebar } from "./components/Sidebar";
 import { HeroPanel } from "./components/HeroPanel";
 import { ChatPage } from "./pages/ChatPage";
@@ -98,7 +99,7 @@ export const App: React.FC = () => {
 	const [webhooksLoading, setWebhooksLoading] = useState<boolean>(false);
 	const [voiceSessions, setVoiceSessions] = useState<Record<string, boolean>>({});
 	const [voicePlayback, setVoicePlayback] = useState<{
-		status: "idle" | "loading" | "playing";
+		status: VoicePlaybackStatus;
 		messageId?: string;
 	}>({ status: "idle" });
 
@@ -108,9 +109,11 @@ export const App: React.FC = () => {
 	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(new Map());
 	const requestThreadRef = useRef<Map<string, string>>(new Map());
 	const requestAgentRef = useRef<Map<string, string>>(new Map());
+	const subscribedSessionsRef = useRef<Set<string>>(new Set());
 	const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
 	const voiceUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 	const voiceAbortRef = useRef<AbortController | null>(null);
+	const voiceRequestIdRef = useRef<string | null>(null);
 	const spokenMessagesRef = useRef<Map<string, Set<string>>>(new Map());
 	const autoConnectAttemptsRef = useRef<number>(0);
 	const autoConnectTimerRef = useRef<number | null>(null);
@@ -364,6 +367,7 @@ export const App: React.FC = () => {
 	);
 
 	const stopVoicePlayback = useCallback(() => {
+		voiceRequestIdRef.current = null;
 		if (voiceAbortRef.current) {
 			voiceAbortRef.current.abort();
 			voiceAbortRef.current = null;
@@ -397,10 +401,18 @@ export const App: React.FC = () => {
 			const resolved = resolveVoiceConfig(config.voice, agentId ? agentVoiceMap.get(agentId) : undefined);
 
 			stopVoicePlayback();
+			const requestId = `voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			voiceRequestIdRef.current = requestId;
+			setVoicePlayback({ status: "pending", messageId });
+
+			const isStale = () => voiceRequestIdRef.current !== requestId;
 
 			if (resolved.provider === "web_speech") {
 				if (!("speechSynthesis" in window)) {
 					logEvent("Speech synthesis is not supported in this browser.");
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
 					return;
 				}
 				const utterance = new SpeechSynthesisUtterance(cleaned);
@@ -421,14 +433,20 @@ export const App: React.FC = () => {
 					utterance.volume = resolved.webSpeech.volume;
 				}
 				utterance.onend = () => {
-					setVoicePlayback({ status: "idle" });
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
 				};
 				utterance.onerror = () => {
 					logEvent("Voice playback failed.");
-					setVoicePlayback({ status: "idle" });
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
 				};
 				voiceUtteranceRef.current = utterance;
-				setVoicePlayback({ status: "playing", messageId });
+				if (!isStale()) {
+					setVoicePlayback({ status: "playing", messageId });
+				}
 				window.speechSynthesis.speak(utterance);
 				return;
 			}
@@ -436,8 +454,12 @@ export const App: React.FC = () => {
 			if (resolved.provider === "elevenlabs") {
 				if (!resolved.elevenlabs.voiceId) {
 					logEvent("ElevenLabs voiceId is not configured.");
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
 					return;
 				}
+				if (isStale()) return;
 				const controller = new AbortController();
 				voiceAbortRef.current = controller;
 				setVoicePlayback({ status: "loading", messageId });
@@ -454,35 +476,55 @@ export const App: React.FC = () => {
 					if (!res.ok) {
 						const errorText = await res.text();
 						logEvent(`Voice request failed: ${errorText || res.statusText}`);
-						setVoicePlayback({ status: "idle" });
+						if (!isStale()) {
+							setVoicePlayback({ status: "idle" });
+						}
 						return;
 					}
 					const blob = await res.blob();
+					if (isStale()) {
+						return;
+					}
 					const url = URL.createObjectURL(blob);
 					const audio = new Audio(url);
 					voiceAudioRef.current = audio;
 					audio.onended = () => {
 						URL.revokeObjectURL(url);
-						setVoicePlayback({ status: "idle" });
+						if (!isStale()) {
+							setVoicePlayback({ status: "idle" });
+						}
 					};
 					audio.onerror = () => {
 						URL.revokeObjectURL(url);
 						logEvent("Voice playback failed.");
-						setVoicePlayback({ status: "idle" });
+						if (!isStale()) {
+							setVoicePlayback({ status: "idle" });
+						}
 					};
 					const playPromise = audio.play();
 					if (playPromise) {
 						await playPromise;
 					}
-					setVoicePlayback({ status: "playing", messageId });
+					if (!isStale()) {
+						setVoicePlayback({ status: "playing", messageId });
+					}
 				} catch (error) {
 					if ((error as Error)?.name !== "AbortError") {
 						logEvent("Voice playback failed.");
 					}
-					setVoicePlayback({ status: "idle" });
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
 				} finally {
-					voiceAbortRef.current = null;
+					if (voiceAbortRef.current === controller) {
+						voiceAbortRef.current = null;
+					}
 				}
+			}
+
+			logEvent("Voice provider is not supported.");
+			if (!isStale()) {
+				setVoicePlayback({ status: "idle" });
 			}
 		},
 		[agentVoiceMap, config.voice, logEvent, stopVoicePlayback],
@@ -667,6 +709,59 @@ export const App: React.FC = () => {
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
 			if (!payload) return;
+			const sessionId =
+				typeof payload?.sessionId === "string" ? payload.sessionId : undefined;
+			if (sessionId && !requestThreadRef.current.has(requestId)) {
+				requestThreadRef.current.set(requestId, sessionId);
+				if (typeof payload?.agentId === "string") {
+					requestAgentRef.current.set(requestId, payload.agentId);
+				}
+				const now = Date.now();
+				setThreads((prev) => {
+					const existing = prev.find((thread) => thread.id === sessionId);
+					const assistantMessage: ChatMessage = {
+						id: requestId,
+						role: "assistant",
+						content: "",
+						createdAt: now,
+					};
+
+					if (!existing) {
+						const newThread: Thread = {
+							id: sessionId,
+							name: sessionId,
+							agentId:
+								typeof payload?.agentId === "string" ? payload.agentId : agentId,
+							messages: [assistantMessage],
+							toolEvents: [],
+							thinkingEvents: [],
+							createdAt: now,
+							updatedAt: now,
+							messageCount: 1,
+							lastMessagePreview: "",
+							messagesLoaded: false,
+						};
+						return [newThread, ...prev];
+					}
+
+					const hasMessage = existing.messages.some(
+						(message) => message.id === requestId,
+					);
+					if (hasMessage) {
+						return prev;
+					}
+
+					return prev.map((thread) => {
+						if (thread.id !== sessionId) return thread;
+						return {
+							...thread,
+							messages: [...thread.messages, assistantMessage],
+							messageCount: (thread.messageCount ?? thread.messages.length) + 1,
+							updatedAt: now,
+						};
+					});
+				});
+			}
 			if (payload.type === "agent-start") {
 				logEvent(`Agent started: ${payload.agent || "unknown"}`);
 				return;
@@ -741,6 +836,7 @@ export const App: React.FC = () => {
 			}
 		},
 		[
+			agentId,
 			finalizeAssistant,
 			logEvent,
 			subagentMap,
@@ -758,6 +854,7 @@ export const App: React.FC = () => {
 		autoConnectAttemptsRef.current = 0;
 		autoConnectFailureRef.current = false;
 		setAutoConnectStatus("");
+		subscribedSessionsRef.current.clear();
 		if (wsRef.current) {
 			wsRef.current.close();
 			wsRef.current = null;
@@ -1372,6 +1469,36 @@ export const App: React.FC = () => {
 		autoConnectFailureRef.current = false;
 		setAutoConnectStatus("");
 	}, [autoConnect]);
+
+	useEffect(() => {
+		if (!connected) return;
+		const ws = wsRef.current;
+		if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+		const nextSessions = new Set(threads.map((thread) => thread.id));
+
+		for (const sessionId of nextSessions) {
+			if (subscribedSessionsRef.current.has(sessionId)) continue;
+			const message: GatewayMessage = {
+				type: "session_subscribe",
+				payload: { sessionId },
+				timestamp: Date.now(),
+			};
+			ws.send(JSON.stringify(message));
+			subscribedSessionsRef.current.add(sessionId);
+		}
+
+		for (const sessionId of Array.from(subscribedSessionsRef.current)) {
+			if (nextSessions.has(sessionId)) continue;
+			const message: GatewayMessage = {
+				type: "session_unsubscribe",
+				payload: { sessionId },
+				timestamp: Date.now(),
+			};
+			ws.send(JSON.stringify(message));
+			subscribedSessionsRef.current.delete(sessionId);
+		}
+	}, [connected, threads]);
 
 	useEffect(() => {
 		refreshStats();

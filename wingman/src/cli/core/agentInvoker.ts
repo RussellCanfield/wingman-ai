@@ -302,8 +302,8 @@ export function buildUserContent(
 ): string | Array<
 	| { type: "text"; text: string }
 	| { type: "image_url"; image_url: { url: string } }
-	| { type: "input_audio"; input_audio: { data: string; format: string } }
-	| { type: "audio_url"; audio_url: { url: string } }
+	| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
+	| { type: "audio"; source_type: "url"; url: string; mime_type?: string }
 > {
 	const text = prompt?.trim() ?? "";
 	if (!attachments || attachments.length === 0) {
@@ -313,8 +313,8 @@ export function buildUserContent(
 	const parts: Array<
 		| { type: "text"; text: string }
 		| { type: "image_url"; image_url: { url: string } }
-		| { type: "input_audio"; input_audio: { data: string; format: string } }
-		| { type: "audio_url"; audio_url: { url: string } }
+		| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
+		| { type: "audio"; source_type: "url"; url: string; mime_type?: string }
 	> = [];
 	if (text) {
 		parts.push({ type: "text", text });
@@ -332,6 +332,9 @@ export function buildUserContent(
 	}
 
 	if (parts.length === 0) {
+		if (!text) {
+			throw new Error("Attachment payload is empty or invalid.");
+		}
 		return text;
 	}
 	return parts;
@@ -347,24 +350,24 @@ function isAudioAttachment(attachment: MediaAttachment): attachment is AudioAtta
 function buildAudioPart(
 	attachment: AudioAttachment,
 ):
-	| { type: "input_audio"; input_audio: { data: string; format: string } }
-	| { type: "audio_url"; audio_url: { url: string } }
-	| null {
+	| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
+	| { type: "audio"; source_type: "url"; url: string; mime_type?: string } {
 	if (!attachment.dataUrl) return null;
 	const parsed = parseDataUrl(attachment.dataUrl);
 	const mimeType = attachment.mimeType || parsed.mimeType;
 	if (parsed.data) {
 		return {
-			type: "input_audio",
-			input_audio: {
-				data: parsed.data,
-				format: resolveAudioFormat(mimeType),
-			},
+			type: "audio",
+			source_type: "base64",
+			data: parsed.data,
+			mime_type: mimeType,
 		};
 	}
 	return {
-		type: "audio_url",
-		audio_url: { url: attachment.dataUrl },
+		type: "audio",
+		source_type: "url",
+		url: attachment.dataUrl,
+		mime_type: mimeType,
 	};
 }
 
@@ -373,32 +376,6 @@ function parseDataUrl(dataUrl: string): { mimeType?: string; data?: string } {
 	const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
 	if (!match) return {};
 	return { mimeType: match[1], data: match[2] };
-}
-
-function resolveAudioFormat(mimeType?: string): string {
-	if (!mimeType) return "wav";
-	const normalized = mimeType.toLowerCase();
-	if (!normalized.startsWith("audio/")) {
-		return "wav";
-	}
-	const subtype = normalized.split("/")[1]?.split(";")[0] ?? "";
-	switch (subtype) {
-		case "mpeg":
-		case "mp3":
-			return "mp3";
-		case "wav":
-		case "x-wav":
-			return "wav";
-		case "mp4":
-		case "x-m4a":
-			return "m4a";
-		case "ogg":
-			return "ogg";
-		case "webm":
-			return "webm";
-		default:
-			return subtype || "wav";
-	}
 }
 
 function buildAttachmentPreview(attachments: MediaAttachment[]): string {
