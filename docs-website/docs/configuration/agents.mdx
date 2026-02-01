@@ -9,6 +9,51 @@ Agents live in `.wingman/agents/<agent-id>/` and can be defined as either JSON (
 
 If you want the gateway to route messages to a specific agent (or show a friendly name in the UI), add entries in `wingman.config.json`. See the `agents` section in the `wingman.config.json` guide.
 
+## Bundled agents (starter templates)
+
+Wingman ships with a small set of bundled agents so you can start quickly. These live in the package at:
+
+```text
+wingman/.wingman/agents/
+```
+
+When you run `wingman init`, the templates are copied into your workspace:
+
+```text
+.wingman/agents/
+```
+
+You can choose a subset during setup:
+
+```bash
+wingman init --agents main,coding,stock-trader
+```
+
+Typical bundled agents include:
+
+- `main` (general-purpose)
+- `coding` (orchestrates coding tasks and sub-agents)
+- `researcher` (source-first web research)
+- `stock-trader` (market data research workflows)
+- `wingman` (workspace-specific assistant)
+
+Edit these in-place to customize prompts, tools, or sub-agents. Treat them as templates—clone and rename as needed for each project.
+
+:::warning
+The `stock-trader` agent is for research and education only. It does not provide financial advice or execute trades.
+:::
+
+## Provider credentials (env vars)
+
+Agents that talk to model providers require credentials. Use either `wingman provider login <provider>` or environment variables, for example:
+
+```text
+OPENAI_API_KEY
+ANTHROPIC_API_KEY
+OPENROUTER_API_KEY
+XAI_API_KEY
+```
+
 ## agent.json example
 
 ```json

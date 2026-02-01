@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import Footer from "./components/layout/Footer";
 import Header from "./components/layout/Header";
+import BundledAgents from "./components/sections/BundledAgents";
 import CTA from "./components/sections/CTA";
 import Features from "./components/sections/Features";
+import FinnhubMcp from "./components/sections/FinnhubMcp";
 import Hero from "./components/sections/Hero";
 import HowItWorks from "./components/sections/HowItWorks";
 import QuickStart from "./components/sections/QuickStart";
@@ -54,6 +56,8 @@ function App() {
 				<HowItWorks />
 				<UseCases />
 				<Features />
+				<BundledAgents />
+				<FinnhubMcp />
 				<QuickStart />
 				<CTA />
 			</main>

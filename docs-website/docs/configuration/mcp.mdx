@@ -56,3 +56,65 @@ Wingman supports Model Context Protocol (MCP) servers via `stdio` or `sse` trans
 - **sse**: connect to a remote HTTP/SSE endpoint.
 
 Keep MCP servers scoped to the minimum data and permissions required for each agent.
+
+## Finnhub finance MCP server
+
+Use the bundled finance MCP server to power market-data agents (like `stock-trader`) with quotes, candles, fundamentals, news, and option chains.
+
+### 1) Provide a Finnhub API key
+
+The finance MCP server requires `FINNHUB_API_KEY`. You can set it globally in your shell or inline per server config.
+
+### 2) Register the server (stdio example)
+
+```json
+{
+  "mcp": {
+    "servers": [
+      {
+        "name": "finnhub",
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "./node_modules/@wingman-ai/gateway/dist/tools/mcp-finance.js"
+        ],
+        "env": {
+          "FINNHUB_API_KEY": "your_key_here",
+          "FINNHUB_CANDLES_PROVIDER": "yahoo"
+        }
+      }
+    ]
+  }
+}
+```
+
+If you are working from the Wingman repo directly, the server file is located at:
+
+```text
+wingman/dist/tools/mcp-finance.js
+```
+
+### 3) Enable MCP for your agent
+
+Set `mcpUseGlobal: true` in `agent.json`/`agent.md` or add a per-agent `mcp` block.
+
+### Optional environment variables
+
+Use these to fine-tune rate limits and candle data behavior:
+
+```text
+FINNHUB_API_KEY                 # required
+FINNHUB_CANDLES_PROVIDER        # yahoo | finnhub | auto (default: yahoo)
+FINNHUB_CANDLE_MAX_DAYS_INTRADAY # default: 30
+FINNHUB_CANDLE_MAX_DAYS_DAILY    # default: 365
+FINNHUB_RATE_LIMIT_PER_MIN       # default: 60 (or tier-based)
+FINNHUB_TIER                     # e.g. free
+FINNHUB_TIER_LIMITS              # JSON override, e.g. {"free":60,"pro":300}
+FINNHUB_BASE_URL                 # default: https://finnhub.io/api/v1
+YAHOO_FINANCE_BASE_URL           # default: https://query1.finance.yahoo.com
+YAHOO_INCLUDE_PREPOST            # set to 1 to include pre/post market candles
+```
+
+:::warning
+The finance MCP tools are intended for research and education only. They do not provide financial advice or execute trades.
+:::
