@@ -94,7 +94,10 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			{ id: "openrouter", example: "openrouter:openai/gpt-4o" },
 			{ id: "xai", example: "xai:grok-beta" },
 			{ id: "copilot", example: "copilot:gpt-4o" },
-			{ id: "lmstudio", example: "lmstudio:llama-3.1-8b" },
+			{
+				id: "lmstudio",
+				example: "lmstudio:lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
+			},
 			{ id: "ollama", example: "ollama:llama3.2" },
 		],
 		[],
@@ -372,6 +375,26 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										Use <span className="font-mono">provider:model-name</span>. If a
 										provider is configured, it will appear below.
 									</p>
+									<div className="mt-3 space-y-2">
+										<div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
+											Local Providers (No API Key Required)
+										</div>
+										<div className="grid gap-2">
+											{providerExamples
+												.filter(({ id }) => id === "lmstudio" || id === "ollama")
+												.map(({ id, example }) => (
+													<div
+														key={id}
+														className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-[11px]"
+													>
+														<span className="pill">
+															{id === "lmstudio" ? "LM Studio" : "Ollama"}
+														</span>
+														<span className="font-mono text-slate-300">{example}</span>
+													</div>
+												))}
+										</div>
+									</div>
 									{configuredProviders.length > 0 ? (
 										<div className="mt-3 space-y-2">
 											<div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">

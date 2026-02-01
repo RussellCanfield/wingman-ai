@@ -2,6 +2,13 @@
 
 Agents live in `.wingman/agents/<agent-id>/` and can be defined as either JSON (`agent.json`) or Markdown (`agent.md` with frontmatter).
 
+## Discovery vs routing
+
+- **Discovery**: agent definitions are loaded from `.wingman/agents/<agent-id>/`.
+- **Routing & metadata**: defaults, display names, workspaces, and channel bindings live in `wingman.config.json` under `agents.list` and `agents.bindings`.
+
+If you want the gateway to route messages to a specific agent (or show a friendly name in the UI), add entries in `wingman.config.json`. See the `agents` section in the `wingman.config.json` guide.
+
 ## agent.json example
 
 ```json

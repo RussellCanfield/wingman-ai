@@ -104,6 +104,7 @@
 	filter: blur(60px);
 	opacity: 0.55;
 	animation: auroraShift 18s ease-in-out infinite;
+	pointer-events: none;
 }
 
 .orb {
@@ -112,6 +113,7 @@
 	filter: blur(32px);
 	opacity: 0.65;
 	mix-blend-mode: multiply;
+	pointer-events: none;
 }
 
 .orb-a {
@@ -170,6 +172,7 @@
 		rgba(2, 6, 23, 0.8),
 		transparent 70%
 	);
+	pointer-events: none;
 }
 
 .noise {

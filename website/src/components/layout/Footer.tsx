@@ -79,7 +79,7 @@ const Footer = () => {
 						<ul className="space-y-2">
 							<li>
 								<a
-									href="https://github.com/RussellCanfield/wingman-ai#readme"
+									href="https://docs.getwingmanai.com"
 									className="text-gray-400 hover:text-white transition-colors flex items-center text-sm"
 									target="_blank"
 									rel="noopener noreferrer"

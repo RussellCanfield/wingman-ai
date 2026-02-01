@@ -18,30 +18,17 @@ describeIfBun("Gateway", () => {
 	let port = 0;
 
 	beforeAll(async () => {
-		const startPort = 23000;
-		const attempts = 50;
-		let lastError: unknown = null;
-		for (let i = 0; i < attempts; i += 1) {
-			const candidate = startPort + i;
-			try {
-				const instance = new GatewayServer({
-					port: candidate,
-					host: "localhost",
-					requireAuth: false,
-					logLevel: "silent",
-				});
-				await instance.start();
-				server = instance;
-				port = candidate;
-				lastError = null;
-				break;
-			} catch (error) {
-				lastError = error;
-			}
-		}
-
-		if (!server || !port) {
-			throw lastError ?? new Error("Unable to start gateway server for tests");
+		const instance = new GatewayServer({
+			port: 0,
+			host: "localhost",
+			requireAuth: false,
+			logLevel: "silent",
+		});
+		await instance.start();
+		server = instance;
+		port = server.getPort();
+		if (!port) {
+			throw new Error("Unable to determine gateway server port");
 		}
 		// Wait for server to be ready
 		await new Promise((resolve) => setTimeout(resolve, 500));

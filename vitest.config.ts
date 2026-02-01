@@ -1,19 +1,17 @@
 import { defineConfig } from "vitest/config";
-import { nodePolyfills } from "vite-plugin-node-polyfills";
+import { resolve } from "node:path";
 
 export default defineConfig({
-	plugins: [
-		nodePolyfills({
-			include: ["path", "fs", "util", "buffer", "process"],
-		}),
-	],
 	test: {
 		globals: true,
 		environment: "node",
-		setupFiles: ["./vitest.setup.ts"],
+		include: ["**/src/**/*.test.{ts,tsx,js,jsx}"],
 		exclude: ["**/node_modules/**", "**/dist/**", "**/out/**"],
 	},
 	resolve: {
 		conditions: ["import", "node"],
+		alias: {
+			"@": resolve(__dirname, "wingman", "src"),
+		},
 	},
 });

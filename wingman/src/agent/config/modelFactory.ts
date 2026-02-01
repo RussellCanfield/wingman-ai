@@ -30,14 +30,15 @@ export class ModelFactory {
 	 * Parse and create a model from a string specification
 	 */
 	static createModel(modelString: string): string | BaseLanguageModel<any, BaseLanguageModelCallOptions> | undefined {
-		const parts = modelString.split(":");
-		if (parts.length !== 2) {
+		const separatorIndex = modelString.indexOf(":");
+		if (separatorIndex === -1) {
 			throw new Error(
 				`Invalid model format: "${modelString}". Expected format: "provider:model-name"`,
 			);
 		}
 
-		const [provider, model] = parts;
+		const provider = modelString.slice(0, separatorIndex);
+		const model = modelString.slice(separatorIndex + 1);
 
 		if (!provider || !model) {
 			throw new Error(
@@ -91,15 +92,16 @@ export class ModelFactory {
 		valid: boolean;
 		error?: string;
 	} {
-		const parts = modelString.split(":");
-		if (parts.length !== 2) {
+		const separatorIndex = modelString.indexOf(":");
+		if (separatorIndex === -1) {
 			return {
 				valid: false,
 				error: `Invalid format: "${modelString}". Expected format: "provider:model-name"`,
 			};
 		}
 
-		const [provider, model] = parts;
+		const provider = modelString.slice(0, separatorIndex);
+		const model = modelString.slice(separatorIndex + 1);
 
 		if (!provider || !model) {
 			return {

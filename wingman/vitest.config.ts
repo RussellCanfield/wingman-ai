@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     globals: true,
     root: __dirname,
+    include: ["**/src/**/*.test.{ts,tsx,js,jsx}"],
     exclude: ['**/node_modules/**', '**/dist/**'],
     environment: 'node',
     coverage: {

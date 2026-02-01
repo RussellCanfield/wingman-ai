@@ -73,6 +73,7 @@ export class GatewayServer {
 		authenticated?: boolean;
 		tailscaleUser?: string;
 	}> | null = null;
+	private boundPort: number | null = null;
 	private startedAt: number = 0;
 	private messagesProcessed: number = 0;
 	private pingInterval: Timer | null = null;
@@ -247,6 +248,7 @@ export class GatewayServer {
 				drain: (ws) => this.handleDrain(ws),
 			},
 		});
+		this.boundPort = this.server.port ?? null;
 
 		// Start ping interval
 		this.startPingInterval();
@@ -318,6 +320,7 @@ export class GatewayServer {
 		if (this.server) {
 			this.server.stop();
 			this.server = null;
+			this.boundPort = null;
 		}
 
 		if (this.uiServer) {
@@ -326,6 +329,10 @@ export class GatewayServer {
 		}
 
 		this.log("info", "Gateway stopped");
+	}
+
+	getPort(): number {
+		return this.boundPort ?? this.config.port;
 	}
 
 	private async startAdapters(): Promise<void> {

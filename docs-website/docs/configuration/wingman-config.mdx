@@ -100,6 +100,39 @@ The global config lives at `.wingman/wingman.config.json`. It controls logging, 
 }
 ```
 
+## Agents list vs filesystem discovery
+
+Agent **definitions** are discovered from the filesystem under `.wingman/agents/<agent-id>/` (via `agent.json` or `agent.md`). The `agents` block in `wingman.config.json` is **optional**, but it is the gateway’s source of truth for routing and metadata.
+
+Why you would use `agents.list`:
+
+- Set a **default** agent for routing when no binding matches.
+- Provide **friendly display names** in the Control UI / HTTP API.
+- Assign a **per‑agent workspace** so an agent can run against a different repo.
+
+Why you would use `agents.bindings`:
+
+- Route inbound messages (Discord, web UI, webhooks) to a specific agent by channel/peer metadata.
+
+Minimal example:
+
+```json
+{
+  "agents": {
+    "list": [
+      { "id": "wingman", "name": "Wingman", "default": true, "workspace": "." },
+      { "id": "researcher", "name": "Researcher", "workspace": "../notes" }
+    ],
+    "bindings": [
+      {
+        "agentId": "researcher",
+        "match": { "channel": "discord", "peer": { "kind": "dm", "id": "123" } }
+      }
+    ]
+  }
+}
+```
+
 ## Key sections
 
 - **logLevel**: `debug | info | warn | error | silent`

@@ -41,6 +41,12 @@ describe("ModelFactory", () => {
 			expect(model).toBeInstanceOf(ChatOpenAI);
 		});
 
+		it("should allow model names with additional colons", () => {
+			const model = ModelFactory.createModel("ollama:phi4:14b-q8_0");
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
+
 		it("should throw error for invalid format (missing colon)", () => {
 			expect(() => {
 				ModelFactory.createModel("anthropic-claude-opus");
@@ -84,6 +90,7 @@ describe("ModelFactory", () => {
 				"copilot:gpt-4o",
 				"lmstudio:llama-3.1-8b",
 				"ollama:llama3.2",
+				"ollama:phi4:14b-q8_0",
 			];
 
 			for (const modelString of validModels) {

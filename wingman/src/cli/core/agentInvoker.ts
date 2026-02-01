@@ -231,7 +231,7 @@ export class AgentInvoker {
 						}),
 						backendOverrides,
 					),
-				middleware,
+				middleware: middleware as any,
 				skills: skillsSources,
 				subagents: [...(targetAgent.subagents || [])],
 				checkpointer: checkpointer as any,
@@ -246,7 +246,7 @@ export class AgentInvoker {
 				this.logger.debug(`Using streaming with session: ${sessionId}`);
 
 				// Stream the agent response
-				const stream = await standaloneAgent.streamEvents(
+				const stream = await (standaloneAgent as any).streamEvents(
 					{
 						messages: [
 							{
@@ -274,7 +274,7 @@ export class AgentInvoker {
 				// Fall back to blocking invoke for backwards compatibility
 				this.logger.debug("Using blocking invoke (no session manager)");
 
-				const result = await standaloneAgent.invoke(
+				const result = await (standaloneAgent as any).invoke(
 					{
 						messages: [
 							{
