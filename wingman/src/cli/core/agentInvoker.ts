@@ -3,6 +3,7 @@ import {
 	createDeepAgent,
 	FilesystemBackend,
 } from "deepagents";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import { AgentLoader } from "../../agent/config/agentLoader.js";
@@ -19,6 +20,7 @@ import type { WingmanConfigType } from "../config/schema.js";
 import { MCPClientManager } from "@/agent/config/mcpClientManager.js";
 import type { MCPServersConfig } from "@/types/mcp.js";
 import { SessionManager } from "./sessionManager.js";
+import { getBundledSkillsPath } from "@/agent/uiRegistry.js";
 
 export interface AgentInvokerOptions {
 	workspace?: string;
@@ -164,11 +166,16 @@ export class AgentInvoker {
 			}
 
 			// Build middleware array
+			const skillsDirectory = this.wingmanConfig?.skills?.skillsDirectory || "skills";
 			const middleware = [
 				mediaCompatibilityMiddleware({ model: targetAgent.model }),
 				additionalMessageMiddleware({
+					workspaceRoot: this.workspace,
 					workdir: this.workdir,
 					defaultOutputDir: this.defaultOutputDir,
+					dynamicUiEnabled:
+						this.wingmanConfig?.gateway?.dynamicUiEnabled !== false,
+					skillsDirectory,
 				}),
 			];
 
@@ -191,6 +198,27 @@ export class AgentInvoker {
 			const checkpointer = this.sessionManager?.getCheckpointer();
 
 			// Create a standalone DeepAgent for this specific agent
+			const bundledSkillsPath = getBundledSkillsPath();
+			const skillsSources = [];
+			if (existsSync(bundledSkillsPath)) {
+				skillsSources.push("/skills-bundled/");
+			}
+			skillsSources.push(
+				`/${skillsDirectory.replace(/^\/+|\/+$/g, "")}/`,
+			);
+			const backendOverrides: Record<string, FilesystemBackend> = {
+				"/memories/": new FilesystemBackend({
+					rootDir: join(this.workspace, this.configDir, "memories"),
+					virtualMode: true,
+				}),
+			};
+			if (existsSync(bundledSkillsPath)) {
+				backendOverrides["/skills-bundled/"] = new FilesystemBackend({
+					rootDir: bundledSkillsPath,
+					virtualMode: true,
+				});
+			}
+
 			const standaloneAgent = createDeepAgent({
 				systemPrompt: targetAgent.systemPrompt,
 				tools: targetAgent.tools as any,
@@ -201,15 +229,10 @@ export class AgentInvoker {
 							rootDir: this.workspace,
 							virtualMode: true,
 						}),
-						{
-							"/memories/": new FilesystemBackend({
-								rootDir: join(this.workspace, this.configDir, "memories"),
-								virtualMode: true,
-							}),
-						},
+						backendOverrides,
 					),
 				middleware,
-				skills: ["/skills/"],
+				skills: skillsSources,
 				subagents: [...(targetAgent.subagents || [])],
 				checkpointer: checkpointer as any,
 			});

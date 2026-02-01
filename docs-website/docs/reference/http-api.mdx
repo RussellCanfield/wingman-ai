@@ -1,0 +1,76 @@
+# Gateway HTTP API
+
+The gateway exposes HTTP endpoints for the Control UI and integrations. Base URL defaults to `http://127.0.0.1:18789` (gateway) and `http://127.0.0.1:18790` (Control UI assets).
+
+## Health
+
+```http
+GET /health
+```
+
+## Agents
+
+```http
+GET /api/agents
+POST /api/agents
+GET /api/agents/:id
+PUT /api/agents/:id
+```
+
+Agent endpoints manage `.wingman/agents/` and update the config list.
+
+## Sessions
+
+```http
+GET /api/sessions?agentId=wingman&limit=100
+POST /api/sessions
+GET /api/sessions/:id/messages?agentId=wingman
+DELETE /api/sessions/:id/messages?agentId=wingman
+POST /api/sessions/:id/workdir?agentId=wingman
+PUT /api/sessions/:id?agentId=wingman
+```
+
+## Providers
+
+```http
+GET /api/providers
+POST /api/providers/:name
+DELETE /api/providers/:name
+```
+
+## File system
+
+```http
+GET /api/fs/roots
+GET /api/fs/list?path=.
+```
+
+## Voice
+
+```http
+GET /api/voice
+POST /api/voice
+POST /api/voice/speak
+```
+
+## Routines
+
+```http
+GET /api/routines
+POST /api/routines
+GET /api/routines/:id
+DELETE /api/routines/:id
+```
+
+## Webhooks
+
+```http
+GET /api/webhooks
+POST /api/webhooks
+GET /api/webhooks/:id
+PUT /api/webhooks/:id
+DELETE /api/webhooks/:id
+POST /webhooks/:id
+```
+
+Refer to the Automation guide for webhook payload examples.

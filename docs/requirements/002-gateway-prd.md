@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.1
+**Version:** 1.2
 **Status:** In Development
-**Last Updated:** 2026-01-31
+**Last Updated:** 2026-02-01
 
 ---
 
@@ -104,8 +104,23 @@ See [Architecture Overview](000-architecture-overview.md) for the full system co
 **Requirements:**
 - Node pairing and approval flow
 - Node invoke protocol
+- Capability and permission reporting per node
 
-### 6. Webhook-Driven Automations (MVP)
+### 6. macOS Companion App (Planned)
+**Scenario:** User installs the Wingman macOS app to expose macOS-only tools
+**Flow:**
+1. App attaches to a local gateway (launchd-managed) or connects to a remote gateway
+2. A local node host service connects to the gateway and advertises macOS capabilities
+3. Gateway routes tool invocations to the macOS node
+4. UI/TCC-sensitive tools (system.run, screen, camera) are executed in the app context via IPC
+
+**Requirements:**
+- Node host service that can proxy to the macOS app for UI/TCC tools
+- Local vs remote mode support (app does not spawn a gateway in remote mode)
+- Local exec approvals for system.run enforced on-device
+- SSH tunnel support for remote gateway control-plane connectivity
+
+### 7. Webhook-Driven Automations (MVP)
 **Scenario:** External systems trigger agents via webhooks (e.g., new email, form submissions, CI alerts)
 **Flow:**
 1. User configures a webhook with agentId + secret
@@ -223,7 +238,20 @@ Rooms are explicit broadcast groups for swarm-style responses. They do not repla
 
 ### Nodes (Planned)
 
-Nodes are remote tool executors that connect to the gateway and expose capabilities. Nodes require a pairing flow and are not in MVP.
+Nodes are remote tool executors that connect to the gateway and expose capabilities. The first target is the Wingman macOS app, which runs a local node host service and proxies UI/TCC-sensitive tools to the app over IPC.
+
+**Node responsibilities:**
+- Identify as a node client and provide metadata (name, platform, mode)
+- Advertise capabilities (canvas.*, camera.*, screen.record, system.run, system.notify)
+- Report a permissions map (TCC status) so agents can decide what is allowed
+- Enforce local exec approvals for system.run
+
+**Gateway responsibilities:**
+- Pair/approve nodes and persist approvals
+- Route tool invocations to target nodes and stream results
+- Surface node status + permissions in stats and Control UI
+
+See the Node Protocol Spec for message schemas and pairing UX: `docs/requirements/004-node-protocol.md`
 
 ### Swarm vs Orchestrated Patterns
 
@@ -254,7 +282,7 @@ Nodes are remote tool executors that connect to the gateway and expose capabilit
 
 ### Planned / Later
 - Broadcast rooms for explicit swarm workflows
-- Node pairing and remote tool execution
+- Node pairing, permission reporting, and remote tool execution (macOS companion app + node host service)
 - mDNS discovery
 - Tailscale discovery
 - HTTP bridge transport
@@ -317,6 +345,22 @@ Client              Gateway            Room Members
   │─broadcast────────▶│                     │
   │ {roomId, msg}     │                     │
   │                   │────────fanout──────▶│
+```
+
+#### Node Connect / Invoke Flow (Planned)
+```
+Node Host Service        Gateway                 macOS App (IPC)
+  │                        │                           │
+  │─connect (node)────────▶│                           │
+  │ {capabilities,...}     │                           │
+  │◀────res (ok)──────────│                           │
+  │                        │                           │
+  │◀──req:node────────────│                           │
+  │ {tool,args}            │                           │
+  │───────────────────────────────────────────────────▶│
+  │                        │      execute in app       │
+  │◀──event:node (stream)──│◀───────────────────────────│
+  │◀────res (done)────────│                           │
 ```
 
 ### Discovery Flow
@@ -393,12 +437,18 @@ interface WebhookConfig {
 interface Node {
   id: string;                    // Unique ID (hex)
   name: string;                  // Human-readable name
-  capabilities?: string[];       // Feature flags
+  platform?: "macos" | "linux" | "windows" | "unknown";
+  mode?: "local" | "remote";
+  transport?: "direct" | "ssh-tunnel";
+  version?: string;
+  capabilities: string[];        // Feature flags
+  permissions?: Record<string, "granted" | "denied" | "prompt" | "restricted">;
   groups: Set<string>;           // Group memberships
   connectedAt: number;           // Connection timestamp
   lastPing?: number;             // Last heartbeat
   messageCount?: number;         // For rate limiting
   lastMessageTime?: number;      // For rate limiting
+  metadata?: Record<string, unknown>;
   ws: ServerWebSocket;           // WebSocket connection
 }
 ```
@@ -424,7 +474,7 @@ interface GatewayMessage {
   id?: string;                   // Request/response correlation
   clientId?: string;             // Sender client ID
   roomId?: string;               // Target room (broadcast)
-  targetNodeId?: string;         // Target node ID (future)
+  targetNodeId?: string;         // Target node ID (node invoke)
   payload?: unknown;             // Message payload
   timestamp: number;             // Message timestamp
 }
@@ -432,6 +482,7 @@ interface GatewayMessage {
 type MessageType =
   | "connect" | "res"
   | "req:agent" | "event:agent"
+  | "req:node" | "event:node"
   | "broadcast"
   | "error";
 ```
@@ -477,6 +528,7 @@ interface ToolStartEvent {
   type: "tool-start";
   toolName: string;              // Tool being executed
   toolInput: unknown;            // Tool arguments
+  ui?: UiRenderSpec;             // Optional UI render hints for clients
   timestamp: number;
 }
 
@@ -486,6 +538,24 @@ interface ToolEndEvent {
   toolOutput: unknown;           // Tool result
   timestamp: number;
 }
+
+interface UiRenderSpec {
+  registry?: string;             // UI registry name (default: webui)
+  layout?: UiLayoutSpec;         // Optional layout hints
+  components: UiComponentSpec[]; // One or more pre-registered components
+}
+
+interface UiComponentSpec {
+  component: string;             // Component ID in registry
+  props: Record<string, unknown>;
+}
+
+interface UiLayoutSpec {
+  type: "stack" | "row" | "grid";
+  gap?: number;
+  columns?: number;              // Grid only
+  align?: "start" | "center" | "end" | "stretch";
+}
 ```
 
 **Protocol Design Principles:**
@@ -494,6 +564,53 @@ interface ToolEndEvent {
 2. **UI Interprets**: Each UI (mobile, web, CLI) parses chunks for its presentation
 3. **Envelope Only**: Gateway adds routing metadata (clientId, roomId) but doesn't modify payload
 4. **Stateful Sessions**: Gateway persists session state but does not buffer stream events
+
+### Tool-Driven UI Prompts (Static Generative UI)
+
+Tools can include UI render hints so clients can render predefined components
+when user input is required. This is a static generative UI (SGUI) pattern:
+agents choose from a registered component set, while clients control layout
+and interaction.
+
+**MVP scope:** Web UI only. Other clients may ignore `ui` hints.
+
+Example tool call: `ask.user.feedback`
+
+```json
+{
+  "type": "event:agent",
+  "clientId": "gateway",
+  "payload": {
+    "type": "tool-start",
+    "toolName": "ask.user.feedback",
+    "toolInput": {
+      "prompt": "What should we do next?"
+    },
+    "ui": {
+      "registry": "webui",
+      "layout": { "type": "stack", "gap": 12 },
+      "components": [
+        { "component": "FeedbackForm", "props": { "title": "Next Step" } }
+      ]
+    },
+    "timestamp": 1706000001000
+  }
+}
+```
+
+Tool result returns user input to the agent:
+```json
+{
+  "type": "event:agent",
+  "clientId": "gateway",
+  "payload": {
+    "type": "tool-end",
+    "toolName": "ask.user.feedback",
+    "toolOutput": { "text": "Ship it." },
+    "timestamp": 1706000003000
+  }
+}
+```
 
 **Example: Agent Response Flow**
 
@@ -713,6 +830,52 @@ to avoid cross-origin issues when the UI is on a different port.
 }
 ```
 
+#### Node Connect (Planned)
+```json
+{
+  "type": "connect",
+  "id": "connect-2",
+  "client": {
+    "instanceId": "mac-node-1",
+    "clientType": "node",
+    "version": "0.1.0"
+  },
+  "auth": { "token": "sk-..." },
+  "payload": {
+    "name": "MacBook Pro",
+    "platform": "macos",
+    "mode": "local",
+    "capabilities": ["system.run", "system.notify", "screen.record"]
+  },
+  "timestamp": 1234567890
+}
+```
+
+#### Node Invoke (Planned)
+```json
+{
+  "type": "req:node",
+  "id": "node-req-1",
+  "targetNodeId": "node-123",
+  "payload": {
+    "tool": "system.run",
+    "args": { "command": "ls -la" },
+    "timeoutMs": 30000
+  },
+  "timestamp": 1234567890
+}
+```
+
+#### Node Stream (Planned)
+```json
+{
+  "type": "event:node",
+  "id": "node-req-1",
+  "payload": { "kind": "stdout", "chunk": "..." },
+  "timestamp": 1234567890
+}
+```
+
 #### Request Agent
 ```json
 {
@@ -768,6 +931,13 @@ to avoid cross-origin issues when the UI is on a different port.
       "pairingRequired": true,
       "allowInsecureAuth": false
     },
+    "dynamicUiEnabled": true,
+    "nodes": {
+      "enabled": true,
+      "pairingRequired": true,
+      "pairingTtlSeconds": 300,
+      "approved": ["node-123"]
+    },
     "adapters": {
       "discord": {
         "enabled": true,
@@ -790,6 +960,11 @@ to avoid cross-origin issues when the UI is on a different port.
 Environment overrides:
 - `WINGMAN_GATEWAY_TOKEN` can supply the auth token at runtime so you can keep `auth.mode` set to `token` without storing the token in config.
 
+Node pairing notes (planned):
+- `nodes.pairingRequired`: require explicit approval for new nodes (recommended)
+- `nodes.approved`: allowlist of approved node IDs
+- `nodes.pairingTtlSeconds`: how long a pending pairing request stays valid
+
 Discord adapter notes:
 - The adapter runs inside the gateway process and connects back to the gateway WebSocket API.
 - By default it only responds to mentions (DMs always route).
@@ -797,6 +972,9 @@ Discord adapter notes:
 - `channelSessions` can map a Discord channel ID to a fixed session ID. If set, it overrides the derived session key unless a `!session` command is used.
 - If the mapped session ID (or `!session` override) starts with `agent:<id>:`, the adapter will set `agentId` to that `<id>` so the gateway routes to the intended agent without requiring a separate binding.
 - Optional overrides: `gatewayUrl`, `gatewayToken`, `gatewayPassword`.
+
+Dynamic UI notes:
+- `dynamicUiEnabled`: when false, clients ignore UI render specs and agents should respond with text only.
 
 ### Session Working Folder (Control UI)
 - Each session can optionally set a working folder for output files.

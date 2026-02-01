@@ -55,4 +55,87 @@ describe("parseStreamEvents", () => {
 			status: "running",
 		});
 	});
+
+	it("extracts UI hints from tool args", () => {
+		const chunk = {
+			event: "on_tool_start",
+			name: "ui_present",
+			run_id: "tool-2",
+			data: {
+				input: {
+					location: "Seattle",
+					uiOnly: true,
+					textFallback: "Seattle: 58°F, Cloudy",
+					ui: {
+						registry: "webui",
+						components: [{ component: "stat_grid", props: { title: "Weather" } }],
+					},
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.toolEvents).toHaveLength(1);
+		expect(result.toolEvents[0].ui).toMatchObject({
+			registry: "webui",
+		});
+		expect(result.toolEvents[0].uiOnly).toBe(true);
+		expect(result.toolEvents[0].textFallback).toBe("Seattle: 58°F, Cloudy");
+		expect(result.toolEvents[0].args).toMatchObject({ location: "Seattle" });
+	});
+
+	it("extracts UI hints from tool output", () => {
+		const chunk = {
+			event: "on_tool_end",
+			name: "ui_present",
+			run_id: "tool-3",
+			data: {
+				output: {
+					temperature: 72,
+					ui: {
+						registry: "webui",
+						components: [{ component: "stat_grid", props: { title: "Weather" } }],
+					},
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.toolEvents).toHaveLength(1);
+		expect(result.toolEvents[0].ui).toMatchObject({
+			registry: "webui",
+		});
+		expect(result.toolEvents[0].output).toMatchObject({ temperature: 72 });
+	});
+
+	it("extracts UI hints from tool output wrapped in kwargs content", () => {
+		const chunk = {
+			event: "on_tool_end",
+			name: "ui_present",
+			run_id: "tool-4",
+			data: {
+				output: {
+					kwargs: {
+						content: JSON.stringify({
+							temperature: 70,
+							ui: {
+								registry: "webui",
+								components: [
+									{ component: "stat_grid", props: { title: "Weather" } },
+								],
+							},
+						}),
+					},
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.toolEvents).toHaveLength(1);
+		expect(result.toolEvents[0].ui).toMatchObject({ registry: "webui" });
+		expect(result.toolEvents[0].output).toMatchObject({ temperature: 70 });
+	});
 });

@@ -1,0 +1,51 @@
+---
+home: true
+hero:
+  name: Wingman
+  text: Command your agent fleet.
+  tagline: A multi-agent system for local and distributed AI workflows, with a gateway, skills, hooks, and realtime UI.
+  image:
+    src: /wingman_logo.webp
+    alt: Wingman logo
+  actions:
+    - text: Quickstart
+      link: /getting-started/quickstart
+    - text: Configure Providers
+      link: /configuration/providers
+    - text: Discord Adapter
+      link: /configuration/discord-adapter
+features:
+  - title: Multi-agent orchestration
+    details: Define specialized agents and sub-agents, route work automatically, and keep context tight across tasks.
+  - title: Gateway + Control UI
+    details: Run a local gateway for sessions, state, and adapters. Use the Control Core UI to manage chats, routines, and webhooks.
+  - title: Extensible tools + skills
+    details: Add MCP servers, install community skills, and wire hooks for pre/post tool automation.
+  - title: Voice + Discord adapters
+    details: Speak responses with Web Speech or ElevenLabs and bring your agents into Discord channels.
+---
+
+# Welcome to Wingman
+
+Wingman is a two-part agent ecosystem:
+
+- **Wingman CLI** for local orchestration, config, and agent execution.
+- **Wingman Gateway** for multi-agent collaboration, sessions, adapters, and the Control Core web UI.
+
+This documentation dives deep into configuration, providers, and real-world use cases so you can ship a production-grade Wingman setup.
+
+## What you can build
+
+- A **multi-agent coding squad** that delegates tasks across specialized sub-agents.
+- A **Discord bot** that routes mentions to specific agents and session threads.
+- A **voice-enabled command center** using Web Speech or ElevenLabs.
+- A **shared gateway** for cross-device collaboration and session persistence.
+
+## Where to start
+
+1. Run `wingman init` to generate a `.wingman/` workspace config.
+2. Configure providers (`wingman provider login <provider>`).
+3. Create or customize agents in `.wingman/agents/`.
+4. Start the gateway and open the Control Core UI.
+
+Ready to dive in? Start with the quickstart.

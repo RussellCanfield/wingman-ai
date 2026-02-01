@@ -109,6 +109,39 @@ export function parseAgentIdFromSessionKey(sessionKey?: string): string | undefi
 	return match?.[1];
 }
 
+export function extractUiMeta(
+	payload: unknown,
+): { uiOnly?: boolean; textFallback?: string } {
+	if (typeof payload === "string") {
+		try {
+			const parsed = JSON.parse(payload);
+			return extractUiMeta(parsed);
+		} catch {
+			return {};
+		}
+	}
+	if (!payload || typeof payload !== "object") {
+		return {};
+	}
+	const record = payload as Record<string, unknown>;
+	const uiOnly = typeof record.uiOnly === "boolean" ? record.uiOnly : undefined;
+	const textFallback =
+		typeof record.textFallback === "string" ? record.textFallback : undefined;
+	if (uiOnly !== undefined || textFallback) {
+		return { uiOnly, textFallback };
+	}
+	const content =
+		typeof record.content === "string"
+			? record.content
+			: typeof (record as any)?.kwargs?.content === "string"
+				? (record as any).kwargs.content
+				: undefined;
+	if (content) {
+		return extractUiMeta(content);
+	}
+	return {};
+}
+
 function buildRoutingInfo(message: Message, botUserId: string): RoutingInfo {
 	const routing: RoutingInfo = {
 		channel: "discord",
@@ -329,6 +362,8 @@ export class DiscordGatewayAdapter {
 			}
 
 			let fallbackText = "";
+			let uiFallbackText = "";
+			let uiOnlyDetected = false;
 			const textByMessageId = new Map<string, string>();
 			const messageOrder: string[] = [];
 
@@ -345,6 +380,15 @@ export class DiscordGatewayAdapter {
 				}
 				const parsedChunks = parseStreamChunk((event as any).chunk);
 				for (const chunk of parsedChunks) {
+					if (chunk.type === "tool-result" && chunk.toolResult?.output) {
+						const meta = extractUiMeta(chunk.toolResult.output);
+						if (meta.uiOnly === true) {
+							uiOnlyDetected = true;
+						}
+						if (meta.textFallback) {
+							uiFallbackText = meta.textFallback;
+						}
+					}
 					if (chunk.type !== "text" || !chunk.text) {
 						continue;
 					}
@@ -369,7 +413,10 @@ export class DiscordGatewayAdapter {
 				.map((id) => textByMessageId.get(id))
 				.filter((value): value is string => Boolean(value))
 				.join("\n\n");
-			const responseText = `${fallbackText}${fallbackText && orderedText ? "\n\n" : ""}${orderedText}`.trim();
+			let responseText = `${fallbackText}${fallbackText && orderedText ? "\n\n" : ""}${orderedText}`.trim();
+			if (uiFallbackText && (uiOnlyDetected || !responseText)) {
+				responseText = uiFallbackText.trim();
+			}
 			if (!responseText) {
 				return;
 			}

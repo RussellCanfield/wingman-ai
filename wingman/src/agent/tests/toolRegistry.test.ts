@@ -109,6 +109,9 @@ describe("Tool Registry", () => {
 				"think",
 				"code_search",
 				"git_status",
+				"ui_registry_list",
+				"ui_registry_get",
+				"ui_present",
 			]);
 		});
 

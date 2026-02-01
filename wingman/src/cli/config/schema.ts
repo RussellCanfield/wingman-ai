@@ -117,6 +117,7 @@ export const GatewayConfigSchema = z
 			pairingRequired: true,
 			allowInsecureAuth: false,
 		}),
+		dynamicUiEnabled: z.boolean().optional().default(true),
 		adapters: GatewayAdaptersSchema.optional().default({}),
 	})
 	.default({
@@ -133,6 +134,7 @@ export const GatewayConfigSchema = z
 			pairingRequired: true,
 			allowInsecureAuth: false,
 		},
+		dynamicUiEnabled: true,
 		adapters: {},
 	});
 
@@ -222,6 +224,7 @@ export const WingmanConfigSchema = z.object({
 			pairingRequired: true,
 			allowInsecureAuth: false,
 		},
+		dynamicUiEnabled: true,
 		adapters: {},
 	}),
 	agents: AgentsConfigSchema.optional().default({

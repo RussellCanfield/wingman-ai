@@ -1,0 +1,5 @@
+[
+  { "type": "file", "name": "cli", "label": "CLI Reference" },
+  { "type": "file", "name": "http-api", "label": "Gateway HTTP API" },
+  { "type": "file", "name": "tools", "label": "Tool Catalog" }
+]

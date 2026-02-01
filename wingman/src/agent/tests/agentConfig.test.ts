@@ -113,6 +113,9 @@ describe("Agent Configuration Schema", () => {
 				"web_crawler",
 				"command_execute",
 				"think",
+				"ui_registry_list",
+				"ui_registry_get",
+				"ui_present",
 			];
 
 			for (const tool of validTools) {

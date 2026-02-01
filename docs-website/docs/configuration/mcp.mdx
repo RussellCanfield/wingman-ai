@@ -1,0 +1,58 @@
+# MCP Servers
+
+Wingman supports Model Context Protocol (MCP) servers via `stdio` or `sse` transports.
+
+## Global MCP config
+
+```json
+{
+  "mcp": {
+    "servers": [
+      {
+        "name": "local-tools",
+        "transport": "stdio",
+        "command": "node",
+        "args": ["/path/to/server.js"],
+        "env": {
+          "API_KEY": "..."
+        }
+      },
+      {
+        "name": "remote-tools",
+        "transport": "sse",
+        "url": "http://localhost:8000/mcp",
+        "headers": {
+          "Authorization": "Bearer ..."
+        }
+      }
+    ]
+  }
+}
+```
+
+## Per-agent MCP config
+
+```json
+{
+  "name": "researcher",
+  "description": "Uses a custom MCP server.",
+  "systemPrompt": "Use MCP tools for retrieval.",
+  "mcp": {
+    "servers": [
+      {
+        "name": "papers",
+        "transport": "sse",
+        "url": "https://mcp.example.com/papers"
+      }
+    ]
+  },
+  "mcpUseGlobal": true
+}
+```
+
+## Transport types
+
+- **stdio**: spawn a local subprocess and communicate over stdio.
+- **sse**: connect to a remote HTTP/SSE endpoint.
+
+Keep MCP servers scoped to the minimum data and permissions required for each agent.

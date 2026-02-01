@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	extractSessionOverride,
+	extractUiMeta,
 	parseAgentIdFromSessionKey,
 	resolveDiscordChannelSessionKey,
 	splitDiscordMessage,
@@ -66,5 +67,24 @@ describe("discord adapter helpers", () => {
 		}
 		const rebuilt = chunks.join("");
 		expect(rebuilt).toBe(input);
+	});
+
+	it("extracts uiOnly and textFallback from plain object", () => {
+		const meta = extractUiMeta({ uiOnly: true, textFallback: "Hello" });
+		expect(meta).toEqual({ uiOnly: true, textFallback: "Hello" });
+	});
+
+	it("extracts uiOnly and textFallback from stringified payload", () => {
+		const meta = extractUiMeta(
+			JSON.stringify({ uiOnly: true, textFallback: "Fallback" }),
+		);
+		expect(meta).toEqual({ uiOnly: true, textFallback: "Fallback" });
+	});
+
+	it("extracts uiOnly and textFallback from kwargs.content", () => {
+		const meta = extractUiMeta({
+			kwargs: { content: JSON.stringify({ uiOnly: true, textFallback: "OK" }) },
+		});
+		expect(meta).toEqual({ uiOnly: true, textFallback: "OK" });
 	});
 });

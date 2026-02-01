@@ -1,0 +1,31 @@
+# Skills
+
+Skills extend Wingman with reusable workflows. Wingman can browse and install skills from a GitHub repository.
+
+## Commands
+
+```bash
+wingman skill browse
+wingman skill install pdf
+wingman skill list
+wingman skill remove pdf
+```
+
+## Configuration
+
+```json
+{
+  "skills": {
+    "repositoryOwner": "anthropics",
+    "repositoryName": "skills",
+    "githubToken": "optional-token",
+    "skillsDirectory": "skills"
+  }
+}
+```
+
+You can also set `GITHUB_TOKEN` for higher GitHub API rate limits.
+
+## Where skills live
+
+Installed skills are placed in `.wingman/skills/` (or the directory you configure). Each skill includes a `SKILL.md` with metadata and instructions.

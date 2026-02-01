@@ -13,6 +13,7 @@
 	"files": [
 		"dist",
 		"bin",
+		"skills",
 		".wingman/agents"
 	],
 	"publishConfig": {
@@ -38,6 +39,9 @@
 		"webui:dev": "vite --config webui/vite.config.ts --host",
 		"webui:build": "vite build --config webui/vite.config.ts",
 		"webui:preview": "vite preview --config webui/vite.config.ts",
+		"docs:dev": "bun --cwd docs-site run dev",
+		"docs:build": "bun --cwd docs-site run build",
+		"docs:preview": "bun --cwd docs-site run preview",
 		"gateway:example": "bun ./examples/gateway-example.ts",
 		"gateway:start": "./bin/wingman gateway start",
 		"gateway:stop": "./bin/wingman gateway stop",

@@ -69,6 +69,7 @@ describe("CLI Config Loader", () => {
 						pairingRequired: true,
 						allowInsecureAuth: false,
 					},
+					dynamicUiEnabled: true,
 					adapters: {},
 				},
 				agents: {

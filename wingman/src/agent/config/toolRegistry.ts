@@ -5,6 +5,11 @@ import { createCommandExecuteTool } from "../tools/command_execute.js";
 import { createThinkingTool } from "../tools/think.js";
 import { createCodeSearchTool } from "../tools/code_search.js";
 import { createGitStatusTool } from "../tools/git_status.js";
+import {
+	createUiRegistryGetTool,
+	createUiRegistryListTool,
+	createUiPresentTool,
+} from "../tools/ui_registry.js";
 import type { AvailableToolName } from "./agentConfig.js";
 import type { SearchConfig } from "../../cli/config/schema.js";
 import { createLogger } from "../../logger.js";
@@ -20,7 +25,15 @@ export interface ToolOptions {
 	timeout?: number;
 	searchConfig?: SearchConfig;
 	mcpConfigs?: MCPServersConfig[];
+	skillsDirectory?: string;
+	dynamicUiEnabled?: boolean;
 }
+
+export const UI_TOOL_NAMES: AvailableToolName[] = [
+	"ui_registry_list",
+	"ui_registry_get",
+	"ui_present",
+];
 
 /**
  * Create a tool by name with optional configuration
@@ -35,6 +48,8 @@ export function createTool(
 		allowScriptExecution = true,
 		timeout = 300000,
 		searchConfig = { provider: "duckduckgo", maxResults: 5 },
+		skillsDirectory = "skills",
+		dynamicUiEnabled = true,
 	} = options;
 
 	logger.debug(`Creating tool: ${name}`, {
@@ -69,6 +84,15 @@ export function createTool(
 
 		case "git_status":
 			return createGitStatusTool(workspace);
+
+		case "ui_registry_list":
+			return createUiRegistryListTool(workspace, skillsDirectory);
+
+		case "ui_registry_get":
+			return createUiRegistryGetTool(workspace, skillsDirectory);
+
+		case "ui_present":
+			return createUiPresentTool(workspace, skillsDirectory, dynamicUiEnabled);
 
 		default:
 			logger.warn(`Unknown tool name: ${name}`);
@@ -135,5 +159,6 @@ export function getAvailableTools(): AvailableToolName[] {
 		"think",
 		"code_search",
 		"git_status",
+		...UI_TOOL_NAMES,
 	];
 }

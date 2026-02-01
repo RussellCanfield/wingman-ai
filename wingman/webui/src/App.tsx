@@ -48,6 +48,7 @@ const DEFAULT_CONFIG: ControlUiConfig = {
 	gatewayPort: 18789,
 	requireAuth: false,
 	outputRoot: "",
+	dynamicUiEnabled: true,
 	voice: DEFAULT_VOICE_CONFIG,
 	agents: [],
 };
@@ -103,6 +104,7 @@ export const App: React.FC = () => {
 		status: VoicePlaybackStatus;
 		messageId?: string;
 	}>({ status: "idle" });
+	const dynamicUiEnabled = config.dynamicUiEnabled !== false;
 
 	const wsRef = useRef<WebSocket | null>(null);
 	const connectRequestIdRef = useRef<string | null>(null);
@@ -110,6 +112,8 @@ export const App: React.FC = () => {
 	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(new Map());
 	const requestThreadRef = useRef<Map<string, string>>(new Map());
 	const requestAgentRef = useRef<Map<string, string>>(new Map());
+	const uiOnlyRequestsRef = useRef<Set<string>>(new Set());
+	const uiFallbackRef = useRef<Map<string, string>>(new Map());
 	const subscribedSessionsRef = useRef<Set<string>>(new Set());
 	const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
 	const voiceUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -572,9 +576,12 @@ export const App: React.FC = () => {
 		stopVoicePlayback();
 	}, [activeThreadId, stopVoicePlayback]);
 
-	const updateAssistant = useCallback((requestId: string, text: string) => {
+const updateAssistant = useCallback((requestId: string, text: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
 		if (!threadId) return;
+		if (uiOnlyRequestsRef.current.has(requestId)) {
+			return;
+		}
 		setThreads((prev) =>
 			prev.map((thread) =>
 				thread.id === threadId
@@ -599,7 +606,16 @@ export const App: React.FC = () => {
 				const messages = thread.messages.map((msg) => {
 					if (msg.id !== requestId) return msg;
 					const existing = msg.toolEvents ? [...msg.toolEvents] : [];
+					const uiBlocks = msg.uiBlocks ? [...msg.uiBlocks] : [];
+					let clearContent = false;
 					for (const event of events) {
+						if (event.uiOnly && dynamicUiEnabled) {
+							uiOnlyRequestsRef.current.add(requestId);
+							clearContent = true;
+						}
+						if (event.textFallback) {
+							uiFallbackRef.current.set(requestId, event.textFallback);
+						}
 						const index = existing.findIndex((item) => item.id === event.id);
 						if (index >= 0) {
 							const resolvedName =
@@ -623,6 +639,9 @@ export const App: React.FC = () => {
 								args: event.args,
 								status: event.status,
 								output: event.output,
+								ui: event.ui,
+								uiOnly: event.uiOnly,
+								textFallback: event.textFallback,
 								error: event.error,
 								startedAt: event.timestamp,
 								completedAt:
@@ -631,8 +650,30 @@ export const App: React.FC = () => {
 										: undefined,
 							});
 						}
+						if (event.ui && dynamicUiEnabled) {
+							const existingBlock = uiBlocks.find((block) => block.id === event.id);
+							if (!existingBlock) {
+								uiBlocks.push({
+									id: event.id,
+									spec: event.ui,
+									uiOnly: event.uiOnly,
+									textFallback: event.textFallback,
+								});
+							} else {
+								existingBlock.spec = event.ui;
+								existingBlock.uiOnly = event.uiOnly;
+								existingBlock.textFallback = event.textFallback;
+							}
+						}
 					}
-					return { ...msg, toolEvents: existing };
+					return {
+						...msg,
+						content: clearContent ? "" : msg.content,
+						toolEvents: existing,
+						uiBlocks: dynamicUiEnabled ? uiBlocks : msg.uiBlocks,
+						uiTextFallback:
+							uiFallbackRef.current.get(requestId) ?? msg.uiTextFallback,
+					};
 				});
 				return {
 					...thread,
@@ -640,7 +681,7 @@ export const App: React.FC = () => {
 				};
 			}),
 		);
-	}, []);
+	}, [dynamicUiEnabled]);
 
 	const updateThinkingEvents = useCallback(
 		(requestId: string, events: ThinkingEvent[]) => {
@@ -679,7 +720,9 @@ export const App: React.FC = () => {
 	const finalizeAssistant = useCallback((requestId: string, fallback?: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
 		if (!threadId) return;
-		const finalText = buffersRef.current.get(requestId) || fallback || "";
+		const uiFallback = uiFallbackRef.current.get(requestId);
+		const resolvedFallback = uiFallback || fallback || "";
+		const finalText = buffersRef.current.get(requestId) || resolvedFallback || "";
 		const spoken = spokenMessagesRef.current.get(threadId) || new Set<string>();
 		if (
 			shouldAutoSpeak({
@@ -705,8 +748,12 @@ export const App: React.FC = () => {
 					...thread,
 					messages: thread.messages.map((msg) => {
 						if (msg.id !== requestId) return msg;
-						if (!msg.content && fallback) {
-							return { ...msg, content: fallback };
+						if (
+							!msg.content &&
+							resolvedFallback &&
+							(!uiOnlyRequestsRef.current.has(requestId) || !dynamicUiEnabled)
+						) {
+							return { ...msg, content: resolvedFallback };
 						}
 						return msg;
 					}),
@@ -717,8 +764,10 @@ export const App: React.FC = () => {
 		thinkingBuffersRef.current.delete(requestId);
 		requestThreadRef.current.delete(requestId);
 		requestAgentRef.current.delete(requestId);
+		uiOnlyRequestsRef.current.delete(requestId);
+		uiFallbackRef.current.delete(requestId);
 		setIsStreaming(false);
-	}, []);
+	}, [dynamicUiEnabled]);
 
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
@@ -930,10 +979,12 @@ export const App: React.FC = () => {
 			}
 			if (payload.type === "agent-complete") {
 				logEvent("Agent complete");
-				finalizeAssistant(
+				const fallback = buildAgentFallback(
+					payload.result,
 					requestId,
-					payload.result ? JSON.stringify(payload.result, null, 2) : undefined,
+					uiOnlyRequestsRef.current,
 				);
+				finalizeAssistant(requestId, fallback);
 				return;
 			}
 			if (payload.type === "agent-error") {
@@ -2122,6 +2173,7 @@ export const App: React.FC = () => {
 										outputRoot={config.outputRoot}
 										voiceAutoEnabled={activeVoiceAutoEnabled}
 										voicePlayback={voicePlayback}
+										dynamicUiEnabled={dynamicUiEnabled}
 										onToggleVoiceAuto={handleToggleVoiceAuto}
 										onSpeakVoice={handleSpeakVoice}
 										onStopVoice={handleStopVoice}
@@ -2270,6 +2322,26 @@ function createAttachmentId(): string {
 		return window.crypto.randomUUID();
 	}
 	return `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildAgentFallback(
+	result: unknown,
+	requestId: string,
+	uiOnlyRequests: Set<string>,
+): string | undefined {
+	if (!result) return undefined;
+	if (uiOnlyRequests.has(requestId)) return undefined;
+	if (typeof result === "object" && result !== null) {
+		const keys = Object.keys(result as Record<string, unknown>);
+		if (keys.length === 1 && keys[0] === "streaming") {
+			return undefined;
+		}
+	}
+	try {
+		return JSON.stringify(result, null, 2);
+	} catch {
+		return String(result);
+	}
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {

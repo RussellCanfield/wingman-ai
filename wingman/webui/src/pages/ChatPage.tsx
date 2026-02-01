@@ -16,6 +16,7 @@ type ChatPageProps = {
 	outputRoot?: string;
 	voiceAutoEnabled: boolean;
 	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
+	dynamicUiEnabled: boolean;
 	onToggleVoiceAuto: () => void;
 	onSpeakVoice: (messageId: string, text: string) => void;
 	onStopVoice: () => void;
@@ -42,6 +43,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	outputRoot,
 	voiceAutoEnabled,
 	voicePlayback,
+	dynamicUiEnabled,
 	onToggleVoiceAuto,
 	onSpeakVoice,
 	onStopVoice,
@@ -91,6 +93,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 				loading={loadingThread}
 				voiceAutoEnabled={voiceAutoEnabled}
 				voicePlayback={voicePlayback}
+				dynamicUiEnabled={dynamicUiEnabled}
 				onToggleVoiceAuto={onToggleVoiceAuto}
 				onSpeakVoice={onSpeakVoice}
 				onStopVoice={onStopVoice}

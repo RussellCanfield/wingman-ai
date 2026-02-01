@@ -1,0 +1,116 @@
+# wingman.config.json
+
+The global config lives at `.wingman/wingman.config.json`. It controls logging, providers, gateway settings, search, voice, and agent bindings.
+
+## Example
+
+```json
+{
+  "logLevel": "info",
+  "defaultAgent": "wingman",
+  "recursionLimit": 5000,
+  "search": {
+    "provider": "duckduckgo",
+    "maxResults": 5
+  },
+  "voice": {
+    "provider": "web_speech",
+    "defaultPolicy": "off",
+    "webSpeech": {
+      "voiceName": "Samantha",
+      "lang": "en-US",
+      "rate": 1
+    },
+    "elevenlabs": {
+      "voiceId": "voice_123",
+      "modelId": "eleven_turbo_v2",
+      "stability": 0.45,
+      "similarityBoost": 0.7
+    }
+  },
+  "cli": {
+    "theme": "default",
+    "outputMode": "auto"
+  },
+  "skills": {
+    "repositoryOwner": "anthropics",
+    "repositoryName": "skills",
+    "skillsDirectory": "skills"
+  },
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18789,
+    "fsRoots": ["."],
+    "auth": {
+      "mode": "token",
+      "token": "optional-token",
+      "allowTailscale": false
+    },
+    "controlUi": {
+      "enabled": true,
+      "port": 18790,
+      "pairingRequired": true,
+      "allowInsecureAuth": false
+    },
+    "dynamicUiEnabled": true,
+    "adapters": {
+      "discord": {
+        "enabled": true,
+        "token": "DISCORD_BOT_TOKEN",
+        "mentionOnly": true,
+        "allowedGuilds": ["123"],
+        "allowedChannels": ["456"],
+        "sessionCommand": "!session",
+        "responseChunkSize": 1900
+      }
+    }
+  },
+  "agents": {
+    "list": [
+      {
+        "id": "wingman",
+        "name": "Wingman",
+        "default": true,
+        "workspace": ".",
+        "agentDir": ".wingman/agents/wingman",
+        "model": "anthropic:claude-sonnet-4-5"
+      }
+    ],
+    "bindings": [
+      {
+        "agentId": "wingman",
+        "match": {
+          "channel": "discord",
+          "guildId": "123",
+          "peer": { "kind": "channel", "id": "456" }
+        }
+      }
+    ]
+  },
+  "mcp": {
+    "servers": [
+      {
+        "name": "local-tools",
+        "transport": "stdio",
+        "command": "node",
+        "args": ["/path/to/server.js"]
+      }
+    ]
+  }
+}
+```
+
+## Key sections
+
+- **logLevel**: `debug | info | warn | error | silent`
+- **defaultAgent**: agent name used when `--agent` is omitted
+- **recursionLimit**: maximum reasoning steps for agents (default 5000)
+- **search**: provider and max results for the `internet_search` tool
+- **voice**: global voice settings; can be overridden per-agent
+- **cli**: CLI theme and output mode (`auto | interactive | json`)
+- **skills**: GitHub repo + local directory for skills
+- **gateway**: host, port, auth, control UI, adapters
+- **agents**: optional list/bindings used by the gateway for routing
+- **mcp**: global MCP server definitions
+
+For agent-specific configuration, see the Agents guide.

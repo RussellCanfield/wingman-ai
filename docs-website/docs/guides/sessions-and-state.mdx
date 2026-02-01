@@ -1,0 +1,44 @@
+# Sessions & State
+
+Wingman persists conversation state in a SQLite database stored at `.wingman/wingman.db`.
+
+## Session keys
+
+A session key identifies a conversation and its routing context. You will see keys like:
+
+```text
+agent:wingman:webui:thread:<uuid>
+agent:wingman:webhook:build-alerts
+agent:wingman:discord-main
+```
+
+## How sessions are created
+
+- **CLI**: creates or resumes the last session for an agent.
+- **Web UI**: creates threads with `agent:<id>:webui:thread:<uuid>`.
+- **Discord**: uses channel mappings or the `!session` command.
+- **Webhooks**: uses `agent:<id>:webhook:<webhookId>`.
+
+## Session metadata
+
+Sessions store metadata like:
+
+- `workdir` (when set via the Control UI)
+- `messageCount` and previews
+- source fields (webhook, discord)
+
+## Clear or update sessions
+
+The gateway HTTP API lets you list, rename, and clear session messages:
+
+```http
+GET /api/sessions?agentId=wingman
+PUT /api/sessions/:id?agentId=wingman
+DELETE /api/sessions/:id/messages?agentId=wingman
+```
+
+## Best practices
+
+- Use stable session keys for long-running projects.
+- Use separate sessions for destructive tasks (migrations, deploys).
+- Limit `fsRoots` to keep session workdirs safe.

@@ -1,0 +1,92 @@
+# Hooks
+
+Wingman supports two hook systems:
+
+1. **Tool hooks** (agent-level): run commands before/after tool execution.
+2. **Gateway hooks** (internal): respond to gateway/session events.
+
+## Tool hooks
+
+Configure in `wingman.config.json` or per-agent.
+
+```json
+{
+  "toolHooks": {
+    "PreToolUse": [
+      {
+        "matcher": "command_execute|git_status",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .wingman/hooks/pretool-log.js",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "command_execute",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .wingman/hooks/posttool-log.js",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .wingman/hooks/stop-log.js"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Hooks receive a JSON payload on **stdin** that includes session + tool context.
+
+```js
+// .wingman/hooks/pretool-log.js
+process.stdin.setEncoding(\"utf8\");
+let data = \"\";
+process.stdin.on(\"data\", (chunk) => (data += chunk));
+process.stdin.on(\"end\", () => {
+  const payload = JSON.parse(data || \"{}\");
+  console.log(\"PreToolUse:\", payload.tool_name);
+});
+```
+
+Matchers support pipe-separated tool names, wildcards, or regex.
+
+## Gateway hooks
+
+Gateway hooks are configured under `hooks`:
+
+```json
+{
+  "hooks": {
+    "enabled": true,
+    "entries": {
+      "notify": {
+        "enabled": true,
+        "deliver": {
+          "agentId": "wingman",
+          "sessionKey": "agent:wingman:hooks"
+        }
+      }
+    },
+    "load": {
+      "extraDirs": [".wingman/hooks"]
+    }
+  }
+}
+```
+
+This enables internal hook plugins to deliver messages to agents when gateway events occur.

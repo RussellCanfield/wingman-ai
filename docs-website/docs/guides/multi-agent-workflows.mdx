@@ -1,0 +1,66 @@
+# Multi-Agent Workflows
+
+Wingman shines when you split work across specialized agents. This guide shows how to build a small agent squad with clear responsibilities and safe tool scopes.
+
+## Define a squad
+
+```json
+{
+  "name": "wingman",
+  "description": "Lead agent that delegates to specialists.",
+  "systemPrompt": "You orchestrate tasks. Delegate whenever a specialist can handle it better.",
+  "tools": ["code_search", "git_status", "command_execute", "internet_search"],
+  "subAgents": [
+    {
+      "name": "planner",
+      "description": "Breaks tasks into steps.",
+      "systemPrompt": "Create a concise plan and ask clarifying questions."
+    },
+    {
+      "name": "implementer",
+      "description": "Makes focused code changes.",
+      "systemPrompt": "Implement changes with minimal diffs.",
+      "tools": ["code_search", "command_execute"]
+    },
+    {
+      "name": "reviewer",
+      "description": "Finds regressions and missing tests.",
+      "systemPrompt": "Review diffs for risk and correctness."
+    }
+  ]
+}
+```
+
+## Route work via the gateway
+
+You can map channels or peers to specific agents using `agents.bindings`:
+
+```json
+{
+  "agents": {
+    "bindings": [
+      {
+        "agentId": "planner",
+        "match": { "channel": "discord", "peer": { "kind": "dm", "id": "123" } }
+      }
+    ]
+  }
+}
+```
+
+## Example workflow
+
+```text
+User: Add a Redis cache layer to the gateway stats endpoint.
+
+Wingman:
+- Delegates to planner for scope + risks
+- Sends implementer to modify gateway stats
+- Uses reviewer to check for missing tests
+```
+
+## Tips
+
+- Keep each sub-agent's tool list minimal.
+- Use `blockedCommands` to prevent destructive shell calls.
+- Configure per-agent models for cost/performance balance.

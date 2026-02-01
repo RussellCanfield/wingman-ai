@@ -6,7 +6,7 @@ import {
 	WingmanDirectory,
 	type WingmanAgentConfig,
 } from "./agentConfig.js";
-import { createTools, type ToolOptions } from "./toolRegistry.js";
+import { createTools, UI_TOOL_NAMES, type ToolOptions } from "./toolRegistry.js";
 import { ModelFactory } from "./modelFactory.js";
 import { createLogger } from "../../logger.js";
 import type { WingmanAgent } from "@/types/agents.js";
@@ -273,6 +273,11 @@ export class AgentLoader {
 			systemPrompt: config.systemPrompt,
 		};
 
+		const dynamicUiEnabled =
+			this.wingmanConfig?.gateway?.dynamicUiEnabled !== false;
+		const skillsDirectory =
+			this.wingmanConfig?.skills?.skillsDirectory || "skills";
+
 		const buildToolOptions = (source: WingmanAgentConfig): ToolOptions => {
 			const mcpConfigs: MCPServersConfig[] = [];
 			if (source.mcp) {
@@ -289,6 +294,8 @@ export class AgentLoader {
 				timeout: source.commandTimeout,
 				searchConfig: this.wingmanConfig?.search,
 				mcpConfigs,
+				skillsDirectory,
+				dynamicUiEnabled,
 			};
 		};
 
@@ -298,6 +305,22 @@ export class AgentLoader {
 				config.tools,
 				buildToolOptions(config),
 			)) as any;
+		}
+
+		const uiTools = (await createTools(
+			UI_TOOL_NAMES,
+			buildToolOptions(config),
+		)) as any;
+		if (uiTools.length > 0) {
+			if (agent.tools && agent.tools.length > 0) {
+				const existing = new Set(agent.tools.map((tool: any) => tool.name));
+				const uniqueUiTools = uiTools.filter(
+					(tool: any) => !existing.has(tool.name),
+				);
+				agent.tools = [...agent.tools, ...uniqueUiTools];
+			} else {
+				agent.tools = uiTools;
+			}
 		}
 
 		// Store MCP config on agent for reference
@@ -336,6 +359,22 @@ export class AgentLoader {
 						subagent.tools,
 						buildToolOptions(subagent as WingmanAgentConfig),
 					) as any;
+				}
+
+				const subUiTools = (await createTools(
+					UI_TOOL_NAMES,
+					buildToolOptions(subagent as WingmanAgentConfig),
+				)) as any;
+				if (subUiTools.length > 0) {
+					if (sub.tools && sub.tools.length > 0) {
+						const existing = new Set(sub.tools.map((tool: any) => tool.name));
+						const uniqueUiTools = subUiTools.filter(
+							(tool: any) => !existing.has(tool.name),
+						);
+						sub.tools = [...sub.tools, ...uniqueUiTools];
+					} else {
+						sub.tools = subUiTools;
+					}
 				}
 
 				if (subagent.model) {

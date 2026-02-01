@@ -12,6 +12,7 @@ Wingman is a **stateful, multi-agent runtime** with a **local CLI control plane*
 - **Local control plane**: The CLI configures, invokes, and connects to the gateway, with an optional `--local` execution mode.
 - **Multi-agent orchestration**: A root agent can delegate to specialized subagents with clear roles.
 - **Protocol-first**: The gateway streams raw agent events so any client (web, mobile, terminal) can render them.
+- **Tool-driven UI prompts (SGUI)**: tool calls can include UI render hints for Web UI components.
 - **Extensible**: Custom agents, hooks, skills, and MCP tools let you tailor workflows to your team.
 
 ## What It’s For (Not Just Coding)
@@ -29,6 +30,7 @@ Wingman is an agent system, not a single “coding assistant.” Example use cas
 - **Wingman Gateway**: stateful runtime for agents, routing, sessions, and channels
 - **Wingman CLI**: local control plane for onboarding, config, and agent invocation
 - **Control UI**: chat + streaming interface (served by the gateway)
+- **Wingman macOS App (planned)**: menu-bar companion that exposes macOS-only capabilities as a node
 
 By default, the CLI connects to a local gateway. For isolated, local-only runs, use `--local`.
 
@@ -44,6 +46,9 @@ Key docs:
 - `docs/requirements/000-architecture-overview.md`
 - `docs/requirements/001-multi-agent-architecture.md`
 - `docs/requirements/002-gateway-prd.md`
+- `docs/requirements/003-macos-app-prd.md`
+- `docs/requirements/004-node-protocol.md`
+- `docs/requirements/005-web-ui-sgui-prd.md`
 - `docs/custom-agents.md`
 
 ## Quick Start

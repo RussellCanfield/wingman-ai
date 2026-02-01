@@ -1,17 +1,18 @@
 # Wingman Architecture Overview
 
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Active
-**Last Updated:** 2026-01-30
+**Last Updated:** 2026-02-01
 
 ---
 
 ## Executive Summary
 
-Wingman is a two-part AI agent ecosystem:
+Wingman is a three-part AI agent ecosystem:
 
 1. **Wingman Gateway** - A central runtime that hosts agents, sessions, routing, and channels with durable state
 2. **Wingman CLI** - A control plane for configuration and invocation; defaults to gateway execution with a `--local` override
+3. **Wingman macOS App (Planned)** - A menu-bar companion that manages macOS permissions, attaches to the gateway, and exposes macOS-only capabilities as a node
 
 The vision is simple: run agents through a local gateway with durable state, and optionally connect additional devices and channels for collaboration.
 
@@ -33,6 +34,7 @@ Rooms enable parallel agent responses, but broadcasts are opt-in. The default pa
 
 ### 5. Protocol-First Design
 The gateway forwards raw agent streams (matching CLI streaming format). UI layers interpret these streams for display. This enables any client (mobile, web, terminal) to consume the same protocol.
+Tool events may include UI render hints so clients can display static generative UI prompts when user input is required.
 
 ### 6. Flexible Provider Support
 Support for multiple model providers via API keys and stored subscription tokens today. OAuth/device-code flows remain planned.
@@ -120,6 +122,23 @@ The Gateway is the central runtime for agents, sessions, routing, and channels.
 | **Channels + Control UI** | Inbound/outbound message adapters and web chat | [PRD-002](002-gateway-prd.md) |
 | **Broadcast Rooms** | Explicit parallel responses when requested | [PRD-002](002-gateway-prd.md) |
 | **Webhook Ingress (Planned)** | External systems trigger agent runs | [PRD-002](002-gateway-prd.md) |
+
+### Part 3: Wingman macOS App (Planned)
+
+The macOS app is a menu-bar companion that handles macOS permissions and exposes
+macOS-only capabilities to the gateway as a node.
+
+**Responsibilities:**
+- Own TCC prompts (Notifications, Accessibility, Screen Recording, Microphone, Speech)
+- Attach to a local gateway (launchd-managed) or connect to a remote gateway
+- Host a local node service that exposes macOS tools (screen, camera, system.run)
+- Provide native status and notifications in the menu bar
+
+| Component | Purpose | Documentation |
+|-----------|---------|---------------|
+| **macOS App** | Menu-bar companion for permissions and macOS tools | [PRD-003](003-macos-app-prd.md) |
+| **Node Protocol (Planned)** | Node connect/invoke and pairing flow | [PRD-004](004-node-protocol.md) |
+| **Web UI SGUI (Planned)** | Static generative UI registry and components | [PRD-005](005-web-ui-sgui-prd.md) |
 
 ---
 

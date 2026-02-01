@@ -39,6 +39,12 @@ export interface SessionMessage {
 	content: string;
 	attachments?: SessionAttachment[];
 	createdAt: number;
+	uiBlocks?: Array<{
+		spec: unknown;
+		uiOnly?: boolean;
+		textFallback?: string;
+	}>;
+	uiTextFallback?: string;
 }
 
 export interface SessionAttachment {
@@ -596,25 +602,31 @@ function toSessionMessage(
 	const role = resolveMessageRole(entry);
 
 	if (role !== "user" && role !== "assistant") {
+		if (isToolMessage(entry)) {
+			const toolContent = extractMessageContent(entry, extractContentBlocks(entry));
+			const ui = extractUiFromPayload(toolContent);
+			if (ui?.spec) {
+				return {
+					id: `msg-${index}`,
+					role: "assistant",
+					content: "",
+					createdAt: baseTime + index,
+					uiBlocks: [
+						{
+							spec: ui.spec,
+							uiOnly: ui.uiOnly,
+							textFallback: ui.textFallback,
+						},
+					],
+					uiTextFallback: ui.textFallback,
+				};
+			}
+		}
 		return null;
 	}
 
 	const blocks = extractContentBlocks(entry);
-	const content =
-		typeof entry.content === "string"
-			? entry.content
-			: typeof entry?.kwargs?.content === "string"
-				? entry.kwargs.content
-				: typeof entry?.additional_kwargs?.content === "string"
-					? entry.additional_kwargs.content
-					: typeof entry?.data?.content === "string"
-						? entry.data.content
-						: blocks.length > 0
-							? blocks
-									.filter((block: any) => block && block.type === "text" && block.text)
-									.map((block: any) => block.text)
-									.join("")
-							: "";
+	const content = extractMessageContent(entry, blocks);
 
 	if (role === "user" && isUiHiddenContent(content)) {
 		return null;
@@ -660,7 +672,8 @@ export function extractMessagesFromState(
 			state?.ts,
 	);
 
-	const mapped = messages
+	const filtered = filterUiOnlyAssistantMessages(messages);
+	const mapped = filtered
 		.map((message, index) => toSessionMessage(message, index, baseTime))
 		.filter(Boolean) as SessionMessage[];
 
@@ -681,6 +694,133 @@ function extractContentBlocks(entry: any): any[] {
 		}
 	}
 	return [];
+}
+
+function extractMessageContent(entry: any, blocks: any[] = []): string {
+	if (!entry || typeof entry !== "object") return "";
+	if (typeof entry.content === "string") return entry.content;
+	if (typeof entry?.kwargs?.content === "string") return entry.kwargs.content;
+	if (typeof entry?.additional_kwargs?.content === "string") {
+		return entry.additional_kwargs.content;
+	}
+	if (typeof entry?.data?.content === "string") return entry.data.content;
+	if (blocks.length > 0) {
+		return blocks
+			.filter((block: any) => block && block.type === "text" && block.text)
+			.map((block: any) => block.text)
+			.join("");
+	}
+	return "";
+}
+
+function extractUiMetaFromPayload(
+	payload: unknown,
+): { uiOnly?: boolean; textFallback?: string } {
+	if (typeof payload === "string") {
+		try {
+			const parsed = JSON.parse(payload);
+			return extractUiMetaFromPayload(parsed);
+		} catch {
+			return {};
+		}
+	}
+	if (!payload || typeof payload !== "object") return {};
+	const record = payload as Record<string, unknown>;
+	const uiOnly = typeof record.uiOnly === "boolean" ? record.uiOnly : undefined;
+	const textFallback =
+		typeof record.textFallback === "string" ? record.textFallback : undefined;
+	if (uiOnly !== undefined || textFallback) {
+		return { uiOnly, textFallback };
+	}
+	const content =
+		typeof record.content === "string"
+			? record.content
+			: typeof (record as any)?.kwargs?.content === "string"
+				? (record as any).kwargs.content
+				: undefined;
+	if (content) {
+		return extractUiMetaFromPayload(content);
+	}
+	return {};
+}
+
+function isToolMessage(entry: any): boolean {
+	if (!entry || typeof entry !== "object") return false;
+	const role =
+		(entry.role as string | undefined) ||
+		(entry?.kwargs?.role as string | undefined) ||
+		(entry?.additional_kwargs?.role as string | undefined);
+	if (role && role.toLowerCase() === "tool") return true;
+	const type = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
+	return type === "tool" || type === "toolmessage";
+}
+
+function filterUiOnlyAssistantMessages(messages: any[]): any[] {
+	if (!Array.isArray(messages) || messages.length === 0) return messages;
+	const filtered: any[] = [];
+	let pendingFallback: string | null = null;
+
+	for (const entry of messages) {
+		if (isToolMessage(entry)) {
+			const content = extractMessageContent(entry, extractContentBlocks(entry));
+			const ui = extractUiFromPayload(content);
+			if (ui?.uiOnly && ui?.textFallback) {
+				pendingFallback = ui.textFallback.trim();
+			}
+			if (ui?.spec) {
+				filtered.push(entry);
+			}
+			continue;
+		}
+
+		const role = resolveMessageRole(entry);
+		if (role === "assistant" && pendingFallback) {
+			const content = extractMessageContent(entry, extractContentBlocks(entry)).trim();
+			if (content && content === pendingFallback) {
+				pendingFallback = null;
+				continue;
+			}
+			pendingFallback = null;
+		}
+
+		filtered.push(entry);
+	}
+
+	return filtered;
+}
+
+function extractUiFromPayload(payload: unknown): {
+	spec?: unknown;
+	uiOnly?: boolean;
+	textFallback?: string;
+} {
+	if (typeof payload === "string") {
+		try {
+			const parsed = JSON.parse(payload);
+			return extractUiFromPayload(parsed);
+		} catch {
+			return {};
+		}
+	}
+	if (!payload || typeof payload !== "object") return {};
+	const record = payload as Record<string, unknown>;
+	const uiOnly = typeof record.uiOnly === "boolean" ? record.uiOnly : undefined;
+	const textFallback =
+		typeof record.textFallback === "string" ? record.textFallback : undefined;
+	const ui = record.ui;
+	if (ui && typeof ui === "object" && Array.isArray((ui as any).components)) {
+		return { spec: ui, uiOnly, textFallback };
+	}
+	const content =
+		typeof record.content === "string"
+			? record.content
+			: typeof (record as any)?.kwargs?.content === "string"
+				? (record as any).kwargs.content
+				: undefined;
+	if (content) {
+		return extractUiFromPayload(content);
+	}
+	return {};
 }
 
 export function extractAttachments(blocks: any[]): SessionAttachment[] {
@@ -845,7 +985,8 @@ function scoreMessages(candidate: any[], baseTime: number): {
 	score: number;
 	messages: SessionMessage[];
 } {
-	const messages = candidate
+	const filtered = filterUiOnlyAssistantMessages(candidate);
+	const messages = filtered
 		.map((message, index) => toSessionMessage(message, index, baseTime))
 		.filter(Boolean) as SessionMessage[];
 	const contentful = messages.filter(
@@ -865,7 +1006,9 @@ function filterEmptyAssistantMessages(
 		(message) =>
 			message.role !== "assistant" ||
 			message.content.trim().length > 0 ||
-			(message.attachments?.length ?? 0) > 0,
+			(message.attachments?.length ?? 0) > 0 ||
+			(Array.isArray((message as any).uiBlocks) &&
+				(message as any).uiBlocks.length > 0),
 	);
 	return filtered.length > 0 ? filtered : messages;
 }

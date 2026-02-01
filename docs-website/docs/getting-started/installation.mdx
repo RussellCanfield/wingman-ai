@@ -1,0 +1,30 @@
+# Installation & Requirements
+
+Wingman is a Node-based CLI and gateway. This repository uses Bun for development.
+
+## Requirements
+
+- **Bun** (recommended): the repo pins `bun@1.1.42` in `package.json`.
+- **Node.js**: required to run the CLI and gateway in production environments.
+
+## Install dependencies
+
+```bash
+bun install
+```
+
+## Run the gateway + UI locally
+
+```bash
+bun run dev
+```
+
+This starts the gateway and the Control Core UI in watch mode.
+
+## Run the CLI directly from the repo
+
+```bash
+./bin/wingman --help
+```
+
+If you are installing Wingman globally via npm or another package manager, you can invoke `wingman` directly after installation.

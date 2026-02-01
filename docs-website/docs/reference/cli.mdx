@@ -1,0 +1,80 @@
+# CLI Reference
+
+## wingman agent
+
+Run an agent with a prompt.
+
+```bash
+wingman agent --agent <name> [options] "your prompt"
+```
+
+Options:
+
+- `--agent <name>`: agent id (required if no default agent)
+- `--local`: run without the gateway
+- `--gateway <url>`: gateway WebSocket URL
+- `--token <token>`: gateway token
+- `--password <value>`: gateway password
+- `--output=<mode>`: `interactive | json`
+- `-v` / `-vv`: log verbosity
+- `--verbose=<level>`: `debug | info | warn | error | silent`
+
+## wingman init
+
+Bootstrap `.wingman/` config and a starter agent.
+
+```bash
+wingman init [options]
+wingman init <agent-name>
+```
+
+Options:
+
+- `--agent <name>`
+- `--agents <list>` (comma-separated bundled agents)
+- `--model <provider:model>`
+- `--provider <name>` (anthropic | openai | openrouter | copilot | xai)
+- `--token` / `--api-key`
+- `--fs-root <path>`
+- `--skip-config`, `--skip-agent`, `--skip-provider`
+- `--merge`, `--force`, `--yes`
+
+## wingman provider
+
+```bash
+wingman provider login <provider>
+wingman provider logout <provider>
+wingman provider status
+```
+
+## wingman skill
+
+```bash
+wingman skill browse
+wingman skill install <name>
+wingman skill list
+wingman skill remove <name>
+```
+
+## wingman gateway
+
+```bash
+wingman gateway start
+wingman gateway stop
+wingman gateway restart
+wingman gateway status
+wingman gateway run
+wingman gateway join <url>
+wingman gateway discover
+wingman gateway tunnel <ssh-host>
+wingman gateway token --generate
+wingman gateway health
+```
+
+Common options:
+
+- `--host`, `--port`
+- `--auth`, `--auth-mode <token|password|none>`
+- `--token`, `--password`
+- `--discovery <mdns|tailscale>`
+- `--name <string>`

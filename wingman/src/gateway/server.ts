@@ -1489,6 +1489,8 @@ export class GatewayServer {
 							requireAuth: this.auth.isAuthRequired(),
 							defaultAgentId,
 							outputRoot: this.resolveOutputRoot(),
+							dynamicUiEnabled:
+								this.wingmanConfig.gateway?.dynamicUiEnabled !== false,
 							voice: this.wingmanConfig.voice,
 							agents,
 						},

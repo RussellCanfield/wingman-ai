@@ -6,8 +6,6 @@ tools:
   - internet_search
   - web_crawler
   - command_execute
-  - code_search
-  - git_status
 model: openai:gpt-5-mini
 ---
 

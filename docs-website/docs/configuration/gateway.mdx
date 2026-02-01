@@ -1,0 +1,62 @@
+# Gateway Settings
+
+The gateway is the collaboration hub. It manages sessions, adapters (like Discord), and the Control Core UI.
+
+## Minimal config
+
+```json
+{
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18789,
+    "fsRoots": ["."],
+    "auth": { "mode": "none" },
+    "controlUi": {
+      "enabled": true,
+      "port": 18790,
+      "pairingRequired": true,
+      "allowInsecureAuth": false
+    },
+    "dynamicUiEnabled": true
+  }
+}
+```
+
+## Auth modes
+
+Set `gateway.auth.mode` to one of:
+
+- `none` (default)
+- `token`
+- `password`
+
+You can also provide a token via env var:
+
+```bash
+export WINGMAN_GATEWAY_TOKEN="..."
+```
+
+## CLI control
+
+```bash
+wingman gateway start
+wingman gateway start --discovery mdns --name "Home Gateway"
+wingman gateway status
+wingman gateway stop
+```
+
+Additional utilities:
+
+```bash
+wingman gateway token --generate
+wingman gateway discover --verbose
+wingman gateway join ws://host:port/ws --name="node-1"
+```
+
+## File system roots
+
+`fsRoots` defines which directories the gateway exposes to tools. Keep this list tight to reduce risk.
+
+## State directory
+
+Set `gateway.stateDir` to control where persistent data is stored (sessions, routines). If omitted, Wingman uses `.wingman/`.

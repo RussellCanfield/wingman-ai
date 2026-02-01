@@ -1,0 +1,5 @@
+[
+  { "type": "file", "name": "quickstart", "label": "Quickstart" },
+  { "type": "file", "name": "installation", "label": "Installation & Requirements" },
+  { "type": "file", "name": "project-structure", "label": "Workspace Layout" }
+]

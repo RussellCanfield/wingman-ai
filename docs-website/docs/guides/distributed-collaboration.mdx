@@ -1,0 +1,59 @@
+# Distributed Collaboration
+
+Wingman Gateway lets you run a shared agent hub across devices.
+
+## Scenario: Shared gateway + remote node
+
+1. Start the gateway on a server:
+
+```bash
+wingman gateway start --discovery mdns --name "Studio Gateway"
+```
+
+2. Discover from another machine:
+
+```bash
+wingman gateway discover --verbose
+```
+
+3. Join as a node:
+
+```bash
+wingman gateway join ws://server:18789/ws --name "laptop-node"
+```
+
+4. Invoke agents through the shared gateway:
+
+```bash
+wingman agent --agent wingman --gateway ws://server:18789/ws "Summarize today's incidents"
+```
+
+## Auth + Tailscale
+
+If you enable token or password auth, you can still allow trusted Tailscale users to connect without tokens:
+
+```json
+{
+  "gateway": {
+    "auth": {
+      "mode": "token",
+      "token": "...",
+      "allowTailscale": true
+    }
+  }
+}
+```
+
+## SSH tunnel fallback
+
+When direct access is blocked, you can tunnel:
+
+```bash
+wingman gateway tunnel user@remote-host --name "tunnel-node"
+```
+
+## Best practices
+
+- Use discovery only on trusted networks.
+- Restrict `fsRoots` to safe directories.
+- Prefer token auth when exposing the gateway.

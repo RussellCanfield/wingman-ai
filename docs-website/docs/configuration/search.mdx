@@ -1,0 +1,32 @@
+# Search Configuration
+
+Wingman includes an `internet_search` tool with two providers.
+
+## Config
+
+```json
+{
+  "search": {
+    "provider": "duckduckgo",
+    "maxResults": 5
+  }
+}
+```
+
+## Providers
+
+- **duckduckgo** (default): free search with rate limiting safeguards.
+- **perplexity**: uses OpenRouter + Perplexity Sonar. Requires `OPENROUTER_API_KEY`.
+
+## Rate-limit tuning (DuckDuckGo)
+
+You can tune DDG backoff behavior with env vars:
+
+```bash
+export WINGMAN_DDG_MIN_DELAY_MS=2000
+export WINGMAN_DDG_MAX_RETRIES=3
+export WINGMAN_DDG_BACKOFF_BASE_MS=500
+export WINGMAN_DDG_BACKOFF_MAX_MS=4000
+```
+
+If you hit repeated DDG limits, consider switching to Perplexity.

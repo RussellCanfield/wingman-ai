@@ -1,0 +1,60 @@
+# Discord Adapter
+
+The Discord adapter lets Wingman listen to Discord messages and route them to the gateway. It supports mention-only mode, per-channel session mappings, and custom session commands.
+
+## Configuration
+
+Add this to `wingman.config.json`:
+
+```json
+{
+  "gateway": {
+    "adapters": {
+      "discord": {
+        "enabled": true,
+        "token": "YOUR_DISCORD_BOT_TOKEN",
+        "mentionOnly": true,
+        "allowBots": false,
+        "allowedGuilds": ["123"],
+        "allowedChannels": ["456"],
+        "channelSessions": {
+          "456": "agent:wingman:discord-main"
+        },
+        "sessionCommand": "!session",
+        "gatewayUrl": "ws://127.0.0.1:18789/ws",
+        "gatewayToken": "optional-token",
+        "gatewayPassword": "optional-password",
+        "responseChunkSize": 1900
+      }
+    }
+  }
+}
+```
+
+## Key behaviors
+
+- **mentionOnly**: if true, the bot only responds when mentioned (or in DMs).
+- **allowedGuilds / allowedChannels**: restricts where the bot can listen.
+- **channelSessions**: map a channel (or parent thread) to a session key.
+- **sessionCommand**: override session routing by typing `!session <sessionKey> <message>`.
+- **responseChunkSize**: Discord message chunk size (default 1900 chars).
+
+## Session keys
+
+Session keys can include an agent prefix to auto-select an agent:
+
+```text
+agent:wingman:discord-main
+```
+
+This tells the adapter to route the message to agent `wingman` and keep a named session.
+
+## Setup checklist
+
+1. Create a bot in the Discord Developer Portal.
+2. Enable the **Message Content Intent**.
+3. Invite the bot to your server with the required permissions.
+4. Copy the bot token into `gateway.adapters.discord.token`.
+5. Restart the gateway.
+
+Once running, mention the bot or DM it to start a session.

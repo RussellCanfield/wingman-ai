@@ -1,0 +1,156 @@
+# Agents & Sub-Agents
+
+Agents live in `.wingman/agents/<agent-id>/` and can be defined as either JSON (`agent.json`) or Markdown (`agent.md` with frontmatter).
+
+## agent.json example
+
+```json
+{
+  "name": "wingman",
+  "description": "General-purpose coding assistant for this repo.",
+  "systemPrompt": "Be concise. Ask clarifying questions when needed.",
+  "tools": ["code_search", "git_status", "command_execute", "internet_search"],
+  "model": "anthropic:claude-sonnet-4-5",
+  "blockedCommands": ["rm", "mv"],
+  "allowScriptExecution": true,
+  "commandTimeout": 300000,
+  "mcpUseGlobal": true,
+  "voice": {
+    "provider": "elevenlabs",
+    "elevenlabs": { "voiceId": "voice_123" }
+  },
+  "subAgents": [
+    {
+      "name": "reviewer",
+      "description": "Reviews code changes for risk.",
+      "systemPrompt": "Check for regressions and missing tests.",
+      "model": "openai:gpt-4o"
+    }
+  ]
+}
+```
+
+## agent.md example
+
+```md
+---
+name: researcher
+description: Gathers context and produces concise briefs.
+model: openrouter:openai/gpt-4o
+tools:
+  - internet_search
+  - web_crawler
+  - think
+---
+You are a researcher. Summarize sources and provide citations.
+```
+
+## Sub-agent model overrides
+
+Sub-agents can override **any** agent field, including model, tools, voice, and command controls. This lets you mix fast/cheap models with deep/reasoning models in one squad.
+
+```json
+{
+  "name": "wingman",
+  "description": "Lead agent that delegates.",
+  "systemPrompt": "Delegate to specialists when possible.",
+  "subAgents": [
+    {
+      "name": "planner",
+      "description": "Breaks tasks into steps.",
+      "systemPrompt": "Produce a short plan before implementation.",
+      "model": "openai:gpt-4o"
+    },
+    {
+      "name": "reviewer",
+      "description": "Finds regressions and missing tests.",
+      "systemPrompt": "Review diffs for correctness.",
+      "model": "anthropic:claude-sonnet-4-5"
+    }
+  ]
+}
+```
+
+## Sub-agent prompt files (agent.md)
+
+When using `agent.md`, sub-agents can load their prompts from separate files with `promptFile`. This keeps large prompts readable and makes it easier to reuse or iterate on specialist instructions.
+
+```md
+---
+name: wingman
+description: Lead agent with specialist sub-agents.
+subAgents:
+  - name: planner
+    description: Produces concise plans.
+    model: openai:gpt-4o
+    promptFile: planner.md
+  - name: reviewer
+    description: Reviews code for risk.
+    model: anthropic:claude-sonnet-4-5
+    promptFile: reviewer.md
+---
+You are the lead agent. Delegate to specialists as needed.
+```
+
+File layout:
+
+```text
+.wingman/agents/wingman/
+  agent.md
+  planner.md
+  reviewer.md
+```
+
+If a prompt file contains frontmatter, those fields **override/extend** the sub-agent metadata. Otherwise the file is treated as the sub-agent’s `systemPrompt`.
+
+## Available tools
+
+Agents can only use the tools listed in the `tools` array. Available tool names:
+
+- `internet_search`
+- `web_crawler`
+- `command_execute`
+- `think`
+- `code_search`
+- `git_status`
+- `ui_registry_list`
+- `ui_registry_get`
+- `ui_present`
+
+## Sub-agent delegation
+
+`subAgents` lets you define specialist agents. The parent agent can delegate tasks when needed. Each sub-agent supports the same schema fields as a normal agent.
+
+## MCP and voice overrides
+
+- `mcp`: agent-specific MCP servers
+- `mcpUseGlobal`: include global MCP servers from `wingman.config.json`
+- `voice`: overrides global voice configuration for this agent
+
+## Why voice is duplicated in agent config
+
+Voice exists in both **global** config and **agent** config so you can set defaults once and override per agent. This allows one agent to speak with ElevenLabs while another uses Web Speech (or stays silent).
+
+```json
+// wingman.config.json
+{
+  "voice": {
+    "provider": "web_speech",
+    "defaultPolicy": "manual",
+    "webSpeech": { "lang": "en-US" }
+  }
+}
+```
+
+```json
+// agent.json
+{
+  "name": "narrator",
+  "description": "Reads summaries aloud.",
+  "systemPrompt": "Narrate results.",
+  "voice": {
+    "provider": "elevenlabs",
+    "elevenlabs": { "voiceId": "voice_123" }
+  }
+}
+```

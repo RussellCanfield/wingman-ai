@@ -1,0 +1,12 @@
+[
+  { "type": "file", "name": "wingman-config", "label": "wingman.config.json" },
+  { "type": "file", "name": "providers", "label": "Providers & Models" },
+  { "type": "file", "name": "agents", "label": "Agents & Sub-Agents" },
+  { "type": "file", "name": "gateway", "label": "Gateway Settings" },
+  { "type": "file", "name": "discord-adapter", "label": "Discord Adapter" },
+  { "type": "file", "name": "voice", "label": "Voice Configuration" },
+  { "type": "file", "name": "mcp", "label": "MCP Servers" },
+  { "type": "file", "name": "hooks", "label": "Hooks" },
+  { "type": "file", "name": "skills", "label": "Skills" },
+  { "type": "file", "name": "search", "label": "Search Configuration" }
+]

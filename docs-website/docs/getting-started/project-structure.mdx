@@ -1,0 +1,17 @@
+# Workspace Layout
+
+Wingman stores project-specific configuration in the `.wingman/` directory inside your workspace by default.
+
+```text
+.wingman/
+  wingman.config.json        # Global workspace config (gateway, search, voice, agents)
+  agents/
+    wingman/
+      agent.json             # Agent definition (JSON)
+      agent.md               # Alternative: Markdown + frontmatter
+  skills/                    # Installed skills (if configured)
+  routines.json              # Saved automation routines
+  wingman.db                 # SQLite session store
+```
+
+Agent configs can be stored as `agent.json` or `agent.md` with frontmatter.

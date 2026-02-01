@@ -1,0 +1,131 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Sora:wght@300;400;500;600;700&display=swap");
+
+:root {
+  color-scheme: dark;
+  --rp-c-brand: #38bdf8;
+  --rp-c-brand-dark: #2563eb;
+  --rp-c-brand-light: #7dd3fc;
+  --rp-c-text-1: #e2e8f0;
+  --rp-c-text-2: #cbd5f5;
+  --rp-c-text-3: #94a3b8;
+  --rp-c-bg: #0b0f14;
+  --rp-c-bg-soft: #0f172a;
+  --rp-c-bg-alt: #101826;
+  --rp-c-divider: rgba(148, 163, 184, 0.2);
+  --rp-c-border: rgba(255, 255, 255, 0.1);
+  --rp-font-family-base: "Sora", system-ui, -apple-system, sans-serif;
+  --rp-font-family-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  font-family: "Sora", system-ui, -apple-system, sans-serif;
+  color: #e2e8f0;
+  background:
+    radial-gradient(1200px 600px at 12% 12%, rgba(56, 189, 248, 0.14) 0%, transparent 60%),
+    radial-gradient(900px 620px at 88% 8%, rgba(59, 130, 246, 0.2) 0%, transparent 55%),
+    radial-gradient(1200px 900px at 42% 100%, rgba(15, 23, 42, 0.85) 0%, transparent 60%),
+    linear-gradient(135deg, #0b0f14 0%, #101826 55%, #0b1120 100%);
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(transparent 0%, rgba(148, 163, 184, 0.08) 100%),
+    linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 100% 100%, 64px 64px, 64px 64px;
+  mask-image: radial-gradient(circle at top left, rgba(2, 6, 23, 0.8), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root,
+#app,
+#rspress-root {
+  position: relative;
+  z-index: 1;
+}
+
+a {
+  color: #7dd3fc;
+}
+
+a:hover {
+  color: #bae6fd;
+}
+
+code,
+pre,
+.rp-codeblock {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.rp-nav,
+.rp-sidebar,
+.rp-outline {
+  background-color: rgba(11, 15, 20, 0.7);
+  backdrop-filter: blur(20px);
+}
+
+.rp-nav {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.rp-sidebar {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.rp-codeblock {
+  background: rgba(2, 8, 23, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+img.rspress-logo {
+  height: 4rem;
+}
+
+.rp-home-hero__actions {
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.rp-home-hero__action .rp-button--big {
+  min-width: 0;
+  height: 40px;
+  line-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+@media (width <= 768px) {
+  .rp-home-hero__actions {
+    width: 100%;
+  }
+
+  .rp-home-hero__action .rp-button--big {
+    width: 100%;
+    justify-content: center;
+  }
+}

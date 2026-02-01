@@ -1,0 +1,61 @@
+# Providers & Models
+
+Wingman supports multiple model providers and a dedicated voice provider. Models are referenced with the format:
+
+```text
+provider:model-name
+```
+
+Examples:
+
+- `anthropic:claude-sonnet-4-5`
+- `openai:gpt-4o`
+- `openrouter:openai/gpt-4o`
+- `copilot:gpt-4o`
+- `xai:grok-beta`
+
+## Configure a provider
+
+Use the CLI to store credentials:
+
+```bash
+wingman provider login anthropic
+wingman provider login openai
+wingman provider login openrouter
+```
+
+Or supply env vars (see table below). The CLI reads env vars first, then `~/.wingman/credentials.json`.
+
+## Supported providers
+
+| Provider | Category | Auth | Env vars | Notes |
+| --- | --- | --- | --- | --- |
+| anthropic | model | API key | `ANTHROPIC_API_KEY` | Recommended for Claude models. |
+| openai | model | API key | `OPENAI_API_KEY` | GPT-4o, GPT-4.1, etc. |
+| openrouter | model | API key | `OPENROUTER_API_KEY` | Uses OpenRouter routing (`https://openrouter.ai/api/v1`). |
+| copilot | model | API key | `GITHUB_COPILOT_TOKEN`, `COPILOT_TOKEN`, `COPILOT_API_KEY` | Token-based access. |
+| xai | model | API key | `XAI_API_KEY` | Grok models. |
+| lmstudio | model | optional | `LMSTUDIO_API_KEY`, `LM_STUDIO_API_KEY` | Defaults to `http://localhost:1234/v1`. |
+| ollama | model | optional | `OLLAMA_API_KEY` | Defaults to `http://localhost:11434/v1`. |
+| elevenlabs | voice | API key | `ELEVENLABS_API_KEY`, `XI_API_KEY` | Used for text-to-speech. |
+
+## Model overrides per agent
+
+You can override the model in `agent.json` or `agent.md`:
+
+```json
+{
+  "name": "reviewer",
+  "description": "Reviews code changes.",
+  "systemPrompt": "Review diffs for correctness and risk.",
+  "model": "openai:gpt-4o"
+}
+```
+
+## Provider status
+
+Check which providers are configured:
+
+```bash
+wingman provider status
+```

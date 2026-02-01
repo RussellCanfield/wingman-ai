@@ -1,0 +1,82 @@
+# Voice Configuration
+
+Wingman supports text-to-speech using **Web Speech** (browser-based) or **ElevenLabs**.
+
+## Global voice config
+
+```json
+{
+  "voice": {
+    "provider": "web_speech",
+    "defaultPolicy": "manual",
+    "webSpeech": {
+      "voiceName": "Samantha",
+      "lang": "en-US",
+      "rate": 1,
+      "pitch": 1,
+      "volume": 0.9
+    }
+  }
+}
+```
+
+### Providers
+
+- **web_speech**: uses the browser's SpeechSynthesis API (Control UI only).
+- **elevenlabs**: uses ElevenLabs TTS API (gateway-side).
+
+## ElevenLabs example
+
+```json
+{
+  "voice": {
+    "provider": "elevenlabs",
+    "defaultPolicy": "auto",
+    "elevenlabs": {
+      "voiceId": "voice_123",
+      "modelId": "eleven_turbo_v2",
+      "stability": 0.45,
+      "similarityBoost": 0.7,
+      "style": 0.2,
+      "speakerBoost": true,
+      "speed": 1,
+      "outputFormat": "mp3_44100_128",
+      "optimizeStreamingLatency": 2
+    }
+  }
+}
+```
+
+Set your API key via:
+
+```bash
+export ELEVENLABS_API_KEY="..."
+```
+
+## Per-agent overrides
+
+```json
+{
+  "name": "narrator",
+  "description": "Reads results aloud.",
+  "systemPrompt": "Summarize and narrate results.",
+  "voice": {
+    "provider": "elevenlabs",
+    "elevenlabs": { "voiceId": "voice_abc" }
+  }
+}
+```
+
+## Voice policy
+
+`defaultPolicy` controls when speech triggers:
+
+- `off`: disabled
+- `manual`: only when requested
+- `auto`: automatic speech for responses
+
+## How it works
+
+- The Control UI reads `/api/voice` for current settings.
+- `/api/voice/speak` streams audio when using ElevenLabs.
+- Web Speech runs entirely in the browser, so it does not require gateway TTS access.

@@ -40,6 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 	deviceId,
 	getAgentLabel,
 }) => {
+	const docsUrl = import.meta.env.VITE_DOCS_URL ?? "/docs";
 	const navClass = (active: boolean) =>
 		`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold transition ${active
 			? "border-sky-500/50 bg-sky-500/15 text-sky-300"
@@ -84,6 +85,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 				<NavLink to="/routines" className={({ isActive }) => navClass(isActive)}>
 					<span>Routines</span>
 				</NavLink>
+				<a
+					href={docsUrl}
+					target="_blank"
+					rel="noreferrer"
+					className={navClass(false)}
+				>
+					<span>Docs</span>
+				</a>
 			</div>
 
 			{/* Threads Section - conditional on /chat route */}

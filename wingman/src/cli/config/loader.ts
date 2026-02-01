@@ -120,6 +120,7 @@ export class WingmanConfigLoader {
 					pairingRequired: true,
 					allowInsecureAuth: false,
 				},
+				dynamicUiEnabled: true,
 				adapters: {},
 			},
 			agents: {

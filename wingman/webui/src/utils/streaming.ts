@@ -1,3 +1,5 @@
+import type { UiRenderSpec } from "../types";
+
 export type ParsedTextEvent = {
 	text: string;
 	messageId?: string;
@@ -13,6 +15,9 @@ export type ParsedStreamEvent = {
 		args?: Record<string, any>;
 		status: "running" | "completed" | "error";
 		output?: any;
+		ui?: UiRenderSpec;
+		uiOnly?: boolean;
+		textFallback?: string;
 		error?: string;
 		timestamp: number;
 	}>;
@@ -56,10 +61,16 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				const node = extractNodeLabel(msg, entry.meta);
 				const toolCalls = extractToolCalls(msg, messageId);
 				for (const toolCall of toolCalls) {
+					const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
+						toolCall.args,
+					);
 					toolEvents.push({
 						id: toolCall.id,
 						name: toolCall.name,
-						args: toolCall.args,
+						args,
+						ui,
+						uiOnly,
+						textFallback,
 						status: "running",
 						timestamp: Date.now(),
 					});
@@ -79,11 +90,17 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 			if (isToolMessage) {
 				const toolResult = extractToolResult(msg);
 				if (toolResult) {
+					const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
+						toolResult.output,
+					);
 					toolEvents.push({
 						id: toolResult.id,
 						name: toolResult.name || "tool",
 						status: toolResult.error ? "error" : "completed",
-						output: toolResult.output,
+						output,
+						ui,
+						uiOnly,
+						textFallback,
 						error: toolResult.error,
 						timestamp: Date.now(),
 					});
@@ -103,10 +120,14 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		for (const toolCall of chunk.tool_calls) {
 			const normalized = normalizeToolCall(toolCall);
 			if (!normalized) continue;
+			const { ui, uiOnly, textFallback, data: args } = splitUiPayload(normalized.args);
 			toolEvents.push({
 				id: normalized.id,
 				name: normalized.name,
-				args: normalized.args,
+				args,
+				ui,
+				uiOnly,
+				textFallback,
 				status: "running",
 				timestamp: Date.now(),
 			});
@@ -163,13 +184,19 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		const toolName = typeof chunk.name === "string" ? chunk.name : "tool";
 		const toolId =
 			typeof chunk.run_id === "string" ? chunk.run_id : createEventId();
+		const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
+			normalizeToolArgs(chunk.data?.input),
+		);
 		return {
 			textEvents: [],
 			toolEvents: [
 				{
 					id: toolId,
 					name: toolName,
-					args: normalizeToolArgs(chunk.data?.input),
+					args,
+					ui,
+					uiOnly,
+					textFallback,
 					status: "running",
 					timestamp: Date.now(),
 				},
@@ -180,6 +207,9 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 	if (chunk.event === "on_tool_end") {
 		const toolId =
 			typeof chunk.run_id === "string" ? chunk.run_id : createEventId();
+		const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
+			chunk.data?.output,
+		);
 		return {
 			textEvents: [],
 			toolEvents: [
@@ -187,7 +217,10 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 					id: toolId,
 					name: typeof chunk.name === "string" ? chunk.name : "tool",
 					status: chunk.data?.error ? "error" : "completed",
-					output: chunk.data?.output,
+					output,
+					ui,
+					uiOnly,
+					textFallback,
 					error: chunk.data?.error,
 					timestamp: Date.now(),
 				},
@@ -461,6 +494,66 @@ function normalizeToolArgs(args: any): Record<string, any> {
 		return args as Record<string, any>;
 	}
 	return { value: args };
+}
+
+function splitUiPayload(
+	payload: any,
+): {
+	ui?: UiRenderSpec;
+	uiOnly?: boolean;
+	textFallback?: string;
+	data: Record<string, any> | any;
+} {
+	if (typeof payload === "string") {
+		try {
+		const parsed = JSON.parse(payload);
+		if (parsed && typeof parsed === "object") {
+			return splitUiPayload(parsed);
+		}
+		} catch {
+			return { data: payload };
+		}
+	}
+	if (!payload || typeof payload !== "object") {
+		return { data: payload };
+	}
+	if (!("ui" in payload)) {
+		const content =
+			typeof (payload as any).content === "string"
+				? (payload as any).content
+				: typeof (payload as any)?.kwargs?.content === "string"
+					? (payload as any).kwargs.content
+					: null;
+		if (content) {
+			return splitUiPayload(content);
+		}
+		return { data: payload };
+	}
+	const { ui, uiOnly, textFallback, ...rest } = payload as {
+		ui?: UiRenderSpec;
+		uiOnly?: boolean;
+		textFallback?: string;
+	} & Record<string, any>;
+	if (!ui || typeof ui !== "object") {
+		return {
+			data: payload,
+			uiOnly: typeof uiOnly === "boolean" ? uiOnly : undefined,
+			textFallback: typeof textFallback === "string" ? textFallback : undefined,
+		};
+	}
+	if (!Array.isArray((ui as UiRenderSpec).components)) {
+		return {
+			data: payload,
+			uiOnly: typeof uiOnly === "boolean" ? uiOnly : undefined,
+			textFallback: typeof textFallback === "string" ? textFallback : undefined,
+		};
+	}
+	return {
+		ui,
+		data: rest,
+		uiOnly: typeof uiOnly === "boolean" ? uiOnly : undefined,
+		textFallback: typeof textFallback === "string" ? textFallback : undefined,
+	};
 }
 
 function normalizeToolCall(

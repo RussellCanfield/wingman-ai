@@ -69,6 +69,7 @@ export type ControlUiConfig = {
     requireAuth: boolean;
     defaultAgentId?: string;
     outputRoot?: string;
+    dynamicUiEnabled?: boolean;
     voice?: VoiceConfig;
     agents: ControlUiAgent[];
 };
@@ -103,6 +104,8 @@ export type ChatMessage = {
     attachments?: ChatAttachment[];
     toolEvents?: ToolEvent[];
     thinkingEvents?: ThinkingEvent[];
+    uiBlocks?: UiBlock[];
+    uiTextFallback?: string;
     createdAt: number;
 };
 export type ToolEvent = {
@@ -111,10 +114,34 @@ export type ToolEvent = {
     args?: Record<string, any>;
     status: "running" | "completed" | "error";
     output?: any;
+    ui?: UiRenderSpec;
+    uiOnly?: boolean;
+    textFallback?: string;
     error?: string;
     timestamp?: number;
     startedAt?: number;
     completedAt?: number;
+};
+export type UiBlock = {
+    id: string;
+    spec: UiRenderSpec;
+    uiOnly?: boolean;
+    textFallback?: string;
+};
+export type UiRenderSpec = {
+    registry?: string;
+    layout?: UiLayoutSpec;
+    components: UiComponentSpec[];
+};
+export type UiComponentSpec = {
+    component: string;
+    props: Record<string, unknown>;
+};
+export type UiLayoutSpec = {
+    type: "stack" | "row" | "grid";
+    gap?: number;
+    columns?: number;
+    align?: "start" | "center" | "end" | "stretch";
 };
 export type ThinkingEvent = {
     id: string;

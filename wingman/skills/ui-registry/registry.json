@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "components": {
+    "stat_grid": {
+      "label": "Stat Grid",
+      "description": "Compact summary of key stats",
+      "useCases": ["Weather snapshot", "KPI summary"],
+      "propsSchema": {
+        "type": "object",
+        "required": ["title", "stats"],
+        "properties": {
+          "title": { "type": "string", "description": "Section title" },
+          "subtitle": { "type": "string", "description": "Optional subtitle" },
+          "stats": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["label", "value"],
+              "properties": {
+                "label": { "type": "string" },
+                "value": { "type": ["string", "number"] },
+                "helper": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "exampleRef": "examples/stat_grid.md"
+    }
+  }
+}

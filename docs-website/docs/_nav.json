@@ -1,0 +1,26 @@
+[
+  {
+    "text": "Getting Started",
+    "link": "/getting-started/quickstart",
+    "activeMatch": "/getting-started/"
+  },
+  {
+    "text": "Configuration",
+    "link": "/configuration/wingman-config",
+    "activeMatch": "/configuration/"
+  },
+  {
+    "text": "Guides",
+    "link": "/guides/multi-agent-workflows",
+    "activeMatch": "/guides/"
+  },
+  {
+    "text": "Reference",
+    "link": "/reference/cli",
+    "activeMatch": "/reference/"
+  },
+  {
+    "text": "GitHub",
+    "link": "https://github.com/RussellCanfield/wingman-ai"
+  }
+]

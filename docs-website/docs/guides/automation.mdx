@@ -1,0 +1,72 @@
+# Automation & Routines
+
+Wingman can schedule routines and respond to inbound webhooks. Both are managed by the gateway and stored under `.wingman/`.
+
+## Routines (cron-based)
+
+Routines are scheduled prompts that run on a cron-like cadence.
+
+```http
+POST /api/routines
+Content-Type: application/json
+
+{
+  "name": "Daily status",
+  "agentId": "wingman",
+  "cron": "0 9 * * *",
+  "prompt": "Summarize open PRs and failing CI."
+}
+```
+
+- Cron format: 5 fields (`minute hour day month weekday`).
+- Stored in `.wingman/routines.json`.
+
+## Webhooks
+
+Webhooks let external systems trigger agents.
+
+### Create a webhook
+
+```http
+POST /api/webhooks
+Content-Type: application/json
+
+{
+  "id": "build-alerts",
+  "name": "CI Alerts",
+  "agentId": "wingman",
+  "eventLabel": "ci",
+  "enabled": true
+}
+```
+
+The gateway generates a secret automatically if you don't provide one.
+
+### Trigger the webhook
+
+```http
+POST /webhooks/build-alerts
+x-wingman-secret: <secret>
+Content-Type: application/json
+
+{
+  "event": "build.failed",
+  "message": "Build #481 failed on main"
+}
+```
+
+You can also pass the secret as a query param: `?secret=...`.
+
+### Presets
+
+Some payloads can be normalized with presets (e.g., `gog-gmail`). Set `preset` when creating a webhook to enable formatting helpers.
+
+## Session routing
+
+Webhooks create or reuse sessions with keys like:
+
+```text
+agent:<agentId>:webhook:<webhookId>
+```
+
+You can bind a webhook to a specific session via `sessionId` if needed.

@@ -8,6 +8,7 @@ import { extractImageFiles } from "../utils/attachments";
 import { getVoicePlaybackLabel, type VoicePlaybackStatus } from "../utils/voicePlayback";
 import { getAudioAvailability } from "../utils/media";
 import { ThinkingPanel } from "./ThinkingPanel";
+import { SguiRenderer } from "../sgui/SguiRenderer";
 
 type ChatPanelProps = {
 	activeThread?: Thread;
@@ -19,6 +20,7 @@ type ChatPanelProps = {
 	loading: boolean;
 	voiceAutoEnabled: boolean;
 	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
+	dynamicUiEnabled: boolean;
 	onToggleVoiceAuto: () => void;
 	onSpeakVoice: (messageId: string, text: string) => void;
 	onStopVoice: () => void;
@@ -47,6 +49,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	loading,
 	voiceAutoEnabled,
 	voicePlayback,
+	dynamicUiEnabled,
 	onToggleVoiceAuto,
 	onSpeakVoice,
 	onStopVoice,
@@ -397,13 +400,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								: hasLegacyEvents
 									? legacyThinkingEvents
 									: [];
-						const hasNestedActivity =
-							msg.role === "assistant" &&
-							(toolEvents.length > 0 || thinkingEvents.length > 0);
-						const isActiveMessage =
-							msg.role === "assistant" &&
-							isStreaming &&
-							msg.id === lastAssistantId;
+					const hasNestedActivity =
+						msg.role === "assistant" &&
+						(toolEvents.length > 0 || thinkingEvents.length > 0);
+					const isActiveMessage =
+						msg.role === "assistant" &&
+						isStreaming &&
+						msg.id === lastAssistantId;
+					const uiBlocks = dynamicUiEnabled ? msg.uiBlocks : undefined;
+					const displayText =
+						msg.content || (!dynamicUiEnabled ? msg.uiTextFallback || "" : "");
 
 						return (
 							<div
@@ -422,7 +428,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											<span className="whitespace-nowrap">
 												{formatTime(msg.createdAt)}
 											</span>
-											{msg.role === "assistant" && msg.content ? (
+											{msg.role === "assistant" &&
+											(msg.content || msg.uiTextFallback) ? (
 												(() => {
 													const playbackStatus =
 														resolvedVoiceMessageId === msg.id
@@ -433,6 +440,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 														playbackStatus === "pending" ||
 														playbackStatus === "loading";
 													const isPlaying = playbackStatus === "playing";
+													const playbackText =
+														msg.content || msg.uiTextFallback || "";
 													return (
 														<button
 															type="button"
@@ -442,7 +451,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 																	? onStopVoice()
 																	: (() => {
 																			lastVoiceMessageIdRef.current = msg.id;
-																			onSpeakVoice(msg.id, msg.content);
+																			onSpeakVoice(msg.id, playbackText);
 																		})()
 															}
 															className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] transition hover:border-sky-400/60 hover:text-sky-100 ${
@@ -476,7 +485,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											) : null}
 										</div>
 									</div>
-									{msg.role === "assistant" && !msg.content ? (
+									{msg.role === "assistant" &&
+									!displayText &&
+									(!uiBlocks || uiBlocks.length === 0) ? (
 										<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
 											<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
 											<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
@@ -533,9 +544,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												),
 											}}
 										>
-											{msg.content}
+											{displayText}
 										</ReactMarkdown>
 									)}
+									{uiBlocks && uiBlocks.length > 0 ? (
+										<div className="mt-3 space-y-3">
+											{uiBlocks.map((block) => (
+												<div
+													key={block.id}
+													className="rounded-xl border border-white/10 bg-slate-950/60 p-3"
+												>
+													<SguiRenderer ui={block.spec} />
+												</div>
+											))}
+										</div>
+									) : null}
 									{msg.attachments && msg.attachments.length > 0 ? (
 										<div className="mt-3 grid gap-2 sm:grid-cols-2">
 											{msg.attachments.map((attachment) => {
