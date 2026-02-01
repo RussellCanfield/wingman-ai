@@ -100,6 +100,129 @@ wingman provider login ollama     # Optional
 wingman agent --local --agent <id> "prompt"
 ```
 
+## Gateway Configuration (All the Ways + Why)
+
+Gateway behavior can be configured in three layers (higher priority wins): runtime flags, environment variables, and `wingman.config.json`. Use the config file for persistent defaults, then override per run when needed.
+
+### 1) `wingman.config.json` (persistent defaults)
+
+- `gateway.host` / `gateway.port` - bind address + port. Use `0.0.0.0` for LAN access, or change the port to avoid conflicts.
+- `gateway.stateDir` - where durable sessions and gateway state live. Point to fast local storage or a shared volume.
+- `gateway.fsRoots` - allowlist for Control UI working folders and output paths. Keep this tight for safety.
+- `gateway.auth.mode` / `gateway.auth.token` / `gateway.auth.password` - gateway auth strategy (token, password, or none) for remote access.
+- `gateway.auth.allowTailscale` - trust Tailscale identity headers so Tailnet users can access without tokens.
+- `gateway.controlUi.enabled` / `gateway.controlUi.port` - enable/disable Control UI and choose its port.
+- `gateway.controlUi.pairingRequired` - require pairing for Control UI clients (recommended).
+- `gateway.controlUi.allowInsecureAuth` - only for local dev when testing auth flows.
+- `gateway.adapters.discord.*` - Discord output adapter:
+  - `enabled`, `token`, `mentionOnly`, `allowBots`, `allowedGuilds`, `allowedChannels`
+  - `channelSessions` to pin channels to a session (or `agent:<id>:` to force routing)
+  - `sessionCommand` for ad-hoc session overrides
+  - `responseChunkSize` to fit Discord message limits
+  - Optional `gatewayUrl`, `gatewayToken`, `gatewayPassword` to point the adapter at a remote gateway
+
+### 2) Runtime flags (`wingman gateway start` / `run`)
+
+- `--host`, `--port` - override bind address + port for this run.
+- `--auth`, `--auth-mode`, `--token`, `--password` - enable auth without editing config.
+- `--discovery mdns|tailscale`, `--name` - advertise your gateway for LAN or Tailnet discovery.
+- `--max-nodes`, `--ping-interval`, `--ping-timeout` - tune scale and heartbeat behavior.
+- `--log-level` - dial verbosity for debugging or production.
+
+### 3) Environment overrides
+
+- `WINGMAN_GATEWAY_TOKEN` - supply a token at runtime so you don't store secrets in config.
+
+### Related gateway behavior (configured elsewhere)
+
+- `agents.bindings` - deterministic routing rules used by the gateway to select an agent per inbound channel/message.
+- `voice` - gateway TTS defaults (provider + settings), with optional per-agent overrides for voice-enabled UIs.
+
+### Example configs (common setups)
+
+#### 1) Local dev (single user, no auth)
+
+```json
+{
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18789,
+    "auth": { "mode": "none" },
+    "controlUi": { "enabled": true, "port": 18790 }
+  }
+}
+```
+
+#### 2) Shared LAN gateway (token auth + restricted outputs)
+
+```json
+{
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18789,
+    "fsRoots": ["~/Projects", "~/.wingman/outputs"],
+    "auth": { "mode": "token" },
+    "controlUi": { "enabled": true, "port": 18790, "pairingRequired": true }
+  }
+}
+```
+
+Tip: set `WINGMAN_GATEWAY_TOKEN` at runtime so you do not store tokens in config.
+
+#### 3) Headless gateway + Discord output adapter
+
+```json
+{
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18789,
+    "auth": { "mode": "token" },
+    "controlUi": { "enabled": false },
+    "adapters": {
+      "discord": {
+        "enabled": true,
+        "token": "DISCORD_BOT_TOKEN",
+        "mentionOnly": true,
+        "allowedGuilds": ["123456789012345678"],
+        "allowedChannels": ["987654321098765432"],
+        "channelSessions": {
+          "987654321098765432": "agent:support:discord:channel:987654321098765432"
+        }
+      }
+    }
+  }
+}
+```
+
+#### 4) Remote access over Tailscale + voice TTS
+
+```json
+{
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18789,
+    "auth": { "mode": "token", "allowTailscale": true },
+    "controlUi": { "enabled": true, "port": 18790, "pairingRequired": true }
+  },
+  "voice": {
+    "provider": "elevenlabs",
+    "defaultPolicy": "off",
+    "elevenlabs": {
+      "voiceId": "VOICE_ID",
+      "modelId": "eleven_multilingual_v2",
+      "stability": 0.4,
+      "similarityBoost": 0.7
+    }
+  }
+}
+```
+
+Start discovery at runtime:
+
+```bash
+wingman gateway start --discovery tailscale --name "Work Gateway"
+```
+
 ## Core Concepts
 
 - **Deterministic routing**: bindings map inbound messages to a single agent by default.

@@ -1,80 +1,88 @@
 import { motion } from "framer-motion";
 import {
-	FiBook,
 	FiClock,
-	FiCpu,
 	FiDatabase,
 	FiGlobe,
 	FiLayers,
 	FiLink,
+	FiMessageCircle,
 	FiPackage,
-	FiZap,
+	FiRadio,
+	FiShield,
+	FiVolume2,
 } from "react-icons/fi";
 
 const Features = () => {
 	const features = [
 		{
 			icon: FiDatabase,
-			title: "Long-Term Memory",
+			title: "Durable Sessions",
 			description:
-				"Agents remember context across sessions with persistent memory. Build knowledge over time.",
+				"Sessions persist in the gateway so every client can pick up where it left off.",
 			color: "sky",
-		},
-		{
-			icon: FiCpu,
-			title: "Automatic Parallelization",
-			description:
-				"Agents automatically spawn subagents for parallel task execution. Complex workflows made simple.",
-			color: "blue",
-		},
-		{
-			icon: FiPackage,
-			title: "Agent Skills System",
-			description:
-				"Extend agent capabilities with custom skills. Reusable, composable tools for any workflow.",
-			color: "sky",
-		},
-		{
-			icon: FiZap,
-			title: "Quick Agent Setup",
-			description:
-				"Stand up new agents in seconds with declarative JSON config. No boilerplate required.",
-			color: "blue",
-		},
-		{
-			icon: FiLink,
-			title: "MCP Integration",
-			description:
-				"Full Model Context Protocol support. Connect to external tools, APIs, and data sources seamlessly.",
-			color: "sky",
-		},
-		{
-			icon: FiGlobe,
-			title: "Tailscale Support",
-			description:
-				"Secure remote access to your gateway. Run agents from anywhere with encrypted connections.",
-			color: "blue",
 		},
 		{
 			icon: FiLayers,
 			title: "Multi-Agent Orchestration",
 			description:
-				"Coordinate multiple specialized agents working together on complex problems with shared context.",
-			color: "sky",
-		},
-		{
-			icon: FiClock,
-			title: "Scheduled Routines",
-			description:
-				"Automate agent workflows with CRON schedules. Set it and forget it.",
+				"Delegate work to specialist agents with shared context and coordinated outputs.",
 			color: "blue",
 		},
 		{
-			icon: FiBook,
-			title: "Persistent Sessions",
+			icon: FiPackage,
+			title: "Skills + Extensibility",
 			description:
-				"All conversations and state stored in durable SQLite. Pick up where you left off, always.",
+				"Compose reusable skills, hooks, and middleware to match your team's workflow.",
 			color: "sky",
+		},
+		{
+			icon: FiLink,
+			title: "MCP Integration",
+			description:
+				"Connect to external tools and APIs through Model Context Protocol servers.",
+			color: "blue",
+		},
+		{
+			icon: FiVolume2,
+			title: "Voice Output (TTS)",
+			description:
+				"Gateway-level voice providers power spoken responses in your UI and clients.",
+			color: "sky",
+		},
+		{
+			icon: FiMessageCircle,
+			title: "Discord + Channel Adapters",
+			description:
+				"Route channels to agents and stream responses back to Discord and other outputs.",
+			color: "blue",
+		},
+		{
+			icon: FiClock,
+			title: "Routines + Webhooks",
+			description:
+				"Schedule workflows or trigger them from external systems with durable sessions.",
+			color: "sky",
+		},
+		{
+			icon: FiRadio,
+			title: "Broadcast Rooms",
+			description:
+				"Opt into swarm-style responses with explicit room broadcasts.",
+			color: "blue",
+		},
+		{
+			icon: FiShield,
+			title: "Gateway Auth + Pairing",
+			description:
+				"Token or password auth with Control UI pairing for safer remote access.",
+			color: "sky",
+		},
+		{
+			icon: FiGlobe,
+			title: "Remote Discovery",
+			description:
+				"Advertise your gateway on LAN or Tailscale and connect from anywhere.",
+			color: "blue",
 		},
 	];
 
@@ -99,8 +107,8 @@ const Features = () => {
 						viewport={{ once: true }}
 						transition={{ duration: 0.6, delay: 0.1 }}
 					>
-						Built on a foundation of persistent state, WebSocket communication,
-						and intelligent agent orchestration.
+						Built on persistent state, streaming protocols, and channel adapters
+						that span voice, webhooks, and team chat.
 					</motion.p>
 				</div>
 
@@ -142,16 +150,16 @@ const Features = () => {
 				>
 					<div className="flex flex-col items-center gap-6 text-center md:flex-row md:text-left">
 						<div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-sky-500/20">
-							<FiPackage className="h-8 w-8 text-sky-400" />
+							<FiVolume2 className="h-8 w-8 text-sky-400" />
 						</div>
 						<div className="flex-1">
 							<h3 className="mb-2 text-2xl font-semibold text-white">
-								Extensible by design. Built for developers.
+								Advanced channels, voice, and automation.
 							</h3>
 							<p className="text-gray-400">
-								Create custom agent skills, integrate with external APIs via
-								MCP, and orchestrate complex workflows. Everything is
-								configurable, composable, and built on open standards.
+								Wire voice output, Discord routing, and webhook-driven workflows
+								into durable sessions. Configure it once and reuse it across
+								clients and teams.
 							</p>
 						</div>
 					</div>

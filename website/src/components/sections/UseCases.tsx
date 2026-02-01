@@ -5,6 +5,8 @@ import {
 	FiCpu,
 	FiGitBranch,
 	FiLayers,
+	FiMessageCircle,
+	FiMic,
 } from "react-icons/fi";
 
 const UseCases = () => {
@@ -17,18 +19,32 @@ const UseCases = () => {
 			gradient: "from-sky-400 to-blue-500",
 		},
 		{
-			icon: FiCpu,
-			title: "Autonomous Feature Development",
+			icon: FiMessageCircle,
+			title: "Discord Support + Triage",
 			description:
-				"Agents automatically break down features into tasks, parallelize implementation, run tests, and create PRs—all while you focus on architecture.",
-			gradient: "from-blue-400 to-indigo-500",
+				"Route Discord channels to dedicated agents, keep durable sessions, and stream responses back to your team.",
+			gradient: "from-blue-500 to-indigo-500",
+		},
+		{
+			icon: FiMic,
+			title: "Voice Briefings + Alerts",
+			description:
+				"Generate spoken daily summaries and incident updates with gateway-level TTS.",
+			gradient: "from-sky-500 to-cyan-500",
 		},
 		{
 			icon: FiGitBranch,
-			title: "Continuous Background Processing",
+			title: "Scheduled + Webhook Ops",
 			description:
-				"Schedule agents to monitor repositories, analyze codebases, generate documentation, and prepare reports on a schedule.",
-			gradient: "from-sky-500 to-cyan-500",
+				"Trigger workflows from external systems and run scheduled routines with durable state.",
+			gradient: "from-blue-400 to-sky-500",
+		},
+		{
+			icon: FiCpu,
+			title: "Autonomous Feature Development",
+			description:
+				"Agents break down features into tasks, parallelize implementation, run tests, and create PRs while you focus on architecture.",
+			gradient: "from-blue-400 to-indigo-500",
 		},
 		{
 			icon: FiCloud,
