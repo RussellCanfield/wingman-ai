@@ -1,31 +1,69 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Sora:wght@300;400;500;600;700&display=swap");
 
 :root {
+  color-scheme: light;
+  --rp-c-brand: #0284c7;
+  --rp-c-brand-dark: #0369a1;
+  --rp-c-brand-light: #0ea5e9;
+  --rp-c-text-1: #0f172a;
+  --rp-c-text-2: #334155;
+  --rp-c-text-3: #64748b;
+  --rp-c-bg: #f8fafc;
+  --rp-c-bg-soft: #f1f5f9;
+  --rp-c-bg-alt: #e2e8f0;
+  --rp-c-divider: rgba(15, 23, 42, 0.12);
+  --rp-c-border: rgba(15, 23, 42, 0.08);
+  --rp-font-family-base: "Sora", system-ui, -apple-system, sans-serif;
+  --rp-font-family-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --wingman-body-bg:
+    radial-gradient(1200px 640px at 12% 12%, rgba(14, 165, 233, 0.16) 0%, transparent 60%),
+    radial-gradient(900px 620px at 88% 8%, rgba(2, 132, 199, 0.12) 0%, transparent 55%),
+    radial-gradient(1100px 900px at 50% 100%, rgba(226, 232, 240, 0.9) 0%, transparent 60%),
+    linear-gradient(135deg, #f8fafc 0%, #eef2ff 55%, #f8fafc 100%);
+  --wingman-grid-soft: rgba(15, 23, 42, 0.06);
+  --wingman-grid-line: rgba(15, 23, 42, 0.08);
+  --wingman-grid-mask: radial-gradient(circle at top left, rgba(226, 232, 240, 0.8), transparent 70%);
+  --wingman-noise-opacity: 0.16;
+  --wingman-panel-bg: rgba(248, 250, 252, 0.85);
+  --wingman-panel-border: rgba(15, 23, 42, 0.08);
+  --wingman-code-bg: rgba(248, 250, 252, 0.92);
+  --wingman-code-border: rgba(15, 23, 42, 0.08);
+}
+
+:root.dark,
+:root.rp-dark {
   color-scheme: dark;
   --rp-c-brand: #38bdf8;
   --rp-c-brand-dark: #2563eb;
   --rp-c-brand-light: #7dd3fc;
   --rp-c-text-1: #e2e8f0;
-  --rp-c-text-2: #cbd5f5;
+  --rp-c-text-2: #cbd5e1;
   --rp-c-text-3: #94a3b8;
   --rp-c-bg: #0b0f14;
   --rp-c-bg-soft: #0f172a;
   --rp-c-bg-alt: #101826;
   --rp-c-divider: rgba(148, 163, 184, 0.2);
   --rp-c-border: rgba(255, 255, 255, 0.1);
-  --rp-font-family-base: "Sora", system-ui, -apple-system, sans-serif;
-  --rp-font-family-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --wingman-body-bg:
+    radial-gradient(1200px 600px at 12% 12%, rgba(56, 189, 248, 0.14) 0%, transparent 60%),
+    radial-gradient(900px 620px at 88% 8%, rgba(59, 130, 246, 0.2) 0%, transparent 55%),
+    radial-gradient(1200px 900px at 42% 100%, rgba(15, 23, 42, 0.85) 0%, transparent 60%),
+    linear-gradient(135deg, #0b0f14 0%, #101826 55%, #0b1120 100%);
+  --wingman-grid-soft: rgba(148, 163, 184, 0.08);
+  --wingman-grid-line: rgba(148, 163, 184, 0.12);
+  --wingman-grid-mask: radial-gradient(circle at top left, rgba(2, 6, 23, 0.8), transparent 70%);
+  --wingman-noise-opacity: 0.35;
+  --wingman-panel-bg: rgba(11, 15, 20, 0.7);
+  --wingman-panel-border: rgba(255, 255, 255, 0.06);
+  --wingman-code-bg: rgba(2, 8, 23, 0.85);
+  --wingman-code-border: rgba(255, 255, 255, 0.08);
 }
 
 html,
 body {
   font-family: "Sora", system-ui, -apple-system, sans-serif;
-  color: #e2e8f0;
-  background:
-    radial-gradient(1200px 600px at 12% 12%, rgba(56, 189, 248, 0.14) 0%, transparent 60%),
-    radial-gradient(900px 620px at 88% 8%, rgba(59, 130, 246, 0.2) 0%, transparent 55%),
-    radial-gradient(1200px 900px at 42% 100%, rgba(15, 23, 42, 0.85) 0%, transparent 60%),
-    linear-gradient(135deg, #0b0f14 0%, #101826 55%, #0b1120 100%);
+  color: var(--rp-c-text-1);
+  background: var(--wingman-body-bg);
   min-height: 100vh;
 }
 
@@ -34,11 +72,11 @@ body::before {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(transparent 0%, rgba(148, 163, 184, 0.08) 100%),
-    linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+    linear-gradient(transparent 0%, var(--wingman-grid-soft) 100%),
+    linear-gradient(to right, var(--wingman-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--wingman-grid-line) 1px, transparent 1px);
   background-size: 100% 100%, 64px 64px, 64px 64px;
-  mask-image: radial-gradient(circle at top left, rgba(2, 6, 23, 0.8), transparent 70%);
+  mask-image: var(--wingman-grid-mask);
   pointer-events: none;
   z-index: 0;
 }
@@ -49,7 +87,7 @@ body::after {
   inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
   mix-blend-mode: soft-light;
-  opacity: 0.35;
+  opacity: var(--wingman-noise-opacity);
   pointer-events: none;
   z-index: 0;
 }
@@ -62,11 +100,11 @@ body::after {
 }
 
 a {
-  color: #7dd3fc;
+  color: var(--rp-c-brand);
 }
 
 a:hover {
-  color: #bae6fd;
+  color: var(--rp-c-brand-light);
 }
 
 code,
@@ -78,21 +116,21 @@ pre,
 .rp-nav,
 .rp-sidebar,
 .rp-outline {
-  background-color: rgba(11, 15, 20, 0.7);
+  background-color: var(--wingman-panel-bg);
   backdrop-filter: blur(20px);
 }
 
 .rp-nav {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--wingman-panel-border);
 }
 
 .rp-sidebar {
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid var(--wingman-panel-border);
 }
 
 .rp-codeblock {
-  background: rgba(2, 8, 23, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--wingman-code-bg);
+  border: 1px solid var(--wingman-code-border);
 }
 
 @media (prefers-reduced-motion: reduce) {
