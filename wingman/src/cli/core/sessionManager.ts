@@ -65,7 +65,8 @@ type CheckpointRow = {
  */
 export class SessionManager {
 	private checkpointer: SqliteSaver | null = null;
-	private stateReaderAgent: ReturnType<typeof createDeepAgent> | null = null;
+	private stateReaderAgent: { getState?: (args: any) => Promise<any> } | null =
+		null;
 	private db: DatabaseLike | null = null;
 	private dbPath: string;
 
@@ -540,7 +541,7 @@ export class SessionManager {
 		return checkpoints;
 	}
 
-	private getStateReaderAgent(): ReturnType<typeof createDeepAgent> {
+	private getStateReaderAgent(): { getState?: (args: any) => Promise<any> } {
 		if (!this.checkpointer) {
 			throw new Error("SessionManager not initialized");
 		}
@@ -548,7 +549,7 @@ export class SessionManager {
 		if (!this.stateReaderAgent) {
 			this.stateReaderAgent = createDeepAgent({
 				checkpointer: this.checkpointer as any,
-			}) as ReturnType<typeof createDeepAgent>;
+			}) as { getState?: (args: any) => Promise<any> };
 		}
 
 		return this.stateReaderAgent;

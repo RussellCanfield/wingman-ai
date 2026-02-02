@@ -15,7 +15,13 @@ pulling schema details only when needed.
 
 ## Registry keys
 
-- `stat_grid` — Compact summary of key stats (use for weather, KPIs, status)
+- `stat_grid` — Compact summary of key stats (weather, KPIs, status)
+- `line_chart` — Time-series trend lines (latency, prices, usage)
+- `area_chart` — Filled trend chart (capacity, throughput, cohorts)
+- `bar_chart` — Categorical comparisons (throughput, counts, mix)
+- `data_table` — Structured rows + columns (comparisons, checklists)
+- `timeline` — Chronological events (incidents, workflows)
+- `status_list` — Health/state indicators (services, agents, tasks)
 
 ## Recommended flow
 

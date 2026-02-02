@@ -27,9 +27,14 @@ describe("UI Registry Tools", () => {
 	it("lists registry components", async () => {
 		const tool = createUiRegistryListTool(workspace, skillsDir);
 		const result = await tool.invoke({});
-		expect(result.components.some((component: any) => component.id === "stat_grid")).toBe(
-			true,
-		);
+		const ids = result.components.map((component: any) => component.id);
+		expect(ids.includes("stat_grid")).toBe(true);
+		expect(ids.includes("line_chart")).toBe(true);
+		expect(ids.includes("area_chart")).toBe(true);
+		expect(ids.includes("bar_chart")).toBe(true);
+		expect(ids.includes("data_table")).toBe(true);
+		expect(ids.includes("timeline")).toBe(true);
+		expect(ids.includes("status_list")).toBe(true);
 	});
 
 	it("returns schema details for a registry component", async () => {
@@ -37,6 +42,22 @@ describe("UI Registry Tools", () => {
 		const result = await tool.invoke({ componentId: "stat_grid" });
 		expect(result.componentId).toBe("stat_grid");
 		expect(result.propsSchema).toBeTruthy();
+	});
+
+	it("returns schema details for new registry components", async () => {
+		const tool = createUiRegistryGetTool(workspace, skillsDir);
+		for (const componentId of [
+			"line_chart",
+			"area_chart",
+			"bar_chart",
+			"data_table",
+			"timeline",
+			"status_list",
+		]) {
+			const result = await tool.invoke({ componentId });
+			expect(result.componentId).toBe(componentId);
+			expect(result.propsSchema).toBeTruthy();
+		}
 	});
 
 	it("renders UI payload when enabled", async () => {

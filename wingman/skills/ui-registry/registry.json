@@ -5,6 +5,7 @@
       "label": "Stat Grid",
       "description": "Compact summary of key stats",
       "useCases": ["Weather snapshot", "KPI summary"],
+      "tags": ["summary", "kpi", "metrics"],
       "propsSchema": {
         "type": "object",
         "required": ["title", "stats"],
@@ -26,6 +27,243 @@
         }
       },
       "exampleRef": "examples/stat_grid.md"
+    },
+    "line_chart": {
+      "label": "Line Chart",
+      "description": "Multi-series trend lines over time",
+      "useCases": ["Latency trend", "Price history", "Usage over time"],
+      "tags": ["chart", "timeseries", "trend"],
+      "propsSchema": {
+        "type": "object",
+        "required": ["title", "series"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "subtitle": { "type": "string", "maxLength": 120 },
+          "series": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "required": ["name", "data"],
+              "properties": {
+                "name": { "type": "string", "maxLength": 40 },
+                "color": {
+                  "type": "string",
+                  "description": "Optional CSS color"
+                },
+                "data": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 60,
+                  "items": {
+                    "type": "object",
+                    "required": ["label", "value"],
+                    "properties": {
+                      "label": { "type": "string", "maxLength": 24 },
+                      "value": { "type": "number" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "yLabel": { "type": "string", "maxLength": 24 },
+          "xLabel": { "type": "string", "maxLength": 24 },
+          "showLegend": { "type": "boolean" },
+          "showMarkers": { "type": "boolean" }
+        }
+      },
+      "exampleRef": "examples/line_chart.md"
+    },
+    "area_chart": {
+      "label": "Area Chart",
+      "description": "Filled trend chart for stacked or single series",
+      "useCases": ["Capacity usage", "Throughput trend", "Cohort growth"],
+      "tags": ["chart", "timeseries", "area"],
+      "propsSchema": {
+        "type": "object",
+        "required": ["title", "series"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "subtitle": { "type": "string", "maxLength": 120 },
+          "series": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "required": ["name", "data"],
+              "properties": {
+                "name": { "type": "string", "maxLength": 40 },
+                "color": {
+                  "type": "string",
+                  "description": "Optional CSS color"
+                },
+                "data": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 60,
+                  "items": {
+                    "type": "object",
+                    "required": ["label", "value"],
+                    "properties": {
+                      "label": { "type": "string", "maxLength": 24 },
+                      "value": { "type": "number" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "yLabel": { "type": "string", "maxLength": 24 },
+          "xLabel": { "type": "string", "maxLength": 24 },
+          "showLegend": { "type": "boolean" },
+          "showMarkers": { "type": "boolean" },
+          "stacked": { "type": "boolean" }
+        }
+      },
+      "exampleRef": "examples/area_chart.md"
+    },
+    "bar_chart": {
+      "label": "Bar Chart",
+      "description": "Categorical values displayed as vertical bars",
+      "useCases": ["Category comparison", "Agent throughput", "Error counts"],
+      "tags": ["chart", "distribution", "comparison"],
+      "propsSchema": {
+        "type": "object",
+        "required": ["title", "bars"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "subtitle": { "type": "string", "maxLength": 120 },
+          "unit": { "type": "string", "maxLength": 16 },
+          "bars": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "required": ["label", "value"],
+              "properties": {
+                "label": { "type": "string", "maxLength": 32 },
+                "value": { "type": "number" },
+                "helper": { "type": "string", "maxLength": 60 },
+                "color": {
+                  "type": "string",
+                  "description": "Optional CSS color"
+                }
+              }
+            }
+          }
+        }
+      },
+      "exampleRef": "examples/bar_chart.md"
+    },
+    "data_table": {
+      "label": "Data Table",
+      "description": "Structured rows and columns for comparisons",
+      "useCases": ["Model comparison", "Release checklist", "Budget breakdown"],
+      "tags": ["table", "comparison", "records"],
+      "propsSchema": {
+        "type": "object",
+        "required": ["title", "columns", "rows"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "subtitle": { "type": "string", "maxLength": 120 },
+          "striped": { "type": "boolean" },
+          "columns": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "required": ["key", "label"],
+              "properties": {
+                "key": { "type": "string", "maxLength": 40 },
+                "label": { "type": "string", "maxLength": 40 },
+                "align": { "type": "string", "enum": ["left", "center", "right"] },
+                "width": { "type": "string", "maxLength": 12 }
+              }
+            }
+          },
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": { "type": ["string", "number"] }
+            }
+          }
+        }
+      },
+      "exampleRef": "examples/data_table.md"
+    },
+    "timeline": {
+      "label": "Timeline",
+      "description": "Chronological events with status context",
+      "useCases": ["Incident response", "Deploy checklist", "Case history"],
+      "tags": ["timeline", "events", "history"],
+      "propsSchema": {
+        "type": "object",
+        "required": ["title", "items"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "subtitle": { "type": "string", "maxLength": 120 },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "required": ["time", "title"],
+              "properties": {
+                "time": { "type": "string", "maxLength": 40 },
+                "title": { "type": "string", "maxLength": 60 },
+                "description": { "type": "string", "maxLength": 160 },
+                "status": {
+                  "type": "string",
+                  "enum": ["neutral", "info", "success", "warning", "error"]
+                },
+                "tag": { "type": "string", "maxLength": 24 }
+              }
+            }
+          }
+        }
+      },
+      "exampleRef": "examples/timeline.md"
+    },
+    "status_list": {
+      "label": "Status List",
+      "description": "Health and state indicators for multiple items",
+      "useCases": ["Service health", "Agent queue", "Task status"],
+      "tags": ["status", "health", "list"],
+      "propsSchema": {
+        "type": "object",
+        "required": ["title", "items"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "subtitle": { "type": "string", "maxLength": 120 },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "required": ["label", "status"],
+              "properties": {
+                "label": { "type": "string", "maxLength": 60 },
+                "status": {
+                  "type": "string",
+                  "enum": ["ok", "warning", "error", "pending", "info"]
+                },
+                "value": { "type": ["string", "number"] },
+                "helper": { "type": "string", "maxLength": 80 }
+              }
+            }
+          }
+        }
+      },
+      "exampleRef": "examples/status_list.md"
     }
   }
 }

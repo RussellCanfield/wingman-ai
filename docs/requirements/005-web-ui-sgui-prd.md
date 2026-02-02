@@ -1,8 +1,8 @@
 # PRD-005: Web UI Static Generative UI (SGUI)
 
-**Version:** 1.1
+**Version:** 1.3
 **Status:** In Progress
-**Last Updated:** 2026-02-01
+**Last Updated:** 2026-02-02
 
 ---
 
@@ -225,6 +225,17 @@ When disabled:
 
 ## Web UI Registry (MVP)
 
+Current registry components (v1.0.0):
+- `stat_grid`
+- `line_chart`
+- `area_chart`
+- `bar_chart`
+- `data_table`
+- `timeline`
+- `status_list`
+
+Full schemas live in `skills/ui-registry/registry.json`. Summaries and core props:
+
 ### `stat_grid` (v1.0.0)
 
 ```json
@@ -251,6 +262,61 @@ When disabled:
   }
 }
 ```
+
+### `line_chart` (v1.0.0)
+
+Required props:
+- `title` (string)
+- `series` (array of `{ name, data: [{ label, value }] }`)
+
+Optional props:
+- `subtitle`, `yLabel`, `xLabel`, `showLegend`, `showMarkers`
+
+### `area_chart` (v1.0.0)
+
+Required props:
+- `title` (string)
+- `series` (array of `{ name, data: [{ label, value }] }`)
+
+Optional props:
+- `subtitle`, `yLabel`, `xLabel`, `showLegend`, `showMarkers`, `stacked`
+
+### `bar_chart` (v1.0.0)
+
+Required props:
+- `title` (string)
+- `bars` (array of `{ label, value }`)
+
+Optional props:
+- `subtitle`, `unit`, `helper`, `color`
+
+### `data_table` (v1.0.0)
+
+Required props:
+- `title` (string)
+- `columns` (array of `{ key, label, align?, width? }`)
+- `rows` (array of objects)
+
+Optional props:
+- `subtitle`, `striped`
+
+### `timeline` (v1.0.0)
+
+Required props:
+- `title` (string)
+- `items` (array of `{ time, title }`)
+
+Optional props:
+- `subtitle`, `description`, `status`, `tag`
+
+### `status_list` (v1.0.0)
+
+Required props:
+- `title` (string)
+- `items` (array of `{ label, status }`)
+
+Optional props:
+- `subtitle`, `value`, `helper`
 
 ---
 

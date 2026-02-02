@@ -233,7 +233,7 @@ export class AgentInvoker {
 					),
 				middleware: middleware as any,
 				skills: skillsSources,
-				subagents: [...(targetAgent.subagents || [])],
+				subagents: (targetAgent.subagents || []) as any,
 				checkpointer: checkpointer as any,
 			});
 

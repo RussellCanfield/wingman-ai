@@ -21,6 +21,10 @@ Wingman is a two-part AI agent ecosystem:
 Test coverage is essential, always add tests for new functionality.
 After you've finished making changes, ensure all tests and builds pass.
 
+## Docs-site Updates
+Keep major feature descriptions in `docs-site` updated when you ship or change significant capabilities.
+The docs-site is legacy for requirements (see below), but it should still reflect the current product surface.
+
 ## Product Requirements
 
 All PRD documents can be found under `./docs/requirements/`:
@@ -54,6 +58,6 @@ All PRD documents can be found under `./docs/requirements/`:
 
 ---
 
-**Version**: 1.2.0
-**Last Updated**: 2026-01-30
+**Version**: 1.2.1
+**Last Updated**: 2026-02-02
 **Maintainer**: Russell Canfield (rcanfield86@gmail.com)

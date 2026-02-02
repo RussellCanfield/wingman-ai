@@ -1,0 +1,231 @@
+# Dynamic UI (SGUI)
+
+Dynamic UI (Static Generative UI, or SGUI) lets agents render pre-registered UI components inside the Control UI. Agents never send raw HTML. They select a component ID, provide props, and always include a `textFallback` for non-UI clients.
+
+## Where it appears
+
+- **Control UI** renders the UI components.
+- **CLI / Discord / non-UI clients** show the `textFallback` string.
+
+## Enable or disable
+
+Dynamic UI is gated by the gateway config:
+
+```json
+{
+  "gateway": {
+    "dynamicUiEnabled": true
+  }
+}
+```
+
+If disabled, `ui_present` still requires `textFallback`, and the Control UI will ignore UI render payloads.
+
+## Registry & components
+
+The registry is stored locally at:
+
+```
+skills/ui-registry/registry.json
+```
+
+Current registry components:
+
+- `stat_grid` — compact KPI snapshots
+- `line_chart` — interactive trend lines
+- `area_chart` — filled trend chart (optionally stacked)
+- `bar_chart` — categorical comparisons
+- `data_table` — structured rows + columns
+- `timeline` — chronological events
+- `status_list` — health/status indicators
+
+Charts are interactive in the Control UI (tooltips, legend hover focus, crosshair cursors).
+
+## How it works (under the hood)
+
+1) The agent calls **ui_registry_list** or **ui_registry_get** to discover component schemas.  
+2) The agent calls **ui_present** with a component ID + props + required `textFallback`.  
+3) The gateway passes the UI payload to the Control UI if `dynamicUiEnabled` is true.  
+4) The Control UI validates the component ID and renders the matching React component from the local registry.  
+5) Non‑UI clients ignore the UI payload and display `textFallback`.
+
+This keeps UI layout and rendering under client control while still letting agents present rich data.
+
+## Recommended tool flow
+
+1) Discover components:
+
+```json
+{ "tool": "ui_registry_list", "args": {} }
+```
+
+2) Inspect a component schema:
+
+```json
+{ "tool": "ui_registry_get", "args": { "componentId": "area_chart" } }
+```
+
+3) Render it with `ui_present`:
+
+```json
+{
+  "tool": "ui_present",
+  "args": {
+    "componentId": "area_chart",
+    "props": {
+      "title": "Capacity usage",
+      "subtitle": "Region breakdown",
+      "yLabel": "%",
+      "xLabel": "Week",
+      "showLegend": true,
+      "stacked": true,
+      "series": [
+        {
+          "name": "US-East",
+          "data": [
+            { "label": "W1", "value": 32 },
+            { "label": "W2", "value": 38 },
+            { "label": "W3", "value": 41 },
+            { "label": "W4", "value": 45 }
+          ]
+        },
+        {
+          "name": "EU",
+          "data": [
+            { "label": "W1", "value": 21 },
+            { "label": "W2", "value": 24 },
+            { "label": "W3", "value": 28 },
+            { "label": "W4", "value": 31 }
+          ]
+        }
+      ]
+    },
+    "layout": { "type": "stack", "gap": 12 },
+    "textFallback": "Capacity usage: US-East 32-45%, EU 21-31%",
+    "uiOnly": true
+  }
+}
+```
+
+## Layout hints
+
+You can pass optional layout hints to organize multiple components:
+
+```json
+{ "layout": { "type": "grid", "columns": 2, "gap": 12, "align": "stretch" } }
+```
+
+Supported layout types:
+
+- `stack` (vertical)
+- `row` (horizontal)
+- `grid` (columns)
+
+Unknown layout fields are ignored by the client.
+
+## Example: agent health dashboard
+
+Combine a status list + charts in a grid layout:
+
+```json
+{
+  "tool": "ui_present",
+  "args": {
+    "componentId": "status_list",
+    "props": {
+      "title": "Agent health",
+      "subtitle": "Last 15 minutes",
+      "items": [
+        { "label": "Router", "status": "ok", "value": "Stable" },
+        { "label": "Planner", "status": "warning", "value": "High latency" },
+        { "label": "Gateway", "status": "ok", "value": "Healthy" }
+      ]
+    },
+    "layout": { "type": "grid", "columns": 2, "gap": 12 },
+    "textFallback": "Agent health: Router stable, Planner high latency, Gateway healthy",
+    "uiOnly": true
+  }
+}
+```
+
+## Best practices
+
+- Always provide a clear `textFallback` for non-UI clients.
+- Keep arrays small (charts and lists should stay concise).
+- Use stable labels so users can compare across updates.
+- Include units in values or labels (ms, %, $, req/s).
+- Use `uiOnly: true` only when the UI is the primary response.
+
+## Extend the registry (add your own components)
+
+Dynamic UI is **registry‑driven**. To add a new component, you update both the registry metadata **and** the Control UI implementation.
+
+### 1) Add metadata to the registry
+
+Edit the registry file:
+
+```
+skills/ui-registry/registry.json
+```
+
+Add a new component entry with a schema and example:
+
+```json
+{
+  "my_component": {
+    "label": "My Component",
+    "description": "One-line description",
+    "useCases": ["Example use case"],
+    "tags": ["optional", "tags"],
+    "propsSchema": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string" }
+      }
+    },
+    "exampleRef": "examples/my_component.md"
+  }
+}
+```
+
+Create the matching example file at:
+
+```
+skills/ui-registry/examples/my_component.md
+```
+
+### 2) Implement the UI component
+
+Add the React component in the Control UI and register it:
+
+```
+wingman/webui/src/sgui/components/MyComponent.tsx
+wingman/webui/src/sgui/registry.ts
+```
+
+Register it by ID:
+
+```ts
+registerLocalComponent({
+  id: "my_component",
+  version: "1.0.0",
+  component: MyComponent
+});
+```
+
+### 3) Rebuild + use it
+
+Rebuild the web UI after adding components so the registry is available at runtime.
+
+### Notes
+
+- Agents can only render components that exist in the Control UI registry.
+- `textFallback` is mandatory for every `ui_present` call.
+- Keep schemas small and props stable so agents can reason about them reliably.
+
+## Troubleshooting
+
+- **UI not rendering**: check `gateway.dynamicUiEnabled`.
+- **Unknown component**: call `ui_registry_list` to verify IDs.
+- **Schema errors**: use `ui_registry_get` to confirm required props.

@@ -1,5 +1,6 @@
 [
   { "type": "file", "name": "multi-agent-workflows", "label": "Multi-Agent Workflows" },
+  { "type": "file", "name": "dynamic-ui", "label": "Dynamic UI (SGUI)" },
   { "type": "file", "name": "sessions-and-state", "label": "Sessions & State" },
   { "type": "file", "name": "automation", "label": "Automation & Routines" },
   { "type": "file", "name": "distributed-collaboration", "label": "Distributed Collaboration" }

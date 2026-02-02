@@ -1,5 +1,11 @@
 import type { ComponentType } from "react";
+import AreaChart from "./components/AreaChart";
+import BarChart from "./components/BarChart";
+import DataTable from "./components/DataTable";
+import LineChart from "./components/LineChart";
 import StatGrid from "./components/StatGrid";
+import StatusList from "./components/StatusList";
+import Timeline from "./components/Timeline";
 
 export type RegistryEntry = {
 	id: string;
@@ -48,6 +54,42 @@ registerLocalComponent({
 	id: "stat_grid",
 	version: "1.0.0",
 	component: StatGrid,
+});
+
+registerLocalComponent({
+	id: "line_chart",
+	version: "1.0.0",
+	component: LineChart,
+});
+
+registerLocalComponent({
+	id: "area_chart",
+	version: "1.0.0",
+	component: AreaChart,
+});
+
+registerLocalComponent({
+	id: "bar_chart",
+	version: "1.0.0",
+	component: BarChart,
+});
+
+registerLocalComponent({
+	id: "data_table",
+	version: "1.0.0",
+	component: DataTable,
+});
+
+registerLocalComponent({
+	id: "timeline",
+	version: "1.0.0",
+	component: Timeline,
+});
+
+registerLocalComponent({
+	id: "status_list",
+	version: "1.0.0",
+	component: StatusList,
 });
 
 registerLocalComponent({
