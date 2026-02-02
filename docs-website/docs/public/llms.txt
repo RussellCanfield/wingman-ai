@@ -1,0 +1,43 @@
+# Wingman Documentation
+Wingman AI is a multi-agent system with a local CLI control plane and a gateway for orchestration, persistent sessions, adapters, and a Control Core UI. This documentation covers setup, configuration, agents and sub-agents, Model Context Protocol (MCP) servers, skills, hooks, voice (TTS), Discord integration, webhooks, routines, and the gateway HTTP API.
+
+Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestration, gateway, Control Core UI, persistent sessions, CLI, agents, sub-agents, Model Context Protocol, MCP, skills, hooks, Discord adapter, voice TTS, Web Speech, ElevenLabs, webhooks, routines, dynamic UI, SGUI, provider auth, OpenAI, Anthropic, OpenRouter, xAI, Copilot, Ollama, LM Studio
+
+## Start Here
+- https://docs.getwingmanai.com/ : Product overview, architecture context, and navigation for all docs.
+- https://docs.getwingmanai.com/getting-started/quickstart : 4-step bootstrap (init workspace, login provider, start gateway, run an agent).
+- https://docs.getwingmanai.com/getting-started/installation : Requirements (Bun/Node), install deps, run gateway + UI, run CLI from repo.
+- https://docs.getwingmanai.com/getting-started/project-structure : .wingman/ layout, agent files, skills, routines, SQLite session store.
+
+## Core Concepts (Short)
+- Gateway = collaboration hub for routing, sessions, adapters, and Control UI.
+- Agents live in `.wingman/agents/<id>/` as `agent.json` or `agent.md`.
+- Sessions persist in `.wingman/wingman.db` with stable session keys.
+- Dynamic UI (SGUI) renders registered components via `ui_*` tools.
+
+## Configuration
+- https://docs.getwingmanai.com/configuration/wingman-config : Global config fields for logging, gateway, agents, search, voice, skills, MCP.
+- https://docs.getwingmanai.com/configuration/providers : Supported providers, auth env vars, model naming format, provider status.
+- https://docs.getwingmanai.com/configuration/agents : Agent discovery vs routing, bundled agents, agent.json/agent.md examples, sub-agents, tools, MCP/voice overrides.
+- https://docs.getwingmanai.com/configuration/gateway : Gateway settings, auth modes, CLI commands, fsRoots, stateDir, dynamic UI toggle.
+- https://docs.getwingmanai.com/configuration/mcp : Global/per-agent MCP config, stdio/SSE transports, Finnhub MCP setup + env vars.
+- https://docs.getwingmanai.com/configuration/hooks : Tool hooks (pre/post/stop) and gateway hook delivery config.
+- https://docs.getwingmanai.com/configuration/skills : Skill commands, GitHub repo config, install location and layout.
+- https://docs.getwingmanai.com/configuration/discord-adapter : Discord adapter config, channel sessions, session command, setup checklist.
+- https://docs.getwingmanai.com/configuration/voice : Web Speech vs ElevenLabs TTS, policies, per-agent overrides, API behavior.
+- https://docs.getwingmanai.com/configuration/search : internet_search config, DuckDuckGo/Perplexity providers, rate-limit env vars.
+
+## Guides
+- https://docs.getwingmanai.com/guides/multi-agent-workflows : Define squads with sub-agents, routing via bindings, safety tips.
+- https://docs.getwingmanai.com/guides/distributed-collaboration : Shared gateway, discovery/join, auth + Tailscale, SSH tunnel fallback.
+- https://docs.getwingmanai.com/guides/sessions-and-state : Session keys, creation by client type, metadata, API cleanup patterns.
+- https://docs.getwingmanai.com/guides/automation : Routines (cron), webhooks create/trigger, session routing patterns.
+- https://docs.getwingmanai.com/guides/dynamic-ui : SGUI registry, ui_* tools, layout hints, examples, and extending components.
+
+## Reference
+- https://docs.getwingmanai.com/reference/cli : CLI commands and options for agent/init/provider/skill/gateway.
+- https://docs.getwingmanai.com/reference/tools : Tool catalog (core + UI) and allowlist example.
+- https://docs.getwingmanai.com/reference/http-api : Gateway HTTP endpoints for health, agents, sessions, providers, fs, voice, routines, webhooks.
+
+## Source
+- https://github.com/RussellCanfield/wingman-ai : Monorepo source for the CLI, gateway, Control UI, and docs.
