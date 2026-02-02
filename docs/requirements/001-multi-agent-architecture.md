@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2
-**Last Updated:** 2026-01-30
+**Version:** 1.2.1
+**Last Updated:** 2026-02-02
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -44,7 +44,7 @@ Modern AI assistants face several challenges:
 - System prompt with delegation guidelines
 - Access to all subagents
 - Backend for state management and file operations
-- Middleware for request/response processing
+- Middleware for request/response processing, including confidentiality rules that prevent disclosure of machine/system details, internal file paths, or tool call IDs
 
 ### Specialized Subagents
 

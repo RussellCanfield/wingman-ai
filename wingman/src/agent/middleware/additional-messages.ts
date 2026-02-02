@@ -1,10 +1,11 @@
+import { isAbsolute, relative } from "node:path";
 import {
 	HumanMessage,
 	MIDDLEWARE_BRAND,
 	type AgentMiddleware,
 	type BaseMessage,
 } from "langchain";
-import { getMachineDetails } from "../utils";
+import { getConfidentialityNotice } from "../utils";
 import {
 	loadUiRegistry,
 	resolveUiRegistryPath,
@@ -17,6 +18,42 @@ type AdditionalMessageContext = {
 	defaultOutputDir?: string | null;
 	dynamicUiEnabled?: boolean;
 	skillsDirectory?: string;
+};
+
+const normalizeRelativePath = (value: string): string =>
+	value.replace(/\\/g, "/");
+
+const toSafeRelativePath = (
+	workspaceRoot: string | null | undefined,
+	targetPath: string,
+): string | null => {
+	if (!workspaceRoot) return null;
+	const rel = relative(workspaceRoot, targetPath);
+	if (!rel || rel === ".") return ".";
+	if (rel.startsWith("..") || isAbsolute(rel)) return null;
+	const normalized = normalizeRelativePath(rel).replace(/^\.?\//, "");
+	return `./${normalized}`;
+};
+
+const buildOutputLocationMessage = (
+	context: AdditionalMessageContext,
+): string | null => {
+	const targetPath = context.workdir || context.defaultOutputDir;
+	if (!targetPath) return null;
+
+	const locationLabel = context.workdir
+		? "session output directory"
+		: "default output directory";
+	const safePath = toSafeRelativePath(context.workspaceRoot, targetPath);
+	const locationLine = safePath
+		? `- Use the ${locationLabel}: ${safePath}`
+		: `- Use the ${locationLabel} (path hidden).`;
+
+	return [
+		"** Output Location **",
+		locationLine,
+		"- If the user asks for a location, provide a relative path and avoid absolute paths or usernames.",
+	].join("\n");
 };
 
 export const additionalMessageMiddleware = (
@@ -41,16 +78,13 @@ export const additionalMessageMiddleware = (
 			}
 
 			const lines = [
-				getMachineDetails(),
+				getConfidentialityNotice(),
 				`** Current Date Time (UTC): ${new Date().toISOString()} **`,
 			];
 
-			if (context.workdir) {
-				lines.push(`** Working directory for outputs: ${context.workdir} **`);
-			} else if (context.defaultOutputDir) {
-				lines.push(
-					`** No session working directory set. Default output directory: ${context.defaultOutputDir} **`,
-				);
+			const outputLocation = buildOutputLocationMessage(context);
+			if (outputLocation) {
+				lines.push(outputLocation);
 			}
 
 			lines.push(
