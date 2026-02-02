@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { FiAlertTriangle, FiLoader, FiMic, FiStopCircle, FiVolume2 } from "react-icons/fi";
@@ -9,6 +9,7 @@ import { getVoicePlaybackLabel, type VoicePlaybackStatus } from "../utils/voiceP
 import { getAudioAvailability } from "../utils/media";
 import { ThinkingPanel } from "./ThinkingPanel";
 import { SguiRenderer } from "../sgui/SguiRenderer";
+import { shouldAutoScroll } from "../utils/scroll";
 
 type ChatPanelProps = {
 	activeThread?: Thread;
@@ -81,6 +82,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const [recordingError, setRecordingError] = useState("");
 	const [inputLevel, setInputLevel] = useState(0);
 	const lastVoiceMessageIdRef = useRef<string | null>(null);
+	const messageCount = activeThread?.messages.length ?? 0;
+	const lastMessage =
+		messageCount > 0 && activeThread ? activeThread.messages[messageCount - 1] : undefined;
 
 	useEffect(() => {
 		if (voicePlayback.status === "idle") {
@@ -93,16 +97,28 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		connected && !isStreaming && !recording && (prompt.trim() || attachments.length > 0);
 
 	useEffect(() => {
-		const el = scrollRef.current;
-		if (!el) return;
-		if (autoScrollRef.current) {
-			el.scrollTop = el.scrollHeight;
-		}
-	}, []);
-
-	useEffect(() => {
 		autoScrollRef.current = true;
-	}, []);
+	}, [activeThread?.id]);
+
+	useLayoutEffect(() => {
+		const el = scrollRef.current;
+		if (!el || !autoScrollRef.current) return;
+		const frame = window.requestAnimationFrame(() => {
+			el.scrollTop = el.scrollHeight;
+		});
+		return () => window.cancelAnimationFrame(frame);
+	}, [
+		activeThread?.id,
+		messageCount,
+		lastMessage?.id,
+		lastMessage?.content,
+		lastMessage?.uiTextFallback,
+		lastMessage?.toolEvents?.length,
+		lastMessage?.thinkingEvents?.length,
+		lastMessage?.uiBlocks?.length,
+		lastMessage?.attachments?.length,
+		loading,
+	]);
 
 	useEffect(() => {
 		if (!previewAttachment) return;
@@ -306,9 +322,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const handleScroll = () => {
 		const el = scrollRef.current;
 		if (!el) return;
-		const threshold = 40;
-		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-		autoScrollRef.current = distanceFromBottom <= threshold;
+		autoScrollRef.current = shouldAutoScroll({
+			scrollHeight: el.scrollHeight,
+			scrollTop: el.scrollTop,
+			clientHeight: el.clientHeight,
+		});
 	};
 
 	const lastAssistantId = useMemo(() => {

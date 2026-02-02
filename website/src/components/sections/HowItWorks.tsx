@@ -9,14 +9,18 @@ import {
 } from "react-icons/fi";
 
 const HowItWorks = () => {
+	const installScriptCommand =
+		"curl -fsSL https://getwingmanai.com/install.sh | bash";
+	const npmInstallCommand = "npm install -g @wingman-ai/gateway && wingman init";
+
 	const steps = [
 		{
 			number: "01",
 			title: "Install Once",
 			description:
-				"Get started with a simple npm install. Initialize your workspace with interactive setup.",
+				"Install via the quick script or npm. Initialize your workspace with interactive setup.",
 			icon: FiDownload,
-			command: "npm install -g @wingman-ai/gateway && wingman init",
+			commands: [installScriptCommand, npmInstallCommand],
 		},
 		{
 			number: "02",
@@ -24,7 +28,7 @@ const HowItWorks = () => {
 			description:
 				"Launch your local AI agent runtime. The gateway handles all agent execution and session persistence.",
 			icon: FiServer,
-			command: "wingman gateway start",
+			commands: ["wingman gateway start"],
 		},
 		{
 			number: "03",
@@ -93,11 +97,18 @@ const HowItWorks = () => {
 							</h3>
 							<p className="mb-4 text-sm text-gray-400">{step.description}</p>
 
-							{step.command && (
-								<div className="rounded-lg bg-slate-950/50 p-3">
-									<code className="font-mono text-xs text-sky-400">
-										$ {step.command}
-									</code>
+							{step.commands && step.commands.length > 0 && (
+								<div className="space-y-2">
+									{step.commands.map((command) => (
+										<div
+											key={command}
+											className="rounded-lg bg-slate-950/50 p-3"
+										>
+											<code className="font-mono text-xs text-sky-400">
+												$ {command}
+											</code>
+										</div>
+									))}
 								</div>
 							)}
 

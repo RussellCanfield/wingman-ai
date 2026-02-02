@@ -3,29 +3,34 @@ import { useState } from "react";
 import { FiCheck, FiCode, FiCopy, FiMonitor, FiTerminal } from "react-icons/fi";
 
 const QuickStart = () => {
-	const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+	const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
 
-	const copyToClipboard = (text: string, index: number) => {
+	const copyToClipboard = (text: string) => {
 		navigator.clipboard.writeText(text);
-		setCopiedIndex(index);
-		setTimeout(() => setCopiedIndex(null), 2000);
+		setCopiedCommand(text);
+		setTimeout(() => setCopiedCommand(null), 2000);
 	};
+
+	const installScriptCommand =
+		"curl -fsSL https://getwingmanai.com/install.sh | bash";
+	const npmCommand = "npm install -g @wingman-ai/gateway";
 
 	const steps = [
 		{
 			number: "1",
 			title: "Install",
-			command: "npm install -g @wingman-ai/gateway",
+			commands: [installScriptCommand, npmCommand],
+			note: "The install script runs wingman init automatically.",
 		},
 		{
 			number: "2",
 			title: "Initialize",
-			command: "wingman init",
+			commands: ["wingman init"],
 		},
 		{
 			number: "3",
 			title: "Start Gateway",
-			command: "wingman gateway start",
+			commands: ["wingman gateway start"],
 		},
 	];
 
@@ -70,7 +75,7 @@ const QuickStart = () => {
 						viewport={{ once: true }}
 						transition={{ duration: 0.6, delay: 0.1 }}
 					>
-						Three simple commands to launch your AI coding infrastructure.
+						Three simple steps to launch your AI coding infrastructure.
 					</motion.p>
 				</div>
 
@@ -95,7 +100,7 @@ const QuickStart = () => {
 
 						{/* Commands */}
 						<div className="p-6">
-							{steps.map((step, index) => (
+							{steps.map((step) => (
 								<div key={step.number} className="mb-6 last:mb-0">
 									<div className="mb-2 flex items-center gap-2">
 										<span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-500/20 text-xs font-semibold text-sky-400">
@@ -105,23 +110,35 @@ const QuickStart = () => {
 											{step.title}
 										</span>
 									</div>
-									<div className="group relative flex items-center gap-2 rounded-lg bg-slate-900/50 p-4">
-										<span className="font-mono text-sm text-sky-400">$</span>
-										<code className="flex-1 font-mono text-sm text-gray-300">
-											{step.command}
-										</code>
-										<button
-											onClick={() => copyToClipboard(step.command, index)}
-											type="button"
-											className="rounded-lg p-2 text-gray-400 opacity-0 transition-all hover:bg-slate-800 hover:text-sky-400 group-hover:opacity-100"
+									{step.commands.map((command) => (
+										<div
+											key={command}
+											className="group relative mb-3 flex items-center gap-2 rounded-lg bg-slate-900/50 p-4 last:mb-0"
 										>
-											{copiedIndex === index ? (
-												<FiCheck className="h-4 w-4 text-green-400" />
-											) : (
-												<FiCopy className="h-4 w-4" />
-											)}
-										</button>
-									</div>
+											<span className="font-mono text-sm text-sky-400">
+												$
+											</span>
+											<code className="flex-1 font-mono text-sm text-gray-300">
+												{command}
+											</code>
+											<button
+												onClick={() => copyToClipboard(command)}
+												type="button"
+												className="rounded-lg p-2 text-gray-400 opacity-0 transition-all hover:bg-slate-800 hover:text-sky-400 group-hover:opacity-100"
+											>
+												{copiedCommand === command ? (
+													<FiCheck className="h-4 w-4 text-green-400" />
+												) : (
+													<FiCopy className="h-4 w-4" />
+												)}
+											</button>
+										</div>
+									))}
+									{step.note && (
+										<p className="mt-2 text-xs text-gray-500">
+											{step.note}
+										</p>
+									)}
 								</div>
 							))}
 						</div>

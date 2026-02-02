@@ -9,15 +9,40 @@ A session key identifies a conversation and its routing context. You will see ke
 ```text
 agent:wingman:webui:thread:<uuid>
 agent:wingman:webhook:build-alerts
+agent:wingman:discord:account:<botId>:channel:<channelId>
 agent:wingman:discord-main
 ```
+
+Custom mappings (like `channelSessions` or `!session`) can use any stable key; `agent:wingman:discord-main` is a common pattern.
+
+## Finding a session key
+
+- **Control UI**: open a thread and expand **Session Snapshot** in the right sidebar. The **Session Key** field is the exact value used for routing.
+- **CLI**: `/show` prints the current session ID, and `/sessions` lists recent sessions.
+- **API**: `GET /api/sessions?agentId=<id>` returns session IDs with metadata.
 
 ## How sessions are created
 
 - **CLI**: creates or resumes the last session for an agent.
 - **Web UI**: creates threads with `agent:<id>:webui:thread:<uuid>`.
-- **Discord**: uses channel mappings or the `!session` command.
+- **Discord**: uses channel mappings, the `!session` command, or a derived key (see below).
 - **Webhooks**: uses `agent:<id>:webhook:<webhookId>`.
+
+## Discord session mapping
+
+When a Discord message arrives, the adapter resolves the session key in this order:
+
+1. `!session <sessionKey> <message>` overrides the session for that message.
+2. `gateway.adapters.discord.channelSessions` maps a channel or thread to a fixed session key (threads fall back to their parent channel).
+3. The gateway derives a key from routing and the selected agent.
+
+Derived key formats:
+
+- **DM**: `agent:<id>:main`
+- **Guild channel**: `agent:<id>:discord:account:<botId>:channel:<channelId>`
+- **Thread**: `agent:<id>:discord:account:<botId>:channel:<channelId>:thread:<threadId>`
+
+If the chosen session key starts with `agent:<id>:`, the adapter pins routing to that agent. Otherwise the gateway falls back to `agents.bindings` or the default agent.
 
 ## Session metadata
 

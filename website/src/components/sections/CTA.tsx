@@ -3,12 +3,15 @@ import { useState } from "react";
 import { FiCheck, FiCode, FiDownload, FiGithub, FiStar } from "react-icons/fi";
 
 const CTA = () => {
-	const [copied, setCopied] = useState(false);
+	const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+	const installScriptCommand =
+		"curl -fsSL https://getwingmanai.com/install.sh | bash";
+	const npmCommand = "npm install -g @wingman-ai/gateway";
 
-	const copyToClipboard = () => {
-		navigator.clipboard.writeText("npm install -g @wingman-ai/gateway");
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
+	const copyToClipboard = (command: string) => {
+		navigator.clipboard.writeText(command);
+		setCopiedCommand(command);
+		setTimeout(() => setCopiedCommand(null), 2000);
 	};
 
 	return (
@@ -51,18 +54,18 @@ const CTA = () => {
 
 						{/* Primary CTA */}
 						<motion.div
-							className="mb-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center"
+							className="mb-8 flex flex-col items-center gap-4 sm:flex-row sm:flex-wrap sm:justify-center"
 							initial={{ opacity: 0, y: 20 }}
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.6, delay: 0.3 }}
 						>
 							<button
-								onClick={copyToClipboard}
+								onClick={() => copyToClipboard(installScriptCommand)}
 								type="button"
-								className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-glow transition-all hover:shadow-[0_0_0_1px_rgba(56,189,248,0.15),0_18px_42px_rgba(59,130,246,0.4)]"
+								className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-8 py-4 text-sm font-semibold text-white shadow-glow transition-all hover:shadow-[0_0_0_1px_rgba(56,189,248,0.15),0_18px_42px_rgba(59,130,246,0.4)] sm:text-base"
 							>
-								{copied ? (
+								{copiedCommand === installScriptCommand ? (
 									<>
 										<FiCheck className="h-5 w-5" />
 										Copied!
@@ -70,7 +73,24 @@ const CTA = () => {
 								) : (
 									<>
 										<FiDownload className="h-5 w-5" />
-										npm install -g @wingman-ai/gateway
+										{installScriptCommand}
+									</>
+								)}
+							</button>
+							<button
+								onClick={() => copyToClipboard(npmCommand)}
+								type="button"
+								className="group flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-8 py-4 text-sm font-semibold text-white transition-all hover:border-sky-500/30 hover:bg-slate-900/90 sm:text-base"
+							>
+								{copiedCommand === npmCommand ? (
+									<>
+										<FiCheck className="h-5 w-5" />
+										Copied!
+									</>
+								) : (
+									<>
+										<FiDownload className="h-5 w-5" />
+										{npmCommand}
 									</>
 								)}
 							</button>

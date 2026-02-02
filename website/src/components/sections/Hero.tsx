@@ -9,12 +9,15 @@ import {
 } from "react-icons/fi";
 
 const Hero = () => {
-	const [copied, setCopied] = useState(false);
+	const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+	const installScriptCommand =
+		"curl -fsSL https://getwingmanai.com/install.sh | bash";
+	const npmCommand = "npm install -g @wingman-ai/gateway";
 
-	const copyToClipboard = () => {
-		navigator.clipboard.writeText("npm install -g @wingman-ai/gateway");
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
+	const copyToClipboard = (command: string) => {
+		navigator.clipboard.writeText(command);
+		setCopiedCommand(command);
+		setTimeout(() => setCopiedCommand(null), 2000);
 	};
 
 	return (
@@ -73,21 +76,34 @@ const Hero = () => {
 						</motion.div>
 
 						<motion.div
-							className="flex flex-col justify-center gap-4 sm:flex-row lg:justify-start"
+							className="flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap lg:justify-start"
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.4 }}
 						>
 							<button
-								onClick={copyToClipboard}
+								onClick={() => copyToClipboard(installScriptCommand)}
 								type="button"
-								className="btn-primary flex items-center justify-center gap-2 sm:justify-start"
+								className="btn-primary flex items-center justify-center gap-2 text-xs sm:justify-start sm:text-sm"
 							>
-								{copied ? (
+								{copiedCommand === installScriptCommand ? (
 									<>✓ Copied!</>
 								) : (
 									<>
-										<FiDownload /> npm install -g @wingman-ai/gateway
+										<FiDownload /> {installScriptCommand}
+									</>
+								)}
+							</button>
+							<button
+								onClick={() => copyToClipboard(npmCommand)}
+								type="button"
+								className="flex items-center justify-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-6 py-3 text-xs font-semibold text-white transition-all hover:border-sky-500/30 hover:bg-slate-900/90 sm:justify-start sm:text-sm"
+							>
+								{copiedCommand === npmCommand ? (
+									<>✓ Copied!</>
+								) : (
+									<>
+										<FiDownload /> {npmCommand}
 									</>
 								)}
 							</button>

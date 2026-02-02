@@ -39,6 +39,14 @@ Add this to `wingman.config.json`:
 - **sessionCommand**: override session routing by typing `!session <sessionKey> <message>`.
 - **responseChunkSize**: Discord message chunk size (default 1900 chars).
 
+## Session mapping order
+
+When a Discord message arrives, the adapter resolves the session key in this order:
+
+1. `!session <sessionKey> <message>` overrides the session for that message only.
+2. `channelSessions` maps a channel or thread to a fixed session key (threads fall back to their parent channel).
+3. The gateway derives a key from routing and the selected agent.
+
 ## Session keys
 
 Session keys can include an agent prefix to auto-select an agent:
@@ -48,6 +56,24 @@ agent:wingman:discord-main
 ```
 
 This tells the adapter to route the message to agent `wingman` and keep a named session.
+
+Derived key formats for Discord routing:
+
+- **DM**: `agent:<id>:main`
+- **Guild channel**: `agent:<id>:discord:account:<botId>:channel:<channelId>`
+- **Thread**: `agent:<id>:discord:account:<botId>:channel:<channelId>:thread:<threadId>`
+
+If a session key does not start with `agent:<id>:`, the gateway selects an agent using `agents.bindings` or the default agent.
+
+## Finding a session key
+
+The easiest way to copy a session key is the Control UI:
+
+- Open a thread in **Chat**.
+- Expand **Session Snapshot** in the right sidebar.
+- Copy the **Session Key** value.
+
+You can also list sessions via the CLI (`/show`, `/sessions`) or the sessions API (`GET /api/sessions?agentId=<id>`).
 
 ## Setup checklist
 
