@@ -59,10 +59,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     @objc private func toggleRecording() {
         if speechManager.isRecording {
             speechManager.stopRecording()
+            overlayController.hide()
         } else {
             speechManager.startRecording()
+            overlayController.show(on: NSScreen.main)
         }
-        overlayController.show(on: NSScreen.main)
     }
 
     @objc private func showOverlay() {
