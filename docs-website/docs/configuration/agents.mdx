@@ -29,6 +29,14 @@ You can choose a subset during setup:
 wingman init --agents main,coding,stock-trader
 ```
 
+To re-copy bundled agents later without changing config or provider settings:
+
+```bash
+wingman init --skip-config --skip-provider
+wingman init --skip-config --skip-provider --agents main,coding
+wingman init --skip-config --skip-provider --force
+```
+
 Typical bundled agents include:
 
 - `main` (general-purpose)
@@ -42,6 +50,8 @@ Edit these in-place to customize prompts, tools, or sub-agents. Treat them as te
 :::warning
 The `stock-trader` agent is for research and education only. It does not provide financial advice or execute trades.
 :::
+
+For readability, the `stock-trader` agent returns a concise Decision Packet with a direct answer first, followed by short sections that summarize the key signals and risks (no raw tool dumps). Ask it to expand any section if you need deeper detail.
 
 ## Provider credentials (env vars)
 

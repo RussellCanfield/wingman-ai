@@ -1,6 +1,6 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.1
+**Version:** 1.2.2
 **Last Updated:** 2026-02-02
 
 ## Overview
@@ -180,6 +180,7 @@ Modern AI assistants face several challenges:
 - External data via MCP tools with strict call budgets
 - Checkpointing and resume logic to handle rate limits
 - Persistent memory for caches, watchlists, and run state
+- Concise, user-facing outputs that summarize signals without dumping raw tool payloads
 
 **Tools**:
 - MCP tools for domain data (e.g., Finnhub quotes/news/options); candle tools enforce conservative lookback caps (intraday default 180 days, daily default 365 days). Candle sourcing defaults to Yahoo Finance chart data (non‑premium Finnhub) and can fall back to Finnhub when configured.

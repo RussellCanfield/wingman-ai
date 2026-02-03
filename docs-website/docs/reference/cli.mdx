@@ -39,6 +39,14 @@ Options:
 - `--skip-config`, `--skip-agent`, `--skip-provider`
 - `--merge`, `--force`, `--yes`
 
+Bundled agent sync (no config/provider changes):
+
+```bash
+wingman init --skip-config --skip-provider
+wingman init --skip-config --skip-provider --agents main,coding
+wingman init --skip-config --skip-provider --force
+```
+
 ## wingman provider
 
 ```bash
