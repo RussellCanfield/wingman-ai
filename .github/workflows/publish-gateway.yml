@@ -21,15 +21,15 @@ jobs:
                   bun-version: latest
 
             - name: Install Dependencies
-              working-directory: ./wingman
+              working-directory: ./apps/wingman
               run: bun install
 
             - name: Run Tests
-              working-directory: ./wingman
+              working-directory: ./apps/wingman
               run: bun run test:unit
 
             - name: Build Package
-              working-directory: ./wingman
+              working-directory: ./apps/wingman
               run: bun run build
 
             - name: Setup Node for npm Publishing
@@ -39,7 +39,7 @@ jobs:
                   registry-url: 'https://registry.npmjs.org'
 
             - name: Publish to npm
-              working-directory: ./wingman
+              working-directory: ./apps/wingman
               run: npm publish --provenance --access public
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

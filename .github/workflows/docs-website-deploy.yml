@@ -5,7 +5,7 @@ on:
         branches:
             - main
         paths:
-            - docs-website/**
+            - apps/docs-website/**
     workflow_dispatch:
 
 jobs:
@@ -25,11 +25,11 @@ jobs:
                   bun-version: latest
 
             - name: Install Dependencies
-              working-directory: ./docs-website
+              working-directory: ./apps/docs-website
               run: bun install
 
             - name: Build Docs Website
-              working-directory: ./docs-website
+              working-directory: ./apps/docs-website
               run: bun run build
 
             - name: Publish to Cloudflare Pages
@@ -39,7 +39,7 @@ jobs:
                   apiToken: ${{ secrets.CLOUD_FLARE_API_TOKEN }}
                   accountId: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
                   projectName: wingman-docs
-                  directory: docs-website/doc_build
+                  directory: apps/docs-website/doc_build
 
             - name: Outputs
               run: |

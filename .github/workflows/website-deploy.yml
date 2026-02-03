@@ -5,7 +5,7 @@ on:
         branches:
             - main
         paths:
-            - website/**
+            - apps/website/**
     workflow_dispatch:
 
 jobs:
@@ -25,20 +25,21 @@ jobs:
                   bun-version: latest
 
             - name: Install Dependencies
-              working-directory: ./website
+              working-directory: ./apps/website
               run: bun install
 
             - name: Build Website
-              working-directory: ./website
+              working-directory: ./apps/website
               run: bun run build
 
             - name: Publish to Cloudflare Pages
+              id: publish
               uses: cloudflare/pages-action@v1
               with:
                   apiToken: ${{ secrets.CLOUD_FLARE_API_TOKEN }}
                   accountId: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
                   projectName: wingman-site
-                  directory: website/dist
+                  directory: apps/website/dist
 
             - name: Outputs
               run: |
