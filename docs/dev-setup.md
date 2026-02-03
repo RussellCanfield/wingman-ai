@@ -14,19 +14,19 @@ bun install
 
 ## Build
 ```bash
-cd wingman
+cd apps/wingman
 bun run build
 ```
 
 ## Run Gateway (with Control UI)
 ```bash
-cd wingman
+cd apps/wingman
 ./bin/wingman gateway start
 ```
 
 ## Run Gateway + Web UI (hot reload)
 ```bash
-cd wingman
+cd apps/wingman
 bun run dev
 ```
 
@@ -36,18 +36,18 @@ This starts:
 
 ## Web UI (dev mode)
 ```bash
-cd wingman
+cd apps/wingman
 bun run webui:dev
 ```
 
 ## Tests
 ```bash
-cd wingman
+cd apps/wingman
 bun run test
 ```
 
 ## Config
-- Local config file: `wingman/.wingman/wingman.config.json`
+- Local config file: `apps/wingman/.wingman/wingman.config.json`
 - Logs: `~/.wingman/logs/wingman.log`
 
 ## Provider Keys

@@ -69,8 +69,10 @@ const BundledAgents = () => {
 						transition={{ duration: 0.6, delay: 0.1 }}
 					>
 						Wingman ships with a curated set of agents stored under{" "}
-						<code className="px-2 text-sky-300">wingman/.wingman/agents</code>.
-						When you run <span className="text-sky-300">wingman init</span>,
+						<code className="px-2 text-sky-300">
+							apps/wingman/.wingman/agents
+						</code>
+						. When you run <span className="text-sky-300">wingman init</span>,
 						they are copied into your workspace at{" "}
 						<code className="px-2 text-sky-300">.wingman/agents</code> so you
 						can customize them immediately.
@@ -117,7 +119,7 @@ const BundledAgents = () => {
 								change system prompts, tools, or subagents.
 							</p>
 							<div className="rounded-lg bg-slate-950/60 p-4 font-mono text-xs text-sky-300">
-								<div>wingman/.wingman/agents</div>
+								<div>apps/wingman/.wingman/agents</div>
 								<div>.wingman/agents</div>
 							</div>
 						</motion.div>

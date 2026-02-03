@@ -51,6 +51,15 @@ Key docs:
 - `docs/requirements/005-web-ui-sgui-prd.md`
 - `docs/custom-agents.md`
 
+## Repository Layout
+
+- `apps/macos`: macOS app (Xcode project)
+- `apps/wingman`: Gateway + CLI + Control UI (Bun)
+- `apps/docs-website`: documentation site (Rspress)
+- `apps/website`: marketing site (Vite)
+- `docs/requirements`: PRDs (source of truth)
+- `docs/dev-setup.md`: local development guide
+
 ## Quick Start
 
 ### Install
@@ -260,34 +269,34 @@ bun install
 ### Build
 
 ```bash
-cd wingman
+cd apps/wingman
 bun run build
 ```
 
 ### Run Gateway (with Control UI)
 
 ```bash
-cd wingman
+cd apps/wingman
 ./bin/wingman gateway start
 ```
 
 ### Run Gateway + Web UI (hot reload)
 
 ```bash
-cd wingman
+cd apps/wingman
 bun run dev
 ```
 
 ### Tests
 
 ```bash
-cd wingman
+cd apps/wingman
 bun run test
 ```
 
 ### Config and Logs
 
-- Config: `wingman/.wingman/wingman.config.json`
+- Config: `apps/wingman/.wingman/wingman.config.json`
 - Logs: `~/.wingman/logs/wingman.log`
 
 ## Contributing Expectations

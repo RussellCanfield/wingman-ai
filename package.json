@@ -1,50 +1,23 @@
 {
-	"name": "wing-man",
+	"name": "@wingman-ai/core",
 	"version": "1.5.3",
 	"description": "Your AI pair programmer, right in your editor",
 	"license": "MIT",
 	"author": "Wingman AI",
 	"type": "module",
 	"workspaces": [
-		"wingman",
-		"docs-website",
-		"website"
+		"apps/wingman",
+		"apps/docs-website",
+		"apps/website"
 	],
 	"scripts": {
-		"build": "rsbuild build",
-		"changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
-		"commit": "git-cz",
-		"dev": "rsbuild dev --open",
 		"format": "biome format .",
 		"lint": "biome lint .",
 		"lint:fix": "biome lint --apply .",
-		"preview": "rsbuild preview",
-		"release": "release-it",
-		"test": "vitest",
-		"vscode:prepublish": "bun run build"
-	},
-	"config": {
-		"commitizen": {
-			"path": "./node_modules/cz-conventional-changelog"
-		}
-	},
-	"devDependencies": {
-		"@rsbuild/core": "1.3.22",
-		"@rsbuild/plugin-node-polyfill": "1.3.0",
-		"@rsbuild/plugin-react": "1.3.2",
-		"@types/node": "^20.12.12",
-		"conventional-changelog-cli": "^5.0.0",
-		"cz-conventional-changelog": "^3.3.0",
-		"release-it": "^17.2.1",
-		"typescript": "^5.4.5",
-		"vitest": "^3.2.4"
+		"test": "vitest"
 	},
 	"packageManager": "bun@1.1.42",
 	"dependencies": {
-		"@types/react": "^18.3.23",
-		"biome": "^0.3.3",
-		"ink": "^5.2.1",
-		"ink-text-input": "^6.0.0",
-		"pino-roll": "^3.1.0"
+		"biome": "^0.3.3"
 	}
 }

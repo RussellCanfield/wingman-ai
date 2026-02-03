@@ -5,6 +5,7 @@ import {
 	FiCpu,
 	FiDatabase,
 	FiDownload,
+	FiMonitor,
 	FiShare2,
 } from "react-icons/fi";
 
@@ -71,6 +72,12 @@ const Hero = () => {
 								<FiCpu className="h-3 w-3 text-sky-400" />
 								<span className="text-sm text-gray-300">
 									Distributed Architecture
+								</span>
+							</div>
+							<div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-4 py-2 backdrop-blur-sm">
+								<FiMonitor className="h-3 w-3 text-sky-400" />
+								<span className="text-sm text-gray-300">
+									macOS Companion App
 								</span>
 							</div>
 						</motion.div>

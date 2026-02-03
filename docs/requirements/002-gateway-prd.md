@@ -1182,7 +1182,7 @@ CMD ["bun", "run", "wingman", "gateway", "run"]
 
 ### Cloudflare Workers (Optional Adapter)
 ```bash
-cd wingman/cloudflare
+cd apps/wingman/cloudflare
 wrangler deploy
 ```
 

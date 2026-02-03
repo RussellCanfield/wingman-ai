@@ -11,7 +11,7 @@ export default defineConfig({
 	resolve: {
 		conditions: ["import", "node"],
 		alias: {
-			"@": resolve(__dirname, "wingman", "src"),
+			"@": resolve(__dirname, "apps", "wingman", "src"),
 		},
 	},
 });
