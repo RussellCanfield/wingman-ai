@@ -60,6 +60,16 @@ describe("UI Registry Tools", () => {
 		}
 	});
 
+	it("exposes axis scale options for chart components", async () => {
+		const tool = createUiRegistryGetTool(workspace, skillsDir);
+		for (const componentId of ["line_chart", "area_chart", "bar_chart"]) {
+			const result = await tool.invoke({ componentId });
+			const props = (result.propsSchema as any)?.properties ?? {};
+			expect(props.xScale).toBeTruthy();
+			expect(props.yScale).toBeTruthy();
+		}
+	});
+
 	it("renders UI payload when enabled", async () => {
 		const tool = createUiPresentTool(workspace, skillsDir, true);
 		const result = await tool.invoke({

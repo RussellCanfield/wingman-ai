@@ -14,6 +14,7 @@ import {
 	buildSeriesDataset,
 	chartPalette,
 	formatMetricValue,
+	type AxisScale,
 	type ChartSeries,
 } from "./chartUtils";
 
@@ -23,6 +24,8 @@ export type AreaChartProps = {
 	series: ChartSeries[];
 	yLabel?: string;
 	xLabel?: string;
+	yScale?: AxisScale;
+	xScale?: AxisScale;
 	showLegend?: boolean;
 	showMarkers?: boolean;
 	stacked?: boolean;
@@ -66,6 +69,8 @@ export const AreaChart: React.FC<AreaChartProps> = ({
 	series,
 	yLabel,
 	xLabel,
+	yScale,
+	xScale,
 	showLegend = true,
 	showMarkers = false,
 	stacked = false,
@@ -87,74 +92,90 @@ export const AreaChart: React.FC<AreaChartProps> = ({
 			</div>
 
 			{hasData ? (
-				<div className="mt-4 h-56 w-full">
-					<ResponsiveContainer width="100%" height="100%">
-						<RechartsAreaChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-							<defs>
+				<div className="mt-4 w-full pb-2">
+					<div className="h-56 w-full">
+						<ResponsiveContainer width="100%" height="100%">
+							<RechartsAreaChart
+								data={data}
+								margin={{ top: 8, right: 16, left: 0, bottom: 18 }}
+							>
+								<defs>
+									{series.map((area, index) => {
+										const color = area.color ?? chartPalette[index % chartPalette.length];
+										const id = `${gradientPrefix}-area-${index}`;
+										return (
+											<linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
+												<stop offset="5%" stopColor={color} stopOpacity={0.45} />
+												<stop offset="95%" stopColor={color} stopOpacity={0.05} />
+											</linearGradient>
+										);
+									})}
+								</defs>
+								<CartesianGrid
+									stroke="rgba(148, 163, 184, 0.15)"
+									strokeDasharray="4 6"
+								/>
+								<XAxis
+									dataKey="label"
+									tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
+									axisLine={false}
+									tickLine={false}
+									tickMargin={10}
+									minTickGap={16}
+									scale={xScale}
+								/>
+								<YAxis
+									tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
+									axisLine={false}
+									tickLine={false}
+									tickMargin={10}
+									width={40}
+									scale={yScale}
+								/>
+								<Tooltip
+									content={<ChartTooltip />}
+									cursor={{ stroke: "rgba(148, 163, 184, 0.4)", strokeDasharray: "3 4" }}
+								/>
+								{showLegend ? (
+									<Legend
+										verticalAlign="top"
+										align="right"
+										wrapperStyle={{
+											color: "rgba(226, 232, 240, 0.8)",
+											fontSize: 12,
+										}}
+										onMouseEnter={(payload) =>
+											setActiveKey(payload.dataKey?.toString() ?? null)
+										}
+										onMouseLeave={() => setActiveKey(null)}
+									/>
+								) : null}
 								{series.map((area, index) => {
 									const color = area.color ?? chartPalette[index % chartPalette.length];
 									const id = `${gradientPrefix}-area-${index}`;
+									const isActive = !activeKey || activeKey === area.name;
 									return (
-										<linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-											<stop offset="5%" stopColor={color} stopOpacity={0.45} />
-											<stop offset="95%" stopColor={color} stopOpacity={0.05} />
-										</linearGradient>
+										<Area
+											key={area.name}
+											type="monotone"
+											dataKey={area.name}
+											stroke={color}
+											fill={`url(#${id})`}
+											fillOpacity={isActive ? 0.9 : 0.25}
+											strokeWidth={isActive ? 2.4 : 1.4}
+											dot={showMarkers ? { r: 3 } : false}
+											activeDot={{ r: 5 }}
+											opacity={isActive ? 1 : 0.3}
+											stackId={stacked ? "stack" : undefined}
+											isAnimationActive={false}
+										/>
 									);
 								})}
-							</defs>
-							<CartesianGrid stroke="rgba(148, 163, 184, 0.15)" strokeDasharray="4 6" />
-							<XAxis
-								dataKey="label"
-								tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
-								axisLine={false}
-								tickLine={false}
-							/>
-							<YAxis
-								tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
-								axisLine={false}
-								tickLine={false}
-								width={40}
-							/>
-							<Tooltip
-								content={<ChartTooltip />}
-								cursor={{ stroke: "rgba(148, 163, 184, 0.4)", strokeDasharray: "3 4" }}
-							/>
-							{showLegend ? (
-								<Legend
-									verticalAlign="top"
-									align="right"
-									wrapperStyle={{ color: "rgba(226, 232, 240, 0.8)", fontSize: 12 }}
-									onMouseEnter={(payload) =>
-										setActiveKey(payload.dataKey?.toString() ?? null)
-									}
-									onMouseLeave={() => setActiveKey(null)}
-								/>
-							) : null}
-							{series.map((area, index) => {
-								const color = area.color ?? chartPalette[index % chartPalette.length];
-								const id = `${gradientPrefix}-area-${index}`;
-								const isActive = !activeKey || activeKey === area.name;
-								return (
-									<Area
-										key={area.name}
-										type="monotone"
-										dataKey={area.name}
-										stroke={color}
-										fill={`url(#${id})`}
-										fillOpacity={isActive ? 0.9 : 0.25}
-										strokeWidth={isActive ? 2.4 : 1.4}
-										dot={showMarkers ? { r: 3 } : false}
-										activeDot={{ r: 5 }}
-										opacity={isActive ? 1 : 0.3}
-										stackId={stacked ? "stack" : undefined}
-										isAnimationActive={false}
-									/>
-								);
-							})}
-						</RechartsAreaChart>
-					</ResponsiveContainer>
+							</RechartsAreaChart>
+						</ResponsiveContainer>
+					</div>
 					{(xLabel || yLabel) && (
-						<div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+						<div className="mt-3 flex items-center justify-between text-xs text-slate-400">
 							<span>{yLabel ?? ""}</span>
 							<span>{xLabel ?? ""}</span>
 						</div>

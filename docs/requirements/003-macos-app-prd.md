@@ -1,8 +1,8 @@
 # PRD-003: Wingman macOS App
 
-**Version:** 1.0
-**Status:** Planned
-**Last Updated:** 2026-02-01
+**Version:** 1.1
+**Status:** In Progress
+**Last Updated:** 2026-02-03
 
 ---
 
@@ -42,6 +42,15 @@ provides macOS capabilities on-demand.
 - Displays node capability/permission status
 - Surfaces notifications (system + agent) natively
 - Provides quick actions (connect, disconnect, open Control UI, install CLI)
+
+### Voice Capture + Hotkey (MVP)
+- Global hotkey starts/stops speech capture
+- Default hotkey: Caps Lock
+- Alternate hotkeys: double-press Control, Option, Command, or Shift
+- Hotkey is configurable in Settings and stored locally
+- Full-screen overlay appears on the active display while recording
+- Overlay shows a live transcript in a quick-input editor so the user can edit before sending
+- Voice input requires Microphone + Speech Recognition permissions
 
 ### Permissions Ownership (TCC)
 The app owns TCC prompts and tracks permission status for:
@@ -209,8 +218,8 @@ Use direct ws/wss transport if the real client IP is required.
 
 Build/dev (native):
 ```
-cd apps/macos && swift build
-swift run WingmanMac
+cd apps/macos/WingmanMac
+open AppHost/Wingman/Wingman.xcodeproj
 ```
 
 Package app:

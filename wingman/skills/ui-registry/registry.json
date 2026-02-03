@@ -70,6 +70,36 @@
           },
           "yLabel": { "type": "string", "maxLength": 24 },
           "xLabel": { "type": "string", "maxLength": 24 },
+          "yScale": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "linear",
+              "pow",
+              "sqrt",
+              "log",
+              "time",
+              "band",
+              "point",
+              "ordinal"
+            ],
+            "description": "Optional scale for the Y axis"
+          },
+          "xScale": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "linear",
+              "pow",
+              "sqrt",
+              "log",
+              "time",
+              "band",
+              "point",
+              "ordinal"
+            ],
+            "description": "Optional scale for the X axis"
+          },
           "showLegend": { "type": "boolean" },
           "showMarkers": { "type": "boolean" }
         }
@@ -118,6 +148,36 @@
           },
           "yLabel": { "type": "string", "maxLength": 24 },
           "xLabel": { "type": "string", "maxLength": 24 },
+          "yScale": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "linear",
+              "pow",
+              "sqrt",
+              "log",
+              "time",
+              "band",
+              "point",
+              "ordinal"
+            ],
+            "description": "Optional scale for the Y axis"
+          },
+          "xScale": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "linear",
+              "pow",
+              "sqrt",
+              "log",
+              "time",
+              "band",
+              "point",
+              "ordinal"
+            ],
+            "description": "Optional scale for the X axis"
+          },
           "showLegend": { "type": "boolean" },
           "showMarkers": { "type": "boolean" },
           "stacked": { "type": "boolean" }
@@ -137,6 +197,36 @@
           "title": { "type": "string", "maxLength": 80 },
           "subtitle": { "type": "string", "maxLength": 120 },
           "unit": { "type": "string", "maxLength": 16 },
+          "yScale": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "linear",
+              "pow",
+              "sqrt",
+              "log",
+              "time",
+              "band",
+              "point",
+              "ordinal"
+            ],
+            "description": "Optional scale for the Y axis"
+          },
+          "xScale": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "linear",
+              "pow",
+              "sqrt",
+              "log",
+              "time",
+              "band",
+              "point",
+              "ordinal"
+            ],
+            "description": "Optional scale for the X axis"
+          },
           "bars": {
             "type": "array",
             "minItems": 1,

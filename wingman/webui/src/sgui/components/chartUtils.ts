@@ -9,6 +9,17 @@ export type ChartSeries = {
 	data: ChartSeriesPoint[];
 };
 
+export type AxisScale =
+	| "auto"
+	| "linear"
+	| "pow"
+	| "sqrt"
+	| "log"
+	| "time"
+	| "band"
+	| "point"
+	| "ordinal";
+
 export const chartPalette = [
 	"#38bdf8",
 	"#a855f7",

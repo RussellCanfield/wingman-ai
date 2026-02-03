@@ -14,6 +14,7 @@ import {
 	buildSeriesDataset,
 	chartPalette,
 	formatMetricValue,
+	type AxisScale,
 	type ChartSeries,
 } from "./chartUtils";
 
@@ -23,6 +24,8 @@ export type LineChartProps = {
 	series: ChartSeries[];
 	yLabel?: string;
 	xLabel?: string;
+	yScale?: AxisScale;
+	xScale?: AxisScale;
 	showLegend?: boolean;
 	showMarkers?: boolean;
 };
@@ -65,6 +68,8 @@ export const LineChart: React.FC<LineChartProps> = ({
 	series,
 	yLabel,
 	xLabel,
+	yScale,
+	xScale,
 	showLegend = true,
 	showMarkers = true,
 }) => {
@@ -84,58 +89,74 @@ export const LineChart: React.FC<LineChartProps> = ({
 			</div>
 
 			{hasData ? (
-				<div className="mt-4 h-56 w-full">
-					<ResponsiveContainer width="100%" height="100%">
-						<RechartsLineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-							<CartesianGrid stroke="rgba(148, 163, 184, 0.15)" strokeDasharray="4 6" />
-							<XAxis
-								dataKey="label"
-								tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
-								axisLine={false}
-								tickLine={false}
-							/>
-							<YAxis
-								tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
-								axisLine={false}
-								tickLine={false}
-								width={40}
-							/>
-							<Tooltip
-								content={<ChartTooltip />}
-								cursor={{ stroke: "rgba(148, 163, 184, 0.4)", strokeDasharray: "3 4" }}
-							/>
-							{showLegend ? (
-								<Legend
-									verticalAlign="top"
-									align="right"
-									wrapperStyle={{ color: "rgba(226, 232, 240, 0.8)", fontSize: 12 }}
-									onMouseEnter={(payload) =>
-										setActiveKey(payload.dataKey?.toString() ?? null)
-									}
-									onMouseLeave={() => setActiveKey(null)}
+				<div className="mt-4 w-full pb-2">
+					<div className="h-56 w-full">
+						<ResponsiveContainer width="100%" height="100%">
+							<RechartsLineChart
+								data={data}
+								margin={{ top: 8, right: 16, left: 0, bottom: 18 }}
+							>
+								<CartesianGrid
+									stroke="rgba(148, 163, 184, 0.15)"
+									strokeDasharray="4 6"
 								/>
-							) : null}
-							{series.map((line, index) => {
-								const color = line.color ?? chartPalette[index % chartPalette.length];
-								const isActive = !activeKey || activeKey === line.name;
-								return (
-									<Line
-										key={line.name}
-										type="monotone"
-										dataKey={line.name}
-										stroke={color}
-										strokeWidth={isActive ? 2.6 : 1.6}
-										dot={showMarkers ? { r: 3 } : false}
-										activeDot={{ r: 5 }}
-										opacity={isActive ? 1 : 0.3}
-										isAnimationActive={false}
+								<XAxis
+									dataKey="label"
+									tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
+									axisLine={false}
+									tickLine={false}
+									tickMargin={10}
+									minTickGap={16}
+									scale={xScale}
+								/>
+								<YAxis
+									tick={{ fill: "rgba(148, 163, 184, 0.8)", fontSize: 12 }}
+									axisLine={false}
+									tickLine={false}
+									tickMargin={10}
+									width={40}
+									scale={yScale}
+								/>
+								<Tooltip
+									content={<ChartTooltip />}
+									cursor={{ stroke: "rgba(148, 163, 184, 0.4)", strokeDasharray: "3 4" }}
+								/>
+								{showLegend ? (
+									<Legend
+										verticalAlign="top"
+										align="right"
+										wrapperStyle={{
+											color: "rgba(226, 232, 240, 0.8)",
+											fontSize: 12,
+										}}
+										onMouseEnter={(payload) =>
+											setActiveKey(payload.dataKey?.toString() ?? null)
+										}
+										onMouseLeave={() => setActiveKey(null)}
 									/>
-								);
-							})}
-						</RechartsLineChart>
-					</ResponsiveContainer>
+								) : null}
+								{series.map((line, index) => {
+									const color = line.color ?? chartPalette[index % chartPalette.length];
+									const isActive = !activeKey || activeKey === line.name;
+									return (
+										<Line
+											key={line.name}
+											type="monotone"
+											dataKey={line.name}
+											stroke={color}
+											strokeWidth={isActive ? 2.6 : 1.6}
+											dot={showMarkers ? { r: 3 } : false}
+											activeDot={{ r: 5 }}
+											opacity={isActive ? 1 : 0.3}
+											isAnimationActive={false}
+										/>
+									);
+								})}
+							</RechartsLineChart>
+						</ResponsiveContainer>
+					</div>
 					{(xLabel || yLabel) && (
-						<div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+						<div className="mt-3 flex items-center justify-between text-xs text-slate-400">
 							<span>{yLabel ?? ""}</span>
 							<span>{xLabel ?? ""}</span>
 						</div>

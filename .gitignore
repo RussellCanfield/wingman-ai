@@ -66,7 +66,21 @@ tsconfig.tsbuildinfo
 **/.wingman/wingman.db-wal
 **/.wingman/wingman.config.json
 **/.wingman/webhooks.json
+**/.wingman/memories
 
 .tmp
 
 **/large_tool_results
+
+# macOS / Xcode / SwiftPM
+**/.build/
+**/.swiftpm/
+**/DerivedData/
+**/*.xcuserdatad/
+**/xcuserdata/
+**/*.xcworkspace/
+*.xccheckout
+*.xcscmblueprint
+*.moved-aside
+apps/macos/WingmanMac/AppHost/Wingman/_backup/
+apps/macos/WingmanMac/.build/
