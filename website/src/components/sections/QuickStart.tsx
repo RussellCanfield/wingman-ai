@@ -115,9 +115,7 @@ const QuickStart = () => {
 											key={command}
 											className="group relative mb-3 flex items-center gap-2 rounded-lg bg-slate-900/50 p-4 last:mb-0"
 										>
-											<span className="font-mono text-sm text-sky-400">
-												$
-											</span>
+											<span className="font-mono text-sm text-sky-400">$</span>
 											<code className="flex-1 font-mono text-sm text-gray-300">
 												{command}
 											</code>
@@ -135,9 +133,7 @@ const QuickStart = () => {
 										</div>
 									))}
 									{step.note && (
-										<p className="mt-2 text-xs text-gray-500">
-											{step.note}
-										</p>
+										<p className="mt-2 text-xs text-gray-500">{step.note}</p>
 									)}
 								</div>
 							))}

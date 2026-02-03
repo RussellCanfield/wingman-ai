@@ -11,7 +11,8 @@ import {
 const HowItWorks = () => {
 	const installScriptCommand =
 		"curl -fsSL https://getwingmanai.com/install.sh | bash";
-	const npmInstallCommand = "npm install -g @wingman-ai/gateway && wingman init";
+	const npmInstallCommand =
+		"npm install -g @wingman-ai/gateway && wingman init";
 
 	const steps = [
 		{
