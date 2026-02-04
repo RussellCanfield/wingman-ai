@@ -22,6 +22,7 @@ describeIfBun("Gateway", () => {
 			port: 0,
 			host: "localhost",
 			requireAuth: false,
+			auth: { mode: "none" },
 			logLevel: "silent",
 		});
 		await instance.start();

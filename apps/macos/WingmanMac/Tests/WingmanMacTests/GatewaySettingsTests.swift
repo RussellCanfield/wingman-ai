@@ -5,6 +5,7 @@ final class GatewaySettingsTests: XCTestCase {
     func testDefaults() {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: "wingman.gateway.url")
+        defaults.removeObject(forKey: "wingman.gateway.uiUrl")
         defaults.removeObject(forKey: "wingman.gateway.token")
         defaults.removeObject(forKey: "wingman.gateway.password")
         defaults.removeObject(forKey: "wingman.gateway.agentId")
@@ -12,6 +13,7 @@ final class GatewaySettingsTests: XCTestCase {
 
         let settings = GatewaySettings()
         XCTAssertEqual(settings.url, "ws://127.0.0.1:18789/ws")
+        XCTAssertEqual(settings.uiURL, "")
         XCTAssertEqual(settings.token, "")
         XCTAssertEqual(settings.password, "")
         XCTAssertEqual(settings.agentId, "")
@@ -21,6 +23,7 @@ final class GatewaySettingsTests: XCTestCase {
     func testPersistsUpdates() {
         let settings = GatewaySettings()
         settings.url = "ws://example:1234/ws"
+        settings.uiURL = "https://example:1234"
         settings.token = "token-1"
         settings.password = "pass-1"
         settings.agentId = "agent-main"
@@ -28,6 +31,7 @@ final class GatewaySettingsTests: XCTestCase {
 
         let reloaded = GatewaySettings()
         XCTAssertEqual(reloaded.url, "ws://example:1234/ws")
+        XCTAssertEqual(reloaded.uiURL, "https://example:1234")
         XCTAssertEqual(reloaded.token, "token-1")
         XCTAssertEqual(reloaded.password, "pass-1")
         XCTAssertEqual(reloaded.agentId, "agent-main")
@@ -42,7 +46,14 @@ final class GatewaySettingsTests: XCTestCase {
 
     func testResolvesHttpBaseUrl() {
         let settings = GatewaySettings()
+        settings.uiURL = ""
         settings.url = "ws://127.0.0.1:18789/ws"
         XCTAssertEqual(settings.resolvedHttpBaseURL?.absoluteString, "http://127.0.0.1:18789")
+    }
+
+    func testResolvesHttpBaseUrlFromOverride() {
+        let settings = GatewaySettings()
+        settings.uiURL = "https://gateway.example.local/ui"
+        XCTAssertEqual(settings.resolvedHttpBaseURL?.absoluteString, "https://gateway.example.local/ui")
     }
 }

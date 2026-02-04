@@ -7,8 +7,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private var statusItem: NSStatusItem?
     private let overlayController = OverlayWindowController()
     private let speechManager = SpeechManager()
-    private let hotkeyManager = HotkeyManager()
-    let hotkeySettings = HotkeySettings()
+    private let recordHotkeyManager = HotkeyManager()
+    private let overlayHotkeyManager = HotkeyManager()
+    let recordHotkeySettings = HotkeySettings(storageKey: "wingman.hotkey.record.option", defaultOption: .capsLock)
+    let overlayHotkeySettings = HotkeySettings(storageKey: "wingman.hotkey.overlay.option", defaultOption: .doubleShift)
     let gatewaySettings = GatewaySettings()
     private lazy var gatewayService = GatewayService(settings: gatewaySettings)
     private var settingsWindow: NSWindow?
@@ -25,7 +27,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
-        wireUpHotkey()
+        wireUpHotkeys()
         overlayController.bind(speechManager: speechManager)
         overlayController.bind(gatewayService: gatewayService)
         speechManager.preflightPermissions()
@@ -38,7 +40,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Start Recording", action: #selector(toggleRecording), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Show Overlay", action: #selector(showOverlay), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Toggle Overlay", action: #selector(toggleOverlay), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Open Gateway UI", action: #selector(openGatewayUI), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Quit Wingman AI", action: #selector(quit), keyEquivalent: "q"))
@@ -46,14 +49,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         statusItem = item
     }
 
-    private func wireUpHotkey() {
-        hotkeyManager.onTrigger = { [weak self] in
+    private func wireUpHotkeys() {
+        recordHotkeyManager.onTrigger = { [weak self] in
             self?.toggleRecording()
         }
-        hotkeySettings.onChange = { [weak self] option in
-            self?.hotkeyManager.update(option: option)
+        recordHotkeySettings.onChange = { [weak self] option in
+            self?.recordHotkeyManager.update(option: option)
         }
-        hotkeyManager.update(option: hotkeySettings.option)
+        recordHotkeyManager.update(option: recordHotkeySettings.option)
+
+        overlayHotkeyManager.onTrigger = { [weak self] in
+            self?.toggleOverlay()
+        }
+        overlayHotkeySettings.onChange = { [weak self] option in
+            self?.overlayHotkeyManager.update(option: option)
+        }
+        overlayHotkeyManager.update(option: overlayHotkeySettings.option)
     }
 
     @objc private func toggleRecording() {
@@ -66,14 +77,27 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
     }
 
-    @objc private func showOverlay() {
-        overlayController.show(on: NSScreen.main)
+    @objc private func toggleOverlay() {
+        overlayController.toggle(on: NSScreen.main)
+    }
+
+    @objc private func openGatewayUI() {
+        guard let url = gatewaySettings.resolvedHttpBaseURL else {
+            let alert = NSAlert()
+            alert.messageText = "Gateway URL is missing"
+            alert.informativeText = "Set a Gateway URL in Settings to open the web UI."
+            alert.alertStyle = .warning
+            alert.runModal()
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func openSettings() {
         if settingsWindow == nil {
             let view = SettingsView(
-                settings: hotkeySettings,
+                recordSettings: recordHotkeySettings,
+                overlaySettings: overlayHotkeySettings,
                 gatewaySettings: gatewaySettings,
                 onTestGateway: { [weak self] in
                     self?.runGatewayTest()
@@ -140,7 +164,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private func refreshSettingsWindow() {
         guard let window = settingsWindow else { return }
         let view = SettingsView(
-            settings: hotkeySettings,
+            recordSettings: recordHotkeySettings,
+            overlaySettings: overlayHotkeySettings,
             gatewaySettings: gatewaySettings,
             onTestGateway: { [weak self] in
                 self?.runGatewayTest()
@@ -209,6 +234,9 @@ final class GatewaySettings: ObservableObject {
     @Published var url: String {
         didSet { store(url, key: Self.urlKey) }
     }
+    @Published var uiURL: String {
+        didSet { store(uiURL, key: Self.uiUrlKey) }
+    }
     @Published var token: String {
         didSet { store(token, key: Self.tokenKey) }
     }
@@ -223,6 +251,7 @@ final class GatewaySettings: ObservableObject {
     }
 
     private static let urlKey = "wingman.gateway.url"
+    private static let uiUrlKey = "wingman.gateway.uiUrl"
     private static let tokenKey = "wingman.gateway.token"
     private static let passwordKey = "wingman.gateway.password"
     private static let agentIdKey = "wingman.gateway.agentId"
@@ -231,6 +260,7 @@ final class GatewaySettings: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         url = defaults.string(forKey: Self.urlKey) ?? "ws://127.0.0.1:18789/ws"
+        uiURL = defaults.string(forKey: Self.uiUrlKey) ?? ""
         token = defaults.string(forKey: Self.tokenKey) ?? ""
         password = defaults.string(forKey: Self.passwordKey) ?? ""
         agentId = defaults.string(forKey: Self.agentIdKey) ?? ""
@@ -256,14 +286,19 @@ final class GatewaySettings: ObservableObject {
     var resolvedURL: URL? {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        guard var components = URLComponents(string: trimmed) else { return nil }
-        if components.host == "0.0.0.0" {
-            components.host = "127.0.0.1"
-        }
-        return components.url
+        return normalizedURL(from: trimmed)
+    }
+
+    var resolvedUIURL: URL? {
+        let trimmed = uiURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return normalizedURL(from: trimmed)
     }
 
     var resolvedHttpBaseURL: URL? {
+        if let uiOverride = resolvedUIURL {
+            return uiOverride
+        }
         guard let wsURL = resolvedURL else { return nil }
         guard var components = URLComponents(url: wsURL, resolvingAgainstBaseURL: false) else {
             return nil
@@ -278,6 +313,14 @@ final class GatewaySettings: ObservableObject {
         }
         if components.path.hasSuffix("/ws") {
             components.path = String(components.path.dropLast(3))
+        }
+        return components.url
+    }
+
+    private func normalizedURL(from value: String) -> URL? {
+        guard var components = URLComponents(string: value) else { return nil }
+        if components.host == "0.0.0.0" {
+            components.host = "127.0.0.1"
         }
         return components.url
     }

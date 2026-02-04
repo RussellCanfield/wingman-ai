@@ -36,4 +36,8 @@ final class ModifierDoublePressDetector {
         lastPress[key] = timestamp
         return false
     }
+
+    func reset() {
+        lastPress.removeAll()
+    }
 }

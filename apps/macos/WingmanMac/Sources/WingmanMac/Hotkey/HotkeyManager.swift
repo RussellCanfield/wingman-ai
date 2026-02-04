@@ -4,9 +4,10 @@ final class HotkeyManager {
     var onTrigger: (() -> Void)?
 
     private var monitor: Any?
+    private var localMonitor: Any?
     private var option: HotkeyOption = .capsLock
     private var lastFlags: NSEvent.ModifierFlags = []
-    private let detector = ModifierDoublePressDetector()
+    private var detector = ModifierDoublePressDetector()
 
     deinit {
         stop()
@@ -14,6 +15,8 @@ final class HotkeyManager {
 
     func update(option: HotkeyOption) {
         self.option = option
+        lastFlags = []
+        detector.reset()
         start()
     }
 
@@ -22,6 +25,10 @@ final class HotkeyManager {
         monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handleFlagsChanged(event)
         }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleFlagsChanged(event)
+            return event
+        }
     }
 
     private func stop() {
@@ -29,6 +36,10 @@ final class HotkeyManager {
             NSEvent.removeMonitor(monitor)
         }
         monitor = nil
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+        }
+        localMonitor = nil
     }
 
     private func handleFlagsChanged(_ event: NSEvent) {

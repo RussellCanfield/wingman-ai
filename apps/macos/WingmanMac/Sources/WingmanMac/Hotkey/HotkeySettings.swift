@@ -3,16 +3,17 @@ import Foundation
 final class HotkeySettings: ObservableObject {
     @Published var option: HotkeyOption {
         didSet {
-            UserDefaults.standard.set(option.rawValue, forKey: Self.storageKey)
+            UserDefaults.standard.set(option.rawValue, forKey: storageKey)
             onChange?(option)
         }
     }
 
     var onChange: ((HotkeyOption) -> Void)?
-    private static let storageKey = "wingman.hotkey.option"
+    private let storageKey: String
 
-    init() {
-        let stored = UserDefaults.standard.string(forKey: Self.storageKey)
-        option = HotkeyOption(rawValue: stored ?? "") ?? .capsLock
+    init(storageKey: String = "wingman.hotkey.option", defaultOption: HotkeyOption = .capsLock) {
+        self.storageKey = storageKey
+        let stored = UserDefaults.standard.string(forKey: storageKey)
+        option = HotkeyOption(rawValue: stored ?? "") ?? defaultOption
     }
 }

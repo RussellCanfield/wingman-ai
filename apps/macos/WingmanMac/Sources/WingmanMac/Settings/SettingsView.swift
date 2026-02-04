@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @ObservedObject var settings: HotkeySettings
+    @ObservedObject var recordSettings: HotkeySettings
+    @ObservedObject var overlaySettings: HotkeySettings
     @ObservedObject var gatewaySettings: GatewaySettings
     let onTestGateway: (() -> Void)?
     let onLoadSessions: (() -> Void)?
@@ -34,14 +35,35 @@ struct SettingsView: View {
                         title: "Hotkey",
                         subtitle: "Choose how Wingman AI listens."
                     ) {
-                        Picker("Activate", selection: $settings.option) {
-                            ForEach(HotkeyOption.allCases) { option in
-                                Text(option.displayName).tag(option)
+                        VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Record toggle")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Picker("Record toggle", selection: $recordSettings.option) {
+                                    ForEach(HotkeyOption.allCases) { option in
+                                        Text(option.displayName).tag(option)
+                                    }
+                                }
+                                .pickerStyle(.radioGroup)
+                            }
+
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Show overlay")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Picker("Show overlay", selection: $overlaySettings.option) {
+                                    ForEach(HotkeyOption.allCases) { option in
+                                        Text(option.displayName).tag(option)
+                                    }
+                                }
+                                .pickerStyle(.radioGroup)
                             }
                         }
-                        .pickerStyle(.radioGroup)
 
-                        Text("Default: Caps Lock. Double-press options only trigger on quick successive presses.")
+                        Text("Defaults: Record uses Caps Lock. Overlay uses Double-press Shift. Double-press options only trigger on quick successive presses.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -51,6 +73,7 @@ struct SettingsView: View {
                         subtitle: "Send transcripts to your Wingman Gateway."
                     ) {
                         fieldRow(title: "Gateway URL", text: $gatewaySettings.url)
+                        fieldRow(title: "Gateway UI URL (optional)", text: $gatewaySettings.uiURL)
                         fieldRow(title: "Gateway Token (optional)", text: $gatewaySettings.token)
                         fieldRow(title: "Gateway Password (optional)", text: $gatewaySettings.password)
                         fieldRow(title: "Target Agent ID (optional)", text: $gatewaySettings.agentId)
@@ -86,6 +109,9 @@ struct SettingsView: View {
                         }
 
                         Text("Default: ws://127.0.0.1:18789/ws")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Leave Gateway UI URL blank to derive it from the Gateway URL.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text("Leave Agent ID and Session Key blank to start a new conversation with the default agent.")

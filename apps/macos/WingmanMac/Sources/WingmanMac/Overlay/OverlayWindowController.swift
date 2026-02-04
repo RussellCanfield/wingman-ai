@@ -7,6 +7,7 @@ final class OverlayWindowController: NSWindowController {
     private let viewModel = OverlayViewModel()
     private var speechManager: SpeechManager?
     private var gatewayService: GatewayService?
+    private(set) var isVisible: Bool = false
 
     init() {
         let window = OverlayWindow(
@@ -77,14 +78,30 @@ final class OverlayWindowController: NSWindowController {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         viewModel.isVisible = true
+        isVisible = true
         viewModel.statusMessage = nil
         viewModel.statusIsError = false
         viewModel.shouldFocusEditor = true
     }
 
     func hide() {
+        if speechManager?.isRecording == true {
+            return
+        }
         window?.orderOut(nil)
         viewModel.isVisible = false
+        isVisible = false
+    }
+
+    func toggle(on screen: NSScreen?) {
+        switch Self.toggleAction(isVisible: isVisible, isRecording: speechManager?.isRecording ?? false) {
+        case .show:
+            show(on: screen)
+        case .hide:
+            hide()
+        case .noChange:
+            break
+        }
     }
 
     private var subscriptions: Set<AnyCancellable> = []
@@ -115,5 +132,20 @@ final class OverlayWindowController: NSWindowController {
             self?.speechManager?.stopRecording()
             self?.hide()
         }
+    }
+}
+
+enum OverlayToggleAction: Equatable {
+    case show
+    case hide
+    case noChange
+}
+
+extension OverlayWindowController {
+    nonisolated static func toggleAction(isVisible: Bool, isRecording: Bool) -> OverlayToggleAction {
+        if isVisible {
+            return isRecording ? .noChange : .hide
+        }
+        return .show
     }
 }
