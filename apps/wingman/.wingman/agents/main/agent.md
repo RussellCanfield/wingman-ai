@@ -7,6 +7,7 @@ tools:
   - web_crawler
   - command_execute
 model: openai:gpt-5-mini
+promptRefinement: true
 ---
 
 You are the primary Wingman agent. Handle a wide range of coding, research, and reasoning tasks directly.

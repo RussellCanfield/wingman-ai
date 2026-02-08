@@ -14,6 +14,7 @@ import type {
 	ProviderStatus,
 	ProviderStatusResponse,
 	AgentVoiceConfig,
+	PromptTrainingConfig,
 	VoiceConfig,
 	ToolEvent,
 	ThinkingEvent,
@@ -31,6 +32,12 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { RoutinesPage } from "./pages/RoutinesPage";
 import { WebhooksPage } from "./pages/WebhooksPage";
 import { buildRoutineAgents } from "./utils/agentOptions";
+import {
+	FILE_INPUT_ACCEPT,
+	isPdfUploadFile,
+	isSupportedTextUploadFile,
+	readUploadFileText,
+} from "./utils/fileUpload";
 import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./utils/voice";
 import { shouldAutoSpeak } from "./utils/voiceAuto";
 import wingmanIcon from "./assets/wingman_icon.webp";
@@ -60,7 +67,19 @@ const AUTO_CONNECT_KEY = "wingman_webui_autoconnect";
 const DEFAULT_THREAD_NAME = "New Thread";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_PDF_BYTES = 12 * 1024 * 1024;
+const MAX_FILE_TEXT_CHARS = 40_000;
 const MAX_ATTACHMENTS = 6;
+
+type AgentEditorSubAgentPayload = {
+	id: string;
+	description?: string;
+	model?: string;
+	tools: string[];
+	prompt: string;
+	promptTraining?: PromptTrainingConfig | boolean | null;
+};
 
 export const App: React.FC = () => {
 	const navigate = useNavigate();
@@ -305,28 +324,80 @@ export const App: React.FC = () => {
 		if (!files || files.length === 0) return;
 		const selected = Array.from(files);
 		const next: ChatAttachment[] = [];
+		let warningMessage = "";
 
 		for (const file of selected) {
 			const isImage = file.type.startsWith("image/");
 			const isAudio = file.type.startsWith("audio/");
-			if (!isImage && !isAudio) {
-				setAttachmentError("Only image or audio files are supported.");
-				continue;
-			}
-			const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_AUDIO_BYTES;
-			if (file.size > maxBytes) {
+			const isPdf = isPdfUploadFile(file);
+			const isTextFile = isSupportedTextUploadFile(file);
+
+			if (!isImage && !isAudio && !isPdf && !isTextFile) {
 				setAttachmentError(
-					isImage ? "Image is too large. Max size is 8MB." : "Audio is too large. Max size is 20MB.",
+					"Unsupported file type. Allowed: images, audio, PDF, text, markdown, JSON, YAML, XML, logs, and common code files.",
 				);
 				continue;
 			}
-			const dataUrl = await readFileAsDataUrl(file);
+
+			if (isImage || isAudio) {
+				const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_AUDIO_BYTES;
+				if (file.size > maxBytes) {
+					setAttachmentError(
+						isImage
+							? "Image is too large. Max size is 8MB."
+							: "Audio is too large. Max size is 20MB.",
+					);
+					continue;
+				}
+				const dataUrl = await readFileAsDataUrl(file);
+				next.push({
+					id: createAttachmentId(),
+					kind: isAudio ? "audio" : "image",
+					dataUrl,
+					name: file.name,
+					mimeType: file.type,
+					size: file.size,
+				});
+				continue;
+			}
+
+			const maxBytes = isPdf ? MAX_PDF_BYTES : MAX_FILE_BYTES;
+			if (file.size > maxBytes) {
+				setAttachmentError(
+					isPdf
+						? "PDF is too large. Max size is 12MB."
+						: "Text/code file is too large. Max size is 2MB.",
+				);
+				continue;
+			}
+
+			const { textContent, truncated, usedPdfFallback } = await readUploadFileText(
+				file,
+				MAX_FILE_TEXT_CHARS,
+			);
+			if (!textContent.trim()) {
+				setAttachmentError("Unable to read file contents.");
+				continue;
+			}
+
+			if (truncated) {
+				warningMessage =
+					"One or more files were truncated before upload to keep prompts manageable.";
+			}
+			if (usedPdfFallback) {
+				warningMessage =
+					"One or more PDFs could not be text-extracted locally. Wingman will use native PDF support when available and a fallback note otherwise.";
+			}
+
+			const fileDataUrl = isPdf ? await readFileAsDataUrl(file) : "";
+
 			next.push({
 				id: createAttachmentId(),
-				kind: isAudio ? "audio" : "image",
-				dataUrl,
+				kind: "file",
+				dataUrl: fileDataUrl,
+				textContent,
 				name: file.name,
-				mimeType: file.type,
+				mimeType: file.type || (isPdf ? "application/pdf" : "text/plain"),
 				size: file.size,
 			});
 		}
@@ -336,6 +407,9 @@ export const App: React.FC = () => {
 			if (combined.length > MAX_ATTACHMENTS) {
 				setAttachmentError(`Limit is ${MAX_ATTACHMENTS} attachments per message.`);
 				return combined.slice(0, MAX_ATTACHMENTS);
+			}
+			if (warningMessage) {
+				setAttachmentError(warningMessage);
 			}
 			return combined;
 		});
@@ -785,7 +859,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 						if (!attachment || typeof attachment !== "object") return null;
 						const dataUrl =
 							typeof attachment.dataUrl === "string" ? attachment.dataUrl : "";
-						if (!dataUrl) return null;
+						const textContent =
+							typeof attachment.textContent === "string"
+								? attachment.textContent
+								: undefined;
 						const mimeType =
 							typeof attachment.mimeType === "string"
 								? attachment.mimeType
@@ -798,6 +875,23 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 							attachment.kind === "audio" ||
 							mimeType?.startsWith("audio/") ||
 							dataUrl.startsWith("data:audio/");
+						const isFile =
+							attachment.kind === "file" ||
+							(typeof textContent === "string" &&
+								!isAudio &&
+								!dataUrl.startsWith("data:image/"));
+						if (isFile) {
+							return {
+								id: createAttachmentId(),
+								kind: "file" as const,
+								dataUrl,
+								textContent: textContent || "",
+								mimeType,
+								name,
+								size,
+							};
+						}
+						if (!dataUrl) return null;
 						return {
 							id: createAttachmentId(),
 							kind: isAudio ? "audio" : "image",
@@ -1187,7 +1281,7 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			logEvent("Wait for the current response to finish");
 			return;
 		}
-		let targetThread = activeThread;
+		let targetThread: Thread | null | undefined = activeThread;
 		if (!targetThread) {
 			targetThread = await createThread(agentId, DEFAULT_THREAD_NAME);
 			if (!targetThread) {
@@ -1743,6 +1837,8 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			tools: string[];
 			prompt?: string;
 			voice?: AgentVoiceConfig | null;
+			promptTraining?: PromptTrainingConfig | boolean | null;
+			subAgents?: AgentEditorSubAgentPayload[];
 		}) => {
 			try {
 				const res = await fetch("/api/agents", {
@@ -1777,6 +1873,8 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				tools: string[];
 				prompt?: string;
 				voice?: AgentVoiceConfig | null;
+				promptTraining?: PromptTrainingConfig | boolean | null;
+				subAgents?: AgentEditorSubAgentPayload[];
 			},
 		) => {
 			try {
@@ -2161,12 +2259,13 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 							<Route
 								path="/chat"
 								element={
-									<ChatPage
-										agentId={currentAgentId}
-										activeThread={activeThread}
-										prompt={prompt}
-										attachments={attachments}
-										attachmentError={attachmentError}
+										<ChatPage
+											agentId={currentAgentId}
+											activeThread={activeThread}
+											prompt={prompt}
+											attachments={attachments}
+											fileAccept={FILE_INPUT_ACCEPT}
+											attachmentError={attachmentError}
 										isStreaming={isStreaming}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
@@ -2355,9 +2454,14 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 function buildAttachmentPreviewText(attachments: ChatAttachment[]): string {
 	if (!attachments || attachments.length === 0) return "";
+	let hasFile = false;
 	let hasAudio = false;
 	let hasImage = false;
 	for (const attachment of attachments) {
+		if (isFileAttachment(attachment)) {
+			hasFile = true;
+			continue;
+		}
 		if (isAudioAttachment(attachment)) {
 			hasAudio = true;
 		} else {
@@ -2365,6 +2469,12 @@ function buildAttachmentPreviewText(attachments: ChatAttachment[]): string {
 		}
 	}
 	const count = attachments.length;
+	if (hasFile && (hasAudio || hasImage)) {
+		return count > 1 ? "File and media attachments" : "File and media attachment";
+	}
+	if (hasFile) {
+		return count > 1 ? "File attachments" : "File attachment";
+	}
 	if (hasAudio && hasImage) {
 		return count > 1 ? "Media attachments" : "Media attachment";
 	}
@@ -2379,4 +2489,9 @@ function isAudioAttachment(attachment: ChatAttachment): boolean {
 	if (attachment.mimeType?.startsWith("audio/")) return true;
 	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
 	return false;
+}
+
+function isFileAttachment(attachment: ChatAttachment): boolean {
+	if (attachment.kind === "file") return true;
+	return typeof attachment.textContent === "string";
 }

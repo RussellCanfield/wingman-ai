@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.2
+**Version:** 1.3
 **Status:** In Development
-**Last Updated:** 2026-02-01
+**Last Updated:** 2026-02-08
 
 ---
 
@@ -52,7 +52,7 @@ See [Architecture Overview](000-architecture-overview.md) for the full system co
 4. Gateway routes to the bound agent and streams the response
 
 **Requirements:**
-- Control UI with chat, streaming output, and media attachments (image/audio, voice capture)
+- Control UI with chat, streaming output, media attachments (image/audio + voice capture), and file uploads (.txt/.md/.csv/.json/.yaml/.yml/.xml/.log plus common code files and PDF)
 - Token-based authentication
 - Tailscale-friendly access patterns
 
@@ -275,7 +275,7 @@ See the Node Protocol Spec for message schemas and pairing UX: `docs/requirement
 - Deterministic routing bindings (most-specific-first)
 - Durable session store (SQLite)
 - WebSocket API for clients (CLI and Control UI)
-- Control UI with chat and streaming output (served on `gateway.controlUi.port`)
+- Control UI with chat, streaming output, and attachment uploads (image/audio + text/code files + PDF) (served on `gateway.controlUi.port`)
 - Token or password authentication
 - Basic health and stats endpoints (gateway + Control UI API proxy)
 - Webhook registry + invocation endpoint (create/manage via Control UI)
@@ -886,8 +886,18 @@ to avoid cross-origin issues when the UI is on a different port.
     "content": "Review the auth code",
     "attachments": [
       {
+        "kind": "file",
+        "name": "notes.md",
+        "mimeType": "text/markdown",
+        "textContent": "# Review Notes\n- keep media uploads working"
+      },
+      {
         "kind": "audio",
         "dataUrl": "data:audio/wav;base64,AAA..."
+      },
+      {
+        "kind": "image",
+        "dataUrl": "data:image/png;base64,BBB..."
       }
     ],
     "routing": { "channel": "webui" }
@@ -895,6 +905,12 @@ to avoid cross-origin issues when the UI is on a different port.
   "timestamp": 1234567890
 }
 ```
+
+Attachment handling notes:
+- `image` and `audio` attachments continue to use `dataUrl` transport (existing behavior).
+- `file` attachments carry extracted text in `textContent` (for `.txt`, `.md`, `.csv`, `.json`, `.yaml/.yml`, `.xml`, `.log`, and common code files: `.ts`, `.js`, `.py`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, `.sql`, `.html`, `.css`).
+- `PDF` uploads are accepted as `file` attachments with native model file blocks when the active model advertises `pdfInputs`; otherwise Wingman falls back to extracted text (or a fallback note when extraction fails).
+
 
 #### Broadcast (Optional)
 ```json

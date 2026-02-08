@@ -5,6 +5,7 @@ import {
 	validateAgentConfig,
 	WingmanDirectory,
 	type WingmanAgentConfig,
+	type PromptRefinementConfig,
 } from "./agentConfig.js";
 import { createTools, UI_TOOL_NAMES, type ToolOptions } from "./toolRegistry.js";
 import { ModelFactory } from "./modelFactory.js";
@@ -14,6 +15,49 @@ import type { WingmanConfigType } from "../../cli/config/schema.js";
 import { MCPServersConfig } from "@/types/mcp.js";
 
 const logger = createLogger();
+const PROMPT_REFINEMENT_MARKER = "[[wingman:prompt-refinement]]";
+
+const normalizePromptRefinementPath = (
+	agentName: string,
+	rawPath?: string,
+): string => {
+	const fallback = `/memories/agents/${agentName}/instructions.md`;
+	if (!rawPath) return fallback;
+	const trimmed = rawPath.trim();
+	if (!trimmed) return fallback;
+	if (trimmed.startsWith("/memories/")) return trimmed;
+	if (trimmed.startsWith("/")) {
+		return `/memories${trimmed}`;
+	}
+	return `/memories/${trimmed.replace(/^\/+/, "")}`;
+};
+
+const buildPromptRefinementInstructions = (instructionsPath: string): string =>
+	[
+		PROMPT_REFINEMENT_MARKER,
+		"Prompt Refinement:",
+		`- Maintain a durable overlay at ${instructionsPath} for stable preferences and corrections.`,
+		"- Read it at the start of each session and follow it in addition to this system prompt.",
+		'- Only update it when the user gives explicit, lasting feedback (e.g., "always", "never", "prefer").',
+		"- Keep entries short, stable, and avoid task-specific details.",
+		"- If the file doesn't exist, create it with a short header and bullet list.",
+	].join("\n");
+
+const applyPromptRefinement = (
+	systemPrompt: string,
+	agentName: string,
+	config?: PromptRefinementConfig,
+): string => {
+	if (!config?.enabled) return systemPrompt;
+	if (systemPrompt.includes(PROMPT_REFINEMENT_MARKER)) return systemPrompt;
+	const instructionsPath = normalizePromptRefinementPath(
+		agentName,
+		config.instructionsPath,
+	);
+	return `${systemPrompt.trim()}\n\n${buildPromptRefinementInstructions(
+		instructionsPath,
+	)}`;
+};
 
 /**
  * Load and validate agent configurations from multiple sources
@@ -272,6 +316,14 @@ export class AgentLoader {
 			description: config.description,
 			systemPrompt: config.systemPrompt,
 		};
+		if (config.promptRefinement) {
+			agent.promptRefinement = config.promptRefinement;
+			agent.systemPrompt = applyPromptRefinement(
+				agent.systemPrompt,
+				config.name,
+				config.promptRefinement,
+			);
+		}
 
 		const dynamicUiEnabled =
 			this.wingmanConfig?.gateway?.dynamicUiEnabled !== false;
@@ -353,6 +405,14 @@ export class AgentLoader {
 					description: subagent.description,
 					systemPrompt: subagent.systemPrompt,
 				};
+				if (subagent.promptRefinement) {
+					sub.promptRefinement = subagent.promptRefinement;
+					sub.systemPrompt = applyPromptRefinement(
+						sub.systemPrompt,
+						subagent.name,
+						subagent.promptRefinement,
+					);
+				}
 
 				if (subagent.tools && subagent.tools.length > 0) {
 					sub.tools = await createTools(

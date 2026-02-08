@@ -70,7 +70,16 @@ export interface AudioAttachment {
 	size?: number;
 }
 
-export type MediaAttachment = ImageAttachment | AudioAttachment;
+export interface FileAttachment {
+	kind: "file";
+	dataUrl: string;
+	textContent: string;
+	mimeType?: string;
+	name?: string;
+	size?: number;
+}
+
+export type MediaAttachment = ImageAttachment | AudioAttachment | FileAttachment;
 
 export interface AgentRequestPayload {
 	agentId?: string;

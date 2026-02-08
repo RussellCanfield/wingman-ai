@@ -22,6 +22,32 @@ export const AvailableToolNames = z.enum([
 
 export type AvailableToolName = z.infer<typeof AvailableToolNames>;
 
+const PromptRefinementSchema = z.preprocess(
+	(value) => {
+		if (value === undefined) return undefined;
+		if (typeof value === "boolean") return { enabled: value };
+		return value;
+	},
+	z
+		.object({
+			enabled: z
+				.boolean()
+				.optional()
+				.default(true)
+				.describe("Whether prompt refinement is enabled for this agent"),
+			instructionsPath: z
+				.string()
+				.min(1)
+				.optional()
+				.describe(
+					"Path (virtual) to store the agent's prompt refinement overlay (defaults under /memories/)",
+				),
+		})
+		.strict(),
+);
+
+export type PromptRefinementConfig = z.infer<typeof PromptRefinementSchema>;
+
 /**
  * Base agent configuration schema
  */
@@ -82,6 +108,9 @@ const BaseAgentConfigSchema = z.object({
 		),
 	voice: AgentVoiceConfigSchema.optional().describe(
 		"Agent-specific voice configuration",
+	),
+	promptRefinement: PromptRefinementSchema.optional().describe(
+		"Optional per-agent prompt refinement settings",
 	),
 });
 

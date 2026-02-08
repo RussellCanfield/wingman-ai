@@ -57,6 +57,25 @@ type GatewaySocketData = {
 
 type GatewaySocket = ServerWebSocket<GatewaySocketData>;
 
+const API_CORS_HEADERS: Record<string, string> = {
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+	"Access-Control-Allow-Headers": "Content-Type, Authorization, X-Wingman-Token, X-Wingman-Password",
+	"Access-Control-Max-Age": "600",
+};
+
+function withApiCors(response: Response): Response {
+	const headers = new Headers(response.headers);
+	for (const [key, value] of Object.entries(API_CORS_HEADERS)) {
+		headers.set(key, value);
+	}
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
+}
+
 /**
  * Wingman Gateway Server
  * Manages WebSocket connections for AI agent swarming
@@ -1478,6 +1497,14 @@ export class GatewayServer {
 		}
 
 		if (url.pathname.startsWith("/api/")) {
+			if (req.method === "OPTIONS") {
+				return withApiCors(
+					new Response(null, {
+						status: 204,
+					}),
+				);
+			}
+
 			if (url.pathname === "/api/config") {
 				const agents =
 					this.wingmanConfig.agents?.list?.map((agent) => ({
@@ -1488,7 +1515,7 @@ export class GatewayServer {
 
 				const defaultAgentId = this.router.selectAgent();
 
-				return new Response(
+				return withApiCors(new Response(
 					JSON.stringify(
 						{
 							gatewayHost: this.config.host,
@@ -1507,7 +1534,7 @@ export class GatewayServer {
 					{
 						headers: { "Content-Type": "application/json" },
 					},
-				);
+				));
 			}
 
 			const apiResponse =
@@ -1519,18 +1546,18 @@ export class GatewayServer {
 				(await handleFsApi(ctx, req, url)) ||
 				(await handleSessionsApi(ctx, req, url));
 			if (apiResponse) {
-				return apiResponse;
+				return withApiCors(apiResponse);
 			}
 
 			if (url.pathname === "/api/health") {
-				return this.handleHealthCheck();
+				return withApiCors(this.handleHealthCheck());
 			}
 
 			if (url.pathname === "/api/stats") {
-				return this.handleStats();
+				return withApiCors(this.handleStats());
 			}
 
-			return new Response("Not Found", { status: 404 });
+			return withApiCors(new Response("Not Found", { status: 404 }));
 		}
 
 		if (req.method !== "GET") {
@@ -1758,9 +1785,14 @@ export class GatewayServer {
 
 function buildAttachmentPreview(attachments: MediaAttachment[] | undefined): string {
 	if (!attachments || attachments.length === 0) return "Attachment";
+	let hasFile = false;
 	let hasAudio = false;
 	let hasImage = false;
 	for (const attachment of attachments) {
+		if (isFileAttachment(attachment)) {
+			hasFile = true;
+			continue;
+		}
 		if (isAudioAttachment(attachment)) {
 			hasAudio = true;
 		} else {
@@ -1768,6 +1800,12 @@ function buildAttachmentPreview(attachments: MediaAttachment[] | undefined): str
 		}
 	}
 	const count = attachments.length;
+	if (hasFile && (hasAudio || hasImage)) {
+		return count > 1 ? "File and media attachments" : "File and media attachment";
+	}
+	if (hasFile) {
+		return count > 1 ? "File attachments" : "File attachment";
+	}
 	if (hasAudio && hasImage) {
 		return count > 1 ? "Media attachments" : "Media attachment";
 	}
@@ -1782,4 +1820,9 @@ function isAudioAttachment(attachment: MediaAttachment): boolean {
 	if (attachment.mimeType?.startsWith("audio/")) return true;
 	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
 	return false;
+}
+
+function isFileAttachment(attachment: MediaAttachment): boolean {
+	if (attachment.kind === "file") return true;
+	return typeof (attachment as { textContent?: unknown }).textContent === "string";
 }

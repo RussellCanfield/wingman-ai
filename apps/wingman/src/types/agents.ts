@@ -9,6 +9,11 @@ export type WingmanAgentTool = {
 	invoke?: (...args: any[]) => unknown;
 };
 
+export type PromptRefinementConfig = {
+	enabled?: boolean;
+	instructionsPath?: string;
+};
+
 export type WingmanAgent = {
 	name: string;
 	systemPrompt: string;
@@ -21,4 +26,5 @@ export type WingmanAgent = {
 	mcpConfig?: MCPServersConfig;
 	mcpUseGlobal?: boolean;
 	voice?: AgentVoiceConfig;
+	promptRefinement?: PromptRefinementConfig;
 };

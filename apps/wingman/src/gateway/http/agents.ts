@@ -7,6 +7,147 @@ import { join } from "node:path";
 import * as yaml from "js-yaml";
 import { AgentVoiceConfigSchema } from "@/types/voice.js";
 
+type PromptTrainingConfig = Record<string, any> | boolean;
+
+type SubAgentApiPayload = {
+	id?: string;
+	name?: string;
+	displayName?: string;
+	description?: string;
+	tools?: string[];
+	model?: string;
+	prompt?: string;
+	systemPrompt?: string;
+	promptTraining?: PromptTrainingConfig | null;
+	promptRefinement?: PromptTrainingConfig | null;
+};
+
+type NormalizedSubAgent = {
+	name: string;
+	description: string;
+	tools: string[];
+	model?: string;
+	systemPrompt: string;
+	promptRefinement?: PromptTrainingConfig;
+};
+
+const hasOwn = (value: unknown, key: string): boolean =>
+	Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
+
+const getPromptTrainingFromPayload = (
+	payload: Record<string, any>,
+): PromptTrainingConfig | null | undefined => {
+	if (hasOwn(payload, "promptTraining")) {
+		return payload.promptTraining as PromptTrainingConfig | null | undefined;
+	}
+	if (hasOwn(payload, "promptRefinement")) {
+		return payload.promptRefinement as PromptTrainingConfig | null | undefined;
+	}
+	return undefined;
+};
+
+const mapPromptTrainingFields = (value: PromptTrainingConfig | undefined) => ({
+	promptTraining: value,
+	promptRefinement: value,
+});
+
+const mapSubAgentForResponse = (sub: {
+	name: string;
+	description?: string;
+	tools?: string[];
+	model?: string;
+	systemPrompt?: string;
+	promptRefinement?: PromptTrainingConfig;
+}) => ({
+	id: sub.name,
+	displayName: sub.name,
+	description: sub.description,
+	tools: sub.tools || [],
+	model: sub.model,
+	prompt: sub.systemPrompt,
+	...mapPromptTrainingFields(sub.promptRefinement),
+});
+
+const normalizeSubAgents = (
+	rawSubAgents: unknown,
+): { ok: true; value: NormalizedSubAgent[] } | { ok: false; error: string } => {
+	if (rawSubAgents === null || rawSubAgents === undefined) {
+		return { ok: true, value: [] };
+	}
+	if (!Array.isArray(rawSubAgents)) {
+		return { ok: false, error: "Invalid subAgents: expected an array" };
+	}
+
+	const availableTools = getAvailableTools();
+	const normalized: NormalizedSubAgent[] = [];
+
+	for (let index = 0; index < rawSubAgents.length; index += 1) {
+		const item = rawSubAgents[index] as SubAgentApiPayload;
+		if (!item || typeof item !== "object") {
+			return {
+				ok: false,
+				error: `Invalid subAgents[${index}]: expected an object`,
+			};
+		}
+
+		const name = (item.id || item.name || "").trim();
+		if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) {
+			return {
+				ok: false,
+				error: `Invalid subAgents[${index}].id`,
+			};
+		}
+
+		const prompt = (item.prompt ?? item.systemPrompt ?? "").trim();
+		if (!prompt) {
+			return {
+				ok: false,
+				error: `Invalid subAgents[${index}].prompt`,
+			};
+		}
+		const description = (item.description || "").trim();
+		if (!description) {
+			return {
+				ok: false,
+				error: `Invalid subAgents[${index}].description`,
+			};
+		}
+
+		const promptTraining = getPromptTrainingFromPayload(
+			item as Record<string, any>,
+		);
+		if (
+			promptTraining !== undefined &&
+			promptTraining !== null &&
+			typeof promptTraining !== "boolean" &&
+			(typeof promptTraining !== "object" || Array.isArray(promptTraining))
+		) {
+			return {
+				ok: false,
+				error: `Invalid subAgents[${index}].promptTraining`,
+			};
+		}
+
+		const tools = Array.isArray(item.tools)
+			? item.tools.filter((tool) => availableTools.includes(tool as any))
+			: [];
+
+		const sub: NormalizedSubAgent = {
+			name,
+			description,
+			tools,
+			model: item.model?.trim() || undefined,
+			systemPrompt: prompt,
+		};
+		if (promptTraining !== undefined && promptTraining !== null) {
+			sub.promptRefinement = promptTraining;
+		}
+		normalized.push(sub);
+	}
+
+	return { ok: true, value: normalized };
+};
+
 const buildAgentMarkdown = (params: {
 	id: string;
 	description?: string;
@@ -14,8 +155,19 @@ const buildAgentMarkdown = (params: {
 	model?: string;
 	prompt?: string;
 	voice?: Record<string, any>;
+	promptRefinement?: PromptTrainingConfig;
+	subAgents?: NormalizedSubAgent[];
 }): string => {
-	const { id, description, tools, model, prompt, voice } = params;
+	const {
+		id,
+		description,
+		tools,
+		model,
+		prompt,
+		voice,
+		promptRefinement,
+		subAgents,
+	} = params;
 	const metadata: Record<string, any> = {
 		name: id,
 		description: description || "New Wingman agent",
@@ -26,6 +178,12 @@ const buildAgentMarkdown = (params: {
 	}
 	if (voice) {
 		metadata.voice = voice;
+	}
+	if (promptRefinement !== undefined) {
+		metadata.promptRefinement = promptRefinement;
+	}
+	if (subAgents && subAgents.length > 0) {
+		metadata.subAgents = subAgents;
 	}
 	return serializeAgentMarkdown(metadata, prompt || "You are a Wingman agent.");
 };
@@ -79,14 +237,9 @@ export const handleAgentsApi = async (
 				tools: agent.tools || [],
 				model: agent.model,
 				voice: agent.voice,
+				...mapPromptTrainingFields(agent.promptRefinement),
 				subAgents:
-					agent.subAgents?.map((sub) => ({
-						id: sub.name,
-						displayName: sub.name,
-						description: sub.description,
-						tools: sub.tools || [],
-						model: sub.model,
-					})) || [],
+					agent.subAgents?.map((sub) => mapSubAgentForResponse(sub)) || [],
 			}));
 
 			return new Response(
@@ -112,6 +265,10 @@ export const handleAgentsApi = async (
 				tools?: string[];
 				prompt?: string;
 				voice?: Record<string, any>;
+				promptTraining?: PromptTrainingConfig | null;
+				promptRefinement?: PromptTrainingConfig | null;
+				subAgents?: SubAgentApiPayload[] | null;
+				subagents?: SubAgentApiPayload[] | null;
 			};
 			let parsedVoice: Record<string, any> | undefined;
 			if (body?.voice !== undefined && body.voice !== null) {
@@ -132,6 +289,27 @@ export const handleAgentsApi = async (
 						getAvailableTools().includes(tool as any),
 					)
 				: [];
+			const promptTraining = getPromptTrainingFromPayload(
+				body as Record<string, any>,
+			);
+			if (
+				promptTraining !== undefined &&
+				promptTraining !== null &&
+				typeof promptTraining !== "boolean" &&
+				(typeof promptTraining !== "object" || Array.isArray(promptTraining))
+			) {
+				return new Response("Invalid promptTraining configuration", {
+					status: 400,
+				});
+			}
+
+			const rawSubAgents = hasOwn(body, "subAgents")
+				? body.subAgents
+				: body.subagents;
+			const subAgentsResult = normalizeSubAgents(rawSubAgents);
+			if (!subAgentsResult.ok) {
+				return new Response(subAgentsResult.error, { status: 400 });
+			}
 
 			const agentsDir = join(ctx.resolveConfigDirPath(), "agents", id);
 			if (existsSync(agentsDir)) {
@@ -146,6 +324,9 @@ export const handleAgentsApi = async (
 				model: body.model,
 				prompt: body.prompt,
 				voice: parsedVoice,
+				promptRefinement:
+					promptTraining === null ? undefined : promptTraining,
+				subAgents: subAgentsResult.value,
 			});
 			writeFileSync(join(agentsDir, "agent.md"), agentMarkdown);
 
@@ -172,13 +353,19 @@ export const handleAgentsApi = async (
 						displayName: body.displayName || id,
 						description: body.description,
 						tools,
-					model: body.model,
-					voice: parsedVoice,
-				},
-				null,
-				2,
-			),
-			{ headers: { "Content-Type": "application/json" } },
+						model: body.model,
+						voice: parsedVoice,
+						...mapPromptTrainingFields(
+							promptTraining === null ? undefined : promptTraining,
+						),
+						subAgents: subAgentsResult.value.map((sub) =>
+							mapSubAgentForResponse(sub),
+						),
+					},
+					null,
+					2,
+				),
+				{ headers: { "Content-Type": "application/json" } },
 			);
 		}
 
@@ -211,6 +398,10 @@ export const handleAgentsApi = async (
 					tools: agentConfig.tools || [],
 					model: agentConfig.model,
 					voice: agentConfig.voice,
+					...mapPromptTrainingFields(agentConfig.promptRefinement),
+					subAgents:
+						agentConfig.subAgents?.map((sub) => mapSubAgentForResponse(sub)) ||
+						[],
 					prompt: agentConfig.systemPrompt,
 				},
 				null,
@@ -231,6 +422,10 @@ export const handleAgentsApi = async (
 			tools?: string[];
 			prompt?: string;
 			voice?: Record<string, any>;
+			promptTraining?: PromptTrainingConfig | null;
+			promptRefinement?: PromptTrainingConfig | null;
+			subAgents?: SubAgentApiPayload[] | null;
+			subagents?: SubAgentApiPayload[] | null;
 		};
 		let parsedVoice: Record<string, any> | undefined | null = undefined;
 		if (body?.voice === null) {
@@ -252,6 +447,37 @@ export const handleAgentsApi = async (
 		const nextPrompt = body.prompt ?? agentConfig.systemPrompt;
 		const nextVoice =
 			parsedVoice === undefined ? agentConfig.voice : parsedVoice;
+		const bodyPromptTraining = getPromptTrainingFromPayload(
+			body as Record<string, any>,
+		);
+		if (
+			bodyPromptTraining !== undefined &&
+			bodyPromptTraining !== null &&
+			typeof bodyPromptTraining !== "boolean" &&
+			(typeof bodyPromptTraining !== "object" ||
+				Array.isArray(bodyPromptTraining))
+		) {
+			return new Response("Invalid promptTraining configuration", {
+				status: 400,
+			});
+		}
+		const nextPromptRefinement =
+			bodyPromptTraining === undefined
+				? agentConfig.promptRefinement
+				: bodyPromptTraining === null
+					? undefined
+					: bodyPromptTraining;
+		const hasSubAgents = hasOwn(body, "subAgents") || hasOwn(body, "subagents");
+		const rawSubAgents = hasOwn(body, "subAgents")
+			? body.subAgents
+			: body.subagents;
+		const subAgentsResult = normalizeSubAgents(rawSubAgents);
+		if (!subAgentsResult.ok) {
+			return new Response(subAgentsResult.error, { status: 400 });
+		}
+		const nextSubAgents = hasSubAgents
+			? subAgentsResult.value
+			: agentConfig.subAgents || [];
 
 		const agentsDir = join(ctx.resolveConfigDirPath(), "agents", agentId);
 		const agentJsonPath = join(agentsDir, "agent.json");
@@ -280,6 +506,17 @@ export const handleAgentsApi = async (
 			} else {
 				delete parsed.voice;
 			}
+			if (nextPromptRefinement !== undefined) {
+				parsed.promptRefinement = nextPromptRefinement;
+			} else {
+				delete parsed.promptRefinement;
+			}
+			if (nextSubAgents.length > 0) {
+				parsed.subAgents = nextSubAgents;
+			} else {
+				delete parsed.subAgents;
+				delete parsed.subagents;
+			}
 			writeFileSync(agentJsonPath, JSON.stringify(parsed, null, 2));
 		} else if (hasMarkdown) {
 			const raw = readFileSync(agentMarkdownPath, "utf-8");
@@ -297,27 +534,38 @@ export const handleAgentsApi = async (
 			} else {
 				delete metadata.voice;
 			}
+			if (nextPromptRefinement !== undefined) {
+				metadata.promptRefinement = nextPromptRefinement;
+			} else {
+				delete metadata.promptRefinement;
+			}
+			if (nextSubAgents.length > 0) {
+				metadata.subAgents = nextSubAgents;
+			} else {
+				delete metadata.subAgents;
+				delete metadata.subagents;
+			}
 			const updatedMarkdown = serializeAgentMarkdown(metadata, nextPrompt);
 			writeFileSync(agentMarkdownPath, updatedMarkdown);
 		}
 
-			if (config.agents?.list) {
-				const nextList = config.agents.list.map((agent) =>
-					agent.id === agentId
-						? { ...agent, name: body.displayName || agent.name || agentId }
-						: agent,
-				);
-				const nextConfig = {
-					...config,
-					agents: {
-						list: nextList,
-						bindings: config.agents?.bindings || [],
-					},
-				};
-				ctx.setWingmanConfig(nextConfig);
-				ctx.setRouter(new GatewayRouter(nextConfig));
-				ctx.persistWingmanConfig();
-			}
+		if (config.agents?.list) {
+			const nextList = config.agents.list.map((agent) =>
+				agent.id === agentId
+					? { ...agent, name: body.displayName || agent.name || agentId }
+					: agent,
+			);
+			const nextConfig = {
+				...config,
+				agents: {
+					list: nextList,
+					bindings: config.agents?.bindings || [],
+				},
+			};
+			ctx.setWingmanConfig(nextConfig);
+			ctx.setRouter(new GatewayRouter(nextConfig));
+			ctx.persistWingmanConfig();
+		}
 
 		return new Response(
 			JSON.stringify(
@@ -328,6 +576,8 @@ export const handleAgentsApi = async (
 					tools,
 					model: nextModel,
 					voice: nextVoice,
+					...mapPromptTrainingFields(nextPromptRefinement),
+					subAgents: nextSubAgents.map((sub) => mapSubAgentForResponse(sub)),
 					prompt: nextPrompt,
 				},
 				null,

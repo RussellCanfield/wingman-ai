@@ -22,7 +22,7 @@ Test coverage is essential, always add tests for new functionality.
 After you've finished making changes, ensure all tests and builds pass.
 
 ## Docs-site Updates
-Keep major feature descriptions in `docs-site` updated when you ship or change significant capabilities.
+Keep major feature descriptions in `./apps/docs-website` updated when you ship or change significant capabilities.
 The docs-site is legacy for requirements (see below), but it should still reflect the current product surface.
 
 ## Product Requirements

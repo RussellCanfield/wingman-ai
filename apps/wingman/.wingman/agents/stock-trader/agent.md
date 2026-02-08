@@ -6,6 +6,7 @@ tools:
   - web_crawler
 model: xai:grok-4-1-fast-reasoning
 mcpUseGlobal: true
+promptRefinement: true
 subAgents:
   - name: goal-translator
     description: "Translates goal + deadline into an aggressiveness profile with feasibility notes."

@@ -4,9 +4,41 @@ import type {
 	AgentDetail,
 	AgentSummary,
 	AgentVoiceConfig,
+	PromptTrainingConfig,
 	ProviderStatus,
 	VoiceProvider,
 } from "../types";
+import { buildSubAgentTemplateOptions } from "../utils/subAgentTemplates";
+
+type AgentFormSubAgentPayload = {
+	id: string;
+	description?: string;
+	model?: string;
+	tools: string[];
+	prompt: string;
+	promptTraining?: PromptTrainingConfig | boolean | null;
+};
+
+type AgentPagePayload = {
+	displayName?: string;
+	description?: string;
+	model?: string;
+	tools: string[];
+	prompt?: string;
+	voice?: AgentVoiceConfig | null;
+	promptTraining?: PromptTrainingConfig | boolean | null;
+	subAgents?: AgentFormSubAgentPayload[];
+};
+
+type AgentSubAgentDraft = {
+	id: string;
+	description: string;
+	model: string;
+	prompt: string;
+	tools: string[];
+	promptTrainingEnabled: boolean;
+	promptTrainingPath: string;
+};
 
 type AgentsPageProps = {
 	agents: AgentSummary[];
@@ -16,21 +48,16 @@ type AgentsPageProps = {
 	loading: boolean;
 	onCreateAgent: (payload: {
 		id: string;
-		displayName?: string;
-		description?: string;
-		model?: string;
-		tools: string[];
-		prompt?: string;
-		voice?: AgentVoiceConfig | null;
+		displayName?: AgentPagePayload["displayName"];
+		description?: AgentPagePayload["description"];
+		model?: AgentPagePayload["model"];
+		tools: AgentPagePayload["tools"];
+		prompt?: AgentPagePayload["prompt"];
+		voice?: AgentPagePayload["voice"];
+		promptTraining?: AgentPagePayload["promptTraining"];
+		subAgents?: AgentPagePayload["subAgents"];
 	}) => Promise<boolean>;
-	onUpdateAgent: (agentId: string, payload: {
-		displayName?: string;
-		description?: string;
-		model?: string;
-		tools: string[];
-		prompt?: string;
-		voice?: AgentVoiceConfig | null;
-	}) => Promise<boolean>;
+	onUpdateAgent: (agentId: string, payload: AgentPagePayload) => Promise<boolean>;
 	onLoadAgent: (agentId: string) => Promise<AgentDetail | null>;
 	onRefresh: () => void;
 };
@@ -51,7 +78,10 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	const [description, setDescription] = useState("");
 	const [model, setModel] = useState("");
 	const [prompt, setPrompt] = useState("");
+	const [promptTrainingEnabled, setPromptTrainingEnabled] = useState(false);
+	const [promptTrainingPath, setPromptTrainingPath] = useState("");
 	const [selectedTools, setSelectedTools] = useState<string[]>([]);
+	const [subAgents, setSubAgents] = useState<AgentSubAgentDraft[]>([]);
 	const [voiceProvider, setVoiceProvider] = useState<"inherit" | VoiceProvider>("inherit");
 	const [voiceName, setVoiceName] = useState("");
 	const [voiceLang, setVoiceLang] = useState("");
@@ -71,6 +101,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	const [submitting, setSubmitting] = useState(false);
 	const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
 	const [loadingDetails, setLoadingDetails] = useState(false);
+	const [formError, setFormError] = useState("");
 	const [mobilePanel, setMobilePanel] = useState<"editor" | "topology">("editor");
 
 	const graphData = useMemo(() => buildGraph(agents), [agents]);
@@ -102,12 +133,58 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		],
 		[],
 	);
+	const subAgentTemplateOptions = useMemo(
+		() => buildSubAgentTemplateOptions({ agents, editingAgentId }),
+		[agents, editingAgentId],
+	);
+	const subAgentTemplateIds = useMemo(
+		() => new Set(subAgentTemplateOptions.map((option) => option.id)),
+		[subAgentTemplateOptions],
+	);
 
 	const parseNumber = (value: string): number | undefined => {
 		if (!value.trim()) return undefined;
 		const parsed = Number(value);
 		return Number.isFinite(parsed) ? parsed : undefined;
 	};
+
+	const parsePromptTraining = (
+		value?: PromptTrainingConfig | boolean,
+	): { enabled: boolean; instructionsPath: string } => {
+		if (value === undefined) {
+			return { enabled: false, instructionsPath: "" };
+		}
+		if (typeof value === "boolean") {
+			return { enabled: value, instructionsPath: "" };
+		}
+		return {
+			enabled: value.enabled ?? true,
+			instructionsPath: value.instructionsPath || "",
+		};
+	};
+
+	const buildPromptTrainingPayload = (
+		enabled: boolean,
+		instructionsPath: string,
+	): PromptTrainingConfig | boolean => {
+		if (!enabled) return false;
+		const trimmedPath = instructionsPath.trim();
+		if (!trimmedPath) return true;
+		return {
+			enabled: true,
+			instructionsPath: trimmedPath,
+		};
+	};
+
+	const createEmptySubAgent = (): AgentSubAgentDraft => ({
+		id: "",
+		description: "",
+		model: "",
+		prompt: "",
+		tools: [],
+		promptTrainingEnabled: false,
+		promptTrainingPath: "",
+	});
 
 	const buildVoicePayload = (): AgentVoiceConfig | null => {
 		if (voiceProvider === "inherit") {
@@ -206,9 +283,114 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		);
 	};
 
+	const updateSubAgent = (
+		index: number,
+		updater: (current: AgentSubAgentDraft) => AgentSubAgentDraft,
+	) => {
+		setSubAgents((prev) =>
+			prev.map((subAgent, subIndex) =>
+				subIndex === index ? updater(subAgent) : subAgent,
+			),
+		);
+	};
+
+	const toggleSubAgentTool = (index: number, tool: string) => {
+		updateSubAgent(index, (current) => ({
+			...current,
+			tools: current.tools.includes(tool)
+				? current.tools.filter((t) => t !== tool)
+				: [...current.tools, tool],
+		}));
+	};
+
+	const addSubAgent = () => {
+		setSubAgents((prev) => [...prev, createEmptySubAgent()]);
+	};
+
+	const removeSubAgent = (index: number) => {
+		setSubAgents((prev) => prev.filter((_, subIndex) => subIndex !== index));
+	};
+
+	const applyTemplateAgent = async (index: number, templateAgentId: string) => {
+		const trimmedId = templateAgentId.trim();
+		if (!trimmedId) return;
+		setFormError("");
+		const detail = await onLoadAgent(trimmedId);
+		if (!detail) {
+			setFormError(`Failed to load selected agent "${trimmedId}".`);
+			return;
+		}
+		const templatePromptTraining = parsePromptTraining(
+			detail.promptTraining ?? detail.promptRefinement,
+		);
+		updateSubAgent(index, (current) => ({
+			...current,
+			id: detail.id,
+			description: detail.description || "",
+			model: detail.model || "",
+			prompt: detail.prompt || "",
+			tools: detail.tools || [],
+			promptTrainingEnabled: templatePromptTraining.enabled,
+			promptTrainingPath: templatePromptTraining.instructionsPath,
+		}));
+	};
+
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
-		if (!id.trim() || !prompt.trim()) return;
+		setFormError("");
+		if (!id.trim() || !prompt.trim()) {
+			setFormError("Agent ID and System Prompt are required.");
+			return;
+		}
+		if (!/^[a-zA-Z0-9_-]+$/.test(id.trim())) {
+			setFormError("Agent ID can only include letters, numbers, underscores, and dashes.");
+			return;
+		}
+
+		const normalizedSubAgents: AgentFormSubAgentPayload[] = [];
+		for (let index = 0; index < subAgents.length; index += 1) {
+			const sub = subAgents[index];
+			const hasValue =
+				sub.id.trim() ||
+				sub.description.trim() ||
+				sub.model.trim() ||
+				sub.prompt.trim() ||
+				sub.tools.length > 0 ||
+				sub.promptTrainingEnabled ||
+				sub.promptTrainingPath.trim();
+			if (!hasValue) {
+				continue;
+			}
+			const subId = sub.id.trim();
+			if (!subId || !/^[a-zA-Z0-9_-]+$/.test(subId)) {
+				setFormError(
+					`Subagent ${index + 1} ID is required and must be alphanumeric (with _ or -).`,
+				);
+				return;
+			}
+			const subPrompt = sub.prompt.trim();
+			if (!subPrompt) {
+				setFormError(`Subagent ${index + 1} prompt is required.`);
+				return;
+			}
+			const subDescription = sub.description.trim();
+			if (!subDescription) {
+				setFormError(`Subagent ${index + 1} description is required.`);
+				return;
+			}
+			normalizedSubAgents.push({
+				id: subId,
+				description: subDescription,
+				model: sub.model.trim() || undefined,
+				tools: sub.tools,
+				prompt: subPrompt,
+				promptTraining: buildPromptTrainingPayload(
+					sub.promptTrainingEnabled,
+					sub.promptTrainingPath,
+				),
+			});
+		}
+
 		setSubmitting(true);
 		const voicePayload = buildVoicePayload();
 		const payload = {
@@ -218,6 +400,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			tools: selectedTools,
 			prompt: prompt.trim() || undefined,
 			voice: voicePayload,
+			promptTraining: buildPromptTrainingPayload(
+				promptTrainingEnabled,
+				promptTrainingPath,
+			),
+			subAgents: normalizedSubAgents,
 		};
 		const ok = isEditing && editingAgentId
 			? await onUpdateAgent(editingAgentId, payload)
@@ -232,16 +419,21 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			setDescription("");
 			setModel("");
 			setPrompt("");
+			setPromptTrainingEnabled(false);
+			setPromptTrainingPath("");
 			setSelectedTools([]);
+			setSubAgents([]);
 			setEditingAgentId(null);
 			applyVoiceConfig(undefined);
+			setFormError("");
 		}
 	};
 
 	const loadAgentForEdit = async () => {
 		if (!selectedAgent) return;
+		const targetAgentId = selectedAgent.parentId || selectedAgent.id;
 		setLoadingDetails(true);
-		const detail = await onLoadAgent(selectedAgent.id);
+		const detail = await onLoadAgent(targetAgentId);
 		setLoadingDetails(false);
 		if (!detail) return;
 		setEditingAgentId(detail.id);
@@ -250,8 +442,30 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		setDescription(detail.description || "");
 		setModel(detail.model || "");
 		setPrompt(detail.prompt || "");
+		const promptTraining = parsePromptTraining(
+			detail.promptTraining ?? detail.promptRefinement,
+		);
+		setPromptTrainingEnabled(promptTraining.enabled);
+		setPromptTrainingPath(promptTraining.instructionsPath);
 		setSelectedTools(detail.tools || []);
+		setSubAgents(
+			(detail.subAgents || []).map((sub) => {
+				const subPromptTraining = parsePromptTraining(
+					sub.promptTraining ?? sub.promptRefinement,
+				);
+				return {
+					id: sub.id || "",
+					description: sub.description || "",
+					model: sub.model || "",
+					prompt: sub.prompt || "",
+					tools: sub.tools || [],
+					promptTrainingEnabled: subPromptTraining.enabled,
+					promptTrainingPath: subPromptTraining.instructionsPath,
+				};
+			}),
+		);
 		applyVoiceConfig(detail.voice);
+		setFormError("");
 	};
 
 	const resetForm = () => {
@@ -261,8 +475,12 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		setDescription("");
 		setModel("");
 		setPrompt("");
+		setPromptTrainingEnabled(false);
+		setPromptTrainingPath("");
 		setSelectedTools([]);
+		setSubAgents([]);
 		applyVoiceConfig(undefined);
+		setFormError("");
 	};
 
 	return (
@@ -450,6 +668,30 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								required
 							/>
 						</div>
+						<div className="space-y-3 rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
+							<div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+								Prompt Training
+							</div>
+							<label className="flex items-center gap-2 text-sm text-slate-200">
+								<input
+									type="checkbox"
+									checked={promptTrainingEnabled}
+									onChange={(event) => setPromptTrainingEnabled(event.target.checked)}
+								/>
+								Enable prompt training
+							</label>
+							{promptTrainingEnabled ? (
+								<input
+									className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+									value={promptTrainingPath}
+									onChange={(event) => setPromptTrainingPath(event.target.value)}
+									placeholder="Optional instructions path (e.g. /memories/agents/my-agent/instructions.md)"
+								/>
+							) : null}
+							<p className="text-xs text-slate-400">
+								Configure prompt training for this agent.
+							</p>
+						</div>
 						<div className="space-y-2">
 							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 								Tools
@@ -467,6 +709,168 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 									>
 										{tool}
 									</button>
+								))}
+							</div>
+						</div>
+						<div className="space-y-3 rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
+							<div className="flex items-center justify-between gap-3">
+								<div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+									Subagents
+								</div>
+								<button className="button-ghost text-xs" type="button" onClick={addSubAgent}>
+									Add Subagent
+								</button>
+							</div>
+							<p className="text-xs text-slate-400">
+								Add specialized subagents this agent can delegate to.
+							</p>
+							{subAgents.length === 0 ? (
+								<p className="text-xs text-slate-500">No subagents configured.</p>
+							) : null}
+							<div className="space-y-3">
+								{subAgents.map((subAgent, subIndex) => (
+									<div
+										key={`subagent-${subIndex}`}
+										className="space-y-3 rounded-xl border border-white/10 bg-slate-900/60 p-3"
+									>
+										<div className="flex items-center justify-between gap-3">
+											<div className="text-xs font-semibold text-slate-200">
+												Subagent {subIndex + 1}
+											</div>
+											<button
+												type="button"
+												className="text-xs text-red-300 hover:text-red-200"
+												onClick={() => removeSubAgent(subIndex)}
+											>
+												Remove
+											</button>
+										</div>
+										<div className="space-y-2">
+											<select
+												className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+												value={
+													subAgentTemplateIds.has(subAgent.id.trim())
+														? subAgent.id.trim()
+														: ""
+												}
+												onChange={(event) => {
+													void applyTemplateAgent(subIndex, event.target.value);
+												}}
+												disabled={subAgentTemplateOptions.length === 0}
+											>
+												<option value="">
+													{subAgentTemplateOptions.length > 0
+														? "Use Existing Agent (Optional)"
+														: "No existing agents available"}
+												</option>
+												{subAgentTemplateOptions.map((option) => (
+													<option key={option.id} value={option.id}>
+														{option.label}
+													</option>
+												))}
+											</select>
+										</div>
+										<p className="text-xs text-slate-400">
+											Selecting an existing agent copies its ID, prompt, description, tools,
+											model, and prompt training settings.
+										</p>
+										<div className="grid gap-3 md:grid-cols-2">
+											<input
+												className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+												value={subAgent.id}
+												onChange={(event) =>
+													updateSubAgent(subIndex, (current) => ({
+														...current,
+														id: event.target.value,
+													}))
+												}
+												placeholder="Subagent ID (e.g. planner)"
+											/>
+											<input
+												className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+												value={subAgent.model}
+												onChange={(event) =>
+													updateSubAgent(subIndex, (current) => ({
+														...current,
+														model: event.target.value,
+													}))
+												}
+												placeholder="Optional model override"
+											/>
+										</div>
+										<textarea
+											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+											rows={2}
+											value={subAgent.description}
+											onChange={(event) =>
+												updateSubAgent(subIndex, (current) => ({
+													...current,
+													description: event.target.value,
+												}))
+											}
+											placeholder="Subagent description"
+										/>
+										<textarea
+											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+											rows={3}
+											value={subAgent.prompt}
+											onChange={(event) =>
+												updateSubAgent(subIndex, (current) => ({
+													...current,
+													prompt: event.target.value,
+												}))
+											}
+											placeholder="Subagent system prompt"
+										/>
+										<div className="space-y-2">
+											<div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+												Subagent Tools
+											</div>
+											<div className="flex flex-wrap gap-2">
+												{availableTools.map((tool) => (
+													<button
+														key={`${subIndex}-${tool}`}
+														type="button"
+														className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${subAgent.tools.includes(tool)
+															? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+															: "border-white/10 bg-slate-900/60 text-slate-300"
+															}`}
+														onClick={() => toggleSubAgentTool(subIndex, tool)}
+													>
+														{tool}
+													</button>
+												))}
+											</div>
+										</div>
+										<div className="space-y-2">
+											<label className="flex items-center gap-2 text-xs text-slate-300">
+												<input
+													type="checkbox"
+													checked={subAgent.promptTrainingEnabled}
+													onChange={(event) =>
+														updateSubAgent(subIndex, (current) => ({
+															...current,
+															promptTrainingEnabled: event.target.checked,
+														}))
+													}
+												/>
+												Enable prompt training
+											</label>
+											{subAgent.promptTrainingEnabled ? (
+												<input
+													className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+													value={subAgent.promptTrainingPath}
+													onChange={(event) =>
+														updateSubAgent(subIndex, (current) => ({
+															...current,
+															promptTrainingPath: event.target.value,
+														}))
+													}
+													placeholder="Optional instructions path"
+												/>
+											) : null}
+										</div>
+									</div>
 								))}
 							</div>
 						</div>
@@ -585,6 +989,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								) : null}
 							</div>
 						</details>
+						{formError ? (
+							<div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+								{formError}
+							</div>
+						) : null}
 						<button className="button-primary w-full" type="submit" disabled={submitting}>
 							{submitting
 								? isEditing

@@ -60,4 +60,64 @@ describe("extractAttachments", () => {
 			{ kind: "audio", dataUrl: "data:audio/wav;base64,abc" },
 		]);
 	});
+
+	it("extracts standardized base64 file blocks", () => {
+		const blocks = [
+			{
+				type: "file",
+				source_type: "base64",
+				data: "JVBERi0xLjQK",
+				mime_type: "application/pdf",
+				metadata: { filename: "report.pdf" },
+			},
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{
+				kind: "file",
+				dataUrl: "data:application/pdf;base64,JVBERi0xLjQK",
+				name: "report.pdf",
+				mimeType: "application/pdf",
+			},
+		]);
+	});
+
+	it("extracts input_file blocks", () => {
+		const blocks = [
+			{
+				type: "input_file",
+				file_data: "data:application/pdf;base64,JVBERi0xLjQK",
+				filename: "invoice.pdf",
+			},
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{
+				kind: "file",
+				dataUrl: "data:application/pdf;base64,JVBERi0xLjQK",
+				name: "invoice.pdf",
+				mimeType: "application/pdf",
+			},
+		]);
+	});
+
+	it("extracts anthropic document blocks", () => {
+		const blocks = [
+			{
+				type: "document",
+				title: "scan.pdf",
+				source: {
+					type: "base64",
+					media_type: "application/pdf",
+					data: "JVBERi0xLjQK",
+				},
+			},
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{
+				kind: "file",
+				dataUrl: "data:application/pdf;base64,JVBERi0xLjQK",
+				name: "scan.pdf",
+				mimeType: "application/pdf",
+			},
+		]);
+	});
 });

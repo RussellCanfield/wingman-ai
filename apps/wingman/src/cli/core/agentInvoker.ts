@@ -48,7 +48,34 @@ export type AudioAttachment = {
 	size?: number;
 };
 
-export type MediaAttachment = ImageAttachment | AudioAttachment;
+export type FileAttachment = {
+	kind: "file";
+	dataUrl: string;
+	textContent: string;
+	mimeType?: string;
+	name?: string;
+	size?: number;
+};
+
+export type MediaAttachment = ImageAttachment | AudioAttachment | FileAttachment;
+
+type UserContentPart =
+	| { type: "text"; text: string }
+	| { type: "image_url"; image_url: { url: string } }
+	| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
+	| { type: "audio"; source_type: "url"; url: string; mime_type?: string }
+	| {
+			type: "file";
+			source_type: "base64" | "url";
+			mime_type: string;
+			data?: string;
+			url?: string;
+			metadata?: {
+				filename: string;
+				name: string;
+				title: string;
+			};
+	  };
 
 export class AgentInvoker {
 	private loader: AgentLoader;
@@ -239,7 +266,11 @@ export class AgentInvoker {
 
 			this.logger.debug("Agent created, sending message");
 
-			const userContent = buildUserContent(prompt, attachments);
+			const userContent = buildUserContent(
+				prompt,
+				attachments,
+				targetAgent.model,
+			);
 
 			// Use streaming if session manager is available, otherwise fall back to invoke
 			if (this.sessionManager && sessionId) {
@@ -324,28 +355,32 @@ export class AgentInvoker {
 export function buildUserContent(
 	prompt: string,
 	attachments?: MediaAttachment[],
-): string | Array<
-	| { type: "text"; text: string }
-	| { type: "image_url"; image_url: { url: string } }
-	| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
-	| { type: "audio"; source_type: "url"; url: string; mime_type?: string }
-> {
+	model?: unknown,
+): string | UserContentPart[] {
 	const text = prompt?.trim() ?? "";
 	if (!attachments || attachments.length === 0) {
 		return text;
 	}
 
-	const parts: Array<
-		| { type: "text"; text: string }
-		| { type: "image_url"; image_url: { url: string } }
-		| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
-		| { type: "audio"; source_type: "url"; url: string; mime_type?: string }
-	> = [];
+	const parts: UserContentPart[] = [];
 	if (text) {
 		parts.push({ type: "text", text });
 	}
 	for (const attachment of attachments) {
-		if (!attachment?.dataUrl) continue;
+		if (!attachment) continue;
+		if (isFileAttachment(attachment)) {
+			const nativePdfPart = buildNativePdfPart(attachment, model);
+			if (nativePdfPart) {
+				parts.push(nativePdfPart);
+				continue;
+			}
+			parts.push({
+				type: "text",
+				text: buildFileAttachmentText(attachment),
+			});
+			continue;
+		}
+		if (!attachment.dataUrl) continue;
 		if (isAudioAttachment(attachment)) {
 			const audioPart = buildAudioPart(attachment);
 			if (audioPart) {
@@ -365,11 +400,89 @@ export function buildUserContent(
 	return parts;
 }
 
+function supportsNativePdfInputs(model?: unknown): boolean {
+	if (!model || typeof model !== "object") return false;
+	try {
+		const profile = (model as { profile?: { pdfInputs?: unknown } }).profile;
+		if (!profile || typeof profile !== "object") return false;
+		return profile.pdfInputs === true;
+	} catch {
+		return false;
+	}
+}
+
+function isPdfName(name?: string): boolean {
+	return (name || "").trim().toLowerCase().endsWith(".pdf");
+}
+
+function resolveFileMimeType(attachment: FileAttachment): string {
+	const direct = attachment.mimeType?.trim().toLowerCase();
+	if (direct) {
+		return direct.split(";")[0] || "";
+	}
+	const parsed = parseDataUrl(attachment.dataUrl);
+	return (parsed.mimeType || "").trim().toLowerCase().split(";")[0] || "";
+}
+
+function buildFileMetadata(
+	attachment: FileAttachment,
+	defaultName: string,
+): {
+	filename: string;
+	name: string;
+	title: string;
+} {
+	const filename = attachment.name?.trim() || defaultName;
+	return {
+		filename,
+		name: filename,
+		title: filename,
+	};
+}
+
+function buildNativePdfPart(
+	attachment: FileAttachment,
+	model?: unknown,
+): UserContentPart | null {
+	if (!supportsNativePdfInputs(model)) return null;
+
+	const mimeType = resolveFileMimeType(attachment);
+	const isPdf = mimeType === "application/pdf" || isPdfName(attachment.name);
+	if (!isPdf) return null;
+
+	const metadata = buildFileMetadata(attachment, "document.pdf");
+	const parsed = parseDataUrl(attachment.dataUrl);
+	if (parsed.data) {
+		return {
+			type: "file",
+			source_type: "base64",
+			mime_type: parsed.mimeType || mimeType || "application/pdf",
+			data: parsed.data,
+			metadata,
+		};
+	}
+
+	const url = attachment.dataUrl?.trim();
+	if (!url || !url.startsWith("data:")) return null;
+	return {
+		type: "file",
+		source_type: "url",
+		mime_type: mimeType || "application/pdf",
+		url,
+		metadata,
+	};
+}
+
 function isAudioAttachment(attachment: MediaAttachment): attachment is AudioAttachment {
 	if ((attachment as AudioAttachment).kind === "audio") return true;
 	if (attachment.mimeType?.startsWith("audio/")) return true;
 	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
 	return false;
+}
+
+function isFileAttachment(attachment: MediaAttachment): attachment is FileAttachment {
+	if ((attachment as FileAttachment).kind === "file") return true;
+	return typeof (attachment as FileAttachment).textContent === "string";
 }
 
 function buildAudioPart(
@@ -402,17 +515,42 @@ function parseDataUrl(dataUrl: string): { mimeType?: string; data?: string } {
 	return { mimeType: match[1], data: match[2] };
 }
 
+function buildFileAttachmentText(attachment: FileAttachment): string {
+	const name = attachment.name?.trim() || "file";
+	const mime = attachment.mimeType?.trim();
+	const sizeLabel =
+		typeof attachment.size === "number" && attachment.size >= 0
+			? `, ${attachment.size} bytes`
+			: "";
+	const meta = mime || sizeLabel
+		? ` (${[mime, sizeLabel.replace(/^, /, "")].filter(Boolean).join(", ")})`
+		: "";
+	const header = `[Attached file: ${name}${meta}]`;
+	const text = attachment.textContent?.trim();
+	if (!text) {
+		return `${header}\n[No extractable text content provided.]`;
+	}
+	return `${header}\n${text}`;
+}
+
 function buildAttachmentPreview(attachments: MediaAttachment[]): string {
+	let hasFile = false;
 	let hasAudio = false;
 	let hasImage = false;
 	for (const attachment of attachments) {
+		if (isFileAttachment(attachment)) {
+			hasFile = true;
+			continue;
+		}
 		if (isAudioAttachment(attachment)) {
 			hasAudio = true;
 		} else {
 			hasImage = true;
 		}
 	}
+	if (hasFile && (hasAudio || hasImage)) return "[files and media]";
 	if (hasAudio && hasImage) return "[attachments]";
+	if (hasFile) return "[file]";
 	if (hasAudio) return "[audio]";
 	if (hasImage) return "[image]";
 	return "";

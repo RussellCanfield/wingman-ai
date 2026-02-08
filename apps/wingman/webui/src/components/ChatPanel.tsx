@@ -2,7 +2,14 @@ import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FiAlertTriangle, FiLoader, FiMic, FiStopCircle, FiVolume2 } from "react-icons/fi";
+import {
+	FiAlertTriangle,
+	FiFileText,
+	FiLoader,
+	FiMic,
+	FiStopCircle,
+	FiVolume2,
+} from "react-icons/fi";
 import type { ChatAttachment, Thread } from "../types";
 import { extractImageFiles } from "../utils/attachments";
 import { getVoicePlaybackLabel, type VoicePlaybackStatus } from "../utils/voicePlayback";
@@ -15,6 +22,7 @@ type ChatPanelProps = {
 	activeThread?: Thread;
 	prompt: string;
 	attachments: ChatAttachment[];
+	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
 	connected: boolean;
@@ -44,6 +52,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	activeThread,
 	prompt,
 	attachments,
+	fileAccept,
 	attachmentError,
 	isStreaming,
 	connected,
@@ -73,7 +82,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const recordingCancelledRef = useRef(false);
 	const audioContextRef = useRef<AudioContext | null>(null);
 	const analyserRef = useRef<AnalyserNode | null>(null);
-	const analyserDataRef = useRef<Uint8Array | null>(null);
+	const analyserDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
 	const analyserRafRef = useRef<number | null>(null);
 	const [previewAttachment, setPreviewAttachment] =
 		useState<ChatAttachment | null>(null);
@@ -161,7 +170,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		analyser.fftSize = 256;
 		const source = audioContext.createMediaStreamSource(stream);
 		source.connect(analyser);
-		const data = new Uint8Array(analyser.fftSize);
+		const data = new Uint8Array(new ArrayBuffer(analyser.fftSize));
 		audioContextRef.current = audioContext;
 		analyserRef.current = analyser;
 		analyserDataRef.current = data;
@@ -524,27 +533,27 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 														rel="noreferrer"
 													/>
 												),
-												code: ({
-													node,
-													inline,
-													className,
-													children,
-													...props
-												}) =>
-													inline ? (
+												code: ({ node, className, children, ...props }) => {
+													const isBlock =
+														Boolean(className?.includes("language-")) ||
+														(node?.position
+															? node.position.start.line !== node.position.end.line
+															: false);
+													return isBlock ? (
+														<pre className="mt-3 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-3 text-xs">
+															<code {...props} className={className}>
+																{children}
+															</code>
+														</pre>
+													) : (
 														<code
 															{...props}
 															className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
 														>
 															{children}
 														</code>
-													) : (
-														<pre className="mt-3 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-3 text-xs">
-															<code {...props} className={className}>
-																{children}
-															</code>
-														</pre>
-													),
+													);
+												},
 												ul: ({ node, ...props }) => (
 													<ul {...props} className="ml-5 list-disc space-y-1" />
 												),
@@ -577,20 +586,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											))}
 										</div>
 									) : null}
-									{msg.attachments && msg.attachments.length > 0 ? (
-										<div className="mt-3 grid gap-2 sm:grid-cols-2">
-											{msg.attachments.map((attachment) => {
-												const isAudio = isAudioAttachment(attachment);
-												const audioAvailability = isAudio
-													? getAudioAvailability(attachment)
-													: null;
-												return (
-													<div
+										{msg.attachments && msg.attachments.length > 0 ? (
+											<div className="mt-3 grid gap-2 sm:grid-cols-2">
+												{msg.attachments.map((attachment) => {
+													const isAudio = isAudioAttachment(attachment);
+													const isFile = isFileAttachment(attachment);
+													const audioAvailability = isAudio
+														? getAudioAvailability(attachment)
+														: null;
+													return (
+														<div
 														key={attachment.id}
 														className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50"
 													>
-														{isAudio ? (
-															<div className="p-4">
+															{isAudio ? (
+																<div className="p-4">
 																{audioAvailability?.playable ? (
 																	<audio
 																		controls
@@ -615,9 +625,31 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 																	</div>
 																) : null}
 															</div>
-														) : (
-															<>
-																<button
+															) : isFile ? (
+																<div className="p-4">
+																	<div className="flex items-center gap-2 text-slate-200">
+																		<FiFileText className="h-4 w-4 text-sky-300" />
+																		<span className="truncate text-sm font-medium">
+																			{attachment.name || "File attachment"}
+																		</span>
+																	</div>
+																	<div className="mt-1 text-[11px] text-slate-400">
+																		{formatFileMeta(attachment)}
+																	</div>
+																	{attachment.textContent ? (
+																		<details className="mt-2 rounded-lg border border-white/10 bg-slate-900/60 p-2">
+																			<summary className="cursor-pointer text-[11px] uppercase tracking-[0.14em] text-slate-400">
+																				Preview text
+																			</summary>
+																			<pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">
+																				{clipFilePreview(attachment.textContent)}
+																			</pre>
+																		</details>
+																	) : null}
+																</div>
+															) : (
+																<>
+																	<button
 																	type="button"
 																	className="group relative block w-full"
 																	onClick={() => setPreviewAttachment(attachment)}
@@ -682,14 +714,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						Prompt
 					</label>
 					<div className="flex items-center gap-3 text-xs text-slate-400">
-						<button
-							type="button"
-							className="button-secondary px-3 py-2 text-xs"
-							onClick={handlePickFiles}
-							disabled={isStreaming}
-						>
-							Add Media
-						</button>
+							<button
+								type="button"
+								className="button-secondary px-3 py-2 text-xs"
+								onClick={handlePickFiles}
+								disabled={isStreaming}
+							>
+								Add Files
+							</button>
 						<button
 							type="button"
 							aria-pressed={recording}
@@ -728,31 +760,32 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								{formatDuration(recordingDuration)}
 							</span>
 						) : null}
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept="image/*,audio/*"
-							multiple
-							className="hidden"
-							onChange={handleFileChange}
-						/>
+							<input
+								ref={fileInputRef}
+								type="file"
+								accept={fileAccept}
+								multiple
+								className="hidden"
+								onChange={handleFileChange}
+							/>
 					</div>
 				</div>
-				{attachments.length > 0 ? (
-					<div className="mt-3 flex flex-wrap gap-2">
-						{attachments.map((attachment) => {
-							const isAudio = isAudioAttachment(attachment);
-							const audioAvailability = isAudio
-								? getAudioAvailability(attachment)
-								: null;
-							return (
-								<div
+					{attachments.length > 0 ? (
+						<div className="mt-3 flex flex-wrap gap-2">
+							{attachments.map((attachment) => {
+								const isAudio = isAudioAttachment(attachment);
+								const isFile = isFileAttachment(attachment);
+								const audioAvailability = isAudio
+									? getAudioAvailability(attachment)
+									: null;
+								return (
+									<div
 									key={attachment.id}
 									className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
 								>
-									{isAudio ? (
-										<div className="flex items-center gap-2 px-2 py-1">
-											{audioAvailability?.playable ? (
+										{isAudio ? (
+											<div className="flex items-center gap-2 px-2 py-1">
+												{audioAvailability?.playable ? (
 												<audio
 													controls
 													src={attachment.dataUrl}
@@ -765,11 +798,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												</div>
 											)}
 										</div>
-									) : (
-										<button
-											type="button"
-											className="h-12 w-12 cursor-zoom-in p-0"
-											onClick={() => setPreviewAttachment(attachment)}
+										) : isFile ? (
+											<div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-800/80 text-sky-200">
+												<FiFileText className="h-5 w-5" />
+											</div>
+										) : (
+											<button
+												type="button"
+												className="h-12 w-12 cursor-zoom-in p-0"
+												onClick={() => setPreviewAttachment(attachment)}
 										>
 											<img
 												src={attachment.dataUrl}
@@ -777,10 +814,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												className="h-full w-full object-cover"
 											/>
 										</button>
-									)}
-									<span className="max-w-[160px] truncate text-slate-300">
-										{attachment.name || (isAudio ? "Audio" : "Image")}
-									</span>
+										)}
+										<span className="max-w-[160px] truncate text-slate-300">
+											{attachment.name || (isAudio ? "Audio" : isFile ? "File" : "Image")}
+										</span>
 									<button
 										type="button"
 										className="text-slate-400 transition hover:text-rose-500"
@@ -913,6 +950,30 @@ function isAudioAttachment(attachment: ChatAttachment): boolean {
 	if (attachment.mimeType?.startsWith("audio/")) return true;
 	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
 	return false;
+}
+
+function isFileAttachment(attachment: ChatAttachment): boolean {
+	if (attachment.kind === "file") return true;
+	return typeof attachment.textContent === "string";
+}
+
+function formatFileMeta(attachment: ChatAttachment): string {
+	const meta: string[] = [];
+	if (attachment.mimeType) meta.push(attachment.mimeType);
+	if (typeof attachment.size === "number") meta.push(formatBytes(attachment.size));
+	return meta.length > 0 ? meta.join(" • ") : "Text extracted for model input";
+}
+
+function clipFilePreview(text: string): string {
+	const trimmed = text.trim();
+	if (trimmed.length <= 800) return trimmed;
+	return `${trimmed.slice(0, 800)}\n…`;
+}
+
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function pickSupportedAudioMimeType(): string | undefined {

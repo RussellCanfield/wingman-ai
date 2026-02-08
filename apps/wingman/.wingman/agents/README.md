@@ -23,6 +23,10 @@ Each agent configuration file follows this schema:
   "systemPrompt": "Detailed instructions for the agent...",
   "tools": ["tool1", "tool2"],
   "model": "provider:model-name",
+  "promptRefinement": {
+    "enabled": true,
+    "instructionsPath": "/memories/agents/agent-name/instructions.md"
+  },
   "subagents": [
     {
       "name": "subagent-1",
@@ -48,6 +52,9 @@ Each agent configuration file follows this schema:
 - **model**: Override the default model (format: `provider:model-name`)
   - Anthropic: `anthropic:claude-opus-4-5`, `anthropic:claude-sonnet-4-5-20250929`
   - OpenAI: `openai:gpt-4o`, `openai:gpt-4-turbo`
+- **promptRefinement**: Allow the agent to maintain a durable prompt overlay under `/memories/`
+  - `enabled`: Set true to allow updates from explicit user feedback
+  - `instructionsPath`: Optional override for the overlay file location (virtual path)
 - **subagents**: Array of subagent configurations (see [Hierarchical Agents](#hierarchical-agents) below)
   - Subagents may also set their own `model` to override the parent/default model
 

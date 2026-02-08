@@ -9,6 +9,7 @@ type ChatPageProps = {
 	activeThread?: Thread;
 	prompt: string;
 	attachments: ChatAttachment[];
+	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
 	connected: boolean;
@@ -36,6 +37,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	activeThread,
 	prompt,
 	attachments,
+	fileAccept,
 	attachmentError,
 	isStreaming,
 	connected,
@@ -85,9 +87,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 		<section className="grid gap-6 lg:grid-cols-[1fr_280px]">
 			<ChatPanel
 				activeThread={activeThread}
-				prompt={prompt}
-				attachments={attachments}
-				attachmentError={attachmentError}
+					prompt={prompt}
+					attachments={attachments}
+					fileAccept={fileAccept}
+					attachmentError={attachmentError}
 				isStreaming={isStreaming}
 				connected={connected}
 				loading={loadingThread}

@@ -73,6 +73,10 @@ XAI_API_KEY
   "systemPrompt": "Be concise. Ask clarifying questions when needed.",
   "tools": ["code_search", "git_status", "command_execute", "internet_search"],
   "model": "anthropic:claude-sonnet-4-5",
+  "promptRefinement": {
+    "enabled": true,
+    "instructionsPath": "/memories/agents/wingman/instructions.md"
+  },
   "blockedCommands": ["rm", "mv"],
   "allowScriptExecution": true,
   "commandTimeout": 300000,
@@ -99,6 +103,9 @@ XAI_API_KEY
 name: researcher
 description: Gathers context and produces concise briefs.
 model: openrouter:openai/gpt-4o
+promptRefinement:
+  enabled: true
+  instructionsPath: /memories/agents/researcher/instructions.md
 tools:
   - internet_search
   - web_crawler
@@ -183,11 +190,20 @@ Agents can only use the tools listed in the `tools` array. Available tool names:
 
 `subAgents` lets you define specialist agents. The parent agent can delegate tasks when needed. Each sub-agent supports the same schema fields as a normal agent.
 
+## Prompt refinement
+
+`promptRefinement` enables a per-agent instruction overlay that the agent can update over time based on explicit feedback.
+
+- The overlay is stored under `/memories/` so it persists across sessions.
+- Updates only happen when users give clear, durable preferences (e.g., “always do X”, “never do Y”).
+- Keep the file short and stable: preferences, workflow rules, and corrections.
+
 ## MCP and voice overrides
 
 - `mcp`: agent-specific MCP servers
 - `mcpUseGlobal`: include global MCP servers from `wingman.config.json`
 - `voice`: overrides global voice configuration for this agent
+- `promptRefinement`: enable/disable prompt refinement and set the overlay path
 
 ## Why voice is duplicated in agent config
 

@@ -8,11 +8,12 @@
 
 ## Executive Summary
 
-Wingman is a three-part AI agent ecosystem:
+Wingman is a four-part AI agent ecosystem:
 
 1. **Wingman Gateway** - A central runtime that hosts agents, sessions, routing, and channels with durable state
 2. **Wingman CLI** - A control plane for configuration and invocation; defaults to gateway execution with a `--local` override
 3. **Wingman macOS App (Planned)** - A menu-bar companion that manages macOS permissions, attaches to the gateway, and exposes macOS-only capabilities as a node
+4. **Wingman Windows App (Planned)** - A system tray companion that manages Windows permissions, attaches to the gateway, and exposes Windows-only capabilities as a node
 
 The vision is simple: run agents through a local gateway with durable state, and optionally connect additional devices and channels for collaboration.
 
@@ -137,6 +138,7 @@ macOS-only capabilities to the gateway as a node.
 | Component | Purpose | Documentation |
 |-----------|---------|---------------|
 | **macOS App** | Menu-bar companion for permissions and macOS tools | [PRD-003](003-macos-app-prd.md) |
+| **Desktop Companion (Tauri)** | Cross-platform tray companion with OS adapters (macOS-first parity path) | [PRD-006](006-windows-app-prd.md) |
 | **Node Protocol (Planned)** | Node connect/invoke and pairing flow | [PRD-004](004-node-protocol.md) |
 | **Web UI SGUI (Planned)** | Static generative UI registry and components | [PRD-005](005-web-ui-sgui-prd.md) |
 

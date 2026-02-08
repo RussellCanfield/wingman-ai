@@ -48,7 +48,7 @@ export interface SessionMessage {
 }
 
 export interface SessionAttachment {
-	kind: "image" | "audio";
+	kind: "image" | "audio" | "file";
 	dataUrl: string;
 	name?: string;
 	mimeType?: string;
@@ -837,11 +837,17 @@ export function extractAttachments(blocks: any[]): SessionAttachment[] {
 			continue;
 		}
 		const audioUrl = extractAudioUrl(block);
-		if (!audioUrl) continue;
-		attachments.push({
-			kind: "audio",
-			dataUrl: audioUrl,
-		});
+		if (audioUrl) {
+			attachments.push({
+				kind: "audio",
+				dataUrl: audioUrl,
+			});
+			continue;
+		}
+		const fileAttachment = extractFileAttachment(block);
+		if (fileAttachment) {
+			attachments.push(fileAttachment);
+		}
 	}
 	return attachments;
 }
@@ -913,6 +919,123 @@ function extractAudioUrl(block: any): string | null {
 			return block.url;
 		}
 	}
+	return null;
+}
+
+function parseDataUrlMime(dataUrl?: string): string | undefined {
+	if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+		return undefined;
+	}
+	const match = dataUrl.match(/^data:([^;,]+)[;,]/i);
+	return match?.[1];
+}
+
+function extractString(...values: unknown[]): string | undefined {
+	for (const value of values) {
+		if (typeof value === "string" && value.trim().length > 0) {
+			return value.trim();
+		}
+	}
+	return undefined;
+}
+
+function extractFileAttachment(block: any): SessionAttachment | null {
+	if (!block || typeof block !== "object") return null;
+
+	if (block.type === "file") {
+		const sourceType = block.source_type || block.sourceType;
+		const metadata = (block.metadata && typeof block.metadata === "object"
+			? block.metadata
+			: {}) as Record<string, unknown>;
+		const name = extractString(
+			block.name,
+			block.filename,
+			metadata.filename,
+			metadata.name,
+			metadata.title,
+		);
+		const declaredMime = extractString(
+			block.mime_type,
+			block.mimeType,
+			block.media_type,
+			block.mediaType,
+		);
+		if (sourceType === "base64" && typeof block.data === "string") {
+			const mimeType = declaredMime || "application/octet-stream";
+			return {
+				kind: "file",
+				dataUrl: `data:${mimeType};base64,${block.data}`,
+				name,
+				mimeType,
+			};
+		}
+		if (sourceType === "url" && typeof block.url === "string") {
+			const mimeType = declaredMime || parseDataUrlMime(block.url);
+			return {
+				kind: "file",
+				dataUrl: block.url,
+				name,
+				mimeType,
+			};
+		}
+		const openAiFile = block.file;
+		if (openAiFile && typeof openAiFile === "object") {
+			const fileData = extractString(openAiFile.file_data, openAiFile.data);
+			const fileUrl = extractString(openAiFile.file_url, openAiFile.url);
+			const fileName = extractString(openAiFile.filename, name);
+			if (fileData) {
+				return {
+					kind: "file",
+					dataUrl: fileData,
+					name: fileName,
+					mimeType: parseDataUrlMime(fileData),
+				};
+			}
+			if (fileUrl) {
+				return {
+					kind: "file",
+					dataUrl: fileUrl,
+					name: fileName,
+					mimeType: parseDataUrlMime(fileUrl),
+				};
+			}
+		}
+	}
+
+	if (block.type === "input_file") {
+		const dataUrl = extractString(block.file_data, block.file_url);
+		if (!dataUrl) return null;
+		return {
+			kind: "file",
+			dataUrl,
+			name: extractString(block.filename),
+			mimeType: parseDataUrlMime(dataUrl),
+		};
+	}
+
+	if (block.type === "document" && block.source && typeof block.source === "object") {
+		const source = block.source as Record<string, unknown>;
+		const sourceType = extractString(source.type);
+		const name = extractString(block.title);
+		if (sourceType === "base64" && typeof source.data === "string") {
+			const mimeType = extractString(source.media_type, "application/pdf");
+			return {
+				kind: "file",
+				dataUrl: `data:${mimeType};base64,${source.data}`,
+				name,
+				mimeType,
+			};
+		}
+		if (sourceType === "url" && typeof source.url === "string") {
+			return {
+				kind: "file",
+				dataUrl: source.url,
+				name,
+				mimeType: parseDataUrlMime(source.url),
+			};
+		}
+	}
+
 	return null;
 }
 

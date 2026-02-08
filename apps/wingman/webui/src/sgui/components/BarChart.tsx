@@ -9,7 +9,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import type { TooltipProps } from "recharts";
+import type { TooltipContentProps, TooltipPayloadEntry } from "recharts";
 import { chartPalette, formatMetricValue, type AxisScale } from "./chartUtils";
 
 type BarDatum = {
@@ -28,14 +28,15 @@ export type BarChartProps = {
 	xScale?: AxisScale;
 };
 
-const ChartTooltip: React.FC<TooltipProps<number, string> & { unit?: string }> = ({
+const ChartTooltip: React.FC<TooltipContentProps<number, string> & { unit?: string }> = ({
 	active,
 	payload,
 	label,
 	unit,
 }) => {
 	if (!active || !payload?.length) return null;
-	const data = payload[0];
+	const entries = payload as ReadonlyArray<TooltipPayloadEntry<number, string>>;
+	const data = entries[0];
 	const helper = data?.payload?.helper as string | undefined;
 	return (
 		<div className="rounded-lg border border-white/10 bg-slate-950/90 px-3 py-2 text-xs text-slate-200 shadow-xl">
@@ -118,7 +119,7 @@ export const BarChart: React.FC<BarChartProps> = ({
 									width={40}
 									scale={yScale}
 								/>
-								<Tooltip
+								<Tooltip<number, string>
 									content={(props) => <ChartTooltip {...props} unit={unit} />}
 									cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
 								/>

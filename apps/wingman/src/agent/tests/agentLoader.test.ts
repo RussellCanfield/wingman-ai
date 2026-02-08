@@ -244,5 +244,28 @@ Markdown agent`;
 			expect(Array.isArray(sub.tools)).toBe(true);
 			expect(sub.tools?.[0]).toHaveProperty("name", "think");
 		});
+
+		it("should append prompt refinement instructions when enabled", async () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "refiner-agent");
+			mkdirSync(agentDir, { recursive: true });
+
+			const config = {
+				name: "refiner-agent",
+				description: "Agent that refines its prompt",
+				systemPrompt: "You are a refiner agent",
+				promptRefinement: true,
+			};
+
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
+
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agent = await loader.loadAgent("refiner-agent");
+
+			expect(agent).toBeDefined();
+			expect(agent?.systemPrompt).toContain("[[wingman:prompt-refinement]]");
+			expect(agent?.systemPrompt).toContain(
+				"/memories/agents/refiner-agent/instructions.md",
+			);
+		});
 	});
 });

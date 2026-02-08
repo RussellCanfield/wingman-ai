@@ -9,7 +9,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import type { TooltipProps } from "recharts";
+import type { TooltipContentProps, TooltipPayloadEntry } from "recharts";
 import {
 	buildSeriesDataset,
 	chartPalette,
@@ -31,17 +31,18 @@ export type AreaChartProps = {
 	stacked?: boolean;
 };
 
-const ChartTooltip: React.FC<TooltipProps<number, string>> = ({
+const ChartTooltip: React.FC<TooltipContentProps<number, string>> = ({
 	active,
 	payload,
 	label,
 }) => {
 	if (!active || !payload?.length) return null;
+	const entries = payload as ReadonlyArray<TooltipPayloadEntry<number, string>>;
 	return (
 		<div className="rounded-lg border border-white/10 bg-slate-950/90 px-3 py-2 text-xs text-slate-200 shadow-xl">
 			<div className="text-slate-400">{label}</div>
 			<div className="mt-2 space-y-1">
-				{payload.map((item) => (
+				{entries.map((item) => (
 					<div
 						key={item.dataKey?.toString()}
 						className="flex items-center justify-between gap-3"
@@ -51,7 +52,12 @@ const ChartTooltip: React.FC<TooltipProps<number, string>> = ({
 								className="h-2 w-2 rounded-full"
 								style={{ backgroundColor: item.color ?? "#38bdf8" }}
 							/>
-							<span>{item.name ?? item.dataKey}</span>
+							<span>
+								{item.name ??
+									(typeof item.dataKey === "string" || typeof item.dataKey === "number"
+										? item.dataKey
+										: "")}
+							</span>
 						</span>
 						<span className="font-semibold text-slate-100">
 							{formatMetricValue(Number(item.value))}
@@ -132,8 +138,8 @@ export const AreaChart: React.FC<AreaChartProps> = ({
 									width={40}
 									scale={yScale}
 								/>
-								<Tooltip
-									content={<ChartTooltip />}
+								<Tooltip<number, string>
+									content={(props) => <ChartTooltip {...props} />}
 									cursor={{ stroke: "rgba(148, 163, 184, 0.4)", strokeDasharray: "3 4" }}
 								/>
 								{showLegend ? (

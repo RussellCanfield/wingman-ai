@@ -40,6 +40,22 @@ export type AgentVoiceConfig = {
 	elevenlabs?: ElevenLabsOptions;
 };
 
+export type PromptTrainingConfig = {
+	enabled?: boolean;
+	instructionsPath?: string;
+};
+
+export type AgentSubAgent = {
+	id: string;
+	displayName: string;
+	description?: string;
+	tools: string[];
+	model?: string;
+	prompt?: string;
+	promptTraining?: PromptTrainingConfig | boolean;
+	promptRefinement?: PromptTrainingConfig | boolean;
+};
+
 export type AgentSummary = {
 	id: string;
 	displayName: string;
@@ -47,13 +63,9 @@ export type AgentSummary = {
 	tools: string[];
 	model?: string;
 	voice?: AgentVoiceConfig;
-	subAgents?: Array<{
-		id: string;
-		displayName: string;
-		description?: string;
-		tools: string[];
-		model?: string;
-	}>;
+	promptTraining?: PromptTrainingConfig | boolean;
+	promptRefinement?: PromptTrainingConfig | boolean;
+	subAgents?: AgentSubAgent[];
 };
 
 export type AgentDetail = {
@@ -63,6 +75,9 @@ export type AgentDetail = {
 	tools: string[];
 	model?: string;
 	voice?: AgentVoiceConfig;
+	promptTraining?: PromptTrainingConfig | boolean;
+	promptRefinement?: PromptTrainingConfig | boolean;
+	subAgents?: AgentSubAgent[];
 	prompt: string;
 };
 
@@ -95,8 +110,9 @@ export type GatewayMessage = {
 
 export type ChatAttachment = {
 	id: string;
-	kind: "image" | "audio";
+	kind: "image" | "audio" | "file";
 	dataUrl: string;
+	textContent?: string;
 	name?: string;
 	mimeType?: string;
 	size?: number;

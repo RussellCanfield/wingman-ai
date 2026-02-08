@@ -54,7 +54,7 @@ function getToolStyle(toolName: string): ToolStyle {
 	return TOOL_STYLES.default;
 }
 
-function getStatusIndicator(status: ToolCallBlock["status"]): JSX.Element {
+function getStatusIndicator(status: ToolCallBlock["status"]): React.ReactElement {
 	switch (status) {
 		case "running":
 			return (

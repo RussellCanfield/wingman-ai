@@ -104,6 +104,39 @@ describe("Agent Configuration Schema", () => {
 			expect(parsed.allowScriptExecution).toBe(true);
 			expect(parsed.commandTimeout).toBe(300000);
 		});
+
+		it("should accept prompt refinement configuration", () => {
+			const config = {
+				name: "refiner",
+				description: "Refines its prompt",
+				systemPrompt: "You are a refiner",
+				promptRefinement: true,
+			};
+
+			const result = validateAgentConfig(config);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.promptRefinement?.enabled).toBe(true);
+			}
+
+			const configWithPath = {
+				name: "refiner-2",
+				description: "Refines its prompt with path",
+				systemPrompt: "You are a refiner",
+				promptRefinement: {
+					instructionsPath: "/memories/agents/refiner-2/instructions.md",
+				},
+			};
+
+			const resultWithPath = validateAgentConfig(configWithPath);
+			expect(resultWithPath.success).toBe(true);
+			if (resultWithPath.success) {
+				expect(resultWithPath.data.promptRefinement?.instructionsPath).toBe(
+					"/memories/agents/refiner-2/instructions.md",
+				);
+				expect(resultWithPath.data.promptRefinement?.enabled).toBe(true);
+			}
+		});
 	});
 
 	describe("Tool names enum", () => {

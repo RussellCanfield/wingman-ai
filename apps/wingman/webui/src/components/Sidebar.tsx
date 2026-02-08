@@ -40,7 +40,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 	deviceId,
 	getAgentLabel,
 }) => {
-	const docsUrl = import.meta.env.VITE_DOCS_URL ?? "/docs";
 	const navClass = (active: boolean) =>
 		`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold transition ${active
 			? "border-sky-500/50 bg-sky-500/15 text-sky-300"
@@ -86,7 +85,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 					<span>Routines</span>
 				</NavLink>
 				<a
-					href={docsUrl}
+					href="https://docs.getwingmanai.com"
 					target="_blank"
 					rel="noreferrer"
 					className={navClass(false)}

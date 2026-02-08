@@ -57,6 +57,16 @@ wingman gateway join ws://host:port/ws --name="node-1"
 
 `fsRoots` defines which directories the gateway exposes to tools. Keep this list tight to reduce risk.
 
+## Control UI uploads
+
+The Control UI chat supports file uploads in addition to existing media capture:
+
+- Media (existing): image uploads, pasted screenshots, and audio/voice attachments
+- Text/code files: `.txt`, `.md`, `.csv`, `.json`, `.yaml`, `.yml`, `.xml`, `.log`, `.ts`, `.js`, `.py`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, `.sql`, `.html`, `.css`
+- PDF: `.pdf` uploads use provider-native PDF handling when supported, with text-extraction fallback
+
+If local PDF text extraction fails, Wingman still sends a fallback note so the request continues without breaking.
+
 ## State directory
 
 Set `gateway.stateDir` to control where persistent data is stored (sessions, routines). If omitted, Wingman uses `.wingman/`.

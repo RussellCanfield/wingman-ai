@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.2
-**Last Updated:** 2026-02-02
+**Version:** 1.2.3
+**Last Updated:** 2026-02-07
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -353,6 +353,10 @@ Users can define custom agents via JSON or Markdown configuration files without 
   "systemPrompt": "Detailed instructions defining agent behavior",
   "tools": ["command_execute", "think"],
   "model": "anthropic:claude-sonnet-4-5",
+  "promptRefinement": {
+    "enabled": true,
+    "instructionsPath": "/memories/agents/my-agent/instructions.md"
+  },
   "voice": {
     "provider": "elevenlabs",
     "elevenlabs": { "voiceId": "voice-id" }
@@ -373,6 +377,9 @@ tools:
   - command_execute
   - think
 model: anthropic:claude-sonnet-4-5
+promptRefinement:
+  enabled: true
+  instructionsPath: /memories/agents/my-agent/instructions.md
 voice:
   provider: elevenlabs
   elevenlabs:
@@ -392,6 +399,7 @@ Notes:
 - `promptFile` is resolved relative to the agent directory and is inlined into `systemPrompt`.
 - `subagents` (lowercase) is accepted for backward compatibility but normalized to `subAgents`.
 - `voice` can override the gateway default TTS provider and settings for this agent.
+- `promptRefinement` enables a per-agent instruction overlay under `/memories/` that is updated only on explicit feedback.
 
 ### Available Tools
 - `internet_search`: Web search (Tavily or DuckDuckGo)

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import type { ThinkingEvent, ToolEvent } from "../types";
 import { ToolEventPanel } from "./ToolEventPanel";
 
@@ -21,6 +21,9 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 	const hasThinking = sortedThinking.length > 0;
 	const hasTools = toolEvents.length > 0;
 	const summaryParts: string[] = [];
+	const [isOpen, setIsOpen] = useState(
+		() => isStreaming && (hasThinking || activeTools > 0),
+	);
 
 	if (hasThinking) {
 		summaryParts.push(
@@ -40,10 +43,17 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 
 	const summary = summaryParts.length > 0 ? summaryParts.join(" • ") : "Activity";
 
+	useEffect(() => {
+		if (isStreaming && (hasThinking || activeTools > 0)) {
+			setIsOpen(true);
+		}
+	}, [activeTools, hasThinking, isStreaming]);
+
 	return (
 		<details
 			className="rounded-2xl border border-sky-400/40 bg-sky-500/10 px-4 py-3 text-sm text-slate-200 shadow-[0_10px_18px_rgba(18,14,12,0.08)]"
-			defaultOpen={isStreaming && (hasThinking || activeTools > 0)}
+			open={isOpen}
+			onToggle={(event) => setIsOpen(event.currentTarget.open)}
 		>
 			<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
 				<div className="flex items-center gap-3">
