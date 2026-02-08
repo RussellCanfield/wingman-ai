@@ -1,7 +1,7 @@
 # Wingman Documentation
-Wingman AI is a multi-agent system with a local CLI control plane and a gateway for orchestration, persistent sessions, adapters, and a Control Core UI. This documentation covers setup, configuration, agents and sub-agents, Model Context Protocol (MCP) servers, skills, hooks, voice (TTS), Discord integration, webhooks, routines, and the gateway HTTP API.
+Wingman AI is a multi-agent system with a local CLI control plane, a gateway for orchestration and persistent sessions, and a desktop companion + Control Core UI for multi-client access. This documentation covers setup, configuration, agents and sub-agents, Model Context Protocol (MCP) servers, skills, hooks, voice (TTS), Discord integration, webhooks, routines, and the gateway HTTP API.
 
-Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestration, gateway, Control Core UI, persistent sessions, CLI, agents, sub-agents, Model Context Protocol, MCP, skills, hooks, Discord adapter, voice TTS, Web Speech, ElevenLabs, webhooks, routines, dynamic UI, SGUI, provider auth, OpenAI, Anthropic, OpenRouter, xAI, Copilot, Ollama, LM Studio
+Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestration, gateway, desktop companion, Control Core UI, persistent sessions, CLI, agents, sub-agents, Model Context Protocol, MCP, skills, hooks, Discord adapter, voice TTS, Web Speech, ElevenLabs, webhooks, routines, dynamic UI, SGUI, provider auth, OpenAI, Anthropic, OpenRouter, xAI, Copilot, Ollama, LM Studio
 
 ## Start Here
 - https://docs.getwingmanai.com/ : Product overview, architecture context, and navigation for all docs.

@@ -1,6 +1,14 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { FiCheck, FiCode, FiDownload, FiGithub, FiStar } from "react-icons/fi";
+import {
+	FiCheck,
+	FiCode,
+	FiDownload,
+	FiExternalLink,
+	FiGithub,
+	FiMonitor,
+	FiStar,
+} from "react-icons/fi";
 
 const CTA = () => {
 	const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
@@ -94,6 +102,16 @@ const CTA = () => {
 									</>
 								)}
 							</button>
+							<a
+								href="https://github.com/RussellCanfield/wingman-ai/releases"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="group flex items-center gap-2 rounded-full border border-sky-500/40 bg-sky-500/10 px-8 py-4 text-sm font-semibold text-sky-100 transition-all hover:border-sky-400/60 hover:bg-sky-500/20 sm:text-base"
+							>
+								<FiMonitor className="h-5 w-5" />
+								Desktop Companion (macOS)
+								<FiExternalLink className="h-4 w-4" />
+							</a>
 						</motion.div>
 
 						{/* Social proof */}

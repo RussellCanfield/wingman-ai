@@ -61,6 +61,17 @@ const Footer = () => {
 							</li>
 							<li>
 								<a
+									href="https://github.com/RussellCanfield/wingman-ai/releases"
+									className="text-gray-400 hover:text-white transition-colors flex items-center text-sm"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									<FiPackage className="mr-1" size={12} /> Desktop Companion
+									(macOS) <FiExternalLink className="ml-1" size={12} />
+								</a>
+							</li>
+							<li>
+								<a
 									href="https://www.npmjs.com/package/@wingman-ai/gateway"
 									className="text-gray-400 hover:text-white transition-colors flex items-center text-sm"
 									target="_blank"

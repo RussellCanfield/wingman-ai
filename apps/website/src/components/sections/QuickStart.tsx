@@ -1,6 +1,14 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { FiCheck, FiCode, FiCopy, FiMonitor, FiTerminal } from "react-icons/fi";
+import {
+	FiCheck,
+	FiCode,
+	FiCopy,
+	FiDownload,
+	FiExternalLink,
+	FiMonitor,
+	FiTerminal,
+} from "react-icons/fi";
 
 const QuickStart = () => {
 	const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
@@ -45,7 +53,13 @@ const QuickStart = () => {
 			icon: FiMonitor,
 			name: "WebUI",
 			command: "http://localhost:18789",
-			description: "Beautiful web interface for mobile",
+			description: "Control Core web experience for chat and orchestration",
+		},
+		{
+			icon: FiDownload,
+			name: "Desktop Companion",
+			link: "https://github.com/RussellCanfield/wingman-ai/releases",
+			description: "Native macOS app with tray controls, overlay, and voice",
 		},
 		{
 			icon: FiCode,
@@ -158,7 +172,7 @@ const QuickStart = () => {
 						</p>
 					</motion.div>
 
-					<div className="grid gap-6 md:grid-cols-3">
+					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
 						{clients.map((client, index) => (
 							<motion.div
 								key={client.name}
@@ -192,7 +206,7 @@ const QuickStart = () => {
 										rel="noopener noreferrer"
 										className="inline-flex items-center gap-1 text-sm font-medium text-sky-400 hover:text-sky-300"
 									>
-										View Extension →
+										Open <FiExternalLink className="h-3 w-3" />
 									</a>
 								)}
 							</motion.div>

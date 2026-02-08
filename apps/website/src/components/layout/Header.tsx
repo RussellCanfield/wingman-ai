@@ -80,6 +80,11 @@ const NavLinks = ({ mobile, onClick }: NavLinksProps) => {
 		{ text: "Features", href: "#features" },
 		{ text: "Quick Start", href: "#quick-start" },
 		{
+			text: "Desktop App",
+			href: "https://github.com/RussellCanfield/wingman-ai/releases",
+			external: true,
+		},
+		{
 			text: "Docs",
 			href: "https://docs.getwingmanai.com",
 			external: true,

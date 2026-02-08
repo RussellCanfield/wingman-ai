@@ -77,7 +77,7 @@ const Hero = () => {
 							<div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-4 py-2 backdrop-blur-sm">
 								<FiMonitor className="h-3 w-3 text-sky-400" />
 								<span className="text-sm text-gray-300">
-									macOS Companion App
+									Desktop Companion App
 								</span>
 							</div>
 						</motion.div>
@@ -119,6 +119,15 @@ const Hero = () => {
 								className="flex items-center justify-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-6 py-3 text-sm font-medium text-white transition-all hover:border-sky-500/30 hover:bg-slate-900/90 sm:justify-start"
 							>
 								See How It Works <FiArrowRight />
+							</a>
+							<a
+								href="https://github.com/RussellCanfield/wingman-ai/releases"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="flex items-center justify-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-6 py-3 text-sm font-medium text-sky-200 transition-all hover:border-sky-400/50 hover:bg-sky-500/20 sm:justify-start"
+							>
+								<FiMonitor />
+								Desktop Companion (macOS)
 							</a>
 						</motion.div>
 

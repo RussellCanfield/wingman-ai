@@ -23,10 +23,12 @@ features:
     details: Define specialized agents and sub-agents, route work automatically, and keep context tight across tasks.
   - title: Gateway + Control UI
     details: Run a local gateway for sessions, state, and adapters. Use the Control Core UI to manage chats, routines, and webhooks.
+  - title: Desktop Companion app
+    details: Use the native desktop companion for tray controls, overlay capture, and chat workflows connected to your gateway sessions.
   - title: Extensible tools + skills
     details: Add MCP servers, install community skills, and wire hooks for pre/post tool automation.
-  - title: Voice + Discord adapters
-    details: Speak responses with Web Speech or ElevenLabs and bring your agents into Discord channels.
+  - title: Voice + channel adapters
+    details: Speak responses with Web Speech or ElevenLabs and route agents through Discord and other channels.
 ---
 
 # Welcome to Wingman
@@ -44,6 +46,7 @@ This documentation dives deep into configuration, providers, and real-world use 
 - A **Discord bot** that routes mentions to specific agents and session threads.
 - A **voice-enabled command center** using Web Speech or ElevenLabs.
 - A **shared gateway** for cross-device collaboration and session persistence.
+- A **native desktop companion** for tray controls, overlay capture, and quick chat access.
 
 ## Where to start
 
