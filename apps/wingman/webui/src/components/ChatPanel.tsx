@@ -392,7 +392,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			<div
 				ref={scrollRef}
 				onScroll={handleScroll}
-				className="flex-1 min-h-0 space-y-4 overflow-auto rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-3 sm:p-4"
+				className="flex-1 min-h-0 space-y-4 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-3 sm:p-4"
 			>
 				{loading ? (
 					<div className="grid h-full place-items-center text-sm text-slate-400">
@@ -444,7 +444,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
 							>
 								<div
-									className={`w-fit max-w-[90%] rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${msg.role === "user"
+									className={`w-fit max-w-[90%] min-w-0 rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${msg.role === "user"
 										? "border-white/10 bg-slate-950/60 text-slate-100"
 										: "border-sky-400/40 bg-sky-500/10 text-slate-100"
 										}`}

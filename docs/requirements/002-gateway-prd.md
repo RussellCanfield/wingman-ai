@@ -995,10 +995,13 @@ Dynamic UI notes:
 - `dynamicUiEnabled`: when false, clients ignore UI render specs and agents should respond with text only.
 
 ### Session Working Folder (Control UI)
-- Each session can optionally set a working folder for output files.
+- Each session can optionally set a working folder (`workdir`).
 - The gateway validates the path against `gateway.fsRoots`.
 - If no session folder is set, the agent defaults to `~/.wingman/outputs/<agentId>/`.
-- The working folder is injected into agent context via hidden middleware, not the system prompt.
+- When set, the session working folder becomes the agent execution root for subsequent turns in that session:
+  - tool execution CWD (`command_execute`, `code_search`, `git_status`)
+  - primary file backend root (read/write operations)
+- The working folder is also injected into agent context via hidden middleware.
 
 ### Agents and Routing
 ```json

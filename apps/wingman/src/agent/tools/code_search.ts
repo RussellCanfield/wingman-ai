@@ -165,7 +165,7 @@ export const createCodeSearchTool = (workspace: string) => {
 					.string()
 					.optional()
 					.describe(
-						"Optional: Directory or file to search in (e.g., 'src/', 'src/utils.ts'). Defaults to entire workspace.",
+						"Optional: Directory or file to search in (e.g., 'src/', 'src/utils.ts'). Defaults to the active execution workspace.",
 					),
 				type: z
 					.string()

@@ -410,6 +410,41 @@ describeIfBun("Gateway", () => {
 		requester.close();
 	});
 
+	it("should broadcast user messages to desktop clients without session subscribe", async () => {
+		const desktopClient = await connectClient("session-desktop-listener", "desktop");
+		const requester = await connectClient("session-desktop-requester");
+		const sessionId = "session-desktop-test";
+
+		const eventPromise = waitForMessage(
+			desktopClient,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.payload?.type === "session-message" &&
+				msg.payload?.role === "user" &&
+				msg.payload?.sessionId === sessionId,
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: "req-session-desktop",
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "Hello desktop",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const eventMsg = await eventPromise;
+		expect(eventMsg.payload?.content).toBe("Hello desktop");
+		expect(eventMsg.payload?.agentId).toBe("main");
+
+		desktopClient.close();
+		requester.close();
+	});
+
 	it("should clear session messages via API", async () => {
 		const createRes = await fetch(`http://localhost:${port}/api/sessions`, {
 			method: "POST",

@@ -20,6 +20,7 @@ const logger = createLogger();
 
 export interface ToolOptions {
 	workspace?: string;
+	executionWorkspace?: string;
 	blockedCommands?: string[];
 	allowScriptExecution?: boolean;
 	timeout?: number;
@@ -44,6 +45,7 @@ export function createTool(
 ): StructuredTool | null {
 	const {
 		workspace = process.cwd(),
+		executionWorkspace,
 		blockedCommands,
 		allowScriptExecution = true,
 		timeout = 300000,
@@ -51,9 +53,11 @@ export function createTool(
 		skillsDirectory = "skills",
 		dynamicUiEnabled = true,
 	} = options;
+	const runtimeWorkspace = executionWorkspace || workspace;
 
 	logger.debug(`Creating tool: ${name}`, {
 		workspace,
+		executionWorkspace: runtimeWorkspace,
 		blockedCommands,
 		allowScriptExecution,
 		timeout,
@@ -69,7 +73,7 @@ export function createTool(
 
 		case "command_execute":
 			return createCommandExecuteTool(
-				workspace,
+				runtimeWorkspace,
 				process.env as Record<string, string>,
 				blockedCommands,
 				allowScriptExecution,
@@ -80,10 +84,10 @@ export function createTool(
 			return createThinkingTool();
 
 		case "code_search":
-			return createCodeSearchTool(workspace);
+			return createCodeSearchTool(runtimeWorkspace);
 
 		case "git_status":
-			return createGitStatusTool(workspace);
+			return createGitStatusTool(runtimeWorkspace);
 
 		case "ui_registry_list":
 			return createUiRegistryListTool(workspace, skillsDirectory);

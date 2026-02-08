@@ -17,6 +17,13 @@ describe("ModelFactory", () => {
 			expect(model).toBeInstanceOf(ChatOpenAI);
 		});
 
+		it("should force OpenAI models onto the responses API", () => {
+			const model = ModelFactory.createModel("openai:gpt-5.2-codex");
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+			expect((model as ChatOpenAI).useResponsesApi).toBe(true);
+		});
+
 		it("should create an OpenRouter model", () => {
 			const model = ModelFactory.createModel("openrouter:openai/gpt-4o");
 

@@ -1,7 +1,7 @@
 {
 	"$schema": "../gen/schemas/desktop-schema.json",
 	"identifier": "default",
-	"description": "Default capabilities for the Wingman Windows app.",
+	"description": "Default capabilities for the Wingman Desktop app.",
 	"windows": ["main"],
 	"permissions": [
 		"core:default",

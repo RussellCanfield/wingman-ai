@@ -1,15 +1,15 @@
-import React, { useMemo, useState, useId } from "react";
+import React, { useMemo, useState } from "react";
 import {
-	Area,
-	AreaChart as RechartsAreaChart,
 	CartesianGrid,
 	Legend,
+	Line,
+	LineChart as RechartsLineChart,
 	ResponsiveContainer,
 	Tooltip,
 	XAxis,
 	YAxis,
 } from "recharts";
-import type { TooltipProps } from "recharts";
+import type { TooltipContentProps, TooltipPayloadEntry } from "recharts";
 import {
 	buildSeriesDataset,
 	chartPalette,
@@ -18,7 +18,7 @@ import {
 	type ChartSeries,
 } from "./chartUtils";
 
-export type AreaChartProps = {
+export type LineChartProps = {
 	title: string;
 	subtitle?: string;
 	series: ChartSeries[];
@@ -28,10 +28,9 @@ export type AreaChartProps = {
 	xScale?: AxisScale;
 	showLegend?: boolean;
 	showMarkers?: boolean;
-	stacked?: boolean;
 };
 
-const ChartTooltip: React.FC<TooltipProps<number, string>> = ({
+const ChartTooltip: React.FC<Partial<TooltipContentProps<number, string>>> = ({
 	active,
 	payload,
 	label,
@@ -41,29 +40,37 @@ const ChartTooltip: React.FC<TooltipProps<number, string>> = ({
 		<div className="rounded-lg border border-white/10 bg-slate-950/90 px-3 py-2 text-xs text-slate-200 shadow-xl">
 			<div className="text-slate-400">{label}</div>
 			<div className="mt-2 space-y-1">
-				{payload.map((item) => (
-					<div
-						key={item.dataKey?.toString()}
-						className="flex items-center justify-between gap-3"
-					>
-						<span className="flex items-center gap-2">
-							<span
-								className="h-2 w-2 rounded-full"
-								style={{ backgroundColor: item.color ?? "#38bdf8" }}
-							/>
-							<span>{item.name ?? item.dataKey}</span>
-						</span>
-						<span className="font-semibold text-slate-100">
-							{formatMetricValue(Number(item.value))}
-						</span>
-					</div>
-				))}
+				{payload.map((item: TooltipPayloadEntry<number, string>) => {
+					const seriesName =
+						typeof item.name === "string" || typeof item.name === "number"
+							? item.name
+							: typeof item.dataKey === "string" || typeof item.dataKey === "number"
+								? item.dataKey
+								: "Series";
+					return (
+						<div
+							key={item.dataKey?.toString()}
+							className="flex items-center justify-between gap-3"
+						>
+							<span className="flex items-center gap-2">
+								<span
+									className="h-2 w-2 rounded-full"
+									style={{ backgroundColor: item.color ?? "#38bdf8" }}
+								/>
+								<span>{seriesName}</span>
+							</span>
+							<span className="font-semibold text-slate-100">
+								{formatMetricValue(Number(item.value))}
+							</span>
+						</div>
+					);
+				})}
 			</div>
 		</div>
 	);
 };
 
-export const AreaChart: React.FC<AreaChartProps> = ({
+export const LineChart: React.FC<LineChartProps> = ({
 	title,
 	subtitle,
 	series,
@@ -72,13 +79,11 @@ export const AreaChart: React.FC<AreaChartProps> = ({
 	yScale,
 	xScale,
 	showLegend = true,
-	showMarkers = false,
-	stacked = false,
+	showMarkers = true,
 }) => {
 	const [activeKey, setActiveKey] = useState<string | null>(null);
 	const { data } = useMemo(() => buildSeriesDataset(series), [series]);
 	const hasData = data.length > 0;
-	const gradientPrefix = useId().replace(/:/g, "");
 
 	return (
 		<div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 shadow-lg">
@@ -95,22 +100,10 @@ export const AreaChart: React.FC<AreaChartProps> = ({
 				<div className="mt-4 w-full pb-2">
 					<div className="h-56 w-full">
 						<ResponsiveContainer width="100%" height="100%">
-							<RechartsAreaChart
+							<RechartsLineChart
 								data={data}
 								margin={{ top: 8, right: 16, left: 0, bottom: 18 }}
 							>
-								<defs>
-									{series.map((area, index) => {
-										const color = area.color ?? chartPalette[index % chartPalette.length];
-										const id = `${gradientPrefix}-area-${index}`;
-										return (
-											<linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-												<stop offset="5%" stopColor={color} stopOpacity={0.45} />
-												<stop offset="95%" stopColor={color} stopOpacity={0.05} />
-											</linearGradient>
-										);
-									})}
-								</defs>
 								<CartesianGrid
 									stroke="rgba(148, 163, 184, 0.15)"
 									strokeDasharray="4 6"
@@ -150,28 +143,24 @@ export const AreaChart: React.FC<AreaChartProps> = ({
 										onMouseLeave={() => setActiveKey(null)}
 									/>
 								) : null}
-								{series.map((area, index) => {
-									const color = area.color ?? chartPalette[index % chartPalette.length];
-									const id = `${gradientPrefix}-area-${index}`;
-									const isActive = !activeKey || activeKey === area.name;
+								{series.map((line, index) => {
+									const color = line.color ?? chartPalette[index % chartPalette.length];
+									const isActive = !activeKey || activeKey === line.name;
 									return (
-										<Area
-											key={area.name}
+										<Line
+											key={line.name}
 											type="monotone"
-											dataKey={area.name}
+											dataKey={line.name}
 											stroke={color}
-											fill={`url(#${id})`}
-											fillOpacity={isActive ? 0.9 : 0.25}
-											strokeWidth={isActive ? 2.4 : 1.4}
+											strokeWidth={isActive ? 2.6 : 1.6}
 											dot={showMarkers ? { r: 3 } : false}
 											activeDot={{ r: 5 }}
 											opacity={isActive ? 1 : 0.3}
-											stackId={stacked ? "stack" : undefined}
 											isAnimationActive={false}
 										/>
 									);
 								})}
-							</RechartsAreaChart>
+							</RechartsLineChart>
 						</ResponsiveContainer>
 					</div>
 					{(xLabel || yLabel) && (
@@ -190,4 +179,4 @@ export const AreaChart: React.FC<AreaChartProps> = ({
 	);
 };
 
-export default AreaChart;
+export default LineChart;

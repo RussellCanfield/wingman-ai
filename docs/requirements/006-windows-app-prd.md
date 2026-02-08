@@ -1,8 +1,8 @@
 # PRD-006: Wingman Desktop Companion (Tauri)
 
-**Version:** 0.2
+**Version:** 0.4
 **Status:** In Progress
-**Last Updated:** 2026-02-07
+**Last Updated:** 2026-02-08
 
 ---
 
@@ -57,6 +57,12 @@ gateway and acts as a native endpoint for voice capture and OS-specific tools.
 ### Gateway Workspace (Desktop Companion)
 - Connection test against `/api/config`, `/api/health`, `/api/stats`
 - WebSocket connect/disconnect using gateway `connect` handshake
+- Provider controls:
+  - list providers and credential source status
+  - save/clear provider credentials via gateway APIs
+- Voice controls:
+  - configure global voice provider and defaults (`web_speech`, `elevenlabs`)
+  - set default voice policy (`off`, `manual`, `auto`)
 - Session explorer:
   - list sessions
   - create new session by selected agent
@@ -68,7 +74,11 @@ gateway and acts as a native endpoint for voice capture and OS-specific tools.
   - create new agent from desktop UI
 - Rich chat stream:
   - `req:agent` prompt send
+  - attachment send (`image`, `audio`, `file`) including image paste support
   - streamed `event:agent` text deltas
+  - mirrored session streaming between desktop and web UI when both are attached to the same session
+  - assistant message voice playback (manual play/stop)
+  - per-session auto-speak behavior using configured voice policy
   - tool status cards
   - thinking traces
   - structured UI blocks rendered by local SGUI registry
@@ -79,8 +89,8 @@ gateway and acts as a native endpoint for voice capture and OS-specific tools.
 
 ### App stack
 - **Shell:** Tauri
-- **Backend:** Rust (`apps/windows/src-tauri`)
-- **Frontend:** React + Tailwind shell built with Vite (`apps/windows/src`)
+- **Backend:** Rust (`apps/desktop/src-tauri`)
+- **Frontend:** React + Tailwind shell built with Vite (`apps/desktop/src`)
 - **Adapter model:** `platform/macos.rs`, `platform/windows.rs`, fallback adapter
 
 ### IPC
@@ -124,8 +134,10 @@ Without a trusted key, the app prompts for explicit confirmation.
 ## Status
 
 Current implementation status in this repository:
-- Standalone app scaffold exists at `apps/windows`
+- Standalone app scaffold exists at `apps/desktop`
 - Frontend gateway workspace exists with session + agent + rich chat flows
+- Provider + voice settings are configurable in desktop runtime UI
+- Chat supports manual voice playback and per-session auto-speak toggle
 - Rust tray/state scaffolding exists
 - OS adapter layer exists with macOS-first implementation
 - macOS overlay now applies native AppKit window behavior (screen-saver level, all-spaces, transparent window)

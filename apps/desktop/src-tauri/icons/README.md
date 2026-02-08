@@ -1,4 +1,4 @@
-Place Windows icon assets here before enabling bundling.
+Place desktop icon assets here before enabling bundling.
 
 Suggested files:
 - `32x32.png`

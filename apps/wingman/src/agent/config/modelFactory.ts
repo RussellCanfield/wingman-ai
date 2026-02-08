@@ -1,5 +1,5 @@
 import { ChatAnthropic } from "@langchain/anthropic";
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI, type ChatOpenAIFields } from "@langchain/openai";
 import { ChatXAI } from "@langchain/xai";
 import type { BaseLanguageModel, BaseLanguageModelCallOptions } from "@langchain/core/language_models/base";
 import { createLogger } from "../../logger.js";
@@ -143,9 +143,12 @@ export class ModelFactory {
 
 	private static createOpenAIModel(model: string): BaseLanguageModel {
 		const token = resolveProviderToken("openai").token;
-		const params: { model: string; temperature: number; apiKey?: string } = {
+		const params: ChatOpenAIFields = {
 			model,
 			temperature: 1,
+			// Force the unified Responses API to support newer OpenAI model families
+			// that are not available through /v1/chat/completions.
+			useResponsesApi: true,
 		};
 
 		if (token) {

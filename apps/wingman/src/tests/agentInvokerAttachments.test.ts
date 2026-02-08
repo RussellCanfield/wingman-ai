@@ -76,7 +76,37 @@ describe("buildUserContent", () => {
 		]);
 	});
 
-	it("uses native pdf file blocks when the model supports pdf inputs", () => {
+	it("uses responses input_file blocks for pdfs when responses api is enabled", () => {
+		const result = buildUserContent(
+			"Summarize this",
+			[
+				{
+					kind: "file",
+					dataUrl: "data:application/pdf;base64,JVBERi0xLjQK",
+					name: "report.pdf",
+					mimeType: "application/pdf",
+					textContent: "fallback text",
+				},
+			],
+			{
+				profile: {
+					pdfInputs: true,
+				},
+				useResponsesApi: true,
+			},
+		);
+		expect(Array.isArray(result)).toBe(true);
+		expect(result).toEqual([
+			{ type: "text", text: "Summarize this" },
+			{
+				type: "input_file",
+				file_data: "data:application/pdf;base64,JVBERi0xLjQK",
+				filename: "report.pdf",
+			},
+		]);
+	});
+
+	it("uses legacy file blocks for pdfs when responses api is not enabled", () => {
 		const result = buildUserContent(
 			"Summarize this",
 			[

@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
 **Version:** 1.2.3
-**Last Updated:** 2026-02-07
+**Last Updated:** 2026-02-08
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -198,6 +198,7 @@ An agent is a fully scoped brain with its own workspace, agent directory, and se
 
 **Isolation rules:**
 - Each agent has a dedicated workspace that acts as the default cwd; relative paths resolve inside the workspace. Sandboxing is optional and configured per agent.
+- Gateway sessions may override this default via per-session `workdir`; when present, the session workdir becomes the execution root for that session's turns.
 - Each agent has a dedicated agentDir for auth profiles and per-agent config. Do not reuse agentDir across agents to avoid auth/session collisions.
 - Sessions are stored per agent under the gateway state directory.
 

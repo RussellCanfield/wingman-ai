@@ -16,6 +16,7 @@ type AdditionalMessageContext = {
 	workspaceRoot?: string | null;
 	workdir?: string | null;
 	defaultOutputDir?: string | null;
+	outputVirtualPath?: string | null;
 	dynamicUiEnabled?: boolean;
 	skillsDirectory?: string;
 };
@@ -45,14 +46,29 @@ const buildOutputLocationMessage = (
 		? "session output directory"
 		: "default output directory";
 	const safePath = toSafeRelativePath(context.workspaceRoot, targetPath);
+	const virtualPath = context.outputVirtualPath?.trim();
 	const locationLine = safePath
 		? `- Use the ${locationLabel}: ${safePath}`
+		: virtualPath
+			? `- Use the ${locationLabel}: ${virtualPath}`
 		: `- Use the ${locationLabel} (path hidden).`;
 
 	return [
 		"** Output Location **",
 		locationLine,
 		"- If the user asks for a location, provide a relative path and avoid absolute paths or usernames.",
+	].join("\n");
+};
+
+const buildWorkingDirectoryMessage = (
+	context: AdditionalMessageContext,
+): string | null => {
+	if (!context.workspaceRoot) return null;
+
+	return [
+		"** Working Directory **",
+		"- Treat `./` as the current working directory for file and tool operations in this session.",
+		"- Use relative paths such as `./test.md`; do not prepend the working directory absolute path.",
 	].join("\n");
 };
 
@@ -85,6 +101,10 @@ export const additionalMessageMiddleware = (
 			const outputLocation = buildOutputLocationMessage(context);
 			if (outputLocation) {
 				lines.push(outputLocation);
+			}
+			const workingDirectory = buildWorkingDirectoryMessage(context);
+			if (workingDirectory) {
+				lines.push(workingDirectory);
 			}
 
 			lines.push(

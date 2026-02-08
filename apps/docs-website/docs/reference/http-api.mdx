@@ -30,6 +30,8 @@ POST /api/sessions/:id/workdir?agentId=wingman
 PUT /api/sessions/:id?agentId=wingman
 ```
 
+`POST /api/sessions/:id/workdir` updates the session working folder. The path must be inside `gateway.fsRoots`; when set, it becomes the execution root for subsequent turns in that session.
+
 ## Providers
 
 ```http

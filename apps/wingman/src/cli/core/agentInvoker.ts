@@ -4,7 +4,7 @@ import {
 	FilesystemBackend,
 } from "deepagents";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, normalize, sep } from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import { AgentLoader } from "../../agent/config/agentLoader.js";
 import { WingmanConfigLoader } from "../config/loader.js";
@@ -65,6 +65,12 @@ type UserContentPart =
 	| { type: "audio"; source_type: "base64"; data: string; mime_type?: string }
 	| { type: "audio"; source_type: "url"; url: string; mime_type?: string }
 	| {
+			type: "input_file";
+			file_data?: string;
+			file_url?: string;
+			filename?: string;
+	  }
+	| {
 			type: "file";
 			source_type: "base64" | "url";
 			mime_type: string;
@@ -76,6 +82,66 @@ type UserContentPart =
 				title: string;
 			};
 	  };
+
+export const WORKDIR_VIRTUAL_PATH = "/workdir/";
+export const OUTPUT_VIRTUAL_PATH = "/output/";
+
+export type ExternalOutputMount = {
+	virtualPath: string | null;
+	absolutePath: string | null;
+};
+
+const isPathWithinRoot = (targetPath: string, rootPath: string): boolean => {
+	const normalizedTarget = normalize(targetPath);
+	const normalizedRoot = normalize(rootPath);
+	return (
+		normalizedTarget === normalizedRoot ||
+		normalizedTarget.startsWith(normalizedRoot + sep)
+	);
+};
+
+export const resolveExecutionWorkspace = (
+	workspace: string,
+	workdir?: string | null,
+): string => {
+	if (!workdir) return normalize(workspace);
+	if (isAbsolute(workdir)) return normalize(workdir);
+	return normalize(join(workspace, workdir));
+};
+
+export const toWorkspaceAliasVirtualPath = (
+	absolutePath: string,
+): string | null => {
+	const normalized = normalize(absolutePath);
+	if (!isAbsolute(normalized)) return null;
+	const posixPath = normalized.replace(/\\/g, "/");
+	const trimmed = posixPath.replace(/^\/+/, "").replace(/\/+$/, "");
+	if (!trimmed) return null;
+	return `/${trimmed}/`;
+};
+
+export const resolveExternalOutputMount = (
+	workspace: string,
+	workdir?: string | null,
+	defaultOutputDir?: string | null,
+): ExternalOutputMount => {
+	if (workdir && !isPathWithinRoot(workdir, workspace)) {
+		return {
+			virtualPath: WORKDIR_VIRTUAL_PATH,
+			absolutePath: workdir,
+		};
+	}
+	if (!workdir && defaultOutputDir && !isPathWithinRoot(defaultOutputDir, workspace)) {
+		return {
+			virtualPath: OUTPUT_VIRTUAL_PATH,
+			absolutePath: defaultOutputDir,
+		};
+	}
+	return {
+		virtualPath: null,
+		absolutePath: null,
+	};
+};
 
 export class AgentInvoker {
 	private loader: AgentLoader;
@@ -133,8 +199,24 @@ export class AgentInvoker {
 		attachments?: MediaAttachment[],
 	): Promise<any> {
 		try {
+			const executionWorkspace = resolveExecutionWorkspace(
+				this.workspace,
+				this.workdir,
+			);
+			const effectiveWorkdir = this.workdir
+				? executionWorkspace
+				: null;
+			const loader = normalize(executionWorkspace) === normalize(this.workspace)
+				? this.loader
+				: new AgentLoader(
+					this.configDir,
+					this.workspace,
+					this.wingmanConfig,
+					executionWorkspace,
+				);
+
 			// Find the agent
-			const targetAgent = await this.findAgent(agentName);
+			const targetAgent = await loader.loadAgent(agentName);
 
 			if (!targetAgent) {
 				throw new Error(`Agent "${agentName}" not found`);
@@ -194,12 +276,23 @@ export class AgentInvoker {
 
 			// Build middleware array
 			const skillsDirectory = this.wingmanConfig?.skills?.skillsDirectory || "skills";
+			const normalizedSkillsDirectory = skillsDirectory.replace(
+				/^\/+|\/+$/g,
+				"",
+			);
+			const skillsVirtualPath = `/${normalizedSkillsDirectory}/`;
+			const outputMount = resolveExternalOutputMount(
+				executionWorkspace,
+				effectiveWorkdir,
+				this.defaultOutputDir,
+			);
 			const middleware = [
 				mediaCompatibilityMiddleware({ model: targetAgent.model }),
 				additionalMessageMiddleware({
-					workspaceRoot: this.workspace,
-					workdir: this.workdir,
+					workspaceRoot: executionWorkspace,
+					workdir: effectiveWorkdir,
 					defaultOutputDir: this.defaultOutputDir,
+					outputVirtualPath: outputMount.virtualPath,
 					dynamicUiEnabled:
 						this.wingmanConfig?.gateway?.dynamicUiEnabled !== false,
 					skillsDirectory,
@@ -214,7 +307,7 @@ export class AgentInvoker {
 				middleware.push(
 					createHooksMiddleware(
 						mergedHooks,
-						this.workspace,
+						executionWorkspace,
 						hookSessionId,
 						this.logger,
 					),
@@ -230,18 +323,44 @@ export class AgentInvoker {
 			if (existsSync(bundledSkillsPath)) {
 				skillsSources.push("/skills-bundled/");
 			}
-			skillsSources.push(
-				`/${skillsDirectory.replace(/^\/+|\/+$/g, "")}/`,
-			);
+			skillsSources.push(skillsVirtualPath);
 			const backendOverrides: Record<string, FilesystemBackend> = {
 				"/memories/": new FilesystemBackend({
 					rootDir: join(this.workspace, this.configDir, "memories"),
 					virtualMode: true,
 				}),
 			};
+			const executionWorkspaceAlias = toWorkspaceAliasVirtualPath(
+				executionWorkspace,
+			);
+			if (executionWorkspaceAlias) {
+				backendOverrides[executionWorkspaceAlias] = new FilesystemBackend({
+					rootDir: executionWorkspace,
+					virtualMode: true,
+				});
+			}
+			if (effectiveWorkdir) {
+				backendOverrides[WORKDIR_VIRTUAL_PATH] = new FilesystemBackend({
+					rootDir: executionWorkspace,
+					virtualMode: true,
+				});
+			}
+			const workspaceSkillsPath = join(this.workspace, normalizedSkillsDirectory);
+			if (existsSync(workspaceSkillsPath)) {
+				backendOverrides[skillsVirtualPath] = new FilesystemBackend({
+					rootDir: workspaceSkillsPath,
+					virtualMode: true,
+				});
+			}
 			if (existsSync(bundledSkillsPath)) {
 				backendOverrides["/skills-bundled/"] = new FilesystemBackend({
 					rootDir: bundledSkillsPath,
+					virtualMode: true,
+				});
+			}
+			if (outputMount.virtualPath && outputMount.absolutePath) {
+				backendOverrides[outputMount.virtualPath] = new FilesystemBackend({
+					rootDir: outputMount.absolutePath,
 					virtualMode: true,
 				});
 			}
@@ -253,7 +372,7 @@ export class AgentInvoker {
 				backend: () =>
 					new CompositeBackend(
 						new FilesystemBackend({
-							rootDir: this.workspace,
+							rootDir: executionWorkspace,
 							virtualMode: true,
 						}),
 						backendOverrides,
@@ -452,6 +571,29 @@ function buildNativePdfPart(
 
 	const metadata = buildFileMetadata(attachment, "document.pdf");
 	const parsed = parseDataUrl(attachment.dataUrl);
+	const useResponsesInputFile = shouldUseResponsesInputFile(model);
+
+	if (useResponsesInputFile) {
+		if (parsed.data) {
+			const fileDataMime = parsed.mimeType || mimeType || "application/pdf";
+			return {
+				type: "input_file",
+				file_data: `data:${fileDataMime};base64,${parsed.data}`,
+				filename: metadata.filename,
+			};
+		}
+
+		const fileDataUrl = attachment.dataUrl?.trim();
+		if (!fileDataUrl || !fileDataUrl.startsWith("data:")) {
+			return null;
+		}
+		return {
+			type: "input_file",
+			file_data: fileDataUrl,
+			filename: metadata.filename,
+		};
+	}
+
 	if (parsed.data) {
 		return {
 			type: "file",
@@ -471,6 +613,15 @@ function buildNativePdfPart(
 		url,
 		metadata,
 	};
+}
+
+function shouldUseResponsesInputFile(model?: unknown): boolean {
+	if (!model || typeof model !== "object") return false;
+	try {
+		const flag = (model as { useResponsesApi?: unknown }).useResponsesApi;
+		if (typeof flag === "boolean") return flag;
+	} catch {}
+	return false;
 }
 
 function isAudioAttachment(attachment: MediaAttachment): attachment is AudioAttachment {

@@ -694,7 +694,7 @@ export class GatewayServer {
 		this.broadcastSessionEvent(sessionKey, sessionMessage, ws);
 		this.broadcastToClients(sessionMessage, {
 			exclude: ws,
-			clientType: "webui",
+			clientTypes: ["webui", "desktop"],
 			skipSessionId: sessionKey,
 		});
 
@@ -1139,6 +1139,7 @@ export class GatewayServer {
 		options?: {
 			exclude?: GatewaySocket;
 			clientType?: string;
+			clientTypes?: string[];
 			skipSessionId?: string;
 		},
 	): number {
@@ -1148,6 +1149,13 @@ export class GatewayServer {
 				continue;
 			}
 			if (options?.clientType && ws.data.clientType !== options.clientType) {
+				continue;
+			}
+			if (
+				options?.clientTypes &&
+				options.clientTypes.length > 0 &&
+				!options.clientTypes.includes(ws.data.clientType || "")
+			) {
 				continue;
 			}
 			if (options?.skipSessionId) {

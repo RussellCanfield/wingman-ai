@@ -55,7 +55,11 @@ wingman gateway join ws://host:port/ws --name="node-1"
 
 ## File system roots
 
-`fsRoots` defines which directories the gateway exposes to tools. Keep this list tight to reduce risk.
+`fsRoots` defines which directories are allowed when selecting a session working folder (`workdir`) in the Control UI/API.
+
+- The selected `workdir` must be inside one of these roots.
+- When set, the session `workdir` becomes the agent's active execution root (tool CWD + file backend root) for subsequent turns in that session.
+- Keep this list tight to reduce risk.
 
 ## Control UI uploads
 

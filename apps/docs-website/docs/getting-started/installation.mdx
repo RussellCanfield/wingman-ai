@@ -35,14 +35,18 @@ Wingman also includes a standalone desktop companion app (Tauri-based) with a
 React + Tailwind shell for native tray actions, recording overlay, and gateway
 routing, with a macOS-first adapter rollout before Windows parity.
 
-- Source location: `apps/windows`
+- Source location: `apps/desktop`
 - Configure the Gateway URL + optional auth in app settings
 - Desktop workspace includes:
   - gateway connection test
   - session list and session management
+  - mirrored live session streams between desktop and Control Core web UI for the same session
   - agent selection and new agent creation
+  - provider credential management (including voice providers)
+  - configurable voice defaults and playback policy
+  - assistant message voice playback (manual and per-session auto-speak)
   - rich streamed chat rendering with structured UI blocks
-- Dev command: `bun run --cwd apps/windows tauri:dev`
+- Dev command: `bun run --cwd apps/desktop tauri:dev`
 
 ## Requirements (development)
 

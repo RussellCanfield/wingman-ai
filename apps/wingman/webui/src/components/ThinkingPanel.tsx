@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import type { ThinkingEvent, ToolEvent } from "../types";
 import { ToolEventPanel } from "./ToolEventPanel";
 
@@ -20,34 +20,17 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 		.length;
 	const hasThinking = sortedThinking.length > 0;
 	const hasTools = toolEvents.length > 0;
-	const summaryParts: string[] = [];
-	const [isOpen, setIsOpen] = useState(
-		() => isStreaming && (hasThinking || activeTools > 0),
+	const [isOpen, setIsOpen] = useState(() =>
+		shouldOpenThinkingPanelByDefault({
+			isStreaming,
+			hasThinking,
+			activeTools,
+		}),
 	);
-
-	if (hasThinking) {
-		summaryParts.push(
-			`${sortedThinking.length} subagent${sortedThinking.length === 1 ? "" : "s"}`,
-		);
-	}
-	if (hasTools) {
-		summaryParts.push(
-			`${toolEvents.length} tool${toolEvents.length === 1 ? "" : "s"}`,
-		);
-	}
-	if (activeTools > 0) {
-		summaryParts.push(
-			`${activeTools} running`,
-		);
-	}
-
-	const summary = summaryParts.length > 0 ? summaryParts.join(" • ") : "Activity";
-
-	useEffect(() => {
-		if (isStreaming && (hasThinking || activeTools > 0)) {
-			setIsOpen(true);
-		}
-	}, [activeTools, hasThinking, isStreaming]);
+	const summary = buildThinkingSummary({
+		thinkingCount: sortedThinking.length,
+		toolCount: toolEvents.length,
+	});
 
 	return (
 		<details
@@ -61,16 +44,6 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 						Thinking
 					</span>
 					<span className="text-xs text-slate-400">{summary}</span>
-				</div>
-				<div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-					{isStreaming ? (
-						<span className="flex items-center gap-1">
-							<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-							<span>Streaming</span>
-						</span>
-					) : (
-						<span>Idle</span>
-					)}
 				</div>
 			</summary>
 			<div className="mt-3 space-y-3">
@@ -102,18 +75,45 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 					</div>
 				) : null}
 				{hasTools ? (
-					<div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
-						<ToolEventPanel
-							toolEvents={toolEvents}
-							activeCount={activeTools}
-							variant="inline"
-						/>
-					</div>
+					<ToolEventPanel
+						toolEvents={toolEvents}
+						variant="inline"
+					/>
 				) : null}
 			</div>
 		</details>
 	);
 };
+
+export function shouldOpenThinkingPanelByDefault(_: {
+	isStreaming: boolean;
+	hasThinking: boolean;
+	activeTools: number;
+}): boolean {
+	// Keep tool/thinking activity collapsed unless the user explicitly opens it.
+	return false;
+}
+
+export function buildThinkingSummary({
+	thinkingCount,
+	toolCount,
+}: {
+	thinkingCount: number;
+	toolCount: number;
+}): string {
+	const summaryParts: string[] = [];
+	if (thinkingCount > 0) {
+		summaryParts.push(
+			`${thinkingCount} subagent${thinkingCount === 1 ? "" : "s"}`,
+		);
+	}
+	if (toolCount > 0) {
+		summaryParts.push(
+			`${toolCount} tool${toolCount === 1 ? "" : "s"}`,
+		);
+	}
+	return summaryParts.length > 0 ? summaryParts.join(" • ") : "Activity";
+}
 
 function formatTime(timestamp?: number): string {
 	if (!timestamp) return "--";

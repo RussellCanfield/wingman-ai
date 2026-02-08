@@ -67,6 +67,7 @@ export class AgentLoader {
 		private configDir = WingmanDirectory,
 		private workspace: string = process.cwd(),
 		private wingmanConfig?: WingmanConfigType,
+		private executionWorkspace: string = workspace,
 	) {}
 
 	private resolveConfigPath(...segments: string[]): string {
@@ -341,6 +342,7 @@ export class AgentLoader {
 
 			return {
 				workspace: this.workspace,
+				executionWorkspace: this.executionWorkspace,
 				blockedCommands: source.blockedCommands,
 				allowScriptExecution: source.allowScriptExecution,
 				timeout: source.commandTimeout,

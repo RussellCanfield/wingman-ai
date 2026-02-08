@@ -1,17 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ChangeEvent,
+	type ClipboardEvent,
+} from "react";
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
 	checkGatewayConnection,
+	clearProviderToken,
+	clearSessionMessages,
 	createAgent,
 	createSession,
 	deleteSession,
 	fetchAgentDetail,
 	fetchAgents,
+	fetchProviders,
 	fetchSessionMessages,
 	fetchSessions,
+	fetchVoiceConfig,
 	mapSessionToThread,
 	renameSession,
+	saveProviderToken,
+	speakVoice,
 	updateAgent,
+	updateVoiceConfig,
 } from "./lib/gatewayApi.js";
 import {
 	isGatewayConfigValid,
@@ -23,15 +38,18 @@ import type {
 	AgentDetail,
 	AgentRequestPayload,
 	AgentSummary,
+	ChatAttachment,
 	ChatMessage,
 	ConnectionStatus,
 	GatewayConfig,
 	GatewayHealth,
 	GatewayStats,
+	ProviderStatus,
 	PromptTrainingConfig,
 	SessionThread,
 	ThinkingEvent,
 	ToolEvent,
+	VoiceConfig,
 } from "./lib/gatewayModels.js";
 import { GatewaySocketClient } from "./lib/gatewaySocket.js";
 import {
@@ -53,11 +71,40 @@ import { shouldRouteToGatewayOnFailure } from "./lib/connectionRouting.js";
 import { shouldShowThreadRail } from "./lib/chatLayout.js";
 import { findThreadNeedingHydration } from "./lib/threadHydration.js";
 import { resolveTalkStopTranscript } from "./lib/talkToChat.js";
+import {
+	FILE_INPUT_ACCEPT,
+	isPdfUploadFile,
+	isSupportedTextUploadFile,
+	readUploadFileText,
+} from "./lib/fileUpload.js";
+import {
+	MAX_ATTACHMENTS,
+	MAX_AUDIO_BYTES,
+	MAX_FILE_BYTES,
+	MAX_FILE_TEXT_CHARS,
+	MAX_IMAGE_BYTES,
+	MAX_PDF_BYTES,
+	buildAttachmentPreviewText,
+	clipFilePreview,
+	createAttachmentId,
+	extractImageFiles,
+	formatAttachmentMeta,
+	isAudioAttachment,
+	isFileAttachment,
+	isPdfAttachment,
+	readFileAsDataUrl,
+} from "./lib/chatAttachments.js";
 import { buildAgentCompletionNotice } from "./lib/notifications.js";
 import {
 	loadDesktopPreferences,
 	saveDesktopPreferences,
 } from "./lib/desktopPrefs.js";
+import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./lib/voice.js";
+import { shouldAutoSpeak } from "./lib/voiceAuto.js";
+import {
+	getVoicePlaybackLabel,
+	type VoicePlaybackStatus,
+} from "./lib/voicePlayback.js";
 import { SguiRenderer } from "./sgui/SguiRenderer.js";
 import {
 	buildSubAgentCandidates,
@@ -65,6 +112,13 @@ import {
 	mapAgentDetailToDraftSeed,
 	parseToolsCsv,
 } from "./lib/agentsForm.js";
+import {
+	ensureSessionAssistantMessage,
+	getSessionIdFromEventPayload,
+	isSessionUserMessagePayload,
+	upsertSessionUserMessage,
+	type SessionMirrorEventPayload,
+} from "./lib/sessionMirror.js";
 
 type NativeState = {
 	connected?: boolean;
@@ -126,6 +180,11 @@ type WorkspaceState = {
 	gatewayConfig?: GatewayConfig;
 	gatewayHealth?: GatewayHealth;
 	gatewayStats?: GatewayStats;
+	providers: ProviderStatus[];
+	providersLoading: boolean;
+	providersUpdatedAt?: string;
+	credentialsPath?: string;
+	voiceConfig?: VoiceConfig;
 	agentCatalog: AgentSummary[];
 	agentDetail?: AgentDetail;
 	availableTools: string[];
@@ -135,6 +194,8 @@ type WorkspaceState = {
 	activeThreadId: string;
 	selectedAgentId: string;
 	prompt: string;
+	attachments: ChatAttachment[];
+	attachmentError: string;
 	isStreaming: boolean;
 	eventLog: string[];
 	createAgentDraft: CreateAgentDraft;
@@ -144,6 +205,8 @@ type WorkspaceState = {
 	agentDetailsById: Record<string, AgentDetail>;
 	lastCompletion?: {
 		nonce: number;
+		threadId: string;
+		messageId: string;
 		threadName: string;
 		agentId: string;
 		preview: string;
@@ -724,7 +787,7 @@ function useRuntimeController(isOverlayView: boolean) {
 		try {
 			const next = await invokeTauri<NativeState>("queue_quick_send");
 			applyNativeState(next);
-			setStatus("Queued transcript for chat send.");
+			setStatus("Queued transcript for send to the active chat session.");
 			return true;
 		} catch (error) {
 			setStatus(`Failed to queue transcript send: ${String(error)}`, true);
@@ -857,6 +920,11 @@ function useGatewayWorkspace(
 		connectionStatus: "disconnected",
 		connectionMessage: "Not connected to gateway",
 		checkingConnection: false,
+		providers: [],
+		providersLoading: false,
+		providersUpdatedAt: undefined,
+		credentialsPath: undefined,
+		voiceConfig: undefined,
 		agentCatalog: [],
 		agentDetail: undefined,
 		availableTools: [],
@@ -866,6 +934,8 @@ function useGatewayWorkspace(
 		activeThreadId: "",
 		selectedAgentId: settings.agentId || "main",
 		prompt: "",
+		attachments: [],
+		attachmentError: "",
 		isStreaming: false,
 		eventLog: [],
 		createAgentDraft: createEmptyAgentDraft(),
@@ -963,6 +1033,32 @@ function useGatewayWorkspace(
 		}
 	}, [logEvent, settings, settings.agentId]);
 
+	const refreshProvidersData = useCallback(async () => {
+		setWorkspace((prev) => ({ ...prev, providersLoading: true }));
+		try {
+			const data = await fetchProviders(settings);
+			setWorkspace((prev) => ({
+				...prev,
+				providers: data.providers || [],
+				providersUpdatedAt: data.updatedAt,
+				credentialsPath: data.credentialsPath,
+			}));
+		} catch (error) {
+			logEvent(`Failed to load providers: ${String(error)}`);
+		} finally {
+			setWorkspace((prev) => ({ ...prev, providersLoading: false }));
+		}
+	}, [logEvent, settings]);
+
+	const refreshVoiceConfigData = useCallback(async () => {
+		try {
+			const voice = await fetchVoiceConfig(settings);
+			setWorkspace((prev) => ({ ...prev, voiceConfig: voice }));
+		} catch (error) {
+			logEvent(`Failed to load voice config: ${String(error)}`);
+		}
+	}, [logEvent, settings]);
+
 	const loadAgentDetailData = useCallback(
 		async (
 			agentId: string,
@@ -1003,12 +1099,50 @@ function useGatewayWorkspace(
 
 	const applyAgentEvent = useCallback(
 		(requestId: string, payload: unknown) => {
-			const threadId = requestThreadRef.current.get(requestId);
-			const messageId = requestMessageRef.current.get(requestId) || requestId;
+			const data = payload as SessionMirrorEventPayload & {
+				error?: string;
+				content?: string;
+				node?: string;
+			};
+			const sessionId = getSessionIdFromEventPayload(data);
+			const ensureSessionSubscribed = (id: string | undefined) => {
+				if (!id) return;
+				socketRef.current?.subscribeSession(id);
+				subscribedRef.current.add(id);
+			};
+
+			if (isSessionUserMessagePayload(data)) {
+				if (!sessionId) return;
+				requestThreadRef.current.set(requestId, sessionId);
+				ensureSessionSubscribed(sessionId);
+				setWorkspace((prev) => ({
+					...prev,
+					threads: upsertSessionUserMessage(prev.threads, requestId, data, {
+						fallbackAgentId: "main",
+					}),
+				}));
+				return;
+			}
+
+			let threadId = requestThreadRef.current.get(requestId);
+			let messageId = requestMessageRef.current.get(requestId) || requestId;
+			if (!threadId && sessionId) {
+				threadId = sessionId;
+				requestThreadRef.current.set(requestId, threadId);
+				requestMessageRef.current.set(requestId, messageId);
+				ensureSessionSubscribed(threadId);
+				setWorkspace((prev) => ({
+					...prev,
+					threads: ensureSessionAssistantMessage(prev.threads, requestId, data, {
+						defaultThreadName: DEFAULT_THREAD_NAME,
+						fallbackAgentId: "main",
+						messageId,
+					}).threads,
+				}));
+			}
 			if (!threadId) return;
 
 			const parsed = parseStreamEvents(payload);
-			const data = payload as { type?: string; error?: string; content?: string; node?: string };
 			const thinkingEvent: ThinkingEvent | null =
 				typeof data.type === "string" && data.type.includes("thinking")
 					? {
@@ -1076,6 +1210,8 @@ function useGatewayWorkspace(
 						isStreaming: false,
 						lastCompletion: {
 							nonce: nextNonce,
+							threadId: threadId || "",
+							messageId,
 							threadName: sourceThread?.name || "Current chat",
 							agentId: sourceThread?.agentId || "agent",
 							preview: previewMessage,
@@ -1157,6 +1293,8 @@ function useGatewayWorkspace(
 				if (connected) {
 					void refreshSessionsData();
 					void refreshAgentsData();
+					void refreshProvidersData();
+					void refreshVoiceConfigData();
 				}
 			},
 			onAgentEvent: applyAgentEvent,
@@ -1198,7 +1336,9 @@ function useGatewayWorkspace(
 		applyAgentEvent,
 		logEvent,
 		refreshAgentsData,
+		refreshProvidersData,
 		refreshSessionsData,
+		refreshVoiceConfigData,
 		setGlobalStatus,
 		settings,
 	]);
@@ -1234,6 +1374,69 @@ function useGatewayWorkspace(
 		}
 		setGlobalStatus(summary, !check.ok);
 	}, [logEvent, setGlobalStatus, settings]);
+
+	const saveProviderCredential = useCallback(
+		async (providerName: string, token: string): Promise<boolean> => {
+			const trimmedProvider = providerName.trim();
+			const trimmedToken = token.trim();
+			if (!trimmedProvider) {
+				setGlobalStatus("Provider name is required.", true);
+				return false;
+			}
+			if (!trimmedToken) {
+				setGlobalStatus("Provider token cannot be empty.", true);
+				return false;
+			}
+			try {
+				await saveProviderToken(settings, {
+					providerName: trimmedProvider,
+					token: trimmedToken,
+				});
+				await refreshProvidersData();
+				setGlobalStatus(`Saved credential for ${trimmedProvider}.`);
+				return true;
+			} catch (error) {
+				setGlobalStatus(`Failed to save credential: ${String(error)}`, true);
+				return false;
+			}
+		},
+		[refreshProvidersData, setGlobalStatus, settings],
+	);
+
+	const clearProviderCredential = useCallback(
+		async (providerName: string): Promise<boolean> => {
+			const trimmedProvider = providerName.trim();
+			if (!trimmedProvider) {
+				setGlobalStatus("Provider name is required.", true);
+				return false;
+			}
+			try {
+				await clearProviderToken(settings, trimmedProvider);
+				await refreshProvidersData();
+				setGlobalStatus(`Cleared credential for ${trimmedProvider}.`);
+				return true;
+			} catch (error) {
+				setGlobalStatus(`Failed to clear credential: ${String(error)}`, true);
+				return false;
+			}
+		},
+		[refreshProvidersData, setGlobalStatus, settings],
+	);
+
+	const saveVoiceSettings = useCallback(
+		async (voice: Partial<VoiceConfig>): Promise<boolean> => {
+			try {
+				const updated = await updateVoiceConfig(settings, voice);
+				setWorkspace((prev) => ({ ...prev, voiceConfig: updated }));
+				setGlobalStatus("Saved voice configuration.");
+				return true;
+			} catch (error) {
+				setGlobalStatus(`Failed to save voice configuration: ${String(error)}`, true);
+				return false;
+			}
+		},
+		[setGlobalStatus, settings],
+	);
 
 	const createNewChat = useCallback(async () => {
 		const agentId = workspace.selectedAgentId || "main";
@@ -1353,101 +1556,288 @@ function useGatewayWorkspace(
 		[logEvent, settings],
 	);
 
-	const sendPrompt = useCallback(async (promptOverride?: string): Promise<boolean> => {
-		const userText = (promptOverride ?? workspace.prompt).trim();
-		if (!userText) return false;
-		if (workspace.connectionStatus !== "connected") {
-			setGlobalStatus("Connect to gateway first.", true);
-			return false;
-		}
-		if (workspace.isStreaming) {
-			setGlobalStatus("Wait for current response to finish.", true);
-			return false;
-		}
-
-		let target = activeThread;
-		if (!target) {
-			target = await createNewChat();
-			if (!target) return false;
-		}
-
-		const now = Date.now();
-		const assistantId = `assistant-${now}-${Math.random().toString(36).slice(2, 8)}`;
-
-		setWorkspace((prev) => ({
-			...prev,
-			prompt: promptOverride === undefined ? "" : prev.prompt,
-			isStreaming: true,
-			threads: prev.threads.map((thread) =>
-				thread.id === target!.id
-					? {
-						...thread,
-						name:
-							thread.name === DEFAULT_THREAD_NAME
-								? mapSessionName(userText, thread.name)
-								: thread.name,
-						messagesLoaded: true,
-						messages: [
-							...thread.messages,
-							{
-								id: `user-${now}`,
-								role: "user",
-								content: userText,
-								createdAt: now,
-							},
-							{
-								id: assistantId,
-								role: "assistant",
-								content: "",
-								createdAt: now,
-							},
-						],
-						updatedAt: now,
-						lastMessagePreview: userText.slice(0, 200),
-						messageCount: (thread.messageCount ?? thread.messages.length) + 1,
-					}
-					: thread,
-			),
-		}));
-
-		try {
-			const payload: AgentRequestPayload = {
-				agentId: target.agentId,
-				content: userText,
-				sessionKey: target.id,
-				routing: {
-					channel: "desktop",
-					peer: { kind: "channel", id: deviceIdRef.current },
-				},
-			};
-			const gatewayRequestId = socketRef.current?.sendAgentRequest(payload);
-			if (!gatewayRequestId) {
-				throw new Error("Gateway socket is unavailable");
+	const clearThreadMessages = useCallback(
+		async (thread: SessionThread) => {
+			try {
+				const cleared = await clearSessionMessages(settings, {
+					sessionId: thread.id,
+					agentId: thread.agentId,
+				});
+				setWorkspace((prev) => ({
+					...prev,
+					prompt: "",
+					attachments: [],
+					attachmentError: "",
+					threads: prev.threads.map((item) =>
+						item.id === thread.id
+							? {
+									...item,
+									messages: [],
+									messagesLoaded: true,
+									messageCount: cleared.messageCount,
+									lastMessagePreview: cleared.lastMessagePreview || "",
+									updatedAt: Date.now(),
+								}
+							: item,
+					),
+				}));
+				setGlobalStatus(`Cleared chat history for ${thread.name}.`);
+				logEvent(`Cleared chat messages for session ${thread.id}`);
+			} catch (error) {
+				setGlobalStatus(`Failed to clear chat: ${String(error)}`, true);
 			}
-			requestThreadRef.current.set(gatewayRequestId, target.id);
-			requestMessageRef.current.set(gatewayRequestId, assistantId);
-			return true;
-		} catch (error) {
-			setWorkspace((prev) => ({ ...prev, isStreaming: false }));
-			setGlobalStatus(`Failed to send prompt: ${String(error)}`, true);
-			return false;
-		}
-	}, [
-		activeThread,
-		createNewChat,
-		setGlobalStatus,
-		workspace.connectionStatus,
-		workspace.isStreaming,
-		workspace.prompt,
-	]);
+		},
+		[logEvent, setGlobalStatus, settings],
+	);
+
+	const sendPrompt = useCallback(
+		async (
+			promptOverride?: string,
+			options?: { includeComposerAttachments?: boolean },
+		): Promise<boolean> => {
+			const includeComposerAttachments = options?.includeComposerAttachments !== false;
+			const outgoingAttachments = includeComposerAttachments ? workspace.attachments : [];
+			const userText = (promptOverride ?? workspace.prompt).trim();
+			if (!userText && outgoingAttachments.length === 0) return false;
+			if (workspace.connectionStatus !== "connected") {
+				setGlobalStatus("Connect to gateway first.", true);
+				return false;
+			}
+			if (workspace.isStreaming) {
+				setGlobalStatus("Wait for current response to finish.", true);
+				return false;
+			}
+
+			let target: SessionThread | undefined = activeThread;
+			if (!target) {
+				const created = await createNewChat();
+				if (!created) return false;
+				target = created;
+			}
+
+			const now = Date.now();
+			const assistantId = `assistant-${now}-${Math.random().toString(36).slice(2, 8)}`;
+			const previewText =
+				userText.trim() || buildAttachmentPreviewText(outgoingAttachments) || DEFAULT_THREAD_NAME;
+
+			setWorkspace((prev) => ({
+				...prev,
+				prompt: promptOverride === undefined ? "" : prev.prompt,
+				attachmentError: "",
+				isStreaming: true,
+				threads: prev.threads.map((thread) =>
+					thread.id === target!.id
+						? {
+							...thread,
+							name:
+								thread.name === DEFAULT_THREAD_NAME
+									? mapSessionName(previewText, thread.name)
+									: thread.name,
+							messagesLoaded: true,
+							messages: [
+								...thread.messages,
+								{
+									id: `user-${now}`,
+									role: "user",
+									content: userText,
+									attachments:
+										outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
+									createdAt: now,
+								},
+								{
+									id: assistantId,
+									role: "assistant",
+									content: "",
+									createdAt: now,
+								},
+							],
+							updatedAt: now,
+							lastMessagePreview: previewText.slice(0, 200),
+							messageCount: (thread.messageCount ?? thread.messages.length) + 1,
+						}
+						: thread,
+				),
+			}));
+
+			try {
+				const payload: AgentRequestPayload = {
+					agentId: target.agentId,
+					content: userText,
+					attachments:
+						outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
+					sessionKey: target.id,
+					routing: {
+						channel: "desktop",
+						peer: { kind: "channel", id: deviceIdRef.current },
+					},
+				};
+				const gatewayRequestId = socketRef.current?.sendAgentRequest(payload);
+				if (!gatewayRequestId) {
+					throw new Error("Gateway socket is unavailable");
+				}
+				requestThreadRef.current.set(gatewayRequestId, target.id);
+				requestMessageRef.current.set(gatewayRequestId, assistantId);
+				if (includeComposerAttachments) {
+					setWorkspace((prev) => ({ ...prev, attachments: [], attachmentError: "" }));
+				}
+				return true;
+			} catch (error) {
+				setWorkspace((prev) => ({ ...prev, isStreaming: false }));
+				setGlobalStatus(`Failed to send prompt: ${String(error)}`, true);
+				return false;
+			}
+		},
+		[
+			activeThread,
+			createNewChat,
+			setGlobalStatus,
+			workspace.attachments,
+			workspace.connectionStatus,
+			workspace.isStreaming,
+			workspace.prompt,
+		],
+	);
 
 	const updatePrompt = useCallback((value: string) => {
 		setWorkspace((prev) => ({ ...prev, prompt: value }));
 	}, []);
 
+	const addAttachments = useCallback(
+		async (files: FileList | File[] | null) => {
+			if (!files || files.length === 0) return;
+			const selected = Array.from(files);
+			const prepared: ChatAttachment[] = [];
+			let errorMessage = "";
+			let truncatedCount = 0;
+			let pdfFallbackCount = 0;
+
+			for (const file of selected) {
+				const isImage = file.type.startsWith("image/");
+				const isAudio = file.type.startsWith("audio/");
+				const isPdf = isPdfUploadFile(file);
+				const isTextFile = isSupportedTextUploadFile(file);
+
+				if (!isImage && !isAudio && !isPdf && !isTextFile) {
+					errorMessage =
+						errorMessage ||
+						"Unsupported file type. Allowed: images, audio, PDF, text, markdown, JSON, YAML, XML, logs, and common code files.";
+					continue;
+				}
+
+				if (isImage || isAudio) {
+					const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_AUDIO_BYTES;
+					if (file.size > maxBytes) {
+						errorMessage =
+							errorMessage ||
+							(isImage
+								? "Image is too large. Max size is 8MB."
+								: "Audio is too large. Max size is 20MB.");
+						continue;
+					}
+					try {
+						const dataUrl = await readFileAsDataUrl(file);
+						prepared.push({
+							id: createAttachmentId(),
+							kind: isAudio ? "audio" : "image",
+							dataUrl,
+							name: file.name,
+							mimeType: file.type,
+							size: file.size,
+						});
+					} catch {
+						errorMessage = errorMessage || "Unable to read one or more attachments.";
+					}
+					continue;
+				}
+
+				const maxBytes = isPdf ? MAX_PDF_BYTES : MAX_FILE_BYTES;
+				if (file.size > maxBytes) {
+					errorMessage =
+						errorMessage ||
+						(isPdf
+							? "PDF is too large. Max size is 8MB."
+							: "Text/code file is too large. Max size is 2MB.");
+					continue;
+				}
+
+				try {
+					const { textContent, truncated, usedPdfFallback } = await readUploadFileText(
+						file,
+						MAX_FILE_TEXT_CHARS,
+					);
+					if (!textContent.trim()) {
+						errorMessage = errorMessage || "Unable to read file contents.";
+						continue;
+					}
+					let dataUrl = "";
+					if (isPdf) {
+						dataUrl = await readFileAsDataUrl(file);
+					}
+					prepared.push({
+						id: createAttachmentId(),
+						kind: "file",
+						dataUrl,
+						textContent,
+						name: file.name,
+						mimeType: file.type || (isPdf ? "application/pdf" : "text/plain"),
+						size: file.size,
+					});
+					if (truncated) truncatedCount += 1;
+					if (usedPdfFallback) pdfFallbackCount += 1;
+				} catch {
+					errorMessage = errorMessage || "Unable to read file contents.";
+				}
+			}
+
+			if (prepared.length === 0 && !errorMessage) return;
+
+			setWorkspace((prev) => {
+				const combined = [...prev.attachments, ...prepared];
+				const limited =
+					combined.length > MAX_ATTACHMENTS
+						? combined.slice(0, MAX_ATTACHMENTS)
+						: combined;
+				const limitError =
+					combined.length > MAX_ATTACHMENTS
+						? `Limit is ${MAX_ATTACHMENTS} attachments per message.`
+						: "";
+
+				return {
+					...prev,
+					attachments: limited,
+					attachmentError: errorMessage || limitError || "",
+				};
+			});
+
+			if (truncatedCount > 0) {
+				setGlobalStatus(
+					"One or more files were truncated before upload to keep prompts manageable.",
+				);
+			}
+			if (pdfFallbackCount > 0) {
+				setGlobalStatus(
+					"One or more PDFs had no extractable text. A fallback note was attached.",
+				);
+			}
+		},
+		[setGlobalStatus],
+	);
+
+	const removeAttachment = useCallback((id: string) => {
+		setWorkspace((prev) => ({
+			...prev,
+			attachments: prev.attachments.filter((item) => item.id !== id),
+			attachmentError: "",
+		}));
+	}, []);
+
+	const clearAttachments = useCallback(() => {
+		setWorkspace((prev) => ({ ...prev, attachments: [], attachmentError: "" }));
+	}, []);
+
 	const sendPromptText = useCallback(
 		async (value: string) => {
-			return sendPrompt(value);
+			return sendPrompt(value, { includeComposerAttachments: false });
 		},
 		[sendPrompt],
 	);
@@ -1630,7 +2020,9 @@ function useGatewayWorkspace(
 	useEffect(() => {
 		void refreshAgentsData();
 		void refreshSessionsData();
-	}, [refreshAgentsData, refreshSessionsData]);
+		void refreshProvidersData();
+		void refreshVoiceConfigData();
+	}, [refreshAgentsData, refreshProvidersData, refreshSessionsData, refreshVoiceConfigData]);
 
 	useEffect(() => {
 		const thread = findThreadNeedingHydration(
@@ -1655,22 +2047,31 @@ function useGatewayWorkspace(
 			disconnectGateway,
 			testConnection,
 			refreshAgentsData,
+			refreshProvidersData,
 			refreshSessionsData,
+			refreshVoiceConfigData,
 			loadThreadMessages,
 			selectThread,
 			updateSelectedAgent,
 			createNewChat,
 			removeThread,
+			clearThreadMessages,
 			renameThreadByPrompt,
 			sendPrompt,
 			sendPromptText,
 			updatePrompt,
+			addAttachments,
+			removeAttachment,
+			clearAttachments,
 			updateCreateAgentDraft,
 			toggleCreateAgentSubAgent,
 			setAgentFormMode,
 			setEditTargetAgentId,
 			submitAgentForm,
 			loadAgentDetailData,
+			saveProviderCredential,
+			clearProviderCredential,
+			saveVoiceSettings,
 		},
 	};
 }
@@ -1685,6 +2086,216 @@ export function App({ overlayMode }: AppProps) {
 	const handledQuickSendNonceRef = useRef(0);
 	const handledCompletionNonceRef = useRef(0);
 	const autoConnectAttemptedRef = useRef(false);
+	const [voiceSessions, setVoiceSessions] = useState<Record<string, boolean>>({});
+	const [voicePlayback, setVoicePlayback] = useState<{
+		status: VoicePlaybackStatus;
+		messageId?: string;
+	}>({ status: "idle" });
+	const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+	const voiceUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+	const voiceAbortRef = useRef<AbortController | null>(null);
+	const voiceRequestIdRef = useRef<string | null>(null);
+	const spokenMessagesRef = useRef<Map<string, Set<string>>>(new Map());
+
+	const isVoiceAutoEnabled = useCallback(
+		(threadId: string): boolean => {
+			const stored = voiceSessions[threadId];
+			if (stored !== undefined) return stored;
+			return (gateway.workspace.voiceConfig?.defaultPolicy || "off") === "auto";
+		},
+		[gateway.workspace.voiceConfig?.defaultPolicy, voiceSessions],
+	);
+
+	const stopVoicePlayback = useCallback(() => {
+		voiceRequestIdRef.current = null;
+		if (voiceAbortRef.current) {
+			voiceAbortRef.current.abort();
+			voiceAbortRef.current = null;
+		}
+		if (voiceAudioRef.current) {
+			if (voiceAudioRef.current.src.startsWith("blob:")) {
+				URL.revokeObjectURL(voiceAudioRef.current.src);
+			}
+			voiceAudioRef.current.pause();
+			voiceAudioRef.current.src = "";
+			voiceAudioRef.current = null;
+		}
+		if (voiceUtteranceRef.current) {
+			if ("speechSynthesis" in window) {
+				window.speechSynthesis.cancel();
+			}
+			voiceUtteranceRef.current = null;
+		}
+		setVoicePlayback({ status: "idle" });
+	}, []);
+
+	const speakMessageVoice = useCallback(
+		async (input: { messageId: string; text: string; agentId?: string }) => {
+			const { messageId, text, agentId } = input;
+			const cleaned = sanitizeForSpeech(text);
+			if (!cleaned) return;
+			const resolved = resolveVoiceConfig(
+				gateway.workspace.voiceConfig,
+				agentId
+					? gateway.workspace.agentCatalog.find((item) => item.id === agentId)?.voice
+					: undefined,
+			);
+
+			stopVoicePlayback();
+			const requestId = `voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			voiceRequestIdRef.current = requestId;
+			setVoicePlayback({ status: "pending", messageId });
+
+			const isStale = () => voiceRequestIdRef.current !== requestId;
+
+			if (resolved.provider === "web_speech") {
+				if (!("speechSynthesis" in window)) {
+					runtime.setStatus("Speech synthesis is not available in this runtime.", true);
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
+					return;
+				}
+				const utterance = new SpeechSynthesisUtterance(cleaned);
+				const voice = resolveSpeechVoice(
+					resolved.webSpeech.voiceName,
+					resolved.webSpeech.lang,
+				);
+				if (voice) {
+					utterance.voice = voice;
+				}
+				if (resolved.webSpeech.lang) {
+					utterance.lang = resolved.webSpeech.lang;
+				}
+				if (typeof resolved.webSpeech.rate === "number") {
+					utterance.rate = resolved.webSpeech.rate;
+				}
+				if (typeof resolved.webSpeech.pitch === "number") {
+					utterance.pitch = resolved.webSpeech.pitch;
+				}
+				if (typeof resolved.webSpeech.volume === "number") {
+					utterance.volume = resolved.webSpeech.volume;
+				}
+				utterance.onend = () => {
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
+				};
+				utterance.onerror = () => {
+					runtime.setStatus("Voice playback failed.", true);
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
+				};
+				voiceUtteranceRef.current = utterance;
+				if (!isStale()) {
+					setVoicePlayback({ status: "playing", messageId });
+				}
+				window.speechSynthesis.speak(utterance);
+				return;
+			}
+
+			if (resolved.provider === "elevenlabs") {
+				if (!resolved.elevenlabs.voiceId) {
+					runtime.setStatus("ElevenLabs voiceId is not configured.", true);
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
+					return;
+				}
+				if (isStale()) return;
+				const controller = new AbortController();
+				voiceAbortRef.current = controller;
+				setVoicePlayback({ status: "loading", messageId });
+				try {
+					const blob = await speakVoice(runtime.state.settings, {
+						text: cleaned,
+						agentId,
+					});
+					if (isStale()) return;
+					const url = URL.createObjectURL(blob);
+					const audio = new Audio(url);
+					voiceAudioRef.current = audio;
+					audio.onended = () => {
+						URL.revokeObjectURL(url);
+						if (!isStale()) {
+							setVoicePlayback({ status: "idle" });
+						}
+					};
+					audio.onerror = () => {
+						URL.revokeObjectURL(url);
+						runtime.setStatus("Voice playback failed.", true);
+						if (!isStale()) {
+							setVoicePlayback({ status: "idle" });
+						}
+					};
+					const playPromise = audio.play();
+					if (playPromise) {
+						await playPromise;
+					}
+					if (!isStale()) {
+						setVoicePlayback({ status: "playing", messageId });
+					}
+				} catch (error) {
+					if ((error as Error)?.name !== "AbortError") {
+						runtime.setStatus(`Voice request failed: ${String(error)}`, true);
+					}
+					if (!isStale()) {
+						setVoicePlayback({ status: "idle" });
+					}
+				} finally {
+					if (voiceAbortRef.current === controller) {
+						voiceAbortRef.current = null;
+					}
+				}
+				return;
+			}
+
+			runtime.setStatus("Voice provider is not supported.", true);
+			if (!isStale()) {
+				setVoicePlayback({ status: "idle" });
+			}
+		},
+		[
+			gateway.workspace.agentCatalog,
+			gateway.workspace.voiceConfig,
+			runtime,
+			stopVoicePlayback,
+		],
+	);
+
+	const toggleVoiceAuto = useCallback(
+		(threadId: string) => {
+			setVoiceSessions((prev) => {
+				const current =
+					prev[threadId] ??
+					((gateway.workspace.voiceConfig?.defaultPolicy || "off") === "auto");
+				return { ...prev, [threadId]: !current };
+			});
+		},
+		[gateway.workspace.voiceConfig?.defaultPolicy],
+	);
+
+	const handleToggleVoiceAuto = useCallback(() => {
+		const activeThread = gateway.activeThread;
+		if (!activeThread) return;
+		const next = !isVoiceAutoEnabled(activeThread.id);
+		toggleVoiceAuto(activeThread.id);
+		if (!next) {
+			stopVoicePlayback();
+		}
+	}, [gateway.activeThread, isVoiceAutoEnabled, stopVoicePlayback, toggleVoiceAuto]);
+
+	const handleSpeakVoice = useCallback(
+		(messageId: string, text: string, agentId?: string) => {
+			void speakMessageVoice({ messageId, text, agentId });
+		},
+		[speakMessageVoice],
+	);
+
+	const handleStopVoice = useCallback(() => {
+		stopVoicePlayback();
+	}, [stopVoicePlayback]);
 
 	useEffect(() => {
 		if (overlayMode) return;
@@ -1720,18 +2331,31 @@ export function App({ overlayMode }: AppProps) {
 				await runtime.actions.clearQuickSend();
 				return;
 			}
+			const targetThread = gateway.activeThread;
+			if (targetThread) {
+				runtime.setStatus(
+					`Sending transcript to "${targetThread.name}" (${targetThread.agentId}).`,
+				);
+			} else {
+				runtime.setStatus(
+					`Sending transcript to a new session for agent "${gateway.workspace.selectedAgentId || "main"}".`,
+				);
+			}
 			if (!window.location.hash.startsWith("#/chat")) {
 				window.location.hash = "#/chat";
 			}
 			const sent = await gateway.actions.sendPromptText(transcript);
 			if (sent) {
 				await runtime.actions.clearTranscript();
+				runtime.setStatus("Transcript sent to chat.");
 			}
 			await runtime.actions.clearQuickSend();
 		})();
 	}, [
+		gateway.activeThread,
 		gateway.actions,
 		gateway.workspace.connectionStatus,
+		gateway.workspace.selectedAgentId,
 		overlayMode,
 		runtime.actions,
 		runtime.setStatus,
@@ -1761,6 +2385,70 @@ export function App({ overlayMode }: AppProps) {
 		runtime.state.notifyOnAgentFinish,
 	]);
 
+	useEffect(() => {
+		if (overlayMode) return;
+		stopVoicePlayback();
+	}, [gateway.workspace.activeThreadId, overlayMode, stopVoicePlayback]);
+
+	useEffect(() => {
+		const activeIds = new Set(gateway.workspace.threads.map((thread) => thread.id));
+		for (const threadId of spokenMessagesRef.current.keys()) {
+			if (!activeIds.has(threadId)) {
+				spokenMessagesRef.current.delete(threadId);
+			}
+		}
+		setVoiceSessions((prev) => {
+			const nextEntries = Object.entries(prev).filter(([threadId]) => activeIds.has(threadId));
+			if (nextEntries.length === Object.keys(prev).length) return prev;
+			return Object.fromEntries(nextEntries);
+		});
+	}, [gateway.workspace.threads]);
+
+	useEffect(() => {
+		if (overlayMode) return;
+		const completion = gateway.workspace.lastCompletion;
+		if (!completion) return;
+		const targetThread = gateway.workspace.threads.find(
+			(thread) => thread.id === completion.threadId,
+		);
+		if (!targetThread) return;
+		const targetMessage =
+			targetThread.messages.find((message) => message.id === completion.messageId) ||
+			[...targetThread.messages].reverse().find((message) => message.role === "assistant");
+		if (!targetMessage || targetMessage.role !== "assistant") return;
+
+		let spoken = spokenMessagesRef.current.get(targetThread.id);
+		if (!spoken) {
+			spoken = new Set<string>();
+			spokenMessagesRef.current.set(targetThread.id, spoken);
+		}
+		const shouldSpeak = shouldAutoSpeak({
+			text: targetMessage.content,
+			enabled: isVoiceAutoEnabled(targetThread.id),
+			spokenMessages: spoken,
+			requestId: targetMessage.id,
+		});
+		if (!shouldSpeak) return;
+		spoken.add(targetMessage.id);
+		void speakMessageVoice({
+			messageId: targetMessage.id,
+			text: targetMessage.content,
+			agentId: targetThread.agentId,
+		});
+	}, [
+		gateway.workspace.lastCompletion,
+		gateway.workspace.threads,
+		isVoiceAutoEnabled,
+		overlayMode,
+		speakMessageVoice,
+	]);
+
+	useEffect(() => {
+		return () => {
+			stopVoicePlayback();
+		};
+	}, [stopVoicePlayback]);
+
 	if (overlayMode) {
 		return (
 			<OverlayView
@@ -1778,6 +2466,13 @@ export function App({ overlayMode }: AppProps) {
 			workspace={gateway.workspace}
 			activeThread={gateway.activeThread}
 			workspaceActions={gateway.actions}
+			voiceAutoEnabled={
+				gateway.activeThread ? isVoiceAutoEnabled(gateway.activeThread.id) : false
+			}
+			voicePlayback={voicePlayback}
+			onToggleVoiceAuto={handleToggleVoiceAuto}
+			onSpeakVoice={handleSpeakVoice}
+			onStopVoice={handleStopVoice}
 		/>
 	);
 }
@@ -1788,6 +2483,11 @@ type MainViewProps = {
 	workspace: WorkspaceState;
 	activeThread?: SessionThread;
 	workspaceActions: ReturnType<typeof useGatewayWorkspace>["actions"];
+	voiceAutoEnabled: boolean;
+	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
+	onToggleVoiceAuto: () => void;
+	onSpeakVoice: (messageId: string, text: string, agentId?: string) => void;
+	onStopVoice: () => void;
 };
 
 type MainNavItem = {
@@ -1942,6 +2642,11 @@ type ChatScreenProps = {
 	workspaceActions: WorkspaceActions;
 	runtimeState: RuntimeState;
 	runtimeActions: RuntimeActions;
+	voiceAutoEnabled: boolean;
+	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
+	onToggleVoiceAuto: () => void;
+	onSpeakVoice: (messageId: string, text: string, agentId?: string) => void;
+	onStopVoice: () => void;
 };
 
 function ChatScreen({
@@ -1950,9 +2655,23 @@ function ChatScreen({
 	workspaceActions,
 	runtimeState,
 	runtimeActions,
+	voiceAutoEnabled,
+	voicePlayback,
+	onToggleVoiceAuto,
+	onSpeakVoice,
+	onStopVoice,
 }: ChatScreenProps) {
 	const messageViewportRef = useRef<HTMLDivElement | null>(null);
+	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const lastMessage = activeThread?.messages[activeThread.messages.length - 1];
+	const canSendPrompt =
+		workspace.connectionStatus === "connected" &&
+		!workspace.isStreaming &&
+		(workspace.prompt.trim().length > 0 || workspace.attachments.length > 0);
+	const voiceTargetSummary = activeThread
+		? `"${activeThread.name}" (${activeThread.agentId})`
+		: `New session (${workspace.selectedAgentId || "main"})`;
+
 	const handleTalkButtonClick = useCallback(async () => {
 		const toggleResult = await runtimeActions.toggleRecording();
 		const transcriptToSend = resolveTalkStopTranscript(
@@ -1962,6 +2681,33 @@ function ChatScreen({
 		if (!transcriptToSend) return;
 		workspaceActions.updatePrompt(transcriptToSend);
 	}, [runtimeActions, workspaceActions]);
+
+	const handlePickFiles = useCallback(() => {
+		fileInputRef.current?.click();
+	}, []);
+
+	const handleFileChange = useCallback(
+		(event: ChangeEvent<HTMLInputElement>) => {
+			void workspaceActions.addAttachments(event.target.files);
+			event.target.value = "";
+		},
+		[workspaceActions],
+	);
+
+	const handlePaste = useCallback(
+		(event: ClipboardEvent<HTMLTextAreaElement>) => {
+			if (workspace.isStreaming) return;
+			const imageFiles = extractImageFiles(event.clipboardData?.items);
+			if (imageFiles.length === 0) return;
+			event.preventDefault();
+			void workspaceActions.addAttachments(imageFiles);
+			const text = event.clipboardData?.getData("text/plain");
+			if (text) {
+				workspaceActions.updatePrompt(`${workspace.prompt}${text}`);
+			}
+		},
+		[workspace.isStreaming, workspace.prompt, workspaceActions],
+	);
 
 	useEffect(() => {
 		const node = messageViewportRef.current;
@@ -2040,6 +2786,14 @@ function ChatScreen({
 						</button>
 						<button
 							type="button"
+							className="rounded-full border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs text-amber-100"
+							onClick={() => activeThread && void workspaceActions.clearThreadMessages(activeThread)}
+							disabled={!activeThread || workspace.isStreaming}
+						>
+							Clear Chat
+						</button>
+						<button
+							type="button"
 							className="rounded-full border border-rose-400/40 bg-rose-500/15 px-3 py-1 text-xs text-rose-200"
 							onClick={() => activeThread && workspaceActions.removeThread(activeThread)}
 							disabled={!activeThread}
@@ -2052,7 +2806,15 @@ function ChatScreen({
 				<div ref={messageViewportRef} className="mt-4 max-h-[46vh] space-y-3 overflow-auto pr-1">
 					{activeThread?.messages.length ? (
 						activeThread.messages.map((message) => (
-							<MessageCard key={message.id} message={message} />
+							<MessageCard
+								key={message.id}
+								message={message}
+								voicePlayback={voicePlayback}
+								onSpeak={(messageId, text) =>
+									onSpeakVoice(messageId, text, activeThread?.agentId)
+								}
+								onStop={onStopVoice}
+							/>
 						))
 					) : (
 						<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
@@ -2063,6 +2825,18 @@ function ChatScreen({
 
 				<div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3">
 						<div className="mb-2 flex flex-wrap items-center gap-2">
+							<button
+								type="button"
+								className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${
+									voiceAutoEnabled
+										? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+										: "border-white/20 bg-slate-900/70 text-slate-200"
+								}`}
+								onClick={onToggleVoiceAuto}
+							>
+								<SpeakerIcon />
+								{voiceAutoEnabled ? "Voice: Auto" : "Voice: Off"}
+							</button>
 							<button
 								type="button"
 								className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
@@ -2076,7 +2850,29 @@ function ChatScreen({
 								<MicIcon />
 								{runtimeState.recording ? "Stop Mic" : "Talk"}
 							</button>
+							<button
+								type="button"
+								className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-100 transition hover:border-cyan-300/45"
+								onClick={handlePickFiles}
+								disabled={workspace.isStreaming}
+							>
+								<AttachmentIcon />
+								Add Files
+							</button>
+							{workspace.attachments.length > 0 ? (
+								<button
+									type="button"
+									className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-slate-200"
+									onClick={workspaceActions.clearAttachments}
+								>
+									Clear Attachments
+								</button>
+								) : null}
 						</div>
+						<p className="mb-2 text-[11px] text-slate-400">
+							Voice target:{" "}
+							<span className="font-mono text-slate-300">{voiceTargetSummary}</span>
+						</p>
 						<textarea
 							className="min-h-28 w-full resize-y rounded-xl border border-white/15 bg-slate-950/50 p-3 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
 							placeholder={
@@ -2086,6 +2882,7 @@ function ChatScreen({
 							}
 							value={workspace.prompt}
 							onChange={(event) => workspaceActions.updatePrompt(event.target.value)}
+							onPaste={handlePaste}
 							onKeyDown={(event) => {
 								if (event.key === "Enter" && !event.shiftKey) {
 									event.preventDefault();
@@ -2093,15 +2890,86 @@ function ChatScreen({
 								}
 							}}
 						/>
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept={FILE_INPUT_ACCEPT}
+							className="hidden"
+							multiple
+							onChange={handleFileChange}
+						/>
+						{workspace.attachmentError ? (
+							<p className="mt-2 text-xs text-rose-300">{workspace.attachmentError}</p>
+						) : null}
+						{workspace.attachments.length > 0 ? (
+							<div className="mt-3 grid gap-2 sm:grid-cols-2">
+								{workspace.attachments.map((attachment) => {
+									const isFile = isFileAttachment(attachment);
+									const isAudio = isAudioAttachment(attachment);
+									const meta = formatAttachmentMeta(attachment);
+									return (
+										<div
+											key={attachment.id}
+											className="rounded-xl border border-white/10 bg-slate-900/70 p-2"
+										>
+											<div className="mb-1 flex items-center justify-between gap-2">
+												<p className="truncate text-xs font-semibold text-slate-200">
+													{attachment.name ||
+														(isAudio ? "Audio attachment" : isFile ? "File attachment" : "Image attachment")}
+												</p>
+												<button
+													type="button"
+													className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] text-slate-200"
+													onClick={() => workspaceActions.removeAttachment(attachment.id)}
+												>
+													Remove
+												</button>
+											</div>
+											{meta ? (
+												<p className="text-[11px] text-slate-400">{meta}</p>
+											) : null}
+											{!isFile && !isAudio ? (
+												attachment.dataUrl ? (
+													<img
+														src={attachment.dataUrl}
+														alt={attachment.name || "Image attachment"}
+														className="mt-2 max-h-40 w-full rounded-lg object-cover"
+													/>
+												) : null
+											) : null}
+											{isAudio ? (
+												<audio className="mt-2 w-full" controls src={attachment.dataUrl} />
+											) : null}
+											{isFile && !isPdfAttachment(attachment) && attachment.textContent ? (
+												<p className="mt-2 whitespace-pre-wrap rounded-lg border border-white/10 bg-slate-950/60 p-2 text-[11px] text-slate-300">
+													{clipFilePreview(attachment.textContent)}
+												</p>
+											) : null}
+										</div>
+									);
+								})}
+							</div>
+						) : null}
 						<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
 							<p className="text-xs text-slate-300">
-								{workspace.isStreaming ? "Streaming response..." : "Enter sends, Shift+Enter adds newline."}
+								{workspace.isStreaming
+									? "Streaming response..."
+									: "Enter sends, Shift+Enter adds newline. Paste images directly into the composer."}
 							</p>
+							{voicePlayback.status !== "idle" ? (
+								<button
+									type="button"
+									className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
+									onClick={onStopVoice}
+								>
+									Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
+								</button>
+							) : null}
 							<button
 								type="button"
 								className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
 								onClick={() => void workspaceActions.sendPrompt()}
-								disabled={workspace.connectionStatus !== "connected" || workspace.isStreaming}
+								disabled={!canSendPrompt}
 							>
 								Send
 							</button>
@@ -2200,6 +3068,42 @@ function MicIcon() {
 			<path d="M5 11a7 7 0 0 0 14 0" />
 			<path d="M12 18v3" />
 			<path d="M8 21h8" />
+		</svg>
+	);
+}
+
+function SpeakerIcon() {
+	return (
+		<svg
+			aria-hidden="true"
+			viewBox="0 0 24 24"
+			className="h-3.5 w-3.5"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.8"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<path d="M11 5 6 9H3v6h3l5 4V5Z" />
+			<path d="M15 9a4 4 0 0 1 0 6" />
+			<path d="M18 7a7 7 0 0 1 0 10" />
+		</svg>
+	);
+}
+
+function AttachmentIcon() {
+	return (
+		<svg
+			aria-hidden="true"
+			viewBox="0 0 24 24"
+			className="h-3.5 w-3.5"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.8"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<path d="M21.44 11.05 12.25 20.24a6 6 0 1 1-8.49-8.49L12.95 2.56a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 1 1-2.82-2.82l8.48-8.48" />
 		</svg>
 	);
 }
@@ -2453,9 +3357,16 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 type RuntimeScreenProps = {
 	runtimeState: RuntimeState;
 	runtimeActions: RuntimeActions;
+	workspace: WorkspaceState;
+	workspaceActions: WorkspaceActions;
 };
 
-function RuntimeScreen({ runtimeState, runtimeActions }: RuntimeScreenProps) {
+function RuntimeScreen({
+	runtimeState,
+	runtimeActions,
+	workspace,
+	workspaceActions,
+}: RuntimeScreenProps) {
 	const [recordHotkey, setRecordHotkey] = useState(runtimeState.recordHotkey);
 	const [overlayHotkey, setOverlayHotkey] = useState(runtimeState.overlayHotkey);
 	const [quickSendOnRecordHotkey, setQuickSendOnRecordHotkey] = useState(
@@ -2471,6 +3382,33 @@ function RuntimeScreen({ runtimeState, runtimeActions }: RuntimeScreenProps) {
 		text: string;
 		error: boolean;
 	} | null>(null);
+	const [providerDrafts, setProviderDrafts] = useState<Record<string, string>>({});
+	const [providerFeedback, setProviderFeedback] = useState<{
+		text: string;
+		error: boolean;
+	} | null>(null);
+	const [updatingProviderName, setUpdatingProviderName] = useState<string | null>(null);
+	const [voiceProvider, setVoiceProvider] = useState<VoiceConfig["provider"]>("web_speech");
+	const [voicePolicy, setVoicePolicy] = useState<NonNullable<VoiceConfig["defaultPolicy"]>>("off");
+	const [voiceName, setVoiceName] = useState("");
+	const [voiceLang, setVoiceLang] = useState("");
+	const [voiceRate, setVoiceRate] = useState("");
+	const [voicePitch, setVoicePitch] = useState("");
+	const [voiceVolume, setVoiceVolume] = useState("");
+	const [elevenVoiceId, setElevenVoiceId] = useState("");
+	const [elevenModelId, setElevenModelId] = useState("");
+	const [elevenStability, setElevenStability] = useState("");
+	const [elevenSimilarityBoost, setElevenSimilarityBoost] = useState("");
+	const [elevenStyle, setElevenStyle] = useState("");
+	const [elevenSpeed, setElevenSpeed] = useState("");
+	const [elevenOutputFormat, setElevenOutputFormat] = useState("");
+	const [elevenLatency, setElevenLatency] = useState("");
+	const [elevenSpeakerBoost, setElevenSpeakerBoost] = useState<boolean | null>(null);
+	const [savingVoice, setSavingVoice] = useState(false);
+	const [voiceFeedback, setVoiceFeedback] = useState<{
+		text: string;
+		error: boolean;
+	} | null>(null);
 
 	useEffect(() => {
 		setRecordHotkey(runtimeState.recordHotkey);
@@ -2483,6 +3421,47 @@ function RuntimeScreen({ runtimeState, runtimeActions }: RuntimeScreenProps) {
 	useEffect(() => {
 		setQuickSendOnRecordHotkey(runtimeState.quickSendOnRecordHotkey);
 	}, [runtimeState.quickSendOnRecordHotkey]);
+
+	useEffect(() => {
+		const voice = workspace.voiceConfig;
+		if (!voice) return;
+		setVoiceProvider(voice.provider || "web_speech");
+		setVoicePolicy(voice.defaultPolicy || "off");
+		setVoiceName(voice.webSpeech?.voiceName || "");
+		setVoiceLang(voice.webSpeech?.lang || "");
+		setVoiceRate(
+			voice.webSpeech?.rate !== undefined ? String(voice.webSpeech.rate) : "",
+		);
+		setVoicePitch(
+			voice.webSpeech?.pitch !== undefined ? String(voice.webSpeech.pitch) : "",
+		);
+		setVoiceVolume(
+			voice.webSpeech?.volume !== undefined ? String(voice.webSpeech.volume) : "",
+		);
+		setElevenVoiceId(voice.elevenlabs?.voiceId || "");
+		setElevenModelId(voice.elevenlabs?.modelId || "");
+		setElevenStability(
+			voice.elevenlabs?.stability !== undefined ? String(voice.elevenlabs.stability) : "",
+		);
+		setElevenSimilarityBoost(
+			voice.elevenlabs?.similarityBoost !== undefined
+				? String(voice.elevenlabs.similarityBoost)
+				: "",
+		);
+		setElevenStyle(
+			voice.elevenlabs?.style !== undefined ? String(voice.elevenlabs.style) : "",
+		);
+		setElevenSpeed(
+			voice.elevenlabs?.speed !== undefined ? String(voice.elevenlabs.speed) : "",
+		);
+		setElevenOutputFormat(voice.elevenlabs?.outputFormat || "");
+		setElevenLatency(
+			voice.elevenlabs?.optimizeStreamingLatency !== undefined
+				? String(voice.elevenlabs.optimizeStreamingLatency)
+				: "",
+		);
+		setElevenSpeakerBoost(voice.elevenlabs?.speakerBoost ?? null);
+	}, [workspace.voiceConfig]);
 
 	const handleSaveHotkeys = useCallback(async () => {
 		setSavingHotkeys(true);
@@ -2514,9 +3493,107 @@ function RuntimeScreen({ runtimeState, runtimeActions }: RuntimeScreenProps) {
 				: {
 						text: "Notification test failed. Check macOS notification permissions and retry.",
 						error: true,
-					},
+				},
 		);
 	}, [runtimeActions]);
+
+	const parseNumber = useCallback((value: string): number | undefined => {
+		const trimmed = value.trim();
+		if (!trimmed) return undefined;
+		const parsed = Number(trimmed);
+		return Number.isFinite(parsed) ? parsed : undefined;
+	}, []);
+
+	const handleSaveProvider = useCallback(
+		async (providerName: string) => {
+			setUpdatingProviderName(providerName);
+			setProviderFeedback(null);
+			const token = providerDrafts[providerName] || "";
+			const ok = await workspaceActions.saveProviderCredential(providerName, token);
+			setUpdatingProviderName(null);
+			setProviderFeedback(
+				ok
+					? { text: `Saved token for ${providerName}.`, error: false }
+					: { text: `Failed to save token for ${providerName}.`, error: true },
+			);
+			if (ok) {
+				setProviderDrafts((prev) => ({ ...prev, [providerName]: "" }));
+			}
+		},
+		[providerDrafts, workspaceActions],
+	);
+
+	const handleClearProvider = useCallback(
+		async (providerName: string) => {
+			setUpdatingProviderName(providerName);
+			setProviderFeedback(null);
+			const ok = await workspaceActions.clearProviderCredential(providerName);
+			setUpdatingProviderName(null);
+			setProviderFeedback(
+				ok
+					? { text: `Cleared token for ${providerName}.`, error: false }
+					: { text: `Failed to clear token for ${providerName}.`, error: true },
+			);
+		},
+		[workspaceActions],
+	);
+
+	const handleSaveVoice = useCallback(async () => {
+		setSavingVoice(true);
+		setVoiceFeedback(null);
+		const ok = await workspaceActions.saveVoiceSettings({
+			provider: voiceProvider,
+			defaultPolicy: voicePolicy,
+			webSpeech: {
+				voiceName: voiceName.trim() || undefined,
+				lang: voiceLang.trim() || undefined,
+				rate: parseNumber(voiceRate),
+				pitch: parseNumber(voicePitch),
+				volume: parseNumber(voiceVolume),
+			},
+			elevenlabs: {
+				voiceId: elevenVoiceId.trim() || undefined,
+				modelId: elevenModelId.trim() || undefined,
+				stability: parseNumber(elevenStability),
+				similarityBoost: parseNumber(elevenSimilarityBoost),
+				style: parseNumber(elevenStyle),
+				speed: parseNumber(elevenSpeed),
+				outputFormat: elevenOutputFormat.trim() || undefined,
+				optimizeStreamingLatency: parseNumber(elevenLatency),
+				speakerBoost: elevenSpeakerBoost ?? undefined,
+			},
+		});
+		setSavingVoice(false);
+		setVoiceFeedback(
+			ok
+				? { text: "Voice settings saved.", error: false }
+				: { text: "Failed to save voice settings.", error: true },
+		);
+	}, [
+		elevenLatency,
+		elevenModelId,
+		elevenOutputFormat,
+		elevenSimilarityBoost,
+		elevenSpeakerBoost,
+		elevenSpeed,
+		elevenStability,
+		elevenStyle,
+		elevenVoiceId,
+		parseNumber,
+		voiceLang,
+		voiceName,
+		voicePitch,
+		voicePolicy,
+		voiceProvider,
+		voiceRate,
+		voiceVolume,
+		workspaceActions,
+	]);
+
+	const providerList = useMemo(
+		() => [...workspace.providers].sort((a, b) => a.label.localeCompare(b.label)),
+		[workspace.providers],
+	);
 
 	return (
 		<section className="space-y-4 rounded-2xl border border-white/10 bg-slate-900/70 p-4 backdrop-blur">
@@ -2592,6 +3669,206 @@ function RuntimeScreen({ runtimeState, runtimeActions }: RuntimeScreenProps) {
 				<p className="mt-1 text-[11px] text-slate-400">
 					Overlay visibility is controlled by recording start/stop and the overlay hotkey.
 				</p>
+				</div>
+				<div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+					<div className="flex items-center justify-between gap-2">
+						<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+							Providers
+						</p>
+						<button
+							type="button"
+							className="rounded-full border border-white/20 px-3 py-1 text-[11px]"
+							onClick={() => void workspaceActions.refreshProvidersData()}
+							disabled={workspace.providersLoading}
+						>
+							{workspace.providersLoading ? "Refreshing..." : "Refresh"}
+						</button>
+					</div>
+					<p className="mt-1 text-[11px] text-slate-400">
+						Store API credentials in the gateway profile used by this desktop app.
+					</p>
+					{workspace.providersUpdatedAt ? (
+						<p className="mt-1 text-[11px] text-slate-400">
+							Updated {new Date(workspace.providersUpdatedAt).toLocaleString()}
+						</p>
+					) : null}
+					{workspace.credentialsPath ? (
+						<p className="mt-1 break-all text-[11px] text-slate-400">
+							Credentials path:{" "}
+							<span className="font-mono text-slate-300">{workspace.credentialsPath}</span>
+						</p>
+					) : null}
+					<div className="mt-2 space-y-2">
+						{providerList.length === 0 ? (
+							<div className="rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-slate-400">
+								No providers found yet.
+							</div>
+						) : (
+							providerList.map((provider) => (
+								<div
+									key={provider.name}
+									className="rounded-lg border border-white/10 bg-slate-900/60 p-2"
+								>
+									<div className="mb-2 flex items-center justify-between gap-2">
+										<div className="min-w-0">
+											<p className="truncate text-xs font-semibold text-slate-100">
+												{provider.label}
+											</p>
+											<p className="truncate text-[10px] uppercase tracking-[0.12em] text-slate-400">
+												{provider.category || "model"} · {provider.source}
+											</p>
+										</div>
+										<span
+											className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
+												provider.source === "missing"
+													? "border-rose-300/40 text-rose-200"
+													: "border-emerald-300/40 text-emerald-200"
+											}`}
+										>
+											{provider.source}
+										</span>
+									</div>
+									<div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+										<input
+											type="password"
+											autoComplete="off"
+											placeholder={`Token for ${provider.label}`}
+											value={providerDrafts[provider.name] || ""}
+											onChange={(event) =>
+												setProviderDrafts((prev) => ({
+													...prev,
+													[provider.name]: event.target.value,
+												}))
+											}
+											className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+										/>
+										<button
+											type="button"
+											className="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100"
+											onClick={() => void handleSaveProvider(provider.name)}
+											disabled={updatingProviderName === provider.name}
+										>
+											{updatingProviderName === provider.name ? "Saving..." : "Save"}
+										</button>
+										<button
+											type="button"
+											className="rounded-full border border-white/20 px-3 py-1.5 text-xs"
+											onClick={() => void handleClearProvider(provider.name)}
+											disabled={updatingProviderName === provider.name}
+										>
+											Clear
+										</button>
+									</div>
+								</div>
+							))
+						)}
+					</div>
+					{providerFeedback ? (
+						<p
+							className={`mt-2 text-xs ${
+								providerFeedback.error ? "text-rose-300" : "text-emerald-300"
+							}`}
+						>
+							{providerFeedback.text}
+						</p>
+					) : null}
+				</div>
+				<div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+					<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+						Voice
+					</p>
+					<p className="mt-1 text-[11px] text-slate-400">
+						Set default text-to-speech behavior for chat playback.
+					</p>
+					<div className="mt-2 grid gap-2 sm:grid-cols-2">
+						<label className="grid gap-1 text-xs text-slate-300">
+							<span>Provider</span>
+							<select
+								className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+								value={voiceProvider}
+								onChange={(event) => setVoiceProvider(event.target.value as VoiceConfig["provider"])}
+							>
+								<option value="web_speech">Web Speech</option>
+								<option value="elevenlabs">ElevenLabs</option>
+							</select>
+						</label>
+						<label className="grid gap-1 text-xs text-slate-300">
+							<span>Default Policy</span>
+							<select
+								className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+								value={voicePolicy}
+								onChange={(event) =>
+									setVoicePolicy(
+										event.target.value as NonNullable<VoiceConfig["defaultPolicy"]>,
+									)
+								}
+							>
+								<option value="off">Off</option>
+								<option value="manual">Manual</option>
+								<option value="auto">Auto</option>
+							</select>
+						</label>
+					</div>
+					{voiceProvider === "web_speech" ? (
+						<div className="mt-2 grid gap-2 sm:grid-cols-2">
+							<Field label="Voice Name" value={voiceName} onChange={setVoiceName} />
+							<Field label="Language" value={voiceLang} onChange={setVoiceLang} />
+							<Field label="Rate" value={voiceRate} onChange={setVoiceRate} />
+							<Field label="Pitch" value={voicePitch} onChange={setVoicePitch} />
+							<Field label="Volume" value={voiceVolume} onChange={setVoiceVolume} />
+						</div>
+					) : null}
+					{voiceProvider === "elevenlabs" ? (
+						<div className="mt-2 grid gap-2 sm:grid-cols-2">
+							<Field label="Voice ID" value={elevenVoiceId} onChange={setElevenVoiceId} />
+							<Field label="Model ID" value={elevenModelId} onChange={setElevenModelId} />
+							<Field label="Stability" value={elevenStability} onChange={setElevenStability} />
+							<Field
+								label="Similarity Boost"
+								value={elevenSimilarityBoost}
+								onChange={setElevenSimilarityBoost}
+							/>
+							<Field label="Style" value={elevenStyle} onChange={setElevenStyle} />
+							<Field label="Speed" value={elevenSpeed} onChange={setElevenSpeed} />
+							<Field
+								label="Output Format"
+								value={elevenOutputFormat}
+								onChange={setElevenOutputFormat}
+							/>
+							<Field
+								label="Streaming Latency"
+								value={elevenLatency}
+								onChange={setElevenLatency}
+							/>
+							<label className="flex items-center gap-2 rounded-lg border border-white/20 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
+								<input
+									type="checkbox"
+									checked={elevenSpeakerBoost === true}
+									onChange={(event) =>
+										setElevenSpeakerBoost(event.target.checked ? true : false)
+									}
+								/>
+								<span>Use speaker boost</span>
+							</label>
+						</div>
+					) : null}
+					<button
+						type="button"
+						className="mt-3 rounded-full border border-white/20 px-4 py-2 text-sm"
+						onClick={() => void handleSaveVoice()}
+						disabled={savingVoice}
+					>
+						{savingVoice ? "Saving..." : "Save Voice Settings"}
+					</button>
+					{voiceFeedback ? (
+						<p
+							className={`mt-2 text-xs ${
+								voiceFeedback.error ? "text-rose-300" : "text-emerald-300"
+							}`}
+						>
+							{voiceFeedback.text}
+						</p>
+					) : null}
 				</div>
 				<div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
 					<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -2685,6 +3962,11 @@ function MainView({
 	workspace,
 	activeThread,
 	workspaceActions,
+	voiceAutoEnabled,
+	voicePlayback,
+	onToggleVoiceAuto,
+	onSpeakVoice,
+	onStopVoice,
 }: MainViewProps) {
 	const resolvedUi = useMemo(() => resolveGatewayUiUrl(runtimeState.settings), [runtimeState.settings]);
 	const location = useLocation();
@@ -2803,6 +4085,11 @@ function MainView({
 										workspaceActions={workspaceActions}
 										runtimeState={runtimeState}
 										runtimeActions={runtimeActions}
+										voiceAutoEnabled={voiceAutoEnabled}
+										voicePlayback={voicePlayback}
+										onToggleVoiceAuto={onToggleVoiceAuto}
+										onSpeakVoice={onSpeakVoice}
+										onStopVoice={onStopVoice}
 									/>
 								}
 							/>
@@ -2812,7 +4099,14 @@ function MainView({
 							/>
 							<Route
 								path="/runtime"
-								element={<RuntimeScreen runtimeState={runtimeState} runtimeActions={runtimeActions} />}
+								element={
+									<RuntimeScreen
+										runtimeState={runtimeState}
+										runtimeActions={runtimeActions}
+										workspace={workspace}
+										workspaceActions={workspaceActions}
+									/>
+								}
 							/>
 							<Route path="/events" element={<EventsScreen workspace={workspace} />} />
 							<Route path="*" element={<Navigate to="/chat" replace />} />
@@ -2857,10 +4151,20 @@ function MainView({
 }
 type MessageCardProps = {
 	message: ChatMessage;
+	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
+	onSpeak: (messageId: string, text: string) => void;
+	onStop: () => void;
 };
 
-function MessageCard({ message }: MessageCardProps) {
+function MessageCard({ message, voicePlayback, onSpeak, onStop }: MessageCardProps) {
 	const isUser = message.role === "user";
+	const canSpeak = !isUser && !!message.content.trim();
+	const isVoiceTarget = voicePlayback.messageId === message.id;
+	const isVoiceBusy = voicePlayback.status !== "idle";
+	const voiceLabel =
+		isVoiceTarget && isVoiceBusy
+			? getVoicePlaybackLabel(voicePlayback.status)
+			: "Play";
 	return (
 		<div
 			className={`rounded-2xl border p-3 ${
@@ -2869,11 +4173,73 @@ function MessageCard({ message }: MessageCardProps) {
 		>
 			<div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
 				<span>{message.role}</span>
-				<span>{new Date(message.createdAt).toLocaleTimeString()}</span>
+				<div className="flex items-center gap-2">
+					{canSpeak ? (
+						<button
+							type="button"
+							className={`rounded-full border px-2.5 py-1 text-[10px] tracking-[0.12em] ${
+								isVoiceTarget && isVoiceBusy
+									? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+									: "border-white/20 text-slate-200"
+							}`}
+							onClick={() => {
+								if (isVoiceTarget && isVoiceBusy) {
+									onStop();
+									return;
+								}
+								onSpeak(message.id, message.content);
+							}}
+						>
+							{voiceLabel}
+						</button>
+					) : null}
+					<span>{new Date(message.createdAt).toLocaleTimeString()}</span>
+				</div>
 			</div>
 			<div className="whitespace-pre-wrap text-sm text-slate-100">
 				{message.content || message.uiTextFallback || "..."}
 			</div>
+
+			{message.attachments?.length ? (
+				<div className="mt-3 grid gap-2 sm:grid-cols-2">
+					{message.attachments.map((attachment) => {
+						const isFile = isFileAttachment(attachment);
+						const isAudio = isAudioAttachment(attachment);
+						const meta = formatAttachmentMeta(attachment);
+						return (
+							<div
+								key={attachment.id}
+								className="rounded-lg border border-white/10 bg-slate-900/70 p-2 text-xs"
+							>
+								<p className="truncate font-semibold text-slate-200">
+									{attachment.name ||
+										(isAudio
+											? "Audio attachment"
+											: isFile
+												? "File attachment"
+												: "Image attachment")}
+								</p>
+								{meta ? <p className="mt-0.5 text-[11px] text-slate-400">{meta}</p> : null}
+								{!isFile && !isAudio && attachment.dataUrl ? (
+									<img
+										src={attachment.dataUrl}
+										alt={attachment.name || "Image attachment"}
+										className="mt-2 max-h-40 w-full rounded-md object-cover"
+									/>
+								) : null}
+								{isAudio && attachment.dataUrl ? (
+									<audio className="mt-2 w-full" controls src={attachment.dataUrl} />
+								) : null}
+									{isFile && !isPdfAttachment(attachment) && attachment.textContent ? (
+										<p className="mt-2 whitespace-pre-wrap rounded-md border border-white/10 bg-slate-950/60 p-2 text-[11px] text-slate-300">
+											{clipFilePreview(attachment.textContent)}
+										</p>
+									) : null}
+							</div>
+						);
+					})}
+				</div>
+			) : null}
 
 			{message.toolEvents?.length ? (
 				<div className="mt-3 space-y-2">
@@ -3032,6 +4398,10 @@ function OverlayView({ state, actions, canUseWebSpeechRecognition }: OverlayProp
 						Close
 					</button>
 				</div>
+				<p className="mt-3 text-[11px] text-slate-400">
+					Send To Chat targets the active session in the main desktop window.
+					If no session is active, a new one is created for the selected agent.
+				</p>
 			</div>
 			{shouldShowTranscriptionFire(state.recording) ? (
 				<div className="fire-effect">

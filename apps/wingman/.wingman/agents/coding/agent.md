@@ -6,7 +6,7 @@ tools:
   - code_search
   - command_execute
   - git_status
-model: openai:gpt-5.3-codex
+model: openai:gpt-5.2-codex
 promptRefinement: true
 subAgents:
   - name: researcher

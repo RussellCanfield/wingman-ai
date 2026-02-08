@@ -45,7 +45,7 @@
         "vite": "^6.2.0",
       },
     },
-    "apps/windows": {
+    "apps/desktop": {
       "name": "@wingman-ai/desktop-companion",
       "version": "0.1.0",
       "dependencies": {
@@ -726,7 +726,7 @@
 
     "@vladfrangu/async_event_emitter": ["@vladfrangu/async_event_emitter@2.4.7", "", {}, "sha512-Xfe6rpCTxSxfbswi/W/Pz7zp1WWSNn4A0eW4mLkQUewCrXXtMj31lCg+iQyTkh/CkusZSq9eDflu7tjEDXUY6g=="],
 
-    "@wingman-ai/desktop-companion": ["@wingman-ai/desktop-companion@workspace:apps/windows"],
+    "@wingman-ai/desktop-companion": ["@wingman-ai/desktop-companion@workspace:apps/desktop"],
 
     "@wingman-ai/gateway": ["@wingman-ai/gateway@workspace:apps/wingman"],
 

@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { createTool, createTools, getAvailableTools } from "../config/toolRegistry";
 
 describe("Tool Registry", () => {
@@ -34,6 +37,20 @@ describe("Tool Registry", () => {
 
 			expect(tool).not.toBeNull();
 			expect(tool?.name).toBe("command_execute");
+		});
+
+		it("should execute command tools in executionWorkspace when provided", async () => {
+			const executionWorkspace = mkdtempSync(join(tmpdir(), "wingman-tool-workspace-"));
+			const tool = createTool("command_execute", {
+				workspace: "/custom/path",
+				executionWorkspace,
+			});
+
+			expect(tool).not.toBeNull();
+			const result = await tool!.invoke({
+				command: 'node -e "process.stdout.write(process.cwd())"',
+			});
+			expect(String(result)).toContain(executionWorkspace);
 		});
 
 		it("should create think tool", () => {

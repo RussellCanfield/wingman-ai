@@ -7,7 +7,7 @@
 	"type": "module",
 	"workspaces": [
 		"apps/wingman",
-		"apps/windows",
+		"apps/desktop",
 		"apps/docs-website",
 		"apps/website"
 	],

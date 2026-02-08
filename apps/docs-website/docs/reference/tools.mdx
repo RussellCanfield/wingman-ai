@@ -4,9 +4,9 @@ Wingman ships with a curated tool set. Agents can only use tools listed in their
 
 ## Core tools
 
-- **code_search**: search workspace files.
+- **code_search**: search files in the active execution workspace (session `workdir` when set, otherwise agent workspace).
 - **git_status**: summarize repo status.
-- **command_execute**: run shell commands (honors `blockedCommands`, `allowScriptExecution`, `commandTimeout`).
+- **command_execute**: run shell commands in the active execution workspace (honors `blockedCommands`, `allowScriptExecution`, `commandTimeout`).
 - **internet_search**: web search (DuckDuckGo or Perplexity).
 - **web_crawler**: fetch and parse web pages.
 - **think**: private reasoning step (no external side effects).
