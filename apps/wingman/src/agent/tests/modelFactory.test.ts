@@ -1,7 +1,22 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ModelFactory } from "../config/modelFactory";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
+
+const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+
+beforeEach(() => {
+	process.env.ANTHROPIC_API_KEY = "test-anthropic-api-key";
+});
+
+afterEach(() => {
+	if (originalAnthropicApiKey === undefined) {
+		delete process.env.ANTHROPIC_API_KEY;
+		return;
+	}
+
+	process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+});
 
 describe("ModelFactory", () => {
 	describe("createModel", () => {
