@@ -11,6 +11,7 @@ mod tray;
 
 use tauri::Manager;
 use tauri::RunEvent;
+use tauri::WindowEvent;
 
 fn main() {
     tauri::Builder::default()
@@ -32,6 +33,18 @@ fn main() {
                 let _ = window.show();
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() != "main" {
+                    return;
+                }
+                if let Some(shared) = window.app_handle().try_state::<state::SharedState>() {
+                    app_logic::stop_recording_for_shutdown(&shared);
+                }
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
@@ -55,7 +68,7 @@ fn main() {
         .run(|app, event| {
             if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
                 if let Some(shared) = app.try_state::<state::SharedState>() {
-                    speech::stop_capture(&shared);
+                    app_logic::stop_recording_for_shutdown(&shared);
                 }
             }
         });

@@ -22,6 +22,19 @@ fn snapshot(shared: &SharedState) -> Result<AppState, String> {
     Ok(guard.clone())
 }
 
+fn reset_recording_state_for_shutdown(shared: &SharedState) {
+    if let Ok(mut guard) = shared.0.lock() {
+        guard.recording = false;
+        guard.overlay_visible = false;
+        guard.recording_started_by_hotkey = false;
+    }
+}
+
+pub fn stop_recording_for_shutdown(shared: &SharedState) {
+    reset_recording_state_for_shutdown(shared);
+    speech::stop_capture(shared);
+}
+
 pub fn toggle_recording<R: Runtime>(
     app: &AppHandle<R>,
     shared: &SharedState,
@@ -152,7 +165,10 @@ pub fn queue_quick_send(shared: &SharedState) -> Result<AppState, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{overlay_visible_after_stop, queue_quick_send, RecordingSource};
+    use super::{
+        overlay_visible_after_stop, queue_quick_send, reset_recording_state_for_shutdown,
+        RecordingSource,
+    };
     use crate::state::SharedState;
 
     #[test]
@@ -181,5 +197,23 @@ mod tests {
         let shared = SharedState::default();
         let next = queue_quick_send(&shared).expect("queue quick send");
         assert_eq!(next.quick_send_nonce, 0);
+    }
+
+    #[test]
+    fn reset_recording_state_for_shutdown_clears_recording_flags() {
+        let shared = SharedState::default();
+        {
+            let mut guard = shared.0.lock().expect("state lock");
+            guard.recording = true;
+            guard.overlay_visible = true;
+            guard.recording_started_by_hotkey = true;
+        }
+
+        reset_recording_state_for_shutdown(&shared);
+
+        let guard = shared.0.lock().expect("state lock");
+        assert!(!guard.recording);
+        assert!(!guard.overlay_visible);
+        assert!(!guard.recording_started_by_hotkey);
     }
 }

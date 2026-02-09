@@ -14,6 +14,7 @@ export const MessageTypeSchema = z.enum([
 	"connect",
 	"res",
 	"req:agent",
+	"req:agent:cancel",
 	"event:agent",
 	"session_subscribe",
 	"session_unsubscribe",

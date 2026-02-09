@@ -23,6 +23,7 @@ type ChatPageProps = {
 	onStopVoice: () => void;
 	onPromptChange: (value: string) => void;
 	onSendPrompt: () => void;
+	onStopPrompt: () => void;
 	onAddAttachments: (files: FileList | File[] | null) => void;
 	onRemoveAttachment: (id: string) => void;
 	onClearAttachments: () => void;
@@ -51,6 +52,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	onStopVoice,
 	onPromptChange,
 	onSendPrompt,
+	onStopPrompt,
 	onAddAttachments,
 	onRemoveAttachment,
 	onClearAttachments,
@@ -102,6 +104,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 				onStopVoice={onStopVoice}
 				onPromptChange={onPromptChange}
 				onSendPrompt={onSendPrompt}
+				onStopPrompt={onStopPrompt}
 				onAddAttachments={onAddAttachments}
 				onRemoveAttachment={onRemoveAttachment}
 				onClearAttachments={onClearAttachments}

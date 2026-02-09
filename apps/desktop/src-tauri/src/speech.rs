@@ -140,6 +140,53 @@ fn process_is_alive(pid: u32) -> bool {
 }
 
 #[cfg(target_os = "macos")]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("kill")
+        .arg("-TERM")
+        .arg(pid.to_string())
+        .status();
+    for _ in 0..20 {
+        if !process_is_alive(pid) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    let _ = Command::new("kill")
+        .arg("-KILL")
+        .arg(pid.to_string())
+        .status();
+}
+
+#[cfg(target_os = "macos")]
+fn helper_processes_alive() -> bool {
+    Command::new("pgrep")
+        .arg("-f")
+        .arg("wingman_speech_bridge")
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn terminate_helper_processes() {
+    let _ = Command::new("pkill")
+        .arg("-f")
+        .arg("wingman_speech_bridge")
+        .status();
+    for _ in 0..20 {
+        if !helper_processes_alive() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    let _ = Command::new("pkill")
+        .arg("-9")
+        .arg("-f")
+        .arg("wingman_speech_bridge")
+        .status();
+}
+
+#[cfg(target_os = "macos")]
 pub fn start_capture(shared: &SharedState) -> Result<(), String> {
     stop_capture(shared);
 
@@ -211,10 +258,7 @@ pub fn stop_capture(shared: &SharedState) {
         if let Some(mut running) = runtime.take() {
             #[cfg(target_os = "macos")]
             if let Some(pid) = running.pid.take() {
-                let _ = Command::new("kill")
-                    .arg("-TERM")
-                    .arg(pid.to_string())
-                    .status();
+                terminate_process(pid);
             }
 
             if let Some(mut child) = running.child.take() {
@@ -232,10 +276,7 @@ pub fn stop_capture(shared: &SharedState) {
     #[cfg(target_os = "macos")]
     {
         // Safety net in case runtime state was lost but helper is still alive.
-        let _ = Command::new("pkill")
-            .arg("-f")
-            .arg("wingman_speech_bridge")
-            .status();
+        terminate_helper_processes();
     }
 
     with_state(&shared.0, |state| {

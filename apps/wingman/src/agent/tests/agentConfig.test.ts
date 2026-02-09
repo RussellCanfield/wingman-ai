@@ -67,6 +67,57 @@ describe("Agent Configuration Schema", () => {
 			}
 		});
 
+		it("should fail when a sub-agent shares the same name as its parent", () => {
+			const config = {
+				name: "coding",
+				description: "Parent coding agent",
+				systemPrompt: "You are the parent coding agent",
+				subAgents: [
+					{
+						name: "coding",
+						description: "Nested coding worker",
+						systemPrompt: "You are a worker",
+					},
+				],
+			};
+
+			const result = validateAgentConfig(config);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error).toContain(
+					"Sub-agent name must be different from parent agent name",
+				);
+			}
+		});
+
+		it("should fail when sub-agent names are duplicated", () => {
+			const config = {
+				name: "parent-agent",
+				description: "Parent agent",
+				systemPrompt: "You are the parent agent",
+				subAgents: [
+					{
+						name: "implementor",
+						description: "First implementor",
+						systemPrompt: "You implement changes",
+					},
+					{
+						name: "IMPLEMENTOR",
+						description: "Duplicate implementor",
+						systemPrompt: "You implement more changes",
+					},
+				],
+			};
+
+			const result = validateAgentConfig(config);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error).toContain(
+					"Sub-agent names must be unique within the same parent agent",
+				);
+			}
+		});
+
 		it("should fail validation for missing required fields", () => {
 			const config = {
 				name: "test-agent",

@@ -121,6 +121,36 @@ export const AgentConfigSchema = BaseAgentConfigSchema.extend({
 		.describe(
 			"List of sub-agents that this agent can delegate to (each may include its own model override)",
 		),
+}).superRefine((config, ctx) => {
+	if (!config.subAgents || config.subAgents.length === 0) {
+		return;
+	}
+
+	const parentName = config.name.trim().toLowerCase();
+	const seenSubAgentNames = new Set<string>();
+
+	for (const [index, subAgent] of config.subAgents.entries()) {
+		const normalizedName = subAgent.name.trim().toLowerCase();
+
+		if (normalizedName === parentName) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["subAgents", index, "name"],
+				message: "Sub-agent name must be different from parent agent name",
+			});
+		}
+
+		if (seenSubAgentNames.has(normalizedName)) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["subAgents", index, "name"],
+				message: "Sub-agent names must be unique within the same parent agent",
+			});
+			continue;
+		}
+
+		seenSubAgentNames.add(normalizedName);
+	}
 });
 
 export type WingmanAgentConfig = z.infer<typeof AgentConfigSchema>;

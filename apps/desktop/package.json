@@ -9,7 +9,9 @@
 		"build:web": "vite build",
 		"test": "bun test src/lib",
 		"tauri:dev": "bunx --bun @tauri-apps/cli dev",
-		"tauri:build": "bunx --bun @tauri-apps/cli build"
+		"tauri:build": "bunx --bun @tauri-apps/cli build",
+		"publish:macos": "bash ./scripts/macos-publish.sh all",
+		"publish:macos:help": "bash ./scripts/macos-publish.sh --help"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.1.18",

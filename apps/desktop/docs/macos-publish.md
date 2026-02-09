@@ -1,5 +1,18 @@
 # macOS Publish Guide (Tauri Desktop Companion)
 
+## Quick Start (Automated)
+
+Run from repo root:
+
+```bash
+IDENTITY="Developer ID Application: Your Company (TEAMID)" \
+NOTARY_PROFILE="wingman-notary" \
+bun run --cwd apps/desktop publish:macos
+```
+
+The publish script is at `apps/desktop/scripts/macos-publish.sh` and supports:
+`build`, `sign`, `notarize`, `verify`, and `all`.
+
 ## 1. Prerequisites
 
 - Apple Developer account + Team ID.
@@ -22,15 +35,20 @@ Set `bundle.active` to `true` in `apps/desktop/src-tauri/tauri.conf.json` for re
 Run from repo root:
 
 ```bash
-bun run --cwd apps/desktop build:web
-bun run --cwd apps/desktop tauri:build
+bash apps/desktop/scripts/macos-publish.sh build
 ```
 
 Expected output is under `apps/desktop/src-tauri/target/release/bundle/macos/`.
 
 ## 5. Notarize + Staple
 
-Use your standard Apple notarization flow (`notarytool`) on the generated `.app`/`.dmg`, then staple the ticket before distribution.
+```bash
+IDENTITY="Developer ID Application: Your Company (TEAMID)" \
+bash apps/desktop/scripts/macos-publish.sh sign
+
+NOTARY_PROFILE="wingman-notary" \
+bash apps/desktop/scripts/macos-publish.sh notarize
+```
 
 ## 6. Verify Before Release
 
@@ -38,3 +56,8 @@ Use your standard Apple notarization flow (`notarytool`) on the generated `.app`
 - Validate first-run permissions (mic, speech, notifications).
 - Confirm tray, overlay, hotkeys, gateway connect, and chat send/stream.
 - Confirm attachment flows: file upload + image paste.
+- Run artifact verification:
+
+```bash
+bash apps/desktop/scripts/macos-publish.sh verify
+```

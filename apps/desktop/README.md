@@ -51,3 +51,4 @@ bun run --cwd apps/desktop tauri:build
 ## Shipping
 
 - macOS publishing guide: `apps/desktop/docs/macos-publish.md`
+- Automated macOS publish script: `apps/desktop/scripts/macos-publish.sh`

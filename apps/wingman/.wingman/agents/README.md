@@ -116,6 +116,7 @@ Agents can have their own subagents, allowing you to create hierarchical agent s
 
 - **Maximum nesting level: 1** - Only top-level agents can have subagents
 - **Subagents cannot have their own subagents** - This prevents excessive nesting and keeps the architecture manageable
+- **Subagent names must be unique and must not match the parent agent name** - Avoids ambiguous delegation routing
 
 ### Example: Agent with Subagents
 

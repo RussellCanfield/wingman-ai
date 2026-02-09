@@ -10,6 +10,7 @@ import type {
 	DirectPayload,
 	ErrorPayload,
 	AgentRequestPayload,
+	AgentCancelPayload,
 	MediaAttachment,
 	GatewayAuthConfig,
 } from "./types.js";
@@ -115,6 +116,10 @@ export class GatewayServer {
 	private sessionSubscriptions: Map<string, Set<GatewaySocket>> = new Map();
 	private socketSubscriptions: Map<GatewaySocket, Set<string>> = new Map();
 	private connectedClients: Set<GatewaySocket> = new Set();
+	private activeAgentRequests: Map<
+		string,
+		{ socket: GatewaySocket; abortController: AbortController }
+	> = new Map();
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -471,6 +476,10 @@ export class GatewayServer {
 				void this.handleAgentRequest(ws, msg);
 				return;
 			}
+			if (msg.type === "req:agent:cancel") {
+				this.handleAgentCancel(ws, msg);
+				return;
+			}
 
 			// Check rate limit (skip for register and ping/pong)
 			if (
@@ -545,6 +554,7 @@ export class GatewayServer {
 		}
 		this.connectedClients.delete(ws);
 		this.clearSessionSubscriptions(ws);
+		this.cancelSocketAgentRequests(ws);
 	}
 
 	/**
@@ -619,6 +629,11 @@ export class GatewayServer {
 		if (!ws.data.authenticated) {
 			this.sendAgentError(ws, msg.id, "Client is not authenticated");
 			return;
+		}
+		if (this.activeAgentRequests.has(msg.id)) {
+			const existing = this.activeAgentRequests.get(msg.id);
+			existing?.abortController.abort();
+			this.activeAgentRequests.delete(msg.id);
 		}
 
 		const payload = msg.payload as AgentRequestPayload;
@@ -728,9 +743,20 @@ export class GatewayServer {
 			workdir,
 			defaultOutputDir,
 		});
+		const abortController = new AbortController();
+		this.activeAgentRequests.set(msg.id, {
+			socket: ws,
+			abortController,
+		});
 
 		try {
-			await invoker.invokeAgent(agentId, content, sessionKey, attachments);
+			await invoker.invokeAgent(
+				agentId,
+				content,
+				sessionKey,
+				attachments,
+				{ signal: abortController.signal },
+			);
 
 			const updated = sessionManager.getSession(sessionKey);
 			if (updated) {
@@ -741,8 +767,59 @@ export class GatewayServer {
 		} catch (error) {
 			this.logger.error("Agent invocation failed", error);
 		} finally {
+			this.activeAgentRequests.delete(msg.id);
 			outputManager.off("output-event", outputHandler);
 		}
+	}
+
+	private handleAgentCancel(ws: GatewaySocket, msg: GatewayMessage): void {
+		if (!ws.data.authenticated) {
+			this.sendError(ws, "AUTH_FAILED", "Client is not authenticated");
+			return;
+		}
+		const payload = msg.payload as AgentCancelPayload | undefined;
+		const requestId =
+			(typeof payload?.requestId === "string" && payload.requestId) || undefined;
+		if (!requestId) {
+			this.sendError(ws, "INVALID_REQUEST", "Missing requestId for cancellation");
+			return;
+		}
+
+		const active = this.activeAgentRequests.get(requestId);
+		if (!active) {
+			this.sendMessage(ws, {
+				type: "ack",
+				id: msg.id,
+				payload: {
+					action: "req:agent:cancel",
+					requestId,
+					status: "not_found",
+				},
+				timestamp: Date.now(),
+			});
+			return;
+		}
+		if (active.socket !== ws) {
+			this.sendError(
+				ws,
+				"FORBIDDEN",
+				"Cannot cancel a request started by another client",
+			);
+			return;
+		}
+
+		active.abortController.abort();
+		this.activeAgentRequests.delete(requestId);
+		this.sendMessage(ws, {
+			type: "ack",
+			id: msg.id,
+			payload: {
+				action: "req:agent:cancel",
+				requestId,
+				status: "cancelled",
+			},
+			timestamp: Date.now(),
+		});
 	}
 
 	/**
@@ -1095,6 +1172,14 @@ export class GatewayServer {
 			},
 			timestamp: Date.now(),
 		});
+	}
+
+	private cancelSocketAgentRequests(ws: GatewaySocket): void {
+		for (const [requestId, active] of this.activeAgentRequests) {
+			if (active.socket !== ws) continue;
+			active.abortController.abort();
+			this.activeAgentRequests.delete(requestId);
+		}
 	}
 
 	private attachSessionContext(

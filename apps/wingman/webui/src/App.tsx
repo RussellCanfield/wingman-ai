@@ -40,6 +40,11 @@ import {
 } from "./utils/fileUpload";
 import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./utils/voice";
 import { shouldAutoSpeak } from "./utils/voiceAuto";
+import {
+	DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
+	DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS,
+	shouldRecoverStream,
+} from "./utils/streamRecovery";
 import wingmanIcon from "./assets/wingman_icon.webp";
 import wingmanLogo from "./assets/wingman_logo.webp";
 
@@ -142,6 +147,11 @@ export const App: React.FC = () => {
 	const autoConnectAttemptsRef = useRef<number>(0);
 	const autoConnectTimerRef = useRef<number | null>(null);
 	const autoConnectFailureRef = useRef<boolean>(false);
+	const activeRequestIdRef = useRef<string | null>(null);
+	const streamStartedAtRef = useRef<number>(0);
+	const streamLastActivityRef = useRef<number>(0);
+	const streamRecoveryTimerRef = useRef<number | null>(null);
+	const runningToolEventsRef = useRef<Map<string, Set<string>>>(new Map());
 
 	const agentOptions = useMemo(
 		() =>
@@ -190,6 +200,89 @@ export const App: React.FC = () => {
 			return next.slice(0, 25);
 		});
 	}, []);
+
+	const clearStreamRecoveryTimer = useCallback(() => {
+		if (streamRecoveryTimerRef.current !== null) {
+			window.clearTimeout(streamRecoveryTimerRef.current);
+			streamRecoveryTimerRef.current = null;
+		}
+	}, []);
+
+	const markStreamActivity = useCallback((requestId: string) => {
+		if (activeRequestIdRef.current !== requestId) return;
+		streamLastActivityRef.current = Date.now();
+	}, []);
+
+	const updateRunningToolState = useCallback(
+		(requestId: string, events: ToolEvent[]): boolean => {
+			const running = new Set(runningToolEventsRef.current.get(requestId) || []);
+			for (const event of events) {
+				if (!event?.id) continue;
+				if (event.status === "running") {
+					running.add(event.id);
+					continue;
+				}
+				if (event.status === "completed" || event.status === "error") {
+					running.delete(event.id);
+				}
+			}
+
+			if (running.size > 0) {
+				runningToolEventsRef.current.set(requestId, running);
+			} else {
+				runningToolEventsRef.current.delete(requestId);
+			}
+			return running.size > 0;
+		},
+		[],
+	);
+
+	const scheduleStreamRecoveryCheck = useCallback(() => {
+		clearStreamRecoveryTimer();
+		if (!activeRequestIdRef.current) return;
+
+		const check = () => {
+			const activeRequestId = activeRequestIdRef.current;
+			if (!activeRequestId) return;
+			const hasRunningTools =
+				(runningToolEventsRef.current.get(activeRequestId)?.size || 0) > 0;
+
+			if (
+				shouldRecoverStream({
+					activeRequestId,
+					lastActivityAt: streamLastActivityRef.current,
+					startedAt: streamStartedAtRef.current,
+					hasRunningTools,
+					now: Date.now(),
+					idleTimeoutMs: DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS,
+					hardTimeoutMs: DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
+				})
+			) {
+				activeRequestIdRef.current = null;
+				streamStartedAtRef.current = 0;
+				setIsStreaming(false);
+				logEvent("Recovered from a stale stream on this device. Prompt input is re-enabled.");
+				return;
+			}
+
+			streamRecoveryTimerRef.current = window.setTimeout(
+				check,
+				Math.max(750, Math.floor(DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS / 2)),
+			);
+		};
+
+		streamRecoveryTimerRef.current = window.setTimeout(
+			check,
+			Math.max(750, Math.floor(DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS / 2)),
+		);
+	}, [clearStreamRecoveryTimer, logEvent]);
+
+	useEffect(
+		() => () => {
+			clearStreamRecoveryTimer();
+		},
+		[clearStreamRecoveryTimer],
+	);
 
 	const formatDuration = (ms?: number) => {
 		if (!ms && ms !== 0) return "--";
@@ -791,9 +884,29 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		[],
 	);
 
+	const cleanupRequestState = useCallback((requestId: string) => {
+		buffersRef.current.delete(requestId);
+		thinkingBuffersRef.current.delete(requestId);
+		requestThreadRef.current.delete(requestId);
+		requestAgentRef.current.delete(requestId);
+		uiOnlyRequestsRef.current.delete(requestId);
+		uiFallbackRef.current.delete(requestId);
+		runningToolEventsRef.current.delete(requestId);
+	}, []);
+
 	const finalizeAssistant = useCallback((requestId: string, fallback?: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
-		if (!threadId) return;
+		const isActiveRequest = activeRequestIdRef.current === requestId;
+		if (!threadId) {
+			cleanupRequestState(requestId);
+			if (isActiveRequest) {
+				activeRequestIdRef.current = null;
+				streamStartedAtRef.current = 0;
+				clearStreamRecoveryTimer();
+				setIsStreaming(false);
+			}
+			return;
+		}
 		const uiFallback = uiFallbackRef.current.get(requestId);
 		const resolvedFallback = uiFallback || fallback || "";
 		const finalText = buffersRef.current.get(requestId) || resolvedFallback || "";
@@ -834,18 +947,22 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				};
 			}),
 		);
-		buffersRef.current.delete(requestId);
-		thinkingBuffersRef.current.delete(requestId);
-		requestThreadRef.current.delete(requestId);
-		requestAgentRef.current.delete(requestId);
-		uiOnlyRequestsRef.current.delete(requestId);
-		uiFallbackRef.current.delete(requestId);
-		setIsStreaming(false);
-	}, [dynamicUiEnabled]);
+		cleanupRequestState(requestId);
+		if (isActiveRequest) {
+			activeRequestIdRef.current = null;
+			streamStartedAtRef.current = 0;
+			clearStreamRecoveryTimer();
+			setIsStreaming(false);
+		}
+	}, [cleanupRequestState, clearStreamRecoveryTimer, dynamicUiEnabled]);
 
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
 			if (!payload) return;
+			if (activeRequestIdRef.current === requestId) {
+				markStreamActivity(requestId);
+				scheduleStreamRecoveryCheck();
+			}
 			const sessionId =
 				typeof payload?.sessionId === "string" ? payload.sessionId : undefined;
 			if (payload.type === "session-message" && payload.role === "user") {
@@ -1055,17 +1172,25 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 					);
 					buffersRef.current.set(requestId, next);
 					updateAssistant(requestId, next);
-					setIsStreaming(true);
+					if (activeRequestIdRef.current === requestId) {
+						setIsStreaming(true);
+					}
 				}
 
 				if (thinkingUpdates.length > 0) {
 					updateThinkingEvents(requestId, thinkingUpdates);
-					setIsStreaming(true);
+					if (activeRequestIdRef.current === requestId) {
+						setIsStreaming(true);
+					}
 				}
 
 				if (toolEvents.length > 0) {
 					updateToolEvents(requestId, toolEvents);
-					if (toolEvents.some((event) => event.status === "running")) {
+					const hasRunningTools = updateRunningToolState(requestId, toolEvents);
+					if (
+						activeRequestIdRef.current === requestId &&
+						hasRunningTools
+					) {
 						setIsStreaming(true);
 					}
 				}
@@ -1082,16 +1207,25 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				return;
 			}
 			if (payload.type === "agent-error") {
-				logEvent(`Agent error: ${payload.error || "unknown"}`);
-				finalizeAssistant(requestId, payload.error || "Agent error");
+				const errorText =
+					typeof payload.error === "string" ? payload.error : "Agent error";
+				if (/cancel/i.test(errorText)) {
+					logEvent("Request stopped.");
+				} else {
+					logEvent(`Agent error: ${errorText || "unknown"}`);
+				}
+				finalizeAssistant(requestId, errorText || "Agent error");
 			}
 		},
 		[
 			agentId,
 			finalizeAssistant,
 			logEvent,
+			markStreamActivity,
+			scheduleStreamRecoveryCheck,
 			subagentMap,
 			updateAssistant,
+			updateRunningToolState,
 			updateThinkingEvents,
 			updateToolEvents,
 		],
@@ -1102,6 +1236,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			window.clearTimeout(autoConnectTimerRef.current);
 			autoConnectTimerRef.current = null;
 		}
+		clearStreamRecoveryTimer();
+		activeRequestIdRef.current = null;
+		streamStartedAtRef.current = 0;
+		runningToolEventsRef.current.clear();
 		autoConnectAttemptsRef.current = 0;
 		autoConnectFailureRef.current = false;
 		setAutoConnectStatus("");
@@ -1113,7 +1251,7 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		setConnected(false);
 		setConnecting(false);
 		setIsStreaming(false);
-	}, []);
+	}, [clearStreamRecoveryTimer]);
 
 	const connect = useCallback(() => {
 		if (!wsUrl) {
@@ -1193,6 +1331,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		};
 
 		ws.onerror = () => {
+			clearStreamRecoveryTimer();
+			activeRequestIdRef.current = null;
+			streamStartedAtRef.current = 0;
+			runningToolEventsRef.current.clear();
 			setConnected(false);
 			setConnecting(false);
 			setIsStreaming(false);
@@ -1201,6 +1343,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		};
 
 		ws.onclose = () => {
+			clearStreamRecoveryTimer();
+			activeRequestIdRef.current = null;
+			streamStartedAtRef.current = 0;
+			runningToolEventsRef.current.clear();
 			setConnected(false);
 			setConnecting(false);
 			setIsStreaming(false);
@@ -1227,7 +1373,7 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				}
 			}, delay);
 		};
-	}, [autoConnect, deviceId, disconnect, handleAgentEvent, logEvent, password, refreshStats, token, wsUrl]);
+	}, [autoConnect, clearStreamRecoveryTimer, deviceId, disconnect, handleAgentEvent, logEvent, password, refreshStats, token, wsUrl]);
 
 	const createThread = useCallback(
 		async (targetAgentId: string, name?: string): Promise<Thread | null> => {
@@ -1332,6 +1478,11 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		setPrompt("");
 		setAttachments([]);
 		setAttachmentError("");
+		streamStartedAtRef.current = now;
+		activeRequestIdRef.current = requestId;
+		streamLastActivityRef.current = now;
+		runningToolEventsRef.current.delete(requestId);
+		scheduleStreamRecoveryCheck();
 		setIsStreaming(true);
 		requestThreadRef.current.set(requestId, targetThread.id);
 		requestAgentRef.current.set(requestId, targetThread.agentId);
@@ -1365,7 +1516,48 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		loadThreadMessages,
 		logEvent,
 		prompt,
+		scheduleStreamRecoveryCheck,
 	]);
+
+	const stopPrompt = useCallback(() => {
+		const requestId = activeRequestIdRef.current;
+		if (!requestId) return;
+		const threadId = requestThreadRef.current.get(requestId);
+		if (threadId) {
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+					return {
+						...thread,
+						messages: thread.messages.map((msg) => {
+							if (msg.id !== requestId) return msg;
+							if (!msg.content.trim()) {
+								return { ...msg, content: "Request stopped." };
+							}
+							return msg;
+						}),
+					};
+				}),
+			);
+		}
+		cleanupRequestState(requestId);
+		activeRequestIdRef.current = null;
+		streamStartedAtRef.current = 0;
+		clearStreamRecoveryTimer();
+		setIsStreaming(false);
+		logEvent("Stopping current response...");
+
+		const ws = wsRef.current;
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			const message: GatewayMessage = {
+				type: "req:agent:cancel",
+				id: `cancel-${Date.now()}`,
+				payload: { requestId },
+				timestamp: Date.now(),
+			};
+			ws.send(JSON.stringify(message));
+		}
+	}, [cleanupRequestState, clearStreamRecoveryTimer, logEvent]);
 
 	const clearChat = useCallback(async () => {
 		if (!activeThread) return;
@@ -2276,9 +2468,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 										onToggleVoiceAuto={handleToggleVoiceAuto}
 										onSpeakVoice={handleSpeakVoice}
 										onStopVoice={handleStopVoice}
-										onPromptChange={setPrompt}
-										onSendPrompt={sendPrompt}
-										onAddAttachments={addAttachments}
+											onPromptChange={setPrompt}
+											onSendPrompt={sendPrompt}
+											onStopPrompt={stopPrompt}
+											onAddAttachments={addAttachments}
 										onRemoveAttachment={removeAttachment}
 										onClearAttachments={clearAttachments}
 										onClearChat={clearChat}

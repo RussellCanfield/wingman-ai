@@ -32,6 +32,10 @@ export interface AgentInvokerOptions {
 	defaultOutputDir?: string | null;
 }
 
+export interface InvokeAgentOptions {
+	signal?: AbortSignal;
+}
+
 export type ImageAttachment = {
 	kind?: "image";
 	dataUrl: string;
@@ -197,7 +201,10 @@ export class AgentInvoker {
 		prompt: string,
 		sessionId?: string,
 		attachments?: MediaAttachment[],
+		options?: InvokeAgentOptions,
 	): Promise<any> {
+		let cancellationHandled = false;
+		const isCancelled = () => options?.signal?.aborted === true;
 		try {
 			const executionWorkspace = resolveExecutionWorkspace(
 				this.workspace,
@@ -409,12 +416,28 @@ export class AgentInvoker {
 						recursionLimit: this.wingmanConfig.recursionLimit,
 						configurable: { thread_id: sessionId },
 						version: "v2",
+						signal: options?.signal,
 					},
 				);
 
 				for await (const chunk of stream) {
+					if (isCancelled()) {
+						cancellationHandled = true;
+						this.logger.info("Agent invocation cancelled");
+						this.outputManager.emitAgentError("Request cancelled");
+						if (typeof (stream as any)?.return === "function") {
+							await (stream as any).return();
+						}
+						return { cancelled: true };
+					}
 					// Forward raw chunks to OutputManager for client-side interpretation
 					this.outputManager.emitAgentStream(chunk);
+				}
+				if (isCancelled()) {
+					cancellationHandled = true;
+					this.logger.info("Agent invocation cancelled");
+					this.outputManager.emitAgentError("Request cancelled");
+					return { cancelled: true };
 				}
 
 				this.logger.info("Agent streaming completed successfully");
@@ -423,6 +446,12 @@ export class AgentInvoker {
 			} else {
 				// Fall back to blocking invoke for backwards compatibility
 				this.logger.debug("Using blocking invoke (no session manager)");
+				if (isCancelled()) {
+					cancellationHandled = true;
+					this.logger.info("Agent invocation cancelled");
+					this.outputManager.emitAgentError("Request cancelled");
+					return { cancelled: true };
+				}
 
 				const result = await (standaloneAgent as any).invoke(
 					{
@@ -435,8 +464,15 @@ export class AgentInvoker {
 					},
 					{
 						recursionLimit: this.wingmanConfig.recursionLimit,
+						signal: options?.signal,
 					},
 				);
+				if (isCancelled()) {
+					cancellationHandled = true;
+					this.logger.info("Agent invocation cancelled");
+					this.outputManager.emitAgentError("Request cancelled");
+					return { cancelled: true };
+				}
 
 				this.logger.info("Agent completed successfully");
 				this.outputManager.emitAgentComplete(result);
@@ -444,6 +480,19 @@ export class AgentInvoker {
 				return result;
 			}
 		} catch (error) {
+			const abortError =
+				isCancelled() ||
+				(error instanceof Error &&
+					(error.name === "AbortError" ||
+						error.name === "CancelledError" ||
+						/abort|cancel/i.test(error.message)));
+			if (abortError) {
+				if (!cancellationHandled) {
+					this.outputManager.emitAgentError("Request cancelled");
+				}
+				this.logger.info("Agent invocation cancelled");
+				return { cancelled: true };
+			}
 			this.logger.error(
 				`Agent invocation failed: ${error instanceof Error ? error.message : String(error)}`,
 			);

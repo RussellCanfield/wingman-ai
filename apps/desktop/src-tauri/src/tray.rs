@@ -1,27 +1,55 @@
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
 use crate::app_logic;
-use crate::speech;
 use crate::state::SharedState;
+
+const SHOW_WINDOW_MENU_ID: &str = "show_window";
+const OPEN_SETTINGS_MENU_ID: &str = "open_settings";
 
 fn emit_state_changed<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.emit("wingman://state-changed", ());
+}
+
+fn should_open_main_window(action_id: &str) -> bool {
+    action_id == SHOW_WINDOW_MENU_ID || action_id == OPEN_SETTINGS_MENU_ID
+}
+
+fn ensure_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+        .title("Wingman Companion")
+        .inner_size(1240.0, 860.0)
+        .resizable(true)
+        .fullscreen(false)
+        .build()?;
+    let _ = window.show();
+    let _ = window.set_focus();
+    Ok(())
 }
 
 pub fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let toggle_recording =
         MenuItemBuilder::with_id("toggle_recording", "Start Recording").build(app)?;
     let toggle_overlay = MenuItemBuilder::with_id("toggle_overlay", "Toggle Overlay").build(app)?;
+    let show_window =
+        MenuItemBuilder::with_id(SHOW_WINDOW_MENU_ID, "Show Wingman Window").build(app)?;
     let open_gateway_ui =
         MenuItemBuilder::with_id("open_gateway_ui", "Open Gateway UI").build(app)?;
-    let open_settings = MenuItemBuilder::with_id("open_settings", "Settings...").build(app)?;
+    let open_settings =
+        MenuItemBuilder::with_id(OPEN_SETTINGS_MENU_ID, "Settings...").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit Wingman AI").build(app)?;
 
     let menu = MenuBuilder::new(app)
         .item(&toggle_recording)
         .item(&toggle_overlay)
+        .item(&show_window)
         .item(&open_gateway_ui)
         .item(&open_settings)
         .separator()
@@ -67,15 +95,14 @@ pub fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                         }
                     }
                 }
-                "open_settings" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                id if should_open_main_window(id) => {
+                    if let Err(error) = ensure_main_window(app) {
+                        eprintln!("failed to open main window: {error}");
                     }
                 }
                 "quit" => {
                     if let Some(state) = app.try_state::<SharedState>() {
-                        speech::stop_capture(&state);
+                        app_logic::stop_recording_for_shutdown(&state);
                     }
                     app.exit(0);
                 }
@@ -85,4 +112,16 @@ pub fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .build(&app_handle)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_open_main_window, OPEN_SETTINGS_MENU_ID, SHOW_WINDOW_MENU_ID};
+
+    #[test]
+    fn recognizes_window_open_actions() {
+        assert!(should_open_main_window(SHOW_WINDOW_MENU_ID));
+        assert!(should_open_main_window(OPEN_SETTINGS_MENU_ID));
+        assert!(!should_open_main_window("quit"));
+    }
 }

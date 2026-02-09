@@ -7,6 +7,7 @@ export type MessageType =
 	| "connect" // Client handshake
 	| "res" // Response to request
 	| "req:agent" // Request agent execution
+	| "req:agent:cancel" // Cancel in-flight agent execution
 	| "event:agent" // Agent stream events
 	| "session_subscribe" // Subscribe to session events
 	| "session_unsubscribe" // Unsubscribe from session events
@@ -87,6 +88,10 @@ export interface AgentRequestPayload {
 	attachments?: MediaAttachment[];
 	routing?: RoutingInfo;
 	sessionKey?: string;
+}
+
+export interface AgentCancelPayload {
+	requestId: string;
 }
 
 export interface RoutingPeer {

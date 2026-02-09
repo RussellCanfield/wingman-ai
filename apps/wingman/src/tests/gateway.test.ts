@@ -6,8 +6,37 @@ const describeIfBun = isBun ? describe : describe.skip;
 
 vi.mock("@/cli/core/agentInvoker.js", () => ({
 	AgentInvoker: class {
-		constructor() {}
-		async invokeAgent() {
+		private outputManager: any;
+		constructor(options: { outputManager?: any }) {
+			this.outputManager = options?.outputManager;
+		}
+		async invokeAgent(
+			_agentId: string,
+			_content: string,
+			_sessionId?: string,
+			_attachments?: any[],
+			options?: { signal?: AbortSignal },
+		) {
+			const signal = options?.signal;
+			await new Promise<void>((resolve) => {
+				const timer = setTimeout(resolve, 75);
+				if (signal) {
+					const onAbort = () => {
+						clearTimeout(timer);
+						resolve();
+					};
+					if (signal.aborted) {
+						onAbort();
+						return;
+					}
+					signal.addEventListener("abort", onAbort, { once: true });
+				}
+			});
+			if (signal?.aborted) {
+				this.outputManager?.emitAgentError?.("Request cancelled");
+				return { cancelled: true };
+			}
+			this.outputManager?.emitAgentComplete?.({ streaming: true });
 			return { streaming: true };
 		}
 	},
@@ -442,6 +471,44 @@ describeIfBun("Gateway", () => {
 		expect(eventMsg.payload?.agentId).toBe("main");
 
 		desktopClient.close();
+		requester.close();
+	});
+
+	it("should cancel an in-flight agent request", async () => {
+		const requester = await connectClient("session-cancel-requester");
+		const requestId = "req-cancel-test";
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: requestId,
+				payload: {
+					agentId: "main",
+					sessionKey: "session-cancel-test",
+					content: "cancel me",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent:cancel",
+				id: "cancel-req-cancel-test",
+				payload: { requestId },
+				timestamp: Date.now(),
+			}),
+		);
+
+		const ack = await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "ack" &&
+				msg.payload?.action === "req:agent:cancel" &&
+				msg.payload?.requestId === requestId,
+		);
+		expect(["cancelled", "not_found"]).toContain(ack.payload?.status);
+
 		requester.close();
 	});
 
