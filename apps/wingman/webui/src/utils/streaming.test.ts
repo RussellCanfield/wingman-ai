@@ -58,6 +58,38 @@ describe("parseStreamEvents", () => {
 		});
 	});
 
+	it("extracts node from langgraph tags when direct metadata is absent", () => {
+		const chunk = {
+			event: "on_tool_start",
+			name: "search",
+			run_id: "tool-tags-1",
+			data: { input: { q: "wingman" } },
+			metadata: { tags: ["trace", "langgraph_node:reviewer"] },
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.toolEvents).toHaveLength(1);
+		expect(result.toolEvents[0]).toMatchObject({
+			id: "tool-tags-1",
+			node: "reviewer",
+		});
+	});
+
+	it("extracts node from checkpoint namespace metadata", () => {
+		const chunk = {
+			event: "on_chat_model_stream",
+			run_id: "run-namespace-1",
+			data: { chunk: { content: "hello from worker" } },
+			metadata: { langgraph_checkpoint_ns: "__pregel_pull/researcher:step-3" },
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0].node).toBe("researcher");
+	});
+
 	it("captures tool node metadata from message payloads", () => {
 		const chunk = [
 			"stream-tools",

@@ -1,4 +1,5 @@
 [
+  { "type": "file", "name": "quick-tips", "label": "Quick Tips (Critical)" },
   { "type": "file", "name": "multi-agent-workflows", "label": "Multi-Agent Workflows" },
   { "type": "file", "name": "dynamic-ui", "label": "Dynamic UI (SGUI)" },
   { "type": "file", "name": "sessions-and-state", "label": "Sessions & State" },

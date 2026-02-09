@@ -108,4 +108,30 @@ describe("ToolEventPanel helpers", () => {
 
 		expect(html).toContain("implementor");
 	});
+
+	it("renders invoked agent summary in panel variant", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "panel",
+				toolEvents: [
+					{
+						id: "tool-actor-2",
+						name: "task",
+						actor: "researcher",
+						status: "running",
+					},
+					{
+						id: "tool-actor-3",
+						name: "task",
+						actor: "reviewer",
+						status: "completed",
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Invoked agents");
+		expect(html).toContain("researcher active");
+		expect(html).toContain("reviewer 1");
+	});
 });

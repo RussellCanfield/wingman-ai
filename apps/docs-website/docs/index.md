@@ -15,6 +15,9 @@ hero:
     - theme: alt
       text: Discord Adapter
       link: /configuration/discord-adapter
+    - theme: alt
+      text: Quick Tips
+      link: /guides/quick-tips
   image:
     src: /wingman_logo.webp
     alt: Wingman logo
@@ -54,5 +57,6 @@ This documentation dives deep into configuration, providers, and real-world use 
 2. Configure providers (`wingman provider login <provider>`).
 3. Create or customize agents in `.wingman/agents/`.
 4. Start the gateway and open the Control Core UI.
+5. Keep [Quick Tips](/guides/quick-tips) handy for critical fixes.
 
 Ready to dive in? Start with the quickstart.

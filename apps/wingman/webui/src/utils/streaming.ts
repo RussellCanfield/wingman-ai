@@ -52,27 +52,26 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 			const messageType = getMessageType(msg);
 			const normalizedType = messageType ? messageType.toLowerCase() : "";
 			const role = getMessageRole(msg);
-			const isAIMessage =
-				isAIMessageType(normalizedType) || role === "assistant";
+			const isAIMessage = isAIMessageType(normalizedType) || role === "assistant";
 			const isToolMessage = isToolMessageType(normalizedType);
 			if (role === "user" && !isAIMessage && !isToolMessage) continue;
 
-				if (isAIMessage) {
-					const messageId = getMessageId(msg, entry);
-					const node = extractNodeLabel(msg, entry.meta);
-					const toolCalls = extractToolCalls(msg, messageId);
-					for (const toolCall of toolCalls) {
+			if (isAIMessage) {
+				const messageId = getMessageId(msg, entry);
+				const node = extractNodeLabel(msg, entry.meta);
+				const toolCalls = extractToolCalls(msg, messageId);
+				for (const toolCall of toolCalls) {
 					const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
 						toolCall.args,
 					);
-						toolEvents.push({
-							id: toolCall.id,
-							name: toolCall.name,
-							node,
-							args,
-							ui,
-							uiOnly,
-							textFallback,
+					toolEvents.push({
+						id: toolCall.id,
+						name: toolCall.name,
+						node,
+						args,
+						ui,
+						uiOnly,
+						textFallback,
 						status: "running",
 						timestamp: Date.now(),
 					});
@@ -89,20 +88,20 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				}
 			}
 
-				if (isToolMessage) {
-					const toolResult = extractToolResult(msg);
-					if (toolResult) {
-						const node = extractNodeLabel(msg, entry.meta);
-						const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
-							toolResult.output,
-						);
-						toolEvents.push({
-							id: toolResult.id,
-							name: toolResult.name || "tool",
-							node,
-							status: toolResult.error ? "error" : "completed",
-							output,
-							ui,
+			if (isToolMessage) {
+				const toolResult = extractToolResult(msg);
+				if (toolResult) {
+					const node = extractNodeLabel(msg, entry.meta);
+					const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
+						toolResult.output,
+					);
+					toolEvents.push({
+						id: toolResult.id,
+						name: toolResult.name || "tool",
+						node,
+						status: toolResult.error ? "error" : "completed",
+						output,
+						ui,
 						uiOnly,
 						textFallback,
 						error: toolResult.error,
@@ -120,19 +119,21 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		textEvents.push({ text: chunk.content });
 	}
 
-		if (chunk.tool_calls && Array.isArray(chunk.tool_calls)) {
-			for (const toolCall of chunk.tool_calls) {
-				const normalized = normalizeToolCall(toolCall);
-				if (!normalized) continue;
-				const { ui, uiOnly, textFallback, data: args } = splitUiPayload(normalized.args);
-				toolEvents.push({
-					id: normalized.id,
-					name: normalized.name,
-					node: extractEventNode(chunk),
-					args,
-					ui,
-					uiOnly,
-					textFallback,
+	if (chunk.tool_calls && Array.isArray(chunk.tool_calls)) {
+		for (const toolCall of chunk.tool_calls) {
+			const normalized = normalizeToolCall(toolCall);
+			if (!normalized) continue;
+			const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
+				normalized.args,
+			);
+			toolEvents.push({
+				id: normalized.id,
+				name: normalized.name,
+				node: extractEventNode(chunk),
+				args,
+				ui,
+				uiOnly,
+				textFallback,
 				status: "running",
 				timestamp: Date.now(),
 			});
@@ -398,6 +399,12 @@ function extractEventNode(chunk: any): string | undefined {
 		chunk?.data?.message?.metadata,
 		chunk?.data?.chunk?.additional_kwargs?.metadata,
 		chunk?.data?.message?.additional_kwargs?.metadata,
+		chunk?.data?.chunk?.response_metadata,
+		chunk?.data?.message?.response_metadata,
+		chunk,
+		chunk?.data,
+		chunk?.data?.chunk,
+		chunk?.data?.message,
 	];
 	for (const candidate of candidates) {
 		const node = extractLanggraphNode(candidate);
@@ -408,15 +415,32 @@ function extractEventNode(chunk: any): string | undefined {
 
 function extractLanggraphNode(meta: any): string | undefined {
 	if (!meta || typeof meta !== "object") return undefined;
-	const node =
+	const directNode =
 		meta.langgraph_node ??
 		meta.langgraphNode ??
 		meta.node ??
 		meta.node_id ??
 		meta.nodeId;
-	if (typeof node === "string" && node.trim().length > 0) {
-		return node;
+	if (typeof directNode === "string" && directNode.trim().length > 0) {
+		return directNode.trim();
 	}
+
+	const tagNode = extractNodeFromTagList(meta.tags) || extractNodeFromTagList(meta.ls_tags);
+	if (tagNode) return tagNode;
+
+	const checkpointNode =
+		extractNodeFromNamespace(meta.langgraph_checkpoint_ns) ||
+		extractNodeFromNamespace(meta.langgraphCheckpointNs) ||
+		extractNodeFromNamespace(meta.checkpoint_ns) ||
+		extractNodeFromNamespace(meta.checkpointNs);
+	if (checkpointNode) return checkpointNode;
+
+	const pathNode =
+		extractNodeFromPath(meta.langgraph_path) ||
+		extractNodeFromPath(meta.langgraphPath) ||
+		extractNodeFromPath(meta.path);
+	if (pathNode) return pathNode;
+
 	return undefined;
 }
 
@@ -424,14 +448,62 @@ function extractNodeLabel(message: any, meta?: any): string | undefined {
 	const candidates = [
 		meta,
 		message?.metadata,
+		message?.response_metadata,
 		message?.kwargs?.metadata,
 		message?.additional_kwargs?.metadata,
+		message?.additional_kwargs?.response_metadata,
 		message?.additional_kwargs,
 		message?.kwargs,
 	];
 	for (const candidate of candidates) {
 		const node = extractLanggraphNode(candidate);
 		if (node) return node;
+	}
+	return undefined;
+}
+
+function extractNodeFromTagList(tags: unknown): string | undefined {
+	if (!Array.isArray(tags)) return undefined;
+	for (const tag of tags) {
+		if (typeof tag !== "string") continue;
+		const normalized = tag.trim();
+		if (!normalized) continue;
+		if (normalized.startsWith("langgraph_node:")) {
+			const value = normalized.slice("langgraph_node:".length).trim();
+			if (value) return value;
+		}
+		if (normalized.startsWith("langgraph_node=")) {
+			const value = normalized.slice("langgraph_node=".length).trim();
+			if (value) return value;
+		}
+	}
+	return undefined;
+}
+
+function extractNodeFromNamespace(namespace: unknown): string | undefined {
+	if (typeof namespace !== "string") return undefined;
+	const trimmed = namespace.trim();
+	if (!trimmed) return undefined;
+
+	const segments = trimmed.split(/[/:|]/g).map((segment) => segment.trim());
+	for (const segment of segments) {
+		if (!segment || segment.startsWith("__")) continue;
+		if (segment.toLowerCase() === "langgraph") continue;
+		return segment;
+	}
+	return undefined;
+}
+
+function extractNodeFromPath(path: unknown): string | undefined {
+	if (typeof path === "string") {
+		return extractNodeFromNamespace(path);
+	}
+	if (!Array.isArray(path)) return undefined;
+	for (let index = path.length - 1; index >= 0; index -= 1) {
+		const part = path[index];
+		if (typeof part !== "string") continue;
+		const extracted = extractNodeFromNamespace(part);
+		if (extracted) return extracted;
 	}
 	return undefined;
 }

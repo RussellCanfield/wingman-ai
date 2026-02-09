@@ -1,0 +1,70 @@
+# Quick Tips (Critical)
+
+This page is a one-stop checklist for the most common "fix it now" tasks in Wingman.
+
+## Re-sync bundled out-of-box agents
+
+If your local `.wingman/agents/` is missing bundled agents (or you want fresh templates), re-copy them without changing config/provider setup:
+
+```bash
+wingman init --skip-config --skip-provider
+```
+
+Only sync specific bundled agents:
+
+```bash
+wingman init --skip-config --skip-provider --agents main,coding
+```
+
+Force overwrite existing agent template files:
+
+```bash
+wingman init --skip-config --skip-provider --force
+```
+
+See full agent details: [Agents & Sub-Agents](/configuration/agents)
+
+## Provider credentials not working
+
+Check provider auth status:
+
+```bash
+wingman provider status
+```
+
+Log in again for a provider:
+
+```bash
+wingman provider login openai
+```
+
+See provider setup guide: [Providers](/configuration/providers)
+
+## Gateway not responding
+
+Check status/health:
+
+```bash
+wingman gateway status
+wingman gateway health
+```
+
+Restart gateway:
+
+```bash
+wingman gateway restart
+```
+
+See gateway setup guide: [Gateway Configuration](/configuration/gateway)
+
+## Quick local smoke test
+
+Run one local prompt directly against your default/local agent:
+
+```bash
+wingman agent --local --agent wingman "hello"
+```
+
+If this works, core CLI + agent loading is healthy.
+
+For more command detail, see [CLI Reference](/reference/cli).

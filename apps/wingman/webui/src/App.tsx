@@ -23,6 +23,11 @@ import type {
 	Webhook,
 } from "./types";
 import { parseStreamEvents } from "./utils/streaming";
+import {
+	matchKnownSubagentLabel,
+	resolveToolActorLabel,
+	type KnownSubagentLookup,
+} from "./utils/agentAttribution";
 import type { VoicePlaybackStatus } from "./utils/voicePlayback";
 import { Sidebar } from "./components/Sidebar";
 import { HeroPanel } from "./components/HeroPanel";
@@ -163,14 +168,20 @@ export const App: React.FC = () => {
 	);
 
 	const subagentMap = useMemo(() => {
-		const map = new Map<string, Set<string>>();
+		const map = new Map<string, KnownSubagentLookup>();
 		for (const agent of agentCatalog) {
-			const set = new Set<string>();
+			const lookup = new Map<string, string>();
 			for (const subagent of agent.subAgents || []) {
-				if (subagent.id) set.add(normalizeName(subagent.id));
-				if (subagent.displayName) set.add(normalizeName(subagent.displayName));
+				const label = (subagent.displayName || subagent.id || "").trim();
+				if (!label) continue;
+				if (subagent.id) {
+					lookup.set(normalizeName(subagent.id), label);
+				}
+				if (subagent.displayName) {
+					lookup.set(normalizeName(subagent.displayName), label);
+				}
 			}
-			map.set(agent.id, set);
+			map.set(agent.id, lookup);
 		}
 		return map;
 	}, [agentCatalog]);
@@ -1146,11 +1157,14 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 
 				for (const event of textEvents) {
 					const nodeLabel = event.node?.trim();
-					const normalizedNode = nodeLabel ? normalizeName(nodeLabel) : "";
-					const isKnownSubagent =
-						nodeLabel && subagents ? subagents.has(normalizedNode) : false;
+					const matchedSubagent = matchKnownSubagentLabel(nodeLabel, subagents);
+					const normalizedNode = matchedSubagent
+						? normalizeName(matchedSubagent)
+						: nodeLabel
+							? normalizeName(nodeLabel)
+							: "";
 
-					if (isKnownSubagent) {
+					if (matchedSubagent) {
 						const buffer =
 							thinkingBuffersRef.current.get(requestId) || new Map<string, string>();
 						const previous = buffer.get(normalizedNode) || "";
@@ -1159,7 +1173,7 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 						thinkingBuffersRef.current.set(requestId, buffer);
 						thinkingUpdates.push({
 							id: `think-${requestId}-${normalizedNode}`,
-							node: nodeLabel || "Subagent",
+							node: matchedSubagent,
 							content: next,
 							updatedAt: Date.now(),
 						});
@@ -2591,73 +2605,6 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 
 function normalizeName(value: string): string {
 	return value.trim().toLowerCase();
-}
-
-function resolveToolActorLabel(
-	node: string | undefined,
-	args: Record<string, any> | undefined,
-	output: unknown,
-	knownSubagents?: Set<string>,
-): string {
-	if (typeof node === "string" && node.trim().length > 0) {
-		return node.trim();
-	}
-
-	const inferred =
-		extractActorFromPayload(args) || extractActorFromPayload(output);
-	if (inferred) {
-		return inferred;
-	}
-
-	if (knownSubagents && knownSubagents.size === 1) {
-		const [single] = Array.from(knownSubagents.values());
-		if (single) return single;
-	}
-
-	return "orchestrator";
-}
-
-function extractActorFromPayload(
-	payload: unknown,
-	depth = 0,
-): string | null {
-	if (!payload || typeof payload !== "object") return null;
-	if (depth > 2) return null;
-
-	const source = payload as Record<string, unknown>;
-	const directKeys = [
-		"subagent",
-		"subAgent",
-		"agent",
-		"agentName",
-		"delegate",
-		"worker",
-		"assistant",
-		"name",
-		"id",
-		"role",
-	];
-
-	for (const key of directKeys) {
-		const value = source[key];
-		if (typeof value === "string" && value.trim()) {
-			return value.trim();
-		}
-	}
-
-	for (const value of Object.values(source)) {
-		if (!value || typeof value !== "object") continue;
-		const nested = value as Record<string, unknown>;
-		const pick =
-			(typeof nested.name === "string" && nested.name.trim()) ||
-			(typeof nested.id === "string" && nested.id.trim()) ||
-			(typeof nested.role === "string" && nested.role.trim());
-		if (pick) return pick;
-		const recursive = extractActorFromPayload(nested, depth + 1);
-		if (recursive) return recursive;
-	}
-
-	return null;
 }
 
 function mergeStreamText(existing: string, next: string): string {

@@ -19,6 +19,7 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 	});
 	const completedCount = sorted.filter((event) => event.status === "completed").length;
 	const errorCount = sorted.filter((event) => event.status === "error").length;
+	const invokedAgents = summarizeInvokedAgents(sorted);
 
 	const showHeader = variant === "panel";
 	const containerClass =
@@ -47,6 +48,22 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 							</span>
 						) : null}
 					</div>
+					{invokedAgents.length > 0 ? (
+						<div className="flex w-full flex-wrap items-center gap-2">
+							<span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+								Invoked agents
+							</span>
+							{invokedAgents.map((agent) => (
+								<span
+									key={agent.label}
+									className="rounded-full border border-sky-400/35 bg-sky-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200"
+								>
+									{agent.label}
+									{agent.running > 0 ? " active" : ` ${agent.total}`}
+								</span>
+							))}
+						</div>
+					) : null}
 				</div>
 			) : null}
 			<div className={showHeader ? "mt-3 space-y-2.5" : "space-y-2.5"}>
@@ -60,12 +77,7 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 
 const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 	const status = TOOL_STATUS_STYLES[event.status];
-	const actorLabel =
-		typeof event.actor === "string" && event.actor.trim()
-			? event.actor.trim()
-			: typeof event.node === "string" && event.node.trim()
-				? event.node.trim()
-				: null;
+	const actorLabel = resolveActorLabel(event);
 	const argsText = stringifyToolEventValue(event.args);
 	const outputText = stringifyToolEventValue(
 		event.error ? { error: event.error } : event.output,
@@ -145,6 +157,35 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 		</details>
 	);
 };
+
+function resolveActorLabel(event: ToolEvent): string | null {
+	if (typeof event.actor === "string" && event.actor.trim()) {
+		return event.actor.trim();
+	}
+	if (typeof event.node === "string" && event.node.trim()) {
+		return event.node.trim();
+	}
+	return null;
+}
+
+function summarizeInvokedAgents(events: ToolEvent[]): Array<{
+	label: string;
+	total: number;
+	running: number;
+}> {
+	const counts = new Map<string, { total: number; running: number }>();
+	for (const event of events) {
+		const label = resolveActorLabel(event);
+		if (!label) continue;
+		const current = counts.get(label) || { total: 0, running: 0 };
+		current.total += 1;
+		if (event.status === "running") current.running += 1;
+		counts.set(label, current);
+	}
+	return Array.from(counts.entries())
+		.map(([label, value]) => ({ label, ...value }))
+		sort((a, b) => a.label.localeCompare(b.label));
+}
 
 const ToolPayload: React.FC<{ label: string; value: string }> = ({ label, value }) => (
 	<div>
