@@ -84,9 +84,7 @@ export class SessionManager {
 			);
 		}
 
-		const { BunSqliteAdapter } = await import(
-			"./database/bunSqliteAdapter.js"
-		);
+		const { BunSqliteAdapter } = await import("./database/bunSqliteAdapter.js");
 
 		// Create native bun:sqlite database via adapter
 		const adapter = new BunSqliteAdapter(this.dbPath);
@@ -120,6 +118,8 @@ export class SessionManager {
 
       CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_name);
+      CREATE INDEX IF NOT EXISTS idx_sessions_status_updated ON sessions(status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_sessions_status_agent_updated ON sessions(status, agent_name, updated_at DESC);
     `);
 	}
 
@@ -156,7 +156,11 @@ export class SessionManager {
 	/**
 	 * Get or create a session with a fixed ID
 	 */
-	getOrCreateSession(sessionId: string, agentName: string, name?: string): Session {
+	getOrCreateSession(
+		sessionId: string,
+		agentName: string,
+		name?: string,
+	): Session {
 		if (!this.db) {
 			throw new Error("SessionManager not initialized");
 		}
@@ -240,12 +244,7 @@ export class SessionManager {
 			throw new Error("SessionManager not initialized");
 		}
 
-		const {
-			status = "active",
-			limit = 10,
-			offset = 0,
-			agentName,
-		} = options;
+		const { status = "active", limit = 10, offset = 0, agentName } = options;
 
 		let query = `
       SELECT * FROM sessions
@@ -593,7 +592,10 @@ function toSessionMessage(
 	baseTime: number,
 ): SessionMessage | null {
 	if (!entry || typeof entry !== "object") return null;
-	if (entry?.additional_kwargs?.ui_hidden || entry?.additional_kwargs?.uiHidden) {
+	if (
+		entry?.additional_kwargs?.ui_hidden ||
+		entry?.additional_kwargs?.uiHidden
+	) {
 		return null;
 	}
 	if (entry?.metadata?.ui_hidden || entry?.metadata?.uiHidden) {
@@ -604,7 +606,10 @@ function toSessionMessage(
 
 	if (role !== "user" && role !== "assistant") {
 		if (isToolMessage(entry)) {
-			const toolContent = extractMessageContent(entry, extractContentBlocks(entry));
+			const toolContent = extractMessageContent(
+				entry,
+				extractContentBlocks(entry),
+			);
 			const ui = extractUiFromPayload(toolContent);
 			if (ui?.spec) {
 				return {
@@ -644,9 +649,7 @@ function toSessionMessage(
 	};
 }
 
-export function extractMessagesFromState(
-	state: any,
-): SessionMessage[] | null {
+export function extractMessagesFromState(state: any): SessionMessage[] | null {
 	if (!state || typeof state !== "object") return null;
 
 	const values = state?.values ?? state?.value ?? state?.state ?? {};
@@ -657,9 +660,9 @@ export function extractMessagesFromState(
 		state?.channel_values?.messages,
 		state?.channelValues?.messages,
 	];
-	const messages = candidates.find((candidate) =>
-		Array.isArray(candidate),
-	) as any[] | undefined;
+	const messages = candidates.find((candidate) => Array.isArray(candidate)) as
+		| any[]
+		| undefined;
 
 	if (!messages) {
 		return null;
@@ -699,24 +702,89 @@ function extractContentBlocks(entry: any): any[] {
 
 function extractMessageContent(entry: any, blocks: any[] = []): string {
 	if (!entry || typeof entry !== "object") return "";
-	if (typeof entry.content === "string") return entry.content;
-	if (typeof entry?.kwargs?.content === "string") return entry.kwargs.content;
-	if (typeof entry?.additional_kwargs?.content === "string") {
-		return entry.additional_kwargs.content;
+
+	const candidates = [
+		entry.content,
+		entry?.kwargs?.content,
+		entry?.additional_kwargs?.content,
+		entry?.data?.content,
+	];
+
+	for (const candidate of candidates) {
+		const extracted = extractTextContent(candidate);
+		if (extracted) {
+			return extracted;
+		}
 	}
-	if (typeof entry?.data?.content === "string") return entry.data.content;
+
 	if (blocks.length > 0) {
-		return blocks
-			.filter((block: any) => block && block.type === "text" && block.text)
-			.map((block: any) => block.text)
-			.join("");
+		return extractTextContent(blocks);
 	}
+
 	return "";
 }
 
-function extractUiMetaFromPayload(
-	payload: unknown,
-): { uiOnly?: boolean; textFallback?: string } {
+function extractTextContent(value: unknown, depth = 0): string {
+	if (depth > 5 || value === null || value === undefined) {
+		return "";
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	if (Array.isArray(value)) {
+		return value
+			.map((entry) => extractTextContent(entry, depth + 1))
+			.filter((entry) => entry.length > 0)
+			.join("");
+	}
+	if (typeof value !== "object") {
+		return "";
+	}
+
+	const record = value as Record<string, unknown>;
+
+	if (typeof record.text === "string") {
+		return record.text;
+	}
+	if (
+		record.text &&
+		typeof record.text === "object" &&
+		typeof (record.text as Record<string, unknown>).value === "string"
+	) {
+		return (record.text as Record<string, unknown>).value as string;
+	}
+	if (typeof record.output_text === "string") {
+		return record.output_text;
+	}
+	if (typeof record.input_text === "string") {
+		return record.input_text;
+	}
+	if (typeof record.value === "string" && isTextLikeContentType(record.type)) {
+		return record.value;
+	}
+
+	if ("content" in record) {
+		return extractTextContent(record.content, depth + 1);
+	}
+
+	return "";
+}
+
+function isTextLikeContentType(type: unknown): boolean {
+	if (typeof type !== "string") return false;
+	const normalized = type.toLowerCase();
+	return (
+		normalized === "text" ||
+		normalized === "input_text" ||
+		normalized === "output_text" ||
+		normalized === "text_delta"
+	);
+}
+
+function extractUiMetaFromPayload(payload: unknown): {
+	uiOnly?: boolean;
+	textFallback?: string;
+} {
 	if (typeof payload === "string") {
 		try {
 			const parsed = JSON.parse(payload);
@@ -776,7 +844,10 @@ function filterUiOnlyAssistantMessages(messages: any[]): any[] {
 
 		const role = resolveMessageRole(entry);
 		if (role === "assistant" && pendingFallback) {
-			const content = extractMessageContent(entry, extractContentBlocks(entry)).trim();
+			const content = extractMessageContent(
+				entry,
+				extractContentBlocks(entry),
+			).trim();
 			if (content && content === pendingFallback) {
 				pendingFallback = null;
 				continue;
@@ -853,7 +924,9 @@ export function extractAttachments(blocks: any[]): SessionAttachment[] {
 }
 
 export function extractImageAttachments(blocks: any[]): SessionAttachment[] {
-	return extractAttachments(blocks).filter((attachment) => attachment.kind === "image");
+	return extractAttachments(blocks).filter(
+		(attachment) => attachment.kind === "image",
+	);
 }
 
 export function extractImageUrl(block: any): string | null {
@@ -884,8 +957,7 @@ function extractAudioUrl(block: any): string | null {
 	if (block.type === "input_audio") {
 		const input = block.input_audio || block.audio;
 		const data = typeof input?.data === "string" ? input.data : null;
-		const format =
-			typeof input?.format === "string" ? input.format : undefined;
+		const format = typeof input?.format === "string" ? input.format : undefined;
 		if (data) {
 			const mimeType = format ? resolveAudioMimeType(format) : "audio/wav";
 			return `data:${mimeType};base64,${data}`;
@@ -903,10 +975,7 @@ function extractAudioUrl(block: any): string | null {
 		const data = block.data;
 		if (sourceType === "base64" && typeof data === "string") {
 			const rawFormat =
-				block.mime_type ||
-				block.media_type ||
-				block.mediaType ||
-				block.format;
+				block.mime_type || block.media_type || block.mediaType || block.format;
 			const mimeType =
 				typeof rawFormat === "string"
 					? rawFormat.includes("/")
@@ -944,9 +1013,9 @@ function extractFileAttachment(block: any): SessionAttachment | null {
 
 	if (block.type === "file") {
 		const sourceType = block.source_type || block.sourceType;
-		const metadata = (block.metadata && typeof block.metadata === "object"
-			? block.metadata
-			: {}) as Record<string, unknown>;
+		const metadata = (
+			block.metadata && typeof block.metadata === "object" ? block.metadata : {}
+		) as Record<string, unknown>;
 		const name = extractString(
 			block.name,
 			block.filename,
@@ -1013,7 +1082,11 @@ function extractFileAttachment(block: any): SessionAttachment | null {
 		};
 	}
 
-	if (block.type === "document" && block.source && typeof block.source === "object") {
+	if (
+		block.type === "document" &&
+		block.source &&
+		typeof block.source === "object"
+	) {
 		const source = block.source as Record<string, unknown>;
 		const sourceType = extractString(source.type);
 		const name = extractString(block.title);
@@ -1075,13 +1148,14 @@ function mapMessageTypeFromId(id?: unknown): "user" | "assistant" | null {
 }
 
 export function resolveMessageRole(entry: any): "user" | "assistant" | null {
-	return (
-		(entry?.role as string | undefined) ||
+	return ((entry?.role as string | undefined) ||
 		(entry?.kwargs?.role as string | undefined) ||
 		(entry?.additional_kwargs?.role as string | undefined) ||
 		mapMessageType(entry?.type as string | undefined) ||
-		mapMessageTypeFromId(entry?.id ?? entry?.lc_id ?? entry?.kwargs?.id)
-	) as "user" | "assistant" | null;
+		mapMessageTypeFromId(entry?.id ?? entry?.lc_id ?? entry?.kwargs?.id)) as
+		| "user"
+		| "assistant"
+		| null;
 }
 
 function parseTimestamp(value?: unknown): number {
@@ -1105,7 +1179,10 @@ function isUiHiddenContent(content: string): boolean {
 	);
 }
 
-function scoreMessages(candidate: any[], baseTime: number): {
+function scoreMessages(
+	candidate: any[],
+	baseTime: number,
+): {
 	score: number;
 	messages: SessionMessage[];
 } {
@@ -1114,7 +1191,8 @@ function scoreMessages(candidate: any[], baseTime: number): {
 		.map((message, index) => toSessionMessage(message, index, baseTime))
 		.filter(Boolean) as SessionMessage[];
 	const contentful = messages.filter(
-		(msg) => msg.content.trim().length > 0 || (msg.attachments?.length ?? 0) > 0,
+		(msg) =>
+			msg.content.trim().length > 0 || (msg.attachments?.length ?? 0) > 0,
 	).length;
 	const assistantContentful = messages.filter(
 		(msg) => msg.role === "assistant" && msg.content.trim().length > 0,

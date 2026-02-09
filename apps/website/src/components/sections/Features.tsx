@@ -44,9 +44,9 @@ const Features = () => {
 		},
 		{
 			icon: FiVolume2,
-			title: "Voice Output (TTS)",
+			title: "Voice Interaction (STT + TTS)",
 			description:
-				"Gateway-level voice providers power spoken responses in your UI and clients.",
+				"Use speech-to-text for agent input and text-to-speech for responses across your UI and clients.",
 			color: "sky",
 		},
 		{
@@ -108,7 +108,7 @@ const Features = () => {
 						transition={{ duration: 0.6, delay: 0.1 }}
 					>
 						Built on persistent state, streaming protocols, and channel adapters
-						that span voice, webhooks, and team chat.
+						that span bidirectional voice, webhooks, and team chat.
 					</motion.p>
 				</div>
 
@@ -154,12 +154,12 @@ const Features = () => {
 						</div>
 						<div className="flex-1">
 							<h3 className="mb-2 text-2xl font-semibold text-white">
-								Advanced channels, voice, and automation.
+								Advanced channels, hands-free voice, and automation.
 							</h3>
 							<p className="text-gray-400">
-								Wire voice output, Discord routing, and webhook-driven workflows
-								into durable sessions. Configure it once and reuse it across
-								clients and teams.
+								Wire speech-to-text input, text-to-speech responses, Discord
+								routing, and webhook-driven workflows into durable sessions.
+								Configure it once and reuse it across clients and teams.
 							</p>
 						</div>
 					</div>

@@ -59,7 +59,8 @@ const QuickStart = () => {
 			icon: FiDownload,
 			name: "Desktop Companion",
 			link: "https://github.com/RussellCanfield/wingman-ai/releases",
-			description: "Native macOS app with tray controls, overlay, and voice",
+			description:
+				"Native macOS app with tray controls, overlay, and hands-free voice (speech-to-text + text-to-speech)",
 		},
 		{
 			icon: FiCode,

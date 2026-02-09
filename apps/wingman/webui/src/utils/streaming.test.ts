@@ -198,4 +198,19 @@ describe("parseStreamEvents", () => {
 		expect(result.toolEvents[0].ui).toMatchObject({ registry: "webui" });
 		expect(result.toolEvents[0].output).toMatchObject({ temperature: 70 });
 	});
+
+	it("unwraps gateway agent-stream wrappers", () => {
+		const chunk = {
+			type: "agent-event",
+			data: {
+				type: "agent-stream",
+				chunk: { content: "nested stream hello" },
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0].text).toBe("nested stream hello");
+	});
 });

@@ -30,7 +30,11 @@ describe("extractMessagesFromState", () => {
 			values: {
 				messages: [
 					{ role: "tool", content: "skip" },
-					{ role: "assistant", content: "", additional_kwargs: { ui_hidden: true } },
+					{
+						role: "assistant",
+						content: "",
+						additional_kwargs: { ui_hidden: true },
+					},
 					{ role: "assistant", content: "keep" },
 				],
 			},
@@ -40,5 +44,35 @@ describe("extractMessagesFromState", () => {
 		expect(result).not.toBeNull();
 		expect(result).toHaveLength(1);
 		expect(result?.[0]).toMatchObject({ role: "assistant", content: "keep" });
+	});
+
+	it("extracts content from responses-style text blocks", () => {
+		const state = {
+			createdAt: 2000,
+			values: {
+				messages: [
+					{
+						role: "user",
+						content: [{ type: "input_text", text: "Build a plan" }],
+					},
+					{
+						role: "assistant",
+						content: [{ type: "output_text", text: "Here is the plan." }],
+					},
+				],
+			},
+		};
+
+		const result = extractMessagesFromState(state);
+		expect(result).not.toBeNull();
+		expect(result).toHaveLength(2);
+		expect(result?.[0]).toMatchObject({
+			role: "user",
+			content: "Build a plan",
+		});
+		expect(result?.[1]).toMatchObject({
+			role: "assistant",
+			content: "Here is the plan.",
+		});
 	});
 });

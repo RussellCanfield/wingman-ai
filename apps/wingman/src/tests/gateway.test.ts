@@ -547,6 +547,183 @@ describeIfBun("Gateway", () => {
 		requester.close();
 	});
 
+	it("should queue and dequeue requests for the same session", async () => {
+		const requester = await connectClient("session-queue-requester");
+		const sessionId = `session-queue-${Date.now()}`;
+		const firstRequestId = `req-queue-first-${Date.now()}`;
+		const secondRequestId = `req-queue-second-${Date.now()}`;
+
+		const firstCompletePromise = waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === firstRequestId &&
+				msg.payload?.type === "agent-complete",
+			10000,
+		);
+		const queuedAckPromise = waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "ack" &&
+				msg.id === secondRequestId &&
+				msg.payload?.action === "req:agent" &&
+				msg.payload?.status === "queued",
+			10000,
+		);
+		const queuedEventPromise = waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === secondRequestId &&
+				msg.payload?.type === "request-queued",
+			10000,
+		);
+		const dequeuedAckPromise = waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "ack" &&
+				msg.id === secondRequestId &&
+				msg.payload?.action === "req:agent" &&
+				msg.payload?.status === "dequeued",
+			10000,
+		);
+		const secondCompletePromise = waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === secondRequestId &&
+				msg.payload?.type === "agent-complete",
+			10000,
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: firstRequestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "First queued request",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: secondRequestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "Second queued request",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const queuedAck = await queuedAckPromise;
+		expect(queuedAck.payload?.position).toBe(1);
+
+		const queuedEvent = await queuedEventPromise;
+		expect(queuedEvent.payload?.position).toBe(1);
+		expect(queuedEvent.payload?.sessionId).toBe(sessionId);
+
+		await firstCompletePromise;
+
+		const dequeuedAck = await dequeuedAckPromise;
+		expect(dequeuedAck.payload?.remaining).toBe(0);
+
+		await secondCompletePromise;
+
+		requester.close();
+	});
+
+	it("should cancel a queued request", async () => {
+		const requester = await connectClient("session-cancel-queued-requester");
+		const sessionId = `session-cancel-queued-${Date.now()}`;
+		const firstRequestId = `req-cancel-queued-first-${Date.now()}`;
+		const secondRequestId = `req-cancel-queued-second-${Date.now()}`;
+
+		const queuedAckPromise = waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "ack" &&
+				msg.id === secondRequestId &&
+				msg.payload?.action === "req:agent" &&
+				msg.payload?.status === "queued",
+			10000,
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: firstRequestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "First request",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: secondRequestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "Second request",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		await queuedAckPromise;
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent:cancel",
+				id: `cancel-${secondRequestId}`,
+				payload: { requestId: secondRequestId },
+				timestamp: Date.now(),
+			}),
+		);
+
+		const cancelAck = await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "ack" &&
+				msg.payload?.action === "req:agent:cancel" &&
+				msg.payload?.requestId === secondRequestId &&
+				msg.payload?.status === "cancelled_queued",
+			10000,
+		);
+		expect(cancelAck.payload?.status).toBe("cancelled_queued");
+
+		await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === firstRequestId &&
+				msg.payload?.type === "agent-complete",
+			10000,
+		);
+
+		const queuedRequests = (server as any).queuedSessionRequests as Map<
+			string,
+			Array<{ msg?: { id?: string } }>
+		>;
+		const isStillQueued = [...queuedRequests.values()].some((queue) =>
+			queue.some((item) => item.msg?.id === secondRequestId),
+		);
+		expect(isStillQueued).toBe(false);
+
+		requester.close();
+	});
+
 	it("should clear session messages via API", async () => {
 		const createRes = await fetch(`http://localhost:${port}/api/sessions`, {
 			method: "POST",

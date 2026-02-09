@@ -46,7 +46,7 @@ export const handleSessionsApi = async (
 				return bUpdated - aUpdated;
 			});
 
-			return new Response(JSON.stringify(sorted.slice(0, limit), null, 2), {
+			return new Response(JSON.stringify(sorted.slice(0, limit)), {
 				headers: { "Content-Type": "application/json" },
 			});
 		}
@@ -68,20 +68,16 @@ export const handleSessionsApi = async (
 			const session = manager.getOrCreateSession(sessionId, selectedAgent, body.name);
 
 			return new Response(
-				JSON.stringify(
-					{
-						id: session.id,
-						name: session.name,
-						agentId: session.agentName,
-						createdAt: session.createdAt.getTime(),
-						updatedAt: session.updatedAt.getTime(),
-						messageCount: session.messageCount,
-						lastMessagePreview: session.lastMessagePreview,
-						workdir: session.metadata?.workdir ?? null,
-					},
-					null,
-					2,
-				),
+				JSON.stringify({
+					id: session.id,
+					name: session.name,
+					agentId: session.agentName,
+					createdAt: session.createdAt.getTime(),
+					updatedAt: session.updatedAt.getTime(),
+					messageCount: session.messageCount,
+					lastMessagePreview: session.lastMessagePreview,
+					workdir: session.metadata?.workdir ?? null,
+				}),
 				{ headers: { "Content-Type": "application/json" } },
 			);
 		}
@@ -100,7 +96,7 @@ export const handleSessionsApi = async (
 
 		if (req.method === "GET") {
 			const messages = await manager.listMessages(sessionId);
-			return new Response(JSON.stringify(messages, null, 2), {
+			return new Response(JSON.stringify(messages), {
 				headers: { "Content-Type": "application/json" },
 			});
 		}
@@ -113,15 +109,11 @@ export const handleSessionsApi = async (
 			manager.clearSessionMessages(sessionId);
 			const updated = manager.getSession(sessionId);
 			return new Response(
-				JSON.stringify(
-					{
-						id: sessionId,
-						messageCount: updated?.messageCount ?? 0,
-						lastMessagePreview: updated?.lastMessagePreview ?? null,
-					},
-					null,
-					2,
-				),
+				JSON.stringify({
+					id: sessionId,
+					messageCount: updated?.messageCount ?? 0,
+					lastMessagePreview: updated?.lastMessagePreview ?? null,
+				}),
 				{ headers: { "Content-Type": "application/json" } },
 			);
 		}
@@ -145,14 +137,10 @@ export const handleSessionsApi = async (
 		if (!rawWorkdir) {
 			manager.updateSessionMetadata(sessionId, { workdir: null });
 			return new Response(
-				JSON.stringify(
-					{
-						id: session.id,
-						workdir: null,
-					},
-					null,
-					2,
-				),
+				JSON.stringify({
+					id: session.id,
+					workdir: null,
+				}),
 				{ headers: { "Content-Type": "application/json" } },
 			);
 		}
@@ -168,14 +156,10 @@ export const handleSessionsApi = async (
 
 		manager.updateSessionMetadata(sessionId, { workdir: resolved });
 		return new Response(
-			JSON.stringify(
-				{
-					id: session.id,
-					workdir: resolved,
-				},
-				null,
-				2,
-			),
+			JSON.stringify({
+				id: session.id,
+				workdir: resolved,
+			}),
 			{ headers: { "Content-Type": "application/json" } },
 		);
 	}
@@ -201,20 +185,16 @@ export const handleSessionsApi = async (
 		manager.updateSession(sessionId, { name });
 		const updated = manager.getSession(sessionId);
 		return new Response(
-			JSON.stringify(
-				{
-					id: updated?.id || sessionId,
-					name: updated?.name || name,
-					agentId: updated?.agentName || agentId,
-					createdAt: updated?.createdAt.getTime() || session.createdAt.getTime(),
-					updatedAt: updated?.updatedAt.getTime() || Date.now(),
-					messageCount: updated?.messageCount ?? session.messageCount,
-					lastMessagePreview: updated?.lastMessagePreview ?? session.lastMessagePreview,
-					workdir: updated?.metadata?.workdir ?? session.metadata?.workdir ?? null,
-				},
-				null,
-				2,
-			),
+			JSON.stringify({
+				id: updated?.id || sessionId,
+				name: updated?.name || name,
+				agentId: updated?.agentName || agentId,
+				createdAt: updated?.createdAt.getTime() || session.createdAt.getTime(),
+				updatedAt: updated?.updatedAt.getTime() || Date.now(),
+				messageCount: updated?.messageCount ?? session.messageCount,
+				lastMessagePreview: updated?.lastMessagePreview ?? session.lastMessagePreview,
+				workdir: updated?.metadata?.workdir ?? session.metadata?.workdir ?? null,
+			}),
 			{ headers: { "Content-Type": "application/json" } },
 		);
 	}

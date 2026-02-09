@@ -88,6 +88,7 @@ export interface AgentRequestPayload {
 	attachments?: MediaAttachment[];
 	routing?: RoutingInfo;
 	sessionKey?: string;
+	queueIfBusy?: boolean;
 }
 
 export interface AgentCancelPayload {

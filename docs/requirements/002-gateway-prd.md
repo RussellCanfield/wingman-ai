@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.3
+**Version:** 1.4
 **Status:** In Development
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-02-09
 
 ---
 
@@ -163,6 +163,18 @@ The gateway derives a session key from agentId plus channel identity. Sessions a
 Sessions can be named on creation and renamed later via the Control UI or API.
 Channel adapters may override the derived key for specific sources (e.g., Discord channel-to-session mappings).
 The Control UI surfaces each session key in the session snapshot panel for easy copy/paste.
+
+### Per-Session Request Queueing
+
+To preserve conversation ordering, the gateway executes at most one in-flight request per `agentId + sessionKey`.
+
+- Additional `req:agent` messages for the same session are queued by default (`queueIfBusy: true`).
+- Clients receive queue lifecycle acks:
+  - `status: "queued"` when accepted into the queue
+  - `status: "dequeued"` when promoted to active execution
+- The gateway also emits `event:agent` with `type: "request-queued"` for immediate UI feedback.
+- `req:agent:cancel` can cancel both active and queued requests (queued cancellations return `status: "cancelled_queued"`).
+- Clients can opt out of queueing per request with `queueIfBusy: false`, which returns an agent error if the session is busy.
 
 ### Voice Providers (TTS)
 

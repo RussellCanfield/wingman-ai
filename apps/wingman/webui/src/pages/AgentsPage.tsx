@@ -9,6 +9,7 @@ import type {
 	ProviderStatus,
 	VoiceProvider,
 } from "../types";
+import { agentSyncNotice } from "../utils/agentSyncNotice";
 import { buildSubAgentTemplateOptions } from "../utils/subAgentTemplates";
 
 type AgentFormSubAgentPayload = {
@@ -511,6 +512,24 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 
 	return (
 		<section className="space-y-6">
+			<div className="panel-card animate-rise space-y-3 border border-sky-500/20 bg-sky-500/5 p-4">
+				<div className="text-[11px] uppercase tracking-[0.2em] text-sky-200">
+					{agentSyncNotice.heading}
+				</div>
+				<p className="text-sm text-slate-200">{agentSyncNotice.body}</p>
+				<div className="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2">
+					{agentSyncNotice.commands.map((command) => (
+						<code
+							key={command}
+							className="block font-mono text-xs text-sky-100 md:text-[13px]"
+						>
+							{command}
+						</code>
+					))}
+				</div>
+				<p className="text-xs text-slate-300">{agentSyncNotice.note}</p>
+			</div>
+
 			<div className="flex items-center justify-between gap-3 lg:hidden">
 				<div className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 p-1 text-xs font-semibold text-slate-300">
 					<button

@@ -27,9 +27,9 @@ const UseCases = () => {
 		},
 		{
 			icon: FiMic,
-			title: "Voice Briefings + Alerts",
+			title: "Hands-Free Agent Interaction",
 			description:
-				"Generate spoken daily summaries and incident updates with gateway-level TTS.",
+				"Talk to agents with speech-to-text and hear responses with text-to-speech. You don't have to type.",
 			gradient: "from-sky-500 to-cyan-500",
 		},
 		{

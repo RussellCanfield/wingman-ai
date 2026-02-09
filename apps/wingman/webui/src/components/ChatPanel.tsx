@@ -86,6 +86,7 @@ type ChatPanelProps = {
 	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
+	queuedPromptCount: number;
 	connected: boolean;
 	loading: boolean;
 	voiceAutoEnabled: boolean;
@@ -111,6 +112,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	fileAccept,
 	attachmentError,
 	isStreaming,
+	queuedPromptCount,
 	connected,
 	loading,
 	voiceAutoEnabled,
@@ -163,11 +165,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			lastVoiceMessageIdRef.current = voicePlayback.messageId;
 		}
 	}, [voicePlayback.messageId, voicePlayback.status]);
-	const canSend =
-		connected &&
-		!isStreaming &&
-		!recording &&
-		(prompt.trim() || attachments.length > 0);
+	const hasDraft = Boolean(prompt.trim() || attachments.length > 0);
+	const canSend = connected && !recording && hasDraft;
+	const canStop = isStreaming && !recording && !hasDraft;
 
 	useEffect(() => {
 		autoScrollRef.current = true;
@@ -424,7 +424,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	};
 
 	const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-		if (isStreaming) return;
 		const items = event.clipboardData?.items;
 		const imageFiles = extractImageFiles(items);
 		if (imageFiles.length === 0) return;
@@ -915,7 +914,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								type="button"
 								className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
 								onClick={handlePickFiles}
-								disabled={isStreaming}
 								aria-label="Add files"
 							>
 								<FiPaperclip className="h-4 w-4" />
@@ -943,7 +941,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						<span className="px-1 text-[11px] text-slate-400">
 							{recording
 								? `Recording ${formatDuration(recordingDuration)}`
-								: "Enter to send, Shift+Enter for newline"}
+								: isStreaming
+									? queuedPromptCount > 0
+										? `Streaming response... ${queuedPromptCount} queued`
+										: "Streaming response... Enter to queue follow-up"
+									: "Enter to send, Shift+Enter for newline"}
 						</span>
 					</div>
 					<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
@@ -957,22 +959,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							onKeyDown={handleKeyDown}
 							onPaste={handlePaste}
 							placeholder="Ask Wingman to do something..."
-							disabled={isStreaming}
 							style={{ overflowY: "hidden" }}
 						/>
 						<button
 							className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
-								isStreaming
+								canStop
 									? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
 									: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
 							}`}
-							onClick={isStreaming ? onStopPrompt : onSendPrompt}
+							onClick={canStop ? onStopPrompt : onSendPrompt}
 							type="button"
-							aria-label={isStreaming ? "Stop response" : "Send prompt"}
-							title={isStreaming ? "Stop response" : "Send prompt"}
-							disabled={!isStreaming && !canSend}
+							aria-label={canStop ? "Stop response" : "Send prompt"}
+							title={canStop ? "Stop response" : "Send prompt"}
+							disabled={canStop ? false : !canSend}
 						>
-							{isStreaming ? (
+							{canStop ? (
 								<FiStopCircle className="h-5 w-5" />
 							) : (
 								<FiSend className="h-4 w-4" />

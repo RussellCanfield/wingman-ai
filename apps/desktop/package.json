@@ -7,7 +7,7 @@
 	"scripts": {
 		"dev:web": "vite",
 		"build:web": "vite build",
-		"test": "bun test src/lib",
+		"test": "bun test src/lib src/*.test.ts",
 		"tauri:dev": "bunx --bun @tauri-apps/cli dev",
 		"tauri:build": "bunx --bun @tauri-apps/cli build",
 		"publish:macos": "bash ./scripts/macos-publish.sh all",

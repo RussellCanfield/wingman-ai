@@ -1,14 +1,14 @@
 # Wingman AI
 Wingman is a distributed AI agent ecosystem with a CLI control plane and a gateway for multi-agent orchestration, persistent sessions, adapters, and a real-time Control UI. Use Wingman to run agent squads, connect MCP tools, automate routines, and collaborate across CLI, Web UI, and VS Code.
 
-Keywords: Wingman AI, distributed AI agents, multi-agent orchestration, persistent sessions, gateway, agent framework, CLI, Control UI, MCP, Model Context Protocol, skills, hooks, Discord adapter, voice TTS, webhooks, routines, automation, VS Code extension
+Keywords: Wingman AI, distributed AI agents, multi-agent orchestration, persistent sessions, gateway, agent framework, CLI, Control UI, MCP, Model Context Protocol, skills, hooks, Discord adapter, voice interaction, speech-to-text, text-to-speech, webhooks, routines, automation, VS Code extension
 
 ## Main Page
 - https://getwingmanai.com/ : Landing page overview with product positioning and install CTA.
 
 ## Sections
 - https://getwingmanai.com/#how-it-works : 4-step flow (install, start gateway, connect clients, collaborate) plus architecture diagram.
-- https://getwingmanai.com/#features : Feature grid covering durable sessions, multi-agent orchestration, skills/hooks, MCP, voice, Discord, routines/webhooks, auth, and discovery.
+- https://getwingmanai.com/#features : Feature grid covering durable sessions, multi-agent orchestration, skills/hooks, MCP, bidirectional voice interaction (speech-to-text + text-to-speech), Discord, routines/webhooks, auth, and discovery.
 - https://getwingmanai.com/#bundled-agents : Bundled agent templates, where they live, and how to customize them.
 - https://getwingmanai.com/#finnhub-mcp : Finance MCP capabilities, setup fields, env vars, and research-only disclaimer.
 - https://getwingmanai.com/#quick-start : Three command quick start and client options (CLI, WebUI, VS Code).

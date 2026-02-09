@@ -1,6 +1,7 @@
 import {
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -62,7 +63,7 @@ import {
 	type PlatformProfile,
 } from "./lib/platform.js";
 import { shouldShowTranscriptionFire } from "./lib/overlayEffects.js";
-import { parseStreamEvents } from "./lib/streaming.js";
+import { parseStreamEvents } from "../../../shared/chat/streaming";
 import { buildSyncSignature } from "./lib/syncSignature.js";
 import { isTauriRuntime, invokeTauri } from "./lib/tauriBridge.js";
 import { mergeGatewaySettingsFromNative } from "./lib/runtimeSettings.js";
@@ -119,6 +120,15 @@ import {
 	upsertSessionUserMessage,
 	type SessionMirrorEventPayload,
 } from "./lib/sessionMirror.js";
+import {
+	collectWorkspaceLoadingTasks,
+	formatSlowLoadEvent,
+} from "./loadingState.js";
+import { runWithInFlightGuard } from "./inFlight.js";
+import {
+	computeComposerTextareaLayout,
+	shouldRefocusComposer,
+} from "./composer.js";
 
 type NativeState = {
 	connected?: boolean;
@@ -185,18 +195,21 @@ type WorkspaceState = {
 	providersUpdatedAt?: string;
 	credentialsPath?: string;
 	voiceConfig?: VoiceConfig;
+	voiceConfigLoading: boolean;
 	agentCatalog: AgentSummary[];
 	agentDetail?: AgentDetail;
 	availableTools: string[];
 	agentsLoading: boolean;
 	threads: SessionThread[];
 	sessionsLoading: boolean;
+	loadingMessagesThreadId: string | null;
 	activeThreadId: string;
 	selectedAgentId: string;
 	prompt: string;
 	attachments: ChatAttachment[];
 	attachmentError: string;
 	isStreaming: boolean;
+	queuedPromptCount: number;
 	eventLog: string[];
 	createAgentDraft: CreateAgentDraft;
 	creatingAgent: boolean;
@@ -228,6 +241,8 @@ const STORAGE_KEY = "wingman.desktop.settings";
 const DEVICE_KEY = "wingman.desktop.device";
 const DEFAULT_THREAD_NAME = "New Session";
 const DEFAULT_AGENT_PROMPT = "You are a helpful Wingman desktop agent.";
+const NATIVE_SYNC_INTERVAL_MS = 1200;
+const COMPOSER_MAX_LINES = 6;
 
 function createEmptyAgentDraft(): CreateAgentDraft {
 	return {
@@ -427,6 +442,7 @@ function useRuntimeController(isOverlayView: boolean) {
 	const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 	const speechUnavailableNotifiedRef = useRef(false);
 	const lastSyncSignatureRef = useRef("");
+	const nativeSyncInFlightRef = useRef(false);
 
 	useEffect(() => {
 		stateRef.current = state;
@@ -567,11 +583,11 @@ function useRuntimeController(isOverlayView: boolean) {
 	const refreshNativeContext = useCallback(async () => {
 		if (!stateRef.current.nativeRuntime) return;
 
-		const profilePayload = await invokeTauri<Partial<PlatformProfile>>("get_platform_profile");
-		const permissionsPayload = await invokeTauri<Partial<PermissionSnapshot>>(
-			"get_permission_snapshot",
-		);
-		const nativeState = await invokeTauri<NativeState>("get_state");
+		const [profilePayload, permissionsPayload, nativeState] = await Promise.all([
+			invokeTauri<Partial<PlatformProfile>>("get_platform_profile"),
+			invokeTauri<Partial<PermissionSnapshot>>("get_permission_snapshot"),
+			invokeTauri<NativeState>("get_state"),
+		]);
 
 		const profile = normalizePlatformProfile(profilePayload);
 		const permissions = normalizePermissionSnapshot(permissionsPayload);
@@ -855,21 +871,32 @@ function useRuntimeController(isOverlayView: boolean) {
 
 	useEffect(() => {
 		if (!state.nativeRuntime) return;
+		let cancelled = false;
 
 		const tick = async () => {
+			if (nativeSyncInFlightRef.current) return;
+			nativeSyncInFlightRef.current = true;
 			try {
 				await refreshNativeContext();
-				syncRecognitionLifecycle();
+				if (!cancelled) {
+					syncRecognitionLifecycle();
+				}
 			} catch (error) {
 				setStatus(`Runtime sync failed: ${String(error)}`, true);
+			} finally {
+				nativeSyncInFlightRef.current = false;
 			}
 		};
 
-		void tick();
+		const startup = window.setTimeout(() => {
+			void tick();
+		}, 0);
 		const timer = window.setInterval(() => {
 			void tick();
-		}, 350);
+		}, NATIVE_SYNC_INTERVAL_MS);
 		return () => {
+			cancelled = true;
+			window.clearTimeout(startup);
 			window.clearInterval(timer);
 		};
 	}, [refreshNativeContext, setStatus, state.nativeRuntime, syncRecognitionLifecycle]);
@@ -925,19 +952,22 @@ function useGatewayWorkspace(
 		providersUpdatedAt: undefined,
 		credentialsPath: undefined,
 		voiceConfig: undefined,
+		voiceConfigLoading: false,
 		agentCatalog: [],
 		agentDetail: undefined,
 		availableTools: [],
 		agentsLoading: false,
 		threads: [],
 		sessionsLoading: false,
+		loadingMessagesThreadId: null,
 		activeThreadId: "",
 		selectedAgentId: settings.agentId || "main",
 		prompt: "",
-		attachments: [],
-		attachmentError: "",
-		isStreaming: false,
-		eventLog: [],
+			attachments: [],
+			attachmentError: "",
+			isStreaming: false,
+			queuedPromptCount: 0,
+			eventLog: [],
 		createAgentDraft: createEmptyAgentDraft(),
 		creatingAgent: false,
 		agentFormMode: "create",
@@ -956,8 +986,14 @@ function useGatewayWorkspace(
 	const completionNonceRef = useRef(0);
 	const subscribedRef = useRef<Set<string>>(new Set());
 	const loadingMessagesRef = useRef<Set<string>>(new Set());
+	const pendingRequestIdsRef = useRef<Set<string>>(new Set());
+	const activeGatewayRequestIdRef = useRef<string | null>(null);
 	const deviceIdRef = useRef<string>(getDeviceId());
 	const agentDetailsRef = useRef<Record<string, AgentDetail>>({});
+	const sessionsRefreshInFlightRef = useRef<Promise<void> | null>(null);
+	const agentsRefreshInFlightRef = useRef<Promise<void> | null>(null);
+	const providersRefreshInFlightRef = useRef<Promise<void> | null>(null);
+	const voiceRefreshInFlightRef = useRef<Promise<void> | null>(null);
 
 	const logEvent = useCallback((message: string) => {
 		setWorkspace((prev) => ({
@@ -966,97 +1002,181 @@ function useGatewayWorkspace(
 		}));
 	}, []);
 
+	const syncRequestStreamingState = useCallback(() => {
+		const pendingSize = pendingRequestIdsRef.current.size;
+		const hasActive = Boolean(activeGatewayRequestIdRef.current);
+		const queuedPromptCount = Math.max(pendingSize - (hasActive ? 1 : 0), 0);
+		setWorkspace((prev) => ({
+			...prev,
+			isStreaming: pendingSize > 0,
+			queuedPromptCount,
+		}));
+	}, []);
+
+	const registerPendingRequest = useCallback(
+		(requestId: string) => {
+			pendingRequestIdsRef.current.add(requestId);
+			if (!activeGatewayRequestIdRef.current) {
+				activeGatewayRequestIdRef.current = requestId;
+			}
+			syncRequestStreamingState();
+		},
+		[syncRequestStreamingState],
+	);
+
+	const markRequestActive = useCallback(
+		(requestId: string) => {
+			if (!pendingRequestIdsRef.current.has(requestId)) return;
+			if (activeGatewayRequestIdRef.current === requestId) return;
+			activeGatewayRequestIdRef.current = requestId;
+			syncRequestStreamingState();
+		},
+		[syncRequestStreamingState],
+	);
+
+	const finalizePendingRequest = useCallback(
+		(requestId: string) => {
+			pendingRequestIdsRef.current.delete(requestId);
+			if (activeGatewayRequestIdRef.current === requestId) {
+				activeGatewayRequestIdRef.current = null;
+			}
+			syncRequestStreamingState();
+		},
+		[syncRequestStreamingState],
+	);
+
+	const resetPendingRequests = useCallback(() => {
+		pendingRequestIdsRef.current.clear();
+		activeGatewayRequestIdRef.current = null;
+		syncRequestStreamingState();
+	}, [syncRequestStreamingState]);
+
 	useEffect(() => {
 		agentDetailsRef.current = workspace.agentDetailsById;
 	}, [workspace.agentDetailsById]);
 
 	const refreshSessionsData = useCallback(async () => {
-		setWorkspace((prev) => ({ ...prev, sessionsLoading: true }));
-		try {
-			const sessions = await fetchSessions(settings, { limit: 200 });
-			setWorkspace((prev) => {
-				const mapped = sessions.map((session) => mapSessionToThread(session));
-				const next = mapped.map((thread) => {
-					const existing = prev.threads.find((item) => item.id === thread.id);
-					if (!existing?.messagesLoaded) return thread;
+		return runWithInFlightGuard(sessionsRefreshInFlightRef, async () => {
+			const startedAt = performance.now();
+			setWorkspace((prev) => ({ ...prev, sessionsLoading: true }));
+			try {
+				const sessions = await fetchSessions(settings, { limit: 200 });
+				setWorkspace((prev) => {
+					const mapped = sessions.map((session) => mapSessionToThread(session));
+					const next = mapped.map((thread) => {
+						const existing = prev.threads.find((item) => item.id === thread.id);
+						if (!existing?.messagesLoaded) return thread;
+						return {
+							...thread,
+							messages: existing.messages,
+							messagesLoaded: true,
+						};
+					});
+					const activeThreadId = next.find((item) => item.id === prev.activeThreadId)
+						? prev.activeThreadId
+						: next[0]?.id || "";
 					return {
-						...thread,
-						messages: existing.messages,
-						messagesLoaded: true,
+						...prev,
+						threads: next,
+						activeThreadId,
 					};
 				});
-				const activeThreadId = next.find((item) => item.id === prev.activeThreadId)
-					? prev.activeThreadId
-					: next[0]?.id || "";
-				return {
-					...prev,
-					threads: next,
-					activeThreadId,
-				};
-			});
-		} catch (error) {
-			logEvent(`Failed to load sessions: ${String(error)}`);
-		} finally {
-			setWorkspace((prev) => ({ ...prev, sessionsLoading: false }));
-		}
+			} catch (error) {
+				logEvent(`Failed to load sessions: ${String(error)}`);
+			} finally {
+				setWorkspace((prev) => ({ ...prev, sessionsLoading: false }));
+				const slowEvent = formatSlowLoadEvent(
+					"sessions",
+					performance.now() - startedAt,
+				);
+				if (slowEvent) logEvent(slowEvent);
+			}
+		});
 	}, [logEvent, settings]);
 
 	const refreshAgentsData = useCallback(async () => {
-		setWorkspace((prev) => ({ ...prev, agentsLoading: true }));
-		try {
-			const agents = await fetchAgents(settings);
-			setWorkspace((prev) => {
-				const preferred =
-					prev.selectedAgentId ||
-					settings.agentId ||
-					agents.agents[0]?.id ||
-					"main";
-				const selectedAgentId =
-					agents.agents.find((agent) => agent.id === preferred)?.id ||
-					agents.agents[0]?.id ||
-					"main";
-				const editTargetAgentId =
-					agents.agents.find((agent) => agent.id === prev.editTargetAgentId)?.id ||
-					selectedAgentId;
-				return {
-					...prev,
-					agentCatalog: agents.agents,
-					availableTools: agents.tools,
-					selectedAgentId,
-					editTargetAgentId,
-				};
-			});
-		} catch (error) {
-			logEvent(`Failed to load agents: ${String(error)}`);
-		} finally {
-			setWorkspace((prev) => ({ ...prev, agentsLoading: false }));
-		}
+		return runWithInFlightGuard(agentsRefreshInFlightRef, async () => {
+			const startedAt = performance.now();
+			setWorkspace((prev) => ({ ...prev, agentsLoading: true }));
+			try {
+				const agents = await fetchAgents(settings);
+				setWorkspace((prev) => {
+					const preferred =
+						prev.selectedAgentId ||
+						settings.agentId ||
+						agents.agents[0]?.id ||
+						"main";
+					const selectedAgentId =
+						agents.agents.find((agent) => agent.id === preferred)?.id ||
+						agents.agents[0]?.id ||
+						"main";
+					const editTargetAgentId =
+						agents.agents.find((agent) => agent.id === prev.editTargetAgentId)?.id ||
+						selectedAgentId;
+					return {
+						...prev,
+						agentCatalog: agents.agents,
+						availableTools: agents.tools,
+						selectedAgentId,
+						editTargetAgentId,
+					};
+				});
+			} catch (error) {
+				logEvent(`Failed to load agents: ${String(error)}`);
+			} finally {
+				setWorkspace((prev) => ({ ...prev, agentsLoading: false }));
+				const slowEvent = formatSlowLoadEvent(
+					"agents",
+					performance.now() - startedAt,
+				);
+				if (slowEvent) logEvent(slowEvent);
+			}
+		});
 	}, [logEvent, settings, settings.agentId]);
 
 	const refreshProvidersData = useCallback(async () => {
-		setWorkspace((prev) => ({ ...prev, providersLoading: true }));
-		try {
-			const data = await fetchProviders(settings);
-			setWorkspace((prev) => ({
-				...prev,
-				providers: data.providers || [],
-				providersUpdatedAt: data.updatedAt,
-				credentialsPath: data.credentialsPath,
-			}));
-		} catch (error) {
-			logEvent(`Failed to load providers: ${String(error)}`);
-		} finally {
-			setWorkspace((prev) => ({ ...prev, providersLoading: false }));
-		}
+		return runWithInFlightGuard(providersRefreshInFlightRef, async () => {
+			const startedAt = performance.now();
+			setWorkspace((prev) => ({ ...prev, providersLoading: true }));
+			try {
+				const data = await fetchProviders(settings);
+				setWorkspace((prev) => ({
+					...prev,
+					providers: data.providers || [],
+					providersUpdatedAt: data.updatedAt,
+					credentialsPath: data.credentialsPath,
+				}));
+			} catch (error) {
+				logEvent(`Failed to load providers: ${String(error)}`);
+			} finally {
+				setWorkspace((prev) => ({ ...prev, providersLoading: false }));
+				const slowEvent = formatSlowLoadEvent(
+					"providers",
+					performance.now() - startedAt,
+				);
+				if (slowEvent) logEvent(slowEvent);
+			}
+		});
 	}, [logEvent, settings]);
 
 	const refreshVoiceConfigData = useCallback(async () => {
-		try {
-			const voice = await fetchVoiceConfig(settings);
-			setWorkspace((prev) => ({ ...prev, voiceConfig: voice }));
-		} catch (error) {
-			logEvent(`Failed to load voice config: ${String(error)}`);
-		}
+		return runWithInFlightGuard(voiceRefreshInFlightRef, async () => {
+			const startedAt = performance.now();
+			setWorkspace((prev) => ({ ...prev, voiceConfigLoading: true }));
+			try {
+				const voice = await fetchVoiceConfig(settings);
+				setWorkspace((prev) => ({ ...prev, voiceConfig: voice }));
+			} catch (error) {
+				logEvent(`Failed to load voice config: ${String(error)}`);
+			} finally {
+				setWorkspace((prev) => ({ ...prev, voiceConfigLoading: false }));
+				const slowEvent = formatSlowLoadEvent(
+					"voice config",
+					performance.now() - startedAt,
+				);
+				if (slowEvent) logEvent(slowEvent);
+			}
+		});
 	}, [logEvent, settings]);
 
 	const loadAgentDetailData = useCallback(
@@ -1126,8 +1246,8 @@ function useGatewayWorkspace(
 
 			let threadId = requestThreadRef.current.get(requestId);
 			let messageId = requestMessageRef.current.get(requestId) || requestId;
-			if (!threadId && sessionId) {
-				threadId = sessionId;
+				if (!threadId && sessionId) {
+					threadId = sessionId;
 				requestThreadRef.current.set(requestId, threadId);
 				requestMessageRef.current.set(requestId, messageId);
 				ensureSessionSubscribed(threadId);
@@ -1139,10 +1259,16 @@ function useGatewayWorkspace(
 						messageId,
 					}).threads,
 				}));
-			}
-			if (!threadId) return;
+				}
+				if (!threadId) return;
+				if (
+					pendingRequestIdsRef.current.has(requestId) &&
+					data.type !== "session-message"
+				) {
+					markRequestActive(requestId);
+				}
 
-			const parsed = parseStreamEvents(payload);
+				const parsed = parseStreamEvents(payload);
 			const thinkingEvent: ThinkingEvent | null =
 				typeof data.type === "string" && data.type.includes("thinking")
 					? {
@@ -1186,13 +1312,13 @@ function useGatewayWorkspace(
 				}),
 			}));
 
-			if (data.type === "agent-error") {
-				setWorkspace((prev) => ({ ...prev, isStreaming: false }));
-				logEvent(`Agent error: ${data.error || "unknown error"}`);
-				requestThreadRef.current.delete(requestId);
-				requestMessageRef.current.delete(requestId);
-				return;
-			}
+				if (data.type === "agent-error") {
+					finalizePendingRequest(requestId);
+					logEvent(`Agent error: ${data.error || "unknown error"}`);
+					requestThreadRef.current.delete(requestId);
+					requestMessageRef.current.delete(requestId);
+					return;
+				}
 
 			if (data.type === "agent-complete") {
 				setWorkspace((prev) => {
@@ -1205,26 +1331,26 @@ function useGatewayWorkspace(
 						"";
 					const nextNonce = completionNonceRef.current + 1;
 					completionNonceRef.current = nextNonce;
-					return {
-						...prev,
-						isStreaming: false,
-						lastCompletion: {
-							nonce: nextNonce,
-							threadId: threadId || "",
+						return {
+							...prev,
+							lastCompletion: {
+								nonce: nextNonce,
+								threadId: threadId || "",
 							messageId,
 							threadName: sourceThread?.name || "Current chat",
 							agentId: sourceThread?.agentId || "agent",
 							preview: previewMessage,
 						},
 					};
-				});
-				requestThreadRef.current.delete(requestId);
-				requestMessageRef.current.delete(requestId);
-				void refreshSessionsData();
-			}
-		},
-		[logEvent, refreshSessionsData],
-	);
+					});
+					finalizePendingRequest(requestId);
+					requestThreadRef.current.delete(requestId);
+					requestMessageRef.current.delete(requestId);
+					void refreshSessionsData();
+				}
+			},
+			[finalizePendingRequest, logEvent, markRequestActive, refreshSessionsData],
+		);
 
 	const connectGateway = useCallback(async () => {
 		if (!isGatewayConfigValid(settings)) {
@@ -1281,16 +1407,18 @@ function useGatewayWorkspace(
 		}));
 
 		socketRef.current?.disconnect();
-		socketRef.current = new GatewaySocketClient({
-			onConnectionChanged: (connected, message) => {
-				setWorkspace((prev) => ({
-					...prev,
-					connectionStatus: connected ? "connected" : "disconnected",
-					connectionMessage: message,
-					isStreaming: connected ? prev.isStreaming : false,
-				}));
-				setGlobalStatus(message, !connected && message.toLowerCase().includes("failed"));
-				if (connected) {
+			socketRef.current = new GatewaySocketClient({
+				onConnectionChanged: (connected, message) => {
+					if (!connected) {
+						resetPendingRequests();
+					}
+					setWorkspace((prev) => ({
+						...prev,
+						connectionStatus: connected ? "connected" : "disconnected",
+						connectionMessage: message,
+					}));
+					setGlobalStatus(message, !connected && message.toLowerCase().includes("failed"));
+					if (connected) {
 					void refreshSessionsData();
 					void refreshAgentsData();
 					void refreshProvidersData();
@@ -1336,23 +1464,24 @@ function useGatewayWorkspace(
 		applyAgentEvent,
 		logEvent,
 		refreshAgentsData,
-		refreshProvidersData,
-		refreshSessionsData,
-		refreshVoiceConfigData,
-		setGlobalStatus,
-		settings,
-	]);
+			refreshProvidersData,
+			refreshSessionsData,
+			refreshVoiceConfigData,
+			resetPendingRequests,
+			setGlobalStatus,
+			settings,
+		]);
 
 	const disconnectGateway = useCallback(() => {
 		socketRef.current?.disconnect();
+		resetPendingRequests();
 		setWorkspace((prev) => ({
 			...prev,
 			connectionStatus: "disconnected",
 			connectionMessage: "Disconnected",
-			isStreaming: false,
 		}));
 		setGlobalStatus("Disconnected from gateway.");
-	}, [setGlobalStatus]);
+	}, [resetPendingRequests, setGlobalStatus]);
 
 	const testConnection = useCallback(async () => {
 		setWorkspace((prev) => ({ ...prev, checkingConnection: true }));
@@ -1466,7 +1595,13 @@ function useGatewayWorkspace(
 		async (thread: SessionThread) => {
 			if (thread.messagesLoaded) return;
 			if (loadingMessagesRef.current.has(thread.id)) return;
+			const startedAt = performance.now();
 			loadingMessagesRef.current.add(thread.id);
+			setWorkspace((prev) =>
+				prev.loadingMessagesThreadId === thread.id
+					? prev
+					: { ...prev, loadingMessagesThreadId: thread.id },
+			);
 			try {
 				const messages = await fetchSessionMessages(settings, {
 					sessionId: thread.id,
@@ -1489,6 +1624,16 @@ function useGatewayWorkspace(
 				logEvent(`Failed to load messages: ${String(error)}`);
 			} finally {
 				loadingMessagesRef.current.delete(thread.id);
+				setWorkspace((prev) =>
+					prev.loadingMessagesThreadId === thread.id
+						? { ...prev, loadingMessagesThreadId: null }
+						: prev,
+				);
+				const slowEvent = formatSlowLoadEvent(
+					`messages for ${thread.name}`,
+					performance.now() - startedAt,
+				);
+				if (slowEvent) logEvent(slowEvent);
 			}
 		},
 		[logEvent, settings],
@@ -1590,25 +1735,21 @@ function useGatewayWorkspace(
 		[logEvent, setGlobalStatus, settings],
 	);
 
-	const sendPrompt = useCallback(
-		async (
-			promptOverride?: string,
-			options?: { includeComposerAttachments?: boolean },
-		): Promise<boolean> => {
+		const sendPrompt = useCallback(
+			async (
+				promptOverride?: string,
+				options?: { includeComposerAttachments?: boolean },
+			): Promise<boolean> => {
 			const includeComposerAttachments = options?.includeComposerAttachments !== false;
 			const outgoingAttachments = includeComposerAttachments ? workspace.attachments : [];
 			const userText = (promptOverride ?? workspace.prompt).trim();
 			if (!userText && outgoingAttachments.length === 0) return false;
-			if (workspace.connectionStatus !== "connected") {
-				setGlobalStatus("Connect to gateway first.", true);
-				return false;
-			}
-			if (workspace.isStreaming) {
-				setGlobalStatus("Wait for current response to finish.", true);
-				return false;
-			}
+				if (workspace.connectionStatus !== "connected") {
+					setGlobalStatus("Connect to gateway first.", true);
+					return false;
+				}
 
-			let target: SessionThread | undefined = activeThread;
+				let target: SessionThread | undefined = activeThread;
 			if (!target) {
 				const created = await createNewChat();
 				if (!created) return false;
@@ -1620,12 +1761,11 @@ function useGatewayWorkspace(
 			const previewText =
 				userText.trim() || buildAttachmentPreviewText(outgoingAttachments) || DEFAULT_THREAD_NAME;
 
-			setWorkspace((prev) => ({
-				...prev,
-				prompt: promptOverride === undefined ? "" : prev.prompt,
-				attachmentError: "",
-				isStreaming: true,
-				threads: prev.threads.map((thread) =>
+				setWorkspace((prev) => ({
+					...prev,
+					prompt: promptOverride === undefined ? "" : prev.prompt,
+					attachmentError: "",
+					threads: prev.threads.map((thread) =>
 					thread.id === target!.id
 						? {
 							...thread,
@@ -1660,43 +1800,49 @@ function useGatewayWorkspace(
 			}));
 
 			try {
-				const payload: AgentRequestPayload = {
-					agentId: target.agentId,
-					content: userText,
-					attachments:
-						outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
-					sessionKey: target.id,
-					routing: {
-						channel: "desktop",
-						peer: { kind: "channel", id: deviceIdRef.current },
-					},
-				};
-				const gatewayRequestId = socketRef.current?.sendAgentRequest(payload);
+					const payload: AgentRequestPayload = {
+						agentId: target.agentId,
+						content: userText,
+						attachments:
+							outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
+						sessionKey: target.id,
+						queueIfBusy: true,
+						routing: {
+							channel: "desktop",
+							peer: { kind: "channel", id: deviceIdRef.current },
+						},
+					};
+					const gatewayRequestId = socketRef.current?.sendAgentRequest(payload);
 				if (!gatewayRequestId) {
 					throw new Error("Gateway socket is unavailable");
+					}
+					requestThreadRef.current.set(gatewayRequestId, target.id);
+					requestMessageRef.current.set(gatewayRequestId, assistantId);
+					registerPendingRequest(gatewayRequestId);
+					if (pendingRequestIdsRef.current.size > 1) {
+						setGlobalStatus(
+							`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`,
+						);
+					}
+					if (includeComposerAttachments) {
+						setWorkspace((prev) => ({ ...prev, attachments: [], attachmentError: "" }));
+					}
+					return true;
+				} catch (error) {
+					setGlobalStatus(`Failed to send prompt: ${String(error)}`, true);
+					return false;
 				}
-				requestThreadRef.current.set(gatewayRequestId, target.id);
-				requestMessageRef.current.set(gatewayRequestId, assistantId);
-				if (includeComposerAttachments) {
-					setWorkspace((prev) => ({ ...prev, attachments: [], attachmentError: "" }));
-				}
-				return true;
-			} catch (error) {
-				setWorkspace((prev) => ({ ...prev, isStreaming: false }));
-				setGlobalStatus(`Failed to send prompt: ${String(error)}`, true);
-				return false;
-			}
-		},
-		[
-			activeThread,
-			createNewChat,
-			setGlobalStatus,
-			workspace.attachments,
-			workspace.connectionStatus,
-			workspace.isStreaming,
-			workspace.prompt,
-		],
-	);
+			},
+			[
+				activeThread,
+				createNewChat,
+				registerPendingRequest,
+				setGlobalStatus,
+				workspace.attachments,
+				workspace.connectionStatus,
+				workspace.prompt,
+			],
+		);
 
 	const updatePrompt = useCallback((value: string) => {
 		setWorkspace((prev) => ({ ...prev, prompt: value }));
@@ -2016,13 +2162,6 @@ function useGatewayWorkspace(
 		}
 		subscribedRef.current = nextIds;
 	}, [workspace.connectionStatus, workspace.threads]);
-
-	useEffect(() => {
-		void refreshAgentsData();
-		void refreshSessionsData();
-		void refreshProvidersData();
-		void refreshVoiceConfigData();
-	}, [refreshAgentsData, refreshProvidersData, refreshSessionsData, refreshVoiceConfigData]);
 
 	useEffect(() => {
 		const thread = findThreadNeedingHydration(
@@ -2663,14 +2802,26 @@ function ChatScreen({
 }: ChatScreenProps) {
 	const messageViewportRef = useRef<HTMLDivElement | null>(null);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
+	const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+	const previousStreamingRef = useRef(workspace.isStreaming);
 	const lastMessage = activeThread?.messages[activeThread.messages.length - 1];
 	const canSendPrompt =
 		workspace.connectionStatus === "connected" &&
-		!workspace.isStreaming &&
 		(workspace.prompt.trim().length > 0 || workspace.attachments.length > 0);
-	const voiceTargetSummary = activeThread
-		? `"${activeThread.name}" (${activeThread.agentId})`
-		: `New session (${workspace.selectedAgentId || "main"})`;
+	const activeThreadMessagesLoading = Boolean(
+		activeThread &&
+			!activeThread.messagesLoaded &&
+			workspace.loadingMessagesThreadId === activeThread.id,
+	);
+	const composerStatusHint = runtimeState.recording
+		? "Recording..."
+		: workspace.isStreaming
+			? workspace.queuedPromptCount > 0
+				? `Streaming response... ${workspace.queuedPromptCount} queued`
+				: "Streaming response..."
+			: activeThreadMessagesLoading
+				? "Syncing session history..."
+				: "Enter to send, Shift+Enter for newline";
 
 	const handleTalkButtonClick = useCallback(async () => {
 		const toggleResult = await runtimeActions.toggleRecording();
@@ -2696,7 +2847,6 @@ function ChatScreen({
 
 	const handlePaste = useCallback(
 		(event: ClipboardEvent<HTMLTextAreaElement>) => {
-			if (workspace.isStreaming) return;
 			const imageFiles = extractImageFiles(event.clipboardData?.items);
 			if (imageFiles.length === 0) return;
 			event.preventDefault();
@@ -2706,7 +2856,7 @@ function ChatScreen({
 				workspaceActions.updatePrompt(`${workspace.prompt}${text}`);
 			}
 		},
-		[workspace.isStreaming, workspace.prompt, workspaceActions],
+		[workspace.prompt, workspaceActions],
 	);
 
 	useEffect(() => {
@@ -2720,6 +2870,39 @@ function ChatScreen({
 		lastMessage?.content,
 		workspace.isStreaming,
 	]);
+
+	useLayoutEffect(() => {
+		const textarea = composerTextareaRef.current;
+		if (!textarea) return;
+		textarea.style.height = "auto";
+		const styles = window.getComputedStyle(textarea);
+		const lineHeight = Number.parseFloat(styles.lineHeight) || 24;
+		const paddingTop = Number.parseFloat(styles.paddingTop) || 10;
+		const paddingBottom = Number.parseFloat(styles.paddingBottom) || 10;
+		const { heightPx, overflowY } = computeComposerTextareaLayout({
+			scrollHeight: textarea.scrollHeight,
+			lineHeight,
+			paddingTop,
+			paddingBottom,
+			maxLines: COMPOSER_MAX_LINES,
+		});
+		textarea.style.height = `${heightPx}px`;
+		textarea.style.overflowY = overflowY;
+	}, [workspace.prompt]);
+
+	useEffect(() => {
+		const wasStreaming = previousStreamingRef.current;
+		previousStreamingRef.current = workspace.isStreaming;
+		if (!shouldRefocusComposer({ wasStreaming, isStreaming: workspace.isStreaming })) return;
+		const frame = window.requestAnimationFrame(() => {
+			const textarea = composerTextareaRef.current;
+			if (!textarea || textarea.disabled) return;
+			textarea.focus();
+			const cursorPosition = textarea.value.length;
+			textarea.setSelectionRange(cursorPosition, cursorPosition);
+		});
+		return () => window.cancelAnimationFrame(frame);
+	}, [workspace.isStreaming]);
 
 	return (
 		<section className="space-y-4">
@@ -2758,9 +2941,10 @@ function ChatScreen({
 						type="button"
 						className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-white/20 bg-slate-950/45 px-4 text-xs text-slate-100 transition hover:border-cyan-300/45"
 						onClick={() => void workspaceActions.refreshSessionsData()}
+						disabled={workspace.sessionsLoading}
 					>
 						<RefreshIcon />
-						Refresh
+						{workspace.sessionsLoading ? "Refreshing..." : "Refresh"}
 					</button>
 				</div>
 			</div>
@@ -2804,7 +2988,11 @@ function ChatScreen({
 				</div>
 
 				<div ref={messageViewportRef} className="mt-4 max-h-[46vh] space-y-3 overflow-auto pr-1">
-					{activeThread?.messages.length ? (
+					{activeThreadMessagesLoading ? (
+						<div className="rounded-2xl border border-white/10 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+							Loading chat history...
+						</div>
+					) : activeThread?.messages.length ? (
 						activeThread.messages.map((message) => (
 							<MessageCard
 								key={message.id}
@@ -2816,6 +3004,10 @@ function ChatScreen({
 								onStop={onStopVoice}
 							/>
 						))
+					) : workspace.sessionsLoading ? (
+						<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+							Loading sessions...
+						</div>
 					) : (
 						<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
 							No chat messages yet. Send a prompt to begin.
@@ -2823,162 +3015,163 @@ function ChatScreen({
 					)}
 				</div>
 
-				<div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3">
-						<div className="mb-2 flex flex-wrap items-center gap-2">
-							<button
-								type="button"
-								className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${
-									voiceAutoEnabled
-										? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-										: "border-white/20 bg-slate-900/70 text-slate-200"
-								}`}
-								onClick={onToggleVoiceAuto}
-							>
-								<SpeakerIcon />
-								{voiceAutoEnabled ? "Voice: Auto" : "Voice: Off"}
-							</button>
-							<button
-								type="button"
-								className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
-									runtimeState.recording
-										? "bg-rose-500/20 text-rose-100"
-										: "bg-cyan-300 text-slate-950"
-								}`}
-								onClick={() => void handleTalkButtonClick()}
-								aria-label={runtimeState.recording ? "Stop microphone" : "Start microphone"}
-							>
-								<MicIcon />
-								{runtimeState.recording ? "Stop Mic" : "Talk"}
-							</button>
-							<button
-								type="button"
-								className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-100 transition hover:border-cyan-300/45"
-								onClick={handlePickFiles}
-								disabled={workspace.isStreaming}
-							>
-								<AttachmentIcon />
-								Add Files
-							</button>
-							{workspace.attachments.length > 0 ? (
-								<button
-									type="button"
-									className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-slate-200"
-									onClick={workspaceActions.clearAttachments}
-								>
-									Clear Attachments
-								</button>
-								) : null}
-						</div>
-						<p className="mb-2 text-[11px] text-slate-400">
-							Voice target:{" "}
-							<span className="font-mono text-slate-300">{voiceTargetSummary}</span>
-						</p>
-						<textarea
-							className="min-h-28 w-full resize-y rounded-xl border border-white/15 bg-slate-950/50 p-3 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
-							placeholder={
-								workspace.connectionStatus === "connected"
-									? "Message the selected agent..."
-									: "Connect to a gateway first..."
-							}
-							value={workspace.prompt}
-							onChange={(event) => workspaceActions.updatePrompt(event.target.value)}
-							onPaste={handlePaste}
-							onKeyDown={(event) => {
-								if (event.key === "Enter" && !event.shiftKey) {
-									event.preventDefault();
-									void workspaceActions.sendPrompt();
-								}
-							}}
-						/>
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept={FILE_INPUT_ACCEPT}
-							className="hidden"
-							multiple
-							onChange={handleFileChange}
-						/>
-						{workspace.attachmentError ? (
-							<p className="mt-2 text-xs text-rose-300">{workspace.attachmentError}</p>
-						) : null}
+					<div className="mt-4">
 						{workspace.attachments.length > 0 ? (
-							<div className="mt-3 grid gap-2 sm:grid-cols-2">
+							<div className="mb-2 flex flex-wrap gap-2">
 								{workspace.attachments.map((attachment) => {
 									const isFile = isFileAttachment(attachment);
 									const isAudio = isAudioAttachment(attachment);
-									const meta = formatAttachmentMeta(attachment);
 									return (
 										<div
 											key={attachment.id}
-											className="rounded-xl border border-white/10 bg-slate-900/70 p-2"
+											className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
 										>
-											<div className="mb-1 flex items-center justify-between gap-2">
-												<p className="truncate text-xs font-semibold text-slate-200">
-													{attachment.name ||
-														(isAudio ? "Audio attachment" : isFile ? "File attachment" : "Image attachment")}
-												</p>
-												<button
-													type="button"
-													className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] text-slate-200"
-													onClick={() => workspaceActions.removeAttachment(attachment.id)}
-												>
-													Remove
-												</button>
-											</div>
-											{meta ? (
-												<p className="text-[11px] text-slate-400">{meta}</p>
-											) : null}
-											{!isFile && !isAudio ? (
-												attachment.dataUrl ? (
-													<img
-														src={attachment.dataUrl}
-														alt={attachment.name || "Image attachment"}
-														className="mt-2 max-h-40 w-full rounded-lg object-cover"
-													/>
-												) : null
-											) : null}
-											{isAudio ? (
-												<audio className="mt-2 w-full" controls src={attachment.dataUrl} />
-											) : null}
-											{isFile && !isPdfAttachment(attachment) && attachment.textContent ? (
-												<p className="mt-2 whitespace-pre-wrap rounded-lg border border-white/10 bg-slate-950/60 p-2 text-[11px] text-slate-300">
-													{clipFilePreview(attachment.textContent)}
-												</p>
-											) : null}
+											{!isFile && !isAudio && attachment.dataUrl ? (
+												<img
+													src={attachment.dataUrl}
+													alt={attachment.name || "Attachment"}
+													className="h-10 w-10 object-cover"
+												/>
+											) : (
+												<div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-800/80 text-[10px] font-semibold text-sky-200">
+													{isAudio ? "AUDIO" : "FILE"}
+												</div>
+											)}
+											<span className="max-w-[180px] truncate text-slate-300">
+												{attachment.name ||
+													(isAudio ? "Audio" : isFile ? "File" : "Image")}
+											</span>
+											<button
+												type="button"
+												className="text-slate-400 transition hover:text-rose-400"
+												onClick={() => workspaceActions.removeAttachment(attachment.id)}
+											>
+												×
+											</button>
 										</div>
 									);
 								})}
-							</div>
-						) : null}
-						<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-							<p className="text-xs text-slate-300">
-								{workspace.isStreaming
-									? "Streaming response..."
-									: "Enter sends, Shift+Enter adds newline. Paste images directly into the composer."}
-							</p>
-							{voicePlayback.status !== "idle" ? (
 								<button
 									type="button"
-									className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
-									onClick={onStopVoice}
+									className="text-xs text-slate-400 underline decoration-slate-300 underline-offset-4"
+									onClick={workspaceActions.clearAttachments}
 								>
-									Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
+									Clear all
 								</button>
+							</div>
+						) : null}
+						{workspace.attachmentError ? (
+							<p className="mb-2 text-xs text-rose-300">{workspace.attachmentError}</p>
+						) : null}
+						<label htmlFor="prompt-textarea" className="sr-only">
+							Message
+						</label>
+						<div className="rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)]">
+							<div className="flex items-center justify-between gap-2 px-1 pb-2">
+								<div className="flex items-center gap-2">
+									<button
+										type="button"
+										className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+										onClick={handlePickFiles}
+										aria-label="Add files"
+									>
+										<AttachmentIcon />
+										<span className="hidden sm:inline">Files</span>
+									</button>
+									<button
+										type="button"
+										aria-pressed={runtimeState.recording}
+										aria-label={runtimeState.recording ? "Stop recording" : "Record audio"}
+										className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+											runtimeState.recording
+												? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+												: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
+										}`}
+										onClick={() => void handleTalkButtonClick()}
+										disabled={workspace.isStreaming}
+									>
+										<MicIcon />
+										{runtimeState.recording ? (
+											<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
+										) : null}
+									</button>
+									<button
+										type="button"
+										aria-pressed={voiceAutoEnabled}
+										aria-label={
+											voiceAutoEnabled
+												? "Disable auto voice playback"
+												: "Enable auto voice playback"
+										}
+										className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs transition ${
+											voiceAutoEnabled
+												? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+												: "border-white/10 bg-slate-900/70 text-slate-200 hover:border-sky-400/50 hover:text-sky-100"
+										}`}
+										onClick={onToggleVoiceAuto}
+									>
+										<SpeakerIcon />
+										<span className="hidden md:inline">
+											{voiceAutoEnabled ? "Voice Auto" : "Voice Off"}
+										</span>
+									</button>
+								</div>
+								<span className="px-1 text-[11px] text-slate-400">{composerStatusHint}</span>
+							</div>
+							<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
+								<textarea
+									ref={composerTextareaRef}
+									id="prompt-textarea"
+									className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
+									rows={1}
+									value={workspace.prompt}
+									onChange={(event) => workspaceActions.updatePrompt(event.target.value)}
+									onPaste={handlePaste}
+									onKeyDown={(event) => {
+										if (event.key === "Enter" && !event.shiftKey) {
+											event.preventDefault();
+											void workspaceActions.sendPrompt();
+										}
+									}}
+									placeholder="Ask Wingman to do something..."
+									style={{ overflowY: "hidden" }}
+								/>
+								<button
+									className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white transition hover:from-cyan-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
+									onClick={() => void workspaceActions.sendPrompt()}
+									type="button"
+									aria-label="Send prompt"
+									title="Send prompt"
+									disabled={!canSendPrompt}
+								>
+									<SendIcon />
+								</button>
+							</div>
+							{voicePlayback.status !== "idle" ? (
+								<div className="mt-2 flex justify-end">
+									<button
+										type="button"
+										className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
+										onClick={onStopVoice}
+									>
+										Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
+									</button>
+								</div>
 							) : null}
-							<button
-								type="button"
-								className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
-								onClick={() => void workspaceActions.sendPrompt()}
-								disabled={!canSendPrompt}
-							>
-								Send
-							</button>
+							<input
+								ref={fileInputRef}
+								type="file"
+								accept={FILE_INPUT_ACCEPT}
+								className="hidden"
+								multiple
+								onChange={handleFileChange}
+							/>
 						</div>
 					</div>
-			</div>
-		</section>
-	);
-}
+				</div>
+			</section>
+		);
+	}
 
 type ChatThreadsRailProps = {
 	workspace: WorkspaceState;
@@ -3011,8 +3204,9 @@ function ChatThreadsRail({
 					type="button"
 					className="flex-1 rounded-full border border-white/20 px-3 py-1.5 text-[11px]"
 					onClick={() => void workspaceActions.refreshSessionsData()}
+					disabled={workspace.sessionsLoading}
 				>
-					Refresh
+					{workspace.sessionsLoading ? "Refreshing..." : "Refresh"}
 				</button>
 			</div>
 			<div className="mt-3 max-h-[52vh] space-y-2 overflow-auto pr-1">
@@ -3104,6 +3298,24 @@ function AttachmentIcon() {
 			strokeLinejoin="round"
 		>
 			<path d="M21.44 11.05 12.25 20.24a6 6 0 1 1-8.49-8.49L12.95 2.56a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 1 1-2.82-2.82l8.48-8.48" />
+		</svg>
+	);
+}
+
+function SendIcon() {
+	return (
+		<svg
+			aria-hidden="true"
+			viewBox="0 0 24 24"
+			className="h-4 w-4"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.8"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<path d="m22 2-7 20-4-9-9-4 20-7Z" />
+			<path d="M22 2 11 13" />
 		</svg>
 	);
 }
@@ -4016,6 +4228,13 @@ function MainView({
 	]);
 
 	const showThreadRail = shouldShowThreadRail(location.pathname);
+	const workspaceLoadingTasks = collectWorkspaceLoadingTasks({
+		checkingConnection: workspace.checkingConnection,
+		sessionsLoading: workspace.sessionsLoading,
+		agentsLoading: workspace.agentsLoading,
+		providersLoading: workspace.providersLoading,
+		voiceConfigLoading: workspace.voiceConfigLoading,
+	});
 
 	return (
 		<div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -4030,6 +4249,22 @@ function MainView({
 						<p className="mt-2 text-sm text-slate-300">
 							Focused desktop experience for sessions, agent chats, and local voice capture.
 						</p>
+						{workspaceLoadingTasks.length > 0 ? (
+							<div className="mt-3 flex flex-wrap items-center gap-2">
+								<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/35 bg-cyan-500/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-cyan-100">
+									<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" />
+									Syncing
+								</span>
+								{workspaceLoadingTasks.map((task) => (
+									<span
+										key={task}
+										className="rounded-full border border-white/20 bg-slate-950/55 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-300"
+									>
+										{task}
+									</span>
+								))}
+							</div>
+						) : null}
 					</div>
 					<div className="flex items-center gap-2">
 						<button

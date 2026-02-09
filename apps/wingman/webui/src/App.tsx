@@ -122,6 +122,7 @@ export const App: React.FC = () => {
 	const [health, setHealth] = useState<GatewayHealth>({});
 	const [stats, setStats] = useState<GatewayStats>({});
 	const [isStreaming, setIsStreaming] = useState<boolean>(false);
+	const [queuedPromptCount, setQueuedPromptCount] = useState<number>(0);
 	const [threads, setThreads] = useState<Thread[]>([]);
 	const [activeThreadId, setActiveThreadId] = useState<string>("");
 	const [loadingThreads, setLoadingThreads] = useState<boolean>(false);
@@ -170,6 +171,7 @@ export const App: React.FC = () => {
 	const autoConnectTimerRef = useRef<number | null>(null);
 	const autoConnectFailureRef = useRef<boolean>(false);
 	const activeRequestIdRef = useRef<string | null>(null);
+	const pendingRequestIdsRef = useRef<Set<string>>(new Set());
 	const streamStartedAtRef = useRef<number>(0);
 	const streamLastActivityRef = useRef<number>(0);
 	const streamRecoveryTimerRef = useRef<number | null>(null);
@@ -267,6 +269,13 @@ export const App: React.FC = () => {
 		[],
 	);
 
+	const syncRequestStreamingState = useCallback(() => {
+		const pendingSize = pendingRequestIdsRef.current.size;
+		const hasActiveRequest = Boolean(activeRequestIdRef.current);
+		setIsStreaming(pendingSize > 0);
+		setQueuedPromptCount(Math.max(pendingSize - (hasActiveRequest ? 1 : 0), 0));
+	}, []);
+
 	const scheduleStreamRecoveryCheck = useCallback(() => {
 		clearStreamRecoveryTimer();
 		if (!activeRequestIdRef.current) return;
@@ -288,9 +297,12 @@ export const App: React.FC = () => {
 					hardTimeoutMs: DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
 				})
 			) {
+				pendingRequestIdsRef.current.clear();
 				activeRequestIdRef.current = null;
 				streamStartedAtRef.current = 0;
-				setIsStreaming(false);
+				streamLastActivityRef.current = 0;
+				runningToolEventsRef.current.clear();
+				syncRequestStreamingState();
 				logEvent(
 					"Recovered from a stale stream on this device. Prompt input is re-enabled.",
 				);
@@ -307,7 +319,71 @@ export const App: React.FC = () => {
 			check,
 			Math.max(750, Math.floor(DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS / 2)),
 		);
-	}, [clearStreamRecoveryTimer, logEvent]);
+	}, [clearStreamRecoveryTimer, logEvent, syncRequestStreamingState]);
+
+	const registerPendingRequest = useCallback(
+		(requestId: string, startedAt: number) => {
+			pendingRequestIdsRef.current.add(requestId);
+			if (!activeRequestIdRef.current) {
+				activeRequestIdRef.current = requestId;
+				streamStartedAtRef.current = startedAt;
+				streamLastActivityRef.current = startedAt;
+				scheduleStreamRecoveryCheck();
+			}
+			syncRequestStreamingState();
+		},
+		[scheduleStreamRecoveryCheck, syncRequestStreamingState],
+	);
+
+	const markPendingRequestActive = useCallback(
+		(requestId: string) => {
+			if (!pendingRequestIdsRef.current.has(requestId)) return;
+			if (activeRequestIdRef.current === requestId) return;
+			activeRequestIdRef.current = requestId;
+			const now = Date.now();
+			streamStartedAtRef.current = now;
+			streamLastActivityRef.current = now;
+			scheduleStreamRecoveryCheck();
+			syncRequestStreamingState();
+		},
+		[scheduleStreamRecoveryCheck, syncRequestStreamingState],
+	);
+
+	const finalizePendingRequest = useCallback(
+		(requestId: string) => {
+			if (!pendingRequestIdsRef.current.delete(requestId)) return;
+			if (activeRequestIdRef.current === requestId) {
+				const nextActive = pendingRequestIdsRef.current.values().next().value;
+				activeRequestIdRef.current = nextActive ?? null;
+				if (nextActive) {
+					const now = Date.now();
+					streamStartedAtRef.current = now;
+					streamLastActivityRef.current = now;
+					scheduleStreamRecoveryCheck();
+				} else {
+					streamStartedAtRef.current = 0;
+					streamLastActivityRef.current = 0;
+					clearStreamRecoveryTimer();
+				}
+			}
+			syncRequestStreamingState();
+		},
+		[
+			clearStreamRecoveryTimer,
+			scheduleStreamRecoveryCheck,
+			syncRequestStreamingState,
+		],
+	);
+
+	const resetPendingRequests = useCallback(() => {
+		pendingRequestIdsRef.current.clear();
+		activeRequestIdRef.current = null;
+		streamStartedAtRef.current = 0;
+		streamLastActivityRef.current = 0;
+		runningToolEventsRef.current.clear();
+		clearStreamRecoveryTimer();
+		syncRequestStreamingState();
+	}, [clearStreamRecoveryTimer, syncRequestStreamingState]);
 
 	useEffect(
 		() => () => {
@@ -950,15 +1026,9 @@ export const App: React.FC = () => {
 			},
 		) => {
 			const threadId = requestThreadRef.current.get(requestId);
-			const isActiveRequest = activeRequestIdRef.current === requestId;
 			if (!threadId) {
 				cleanupRequestState(requestId);
-				if (isActiveRequest) {
-					activeRequestIdRef.current = null;
-					streamStartedAtRef.current = 0;
-					clearStreamRecoveryTimer();
-					setIsStreaming(false);
-				}
+				finalizePendingRequest(requestId);
 				return;
 			}
 			const uiFallback = uiFallbackRef.current.get(requestId);
@@ -1007,22 +1077,33 @@ export const App: React.FC = () => {
 				}),
 			);
 			cleanupRequestState(requestId);
-			if (isActiveRequest) {
-				activeRequestIdRef.current = null;
-				streamStartedAtRef.current = 0;
-				clearStreamRecoveryTimer();
-				setIsStreaming(false);
-			}
+			finalizePendingRequest(requestId);
 		},
-		[cleanupRequestState, clearStreamRecoveryTimer, dynamicUiEnabled],
+		[cleanupRequestState, dynamicUiEnabled, finalizePendingRequest],
 	);
 
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
 			if (!payload) return;
+			if (
+				pendingRequestIdsRef.current.has(requestId) &&
+				payload.type !== "session-message"
+			) {
+				markPendingRequestActive(requestId);
+			}
 			if (activeRequestIdRef.current === requestId) {
 				markStreamActivity(requestId);
 				scheduleStreamRecoveryCheck();
+			}
+			if (payload.type === "request-queued") {
+				const position =
+					typeof payload.position === "number" ? payload.position : undefined;
+				logEvent(
+					position && position > 0
+						? `Prompt queued (${position} waiting).`
+						: "Prompt queued.",
+				);
+				return;
 			}
 			const sessionId =
 				typeof payload?.sessionId === "string" ? payload.sessionId : undefined;
@@ -1240,16 +1321,10 @@ export const App: React.FC = () => {
 					);
 					buffersRef.current.set(requestId, next);
 					updateAssistant(requestId, next);
-					if (activeRequestIdRef.current === requestId) {
-						setIsStreaming(true);
-					}
 				}
 
 				if (thinkingUpdates.length > 0) {
 					updateThinkingEvents(requestId, thinkingUpdates);
-					if (activeRequestIdRef.current === requestId) {
-						setIsStreaming(true);
-					}
 				}
 
 				if (toolEvents.length > 0) {
@@ -1263,13 +1338,7 @@ export const App: React.FC = () => {
 						),
 					}));
 					updateToolEvents(requestId, enrichedToolEvents);
-					const hasRunningTools = updateRunningToolState(
-						requestId,
-						enrichedToolEvents,
-					);
-					if (activeRequestIdRef.current === requestId && hasRunningTools) {
-						setIsStreaming(true);
-					}
+					updateRunningToolState(requestId, enrichedToolEvents);
 				}
 				return;
 			}
@@ -1301,6 +1370,7 @@ export const App: React.FC = () => {
 			agentId,
 			finalizeAssistant,
 			logEvent,
+			markPendingRequestActive,
 			markStreamActivity,
 			scheduleStreamRecoveryCheck,
 			subagentMap,
@@ -1316,10 +1386,7 @@ export const App: React.FC = () => {
 			window.clearTimeout(autoConnectTimerRef.current);
 			autoConnectTimerRef.current = null;
 		}
-		clearStreamRecoveryTimer();
-		activeRequestIdRef.current = null;
-		streamStartedAtRef.current = 0;
-		runningToolEventsRef.current.clear();
+		resetPendingRequests();
 		autoConnectAttemptsRef.current = 0;
 		autoConnectFailureRef.current = false;
 		setAutoConnectStatus("");
@@ -1330,8 +1397,7 @@ export const App: React.FC = () => {
 		}
 		setConnected(false);
 		setConnecting(false);
-		setIsStreaming(false);
-	}, [clearStreamRecoveryTimer]);
+	}, [resetPendingRequests]);
 
 	const connect = useCallback(() => {
 		if (!wsUrl) {
@@ -1415,7 +1481,10 @@ export const App: React.FC = () => {
 							? error.message
 							: String(error || "Unknown error");
 					logEvent(`Agent event processing error: ${errorText}`);
-					if (activeRequestIdRef.current === msg.id) {
+					if (
+						activeRequestIdRef.current === msg.id ||
+						pendingRequestIdsRef.current.has(msg.id)
+					) {
 						finalizeAssistant(msg.id, {
 							fallback: `Agent event processing error: ${errorText}`,
 							forceText: true,
@@ -1431,25 +1500,17 @@ export const App: React.FC = () => {
 		};
 
 		ws.onerror = () => {
-			clearStreamRecoveryTimer();
-			activeRequestIdRef.current = null;
-			streamStartedAtRef.current = 0;
-			runningToolEventsRef.current.clear();
+			resetPendingRequests();
 			setConnected(false);
 			setConnecting(false);
-			setIsStreaming(false);
 			logEvent("WebSocket error");
 			autoConnectFailureRef.current = true;
 		};
 
 		ws.onclose = () => {
-			clearStreamRecoveryTimer();
-			activeRequestIdRef.current = null;
-			streamStartedAtRef.current = 0;
-			runningToolEventsRef.current.clear();
+			resetPendingRequests();
 			setConnected(false);
 			setConnecting(false);
-			setIsStreaming(false);
 			logEvent("Gateway disconnected");
 			if (!autoConnect) return;
 			if (!autoConnectFailureRef.current) return;
@@ -1475,7 +1536,6 @@ export const App: React.FC = () => {
 		};
 	}, [
 		autoConnect,
-		clearStreamRecoveryTimer,
 		deviceId,
 		disconnect,
 		finalizeAssistant,
@@ -1487,6 +1547,7 @@ export const App: React.FC = () => {
 		wsUrl,
 		connected,
 		connecting,
+		resetPendingRequests,
 	]);
 
 	const createThread = useCallback(
@@ -1537,10 +1598,6 @@ export const App: React.FC = () => {
 			return;
 		}
 		if (!prompt.trim() && attachments.length === 0) return;
-		if (isStreaming) {
-			logEvent("Wait for the current response to finish");
-			return;
-		}
 		let targetThread: Thread | null | undefined = activeThread;
 		if (!targetThread) {
 			targetThread = await createThread(agentId, DEFAULT_THREAD_NAME);
@@ -1594,19 +1651,18 @@ export const App: React.FC = () => {
 		setPrompt("");
 		setAttachments([]);
 		setAttachmentError("");
-		streamStartedAtRef.current = now;
-		activeRequestIdRef.current = requestId;
-		streamLastActivityRef.current = now;
-		runningToolEventsRef.current.delete(requestId);
-		scheduleStreamRecoveryCheck();
-		setIsStreaming(true);
 		requestThreadRef.current.set(requestId, targetThread.id);
 		requestAgentRef.current.set(requestId, targetThread.agentId);
+		registerPendingRequest(requestId, now);
+		if (pendingRequestIdsRef.current.size > 1) {
+			logEvent(`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`);
+		}
 
 		const payload = {
 			agentId: targetThread.agentId,
 			content: userMessage.content,
 			attachments: attachments.length > 0 ? attachments : undefined,
+			queueIfBusy: true,
 			routing: {
 				channel: "webui",
 				peer: { kind: "channel", id: deviceId },
@@ -1628,11 +1684,10 @@ export const App: React.FC = () => {
 		attachments,
 		createThread,
 		deviceId,
-		isStreaming,
 		loadThreadMessages,
 		logEvent,
 		prompt,
-		scheduleStreamRecoveryCheck,
+		registerPendingRequest,
 	]);
 
 	const stopPrompt = useCallback(() => {
@@ -1657,10 +1712,7 @@ export const App: React.FC = () => {
 			);
 		}
 		cleanupRequestState(requestId);
-		activeRequestIdRef.current = null;
-		streamStartedAtRef.current = 0;
-		clearStreamRecoveryTimer();
-		setIsStreaming(false);
+		finalizePendingRequest(requestId);
 		logEvent("Stopping current response...");
 
 		const ws = wsRef.current;
@@ -1673,7 +1725,7 @@ export const App: React.FC = () => {
 			};
 			ws.send(JSON.stringify(message));
 		}
-	}, [cleanupRequestState, clearStreamRecoveryTimer, logEvent]);
+	}, [cleanupRequestState, finalizePendingRequest, logEvent]);
 
 	const clearChat = useCallback(async () => {
 		if (!activeThread) return;
@@ -2605,6 +2657,7 @@ export const App: React.FC = () => {
 										fileAccept={FILE_INPUT_ACCEPT}
 										attachmentError={attachmentError}
 										isStreaming={isStreaming}
+										queuedPromptCount={queuedPromptCount}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
 										outputRoot={config.outputRoot}

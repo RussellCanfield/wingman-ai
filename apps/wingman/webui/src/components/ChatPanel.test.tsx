@@ -20,6 +20,7 @@ const baseProps: React.ComponentProps<typeof ChatPanel> = {
 	fileAccept: "*/*",
 	attachmentError: "",
 	isStreaming: false,
+	queuedPromptCount: 0,
 	connected: true,
 	loading: false,
 	voiceAutoEnabled: false,
@@ -75,6 +76,20 @@ describe("ChatPanel prompt composer", () => {
 		);
 		expect(html).toContain('aria-label="Stop response"');
 		expect(html).not.toContain('aria-label="Send prompt"');
+	});
+
+	it("keeps send action available while streaming when draft text exists", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				isStreaming: true,
+				prompt: "follow-up",
+			}),
+		);
+
+		expect(html).toContain('aria-label="Send prompt"');
+		expect(html).not.toContain('aria-label="Stop response"');
+		expect(html).toContain("Streaming response... Enter to queue follow-up");
 	});
 
 	it("renders syntax-highlighted fenced code in chat messages", () => {

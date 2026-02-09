@@ -1,5 +1,5 @@
-<p align="center" width="100%">
-  <img src="./apps/website/public/wingman_opengraph.png" alt="Wingman logo" />
+<p align="center" width="50%">
+  <img src="./apps/website/public/wingman_opengraph.webp" alt="Wingman logo" />
 </p>
 
 # Wingman AI Agent System

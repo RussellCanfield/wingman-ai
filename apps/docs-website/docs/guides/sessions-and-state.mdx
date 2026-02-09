@@ -28,6 +28,19 @@ Custom mappings (like `channelSessions` or `!session`) can use any stable key; `
 - **Discord**: uses channel mappings, the `!session` command, or a derived key (see below).
 - **Webhooks**: uses `agent:<id>:webhook:<webhookId>`.
 
+## Per-session request queueing
+
+Gateway request execution is serialized per `agentId + sessionKey`.
+
+- If a request is already running for a session, the next request is queued by default.
+- Web UI and Desktop support queueing follow-up prompts while a response is still streaming.
+- The gateway emits queue lifecycle events:
+  - `ack` with `status: "queued"` when a request is enqueued
+  - `ack` with `status: "dequeued"` when that request begins execution
+  - `event:agent` with `type: "request-queued"` for UI feedback
+
+For low-level clients, `req:agent` accepts `queueIfBusy` (defaults to `true`). Set `queueIfBusy: false` to reject overlapping turns for that session.
+
 ## Discord session mapping
 
 When a Discord message arrives, the adapter resolves the session key in this order:

@@ -60,6 +60,20 @@ type GatewaySocketData = {
 
 type GatewaySocket = ServerWebSocket<GatewaySocketData>;
 
+type PendingAgentRequest = {
+	ws: GatewaySocket;
+	msg: GatewayMessage;
+	payload: AgentRequestPayload;
+	agentId: string;
+	sessionKey: string;
+	sessionQueueKey: string;
+	content: string;
+	attachments: MediaAttachment[];
+	sessionManager: SessionManager;
+	workdir: string | null;
+	defaultOutputDir: string;
+};
+
 const API_CORS_HEADERS: Record<string, string> = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
@@ -123,6 +137,9 @@ export class GatewayServer {
 		string,
 		{ socket: GatewaySocket; abortController: AbortController }
 	> = new Map();
+	private activeSessionRequests: Map<string, string> = new Map();
+	private queuedSessionRequests: Map<string, PendingAgentRequest[]> = new Map();
+	private requestSessionKeys: Map<string, string> = new Map();
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -641,6 +658,7 @@ export class GatewayServer {
 			existing?.abortController.abort();
 			this.activeAgentRequests.delete(msg.id);
 		}
+		this.removeQueuedRequestById(msg.id);
 
 		const payload = msg.payload as AgentRequestPayload;
 		const content = typeof payload?.content === "string" ? payload.content : "";
@@ -663,6 +681,7 @@ export class GatewayServer {
 		const sessionKey =
 			payload.sessionKey ||
 			this.router.buildSessionKey(agentId, payload.routing);
+		const sessionQueueKey = this.buildSessionQueueKey(agentId, sessionKey);
 
 		const sessionManager = await this.getSessionManager(agentId);
 		const existingSession = sessionManager.getSession(sessionKey);
@@ -722,6 +741,90 @@ export class GatewayServer {
 			skipSessionId: sessionKey,
 		});
 
+		const request: PendingAgentRequest = {
+			ws,
+			msg,
+			payload,
+			agentId,
+			sessionKey,
+			sessionQueueKey,
+			content,
+			attachments,
+			sessionManager,
+			workdir,
+			defaultOutputDir,
+		};
+		this.requestSessionKeys.set(msg.id, sessionQueueKey);
+
+		const queueIfBusy = payload.queueIfBusy !== false;
+		const activeRequestId = this.activeSessionRequests.get(sessionQueueKey);
+		if (activeRequestId && queueIfBusy) {
+			const queued = this.queuedSessionRequests.get(sessionQueueKey) || [];
+			queued.push(request);
+			this.queuedSessionRequests.set(sessionQueueKey, queued);
+			const position = queued.length;
+			this.sendMessage(ws, {
+				type: "ack",
+				id: msg.id,
+				payload: {
+					action: "req:agent",
+					status: "queued",
+					requestId: msg.id,
+					sessionId: sessionKey,
+					agentId,
+					position,
+				},
+				timestamp: Date.now(),
+			});
+			this.sendMessage(ws, {
+				type: "event:agent",
+				id: msg.id,
+				clientId: ws.data.clientId,
+				payload: this.attachSessionContext(
+					{
+						type: "request-queued",
+						position,
+					},
+					sessionKey,
+					agentId,
+				),
+				timestamp: Date.now(),
+			});
+			return;
+		}
+
+		if (activeRequestId && !queueIfBusy) {
+			this.requestSessionKeys.delete(msg.id);
+			this.sendAgentError(
+				ws,
+				msg.id,
+				"Session already has an in-flight request. Set queueIfBusy=true to enqueue.",
+				{
+					sessionId: sessionKey,
+					agentId,
+				},
+			);
+			return;
+		}
+
+		void this.executeAgentRequest(request);
+	}
+
+	private async executeAgentRequest(request: PendingAgentRequest): Promise<void> {
+		const {
+			ws,
+			msg,
+			agentId,
+			sessionKey,
+			sessionQueueKey,
+			content,
+			attachments,
+			sessionManager,
+			workdir,
+			defaultOutputDir,
+		} = request;
+
+		this.activeSessionRequests.set(sessionQueueKey, msg.id!);
 		const outputManager = new OutputManager("interactive");
 		let emittedAgentError = false;
 		const outputHandler = (event: unknown) => {
@@ -766,7 +869,7 @@ export class GatewayServer {
 			defaultOutputDir,
 		});
 		const abortController = new AbortController();
-		this.activeAgentRequests.set(msg.id, {
+		this.activeAgentRequests.set(msg.id!, {
 			socket: ws,
 			abortController,
 		});
@@ -787,7 +890,7 @@ export class GatewayServer {
 			if (!emittedAgentError) {
 				const message = error instanceof Error ? error.message : String(error);
 				const stack = error instanceof Error ? error.stack : undefined;
-				this.sendAgentError(ws, msg.id, message, {
+				this.sendAgentError(ws, msg.id!, message, {
 					sessionId: sessionKey,
 					agentId,
 					stack,
@@ -796,9 +899,44 @@ export class GatewayServer {
 				});
 			}
 		} finally {
-			this.activeAgentRequests.delete(msg.id);
+			this.activeAgentRequests.delete(msg.id!);
+			this.activeSessionRequests.delete(sessionQueueKey);
+			this.requestSessionKeys.delete(msg.id!);
 			outputManager.off("output-event", outputHandler);
+			this.processNextQueuedAgentRequest(sessionQueueKey);
 		}
+	}
+
+	private processNextQueuedAgentRequest(sessionQueueKey: string): void {
+		if (this.activeSessionRequests.has(sessionQueueKey)) return;
+		const queue = this.queuedSessionRequests.get(sessionQueueKey);
+		if (!queue || queue.length === 0) {
+			this.queuedSessionRequests.delete(sessionQueueKey);
+			return;
+		}
+
+		const next = queue.shift();
+		if (!next) return;
+		if (queue.length === 0) {
+			this.queuedSessionRequests.delete(sessionQueueKey);
+		} else {
+			this.queuedSessionRequests.set(sessionQueueKey, queue);
+		}
+
+		this.sendMessage(next.ws, {
+			type: "ack",
+			id: next.msg.id,
+			payload: {
+				action: "req:agent",
+				status: "dequeued",
+				requestId: next.msg.id,
+				sessionId: next.sessionKey,
+				agentId: next.agentId,
+				remaining: queue.length,
+			},
+			timestamp: Date.now(),
+		});
+		void this.executeAgentRequest(next);
 	}
 
 	private handleAgentCancel(ws: GatewaySocket, msg: GatewayMessage): void {
@@ -820,40 +958,84 @@ export class GatewayServer {
 		}
 
 		const active = this.activeAgentRequests.get(requestId);
-		if (!active) {
+		if (active) {
+			if (active.socket !== ws) {
+				this.sendError(
+					ws,
+					"FORBIDDEN",
+					"Cannot cancel a request started by another client",
+				);
+				return;
+			}
+
+			active.abortController.abort();
+			this.activeAgentRequests.delete(requestId);
 			this.sendMessage(ws, {
 				type: "ack",
 				id: msg.id,
 				payload: {
 					action: "req:agent:cancel",
 					requestId,
-					status: "not_found",
+					status: "cancelled",
 				},
 				timestamp: Date.now(),
 			});
 			return;
 		}
-		if (active.socket !== ws) {
-			this.sendError(
-				ws,
-				"FORBIDDEN",
-				"Cannot cancel a request started by another client",
-			);
+
+		const queued = this.removeQueuedRequestById(requestId);
+		if (queued) {
+			if (queued.ws !== ws) {
+				this.sendError(
+					ws,
+					"FORBIDDEN",
+					"Cannot cancel a request started by another client",
+				);
+				return;
+			}
+			this.sendMessage(ws, {
+				type: "ack",
+				id: msg.id,
+				payload: {
+					action: "req:agent:cancel",
+					requestId,
+					status: "cancelled_queued",
+				},
+				timestamp: Date.now(),
+			});
 			return;
 		}
 
-		active.abortController.abort();
-		this.activeAgentRequests.delete(requestId);
 		this.sendMessage(ws, {
 			type: "ack",
 			id: msg.id,
 			payload: {
 				action: "req:agent:cancel",
 				requestId,
-				status: "cancelled",
+				status: "not_found",
 			},
 			timestamp: Date.now(),
 		});
+	}
+
+	private buildSessionQueueKey(agentId: string, sessionKey: string): string {
+		return `${agentId}:${sessionKey}`;
+	}
+
+	private removeQueuedRequestById(requestId: string): PendingAgentRequest | null {
+		for (const [queueKey, queue] of this.queuedSessionRequests) {
+			const index = queue.findIndex((item) => item.msg.id === requestId);
+			if (index === -1) continue;
+			const [removed] = queue.splice(index, 1);
+			if (queue.length === 0) {
+				this.queuedSessionRequests.delete(queueKey);
+			} else {
+				this.queuedSessionRequests.set(queueKey, queue);
+			}
+			this.requestSessionKeys.delete(requestId);
+			return removed || null;
+		}
+		return null;
 	}
 
 	/**
@@ -1214,6 +1396,20 @@ export class GatewayServer {
 			if (active.socket !== ws) continue;
 			active.abortController.abort();
 			this.activeAgentRequests.delete(requestId);
+		}
+		for (const [queueKey, queue] of this.queuedSessionRequests) {
+			const nextQueue = queue.filter((request) => request.ws !== ws);
+			if (nextQueue.length === queue.length) continue;
+			for (const request of queue) {
+				if (request.ws === ws && request.msg.id) {
+					this.requestSessionKeys.delete(request.msg.id);
+				}
+			}
+			if (nextQueue.length === 0) {
+				this.queuedSessionRequests.delete(queueKey);
+			} else {
+				this.queuedSessionRequests.set(queueKey, nextQueue);
+			}
 		}
 	}
 
