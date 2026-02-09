@@ -1,15 +1,22 @@
 import { ChatAnthropic } from "@langchain/anthropic";
+import type {
+	BaseLanguageModel,
+	BaseLanguageModelCallOptions,
+} from "@langchain/core/language_models/base";
 import { ChatOpenAI, type ChatOpenAIFields } from "@langchain/openai";
 import { ChatXAI } from "@langchain/xai";
-import type { BaseLanguageModel, BaseLanguageModelCallOptions } from "@langchain/core/language_models/base";
-import { createLogger } from "../../logger.js";
-import { resolveProviderToken } from "@/providers/credentials.js";
+import {
+	createCodexFetch,
+	resolveCodexAuthFromFile,
+} from "@/providers/codex.js";
 import { createCopilotFetch } from "@/providers/copilot.js";
+import { resolveProviderToken } from "@/providers/credentials.js";
 import {
 	getProviderSpec,
 	listProviderSpecs,
 	normalizeProviderName,
 } from "@/providers/registry.js";
+import { createLogger } from "../../logger.js";
 
 const logger = createLogger();
 
@@ -22,6 +29,7 @@ const logger = createLogger();
  *  - "anthropic:claude-sonnet-4-5"
  *  - "openai:gpt-4o"
  *  - "openai:gpt-4-turbo"
+ *  - "codex:codex-mini-latest"
  *  - "openrouter:openai/gpt-4o"
  *  - "copilot:gpt-4o"
  */
@@ -29,7 +37,9 @@ export class ModelFactory {
 	/**
 	 * Parse and create a model from a string specification
 	 */
-	static createModel(modelString: string): string | BaseLanguageModel<any, BaseLanguageModelCallOptions> | undefined {
+	static createModel(
+		modelString: string,
+	): string | BaseLanguageModel<any, BaseLanguageModelCallOptions> | undefined {
 		const separatorIndex = modelString.indexOf(":");
 		if (separatorIndex === -1) {
 			throw new Error(
@@ -67,6 +77,9 @@ export class ModelFactory {
 
 			case "openai":
 				return ModelFactory.createOpenAIModel(model);
+
+			case "codex":
+				return ModelFactory.createCodexModel(model);
 
 			case "openrouter":
 				return ModelFactory.createOpenRouterModel(model);
@@ -156,6 +169,25 @@ export class ModelFactory {
 		}
 
 		return new ChatOpenAI(params);
+	}
+
+	private static createCodexModel(model: string): BaseLanguageModel {
+		const provider = getProviderSpec("codex");
+		const token = resolveProviderToken("codex").token;
+		const codexAuth = resolveCodexAuthFromFile();
+
+		return new ChatOpenAI({
+			model,
+			useResponsesApi: true,
+			apiKey: token ?? "codex",
+			configuration: {
+				baseURL: provider?.baseURL,
+				fetch: createCodexFetch({
+					fallbackToken: token,
+					fallbackAccountId: codexAuth.accountId,
+				}),
+			},
+		});
 	}
 
 	private static createOpenRouterModel(model: string): BaseLanguageModel {

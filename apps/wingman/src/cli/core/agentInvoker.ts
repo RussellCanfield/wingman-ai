@@ -1,26 +1,31 @@
+import { existsSync } from "node:fs";
+import { isAbsolute, join, normalize, sep } from "node:path";
 import {
 	CompositeBackend,
 	createDeepAgent,
 	FilesystemBackend,
 } from "deepagents";
-import { existsSync } from "node:fs";
-import { isAbsolute, join, normalize, sep } from "node:path";
+import {
+	modelRetryMiddleware,
+	summarizationMiddleware,
+	toolRetryMiddleware,
+} from "langchain";
 import { v4 as uuidv4 } from "uuid";
-import { AgentLoader } from "../../agent/config/agentLoader.js";
-import { WingmanConfigLoader } from "../config/loader.js";
-import type { OutputManager } from "./outputManager.js";
-import type { Logger } from "../../logger.js";
-import { additionalMessageMiddleware } from "@/agent/middleware/additional-messages.js";
-import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
-import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
-import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
 import type { WingmanAgentConfig } from "@/agent/config/agentConfig.js";
-import type { WingmanAgent } from "@/types/agents.js";
-import type { WingmanConfigType } from "../config/schema.js";
 import { MCPClientManager } from "@/agent/config/mcpClientManager.js";
-import type { MCPServersConfig } from "@/types/mcp.js";
-import { SessionManager } from "./sessionManager.js";
+import { additionalMessageMiddleware } from "@/agent/middleware/additional-messages.js";
+import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
+import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
+import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
 import { getBundledSkillsPath } from "@/agent/uiRegistry.js";
+import type { WingmanAgent } from "@/types/agents.js";
+import type { MCPServersConfig } from "@/types/mcp.js";
+import { AgentLoader } from "../../agent/config/agentLoader.js";
+import type { Logger } from "../../logger.js";
+import { WingmanConfigLoader } from "../config/loader.js";
+import type { WingmanConfigType } from "../config/schema.js";
+import type { OutputManager } from "./outputManager.js";
+import type { SessionManager } from "./sessionManager.js";
 
 export interface AgentInvokerOptions {
 	workspace?: string;
@@ -61,7 +66,10 @@ export type FileAttachment = {
 	size?: number;
 };
 
-export type MediaAttachment = ImageAttachment | AudioAttachment | FileAttachment;
+export type MediaAttachment =
+	| ImageAttachment
+	| AudioAttachment
+	| FileAttachment;
 
 type UserContentPart =
 	| { type: "text"; text: string }
@@ -94,6 +102,38 @@ export type ExternalOutputMount = {
 	virtualPath: string | null;
 	absolutePath: string | null;
 };
+
+export type SummarizationMiddlewareSettings = {
+	maxTokensBeforeSummary: number;
+	messagesToKeep: number;
+};
+
+export type ModelRetryMiddlewareSettings = {
+	maxRetries: number;
+	backoffFactor: number;
+	initialDelayMs: number;
+	maxDelayMs: number;
+	jitter: boolean;
+	onFailure: "continue" | "error";
+};
+
+export type ToolRetryMiddlewareSettings = ModelRetryMiddlewareSettings & {
+	tools?: string[];
+};
+
+export type HumanInTheLoopSettings = {
+	interruptOn: Record<
+		string,
+		| boolean
+		| {
+				allowedDecisions: Array<"approve" | "edit" | "reject">;
+				description?: string;
+				argsSchema?: Record<string, any>;
+		  }
+	>;
+};
+
+const DEFAULT_DEEPAGENT_MODEL = "claude-sonnet-4-5-20250929";
 
 const isPathWithinRoot = (targetPath: string, rootPath: string): boolean => {
 	const normalizedTarget = normalize(targetPath);
@@ -135,7 +175,11 @@ export const resolveExternalOutputMount = (
 			absolutePath: workdir,
 		};
 	}
-	if (!workdir && defaultOutputDir && !isPathWithinRoot(defaultOutputDir, workspace)) {
+	if (
+		!workdir &&
+		defaultOutputDir &&
+		!isPathWithinRoot(defaultOutputDir, workspace)
+	) {
 		return {
 			virtualPath: OUTPUT_VIRTUAL_PATH,
 			absolutePath: defaultOutputDir,
@@ -145,6 +189,203 @@ export const resolveExternalOutputMount = (
 		virtualPath: null,
 		absolutePath: null,
 	};
+};
+
+export const resolveSummarizationMiddlewareSettings = (
+	config: WingmanConfigType,
+): SummarizationMiddlewareSettings | null => {
+	if (!config.summarization?.enabled) {
+		return null;
+	}
+	return {
+		maxTokensBeforeSummary: config.summarization.maxTokensBeforeSummary,
+		messagesToKeep: config.summarization.messagesToKeep,
+	};
+};
+
+export const resolveModelRetryMiddlewareSettings = (
+	config: WingmanConfigType,
+): ModelRetryMiddlewareSettings | null => {
+	if (!config.modelRetry?.enabled) {
+		return null;
+	}
+	return {
+		maxRetries: config.modelRetry.maxRetries,
+		backoffFactor: config.modelRetry.backoffFactor,
+		initialDelayMs: config.modelRetry.initialDelayMs,
+		maxDelayMs: config.modelRetry.maxDelayMs,
+		jitter: config.modelRetry.jitter,
+		onFailure: config.modelRetry.onFailure,
+	};
+};
+
+export const resolveToolRetryMiddlewareSettings = (
+	config: WingmanConfigType,
+): ToolRetryMiddlewareSettings | null => {
+	if (!config.toolRetry?.enabled) {
+		return null;
+	}
+	return {
+		maxRetries: config.toolRetry.maxRetries,
+		backoffFactor: config.toolRetry.backoffFactor,
+		initialDelayMs: config.toolRetry.initialDelayMs,
+		maxDelayMs: config.toolRetry.maxDelayMs,
+		jitter: config.toolRetry.jitter,
+		onFailure: config.toolRetry.onFailure,
+		...(config.toolRetry.tools && config.toolRetry.tools.length > 0
+			? { tools: config.toolRetry.tools }
+			: {}),
+	};
+};
+
+export const resolveHumanInTheLoopSettings = (
+	config: WingmanConfigType,
+): HumanInTheLoopSettings | null => {
+	if (!config.humanInTheLoop?.enabled) {
+		return null;
+	}
+	const interruptOn = config.humanInTheLoop.interruptOn || {};
+	if (Object.keys(interruptOn).length === 0) {
+		return null;
+	}
+	return {
+		interruptOn,
+	};
+};
+
+export const configureDeepAgentSummarizationMiddleware = (
+	agent: any,
+	settings: SummarizationMiddlewareSettings | null,
+	model?: any,
+): void => {
+	const middleware = agent?.options?.middleware;
+	if (!Array.isArray(middleware)) {
+		return;
+	}
+	const index = middleware.findIndex(
+		(entry: any) => entry?.name === "SummarizationMiddleware",
+	);
+	if (index < 0) {
+		return;
+	}
+
+	if (!settings) {
+		middleware.splice(index, 1);
+		return;
+	}
+
+	middleware[index] = summarizationMiddleware({
+		model: model || DEFAULT_DEEPAGENT_MODEL,
+		trigger: { tokens: settings.maxTokensBeforeSummary },
+		keep: { messages: settings.messagesToKeep },
+	});
+};
+
+type ToolEventContext = {
+	event: "on_tool_start" | "on_tool_end";
+	toolName: string;
+};
+
+export const detectToolEventContext = (
+	chunk: unknown,
+): ToolEventContext | null => {
+	if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) {
+		return null;
+	}
+	const eventChunk = chunk as Record<string, unknown>;
+	if (
+		eventChunk.event !== "on_tool_start" &&
+		eventChunk.event !== "on_tool_end"
+	) {
+		return null;
+	}
+	const toolName =
+		typeof eventChunk.name === "string" && eventChunk.name.trim()
+			? eventChunk.name.trim()
+			: "unknown";
+	return {
+		event: eventChunk.event,
+		toolName,
+	};
+};
+
+export const chunkHasAssistantText = (chunk: unknown): boolean => {
+	if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) {
+		return false;
+	}
+
+	const eventChunk = chunk as Record<string, unknown>;
+	const eventName =
+		typeof eventChunk.event === "string" ? eventChunk.event : undefined;
+
+	if (eventName === "on_chat_model_stream") {
+		const data =
+			eventChunk.data && typeof eventChunk.data === "object"
+				? (eventChunk.data as Record<string, unknown>)
+				: null;
+		const messageChunk =
+			(data?.chunk as Record<string, unknown> | undefined) ||
+			(data?.message as Record<string, unknown> | undefined);
+		const content = messageChunk?.content;
+		if (typeof content === "string") {
+			return content.length > 0;
+		}
+		if (Array.isArray(content)) {
+			return content.some(
+				(part) =>
+					part &&
+					typeof part === "object" &&
+					(part as Record<string, unknown>).type === "text" &&
+					typeof (part as Record<string, unknown>).text === "string" &&
+					((part as Record<string, unknown>).text as string).length > 0,
+			);
+		}
+	}
+
+	if (eventName === "on_llm_stream") {
+		const data =
+			eventChunk.data && typeof eventChunk.data === "object"
+				? (eventChunk.data as Record<string, unknown>)
+				: null;
+		const llmChunk =
+			data?.chunk && typeof data.chunk === "object"
+				? (data.chunk as Record<string, unknown>)
+				: null;
+		return typeof llmChunk?.text === "string" && llmChunk.text.length > 0;
+	}
+
+	return false;
+};
+
+export const selectStreamingFallbackText = (
+	sessionMessages: Array<{
+		role?: unknown;
+		createdAt?: unknown;
+		content?: unknown;
+	}>,
+	invocationStartedAt: number,
+	windowMs = 1000,
+): string | undefined => {
+	for (let i = sessionMessages.length - 1; i >= 0; i -= 1) {
+		const message = sessionMessages[i];
+		if (!message || typeof message !== "object") {
+			continue;
+		}
+		if (message.role !== "assistant") {
+			continue;
+		}
+		if (
+			typeof message.createdAt !== "number" ||
+			message.createdAt < invocationStartedAt - windowMs
+		) {
+			continue;
+		}
+		if (typeof message.content !== "string" || !message.content.trim()) {
+			continue;
+		}
+		return message.content;
+	}
+	return undefined;
 };
 
 export class AgentInvoker {
@@ -203,24 +444,27 @@ export class AgentInvoker {
 		attachments?: MediaAttachment[],
 		options?: InvokeAgentOptions,
 	): Promise<any> {
+		const invocationStartedAt = Date.now();
 		let cancellationHandled = false;
+		let activeToolName: string | null = null;
+		let lastToolName: string | null = null;
+		let sawAssistantText = false;
 		const isCancelled = () => options?.signal?.aborted === true;
 		try {
 			const executionWorkspace = resolveExecutionWorkspace(
 				this.workspace,
 				this.workdir,
 			);
-			const effectiveWorkdir = this.workdir
-				? executionWorkspace
-				: null;
-			const loader = normalize(executionWorkspace) === normalize(this.workspace)
-				? this.loader
-				: new AgentLoader(
-					this.configDir,
-					this.workspace,
-					this.wingmanConfig,
-					executionWorkspace,
-				);
+			const effectiveWorkdir = this.workdir ? executionWorkspace : null;
+			const loader =
+				normalize(executionWorkspace) === normalize(this.workspace)
+					? this.loader
+					: new AgentLoader(
+							this.configDir,
+							this.workspace,
+							this.wingmanConfig,
+							executionWorkspace,
+						);
 
 			// Find the agent
 			const targetAgent = await loader.loadAgent(agentName);
@@ -231,7 +475,8 @@ export class AgentInvoker {
 
 			this.logger.info(`Invoking agent: ${agentName}`);
 			const preview =
-				prompt.trim() || (attachments && attachments.length > 0
+				prompt.trim() ||
+				(attachments && attachments.length > 0
 					? buildAttachmentPreview(attachments)
 					: "");
 			this.outputManager.emitAgentStart(agentName, preview);
@@ -273,16 +518,14 @@ export class AgentInvoker {
 						(targetAgent.tools || []).map((tool) => tool.name),
 					);
 					const unique = mcpTools.filter((tool) => !existing.has(tool.name));
-					targetAgent.tools = [
-						...(targetAgent.tools || []),
-						...unique,
-					] as any;
+					targetAgent.tools = [...(targetAgent.tools || []), ...unique] as any;
 					this.logger.info(`Added ${unique.length} MCP tools to agent`);
 				}
 			}
 
 			// Build middleware array
-			const skillsDirectory = this.wingmanConfig?.skills?.skillsDirectory || "skills";
+			const skillsDirectory =
+				this.wingmanConfig?.skills?.skillsDirectory || "skills";
 			const normalizedSkillsDirectory = skillsDirectory.replace(
 				/^\/+|\/+$/g,
 				"",
@@ -305,6 +548,43 @@ export class AgentInvoker {
 					skillsDirectory,
 				}),
 			];
+			const summarizationSettings = resolveSummarizationMiddlewareSettings(
+				this.wingmanConfig,
+			);
+			const modelRetrySettings = resolveModelRetryMiddlewareSettings(
+				this.wingmanConfig,
+			);
+			if (modelRetrySettings) {
+				middleware.push(
+					modelRetryMiddleware({
+						maxRetries: modelRetrySettings.maxRetries,
+						backoffFactor: modelRetrySettings.backoffFactor,
+						initialDelayMs: modelRetrySettings.initialDelayMs,
+						maxDelayMs: modelRetrySettings.maxDelayMs,
+						jitter: modelRetrySettings.jitter,
+						onFailure: modelRetrySettings.onFailure,
+					}),
+				);
+			}
+			const toolRetrySettings = resolveToolRetryMiddlewareSettings(
+				this.wingmanConfig,
+			);
+			if (toolRetrySettings) {
+				middleware.push(
+					toolRetryMiddleware({
+						maxRetries: toolRetrySettings.maxRetries,
+						backoffFactor: toolRetrySettings.backoffFactor,
+						initialDelayMs: toolRetrySettings.initialDelayMs,
+						maxDelayMs: toolRetrySettings.maxDelayMs,
+						jitter: toolRetrySettings.jitter,
+						onFailure: toolRetrySettings.onFailure,
+						...(toolRetrySettings.tools
+							? { tools: toolRetrySettings.tools }
+							: {}),
+					}),
+				);
+			}
+			const hitlSettings = resolveHumanInTheLoopSettings(this.wingmanConfig);
 
 			// Add hooks middleware if hooks are configured
 			if (mergedHooks) {
@@ -337,9 +617,8 @@ export class AgentInvoker {
 					virtualMode: true,
 				}),
 			};
-			const executionWorkspaceAlias = toWorkspaceAliasVirtualPath(
-				executionWorkspace,
-			);
+			const executionWorkspaceAlias =
+				toWorkspaceAliasVirtualPath(executionWorkspace);
 			if (executionWorkspaceAlias) {
 				backendOverrides[executionWorkspaceAlias] = new FilesystemBackend({
 					rootDir: executionWorkspace,
@@ -352,7 +631,10 @@ export class AgentInvoker {
 					virtualMode: true,
 				});
 			}
-			const workspaceSkillsPath = join(this.workspace, normalizedSkillsDirectory);
+			const workspaceSkillsPath = join(
+				this.workspace,
+				normalizedSkillsDirectory,
+			);
 			if (existsSync(workspaceSkillsPath)) {
 				backendOverrides[skillsVirtualPath] = new FilesystemBackend({
 					rootDir: workspaceSkillsPath,
@@ -385,10 +667,16 @@ export class AgentInvoker {
 						backendOverrides,
 					),
 				middleware: middleware as any,
+				interruptOn: hitlSettings?.interruptOn,
 				skills: skillsSources,
 				subagents: (targetAgent.subagents || []) as any,
 				checkpointer: checkpointer as any,
 			});
+			configureDeepAgentSummarizationMiddleware(
+				standaloneAgent,
+				summarizationSettings,
+				targetAgent.model as any,
+			);
 
 			this.logger.debug("Agent created, sending message");
 
@@ -421,6 +709,18 @@ export class AgentInvoker {
 				);
 
 				for await (const chunk of stream) {
+					if (!sawAssistantText && chunkHasAssistantText(chunk)) {
+						sawAssistantText = true;
+					}
+					const toolEvent = detectToolEventContext(chunk);
+					if (toolEvent) {
+						lastToolName = toolEvent.toolName;
+						if (toolEvent.event === "on_tool_start") {
+							activeToolName = toolEvent.toolName;
+						} else if (activeToolName === toolEvent.toolName) {
+							activeToolName = null;
+						}
+					}
 					if (isCancelled()) {
 						cancellationHandled = true;
 						this.logger.info("Agent invocation cancelled");
@@ -441,7 +741,36 @@ export class AgentInvoker {
 				}
 
 				this.logger.info("Agent streaming completed successfully");
-				this.outputManager.emitAgentComplete({ streaming: true });
+				let fallbackText: string | undefined;
+				if (!sawAssistantText && this.sessionManager && sessionId) {
+					try {
+						const sessionMessages =
+							await this.sessionManager.listMessages(sessionId);
+						fallbackText = selectStreamingFallbackText(
+							sessionMessages,
+							invocationStartedAt,
+						);
+					} catch (stateError) {
+						this.logger.debug(
+							"Failed to derive streaming fallback text from session state",
+							stateError,
+						);
+					}
+				}
+				if (!sawAssistantText && !fallbackText) {
+					const emptyResponseMessage =
+						"Model completed without a response. Check provider logs for request errors.";
+					this.logger.warn(emptyResponseMessage);
+					this.outputManager.emitAgentError(emptyResponseMessage);
+					return {
+						blocked: true,
+						reason: "empty_stream_response",
+					};
+				}
+				this.outputManager.emitAgentComplete({
+					streaming: true,
+					...(fallbackText ? { fallbackText } : {}),
+				});
 				return { streaming: true };
 			} else {
 				// Fall back to blocking invoke for backwards compatibility
@@ -494,9 +823,22 @@ export class AgentInvoker {
 				return { cancelled: true };
 			}
 			this.logger.error(
-				`Agent invocation failed: ${error instanceof Error ? error.message : String(error)}`,
+				`Agent invocation failed: ${error instanceof Error ? error.message : String(error)}${
+					activeToolName
+						? ` (while running tool "${activeToolName}")`
+						: lastToolName
+							? ` (last tool: "${lastToolName}")`
+							: ""
+				}`,
 			);
-			this.outputManager.emitAgentError(error as Error);
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			const errorWithToolContext = activeToolName
+				? `${errorMessage} (while running tool "${activeToolName}")`
+				: lastToolName
+					? `${errorMessage} (last tool: "${lastToolName}")`
+					: errorMessage;
+			this.outputManager.emitAgentError(errorWithToolContext);
 			throw error;
 		} finally {
 			// Always cleanup MCP client
@@ -673,14 +1015,18 @@ function shouldUseResponsesInputFile(model?: unknown): boolean {
 	return false;
 }
 
-function isAudioAttachment(attachment: MediaAttachment): attachment is AudioAttachment {
+function isAudioAttachment(
+	attachment: MediaAttachment,
+): attachment is AudioAttachment {
 	if ((attachment as AudioAttachment).kind === "audio") return true;
 	if (attachment.mimeType?.startsWith("audio/")) return true;
 	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
 	return false;
 }
 
-function isFileAttachment(attachment: MediaAttachment): attachment is FileAttachment {
+function isFileAttachment(
+	attachment: MediaAttachment,
+): attachment is FileAttachment {
 	if ((attachment as FileAttachment).kind === "file") return true;
 	return typeof (attachment as FileAttachment).textContent === "string";
 }
@@ -722,9 +1068,10 @@ function buildFileAttachmentText(attachment: FileAttachment): string {
 		typeof attachment.size === "number" && attachment.size >= 0
 			? `, ${attachment.size} bytes`
 			: "";
-	const meta = mime || sizeLabel
-		? ` (${[mime, sizeLabel.replace(/^, /, "")].filter(Boolean).join(", ")})`
-		: "";
+	const meta =
+		mime || sizeLabel
+			? ` (${[mime, sizeLabel.replace(/^, /, "")].filter(Boolean).join(", ")})`
+			: "";
 	const header = `[Attached file: ${name}${meta}]`;
 	const text = attachment.textContent?.trim();
 	if (!text) {

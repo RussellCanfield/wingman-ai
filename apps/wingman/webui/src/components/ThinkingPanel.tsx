@@ -85,12 +85,12 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 	);
 };
 
-export function shouldOpenThinkingPanelByDefault(params: {
+export function shouldOpenThinkingPanelByDefault(_params: {
 	isStreaming: boolean;
 	hasThinking: boolean;
 	activeTools: number;
 }): boolean {
-	return params.isStreaming && (params.hasThinking || params.activeTools > 0);
+	return false;
 }
 
 export function buildThinkingSummary({

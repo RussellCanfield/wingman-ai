@@ -1,41 +1,48 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FiMenu, FiX } from "react-icons/fi";
+import {
+	Navigate,
+	Route,
+	Routes,
+	useLocation,
+	useNavigate,
+} from "react-router-dom";
+import wingmanIcon from "./assets/wingman_icon.webp";
+import wingmanLogo from "./assets/wingman_logo.webp";
+import { HeroPanel } from "./components/HeroPanel";
+import { Sidebar } from "./components/Sidebar";
+import { AgentsPage } from "./pages/AgentsPage";
+import { ChatPage } from "./pages/ChatPage";
+import { CommandDeckPage } from "./pages/CommandDeckPage";
+import { RoutinesPage } from "./pages/RoutinesPage";
+import { WebhooksPage } from "./pages/WebhooksPage";
 import type {
+	AgentDetail,
+	AgentSummary,
+	AgentsResponse,
+	AgentVoiceConfig,
 	ChatAttachment,
 	ChatMessage,
 	ControlUiConfig,
 	GatewayHealth,
 	GatewayMessage,
 	GatewayStats,
-	AgentSummary,
-	AgentsResponse,
-	AgentDetail,
+	PromptTrainingConfig,
 	ProviderStatus,
 	ProviderStatusResponse,
-	AgentVoiceConfig,
-	PromptTrainingConfig,
-	VoiceConfig,
-	ToolEvent,
+	Routine,
 	ThinkingEvent,
 	Thread,
-	Routine,
+	ToolEvent,
+	VoiceConfig,
 	Webhook,
 } from "./types";
-import { parseStreamEvents } from "./utils/streaming";
 import {
+	type KnownSubagentLookup,
 	matchKnownSubagentLabel,
 	resolveToolActorLabel,
-	type KnownSubagentLookup,
 } from "./utils/agentAttribution";
-import type { VoicePlaybackStatus } from "./utils/voicePlayback";
-import { Sidebar } from "./components/Sidebar";
-import { HeroPanel } from "./components/HeroPanel";
-import { ChatPage } from "./pages/ChatPage";
-import { CommandDeckPage } from "./pages/CommandDeckPage";
-import { AgentsPage } from "./pages/AgentsPage";
-import { RoutinesPage } from "./pages/RoutinesPage";
-import { WebhooksPage } from "./pages/WebhooksPage";
 import { buildRoutineAgents } from "./utils/agentOptions";
 import {
 	FILE_INPUT_ACCEPT,
@@ -43,15 +50,19 @@ import {
 	isSupportedTextUploadFile,
 	readUploadFileText,
 } from "./utils/fileUpload";
-import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./utils/voice";
-import { shouldAutoSpeak } from "./utils/voiceAuto";
+import { parseStreamEvents } from "./utils/streaming";
 import {
 	DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
 	DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS,
 	shouldRecoverStream,
 } from "./utils/streamRecovery";
-import wingmanIcon from "./assets/wingman_icon.webp";
-import wingmanLogo from "./assets/wingman_logo.webp";
+import {
+	resolveSpeechVoice,
+	resolveVoiceConfig,
+	sanitizeForSpeech,
+} from "./utils/voice";
+import { shouldAutoSpeak } from "./utils/voiceAuto";
+import type { VoicePlaybackStatus } from "./utils/voicePlayback";
 
 const DEFAULT_VOICE_CONFIG: VoiceConfig = {
 	provider: "web_speech",
@@ -117,7 +128,9 @@ export const App: React.FC = () => {
 	const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null);
 	const [providers, setProviders] = useState<ProviderStatus[]>([]);
 	const [providersLoading, setProvidersLoading] = useState<boolean>(false);
-	const [providersUpdatedAt, setProvidersUpdatedAt] = useState<string | undefined>();
+	const [providersUpdatedAt, setProvidersUpdatedAt] = useState<
+		string | undefined
+	>();
 	const [credentialsPath, setCredentialsPath] = useState<string | undefined>();
 	const [agentCatalog, setAgentCatalog] = useState<AgentSummary[]>([]);
 	const [availableTools, setAvailableTools] = useState<string[]>([]);
@@ -128,7 +141,9 @@ export const App: React.FC = () => {
 	const [autoConnectStatus, setAutoConnectStatus] = useState<string>("");
 	const [webhooks, setWebhooks] = useState<Webhook[]>([]);
 	const [webhooksLoading, setWebhooksLoading] = useState<boolean>(false);
-	const [voiceSessions, setVoiceSessions] = useState<Record<string, boolean>>({});
+	const [voiceSessions, setVoiceSessions] = useState<Record<string, boolean>>(
+		{},
+	);
 	const [voicePlayback, setVoicePlayback] = useState<{
 		status: VoicePlaybackStatus;
 		messageId?: string;
@@ -138,7 +153,9 @@ export const App: React.FC = () => {
 	const wsRef = useRef<WebSocket | null>(null);
 	const connectRequestIdRef = useRef<string | null>(null);
 	const buffersRef = useRef<Map<string, string>>(new Map());
-	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(new Map());
+	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(
+		new Map(),
+	);
 	const requestThreadRef = useRef<Map<string, string>>(new Map());
 	const requestAgentRef = useRef<Map<string, string>>(new Map());
 	const uiOnlyRequestsRef = useRef<Set<string>>(new Set());
@@ -226,7 +243,9 @@ export const App: React.FC = () => {
 
 	const updateRunningToolState = useCallback(
 		(requestId: string, events: ToolEvent[]): boolean => {
-			const running = new Set(runningToolEventsRef.current.get(requestId) || []);
+			const running = new Set(
+				runningToolEventsRef.current.get(requestId) || [],
+			);
 			for (const event of events) {
 				if (!event?.id) continue;
 				if (event.status === "running") {
@@ -272,7 +291,9 @@ export const App: React.FC = () => {
 				activeRequestIdRef.current = null;
 				streamStartedAtRef.current = 0;
 				setIsStreaming(false);
-				logEvent("Recovered from a stale stream on this device. Prompt input is re-enabled.");
+				logEvent(
+					"Recovered from a stale stream on this device. Prompt input is re-enabled.",
+				);
 				return;
 			}
 
@@ -396,7 +417,9 @@ export const App: React.FC = () => {
 				const params = new URLSearchParams({
 					agentId: thread.agentId,
 				});
-				const res = await fetch(`/api/sessions/${encodeURIComponent(thread.id)}/messages?${params.toString()}`);
+				const res = await fetch(
+					`/api/sessions/${encodeURIComponent(thread.id)}/messages?${params.toString()}`,
+				);
 				if (!res.ok) {
 					logEvent("Failed to load session messages");
 					return;
@@ -406,13 +429,13 @@ export const App: React.FC = () => {
 					prev.map((item) =>
 						item.id === thread.id
 							? {
-								...item,
-								messages: data,
-								messagesLoaded: true,
-								messageCount: data.length,
-							}
+									...item,
+									messages: data,
+									messagesLoaded: true,
+									messageCount: data.length,
+								}
 							: item,
-						),
+					),
 				);
 			} catch {
 				logEvent("Failed to load session messages");
@@ -423,101 +446,104 @@ export const App: React.FC = () => {
 		[logEvent],
 	);
 
-	const addAttachments = useCallback(async (files: FileList | File[] | null) => {
-		setAttachmentError("");
-		if (!files || files.length === 0) return;
-		const selected = Array.from(files);
-		const next: ChatAttachment[] = [];
-		let warningMessage = "";
+	const addAttachments = useCallback(
+		async (files: FileList | File[] | null) => {
+			setAttachmentError("");
+			if (!files || files.length === 0) return;
+			const selected = Array.from(files);
+			const next: ChatAttachment[] = [];
+			let warningMessage = "";
 
-		for (const file of selected) {
-			const isImage = file.type.startsWith("image/");
-			const isAudio = file.type.startsWith("audio/");
-			const isPdf = isPdfUploadFile(file);
-			const isTextFile = isSupportedTextUploadFile(file);
+			for (const file of selected) {
+				const isImage = file.type.startsWith("image/");
+				const isAudio = file.type.startsWith("audio/");
+				const isPdf = isPdfUploadFile(file);
+				const isTextFile = isSupportedTextUploadFile(file);
 
-			if (!isImage && !isAudio && !isPdf && !isTextFile) {
-				setAttachmentError(
-					"Unsupported file type. Allowed: images, audio, PDF, text, markdown, JSON, YAML, XML, logs, and common code files.",
-				);
-				continue;
-			}
-
-			if (isImage || isAudio) {
-				const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_AUDIO_BYTES;
-				if (file.size > maxBytes) {
+				if (!isImage && !isAudio && !isPdf && !isTextFile) {
 					setAttachmentError(
-						isImage
-							? "Image is too large. Max size is 8MB."
-							: "Audio is too large. Max size is 20MB.",
+						"Unsupported file type. Allowed: images, audio, PDF, text, markdown, JSON, YAML, XML, logs, and common code files.",
 					);
 					continue;
 				}
-				const dataUrl = await readFileAsDataUrl(file);
+
+				if (isImage || isAudio) {
+					const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_AUDIO_BYTES;
+					if (file.size > maxBytes) {
+						setAttachmentError(
+							isImage
+								? "Image is too large. Max size is 8MB."
+								: "Audio is too large. Max size is 20MB.",
+						);
+						continue;
+					}
+					const dataUrl = await readFileAsDataUrl(file);
+					next.push({
+						id: createAttachmentId(),
+						kind: isAudio ? "audio" : "image",
+						dataUrl,
+						name: file.name,
+						mimeType: file.type,
+						size: file.size,
+					});
+					continue;
+				}
+
+				const maxBytes = isPdf ? MAX_PDF_BYTES : MAX_FILE_BYTES;
+				if (file.size > maxBytes) {
+					setAttachmentError(
+						isPdf
+							? "PDF is too large. Max size is 12MB."
+							: "Text/code file is too large. Max size is 2MB.",
+					);
+					continue;
+				}
+
+				const { textContent, truncated, usedPdfFallback } =
+					await readUploadFileText(file, MAX_FILE_TEXT_CHARS);
+				if (!textContent.trim()) {
+					setAttachmentError("Unable to read file contents.");
+					continue;
+				}
+
+				if (truncated) {
+					warningMessage =
+						"One or more files were truncated before upload to keep prompts manageable.";
+				}
+				if (usedPdfFallback) {
+					warningMessage =
+						"One or more PDFs could not be text-extracted locally. Wingman will use native PDF support when available and a fallback note otherwise.";
+				}
+
+				const fileDataUrl = isPdf ? await readFileAsDataUrl(file) : "";
+
 				next.push({
 					id: createAttachmentId(),
-					kind: isAudio ? "audio" : "image",
-					dataUrl,
+					kind: "file",
+					dataUrl: fileDataUrl,
+					textContent,
 					name: file.name,
-					mimeType: file.type,
+					mimeType: file.type || (isPdf ? "application/pdf" : "text/plain"),
 					size: file.size,
 				});
-				continue;
 			}
 
-			const maxBytes = isPdf ? MAX_PDF_BYTES : MAX_FILE_BYTES;
-			if (file.size > maxBytes) {
-				setAttachmentError(
-					isPdf
-						? "PDF is too large. Max size is 12MB."
-						: "Text/code file is too large. Max size is 2MB.",
-				);
-				continue;
-			}
-
-			const { textContent, truncated, usedPdfFallback } = await readUploadFileText(
-				file,
-				MAX_FILE_TEXT_CHARS,
-			);
-			if (!textContent.trim()) {
-				setAttachmentError("Unable to read file contents.");
-				continue;
-			}
-
-			if (truncated) {
-				warningMessage =
-					"One or more files were truncated before upload to keep prompts manageable.";
-			}
-			if (usedPdfFallback) {
-				warningMessage =
-					"One or more PDFs could not be text-extracted locally. Wingman will use native PDF support when available and a fallback note otherwise.";
-			}
-
-			const fileDataUrl = isPdf ? await readFileAsDataUrl(file) : "";
-
-			next.push({
-				id: createAttachmentId(),
-				kind: "file",
-				dataUrl: fileDataUrl,
-				textContent,
-				name: file.name,
-				mimeType: file.type || (isPdf ? "application/pdf" : "text/plain"),
-				size: file.size,
+			setAttachments((prev) => {
+				const combined = [...prev, ...next];
+				if (combined.length > MAX_ATTACHMENTS) {
+					setAttachmentError(
+						`Limit is ${MAX_ATTACHMENTS} attachments per message.`,
+					);
+					return combined.slice(0, MAX_ATTACHMENTS);
+				}
+				if (warningMessage) {
+					setAttachmentError(warningMessage);
+				}
+				return combined;
 			});
-		}
-
-		setAttachments((prev) => {
-			const combined = [...prev, ...next];
-			if (combined.length > MAX_ATTACHMENTS) {
-				setAttachmentError(`Limit is ${MAX_ATTACHMENTS} attachments per message.`);
-				return combined.slice(0, MAX_ATTACHMENTS);
-			}
-			if (warningMessage) {
-				setAttachmentError(warningMessage);
-			}
-			return combined;
-		});
-	}, []);
+		},
+		[],
+	);
 
 	const removeAttachment = useCallback((id: string) => {
 		setAttachments((prev) => prev.filter((item) => item.id !== id));
@@ -545,8 +571,7 @@ export const App: React.FC = () => {
 		(threadId: string) => {
 			setVoiceSessions((prev) => {
 				const current =
-					prev[threadId] ??
-					((config.voice?.defaultPolicy || "off") === "auto");
+					prev[threadId] ?? (config.voice?.defaultPolicy || "off") === "auto";
 				return { ...prev, [threadId]: !current };
 			});
 		},
@@ -577,15 +602,14 @@ export const App: React.FC = () => {
 	}, []);
 
 	const speakVoice = useCallback(
-		async (input: {
-			messageId: string;
-			text: string;
-			agentId?: string;
-		}) => {
+		async (input: { messageId: string; text: string; agentId?: string }) => {
 			const { messageId, text, agentId } = input;
 			const cleaned = sanitizeForSpeech(text);
 			if (!cleaned) return;
-			const resolved = resolveVoiceConfig(config.voice, agentId ? agentVoiceMap.get(agentId) : undefined);
+			const resolved = resolveVoiceConfig(
+				config.voice,
+				agentId ? agentVoiceMap.get(agentId) : undefined,
+			);
 
 			stopVoicePlayback();
 			const requestId = `voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -603,7 +627,10 @@ export const App: React.FC = () => {
 					return;
 				}
 				const utterance = new SpeechSynthesisUtterance(cleaned);
-				const voice = resolveSpeechVoice(resolved.webSpeech.voiceName, resolved.webSpeech.lang);
+				const voice = resolveSpeechVoice(
+					resolved.webSpeech.voiceName,
+					resolved.webSpeech.lang,
+				);
 				if (voice) {
 					utterance.voice = voice;
 				}
@@ -754,7 +781,7 @@ export const App: React.FC = () => {
 		stopVoicePlayback();
 	}, [activeThreadId, stopVoicePlayback]);
 
-const updateAssistant = useCallback((requestId: string, text: string) => {
+	const updateAssistant = useCallback((requestId: string, text: string) => {
 		const threadId = requestThreadRef.current.get(requestId);
 		if (!threadId) return;
 		if (uiOnlyRequestsRef.current.has(requestId)) {
@@ -764,106 +791,111 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			prev.map((thread) =>
 				thread.id === threadId
 					? {
-						...thread,
-						messages: thread.messages.map((msg) =>
-							msg.id === requestId ? { ...msg, content: text } : msg,
-						),
-					}
+							...thread,
+							messages: thread.messages.map((msg) =>
+								msg.id === requestId ? { ...msg, content: text } : msg,
+							),
+						}
 					: thread,
 			),
 		);
-}, []);
+	}, []);
 
-	const updateToolEvents = useCallback((requestId: string, events: ToolEvent[]) => {
-		const threadId = requestThreadRef.current.get(requestId);
-		if (!threadId || events.length === 0) return;
+	const updateToolEvents = useCallback(
+		(requestId: string, events: ToolEvent[]) => {
+			const threadId = requestThreadRef.current.get(requestId);
+			if (!threadId || events.length === 0) return;
 
-		setThreads((prev) =>
-			prev.map((thread) => {
-				if (thread.id !== threadId) return thread;
-				const messages = thread.messages.map((msg) => {
-					if (msg.id !== requestId) return msg;
-					const existing = msg.toolEvents ? [...msg.toolEvents] : [];
-					const uiBlocks = msg.uiBlocks ? [...msg.uiBlocks] : [];
-					let clearContent = false;
-					for (const event of events) {
-						if (event.uiOnly && dynamicUiEnabled) {
-							uiOnlyRequestsRef.current.add(requestId);
-							clearContent = true;
-						}
-						if (event.textFallback) {
-							uiFallbackRef.current.set(requestId, event.textFallback);
-						}
-						const index = existing.findIndex((item) => item.id === event.id);
-						if (index >= 0) {
-							const resolvedName =
-								event.name && event.name !== "tool"
-									? event.name
-									: existing[index].name;
-							existing[index] = {
-								...existing[index],
-								...event,
-								name: resolvedName,
-								node: event.node || existing[index].node,
-								actor: event.actor || existing[index].actor,
-								startedAt: existing[index].startedAt || event.timestamp,
-								completedAt:
-									event.status === "completed" || event.status === "error"
-										? event.timestamp
-										: existing[index].completedAt,
-							};
-						} else {
-							existing.push({
-								id: event.id,
-								name: event.name,
-								node: event.node,
-								actor: event.actor,
-								args: event.args,
-								status: event.status,
-								output: event.output,
-								ui: event.ui,
-								uiOnly: event.uiOnly,
-								textFallback: event.textFallback,
-								error: event.error,
-								startedAt: event.timestamp,
-								completedAt:
-									event.status === "completed" || event.status === "error"
-										? event.timestamp
-										: undefined,
-							});
-						}
-						if (event.ui && dynamicUiEnabled) {
-							const existingBlock = uiBlocks.find((block) => block.id === event.id);
-							if (!existingBlock) {
-								uiBlocks.push({
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+					const messages = thread.messages.map((msg) => {
+						if (msg.id !== requestId) return msg;
+						const existing = msg.toolEvents ? [...msg.toolEvents] : [];
+						const uiBlocks = msg.uiBlocks ? [...msg.uiBlocks] : [];
+						let clearContent = false;
+						for (const event of events) {
+							if (event.uiOnly && dynamicUiEnabled) {
+								uiOnlyRequestsRef.current.add(requestId);
+								clearContent = true;
+							}
+							if (event.textFallback) {
+								uiFallbackRef.current.set(requestId, event.textFallback);
+							}
+							const index = existing.findIndex((item) => item.id === event.id);
+							if (index >= 0) {
+								const resolvedName =
+									event.name && event.name !== "tool"
+										? event.name
+										: existing[index].name;
+								existing[index] = {
+									...existing[index],
+									...event,
+									name: resolvedName,
+									node: event.node || existing[index].node,
+									actor: event.actor || existing[index].actor,
+									startedAt: existing[index].startedAt || event.timestamp,
+									completedAt:
+										event.status === "completed" || event.status === "error"
+											? event.timestamp
+											: existing[index].completedAt,
+								};
+							} else {
+								existing.push({
 									id: event.id,
-									spec: event.ui,
+									name: event.name,
+									node: event.node,
+									actor: event.actor,
+									args: event.args,
+									status: event.status,
+									output: event.output,
+									ui: event.ui,
 									uiOnly: event.uiOnly,
 									textFallback: event.textFallback,
+									error: event.error,
+									startedAt: event.timestamp,
+									completedAt:
+										event.status === "completed" || event.status === "error"
+											? event.timestamp
+											: undefined,
 								});
-							} else {
-								existingBlock.spec = event.ui;
-								existingBlock.uiOnly = event.uiOnly;
-								existingBlock.textFallback = event.textFallback;
+							}
+							if (event.ui && dynamicUiEnabled) {
+								const existingBlock = uiBlocks.find(
+									(block) => block.id === event.id,
+								);
+								if (!existingBlock) {
+									uiBlocks.push({
+										id: event.id,
+										spec: event.ui,
+										uiOnly: event.uiOnly,
+										textFallback: event.textFallback,
+									});
+								} else {
+									existingBlock.spec = event.ui;
+									existingBlock.uiOnly = event.uiOnly;
+									existingBlock.textFallback = event.textFallback;
+								}
 							}
 						}
-					}
+						return {
+							...msg,
+							content: clearContent ? "" : msg.content,
+							toolEvents: existing,
+							uiBlocks: dynamicUiEnabled ? uiBlocks : msg.uiBlocks,
+							uiTextFallback:
+								uiFallbackRef.current.get(requestId) ?? msg.uiTextFallback,
+						};
+					});
 					return {
-						...msg,
-						content: clearContent ? "" : msg.content,
-						toolEvents: existing,
-						uiBlocks: dynamicUiEnabled ? uiBlocks : msg.uiBlocks,
-						uiTextFallback:
-							uiFallbackRef.current.get(requestId) ?? msg.uiTextFallback,
+						...thread,
+						messages,
 					};
-				});
-				return {
-					...thread,
-					messages,
-				};
-			}),
-		);
-	}, [dynamicUiEnabled]);
+				}),
+			);
+		},
+		[dynamicUiEnabled],
+	);
 
 	const updateThinkingEvents = useCallback(
 		(requestId: string, events: ThinkingEvent[]) => {
@@ -909,10 +941,71 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		runningToolEventsRef.current.delete(requestId);
 	}, []);
 
-	const finalizeAssistant = useCallback((requestId: string, fallback?: string) => {
-		const threadId = requestThreadRef.current.get(requestId);
-		const isActiveRequest = activeRequestIdRef.current === requestId;
-		if (!threadId) {
+	const finalizeAssistant = useCallback(
+		(
+			requestId: string,
+			options?: {
+				fallback?: string;
+				forceText?: boolean;
+			},
+		) => {
+			const threadId = requestThreadRef.current.get(requestId);
+			const isActiveRequest = activeRequestIdRef.current === requestId;
+			if (!threadId) {
+				cleanupRequestState(requestId);
+				if (isActiveRequest) {
+					activeRequestIdRef.current = null;
+					streamStartedAtRef.current = 0;
+					clearStreamRecoveryTimer();
+					setIsStreaming(false);
+				}
+				return;
+			}
+			const uiFallback = uiFallbackRef.current.get(requestId);
+			const resolvedFallback = options?.fallback || uiFallback || "";
+			const finalText =
+				buffersRef.current.get(requestId) || resolvedFallback || "";
+			const spoken =
+				spokenMessagesRef.current.get(threadId) || new Set<string>();
+			if (
+				shouldAutoSpeak({
+					text: finalText,
+					enabled: isVoiceAutoEnabledRef.current(threadId),
+					spokenMessages: spoken,
+					requestId,
+				})
+			) {
+				spoken.add(requestId);
+				spokenMessagesRef.current.set(threadId, spoken);
+				const agentForRequest = requestAgentRef.current.get(requestId);
+				void speakVoiceRef.current({
+					messageId: requestId,
+					text: finalText,
+					agentId: agentForRequest,
+				});
+			}
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+					return {
+						...thread,
+						messages: thread.messages.map((msg) => {
+							if (msg.id !== requestId) return msg;
+							if (!msg.content && resolvedFallback) {
+								const canRenderFallbackText =
+									options?.forceText ||
+									!uiOnlyRequestsRef.current.has(requestId) ||
+									!dynamicUiEnabled;
+								if (!canRenderFallbackText) {
+									return msg;
+								}
+								return { ...msg, content: resolvedFallback };
+							}
+							return msg;
+						}),
+					};
+				}),
+			);
 			cleanupRequestState(requestId);
 			if (isActiveRequest) {
 				activeRequestIdRef.current = null;
@@ -920,56 +1013,9 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				clearStreamRecoveryTimer();
 				setIsStreaming(false);
 			}
-			return;
-		}
-		const uiFallback = uiFallbackRef.current.get(requestId);
-		const resolvedFallback = uiFallback || fallback || "";
-		const finalText = buffersRef.current.get(requestId) || resolvedFallback || "";
-		const spoken = spokenMessagesRef.current.get(threadId) || new Set<string>();
-		if (
-			shouldAutoSpeak({
-				text: finalText,
-				enabled: isVoiceAutoEnabledRef.current(threadId),
-				spokenMessages: spoken,
-				requestId,
-			})
-		) {
-			spoken.add(requestId);
-			spokenMessagesRef.current.set(threadId, spoken);
-			const agentForRequest = requestAgentRef.current.get(requestId);
-			void speakVoiceRef.current({
-				messageId: requestId,
-				text: finalText,
-				agentId: agentForRequest,
-			});
-		}
-		setThreads((prev) =>
-			prev.map((thread) => {
-				if (thread.id !== threadId) return thread;
-				return {
-					...thread,
-					messages: thread.messages.map((msg) => {
-						if (msg.id !== requestId) return msg;
-						if (
-							!msg.content &&
-							resolvedFallback &&
-							(!uiOnlyRequestsRef.current.has(requestId) || !dynamicUiEnabled)
-						) {
-							return { ...msg, content: resolvedFallback };
-						}
-						return msg;
-					}),
-				};
-			}),
-		);
-		cleanupRequestState(requestId);
-		if (isActiveRequest) {
-			activeRequestIdRef.current = null;
-			streamStartedAtRef.current = 0;
-			clearStreamRecoveryTimer();
-			setIsStreaming(false);
-		}
-	}, [cleanupRequestState, clearStreamRecoveryTimer, dynamicUiEnabled]);
+		},
+		[cleanupRequestState, clearStreamRecoveryTimer, dynamicUiEnabled],
+	);
 
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
@@ -1053,17 +1099,18 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 							id: sessionId,
 							name: sessionId,
 							agentId:
-								typeof payload?.agentId === "string" ? payload.agentId : agentId,
+								typeof payload?.agentId === "string"
+									? payload.agentId
+									: agentId,
 							messages: [userMessage],
 							toolEvents: [],
 							thinkingEvents: [],
 							createdAt: now,
 							updatedAt: now,
 							messageCount: 1,
-							lastMessagePreview: (userMessage.content || attachmentPreview).slice(
-								0,
-								200,
-							),
+							lastMessagePreview: (
+								userMessage.content || attachmentPreview
+							).slice(0, 200),
 							messagesLoaded: false,
 						};
 						return [newThread, ...prev];
@@ -1082,10 +1129,9 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 							...thread,
 							messages: [...thread.messages, userMessage],
 							messageCount: (thread.messageCount ?? thread.messages.length) + 1,
-							lastMessagePreview: (userMessage.content || attachmentPreview).slice(
-								0,
-								200,
-							),
+							lastMessagePreview: (
+								userMessage.content || attachmentPreview
+							).slice(0, 200),
 							updatedAt: now,
 						};
 					});
@@ -1112,7 +1158,9 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 							id: sessionId,
 							name: sessionId,
 							agentId:
-								typeof payload?.agentId === "string" ? payload.agentId : agentId,
+								typeof payload?.agentId === "string"
+									? payload.agentId
+									: agentId,
 							messages: [assistantMessage],
 							toolEvents: [],
 							thinkingEvents: [],
@@ -1150,8 +1198,9 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			if (payload.type === "agent-stream") {
 				const { textEvents, toolEvents } = parseStreamEvents(payload.chunk);
 				const agentForRequest = requestAgentRef.current.get(requestId);
-				const subagents =
-					agentForRequest ? subagentMap.get(agentForRequest) : undefined;
+				const subagents = agentForRequest
+					? subagentMap.get(agentForRequest)
+					: undefined;
 				const assistantTexts: string[] = [];
 				const thinkingUpdates: ThinkingEvent[] = [];
 
@@ -1166,7 +1215,8 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 
 					if (matchedSubagent) {
 						const buffer =
-							thinkingBuffersRef.current.get(requestId) || new Map<string, string>();
+							thinkingBuffersRef.current.get(requestId) ||
+							new Map<string, string>();
 						const previous = buffer.get(normalizedNode) || "";
 						const next = mergeStreamText(previous, event.text);
 						buffer.set(normalizedNode, next);
@@ -1217,10 +1267,7 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 						requestId,
 						enrichedToolEvents,
 					);
-					if (
-						activeRequestIdRef.current === requestId &&
-						hasRunningTools
-					) {
+					if (activeRequestIdRef.current === requestId && hasRunningTools) {
 						setIsStreaming(true);
 					}
 				}
@@ -1233,7 +1280,7 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 					requestId,
 					uiOnlyRequestsRef.current,
 				);
-				finalizeAssistant(requestId, fallback);
+				finalizeAssistant(requestId, { fallback });
 				return;
 			}
 			if (payload.type === "agent-error") {
@@ -1244,7 +1291,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				} else {
 					logEvent(`Agent error: ${errorText || "unknown"}`);
 				}
-				finalizeAssistant(requestId, errorText || "Agent error");
+				finalizeAssistant(requestId, {
+					fallback: errorText || "Agent error",
+					forceText: true,
+				});
 			}
 		},
 		[
@@ -1332,7 +1382,11 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				return;
 			}
 
-			if (msg.type === "res" && msg.id && msg.id === connectRequestIdRef.current) {
+			if (
+				msg.type === "res" &&
+				msg.id &&
+				msg.id === connectRequestIdRef.current
+			) {
 				if (msg.ok) {
 					setConnected(true);
 					setConnecting(false);
@@ -1345,13 +1399,29 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 					setConnecting(false);
 					logEvent("Gateway auth failed");
 					setAutoConnect(false);
-					setAutoConnectStatus("Auto-connect paused due to auth failure. Update credentials and connect manually.");
+					setAutoConnectStatus(
+						"Auto-connect paused due to auth failure. Update credentials and connect manually.",
+					);
 				}
 				return;
 			}
 
 			if (msg.type === "event:agent" && msg.id) {
-				handleAgentEvent(msg.id, msg.payload);
+				try {
+					handleAgentEvent(msg.id, msg.payload);
+				} catch (error) {
+					const errorText =
+						error instanceof Error
+							? error.message
+							: String(error || "Unknown error");
+					logEvent(`Agent event processing error: ${errorText}`);
+					if (activeRequestIdRef.current === msg.id) {
+						finalizeAssistant(msg.id, {
+							fallback: `Agent event processing error: ${errorText}`,
+							forceText: true,
+						});
+					}
+				}
 				return;
 			}
 
@@ -1403,7 +1473,21 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				}
 			}, delay);
 		};
-	}, [autoConnect, clearStreamRecoveryTimer, deviceId, disconnect, handleAgentEvent, logEvent, password, refreshStats, token, wsUrl]);
+	}, [
+		autoConnect,
+		clearStreamRecoveryTimer,
+		deviceId,
+		disconnect,
+		finalizeAssistant,
+		handleAgentEvent,
+		logEvent,
+		password,
+		refreshStats,
+		token,
+		wsUrl,
+		connected,
+		connecting,
+	]);
 
 	const createThread = useCallback(
 		async (targetAgentId: string, name?: string): Promise<Thread | null> => {
@@ -1491,17 +1575,19 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			prev.map((thread) =>
 				thread.id === targetThread!.id
 					? {
-						...thread,
-						name:
-							thread.name === DEFAULT_THREAD_NAME
-								? (userMessage.content || attachmentPreview).slice(0, 32)
-								: thread.name,
-						messages: [...thread.messages, userMessage, assistantMessage],
-						messageCount: (thread.messageCount ?? thread.messages.length) + 1,
-						lastMessagePreview: (userMessage.content || attachmentPreview).slice(0, 200),
-						updatedAt: now,
-						thinkingEvents: [],
-					}
+							...thread,
+							name:
+								thread.name === DEFAULT_THREAD_NAME
+									? (userMessage.content || attachmentPreview).slice(0, 32)
+									: thread.name,
+							messages: [...thread.messages, userMessage, assistantMessage],
+							messageCount: (thread.messageCount ?? thread.messages.length) + 1,
+							lastMessagePreview: (
+								userMessage.content || attachmentPreview
+							).slice(0, 200),
+							updatedAt: now,
+							thinkingEvents: [],
+						}
 					: thread,
 			),
 		);
@@ -1615,13 +1701,13 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			prev.map((thread) =>
 				thread.id === activeThread.id
 					? {
-						...thread,
-						messages: [],
-						messageCount: 0,
-						lastMessagePreview: undefined,
-						messagesLoaded: true,
-						thinkingEvents: [],
-					}
+							...thread,
+							messages: [],
+							messageCount: 0,
+							lastMessagePreview: undefined,
+							messagesLoaded: true,
+							thinkingEvents: [],
+						}
 					: thread,
 			),
 		);
@@ -1637,9 +1723,12 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			if (!target) return;
 			try {
 				const params = new URLSearchParams({ agentId: target.agentId });
-				await fetch(`/api/sessions/${encodeURIComponent(threadId)}?${params.toString()}`, {
-					method: "DELETE",
-				});
+				await fetch(
+					`/api/sessions/${encodeURIComponent(threadId)}?${params.toString()}`,
+					{
+						method: "DELETE",
+					},
+				);
 			} catch {
 				logEvent("Failed to delete session");
 			}
@@ -1657,7 +1746,14 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				stopVoicePlayback();
 			}
 		},
-		[activeThread?.id, activeThreadId, isStreaming, logEvent, stopVoicePlayback, threads],
+		[
+			activeThread?.id,
+			activeThreadId,
+			isStreaming,
+			logEvent,
+			stopVoicePlayback,
+			threads,
+		],
 	);
 
 	const renameThread = useCallback(
@@ -1690,10 +1786,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 					prev.map((thread) =>
 						thread.id === threadId
 							? {
-								...thread,
-								name: updated.name || nextName.trim(),
-								updatedAt: updated.updatedAt ?? thread.updatedAt,
-							}
+									...thread,
+									name: updated.name || nextName.trim(),
+									updatedAt: updated.updatedAt ?? thread.updatedAt,
+								}
 							: thread,
 					),
 				);
@@ -1776,7 +1872,9 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		const storedAutoConnect = localStorage.getItem(AUTO_CONNECT_KEY);
 		setToken(storedToken);
 		setPassword(storedPassword);
-		setAutoConnect(storedAutoConnect !== null ? storedAutoConnect === "true" : true);
+		setAutoConnect(
+			storedAutoConnect !== null ? storedAutoConnect === "true" : true,
+		);
 
 		let existingDevice = localStorage.getItem(DEVICE_KEY) || "";
 		if (!existingDevice) {
@@ -1813,7 +1911,9 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				});
 				if (!res.ok) {
 					const message = await res.text();
-					logEvent(`Failed to update voice config: ${message || "unknown error"}`);
+					logEvent(
+						`Failed to update voice config: ${message || "unknown error"}`,
+					);
 					return false;
 				}
 				const data = (await res.json()) as { voice?: VoiceConfig };
@@ -2044,7 +2144,11 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 		return () => window.removeEventListener("resize", handleResize);
 	}, []);
 
-	const statusLabel = connected ? "Connected" : connecting ? "Connecting" : "Disconnected";
+	const statusLabel = connected
+		? "Connected"
+		: connecting
+			? "Connecting"
+			: "Disconnected";
 	const authHint = config.requireAuth
 		? "Auth required by gateway. Provide a token or password."
 		: "Auth is not required for this gateway.";
@@ -2200,11 +2304,14 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 			payload: Partial<Omit<Webhook, "id" | "createdAt">>,
 		) => {
 			try {
-				const res = await fetch(`/api/webhooks/${encodeURIComponent(webhookId)}`, {
-					method: "PUT",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(payload),
-				});
+				const res = await fetch(
+					`/api/webhooks/${encodeURIComponent(webhookId)}`,
+					{
+						method: "PUT",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(payload),
+					},
+				);
 				if (!res.ok) {
 					const message = await res.text();
 					logEvent(`Failed to update webhook: ${message || "unknown error"}`);
@@ -2224,9 +2331,12 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 	const deleteWebhook = useCallback(
 		async (webhookId: string) => {
 			try {
-				const res = await fetch(`/api/webhooks/${encodeURIComponent(webhookId)}`, {
-					method: "DELETE",
-				});
+				const res = await fetch(
+					`/api/webhooks/${encodeURIComponent(webhookId)}`,
+					{
+						method: "DELETE",
+					},
+				);
 				if (!res.ok) {
 					const message = await res.text();
 					logEvent(`Failed to delete webhook: ${message || "unknown error"}`);
@@ -2291,13 +2401,16 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 	const saveProviderToken = useCallback(
 		async (providerName: string, tokenValue: string) => {
 			try {
-				const res = await fetch(`/api/providers/${encodeURIComponent(providerName)}`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
+				const res = await fetch(
+					`/api/providers/${encodeURIComponent(providerName)}`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({ token: tokenValue }),
 					},
-					body: JSON.stringify({ token: tokenValue }),
-				});
+				);
 				if (!res.ok) {
 					logEvent(`Failed to save ${providerName} credentials`);
 					return false;
@@ -2316,9 +2429,12 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 	const clearProviderToken = useCallback(
 		async (providerName: string) => {
 			try {
-				const res = await fetch(`/api/providers/${encodeURIComponent(providerName)}`, {
-					method: "DELETE",
-				});
+				const res = await fetch(
+					`/api/providers/${encodeURIComponent(providerName)}`,
+					{
+						method: "DELETE",
+					},
+				);
 				if (!res.ok) {
 					logEvent(`Failed to clear ${providerName} credentials`);
 					return false;
@@ -2481,13 +2597,13 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 							<Route
 								path="/chat"
 								element={
-										<ChatPage
-											agentId={currentAgentId}
-											activeThread={activeThread}
-											prompt={prompt}
-											attachments={attachments}
-											fileAccept={FILE_INPUT_ACCEPT}
-											attachmentError={attachmentError}
+									<ChatPage
+										agentId={currentAgentId}
+										activeThread={activeThread}
+										prompt={prompt}
+										attachments={attachments}
+										fileAccept={FILE_INPUT_ACCEPT}
+										attachmentError={attachmentError}
 										isStreaming={isStreaming}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
@@ -2498,10 +2614,10 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 										onToggleVoiceAuto={handleToggleVoiceAuto}
 										onSpeakVoice={handleSpeakVoice}
 										onStopVoice={handleStopVoice}
-											onPromptChange={setPrompt}
-											onSendPrompt={sendPrompt}
-											onStopPrompt={stopPrompt}
-											onAddAttachments={addAttachments}
+										onPromptChange={setPrompt}
+										onSendPrompt={sendPrompt}
+										onStopPrompt={stopPrompt}
+										onAddAttachments={addAttachments}
 										onRemoveAttachment={removeAttachment}
 										onClearAttachments={clearAttachments}
 										onClearChat={clearChat}
@@ -2565,19 +2681,19 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 									/>
 								}
 							/>
-								<Route
-									path="/routines"
-									element={
-										<RoutinesPage
-											agents={agentOptions}
-											routines={routines}
-											threads={threads}
-											loading={routinesLoading}
-											onCreateRoutine={createRoutine}
-											onDeleteRoutine={deleteRoutine}
-										/>
-									}
-								/>
+							<Route
+								path="/routines"
+								element={
+									<RoutinesPage
+										agents={agentOptions}
+										routines={routines}
+										threads={threads}
+										loading={routinesLoading}
+										onCreateRoutine={createRoutine}
+										onDeleteRoutine={deleteRoutine}
+									/>
+								}
+							/>
 							<Route
 								path="/webhooks"
 								element={
@@ -2640,7 +2756,10 @@ function mapSessionToThread(session: {
 }
 
 function createAttachmentId(): string {
-	if (typeof window !== "undefined" && typeof window.crypto?.randomUUID === "function") {
+	if (
+		typeof window !== "undefined" &&
+		typeof window.crypto?.randomUUID === "function"
+	) {
 		return window.crypto.randomUUID();
 	}
 	return `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -2654,6 +2773,13 @@ function buildAgentFallback(
 	if (!result) return undefined;
 	if (uiOnlyRequests.has(requestId)) return undefined;
 	if (typeof result === "object" && result !== null) {
+		const record = result as Record<string, unknown>;
+		if (
+			typeof record.fallbackText === "string" &&
+			record.fallbackText.trim().length > 0
+		) {
+			return record.fallbackText;
+		}
 		const keys = Object.keys(result as Record<string, unknown>);
 		if (keys.length === 1 && keys[0] === "streaming") {
 			return undefined;
@@ -2670,7 +2796,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
 		reader.onload = () => resolve(String(reader.result || ""));
-		reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+		reader.onerror = () =>
+			reject(reader.error || new Error("Failed to read file"));
 		reader.readAsDataURL(file);
 	});
 }
@@ -2693,7 +2820,9 @@ function buildAttachmentPreviewText(attachments: ChatAttachment[]): string {
 	}
 	const count = attachments.length;
 	if (hasFile && (hasAudio || hasImage)) {
-		return count > 1 ? "File and media attachments" : "File and media attachment";
+		return count > 1
+			? "File and media attachments"
+			: "File and media attachment";
 	}
 	if (hasFile) {
 		return count > 1 ? "File attachments" : "File attachment";

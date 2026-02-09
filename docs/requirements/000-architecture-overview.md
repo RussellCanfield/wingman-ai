@@ -226,10 +226,10 @@ Each agent produces independent output. No built-in aggregation - the UI display
 │  └──────────────┘ └──────────────┘ └──────────────┘ └─────┘│
 │                                                              │
 │  Subscription:                                               │
-│  ┌──────────────┐                                            │
-│  │GitHub Copilot│                                            │
-│  │   gpt-4o     │                                            │
-│  └──────────────┘                                            │
+│  ┌──────────────┐ ┌──────────────┐                          │
+│  │GitHub Copilot│ │ OpenAI Codex │                          │
+│  │   gpt-4o     │ │ codex/gpt-5  │                          │
+│  └──────────────┘ └──────────────┘                          │
 │                                                              │
 │  Local Inference:                                            │
 │  ┌──────────────┐ ┌──────────────┐                          │
@@ -241,7 +241,8 @@ Each agent produces independent output. No built-in aggregation - the UI display
 │  Authentication:                                             │
 │  - API keys via env: ANTHROPIC_API_KEY, OPENAI_API_KEY,      │
 │    OPENROUTER_API_KEY, XAI_API_KEY                          │
-│  - Subscription tokens in ~/.wingman/credentials.json        │
+│  - Subscription tokens via env or ~/.wingman/credentials.json│
+│  - Codex login fallback: CODEX_HOME/auth.json or ~/.codex    │
 │  - Local providers: Optional (no auth required)              │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘

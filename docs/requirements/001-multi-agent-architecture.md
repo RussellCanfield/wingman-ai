@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.3
-**Last Updated:** 2026-02-08
+**Version:** 1.2.5
+**Last Updated:** 2026-02-09
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -333,6 +333,82 @@ beforeAgent: (input) => {
 - Response formatting
 - Error handling
 
+### Conversation Summarization Middleware
+**Purpose**: Compress long-running conversation history to reduce context pressure and token cost.
+
+**Configuration (`.wingman/wingman.config.json`)**:
+```json
+{
+  "summarization": {
+    "enabled": true,
+    "maxTokensBeforeSummary": 12000,
+    "messagesToKeep": 8
+  }
+}
+```
+
+**Behavior**:
+- When enabled, Wingman configures DeepAgent's built-in summarization middleware to summarize older turns once the configured token threshold is crossed.
+- The most recent `messagesToKeep` turns remain verbatim.
+- Summarization runs with the active agent model and complements session checkpointing.
+
+### Retry Middleware
+**Purpose**: Improve resilience for transient model/tool failures.
+
+**Configuration (`.wingman/wingman.config.json`)**:
+```json
+{
+  "modelRetry": {
+    "enabled": true,
+    "maxRetries": 2,
+    "backoffFactor": 2,
+    "initialDelayMs": 1000,
+    "maxDelayMs": 60000,
+    "jitter": true,
+    "onFailure": "continue"
+  },
+  "toolRetry": {
+    "enabled": true,
+    "maxRetries": 2,
+    "backoffFactor": 2,
+    "initialDelayMs": 1000,
+    "maxDelayMs": 60000,
+    "jitter": true,
+    "onFailure": "continue",
+    "tools": ["internet_search"]
+  }
+}
+```
+
+**Behavior**:
+- `modelRetry` applies LangChain `modelRetryMiddleware`.
+- `toolRetry` applies LangChain `toolRetryMiddleware`.
+- `toolRetry.tools` can scope retries to specific tool names.
+
+### Human-in-the-loop Tool Policies
+**Purpose**: Require human approval for selected tools.
+
+**Configuration (`.wingman/wingman.config.json`)**:
+```json
+{
+  "humanInTheLoop": {
+    "enabled": true,
+    "interruptOn": {
+      "command_execute": {
+        "allowedDecisions": ["approve", "reject"],
+        "description": "Command execution requires approval"
+      },
+      "internet_search": false
+    }
+  }
+}
+```
+
+**Behavior**:
+- Uses DeepAgent `interruptOn` routing to enable per-tool HITL decisions.
+- Supports `approve`, `edit`, and `reject` decision modes where configured.
+- Empty `interruptOn` maps are ignored (no runtime interruptions).
+
 ## Custom Agent Configuration
 
 Users can define custom agents via JSON or Markdown configuration files without modifying code.
@@ -561,6 +637,7 @@ Wingman currently supports multiple model providers via API keys and stored toke
 |----------|--------|----------------|------|
 | Anthropic | claude-opus-4-5, claude-sonnet-4-5 | `ANTHROPIC_API_KEY` (or stored) | Cloud API |
 | OpenAI | gpt-4o, gpt-4-turbo | `OPENAI_API_KEY` (or stored) | Cloud API |
+| OpenAI Codex | codex-mini-latest, gpt-5-codex | `CODEX_ACCESS_TOKEN`, `CHATGPT_ACCESS_TOKEN`, or Codex auth file | Subscription |
 | OpenRouter | any OpenRouter model | `OPENROUTER_API_KEY` (or stored) | Cloud API |
 | xAI | grok-beta | `XAI_API_KEY` (or stored) | Cloud API |
 | GitHub Copilot | gpt-4o, gpt-4-turbo | `GITHUB_COPILOT_TOKEN` or `wingman provider login` | Subscription |
@@ -572,6 +649,7 @@ Wingman currently supports multiple model providers via API keys and stored toke
 Examples:
 - `anthropic:claude-opus-4-5`
 - `openai:gpt-4o`
+- `codex:codex-mini-latest`
 - `openrouter:openai/gpt-4o`
 - `xai:grok-beta`
 - `copilot:gpt-4o`
@@ -589,9 +667,9 @@ To maximize adoption, Wingman will support subscription-based model providers al
 | OpenRouter | API | API Key | ✅ Implemented |
 | xAI | API | API Key | ✅ Implemented |
 | GitHub Copilot | Subscription | Token (manual) | ✅ Implemented |
+| OpenAI Codex | Subscription | Codex auth token or env token | ✅ Implemented |
 | LM Studio | Local | Optional API Key | ✅ Implemented |
 | Ollama | Local | Optional API Key | ✅ Implemented |
-| OpenAI Codex | Subscription | OAuth | 🔄 Planned |
 | Claude Max | Subscription | OAuth | 🔄 Planned |
 | Google Gemini | API | API Key | 🔄 Planned |
 
@@ -646,6 +724,7 @@ For subscription providers like Copilot, users will authenticate via browser onc
 - Location: `~/.wingman/credentials.json` (encryption planned)
 - Rotation: Automatic refresh when tokens expire
 - Revocation: `wingman provider logout copilot`
+- Codex shortcut: reuse local Codex login state from `CODEX_HOME/auth.json` or `~/.codex/auth.json`
 
 OAuth flows will require provider-specific client configuration and redirect URIs.
 

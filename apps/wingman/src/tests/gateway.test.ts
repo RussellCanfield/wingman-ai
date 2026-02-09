@@ -12,11 +12,14 @@ vi.mock("@/cli/core/agentInvoker.js", () => ({
 		}
 		async invokeAgent(
 			_agentId: string,
-			_content: string,
+			content: string,
 			_sessionId?: string,
 			_attachments?: any[],
 			options?: { signal?: AbortSignal },
 		) {
+			if (content === "throw-no-event") {
+				throw new Error("Synthetic invocation failure");
+			}
 			const signal = options?.signal;
 			await new Promise<void>((resolve) => {
 				const timer = setTimeout(resolve, 75);
@@ -471,6 +474,38 @@ describeIfBun("Gateway", () => {
 		expect(eventMsg.payload?.agentId).toBe("main");
 
 		desktopClient.close();
+		requester.close();
+	});
+
+	it("should emit agent-error to requester when invocation throws without emitting", async () => {
+		const requester = await connectClient("session-error-requester");
+		const requestId = "req-invocation-error";
+		const sessionId = "session-error-test";
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: requestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "throw-no-event",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const errorMsg = await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-error",
+		);
+		expect(errorMsg.payload?.error).toContain("Synthetic invocation failure");
+		expect(errorMsg.payload?.sessionId).toBe(sessionId);
+		expect(errorMsg.payload?.agentId).toBe("main");
+
 		requester.close();
 	});
 

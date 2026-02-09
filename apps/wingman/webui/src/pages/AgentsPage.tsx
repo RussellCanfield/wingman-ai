@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import type React from "react";
+import { useMemo, useState } from "react";
 import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
 import type {
 	AgentDetail,
@@ -57,7 +58,10 @@ type AgentsPageProps = {
 		promptTraining?: AgentPagePayload["promptTraining"];
 		subAgents?: AgentPagePayload["subAgents"];
 	}) => Promise<boolean>;
-	onUpdateAgent: (agentId: string, payload: AgentPagePayload) => Promise<boolean>;
+	onUpdateAgent: (
+		agentId: string,
+		payload: AgentPagePayload,
+	) => Promise<boolean>;
 	onLoadAgent: (agentId: string) => Promise<AgentDetail | null>;
 	onRefresh: () => void;
 };
@@ -82,7 +86,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	const [promptTrainingPath, setPromptTrainingPath] = useState("");
 	const [selectedTools, setSelectedTools] = useState<string[]>([]);
 	const [subAgents, setSubAgents] = useState<AgentSubAgentDraft[]>([]);
-	const [voiceProvider, setVoiceProvider] = useState<"inherit" | VoiceProvider>("inherit");
+	const [voiceProvider, setVoiceProvider] = useState<"inherit" | VoiceProvider>(
+		"inherit",
+	);
 	const [voiceName, setVoiceName] = useState("");
 	const [voiceLang, setVoiceLang] = useState("");
 	const [voiceRate, setVoiceRate] = useState("");
@@ -96,13 +102,17 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	const [elevenSpeed, setElevenSpeed] = useState("");
 	const [elevenOutputFormat, setElevenOutputFormat] = useState("");
 	const [elevenOptimizeLatency, setElevenOptimizeLatency] = useState("");
-	const [elevenSpeakerBoost, setElevenSpeakerBoost] = useState<boolean | null>(null);
+	const [elevenSpeakerBoost, setElevenSpeakerBoost] = useState<boolean | null>(
+		null,
+	);
 	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
 	const [loadingDetails, setLoadingDetails] = useState(false);
 	const [formError, setFormError] = useState("");
-	const [mobilePanel, setMobilePanel] = useState<"editor" | "topology">("editor");
+	const [mobilePanel, setMobilePanel] = useState<"editor" | "topology">(
+		"editor",
+	);
 
 	const graphData = useMemo(() => buildGraph(agents), [agents]);
 	const selectedAgent = useMemo(() => {
@@ -121,6 +131,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	const providerExamples = useMemo(
 		() => [
 			{ id: "openai", example: "openai:gpt-4o" },
+			{ id: "codex", example: "codex:codex-mini-latest" },
 			{ id: "anthropic", example: "anthropic:claude-sonnet-4-5" },
 			{ id: "openrouter", example: "openrouter:openai/gpt-4o" },
 			{ id: "xai", example: "xai:grok-beta" },
@@ -234,12 +245,16 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			setElevenSpeed("");
 			setElevenOutputFormat("");
 			setElevenOptimizeLatency("");
-		setElevenSpeakerBoost(null);
+			setElevenSpeakerBoost(null);
 			return;
 		}
 		const provider =
 			voice.provider ||
-			(voice.elevenlabs ? "elevenlabs" : voice.webSpeech ? "web_speech" : "inherit");
+			(voice.elevenlabs
+				? "elevenlabs"
+				: voice.webSpeech
+					? "web_speech"
+					: "inherit");
 		setVoiceProvider(provider as "inherit" | VoiceProvider);
 		setVoiceName(voice.webSpeech?.voiceName || "");
 		setVoiceLang(voice.webSpeech?.lang || "");
@@ -250,12 +265,16 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			voice.webSpeech?.pitch !== undefined ? String(voice.webSpeech.pitch) : "",
 		);
 		setVoiceVolume(
-			voice.webSpeech?.volume !== undefined ? String(voice.webSpeech.volume) : "",
+			voice.webSpeech?.volume !== undefined
+				? String(voice.webSpeech.volume)
+				: "",
 		);
 		setElevenVoiceId(voice.elevenlabs?.voiceId || "");
 		setElevenModelId(voice.elevenlabs?.modelId || "");
 		setElevenStability(
-			voice.elevenlabs?.stability !== undefined ? String(voice.elevenlabs.stability) : "",
+			voice.elevenlabs?.stability !== undefined
+				? String(voice.elevenlabs.stability)
+				: "",
 		);
 		setElevenSimilarity(
 			voice.elevenlabs?.similarityBoost !== undefined
@@ -263,10 +282,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 				: "",
 		);
 		setElevenStyle(
-			voice.elevenlabs?.style !== undefined ? String(voice.elevenlabs.style) : "",
+			voice.elevenlabs?.style !== undefined
+				? String(voice.elevenlabs.style)
+				: "",
 		);
 		setElevenSpeed(
-			voice.elevenlabs?.speed !== undefined ? String(voice.elevenlabs.speed) : "",
+			voice.elevenlabs?.speed !== undefined
+				? String(voice.elevenlabs.speed)
+				: "",
 		);
 		setElevenOutputFormat(voice.elevenlabs?.outputFormat || "");
 		setElevenOptimizeLatency(
@@ -343,7 +366,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			return;
 		}
 		if (!/^[a-zA-Z0-9_-]+$/.test(id.trim())) {
-			setFormError("Agent ID can only include letters, numbers, underscores, and dashes.");
+			setFormError(
+				"Agent ID can only include letters, numbers, underscores, and dashes.",
+			);
 			return;
 		}
 
@@ -406,12 +431,13 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			),
 			subAgents: normalizedSubAgents,
 		};
-		const ok = isEditing && editingAgentId
-			? await onUpdateAgent(editingAgentId, payload)
-			: await onCreateAgent({
-				id: id.trim(),
-				...payload,
-			});
+		const ok =
+			isEditing && editingAgentId
+				? await onUpdateAgent(editingAgentId, payload)
+				: await onCreateAgent({
+						id: id.trim(),
+						...payload,
+					});
 		setSubmitting(false);
 		if (ok) {
 			setId("");
@@ -489,20 +515,22 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 				<div className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 p-1 text-xs font-semibold text-slate-300">
 					<button
 						type="button"
-						className={`rounded-full px-3 py-1 transition ${mobilePanel === "editor"
-							? "bg-sky-500/20 text-sky-300"
-							: "text-slate-400"
-							}`}
+						className={`rounded-full px-3 py-1 transition ${
+							mobilePanel === "editor"
+								? "bg-sky-500/20 text-sky-300"
+								: "text-slate-400"
+						}`}
 						onClick={() => setMobilePanel("editor")}
 					>
 						Editor
 					</button>
 					<button
 						type="button"
-						className={`rounded-full px-3 py-1 transition ${mobilePanel === "topology"
-							? "bg-sky-500/20 text-sky-300"
-							: "text-slate-400"
-							}`}
+						className={`rounded-full px-3 py-1 transition ${
+							mobilePanel === "topology"
+								? "bg-sky-500/20 text-sky-300"
+								: "text-slate-400"
+						}`}
 						onClick={() => setMobilePanel("topology")}
 					>
 						Topology
@@ -512,19 +540,30 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 
 			<div className="grid gap-6 xl:grid-cols-[minmax(420px,1.4fr)_minmax(360px,1fr)]">
 				<aside
-					className={`panel-card animate-rise space-y-6 p-5 ${mobilePanel === "topology" ? "hidden lg:block" : ""
-						}`}
+					className={`panel-card animate-rise space-y-6 p-5 ${
+						mobilePanel === "topology" ? "hidden lg:block" : ""
+					}`}
 				>
 					<div className="flex items-center justify-between gap-3">
 						<div>
 							<h2 className="text-lg font-semibold">Agents</h2>
-							<p className="text-xs text-slate-400">Create and inspect agent configs.</p>
+							<p className="text-xs text-slate-400">
+								Create and inspect agent configs.
+							</p>
 						</div>
 						<div className="flex items-center gap-2">
-							<button className="button-ghost" type="button" onClick={resetForm}>
+							<button
+								className="button-ghost"
+								type="button"
+								onClick={resetForm}
+							>
 								New
 							</button>
-							<button className="button-ghost" type="button" onClick={onRefresh}>
+							<button
+								className="button-ghost"
+								type="button"
+								onClick={onRefresh}
+							>
 								Refresh
 							</button>
 						</div>
@@ -558,8 +597,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							/>
 							{isEditing ? (
 								<p className="text-xs text-slate-400">
-									Editing agent <span className="font-mono">{editingAgentId}</span>. Agent
-									ID cannot be changed.
+									Editing agent{" "}
+									<span className="font-mono">{editingAgentId}</span>. Agent ID
+									cannot be changed.
 								</p>
 							) : null}
 						</div>
@@ -590,8 +630,8 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										Model Format
 									</div>
 									<p className="mt-2 text-xs">
-										Use <span className="font-mono">provider:model-name</span>. If a
-										provider is configured, it will appear below.
+										Use <span className="font-mono">provider:model-name</span>.
+										If a provider is configured, it will appear below.
 									</p>
 									<div className="mt-3 space-y-2">
 										<div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
@@ -599,7 +639,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										</div>
 										<div className="grid gap-2">
 											{providerExamples
-												.filter(({ id }) => id === "lmstudio" || id === "ollama")
+												.filter(
+													({ id }) => id === "lmstudio" || id === "ollama",
+												)
 												.map(({ id, example }) => (
 													<div
 														key={id}
@@ -608,7 +650,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 														<span className="pill">
 															{id === "lmstudio" ? "LM Studio" : "Ollama"}
 														</span>
-														<span className="font-mono text-slate-300">{example}</span>
+														<span className="font-mono text-slate-300">
+															{example}
+														</span>
 													</div>
 												))}
 										</div>
@@ -630,9 +674,13 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 														>
 															<span className="pill">{provider.label}</span>
 															{example ? (
-																<span className="font-mono text-slate-300">{example}</span>
+																<span className="font-mono text-slate-300">
+																	{example}
+																</span>
 															) : (
-																<span className="text-slate-400">example coming soon</span>
+																<span className="text-slate-400">
+																	example coming soon
+																</span>
 															)}
 														</div>
 													);
@@ -676,7 +724,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								<input
 									type="checkbox"
 									checked={promptTrainingEnabled}
-									onChange={(event) => setPromptTrainingEnabled(event.target.checked)}
+									onChange={(event) =>
+										setPromptTrainingEnabled(event.target.checked)
+									}
 								/>
 								Enable prompt training
 							</label>
@@ -684,7 +734,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								<input
 									className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 									value={promptTrainingPath}
-									onChange={(event) => setPromptTrainingPath(event.target.value)}
+									onChange={(event) =>
+										setPromptTrainingPath(event.target.value)
+									}
 									placeholder="Optional instructions path (e.g. /memories/agents/my-agent/instructions.md)"
 								/>
 							) : null}
@@ -701,10 +753,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 									<button
 										key={tool}
 										type="button"
-										className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${selectedTools.includes(tool)
-											? "border-sky-500/50 bg-sky-500/15 text-sky-300"
-											: "border-white/10 bg-slate-900/60 text-slate-300"
-											}`}
+										className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+											selectedTools.includes(tool)
+												? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+												: "border-white/10 bg-slate-900/60 text-slate-300"
+										}`}
 										onClick={() => toggleTool(tool)}
 									>
 										{tool}
@@ -717,7 +770,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								<div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 									Subagents
 								</div>
-								<button className="button-ghost text-xs" type="button" onClick={addSubAgent}>
+								<button
+									className="button-ghost text-xs"
+									type="button"
+									onClick={addSubAgent}
+								>
 									Add Subagent
 								</button>
 							</div>
@@ -725,7 +782,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								Add specialized subagents this agent can delegate to.
 							</p>
 							{subAgents.length === 0 ? (
-								<p className="text-xs text-slate-500">No subagents configured.</p>
+								<p className="text-xs text-slate-500">
+									No subagents configured.
+								</p>
 							) : null}
 							<div className="space-y-3">
 								{subAgents.map((subAgent, subIndex) => (
@@ -771,8 +830,8 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 											</select>
 										</div>
 										<p className="text-xs text-slate-400">
-											Selecting an existing agent copies its ID, prompt, description, tools,
-											model, and prompt training settings.
+											Selecting an existing agent copies its ID, prompt,
+											description, tools, model, and prompt training settings.
 										</p>
 										<div className="grid gap-3 md:grid-cols-2">
 											<input
@@ -831,10 +890,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 													<button
 														key={`${subIndex}-${tool}`}
 														type="button"
-														className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${subAgent.tools.includes(tool)
-															? "border-sky-500/50 bg-sky-500/15 text-sky-300"
-															: "border-white/10 bg-slate-900/60 text-slate-300"
-															}`}
+														className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+															subAgent.tools.includes(tool)
+																? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+																: "border-white/10 bg-slate-900/60 text-slate-300"
+														}`}
 														onClick={() => toggleSubAgentTool(subIndex, tool)}
 													>
 														{tool}
@@ -886,7 +946,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 									<select
 										className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 										value={voiceProvider}
-										onChange={(event) => setVoiceProvider(event.target.value as "inherit" | VoiceProvider)}
+										onChange={(event) =>
+											setVoiceProvider(
+												event.target.value as "inherit" | VoiceProvider,
+											)
+										}
 									>
 										<option value="inherit">Inherit gateway defaults</option>
 										<option value="web_speech">Web Speech</option>
@@ -945,13 +1009,17 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 											placeholder="Stability (0 - 1)"
 											value={elevenStability}
-											onChange={(event) => setElevenStability(event.target.value)}
+											onChange={(event) =>
+												setElevenStability(event.target.value)
+											}
 										/>
 										<input
 											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 											placeholder="Similarity boost (0 - 1)"
 											value={elevenSimilarity}
-											onChange={(event) => setElevenSimilarity(event.target.value)}
+											onChange={(event) =>
+												setElevenSimilarity(event.target.value)
+											}
 										/>
 										<input
 											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
@@ -969,19 +1037,25 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 											placeholder="Output format"
 											value={elevenOutputFormat}
-											onChange={(event) => setElevenOutputFormat(event.target.value)}
+											onChange={(event) =>
+												setElevenOutputFormat(event.target.value)
+											}
 										/>
 										<input
 											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 											placeholder="Optimize latency (0-4)"
 											value={elevenOptimizeLatency}
-											onChange={(event) => setElevenOptimizeLatency(event.target.value)}
+											onChange={(event) =>
+												setElevenOptimizeLatency(event.target.value)
+											}
 										/>
 										<label className="flex items-center gap-2 text-xs text-slate-300">
 											<input
 												type="checkbox"
 												checked={elevenSpeakerBoost ?? false}
-												onChange={(event) => setElevenSpeakerBoost(event.target.checked)}
+												onChange={(event) =>
+													setElevenSpeakerBoost(event.target.checked)
+												}
 											/>
 											Use speaker boost
 										</label>
@@ -994,7 +1068,11 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								{formError}
 							</div>
 						) : null}
-						<button className="button-primary w-full" type="submit" disabled={submitting}>
+						<button
+							className="button-primary w-full"
+							type="submit"
+							disabled={submitting}
+						>
 							{submitting
 								? isEditing
 									? "Updating..."
@@ -1007,8 +1085,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 				</aside>
 
 				<section
-					className={`space-y-6 ${mobilePanel === "editor" ? "hidden lg:block" : ""
-						}`}
+					className={`space-y-6 ${
+						mobilePanel === "editor" ? "hidden lg:block" : ""
+					}`}
 				>
 					<div className="panel-card animate-rise space-y-4 p-5">
 						<div className="flex items-center justify-between">
@@ -1022,8 +1101,12 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								<div className="space-y-2">
 									<div className="flex items-center justify-between gap-3">
 										<div>
-											<div className="text-sm font-semibold text-slate-100">{selectedAgent.displayName}</div>
-											<div className="text-xs text-slate-400">{selectedAgent.id}</div>
+											<div className="text-sm font-semibold text-slate-100">
+												{selectedAgent.displayName}
+											</div>
+											<div className="text-xs text-slate-400">
+												{selectedAgent.id}
+											</div>
 										</div>
 										<button
 											type="button"
@@ -1035,11 +1118,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										</button>
 									</div>
 									{selectedAgent.description ? (
-										<p className="text-xs text-slate-300">{selectedAgent.description}</p>
+										<p className="text-xs text-slate-300">
+											{selectedAgent.description}
+										</p>
 									) : null}
 									{selectedAgent.model ? (
 										<div className="text-xs text-slate-400">
-											Model: <span className="font-mono">{selectedAgent.model}</span>
+											Model:{" "}
+											<span className="font-mono">{selectedAgent.model}</span>
 										</div>
 									) : null}
 									<div className="flex flex-wrap gap-2">
@@ -1052,7 +1138,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 									{selectedAgent.parentId ? (
 										<div className="text-xs text-slate-400">
 											Subagent of{" "}
-											<span className="font-mono">{selectedAgent.parentId}</span>
+											<span className="font-mono">
+												{selectedAgent.parentId}
+											</span>
 										</div>
 									) : null}
 								</div>
@@ -1083,16 +1171,23 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 };
 
 function buildGraph(agents: AgentSummary[]) {
-	const nodes: Array<{ id: string; data: { label: string }; position: { x: number; y: number } }> = [];
-	const edges: Array<{ id: string; source: string; target: string }> = [];
-	const lookup: Record<string, {
+	const nodes: Array<{
 		id: string;
-		displayName: string;
-		description?: string;
-		tools: string[];
-		model?: string;
-		parentId?: string;
-	}> = {};
+		data: { label: string };
+		position: { x: number; y: number };
+	}> = [];
+	const edges: Array<{ id: string; source: string; target: string }> = [];
+	const lookup: Record<
+		string,
+		{
+			id: string;
+			displayName: string;
+			description?: string;
+			tools: string[];
+			model?: string;
+			parentId?: string;
+		}
+	> = {};
 
 	const gapX = 220;
 	const gapY = 160;
@@ -1116,7 +1211,10 @@ function buildGraph(agents: AgentSummary[]) {
 			nodes.push({
 				id: subId,
 				data: { label: subAgent.displayName },
-				position: { x: (index % 3) * gapX + 180, y: Math.floor(index / 3) * gapY + (subIndex + 1) * 80 },
+				position: {
+					x: (index % 3) * gapX + 180,
+					y: Math.floor(index / 3) * gapY + (subIndex + 1) * 80,
+				},
 			});
 			lookup[subId] = {
 				id: subAgent.id,

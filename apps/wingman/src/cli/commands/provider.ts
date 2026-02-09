@@ -1,16 +1,17 @@
 import { createInterface } from "node:readline";
-import type { ProviderCommandArgs } from "../types/provider.js";
-import { OutputManager } from "../core/outputManager.js";
+import { createLogger, getLogFilePath } from "@/logger.js";
+import { resolveCodexAuthFromFile } from "@/providers/codex.js";
 import {
 	deleteProviderCredentials,
 	getCredentialsPath,
 	resolveProviderToken,
-	setProviderCredentials,
 	saveProviderToken,
+	setProviderCredentials,
 } from "@/providers/credentials.js";
-import { getProviderSpec, listProviderSpecs } from "@/providers/registry.js";
 import { loginWithLocalCallback } from "@/providers/oauth.js";
-import { createLogger, getLogFilePath } from "@/logger.js";
+import { getProviderSpec, listProviderSpecs } from "@/providers/registry.js";
+import { OutputManager } from "../core/outputManager.js";
+import type { ProviderCommandArgs } from "../types/provider.js";
 
 /**
  * Execute provider command
@@ -85,6 +86,34 @@ async function handleLogin(
 		return;
 	}
 
+	if (provider.name === "codex") {
+		const codexAuth = resolveCodexAuthFromFile();
+		if (codexAuth.accessToken) {
+			writeLine(
+				outputManager,
+				`Detected Codex login at ${codexAuth.authPath}. Wingman will use it automatically.`,
+			);
+			return;
+		}
+
+		if (outputManager.getMode() !== "interactive") {
+			throw new Error(
+				`Codex login not found at ${codexAuth.authPath}. Run "codex login" or pass --token.`,
+			);
+		}
+
+		writeLine(outputManager, `No Codex login found at ${codexAuth.authPath}.`);
+		const resolvedToken = await promptForToken(
+			`Enter ${provider.label} token: `,
+		);
+		saveProviderToken(provider.name, resolvedToken);
+		writeLine(
+			outputManager,
+			`Saved ${provider.label} credentials to ${getCredentialsPath()}`,
+		);
+		return;
+	}
+
 	if (provider.type === "oauth") {
 		const credentials = await loginWithLocalCallback(provider.name, {
 			clientId: getOptionValue(args.options, "client-id"),
@@ -141,10 +170,7 @@ function handleLogout(
 			`Removed ${provider.label} credentials from ${getCredentialsPath()}`,
 		);
 	} else {
-		writeLine(
-			outputManager,
-			`No stored credentials for ${provider.label}`,
-		);
+		writeLine(outputManager, `No stored credentials for ${provider.label}`);
 	}
 }
 
@@ -154,19 +180,14 @@ function handleStatus(outputManager: OutputManager): void {
 	for (const provider of listProviderSpecs()) {
 		const resolved = resolveProviderToken(provider.name);
 		const source =
-			resolved.source === "env"
-				? `env (${resolved.envVar})`
-				: resolved.source;
+			resolved.source === "env" ? `env (${resolved.envVar})` : resolved.source;
 
 		writeLine(
 			outputManager,
 			`  ${provider.name} (${provider.type}) - ${source}`,
 		);
 
-		writeLine(
-			outputManager,
-			`    env: ${provider.envVars.join(", ")}`,
-		);
+		writeLine(outputManager, `    env: ${provider.envVars.join(", ")}`);
 	}
 
 	writeLine(outputManager, `Credentials file: ${getCredentialsPath()}`);
@@ -186,6 +207,7 @@ Usage:
 Examples:
   wingman provider status
   wingman provider login copilot
+  wingman provider login codex
   wingman provider login openrouter --api-key="<key>"
   wingman provider login lmstudio
   wingman provider login ollama
@@ -197,6 +219,8 @@ Options:
 Environment Variables:
   ANTHROPIC_API_KEY     Anthropic API key
   OPENAI_API_KEY        OpenAI API key
+  CODEX_ACCESS_TOKEN    OpenAI Codex ChatGPT access token
+  CHATGPT_ACCESS_TOKEN  OpenAI Codex ChatGPT access token
   OPENROUTER_API_KEY    OpenRouter API key
   GITHUB_COPILOT_TOKEN  GitHub Copilot token
   COPILOT_TOKEN         GitHub Copilot token

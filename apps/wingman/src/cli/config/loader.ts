@@ -94,6 +94,33 @@ export class WingmanConfigLoader {
 		return {
 			logLevel: "info",
 			recursionLimit: 5000,
+			summarization: {
+				enabled: true,
+				maxTokensBeforeSummary: 12000,
+				messagesToKeep: 8,
+			},
+			modelRetry: {
+				enabled: true,
+				maxRetries: 2,
+				backoffFactor: 2,
+				initialDelayMs: 1000,
+				maxDelayMs: 60000,
+				jitter: true,
+				onFailure: "continue",
+			},
+			toolRetry: {
+				enabled: false,
+				maxRetries: 2,
+				backoffFactor: 2,
+				initialDelayMs: 1000,
+				maxDelayMs: 60000,
+				jitter: true,
+				onFailure: "continue",
+			},
+			humanInTheLoop: {
+				enabled: false,
+				interruptOn: {},
+			},
 			search: {
 				provider: "duckduckgo",
 				maxResults: 5,

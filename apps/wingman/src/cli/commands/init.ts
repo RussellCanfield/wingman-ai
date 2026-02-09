@@ -2,15 +2,14 @@ import {
 	copyFileSync,
 	existsSync,
 	mkdirSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import chalk from "chalk";
 import {
 	cancel,
 	confirm,
@@ -23,21 +22,22 @@ import {
 	spinner,
 	text,
 } from "@clack/prompts";
-import type { InitCommandArgs } from "../types/init.js";
-import type { OutputMode } from "../types.js";
-import { OutputManager } from "../core/outputManager.js";
-import { WingmanConfigSchema } from "../config/schema.js";
+import chalk from "chalk";
+import { ModelFactory } from "@/agent/config/modelFactory.js";
 import { createLogger, getLogFilePath } from "@/logger.js";
-import {
-	listProviderSpecs,
-	normalizeProviderName,
-} from "@/providers/registry.js";
 import {
 	getCredentialsPath,
 	resolveProviderToken,
 	saveProviderToken,
 } from "@/providers/credentials.js";
-import { ModelFactory } from "@/agent/config/modelFactory.js";
+import {
+	listProviderSpecs,
+	normalizeProviderName,
+} from "@/providers/registry.js";
+import { WingmanConfigSchema } from "../config/schema.js";
+import { OutputManager } from "../core/outputManager.js";
+import type { InitCommandArgs } from "../types/init.js";
+import type { OutputMode } from "../types.js";
 
 export interface InitCommandOptions {
 	workspace?: string;
@@ -64,6 +64,7 @@ const DEFAULT_FS_ROOT = ".";
 const DEFAULT_MODELS: Record<string, string> = {
 	anthropic: "anthropic:claude-sonnet-4-5",
 	openai: "openai:gpt-4o",
+	codex: "codex:codex-mini-latest",
 	openrouter: "openrouter:openai/gpt-4o",
 	copilot: "copilot:gpt-4o",
 	xai: "xai:grok-beta",
@@ -139,56 +140,47 @@ export async function executeInitCommand(
 		});
 
 		if (!skipConfig) {
-			await runStep(
-				useClack,
-				"Writing workspace config",
-				async () =>
-					handleConfigSetup({
-						configPath,
-						configRoot,
-						agentId: agentPlan.defaultAgentId,
-						fsRoot,
-						force,
-						merge,
-						nonInteractive,
-						outputManager,
-					}),
+			await runStep(useClack, "Writing workspace config", async () =>
+				handleConfigSetup({
+					configPath,
+					configRoot,
+					agentId: agentPlan.defaultAgentId,
+					fsRoot,
+					force,
+					merge,
+					nonInteractive,
+					outputManager,
+				}),
 			);
 		} else {
 			writeLine(outputManager, "Skipping config setup (--skip-config).");
 		}
 
 		if (!skipAgent) {
-			await runStep(
-				useClack,
-				"Installing bundled agents",
-				async () =>
-					handleAgentSetup({
-						configRoot,
-						agentId: agentPlan.defaultAgentId,
-						model,
-						force,
-						nonInteractive,
-						outputManager,
-						bundledAgentsPath,
-						copyAgents: agentPlan.copyAgents,
-					}),
+			await runStep(useClack, "Installing bundled agents", async () =>
+				handleAgentSetup({
+					configRoot,
+					agentId: agentPlan.defaultAgentId,
+					model,
+					force,
+					nonInteractive,
+					outputManager,
+					bundledAgentsPath,
+					copyAgents: agentPlan.copyAgents,
+				}),
 			);
 		} else {
 			writeLine(outputManager, "Skipping starter agent (--skip-agent).");
 		}
 
 		if (!skipProvider) {
-			await runStep(
-				useClack,
-				"Connecting providers",
-				async () =>
-					handleProviderSetup({
-						providerName,
-						optionMap,
-						nonInteractive,
-						outputManager,
-					}),
+			await runStep(useClack, "Connecting providers", async () =>
+				handleProviderSetup({
+					providerName,
+					optionMap,
+					nonInteractive,
+					outputManager,
+				}),
 			);
 		} else {
 			writeLine(outputManager, "Skipping provider setup (--skip-provider).");
@@ -253,9 +245,13 @@ function renderInitBanner(
 		"   \\_/\\_/  |_|_| \\_|\\____|_|  |_/_/   \\_\\_| \\_|",
 	].join("\n");
 
-	const accent = process.stdout.isTTY ? chalk.cyanBright : (text: string) => text;
+	const accent = process.stdout.isTTY
+		? chalk.cyanBright
+		: (text: string) => text;
 	const muted = process.stdout.isTTY ? chalk.gray : (text: string) => text;
-	const emphasis = process.stdout.isTTY ? chalk.whiteBright : (text: string) => text;
+	const emphasis = process.stdout.isTTY
+		? chalk.whiteBright
+		: (text: string) => text;
 
 	intro(accent(title));
 	note(
@@ -315,7 +311,11 @@ async function resolveAgentPlan(input: {
 	const rawAgentsList = getStringOption(optionMap, ["agents"]);
 	if (rawAgentsList) {
 		const selected = parseAgentList(rawAgentsList, availableAgents);
-		const unique = ensureIncludesDefault(selected, nextDefaultAgent, availableAgents);
+		const unique = ensureIncludesDefault(
+			selected,
+			nextDefaultAgent,
+			availableAgents,
+		);
 		return { defaultAgentId: nextDefaultAgent, copyAgents: unique };
 	}
 
@@ -323,10 +323,7 @@ async function resolveAgentPlan(input: {
 		return { defaultAgentId: nextDefaultAgent };
 	}
 
-	const copyAll = await promptConfirm(
-		"Copy all bundled agents?",
-		true,
-	);
+	const copyAll = await promptConfirm("Copy all bundled agents?", true);
 	if (copyAll) {
 		return { defaultAgentId: nextDefaultAgent };
 	}
@@ -405,9 +402,10 @@ async function handleConfigSetup(input: {
 		}
 	}
 
-	const nextConfig = configExists && !force
-		? mergeConfigFile(configPath, agentId, fsRoot)
-		: buildDefaultConfig(agentId, fsRoot);
+	const nextConfig =
+		configExists && !force
+			? mergeConfigFile(configPath, agentId, fsRoot)
+			: buildDefaultConfig(agentId, fsRoot);
 
 	if (!nextConfig) {
 		writeLine(outputManager, "Config already has recommended settings.");
@@ -911,10 +909,7 @@ function getStringOption(
 	return undefined;
 }
 
-function parseAgentList(
-	raw: string,
-	bundledAgents: string[],
-): string[] {
+function parseAgentList(raw: string, bundledAgents: string[]): string[] {
 	const normalized = raw
 		.split(/[,\s]+/)
 		.map((value) => value.trim())
@@ -924,13 +919,9 @@ function parseAgentList(
 		return [];
 	}
 
-	const unknown = normalized.filter(
-		(value) => !bundledAgents.includes(value),
-	);
+	const unknown = normalized.filter((value) => !bundledAgents.includes(value));
 	if (unknown.length > 0) {
-		throw new Error(
-			`Unknown bundled agents: ${unknown.join(", ")}.`,
-		);
+		throw new Error(`Unknown bundled agents: ${unknown.join(", ")}.`);
 	}
 
 	return Array.from(new Set(normalized));
@@ -1083,7 +1074,10 @@ async function promptConfirm(
 	return Boolean(response);
 }
 
-function showInitHelp(outputManager: OutputManager, outputMode: OutputMode): void {
+function showInitHelp(
+	outputManager: OutputManager,
+	outputMode: OutputMode,
+): void {
 	if (outputMode === "interactive") {
 		console.log(`
 Wingman Init - Quickstart onboarding
@@ -1097,7 +1091,7 @@ Options:
   --agents <list>        Copy only these bundled agents (comma-separated)
   --model <provider:model>
                          Set model for the starter agent
-  --provider <name>      Provider to configure (anthropic|openai|openrouter|copilot|xai)
+  --provider <name>      Provider to configure (anthropic|openai|codex|openrouter|copilot|xai)
   --token <token>        Save provider token (non-interactive)
   --api-key <key>        Alias for --token
   --fs-root <path>       Add fs root (default: ".")

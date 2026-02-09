@@ -9,6 +9,40 @@ The global config lives at `.wingman/wingman.config.json`. It controls logging, 
   "logLevel": "info",
   "defaultAgent": "wingman",
   "recursionLimit": 5000,
+  "summarization": {
+    "enabled": true,
+    "maxTokensBeforeSummary": 12000,
+    "messagesToKeep": 8
+  },
+  "modelRetry": {
+    "enabled": true,
+    "maxRetries": 2,
+    "backoffFactor": 2,
+    "initialDelayMs": 1000,
+    "maxDelayMs": 60000,
+    "jitter": true,
+    "onFailure": "continue"
+  },
+  "toolRetry": {
+    "enabled": false,
+    "maxRetries": 2,
+    "backoffFactor": 2,
+    "initialDelayMs": 1000,
+    "maxDelayMs": 60000,
+    "jitter": true,
+    "onFailure": "continue",
+    "tools": ["internet_search", "web_crawler"]
+  },
+  "humanInTheLoop": {
+    "enabled": false,
+    "interruptOn": {
+      "command_execute": {
+        "allowedDecisions": ["approve", "reject"],
+        "description": "Command execution requires approval"
+      },
+      "internet_search": false
+    }
+  },
   "search": {
     "provider": "duckduckgo",
     "maxResults": 5
@@ -138,6 +172,10 @@ Minimal example:
 - **logLevel**: `debug | info | warn | error | silent`
 - **defaultAgent**: agent name used when `--agent` is omitted
 - **recursionLimit**: maximum reasoning steps for agents (default 5000)
+- **summarization**: conversation-history compression settings
+- **modelRetry**: retry failed model calls with backoff
+- **toolRetry**: retry failed tool calls (optionally scoped to named tools)
+- **humanInTheLoop**: per-tool approval/interrupt policies
 - **search**: provider and max results for the `internet_search` tool
 - **voice**: global voice settings; can be overridden per-agent
 - **cli**: CLI theme and output mode (`auto | interactive | json`)
@@ -145,5 +183,39 @@ Minimal example:
 - **gateway**: host, port, auth, control UI, adapters
 - **agents**: optional list/bindings used by the gateway for routing
 - **mcp**: global MCP server definitions
+
+## Summarization settings
+
+Wingman configures DeepAgent's built-in conversation summarization middleware so long-running threads are compressed instead of continuously expanding context.
+
+- `summarization.enabled` (default `true`): turn conversation compression on/off.
+- `summarization.maxTokensBeforeSummary` (default `12000`): approximate token threshold before summarization runs.
+- `summarization.messagesToKeep` (default `8`): number of most recent messages to keep verbatim after summarization.
+
+## Retry middleware settings
+
+Wingman can apply LangChain retry middleware for model and tool failures.
+
+- `modelRetry.enabled` (default `true`): enables `modelRetryMiddleware`.
+- `toolRetry.enabled`: enables `toolRetryMiddleware`.
+- Shared retry controls:
+  - `maxRetries`
+  - `backoffFactor`
+  - `initialDelayMs`
+  - `maxDelayMs`
+  - `jitter`
+  - `onFailure` (`continue` or `error`)
+- `toolRetry.tools`: optional list of tool names to restrict retries to.
+
+## Human-in-the-loop settings
+
+Use `humanInTheLoop.interruptOn` to configure tool-specific approval:
+
+- `true`: require approval with default decisions.
+- `false`: auto-approve this tool.
+- object:
+  - `allowedDecisions`: any of `approve`, `edit`, `reject`
+  - `description`: optional custom approval prompt
+  - `argsSchema`: optional argument schema for edit flows
 
 For agent-specific configuration, see the Agents guide.

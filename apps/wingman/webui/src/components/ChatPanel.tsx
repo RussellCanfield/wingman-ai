@@ -131,6 +131,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+	const previousStreamingRef = useRef(isStreaming);
 	const autoScrollRef = useRef<boolean>(true);
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 	const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -210,6 +211,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		textarea.style.height = `${heightPx}px`;
 		textarea.style.overflowY = overflowY;
 	}, [prompt]);
+
+	useEffect(() => {
+		const wasStreaming = previousStreamingRef.current;
+		previousStreamingRef.current = isStreaming;
+		if (!shouldRefocusComposer({ wasStreaming, isStreaming })) return;
+		const frame = window.requestAnimationFrame(() => {
+			const textarea = composerTextareaRef.current;
+			if (!textarea || textarea.disabled) return;
+			textarea.focus();
+			const cursorPosition = textarea.value.length;
+			textarea.setSelectionRange(cursorPosition, cursorPosition);
+		});
+		return () => window.cancelAnimationFrame(frame);
+	}, [isStreaming]);
 
 	useEffect(() => {
 		if (!previewAttachment) return;
@@ -1038,6 +1053,16 @@ export function computeComposerTextareaLayout({
 		heightPx,
 		overflowY: scrollHeight > maxHeight ? "auto" : "hidden",
 	};
+}
+
+export function shouldRefocusComposer({
+	wasStreaming,
+	isStreaming,
+}: {
+	wasStreaming: boolean;
+	isStreaming: boolean;
+}): boolean {
+	return wasStreaming && !isStreaming;
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {

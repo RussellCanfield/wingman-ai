@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
-import { createLogger, getLogFilePath, type LogLevel } from "../logger.js";
-import type { OutputMode, AgentCommandArgs } from "./types.js";
-import type { SkillCommandArgs } from "./types/skill.js";
-import { WingmanConfigLoader } from "./config/loader.js";
 import { getGatewayTokenFromEnv } from "@/gateway/env.js";
-import { OutputManager } from "./core/outputManager.js";
+import { createLogger, getLogFilePath, type LogLevel } from "../logger.js";
 import { executeAgentCommand } from "./commands/agent.js";
-import { executeSkillCommand } from "./commands/skill.js";
-import { executeGatewayCommand } from "./commands/gateway.js";
 import type { GatewayCommandArgs } from "./commands/gateway.js";
-import { executeProviderCommand } from "./commands/provider.js";
-import type { ProviderCommandArgs } from "./types/provider.js";
+import { executeGatewayCommand } from "./commands/gateway.js";
 import { executeInitCommand } from "./commands/init.js";
+import { executeProviderCommand } from "./commands/provider.js";
+import { executeSkillCommand } from "./commands/skill.js";
+import { WingmanConfigLoader } from "./config/loader.js";
+import { OutputManager } from "./core/outputManager.js";
 import type { InitCommandArgs } from "./types/init.js";
+import type { ProviderCommandArgs } from "./types/provider.js";
+import type { SkillCommandArgs } from "./types/skill.js";
+import type { AgentCommandArgs, OutputMode } from "./types.js";
 
 /**
  * Parse command line arguments
@@ -166,6 +166,7 @@ Examples:
   wingman skill install pdf
   wingman skill list
   wingman provider status
+  wingman provider login codex
   wingman provider login copilot --token="<token>"
   wingman gateway start
   wingman gateway join ws://localhost:3000/ws --name="agent-1"
@@ -197,10 +198,7 @@ async function main() {
 
 		// Determine output mode (CLI flag > config > auto-detect)
 		let outputMode: OutputMode;
-		if (
-			parsed.outputMode === "interactive" ||
-			parsed.outputMode === "json"
-		) {
+		if (parsed.outputMode === "interactive" || parsed.outputMode === "json") {
 			outputMode = parsed.outputMode;
 		} else if (config.cli.outputMode === "auto") {
 			outputMode = OutputManager.detectMode();

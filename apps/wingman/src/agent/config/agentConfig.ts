@@ -75,7 +75,7 @@ const BaseAgentConfigSchema = z.object({
 		.string()
 		.optional()
 		.describe(
-			'Model override in format "provider:model-name" (e.g., "anthropic:claude-opus-4-5", "openrouter:openai/gpt-4o", "copilot:gpt-4o")',
+			'Model override in format "provider:model-name" (e.g., "anthropic:claude-opus-4-5", "codex:codex-mini-latest", "openrouter:openai/gpt-4o", "copilot:gpt-4o")',
 		),
 	blockedCommands: z
 		.array(z.string())

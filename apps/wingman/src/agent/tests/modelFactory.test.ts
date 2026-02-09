@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ModelFactory } from "../config/modelFactory";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ModelFactory } from "../config/modelFactory";
 
 const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -28,6 +28,12 @@ describe("ModelFactory", () => {
 
 		it("should create an OpenAI model", () => {
 			const model = ModelFactory.createModel("openai:gpt-4o");
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
+
+		it("should create a Codex model", () => {
+			const model = ModelFactory.createModel("codex:codex-mini-latest");
 
 			expect(model).toBeInstanceOf(ChatOpenAI);
 		});
@@ -107,6 +113,7 @@ describe("ModelFactory", () => {
 			const validModels = [
 				"anthropic:claude-opus-4-5",
 				"openai:gpt-4o",
+				"codex:codex-mini-latest",
 				"anthropic:claude-sonnet-4-5-20250929",
 				"openrouter:openai/gpt-4o",
 				"copilot:gpt-4o",
@@ -153,15 +160,17 @@ describe("ModelFactory", () => {
 		it("should accept case variations of providers", () => {
 			const result1 = ModelFactory.validateModelString("Anthropic:model");
 			const result2 = ModelFactory.validateModelString("OPENAI:model");
-			const result3 = ModelFactory.validateModelString("Copilot:model");
-			const result4 = ModelFactory.validateModelString("LMStudio:model");
-			const result5 = ModelFactory.validateModelString("OLLAMA:model");
+			const result3 = ModelFactory.validateModelString("CODEX:model");
+			const result4 = ModelFactory.validateModelString("Copilot:model");
+			const result5 = ModelFactory.validateModelString("LMStudio:model");
+			const result6 = ModelFactory.validateModelString("OLLAMA:model");
 
 			expect(result1.valid).toBe(true);
 			expect(result2.valid).toBe(true);
 			expect(result3.valid).toBe(true);
 			expect(result4.valid).toBe(true);
 			expect(result5.valid).toBe(true);
+			expect(result6.valid).toBe(true);
 		});
 	});
 });

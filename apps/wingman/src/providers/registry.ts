@@ -3,6 +3,7 @@ export type ProviderCategory = "model" | "voice";
 export type ProviderName =
 	| "anthropic"
 	| "openai"
+	| "codex"
 	| "openrouter"
 	| "copilot"
 	| "xai"
@@ -51,6 +52,14 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		label: "OpenAI",
 		type: "api-key",
 		envVars: ["OPENAI_API_KEY"],
+		category: "model",
+	},
+	codex: {
+		name: "codex",
+		label: "OpenAI Codex",
+		type: "api-key",
+		envVars: ["CODEX_ACCESS_TOKEN", "CHATGPT_ACCESS_TOKEN"],
+		baseURL: "https://chatgpt.com/backend-api/codex",
 		category: "model",
 	},
 	openrouter: {
@@ -103,7 +112,9 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 	},
 };
 
-export function normalizeProviderName(provider: string): ProviderName | undefined {
+export function normalizeProviderName(
+	provider: string,
+): ProviderName | undefined {
 	const key = provider.trim().toLowerCase() as ProviderName;
 	return PROVIDERS[key] ? key : undefined;
 }

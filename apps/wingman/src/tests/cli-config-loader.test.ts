@@ -36,6 +36,33 @@ describe("CLI Config Loader", () => {
 			expect(config).toEqual({
 				logLevel: "info",
 				recursionLimit: 5000,
+				summarization: {
+					enabled: true,
+					maxTokensBeforeSummary: 12000,
+					messagesToKeep: 8,
+				},
+				modelRetry: {
+					enabled: true,
+					maxRetries: 2,
+					backoffFactor: 2,
+					initialDelayMs: 1000,
+					maxDelayMs: 60000,
+					jitter: true,
+					onFailure: "continue",
+				},
+				toolRetry: {
+					enabled: false,
+					maxRetries: 2,
+					backoffFactor: 2,
+					initialDelayMs: 1000,
+					maxDelayMs: 60000,
+					jitter: true,
+					onFailure: "continue",
+				},
+				humanInTheLoop: {
+					enabled: false,
+					interruptOn: {},
+				},
 				search: {
 					provider: "duckduckgo",
 					maxResults: 5,
@@ -130,6 +157,11 @@ describe("CLI Config Loader", () => {
 				logLevel: "debug",
 				defaultAgent: "coder",
 				recursionLimit: 5,
+				summarization: {
+					enabled: true,
+					maxTokensBeforeSummary: 18000,
+					messagesToKeep: 10,
+				},
 				search: {
 					provider: "perplexity",
 					maxResults: 10,
@@ -148,6 +180,70 @@ describe("CLI Config Loader", () => {
 			writeFileSync(
 				join(configDir, "wingman.config.json"),
 				JSON.stringify(configData)
+			);
+
+			const loader = new WingmanConfigLoader(".wingman", testDir);
+			const config = loader.loadConfig();
+
+			expect(config).toMatchObject(configData);
+		});
+
+		it("should allow disabling summarization middleware", () => {
+			const configData = {
+				summarization: {
+					enabled: false,
+				},
+			};
+
+			writeFileSync(
+				join(configDir, "wingman.config.json"),
+				JSON.stringify(configData),
+			);
+
+			const loader = new WingmanConfigLoader(".wingman", testDir);
+			const config = loader.loadConfig();
+
+			expect(config.summarization).toEqual({
+				enabled: false,
+				maxTokensBeforeSummary: 12000,
+				messagesToKeep: 8,
+			});
+		});
+
+		it("should load retry and HITL middleware config", () => {
+			const configData = {
+				modelRetry: {
+					enabled: true,
+					maxRetries: 3,
+					backoffFactor: 1.5,
+					initialDelayMs: 250,
+					maxDelayMs: 4000,
+					jitter: false,
+					onFailure: "error",
+				},
+				toolRetry: {
+					enabled: true,
+					maxRetries: 4,
+					backoffFactor: 2,
+					initialDelayMs: 500,
+					maxDelayMs: 8000,
+					jitter: true,
+					onFailure: "continue",
+					tools: ["internet_search", "web_crawler"],
+				},
+				humanInTheLoop: {
+					enabled: true,
+					interruptOn: {
+						command_execute: {
+							allowedDecisions: ["approve", "reject"],
+						},
+					},
+				},
+			};
+
+			writeFileSync(
+				join(configDir, "wingman.config.json"),
+				JSON.stringify(configData),
 			);
 
 			const loader = new WingmanConfigLoader(".wingman", testDir);

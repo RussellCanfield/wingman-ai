@@ -1,7 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ChatPanel, computeComposerTextareaLayout } from "./ChatPanel";
+import {
+	ChatPanel,
+	computeComposerTextareaLayout,
+	shouldRefocusComposer,
+} from "./ChatPanel";
 
 const baseProps: React.ComponentProps<typeof ChatPanel> = {
 	activeThread: {
@@ -123,5 +127,34 @@ describe("computeComposerTextareaLayout", () => {
 
 		expect(result.heightPx).toBe(116);
 		expect(result.overflowY).toBe("auto");
+	});
+});
+
+describe("shouldRefocusComposer", () => {
+	it("returns true only when streaming transitions to idle", () => {
+		expect(
+			shouldRefocusComposer({
+				wasStreaming: true,
+				isStreaming: false,
+			}),
+		).toBe(true);
+		expect(
+			shouldRefocusComposer({
+				wasStreaming: false,
+				isStreaming: false,
+			}),
+		).toBe(false);
+		expect(
+			shouldRefocusComposer({
+				wasStreaming: false,
+				isStreaming: true,
+			}),
+		).toBe(false);
+		expect(
+			shouldRefocusComposer({
+				wasStreaming: true,
+				isStreaming: true,
+			}),
+		).toBe(false);
 	});
 });

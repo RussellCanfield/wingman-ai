@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveCodexAuthFromFile } from "./codex.js";
 import { getProviderSpec, type ProviderName } from "./registry.js";
 
 export interface ProviderCredentials {
@@ -144,6 +145,15 @@ export function resolveProviderToken(providerName: string): {
 		const value = process.env[envVar];
 		if (value && value.trim()) {
 			return { token: value.trim(), source: "env", envVar };
+		}
+	}
+
+	// Codex subscription login state should take precedence over any previously
+	// stored Wingman token so stale manual tokens do not shadow valid Codex auth.
+	if (provider.name === "codex") {
+		const codexAuth = resolveCodexAuthFromFile();
+		if (codexAuth.accessToken) {
+			return { token: codexAuth.accessToken, source: "credentials" };
 		}
 	}
 

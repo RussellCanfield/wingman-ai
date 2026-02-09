@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import type React from "react";
+import { useMemo, useState } from "react";
 import type { ProviderStatus } from "../types";
 
 type ProviderConfigPanelProps = {
@@ -62,7 +63,7 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 				<div>
 					<h3 className="text-lg font-semibold">Providers</h3>
 					<p className="text-xs text-slate-400">
-						Manage API keys for model and voice providers.
+						Manage credentials for model and voice providers.
 					</p>
 				</div>
 				<button className="button-ghost" type="button" onClick={onRefresh}>
@@ -85,20 +86,22 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 					{sortedProviders.map((provider) => {
 						const isLocalProvider = provider.requiresAuth === false;
 						const isMissing = provider.source === "missing";
+						const expectsToken =
+							provider.type === "oauth" ||
+							provider.name === "copilot" ||
+							provider.name === "codex";
 
-						const statusLabel =
-							isMissing
-								? isLocalProvider
-									? "Ready"
-									: "Missing"
-								: "Configured";
+						const statusLabel = isMissing
+							? isLocalProvider
+								? "Ready"
+								: "Missing"
+							: "Configured";
 
-						const statusTone =
-							isMissing
-								? isLocalProvider
-									? "border-emerald-400/60 bg-emerald-500/10 text-emerald-300"
-									: "border-rose-400/50 bg-rose-500/15 text-rose-200"
-								: "border-sky-400/60 bg-sky-500/10 text-sky-300";
+						const statusTone = isMissing
+							? isLocalProvider
+								? "border-emerald-400/60 bg-emerald-500/10 text-emerald-300"
+								: "border-rose-400/50 bg-rose-500/15 text-rose-200"
+							: "border-sky-400/60 bg-sky-500/10 text-sky-300";
 
 						const sourceLabel =
 							provider.source === "env"
@@ -120,9 +123,7 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 										<div className="text-sm font-semibold text-slate-100">
 											{provider.label}
 										</div>
-										<div className="text-xs text-slate-400">
-											{sourceLabel}
-										</div>
+										<div className="text-xs text-slate-400">{sourceLabel}</div>
 									</div>
 									<span
 										className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${statusTone}`}
@@ -132,7 +133,7 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 								</summary>
 								<div className="mt-4 space-y-3">
 									<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-										{provider.type === "oauth"
+										{expectsToken
 											? "Access Token"
 											: isLocalProvider
 												? "API Key (Optional)"
@@ -144,7 +145,7 @@ export const ProviderConfigPanel: React.FC<ProviderConfigPanelProps> = ({
 										placeholder={
 											isLocalProvider
 												? `Optional: Custom API key for ${provider.label}`
-												: `Paste ${provider.label} ${provider.type === "oauth" ? "token" : "API key"}`
+												: `Paste ${provider.label} ${expectsToken ? "token" : "API key"}`
 										}
 										value={drafts[provider.name] || ""}
 										onChange={(event) =>

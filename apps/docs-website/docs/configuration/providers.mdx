@@ -10,6 +10,7 @@ Examples:
 
 - `anthropic:claude-sonnet-4-5`
 - `openai:gpt-4o`
+- `codex:codex-mini-latest`
 - `openrouter:openai/gpt-4o`
 - `copilot:gpt-4o`
 - `xai:grok-beta`
@@ -21,6 +22,7 @@ Use the CLI to store credentials:
 ```bash
 wingman provider login anthropic
 wingman provider login openai
+wingman provider login codex
 wingman provider login openrouter
 ```
 
@@ -32,6 +34,7 @@ Or supply env vars (see table below). The CLI reads env vars first, then `~/.win
 | --- | --- | --- | --- | --- |
 | anthropic | model | API key | `ANTHROPIC_API_KEY` | Recommended for Claude models. |
 | openai | model | API key | `OPENAI_API_KEY` | GPT-4o, GPT-4.1, etc. |
+| codex | model | subscription token | `CODEX_ACCESS_TOKEN`, `CHATGPT_ACCESS_TOKEN` | Uses ChatGPT Codex backend (`https://chatgpt.com/backend-api/codex`) and reads `CODEX_HOME/auth.json` or `~/.codex/auth.json` when available. |
 | openrouter | model | API key | `OPENROUTER_API_KEY` | Uses OpenRouter routing (`https://openrouter.ai/api/v1`). |
 | copilot | model | API key | `GITHUB_COPILOT_TOKEN`, `COPILOT_TOKEN`, `COPILOT_API_KEY` | Token-based access. |
 | xai | model | API key | `XAI_API_KEY` | Grok models. |

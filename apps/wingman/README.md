@@ -99,6 +99,7 @@ wingman gateway start --auth
 # Cloud providers
 wingman provider login anthropic
 wingman provider login openai
+wingman provider login codex
 wingman provider login openrouter
 wingman provider login xai
 wingman provider login copilot

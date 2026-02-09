@@ -7,6 +7,41 @@ export type OutputMode = "interactive" | "json";
 export interface WingmanConfig {
 	logLevel?: LogLevel;
 	defaultAgent?: string;
+	summarization?: {
+		enabled?: boolean;
+		maxTokensBeforeSummary?: number;
+		messagesToKeep?: number;
+	};
+	modelRetry?: {
+		enabled?: boolean;
+		maxRetries?: number;
+		backoffFactor?: number;
+		initialDelayMs?: number;
+		maxDelayMs?: number;
+		jitter?: boolean;
+		onFailure?: "continue" | "error";
+	};
+	toolRetry?: {
+		enabled?: boolean;
+		maxRetries?: number;
+		backoffFactor?: number;
+		initialDelayMs?: number;
+		maxDelayMs?: number;
+		jitter?: boolean;
+		onFailure?: "continue" | "error";
+		tools?: string[];
+	};
+	humanInTheLoop?: {
+		enabled?: boolean;
+		interruptOn?: Record<
+			string,
+			boolean | {
+				allowedDecisions: Array<"approve" | "edit" | "reject">;
+				description?: string;
+				argsSchema?: Record<string, any>;
+			}
+		>;
+	};
 	gateway?: {
 		host?: string;
 		port?: number;

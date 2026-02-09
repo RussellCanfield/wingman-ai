@@ -43,6 +43,120 @@ export const SkillsConfigSchema = z.object({
 
 export type SkillsConfig = z.infer<typeof SkillsConfigSchema>;
 
+export const SummarizationConfigSchema = z.object({
+	enabled: z
+		.boolean()
+		.optional()
+		.default(true)
+		.describe("Enable conversation history summarization"),
+	maxTokensBeforeSummary: z
+		.number()
+		.min(1000)
+		.max(1000000)
+		.optional()
+		.default(12000)
+		.describe("Token threshold before summarizing conversation history"),
+	messagesToKeep: z
+		.number()
+		.min(2)
+		.max(100)
+		.optional()
+		.default(8)
+		.describe("How many most recent messages to keep after summarization"),
+});
+
+export type SummarizationConfig = z.infer<typeof SummarizationConfigSchema>;
+
+const RetryOnFailureSchema = z.enum(["continue", "error"]);
+
+const BaseRetryConfigSchema = z.object({
+	enabled: z
+		.boolean()
+		.optional()
+		.default(false)
+		.describe("Enable retry middleware"),
+	maxRetries: z
+		.number()
+		.min(0)
+		.max(20)
+		.optional()
+		.default(2)
+		.describe("Maximum number of retry attempts"),
+	backoffFactor: z
+		.number()
+		.min(0)
+		.max(10)
+		.optional()
+		.default(2)
+		.describe("Exponential backoff multiplier"),
+	initialDelayMs: z
+		.number()
+		.min(0)
+		.max(120000)
+		.optional()
+		.default(1000)
+		.describe("Initial delay before first retry in milliseconds"),
+	maxDelayMs: z
+		.number()
+		.min(0)
+		.max(300000)
+		.optional()
+		.default(60000)
+		.describe("Maximum backoff delay in milliseconds"),
+	jitter: z
+		.boolean()
+		.optional()
+		.default(true)
+		.describe("Add randomized jitter to retry delays"),
+	onFailure: RetryOnFailureSchema.optional()
+		.default("continue")
+		.describe("Behavior when retries are exhausted"),
+});
+
+export const ModelRetryConfigSchema = BaseRetryConfigSchema;
+export type ModelRetryConfig = z.infer<typeof ModelRetryConfigSchema>;
+
+export const ToolRetryConfigSchema = BaseRetryConfigSchema.extend({
+	tools: z
+		.array(z.string().min(1))
+		.optional()
+		.describe("Optional list of tool names to apply retry logic to"),
+});
+export type ToolRetryConfig = z.infer<typeof ToolRetryConfigSchema>;
+
+const AllowedDecisionSchema = z.enum(["approve", "edit", "reject"]);
+const InterruptOnToolConfigSchema = z.union([
+	z.boolean(),
+	z.object({
+		allowedDecisions: z
+			.array(AllowedDecisionSchema)
+			.min(1)
+			.describe("Allowed decisions for this tool"),
+		description: z
+			.string()
+			.optional()
+			.describe("Optional custom review prompt for this tool"),
+		argsSchema: z
+			.record(z.string(), z.any())
+			.optional()
+			.describe("Optional argument schema for edit decisions"),
+	}),
+]);
+
+export const HumanInTheLoopConfigSchema = z.object({
+	enabled: z
+		.boolean()
+		.optional()
+		.default(false)
+		.describe("Enable human-in-the-loop tool approval"),
+	interruptOn: z
+		.record(z.string(), InterruptOnToolConfigSchema)
+		.optional()
+		.default({})
+		.describe("Per-tool approval policy mapping"),
+});
+export type HumanInTheLoopConfig = z.infer<typeof HumanInTheLoopConfigSchema>;
+
 const GatewayAuthSchema = z
 	.object({
 		mode: z.enum(["token", "password", "none"]).default("none"),
@@ -187,6 +301,33 @@ export const WingmanConfigSchema = z.object({
 		.default("info"),
 	defaultAgent: z.string().optional(),
 	recursionLimit: z.number().min(1).max(1000000).optional().default(5000),
+	summarization: SummarizationConfigSchema.optional().default({
+		enabled: true,
+		maxTokensBeforeSummary: 12000,
+		messagesToKeep: 8,
+	}),
+	modelRetry: ModelRetryConfigSchema.optional().default({
+		enabled: true,
+		maxRetries: 2,
+		backoffFactor: 2,
+		initialDelayMs: 1000,
+		maxDelayMs: 60000,
+		jitter: true,
+		onFailure: "continue",
+	}),
+	toolRetry: ToolRetryConfigSchema.optional().default({
+		enabled: false,
+		maxRetries: 2,
+		backoffFactor: 2,
+		initialDelayMs: 1000,
+		maxDelayMs: 60000,
+		jitter: true,
+		onFailure: "continue",
+	}),
+	humanInTheLoop: HumanInTheLoopConfigSchema.optional().default({
+		enabled: false,
+		interruptOn: {},
+	}),
 	toolHooks: HooksConfigSchema.optional().describe("Global tool hooks configuration"),
 	hooks: InternalHooksConfigSchema.optional().describe("Internal hook configuration"),
 	search: SearchConfigSchema.optional().default({

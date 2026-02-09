@@ -1,52 +1,54 @@
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, normalize, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Server, ServerWebSocket } from "bun";
-import type {
-	GatewayConfig,
-	GatewayMessage,
-	GatewayStats,
-	HealthResponse,
-	RegisterPayload,
-	JoinGroupPayload,
-	BroadcastPayload,
-	DirectPayload,
-	ErrorPayload,
-	AgentRequestPayload,
-	AgentCancelPayload,
-	MediaAttachment,
-	GatewayAuthConfig,
-} from "./types.js";
-import { NodeManager } from "./node.js";
-import { BroadcastGroupManager } from "./broadcast.js";
+import { WingmanConfigLoader } from "@/cli/config/loader.js";
+import type { WingmanConfigType } from "@/cli/config/schema.js";
+import { AgentInvoker } from "@/cli/core/agentInvoker.js";
+import { OutputManager } from "@/cli/core/outputManager.js";
+import { SessionManager } from "@/cli/core/sessionManager.js";
+import { createLogger, type Logger, type LogLevel } from "@/logger.js";
+import { DiscordGatewayAdapter } from "./adapters/discord.js";
 import { GatewayAuth } from "./auth.js";
-import {
-	validateGatewayMessage,
-} from "./validation.js";
-import { getGatewayTokenFromEnv } from "./env.js";
+import { BroadcastGroupManager } from "./broadcast.js";
 import {
 	MDNSDiscoveryService,
 	TailscaleDiscoveryService,
 } from "./discovery/index.js";
 import type { DiscoveryService } from "./discovery/types.js";
-import { createLogger, type Logger, type LogLevel } from "@/logger.js";
-import { WingmanConfigLoader } from "@/cli/config/loader.js";
-import type { WingmanConfigType } from "@/cli/config/schema.js";
-import { GatewayRouter } from "./router.js";
-import { OutputManager } from "@/cli/core/outputManager.js";
-import { AgentInvoker } from "@/cli/core/agentInvoker.js";
-import { SessionManager } from "@/cli/core/sessionManager.js";
+import { getGatewayTokenFromEnv } from "./env.js";
+import { InternalHookRegistry } from "./hooks/registry.js";
 import { handleAgentsApi } from "./http/agents.js";
 import { handleFsApi } from "./http/fs.js";
 import { handleProvidersApi } from "./http/providers.js";
-import { handleVoiceApi } from "./http/voice.js";
-import { handleSessionsApi } from "./http/sessions.js";
-import { createWebhookStore, handleWebhookInvoke, handleWebhooksApi } from "./http/webhooks.js";
 import { createRoutineStore, handleRoutinesApi } from "./http/routines.js";
+import { handleSessionsApi } from "./http/sessions.js";
 import type { GatewayHttpContext } from "./http/types.js";
-import { DiscordGatewayAdapter } from "./adapters/discord.js";
-import { InternalHookRegistry } from "./hooks/registry.js";
-import { homedir } from "node:os";
-import { join, isAbsolute, normalize, dirname, sep } from "node:path";
-import { mkdirSync, existsSync, statSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { handleVoiceApi } from "./http/voice.js";
+import {
+	createWebhookStore,
+	handleWebhookInvoke,
+	handleWebhooksApi,
+} from "./http/webhooks.js";
+import { NodeManager } from "./node.js";
+import { GatewayRouter } from "./router.js";
+import type {
+	AgentCancelPayload,
+	AgentRequestPayload,
+	BroadcastPayload,
+	DirectPayload,
+	ErrorPayload,
+	GatewayAuthConfig,
+	GatewayConfig,
+	GatewayMessage,
+	GatewayStats,
+	HealthResponse,
+	JoinGroupPayload,
+	MediaAttachment,
+	RegisterPayload,
+} from "./types.js";
+import { validateGatewayMessage } from "./validation.js";
 
 type GatewaySocketData = {
 	nodeId: string;
@@ -61,7 +63,8 @@ type GatewaySocket = ServerWebSocket<GatewaySocketData>;
 const API_CORS_HEADERS: Record<string, string> = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-	"Access-Control-Allow-Headers": "Content-Type, Authorization, X-Wingman-Token, X-Wingman-Password",
+	"Access-Control-Allow-Headers":
+		"Content-Type, Authorization, X-Wingman-Token, X-Wingman-Password",
 	"Access-Control-Max-Age": "600",
 };
 
@@ -123,7 +126,8 @@ export class GatewayServer {
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
-	private bridgePollWaiters: Map<string, (messages: GatewayMessage[]) => void> = new Map();
+	private bridgePollWaiters: Map<string, (messages: GatewayMessage[]) => void> =
+		new Map();
 
 	constructor(config: Partial<GatewayConfig> = {}) {
 		this.workspace = config.workspace || process.cwd();
@@ -151,7 +155,9 @@ export class GatewayServer {
 				? { mode: "token", token: legacyToken }
 				: gatewayDefaults.auth;
 		const resolvedAuthToken =
-			authConfig?.mode === "token" ? authConfig.token ?? legacyToken : undefined;
+			authConfig?.mode === "token"
+				? (authConfig.token ?? legacyToken)
+				: undefined;
 
 		this.config = {
 			port: config.port ?? gatewayDefaults.port ?? 18789,
@@ -173,10 +179,11 @@ export class GatewayServer {
 		this.groupManager = new BroadcastGroupManager();
 		this.logger = createLogger(this.config.logLevel);
 
-		const initialTokens = this.config.authToken
-			? [this.config.authToken]
-			: [];
-		this.auth = new GatewayAuth(this.config.auth || { mode: "none" }, initialTokens);
+		const initialTokens = this.config.authToken ? [this.config.authToken] : [];
+		this.auth = new GatewayAuth(
+			this.config.auth || { mode: "none" },
+			initialTokens,
+		);
 
 		const controlUi = this.wingmanConfig.gateway?.controlUi;
 		this.controlUiEnabled = controlUi?.enabled ?? false;
@@ -371,10 +378,14 @@ export class GatewayServer {
 				`ws://${resolvedHost}:${this.config.port}/ws`;
 			const token =
 				discordConfig.gatewayToken ||
-				(this.config.auth?.mode === "token" ? this.config.authToken : undefined);
+				(this.config.auth?.mode === "token"
+					? this.config.authToken
+					: undefined);
 			const password =
 				discordConfig.gatewayPassword ||
-				(this.config.auth?.mode === "password" ? this.config.auth?.password : undefined);
+				(this.config.auth?.mode === "password"
+					? this.config.auth?.password
+					: undefined);
 
 			this.discordAdapter = new DiscordGatewayAdapter(
 				{
@@ -425,7 +436,8 @@ export class GatewayServer {
 			requireAuth: this.auth.isAuthRequired(),
 			capabilities: ["broadcast", "direct", "groups"],
 			version: "1.0.0",
-			transport: this.config.host === "0.0.0.0" ? ("ws" as const) : ("wss" as const),
+			transport:
+				this.config.host === "0.0.0.0" ? ("ws" as const) : ("wss" as const),
 		};
 
 		if (discovery.method === "mdns") {
@@ -449,10 +461,7 @@ export class GatewayServer {
 	/**
 	 * Handle WebSocket message
 	 */
-	private handleMessage(
-		ws: GatewaySocket,
-		message: string | Buffer,
-	): void {
+	private handleMessage(ws: GatewaySocket, message: string | Buffer): void {
 		try {
 			// Parse and validate message
 			const parsed = JSON.parse(message.toString());
@@ -567,10 +576,7 @@ export class GatewayServer {
 	/**
 	 * Handle client connect handshake
 	 */
-	private handleConnect(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleConnect(ws: GatewaySocket, msg: GatewayMessage): void {
 		if (!msg.id) {
 			this.sendError(ws, "INVALID_CONNECT", "Missing connect request id");
 			return;
@@ -655,7 +661,8 @@ export class GatewayServer {
 		}
 
 		const sessionKey =
-			payload.sessionKey || this.router.buildSessionKey(agentId, payload.routing);
+			payload.sessionKey ||
+			this.router.buildSessionKey(agentId, payload.routing);
 
 		const sessionManager = await this.getSessionManager(agentId);
 		const existingSession = sessionManager.getSession(sessionKey);
@@ -663,7 +670,9 @@ export class GatewayServer {
 			existingSession || sessionManager.getOrCreateSession(sessionKey, agentId);
 		const workdir = session.metadata?.workdir ?? null;
 		const defaultOutputDir = this.resolveDefaultOutputDir(agentId);
-		const preview = hasContent ? content.trim() : buildAttachmentPreview(attachments);
+		const preview = hasContent
+			? content.trim()
+			: buildAttachmentPreview(attachments);
 		sessionManager.updateSession(session.id, {
 			lastMessagePreview: preview.substring(0, 200),
 		});
@@ -714,8 +723,21 @@ export class GatewayServer {
 		});
 
 		const outputManager = new OutputManager("interactive");
+		let emittedAgentError = false;
 		const outputHandler = (event: unknown) => {
-			const payloadWithSession = this.attachSessionContext(event, sessionKey, agentId);
+			const payloadWithSession = this.attachSessionContext(
+				event,
+				sessionKey,
+				agentId,
+			);
+			if (
+				payloadWithSession &&
+				typeof payloadWithSession === "object" &&
+				!Array.isArray(payloadWithSession) &&
+				(payloadWithSession as Record<string, unknown>).type === "agent-error"
+			) {
+				emittedAgentError = true;
+			}
 			const baseMessage: GatewayMessage = {
 				type: "event:agent",
 				id: msg.id,
@@ -750,13 +772,9 @@ export class GatewayServer {
 		});
 
 		try {
-			await invoker.invokeAgent(
-				agentId,
-				content,
-				sessionKey,
-				attachments,
-				{ signal: abortController.signal },
-			);
+			await invoker.invokeAgent(agentId, content, sessionKey, attachments, {
+				signal: abortController.signal,
+			});
 
 			const updated = sessionManager.getSession(sessionKey);
 			if (updated) {
@@ -766,6 +784,17 @@ export class GatewayServer {
 			}
 		} catch (error) {
 			this.logger.error("Agent invocation failed", error);
+			if (!emittedAgentError) {
+				const message = error instanceof Error ? error.message : String(error);
+				const stack = error instanceof Error ? error.stack : undefined;
+				this.sendAgentError(ws, msg.id, message, {
+					sessionId: sessionKey,
+					agentId,
+					stack,
+					broadcastToSession: true,
+					exclude: ws,
+				});
+			}
 		} finally {
 			this.activeAgentRequests.delete(msg.id);
 			outputManager.off("output-event", outputHandler);
@@ -779,9 +808,14 @@ export class GatewayServer {
 		}
 		const payload = msg.payload as AgentCancelPayload | undefined;
 		const requestId =
-			(typeof payload?.requestId === "string" && payload.requestId) || undefined;
+			(typeof payload?.requestId === "string" && payload.requestId) ||
+			undefined;
 		if (!requestId) {
-			this.sendError(ws, "INVALID_REQUEST", "Missing requestId for cancellation");
+			this.sendError(
+				ws,
+				"INVALID_REQUEST",
+				"Missing requestId for cancellation",
+			);
 			return;
 		}
 
@@ -825,10 +859,7 @@ export class GatewayServer {
 	/**
 	 * Handle node registration
 	 */
-	private handleRegister(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleRegister(ws: GatewaySocket, msg: GatewayMessage): void {
 		const payload = msg.payload as RegisterPayload;
 
 		// Validate authentication
@@ -867,23 +898,24 @@ export class GatewayServer {
 		});
 
 		const sessionInfo = node.sessionId ? ` (session: ${node.sessionId})` : "";
-		this.log("info", `Node registered: ${node.id} (${node.name})${sessionInfo}`);
+		this.log(
+			"info",
+			`Node registered: ${node.id} (${node.name})${sessionInfo}`,
+		);
 	}
 
 	/**
 	 * Handle session subscription request
 	 */
-	private handleSessionSubscribe(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleSessionSubscribe(ws: GatewaySocket, msg: GatewayMessage): void {
 		if (!ws.data.authenticated) {
 			this.sendError(ws, "AUTH_REQUIRED", "Client is not authenticated");
 			return;
 		}
 
 		const payload = msg.payload as { sessionId?: string };
-		const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "";
+		const sessionId =
+			typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "";
 		if (!sessionId) {
 			this.sendError(ws, "INVALID_REQUEST", "Missing sessionId");
 			return;
@@ -914,7 +946,8 @@ export class GatewayServer {
 		}
 
 		const payload = msg.payload as { sessionId?: string };
-		const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "";
+		const sessionId =
+			typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "";
 		if (!sessionId) {
 			this.sendError(ws, "INVALID_REQUEST", "Missing sessionId");
 			return;
@@ -935,10 +968,7 @@ export class GatewayServer {
 	/**
 	 * Handle node unregistration
 	 */
-	private handleUnregister(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleUnregister(ws: GatewaySocket, msg: GatewayMessage): void {
 		const nodeId = ws.data.nodeId;
 		if (nodeId) {
 			this.groupManager.removeNodeFromAllGroups(nodeId);
@@ -950,10 +980,7 @@ export class GatewayServer {
 	/**
 	 * Handle join group request
 	 */
-	private handleJoinGroup(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleJoinGroup(ws: GatewaySocket, msg: GatewayMessage): void {
 		const nodeId = ws.data.nodeId;
 		if (!nodeId) {
 			this.sendError(ws, "NOT_REGISTERED", "Node not registered");
@@ -1004,10 +1031,7 @@ export class GatewayServer {
 	/**
 	 * Handle leave group request
 	 */
-	private handleLeaveGroup(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleLeaveGroup(ws: GatewaySocket, msg: GatewayMessage): void {
 		const nodeId = ws.data.nodeId;
 		if (!nodeId || !msg.groupId) {
 			this.sendError(ws, "INVALID_REQUEST", "Invalid leave group request");
@@ -1031,10 +1055,7 @@ export class GatewayServer {
 	/**
 	 * Handle broadcast message
 	 */
-	private handleBroadcast(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleBroadcast(ws: GatewaySocket, msg: GatewayMessage): void {
 		const nodeId = ws.data.nodeId;
 		if (!nodeId) {
 			this.sendError(ws, "NOT_REGISTERED", "Node not registered");
@@ -1066,10 +1087,7 @@ export class GatewayServer {
 	/**
 	 * Handle direct message
 	 */
-	private handleDirect(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handleDirect(ws: GatewaySocket, msg: GatewayMessage): void {
 		const nodeId = ws.data.nodeId;
 		if (!nodeId) {
 			this.sendError(ws, "NOT_REGISTERED", "Node not registered");
@@ -1094,10 +1112,7 @@ export class GatewayServer {
 	/**
 	 * Handle ping message
 	 */
-	private handlePing(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handlePing(ws: GatewaySocket, msg: GatewayMessage): void {
 		const nodeId = ws.data.nodeId;
 		if (nodeId) {
 			this.nodeManager.updatePing(nodeId);
@@ -1113,10 +1128,7 @@ export class GatewayServer {
 	/**
 	 * Handle pong message
 	 */
-	private handlePong(
-		ws: GatewaySocket,
-		msg: GatewayMessage,
-	): void {
+	private handlePong(ws: GatewaySocket, msg: GatewayMessage): void {
 		const nodeId = ws.data.nodeId;
 		if (nodeId) {
 			this.nodeManager.updatePing(nodeId);
@@ -1126,10 +1138,7 @@ export class GatewayServer {
 	/**
 	 * Send a message to a WebSocket
 	 */
-	private sendMessage(
-		ws: GatewaySocket,
-		message: GatewayMessage,
-	): void {
+	private sendMessage(ws: GatewaySocket, message: GatewayMessage): void {
 		try {
 			ws.send(JSON.stringify(message));
 		} catch (error) {
@@ -1140,11 +1149,7 @@ export class GatewayServer {
 	/**
 	 * Send an error message
 	 */
-	private sendError(
-		ws: GatewaySocket,
-		code: string,
-		message: string,
-	): void {
+	private sendError(ws: GatewaySocket, code: string, message: string): void {
 		const errorPayload: ErrorPayload = {
 			code,
 			message,
@@ -1161,17 +1166,47 @@ export class GatewayServer {
 		ws: GatewaySocket,
 		requestId: string,
 		message: string,
+		options?: {
+			sessionId?: string;
+			agentId?: string;
+			stack?: string;
+			broadcastToSession?: boolean;
+			exclude?: GatewaySocket;
+		},
 	): void {
-		this.sendMessage(ws, {
+		let payload: Record<string, unknown> = {
+			type: "agent-error",
+			error: message,
+			timestamp: new Date().toISOString(),
+		};
+		if (options?.stack) {
+			payload.stack = options.stack;
+		}
+		if (options?.sessionId && options?.agentId) {
+			payload = this.attachSessionContext(
+				payload,
+				options.sessionId,
+				options.agentId,
+			) as Record<string, unknown>;
+		}
+
+		const baseMessage: GatewayMessage = {
 			type: "event:agent",
 			id: requestId,
-			payload: {
-				type: "agent-error",
-				error: message,
-				timestamp: new Date().toISOString(),
-			},
+			payload,
 			timestamp: Date.now(),
+		};
+		this.sendMessage(ws, {
+			...baseMessage,
+			clientId: ws.data.clientId,
 		});
+		if (options?.broadcastToSession && options.sessionId) {
+			this.broadcastSessionEvent(
+				options.sessionId,
+				baseMessage,
+				options.exclude,
+			);
+		}
 	}
 
 	private cancelSocketAgentRequests(ws: GatewaySocket): void {
@@ -1244,7 +1279,9 @@ export class GatewayServer {
 				continue;
 			}
 			if (options?.skipSessionId) {
-				const subscribers = this.sessionSubscriptions.get(options.skipSessionId);
+				const subscribers = this.sessionSubscriptions.get(
+					options.skipSessionId,
+				);
 				if (subscribers?.has(ws)) {
 					continue;
 				}
@@ -1271,7 +1308,10 @@ export class GatewayServer {
 		socketSessions.add(sessionId);
 	}
 
-	private removeSessionSubscription(ws: GatewaySocket, sessionId: string): void {
+	private removeSessionSubscription(
+		ws: GatewaySocket,
+		sessionId: string,
+	): void {
 		const subscribers = this.sessionSubscriptions.get(sessionId);
 		if (subscribers) {
 			subscribers.delete(ws);
@@ -1355,7 +1395,8 @@ export class GatewayServer {
 			getSessionManager: (agentId) => this.getSessionManager(agentId),
 			resolveConfigDirPath: () => this.resolveConfigDirPath(),
 			resolveOutputRoot: () => this.resolveOutputRoot(),
-			resolveDefaultOutputDir: (agentId) => this.resolveDefaultOutputDir(agentId),
+			resolveDefaultOutputDir: (agentId) =>
+				this.resolveDefaultOutputDir(agentId),
 			resolveAgentWorkspace: (agentId) => this.resolveAgentWorkspace(agentId),
 			resolveFsRoots: () => this.resolveFsRoots(),
 			resolveFsPath: (path) => this.resolveFsPath(path),
@@ -1447,9 +1488,7 @@ export class GatewayServer {
 				) {
 					return candidate;
 				}
-			} catch {
-				continue;
-			}
+			} catch {}
 		}
 
 		return null;
@@ -1575,7 +1614,6 @@ export class GatewayServer {
 	}
 
 	private async handleUiRequest(req: Request): Promise<Response> {
-
 		const url = new URL(req.url);
 
 		const ctx = this.getHttpContext();
@@ -1608,26 +1646,28 @@ export class GatewayServer {
 
 				const defaultAgentId = this.router.selectAgent();
 
-				return withApiCors(new Response(
-					JSON.stringify(
+				return withApiCors(
+					new Response(
+						JSON.stringify(
+							{
+								gatewayHost: this.config.host,
+								gatewayPort: this.config.port,
+								requireAuth: this.auth.isAuthRequired(),
+								defaultAgentId,
+								outputRoot: this.resolveOutputRoot(),
+								dynamicUiEnabled:
+									this.wingmanConfig.gateway?.dynamicUiEnabled !== false,
+								voice: this.wingmanConfig.voice,
+								agents,
+							},
+							null,
+							2,
+						),
 						{
-							gatewayHost: this.config.host,
-							gatewayPort: this.config.port,
-							requireAuth: this.auth.isAuthRequired(),
-							defaultAgentId,
-							outputRoot: this.resolveOutputRoot(),
-							dynamicUiEnabled:
-								this.wingmanConfig.gateway?.dynamicUiEnabled !== false,
-							voice: this.wingmanConfig.voice,
-							agents,
+							headers: { "Content-Type": "application/json" },
 						},
-						null,
-						2,
 					),
-					{
-						headers: { "Content-Type": "application/json" },
-					},
-				));
+				);
 			}
 
 			const apiResponse =
@@ -1730,13 +1770,10 @@ export class GatewayServer {
 			// Validate message
 			const validation = validateGatewayMessage(message);
 			if (!validation.success) {
-				return new Response(
-					JSON.stringify({ error: validation.error }),
-					{
-						status: 400,
-						headers: { "Content-Type": "application/json" },
-					},
-				);
+				return new Response(JSON.stringify({ error: validation.error }), {
+					status: 400,
+					headers: { "Content-Type": "application/json" },
+				});
 			}
 
 			const validatedMessage = validation.data;
@@ -1767,13 +1804,10 @@ export class GatewayServer {
 			// For other messages, queue them for the node's poll
 			const nodeId = validatedMessage.nodeId;
 			if (!nodeId) {
-				return new Response(
-					JSON.stringify({ error: "nodeId required" }),
-					{
-						status: 400,
-						headers: { "Content-Type": "application/json" },
-					},
-				);
+				return new Response(JSON.stringify({ error: "nodeId required" }), {
+					status: 400,
+					headers: { "Content-Type": "application/json" },
+				});
 			}
 
 			// Process message (similar to WebSocket handling)
@@ -1817,13 +1851,10 @@ export class GatewayServer {
 			// Check if there are queued messages
 			const queue = this.bridgeQueues.get(nodeId);
 			if (!queue) {
-				return new Response(
-					JSON.stringify({ error: "Node not registered" }),
-					{
-						status: 404,
-						headers: { "Content-Type": "application/json" },
-					},
-				);
+				return new Response(JSON.stringify({ error: "Node not registered" }), {
+					status: 404,
+					headers: { "Content-Type": "application/json" },
+				});
 			}
 
 			// If there are messages, return them immediately
@@ -1876,7 +1907,9 @@ export class GatewayServer {
 	}
 }
 
-function buildAttachmentPreview(attachments: MediaAttachment[] | undefined): string {
+function buildAttachmentPreview(
+	attachments: MediaAttachment[] | undefined,
+): string {
 	if (!attachments || attachments.length === 0) return "Attachment";
 	let hasFile = false;
 	let hasAudio = false;
@@ -1894,7 +1927,9 @@ function buildAttachmentPreview(attachments: MediaAttachment[] | undefined): str
 	}
 	const count = attachments.length;
 	if (hasFile && (hasAudio || hasImage)) {
-		return count > 1 ? "File and media attachments" : "File and media attachment";
+		return count > 1
+			? "File and media attachments"
+			: "File and media attachment";
 	}
 	if (hasFile) {
 		return count > 1 ? "File attachments" : "File attachment";
@@ -1917,5 +1952,7 @@ function isAudioAttachment(attachment: MediaAttachment): boolean {
 
 function isFileAttachment(attachment: MediaAttachment): boolean {
 	if (attachment.kind === "file") return true;
-	return typeof (attachment as { textContent?: unknown }).textContent === "string";
+	return (
+		typeof (attachment as { textContent?: unknown }).textContent === "string"
+	);
 }
