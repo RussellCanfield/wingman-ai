@@ -36,12 +36,18 @@ const baseProps: React.ComponentProps<typeof ChatPanel> = {
 
 describe("ChatPanel prompt composer", () => {
 	it("removes quick prompts and renders a single-bar composer with icon controls", () => {
-		const html = renderToStaticMarkup(React.createElement(ChatPanel, baseProps));
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, baseProps),
+		);
 
 		expect(html).toContain('id="prompt-textarea"');
-		expect(html).toContain("rounded-2xl border border-white/10 bg-slate-950/70 p-2");
+		expect(html).toContain(
+			"rounded-2xl border border-white/10 bg-slate-950/70 p-2",
+		);
 		expect(html).toContain("flex items-center justify-between gap-2 px-1 pb-2");
-		expect(html).toContain("flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2");
+		expect(html).toContain(
+			"flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2",
+		);
 		expect(html).toContain('aria-label="Send prompt"');
 		expect(html).toContain('aria-label="Add files"');
 		expect(html).toContain('aria-label="Record audio"');
@@ -60,9 +66,35 @@ describe("ChatPanel prompt composer", () => {
 			}),
 		);
 
-		expect(html).toContain("rounded-2xl border border-white/10 bg-slate-950/70 p-2");
+		expect(html).toContain(
+			"rounded-2xl border border-white/10 bg-slate-950/70 p-2",
+		);
 		expect(html).toContain('aria-label="Stop response"');
 		expect(html).not.toContain('aria-label="Send prompt"');
+	});
+
+	it("renders syntax-highlighted fenced code in chat messages", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...baseProps.activeThread,
+					messages: [
+						{
+							id: "assistant-1",
+							role: "assistant",
+							content: "```ts\nconst value = 42;\n```",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("language-ts");
+		expect(html).toContain("hljs");
+		expect(html).toContain('aria-label="Copy code block"');
+		expect(html).toContain(">Copy<");
 	});
 });
 

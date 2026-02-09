@@ -41,7 +41,7 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 			<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
 				<div className="flex items-center gap-3">
 					<span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-						Thinking
+						Execution Trace
 					</span>
 					<span className="text-xs text-slate-400">{summary}</span>
 				</div>
@@ -85,13 +85,12 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 	);
 };
 
-export function shouldOpenThinkingPanelByDefault(_: {
+export function shouldOpenThinkingPanelByDefault(params: {
 	isStreaming: boolean;
 	hasThinking: boolean;
 	activeTools: number;
 }): boolean {
-	// Keep tool/thinking activity collapsed unless the user explicitly opens it.
-	return false;
+	return params.isStreaming && (params.hasThinking || params.activeTools > 0);
 }
 
 export function buildThinkingSummary({

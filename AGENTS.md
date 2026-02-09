@@ -2,10 +2,11 @@
 
 ## Project Overview
 
-Wingman is a two-part AI agent ecosystem:
+Wingman is a three-part AI agent ecosystem:
 
 1. **Wingman CLI** - A local AI agent framework that runs on your machine, supporting multiple model providers and customizable agent configurations
 2. **Wingman Gateway** - A distributed communication hub that enables multi-agent collaboration across devices, allowing AI agents to communicate as a team
+3. **Wingman Desktop** - A native desktop application for managing and interacting with Wingman locally, including tray and voice integrations
 
 **Key Features**:
 - Intelligent task delegation and orchestration
@@ -16,10 +17,17 @@ Wingman is a two-part AI agent ecosystem:
 - Extensible middleware, hooks, and skills system
 - Gateway for distributed multi-agent collaboration
 - Session persistence with SQLite storage
+- Desktop app support with native OS integration
 
 ## Verify Changes
 Test coverage is essential, always add tests for new functionality.
 After you've finished making changes, ensure all tests and builds pass.
+
+## Maintainable Code Standards
+- Keep files from growing too large; split code into focused modules/components before files become difficult to navigate.
+- Always ensure there are no TypeScript errors.
+- Always lint and format code after changes.
+- Always ensure builds and tests pass before considering work complete.
 
 ## Docs-site Updates
 Keep major feature descriptions in `./apps/docs-website` updated when you ship or change significant capabilities.
@@ -58,6 +66,6 @@ All PRD documents can be found under `./docs/requirements/`:
 
 ---
 
-**Version**: 1.2.1
-**Last Updated**: 2026-02-02
+**Version**: 1.2.2
+**Last Updated**: 2026-02-09
 **Maintainer**: Russell Canfield (rcanfield86@gmail.com)

@@ -97,6 +97,7 @@
 		"deepagents": "^1.6.3",
 		"discord.js": "^14.22.1",
 		"duck-duck-scrape": "^2.2.7",
+		"highlight.js": "^11.11.1",
 		"ink": "^5.2.1",
 		"ink-box": "^2.0.0",
 		"ink-spinner": "^5.0.0",
@@ -110,6 +111,7 @@
 		"react-router-dom": "^6.26.2",
 		"reactflow": "^11.11.4",
 		"recharts": "^3.7.0",
+		"rehype-highlight": "^7.0.2",
 		"remark-gfm": "^4.0.0",
 		"uuid": "^13.0.0",
 		"zod": "^4.3.5"

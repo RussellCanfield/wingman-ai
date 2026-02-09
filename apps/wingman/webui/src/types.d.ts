@@ -125,6 +125,8 @@ export type ChatMessage = {
 export type ToolEvent = {
     id: string;
     name: string;
+    node?: string;
+    actor?: string;
     args?: Record<string, any>;
     status: "running" | "completed" | "error";
     output?: any;

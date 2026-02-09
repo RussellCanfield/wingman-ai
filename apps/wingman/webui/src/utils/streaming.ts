@@ -12,6 +12,7 @@ export type ParsedStreamEvent = {
 	toolEvents: Array<{
 		id: string;
 		name: string;
+		node?: string;
 		args?: Record<string, any>;
 		status: "running" | "completed" | "error";
 		output?: any;
@@ -56,21 +57,22 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 			const isToolMessage = isToolMessageType(normalizedType);
 			if (role === "user" && !isAIMessage && !isToolMessage) continue;
 
-			if (isAIMessage) {
-				const messageId = getMessageId(msg, entry);
-				const node = extractNodeLabel(msg, entry.meta);
-				const toolCalls = extractToolCalls(msg, messageId);
-				for (const toolCall of toolCalls) {
+				if (isAIMessage) {
+					const messageId = getMessageId(msg, entry);
+					const node = extractNodeLabel(msg, entry.meta);
+					const toolCalls = extractToolCalls(msg, messageId);
+					for (const toolCall of toolCalls) {
 					const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
 						toolCall.args,
 					);
-					toolEvents.push({
-						id: toolCall.id,
-						name: toolCall.name,
-						args,
-						ui,
-						uiOnly,
-						textFallback,
+						toolEvents.push({
+							id: toolCall.id,
+							name: toolCall.name,
+							node,
+							args,
+							ui,
+							uiOnly,
+							textFallback,
 						status: "running",
 						timestamp: Date.now(),
 					});
@@ -87,18 +89,20 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				}
 			}
 
-			if (isToolMessage) {
-				const toolResult = extractToolResult(msg);
-				if (toolResult) {
-					const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
-						toolResult.output,
-					);
-					toolEvents.push({
-						id: toolResult.id,
-						name: toolResult.name || "tool",
-						status: toolResult.error ? "error" : "completed",
-						output,
-						ui,
+				if (isToolMessage) {
+					const toolResult = extractToolResult(msg);
+					if (toolResult) {
+						const node = extractNodeLabel(msg, entry.meta);
+						const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
+							toolResult.output,
+						);
+						toolEvents.push({
+							id: toolResult.id,
+							name: toolResult.name || "tool",
+							node,
+							status: toolResult.error ? "error" : "completed",
+							output,
+							ui,
 						uiOnly,
 						textFallback,
 						error: toolResult.error,
@@ -116,18 +120,19 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		textEvents.push({ text: chunk.content });
 	}
 
-	if (chunk.tool_calls && Array.isArray(chunk.tool_calls)) {
-		for (const toolCall of chunk.tool_calls) {
-			const normalized = normalizeToolCall(toolCall);
-			if (!normalized) continue;
-			const { ui, uiOnly, textFallback, data: args } = splitUiPayload(normalized.args);
-			toolEvents.push({
-				id: normalized.id,
-				name: normalized.name,
-				args,
-				ui,
-				uiOnly,
-				textFallback,
+		if (chunk.tool_calls && Array.isArray(chunk.tool_calls)) {
+			for (const toolCall of chunk.tool_calls) {
+				const normalized = normalizeToolCall(toolCall);
+				if (!normalized) continue;
+				const { ui, uiOnly, textFallback, data: args } = splitUiPayload(normalized.args);
+				toolEvents.push({
+					id: normalized.id,
+					name: normalized.name,
+					node: extractEventNode(chunk),
+					args,
+					ui,
+					uiOnly,
+					textFallback,
 				status: "running",
 				timestamp: Date.now(),
 			});
@@ -184,6 +189,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		const toolName = typeof chunk.name === "string" ? chunk.name : "tool";
 		const toolId =
 			typeof chunk.run_id === "string" ? chunk.run_id : createEventId();
+		const node = extractEventNode(chunk);
 		const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
 			normalizeToolArgs(chunk.data?.input),
 		);
@@ -193,6 +199,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 				{
 					id: toolId,
 					name: toolName,
+					node,
 					args,
 					ui,
 					uiOnly,
@@ -207,6 +214,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 	if (chunk.event === "on_tool_end") {
 		const toolId =
 			typeof chunk.run_id === "string" ? chunk.run_id : createEventId();
+		const node = extractEventNode(chunk);
 		const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
 			chunk.data?.output,
 		);
@@ -216,6 +224,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 				{
 					id: toolId,
 					name: typeof chunk.name === "string" ? chunk.name : "tool",
+					node,
 					status: chunk.data?.error ? "error" : "completed",
 					output,
 					ui,

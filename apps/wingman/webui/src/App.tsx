@@ -761,7 +761,7 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 					: thread,
 			),
 		);
-	}, []);
+}, []);
 
 	const updateToolEvents = useCallback((requestId: string, events: ToolEvent[]) => {
 		const threadId = requestThreadRef.current.get(requestId);
@@ -793,6 +793,8 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 								...existing[index],
 								...event,
 								name: resolvedName,
+								node: event.node || existing[index].node,
+								actor: event.actor || existing[index].actor,
 								startedAt: existing[index].startedAt || event.timestamp,
 								completedAt:
 									event.status === "completed" || event.status === "error"
@@ -803,6 +805,8 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 							existing.push({
 								id: event.id,
 								name: event.name,
+								node: event.node,
+								actor: event.actor,
 								args: event.args,
 								status: event.status,
 								output: event.output,
@@ -1185,8 +1189,20 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 				}
 
 				if (toolEvents.length > 0) {
-					updateToolEvents(requestId, toolEvents);
-					const hasRunningTools = updateRunningToolState(requestId, toolEvents);
+					const enrichedToolEvents = toolEvents.map((event) => ({
+						...event,
+						actor: resolveToolActorLabel(
+							event.node,
+							event.args,
+							event.output,
+							subagents,
+						),
+					}));
+					updateToolEvents(requestId, enrichedToolEvents);
+					const hasRunningTools = updateRunningToolState(
+						requestId,
+						enrichedToolEvents,
+					);
 					if (
 						activeRequestIdRef.current === requestId &&
 						hasRunningTools
@@ -2575,6 +2591,73 @@ const updateAssistant = useCallback((requestId: string, text: string) => {
 
 function normalizeName(value: string): string {
 	return value.trim().toLowerCase();
+}
+
+function resolveToolActorLabel(
+	node: string | undefined,
+	args: Record<string, any> | undefined,
+	output: unknown,
+	knownSubagents?: Set<string>,
+): string {
+	if (typeof node === "string" && node.trim().length > 0) {
+		return node.trim();
+	}
+
+	const inferred =
+		extractActorFromPayload(args) || extractActorFromPayload(output);
+	if (inferred) {
+		return inferred;
+	}
+
+	if (knownSubagents && knownSubagents.size === 1) {
+		const [single] = Array.from(knownSubagents.values());
+		if (single) return single;
+	}
+
+	return "orchestrator";
+}
+
+function extractActorFromPayload(
+	payload: unknown,
+	depth = 0,
+): string | null {
+	if (!payload || typeof payload !== "object") return null;
+	if (depth > 2) return null;
+
+	const source = payload as Record<string, unknown>;
+	const directKeys = [
+		"subagent",
+		"subAgent",
+		"agent",
+		"agentName",
+		"delegate",
+		"worker",
+		"assistant",
+		"name",
+		"id",
+		"role",
+	];
+
+	for (const key of directKeys) {
+		const value = source[key];
+		if (typeof value === "string" && value.trim()) {
+			return value.trim();
+		}
+	}
+
+	for (const value of Object.values(source)) {
+		if (!value || typeof value !== "object") continue;
+		const nested = value as Record<string, unknown>;
+		const pick =
+			(typeof nested.name === "string" && nested.name.trim()) ||
+			(typeof nested.id === "string" && nested.id.trim()) ||
+			(typeof nested.role === "string" && nested.role.trim());
+		if (pick) return pick;
+		const recursive = extractActorFromPayload(nested, depth + 1);
+		if (recursive) return recursive;
+	}
+
+	return null;
 }
 
 function mergeStreamText(existing: string, next: string): string {

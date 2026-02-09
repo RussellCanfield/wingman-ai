@@ -60,6 +60,12 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 
 const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 	const status = TOOL_STATUS_STYLES[event.status];
+	const actorLabel =
+		typeof event.actor === "string" && event.actor.trim()
+			? event.actor.trim()
+			: typeof event.node === "string" && event.node.trim()
+				? event.node.trim()
+				: null;
 	const argsText = stringifyToolEventValue(event.args);
 	const outputText = stringifyToolEventValue(
 		event.error ? { error: event.error } : event.output,
@@ -89,6 +95,11 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 							<div className="truncate text-sm font-semibold text-slate-100">
 								{event.name}
 							</div>
+							{actorLabel ? (
+								<span className="rounded-full border border-sky-400/40 bg-sky-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200">
+									{actorLabel}
+								</span>
+							) : null}
 							{duration ? (
 								<span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
 									{duration}

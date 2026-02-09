@@ -1,3 +1,5 @@
+@import "highlight.js/styles/github-dark.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -87,6 +89,10 @@
 
   .markdown-content hr {
     @apply my-4 border-white/10;
+  }
+
+  .markdown-content pre code.hljs {
+    @apply bg-transparent p-0;
   }
 }
 

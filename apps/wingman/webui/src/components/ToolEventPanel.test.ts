@@ -90,4 +90,22 @@ describe("ToolEventPanel helpers", () => {
 		expect(html).toContain("overflow-x-hidden");
 		expect(html).toContain("[overflow-wrap:anywhere]");
 	});
+
+	it("renders actor labels when subagent metadata is present", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-actor-1",
+						name: "task",
+						actor: "implementor",
+						status: "running",
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("implementor");
+	});
 });

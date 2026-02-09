@@ -44,6 +44,7 @@ describe("parseStreamEvents", () => {
 			name: "search",
 			run_id: "tool-1",
 			data: { input: { q: "wingman" } },
+			metadata: { langgraph_node: "researcher" },
 		};
 
 		const result = parseStreamEvents(chunk);
@@ -52,6 +53,31 @@ describe("parseStreamEvents", () => {
 		expect(result.toolEvents[0]).toMatchObject({
 			id: "tool-1",
 			name: "search",
+			node: "researcher",
+			status: "running",
+		});
+	});
+
+	it("captures tool node metadata from message payloads", () => {
+		const chunk = [
+			"stream-tools",
+			"messages",
+			[
+				{
+					type: "ai",
+					tool_calls: [{ id: "tool-msg-1", name: "task", args: { work: "x" } }],
+				},
+				{ langgraph_node: "implementor" },
+			],
+		];
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.toolEvents).toHaveLength(1);
+		expect(result.toolEvents[0]).toMatchObject({
+			id: "tool-msg-1",
+			name: "task",
+			node: "implementor",
 			status: "running",
 		});
 	});
@@ -90,6 +116,7 @@ describe("parseStreamEvents", () => {
 			event: "on_tool_end",
 			name: "ui_present",
 			run_id: "tool-3",
+			metadata: { langgraph_node: "composer" },
 			data: {
 				output: {
 					temperature: 72,
@@ -107,6 +134,7 @@ describe("parseStreamEvents", () => {
 		expect(result.toolEvents[0].ui).toMatchObject({
 			registry: "webui",
 		});
+		expect(result.toolEvents[0].node).toBe("composer");
 		expect(result.toolEvents[0].output).toMatchObject({ temperature: 72 });
 	});
 

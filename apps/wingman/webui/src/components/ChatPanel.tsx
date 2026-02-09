@@ -1,5 +1,6 @@
 import type React from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import rehypeHighlight from "rehype-highlight";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -14,13 +15,69 @@ import {
 } from "react-icons/fi";
 import type { ChatAttachment, Thread } from "../types";
 import { extractImageFiles } from "../utils/attachments";
-import { getVoicePlaybackLabel, type VoicePlaybackStatus } from "../utils/voicePlayback";
+import {
+	getVoicePlaybackLabel,
+	type VoicePlaybackStatus,
+} from "../utils/voicePlayback";
 import { getAudioAvailability } from "../utils/media";
 import { ThinkingPanel } from "./ThinkingPanel";
 import { SguiRenderer } from "../sgui/SguiRenderer";
 import { shouldAutoScroll } from "../utils/scroll";
 
 const COMPOSER_MAX_LINES = 4;
+
+type MarkdownCodeBlockProps = {
+	className?: string;
+	children: React.ReactNode;
+};
+
+const MarkdownCodeBlock: React.FC<MarkdownCodeBlockProps> = ({
+	className,
+	children,
+}) => {
+	const [copied, setCopied] = useState(false);
+	const codeRef = useRef<HTMLElement | null>(null);
+	const copiedTimerRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (copiedTimerRef.current !== null) {
+				window.clearTimeout(copiedTimerRef.current);
+				copiedTimerRef.current = null;
+			}
+		};
+	}, []);
+
+	const handleCopy = useCallback(async () => {
+		const text = codeRef.current?.innerText?.trim();
+		if (!text) return;
+		const didCopy = await copyTextToClipboard(text);
+		if (!didCopy) return;
+		setCopied(true);
+		if (copiedTimerRef.current !== null) {
+			window.clearTimeout(copiedTimerRef.current);
+		}
+		copiedTimerRef.current = window.setTimeout(() => {
+			setCopied(false);
+		}, 1500);
+	}, []);
+
+	return (
+		<pre className="relative mt-3 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-3 pt-9 text-xs">
+			<button
+				type="button"
+				className="absolute right-2 top-2 rounded-md border border-white/10 bg-slate-950/80 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-300 transition hover:border-sky-400/60 hover:text-sky-100"
+				aria-label="Copy code block"
+				onClick={handleCopy}
+			>
+				{copied ? "Copied" : "Copy"}
+			</button>
+			<code ref={codeRef} className={className || "hljs"}>
+				{children}
+			</code>
+		</pre>
+	);
+};
 
 type ChatPanelProps = {
 	activeThread?: Thread;
@@ -94,7 +151,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const lastVoiceMessageIdRef = useRef<string | null>(null);
 	const messageCount = activeThread?.messages.length ?? 0;
 	const lastMessage =
-		messageCount > 0 && activeThread ? activeThread.messages[messageCount - 1] : undefined;
+		messageCount > 0 && activeThread
+			? activeThread.messages[messageCount - 1]
+			: undefined;
 
 	useEffect(() => {
 		if (voicePlayback.status === "idle") {
@@ -104,7 +163,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		}
 	}, [voicePlayback.messageId, voicePlayback.status]);
 	const canSend =
-		connected && !isStreaming && !recording && (prompt.trim() || attachments.length > 0);
+		connected &&
+		!isStreaming &&
+		!recording &&
+		(prompt.trim() || attachments.length > 0);
 
 	useEffect(() => {
 		autoScrollRef.current = true;
@@ -168,7 +230,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				recordTimerRef.current = null;
 			}
 			stopAudioMeter();
-			if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+			if (
+				mediaRecorderRef.current &&
+				mediaRecorderRef.current.state !== "inactive"
+			) {
 				mediaRecorderRef.current.stop();
 			}
 			if (mediaStreamRef.current) {
@@ -183,7 +248,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const startAudioMeter = (stream: MediaStream) => {
 		stopAudioMeter();
 		const AudioContextCtor =
-			window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+			window.AudioContext ||
+			(window as unknown as { webkitAudioContext?: typeof AudioContext })
+				.webkitAudioContext;
 		if (!AudioContextCtor) return;
 		const audioContext = new AudioContextCtor();
 		const analyser = audioContext.createAnalyser();
@@ -229,14 +296,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		if (recording || isStreaming) return;
 		setRecordingError("");
 		recordingCancelledRef.current = false;
-		if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+		if (
+			!navigator.mediaDevices?.getUserMedia ||
+			typeof MediaRecorder === "undefined"
+		) {
 			setRecordingError("Audio recording is not supported in this browser.");
 			return;
 		}
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 			const mimeType = pickSupportedAudioMimeType();
-			const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+			const recorder = new MediaRecorder(
+				stream,
+				mimeType ? { mimeType } : undefined,
+			);
 			mediaStreamRef.current = stream;
 			mediaRecorderRef.current = recorder;
 			recordChunksRef.current = [];
@@ -419,9 +492,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				msg.role === "assistant" &&
 				(toolEvents.length > 0 || thinkingEvents.length > 0);
 			const isActiveMessage =
-				msg.role === "assistant" &&
-				isStreaming &&
-				msg.id === lastAssistantId;
+				msg.role === "assistant" && isStreaming && msg.id === lastAssistantId;
 			const uiBlocks = dynamicUiEnabled ? msg.uiBlocks : undefined;
 			const displayText =
 				msg.content || (!dynamicUiEnabled ? msg.uiTextFallback || "" : "");
@@ -432,10 +503,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
 				>
 					<div
-						className={`w-fit max-w-[90%] min-w-0 rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${msg.role === "user"
-							? "border-white/10 bg-slate-950/60 text-slate-100"
-							: "border-sky-400/40 bg-sky-500/10 text-slate-100"
-							}`}
+						className={`w-fit max-w-[90%] min-w-0 rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${
+							msg.role === "user"
+								? "border-white/10 bg-slate-950/60 text-slate-100"
+								: "border-sky-400/40 bg-sky-500/10 text-slate-100"
+						}`}
 					>
 						<div className="flex items-center justify-between gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400">
 							<span>{msg.role === "user" ? "You" : "Wingman"}</span>
@@ -443,60 +515,61 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								<span className="whitespace-nowrap">
 									{formatTime(msg.createdAt)}
 								</span>
-								{msg.role === "assistant" &&
-								(msg.content || msg.uiTextFallback) ? (
-									(() => {
-										const playbackStatus =
-											resolvedVoiceMessageId === msg.id
-												? voicePlayback.status
-												: "idle";
-										const playbackLabel = getVoicePlaybackLabel(playbackStatus);
-										const isBusy =
-											playbackStatus === "pending" ||
-											playbackStatus === "loading";
-										const isPlaying = playbackStatus === "playing";
-										const playbackText = msg.content || msg.uiTextFallback || "";
-										return (
-											<button
-												type="button"
-												onClick={() =>
-													resolvedVoiceMessageId === msg.id &&
-													voicePlayback.status !== "idle"
-														? onStopVoice()
-														: (() => {
-																lastVoiceMessageIdRef.current = msg.id;
-																onSpeakVoice(msg.id, playbackText);
-															})()
-												}
-												className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] transition hover:border-sky-400/60 hover:text-sky-100 ${
-													isBusy
-														? "border-sky-400/40 text-sky-100"
-														: isPlaying
-															? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
-															: "border-white/10 text-slate-300"
-												}`}
-											>
-												{isBusy ? (
-													<FiLoader
-														className={`h-3 w-3 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
-													/>
-												) : playbackStatus === "playing" ? (
-													<FiStopCircle className="h-3 w-3 animate-pulse" />
-												) : (
-													<FiVolume2 className="h-3 w-3" />
-												)}
-												<span>{playbackLabel}</span>
-												{isPlaying ? (
-													<span className="flex items-end gap-0.5">
-														<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80" />
-														<span className="h-3 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:120ms]" />
-														<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:240ms]" />
-													</span>
-												) : null}
-											</button>
-										);
-									})()
-								) : null}
+								{msg.role === "assistant" && (msg.content || msg.uiTextFallback)
+									? (() => {
+											const playbackStatus =
+												resolvedVoiceMessageId === msg.id
+													? voicePlayback.status
+													: "idle";
+											const playbackLabel =
+												getVoicePlaybackLabel(playbackStatus);
+											const isBusy =
+												playbackStatus === "pending" ||
+												playbackStatus === "loading";
+											const isPlaying = playbackStatus === "playing";
+											const playbackText =
+												msg.content || msg.uiTextFallback || "";
+											return (
+												<button
+													type="button"
+													onClick={() =>
+														resolvedVoiceMessageId === msg.id &&
+														voicePlayback.status !== "idle"
+															? onStopVoice()
+															: (() => {
+																	lastVoiceMessageIdRef.current = msg.id;
+																	onSpeakVoice(msg.id, playbackText);
+																})()
+													}
+													className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] transition hover:border-sky-400/60 hover:text-sky-100 ${
+														isBusy
+															? "border-sky-400/40 text-sky-100"
+															: isPlaying
+																? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
+																: "border-white/10 text-slate-300"
+													}`}
+												>
+													{isBusy ? (
+														<FiLoader
+															className={`h-3 w-3 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
+														/>
+													) : playbackStatus === "playing" ? (
+														<FiStopCircle className="h-3 w-3 animate-pulse" />
+													) : (
+														<FiVolume2 className="h-3 w-3" />
+													)}
+													<span>{playbackLabel}</span>
+													{isPlaying ? (
+														<span className="flex items-end gap-0.5">
+															<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80" />
+															<span className="h-3 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:120ms]" />
+															<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:240ms]" />
+														</span>
+													) : null}
+												</button>
+											);
+										})()
+									: null}
 							</div>
 						</div>
 						{msg.role === "assistant" &&
@@ -510,6 +583,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						) : (
 							<ReactMarkdown
 								remarkPlugins={[remarkGfm]}
+								rehypePlugins={[
+									[rehypeHighlight, { detect: true, ignoreMissing: true }],
+								]}
 								className="markdown-content mt-2 text-sm leading-relaxed"
 								components={{
 									a: ({ node, ...props }) => (
@@ -527,11 +603,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												? node.position.start.line !== node.position.end.line
 												: false);
 										return isBlock ? (
-											<pre className="mt-3 overflow-auto rounded-lg border border-white/10 bg-slate-900/60 p-3 text-xs">
-												<code {...props} className={className}>
-													{children}
-												</code>
-											</pre>
+											<MarkdownCodeBlock className={className}>
+												{children}
+											</MarkdownCodeBlock>
 										) : (
 											<code
 												{...props}
@@ -545,10 +619,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										<ul {...props} className="ml-5 list-disc space-y-1" />
 									),
 									ol: ({ node, ...props }) => (
-										<ol
-											{...props}
-											className="ml-5 list-decimal space-y-1"
-										/>
+										<ol {...props} className="ml-5 list-decimal space-y-1" />
 									),
 									blockquote: ({ node, ...props }) => (
 										<blockquote
@@ -598,7 +669,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 														<div className="flex items-center gap-3 rounded-xl border border-dashed border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
 															<FiAlertTriangle className="h-4 w-4" />
 															<div>
-																<div className="font-semibold">Audio unavailable</div>
+																<div className="font-semibold">
+																	Audio unavailable
+																</div>
 																<div className="text-[11px] text-amber-200/80">
 																	{audioAvailability?.reason ||
 																		"Audio was not stored for this session."}
@@ -789,7 +862,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										</button>
 									)}
 									<span className="max-w-[160px] truncate text-slate-300">
-										{attachment.name || (isAudio ? "Audio" : isFile ? "File" : "Image")}
+										{attachment.name ||
+											(isAudio ? "Audio" : isFile ? "File" : "Image")}
 									</span>
 									<button
 										type="button"
@@ -845,11 +919,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								onClick={recording ? stopRecording : startRecording}
 								disabled={isStreaming}
 							>
-									{recording ? <FiStopCircle size={16} /> : <FiMic size={16} />}
-									{recording ? (
-										<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
-									) : null}
-								</button>
+								{recording ? <FiStopCircle size={16} /> : <FiMic size={16} />}
+								{recording ? (
+									<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
+								) : null}
+							</button>
 						</div>
 						<span className="px-1 text-[11px] text-slate-400">
 							{recording
@@ -857,20 +931,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								: "Enter to send, Shift+Enter for newline"}
 						</span>
 					</div>
-						<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
-							<textarea
-								ref={composerTextareaRef}
-								id="prompt-textarea"
-								className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
-								rows={1}
+					<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
+						<textarea
+							ref={composerTextareaRef}
+							id="prompt-textarea"
+							className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
+							rows={1}
 							value={prompt}
 							onChange={(event) => onPromptChange(event.target.value)}
 							onKeyDown={handleKeyDown}
-								onPaste={handlePaste}
-								placeholder="Ask Wingman to do something..."
-								disabled={isStreaming}
-								style={{ overflowY: "hidden" }}
-							/>
+							onPaste={handlePaste}
+							placeholder="Ask Wingman to do something..."
+							disabled={isStreaming}
+							style={{ overflowY: "hidden" }}
+						/>
 						<button
 							className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
 								isStreaming
@@ -966,6 +1040,35 @@ export function computeComposerTextareaLayout({
 	};
 }
 
+async function copyTextToClipboard(text: string): Promise<boolean> {
+	if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
+		} catch {
+			// fall through to legacy copy behavior
+		}
+	}
+
+	if (typeof document === "undefined") {
+		return false;
+	}
+	try {
+		const textarea = document.createElement("textarea");
+		textarea.value = text;
+		textarea.setAttribute("readonly", "true");
+		textarea.style.position = "absolute";
+		textarea.style.left = "-9999px";
+		document.body.appendChild(textarea);
+		textarea.select();
+		const didCopy = document.execCommand("copy");
+		document.body.removeChild(textarea);
+		return didCopy;
+	} catch {
+		return false;
+	}
+}
+
 function formatTime(timestamp?: number): string {
 	if (!timestamp) return "--";
 	try {
@@ -1003,7 +1106,8 @@ function isFileAttachment(attachment: ChatAttachment): boolean {
 function formatFileMeta(attachment: ChatAttachment): string {
 	const meta: string[] = [];
 	if (attachment.mimeType) meta.push(attachment.mimeType);
-	if (typeof attachment.size === "number") meta.push(formatBytes(attachment.size));
+	if (typeof attachment.size === "number")
+		meta.push(formatBytes(attachment.size));
 	return meta.length > 0 ? meta.join(" • ") : "Text extracted for model input";
 }
 
