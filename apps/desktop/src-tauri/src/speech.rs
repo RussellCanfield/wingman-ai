@@ -247,7 +247,18 @@ pub fn start_capture(shared: &SharedState) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub fn start_capture(shared: &SharedState) -> Result<(), String> {
+    stop_capture(shared);
+    with_state(&shared.0, |state| {
+        state.speech_status =
+            "Windows testing mode: native speech is pending; type transcript in the overlay."
+                .to_string();
+    });
+    Ok(())
+}
+
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 pub fn start_capture(_shared: &SharedState) -> Result<(), String> {
     Err("Native speech capture is only implemented for macOS.".to_string())
 }
@@ -279,6 +290,12 @@ pub fn stop_capture(shared: &SharedState) {
         terminate_helper_processes();
     }
 
+    #[cfg(target_os = "windows")]
+    with_state(&shared.0, |state| {
+        state.speech_status = "Windows testing mode idle.".to_string();
+    });
+
+    #[cfg(not(target_os = "windows"))]
     with_state(&shared.0, |state| {
         state.speech_status = "Native speech idle.".to_string();
     });
@@ -309,5 +326,18 @@ mod tests {
             guard.speech_status,
             "Native speech bridge: swift runtime warning"
         );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_capture_enters_manual_testing_mode() {
+        use super::start_capture;
+        use crate::state::SharedState;
+
+        let shared = SharedState::default();
+        start_capture(&shared).expect("windows manual capture should start");
+
+        let guard = shared.0.lock().expect("state lock");
+        assert!(guard.speech_status.contains("Windows testing mode"));
     }
 }

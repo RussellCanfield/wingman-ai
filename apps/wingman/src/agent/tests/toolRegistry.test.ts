@@ -1,8 +1,13 @@
-import { describe, it, expect } from "vitest";
 import { mkdtempSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createTool, createTools, getAvailableTools } from "../config/toolRegistry";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+	createTool,
+	createTools,
+	getAvailableTools,
+} from "../config/toolRegistry";
+import { TerminalSessionManager } from "../tools/terminal_session_manager";
 
 describe("Tool Registry", () => {
 	describe("createTool", () => {
@@ -39,15 +44,31 @@ describe("Tool Registry", () => {
 			expect(tool?.name).toBe("command_execute");
 		});
 
+		it("should create terminal tools", () => {
+			const manager = new TerminalSessionManager();
+			const terminalTool = createTool("background_terminal", {
+				terminalOwnerId: "owner-1",
+				terminalSessionManager: manager,
+			});
+			expect(terminalTool?.name).toBe("background_terminal");
+
+			manager.dispose();
+		});
+
 		it("should execute command tools in executionWorkspace when provided", async () => {
-			const executionWorkspace = mkdtempSync(join(tmpdir(), "wingman-tool-workspace-"));
+			const executionWorkspace = mkdtempSync(
+				join(tmpdir(), "wingman-tool-workspace-"),
+			);
 			const tool = createTool("command_execute", {
 				workspace: "/custom/path",
 				executionWorkspace,
 			});
 
 			expect(tool).not.toBeNull();
-			const result = await tool!.invoke({
+			if (!tool) {
+				throw new Error("Expected command_execute tool to be created");
+			}
+			const result = await tool.invoke({
 				command: 'node -e "process.stdout.write(process.cwd())"',
 			});
 			expect(String(result)).toContain(executionWorkspace);
@@ -70,7 +91,11 @@ describe("Tool Registry", () => {
 
 	describe("createTools", () => {
 		it("should create multiple tools from array", async () => {
-			const tools = await createTools(["internet_search", "web_crawler", "think"]);
+			const tools = await createTools([
+				"internet_search",
+				"web_crawler",
+				"think",
+			]);
 
 			expect(tools).toHaveLength(3);
 			expect(tools[0].name).toBe("internet_search");
@@ -123,6 +148,7 @@ describe("Tool Registry", () => {
 				"internet_search",
 				"web_crawler",
 				"command_execute",
+				"background_terminal",
 				"think",
 				"code_search",
 				"git_status",

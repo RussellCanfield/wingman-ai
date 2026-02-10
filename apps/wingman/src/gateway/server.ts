@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Server, ServerWebSocket } from "bun";
+import { TerminalSessionManager } from "@/agent/tools/terminal_session_manager.js";
 import { WingmanConfigLoader } from "@/cli/config/loader.js";
 import type { WingmanConfigType } from "@/cli/config/schema.js";
 import { AgentInvoker } from "@/cli/core/agentInvoker.js";
@@ -140,6 +141,7 @@ export class GatewayServer {
 	private activeSessionRequests: Map<string, string> = new Map();
 	private queuedSessionRequests: Map<string, PendingAgentRequest[]> = new Map();
 	private requestSessionKeys: Map<string, string> = new Map();
+	private terminalSessionManager: TerminalSessionManager;
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -208,6 +210,7 @@ export class GatewayServer {
 		this.controlUiSamePort =
 			this.controlUiEnabled && this.controlUiPort === this.config.port;
 		this.uiDistDir = this.controlUiEnabled ? this.resolveControlUiDir() : null;
+		this.terminalSessionManager = new TerminalSessionManager();
 	}
 
 	/**
@@ -375,6 +378,7 @@ export class GatewayServer {
 			this.uiServer.stop();
 			this.uiServer = null;
 		}
+		this.terminalSessionManager.dispose();
 
 		this.log("info", "Gateway stopped");
 	}
@@ -810,7 +814,9 @@ export class GatewayServer {
 		void this.executeAgentRequest(request);
 	}
 
-	private async executeAgentRequest(request: PendingAgentRequest): Promise<void> {
+	private async executeAgentRequest(
+		request: PendingAgentRequest,
+	): Promise<void> {
 		const {
 			ws,
 			msg,
@@ -865,6 +871,7 @@ export class GatewayServer {
 			outputManager,
 			logger: this.logger,
 			sessionManager,
+			terminalSessionManager: this.terminalSessionManager,
 			workdir,
 			defaultOutputDir,
 		});
@@ -1022,7 +1029,9 @@ export class GatewayServer {
 		return `${agentId}:${sessionKey}`;
 	}
 
-	private removeQueuedRequestById(requestId: string): PendingAgentRequest | null {
+	private removeQueuedRequestById(
+		requestId: string,
+	): PendingAgentRequest | null {
 		for (const [queueKey, queue] of this.queuedSessionRequests) {
 			const index = queue.findIndex((item) => item.msg.id === requestId);
 			if (index === -1) continue;
@@ -1597,6 +1606,7 @@ export class GatewayServer {
 			resolveFsRoots: () => this.resolveFsRoots(),
 			resolveFsPath: (path) => this.resolveFsPath(path),
 			isPathWithinRoots: (path, roots) => this.isPathWithinRoots(path, roots),
+			getTerminalSessionManager: () => this.terminalSessionManager,
 			getBuiltInTools: () => this.getBuiltInTools(),
 		};
 	}

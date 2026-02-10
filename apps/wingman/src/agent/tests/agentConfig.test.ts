@@ -1,8 +1,5 @@
-import { describe, it, expect } from "vitest";
-import {
-	validateAgentConfig,
-	AgentConfigSchema,
-} from "../config/agentConfig";
+import { describe, expect, it } from "vitest";
+import { AgentConfigSchema, validateAgentConfig } from "../config/agentConfig";
 
 describe("Agent Configuration Schema", () => {
 	describe("validateAgentConfig", () => {
@@ -196,7 +193,10 @@ describe("Agent Configuration Schema", () => {
 				"internet_search",
 				"web_crawler",
 				"command_execute",
+				"background_terminal",
 				"think",
+				"code_search",
+				"git_status",
 				"ui_registry_list",
 				"ui_registry_get",
 				"ui_present",

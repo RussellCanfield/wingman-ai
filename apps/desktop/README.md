@@ -52,3 +52,6 @@ bun run --cwd apps/desktop tauri:build
 
 - macOS publishing guide: `apps/desktop/docs/macos-publish.md`
 - Automated macOS publish script: `apps/desktop/scripts/macos-publish.sh`
+- Windows publishing guide: `apps/desktop/docs/windows-publish.md`
+- Automated Windows publish script: `apps/desktop/scripts/windows-publish.ps1`
+- Windows QA checklist: `apps/desktop/docs/windows-testing-checklist.md`

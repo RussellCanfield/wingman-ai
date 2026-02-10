@@ -1,20 +1,25 @@
 import type { StructuredTool } from "@langchain/core/tools";
-import { createInternetSearchTool } from "../tools/internet_search.js";
-import { webCrawler } from "../tools/web_crawler.js";
-import { createCommandExecuteTool } from "../tools/command_execute.js";
-import { createThinkingTool } from "../tools/think.js";
-import { createCodeSearchTool } from "../tools/code_search.js";
-import { createGitStatusTool } from "../tools/git_status.js";
-import {
-	createUiRegistryGetTool,
-	createUiRegistryListTool,
-	createUiPresentTool,
-} from "../tools/ui_registry.js";
-import type { AvailableToolName } from "./agentConfig.js";
+import type { MCPServersConfig } from "@/types/mcp.js";
 import type { SearchConfig } from "../../cli/config/schema.js";
 import { createLogger } from "../../logger.js";
+import { createBackgroundTerminalTool } from "../tools/background_terminal.js";
+import { createCodeSearchTool } from "../tools/code_search.js";
+import { createCommandExecuteTool } from "../tools/command_execute.js";
+import { createGitStatusTool } from "../tools/git_status.js";
+import { createInternetSearchTool } from "../tools/internet_search.js";
+import {
+	getSharedTerminalSessionManager,
+	type TerminalSessionManager,
+} from "../tools/terminal_session_manager.js";
+import { createThinkingTool } from "../tools/think.js";
+import {
+	createUiPresentTool,
+	createUiRegistryGetTool,
+	createUiRegistryListTool,
+} from "../tools/ui_registry.js";
+import { webCrawler } from "../tools/web_crawler.js";
+import type { AvailableToolName } from "./agentConfig.js";
 import { MCPClientManager } from "./mcpClientManager.js";
-import type { MCPServersConfig } from "@/types/mcp.js";
 
 const logger = createLogger();
 
@@ -24,6 +29,8 @@ export interface ToolOptions {
 	blockedCommands?: string[];
 	allowScriptExecution?: boolean;
 	timeout?: number;
+	terminalOwnerId?: string;
+	terminalSessionManager?: TerminalSessionManager;
 	searchConfig?: SearchConfig;
 	mcpConfigs?: MCPServersConfig[];
 	skillsDirectory?: string;
@@ -49,6 +56,8 @@ export function createTool(
 		blockedCommands,
 		allowScriptExecution = true,
 		timeout = 300000,
+		terminalOwnerId = "default",
+		terminalSessionManager = getSharedTerminalSessionManager(),
 		searchConfig = { provider: "duckduckgo", maxResults: 5 },
 		skillsDirectory = "skills",
 		dynamicUiEnabled = true,
@@ -79,6 +88,17 @@ export function createTool(
 				allowScriptExecution,
 				timeout,
 			);
+
+		case "background_terminal":
+			return createBackgroundTerminalTool({
+				workspace: runtimeWorkspace,
+				ownerId: terminalOwnerId,
+				sessionManager: terminalSessionManager,
+				envVariables: process.env as Record<string, string>,
+				blockedCommands,
+				allowScriptExecution,
+				commandTimeout: timeout,
+			});
 
 		case "think":
 			return createThinkingTool();
@@ -160,6 +180,7 @@ export function getAvailableTools(): AvailableToolName[] {
 		"internet_search",
 		"web_crawler",
 		"command_execute",
+		"background_terminal",
 		"think",
 		"code_search",
 		"git_status",

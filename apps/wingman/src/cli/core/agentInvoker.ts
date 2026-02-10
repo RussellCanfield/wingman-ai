@@ -17,6 +17,10 @@ import { additionalMessageMiddleware } from "@/agent/middleware/additional-messa
 import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
 import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
+import {
+	getSharedTerminalSessionManager,
+	type TerminalSessionManager,
+} from "@/agent/tools/terminal_session_manager.js";
 import { getBundledSkillsPath } from "@/agent/uiRegistry.js";
 import type { WingmanAgent } from "@/types/agents.js";
 import type { MCPServersConfig } from "@/types/mcp.js";
@@ -33,6 +37,7 @@ export interface AgentInvokerOptions {
 	outputManager: OutputManager;
 	logger: Logger;
 	sessionManager?: SessionManager;
+	terminalSessionManager?: TerminalSessionManager;
 	workdir?: string | null;
 	defaultOutputDir?: string | null;
 }
@@ -397,6 +402,7 @@ export class AgentInvoker {
 	private wingmanConfig: WingmanConfigType;
 	private mcpManager: MCPClientManager | null = null;
 	private sessionManager: SessionManager | null = null;
+	private terminalSessionManager: TerminalSessionManager;
 	private workdir: string | null = null;
 	private defaultOutputDir: string | null = null;
 
@@ -406,6 +412,8 @@ export class AgentInvoker {
 		this.workspace = options.workspace || process.cwd();
 		this.configDir = options.configDir || ".wingman";
 		this.sessionManager = options.sessionManager || null;
+		this.terminalSessionManager =
+			options.terminalSessionManager || getSharedTerminalSessionManager();
 		this.workdir = options.workdir || null;
 		this.defaultOutputDir = options.defaultOutputDir || null;
 
@@ -451,20 +459,22 @@ export class AgentInvoker {
 		let sawAssistantText = false;
 		const isCancelled = () => options?.signal?.aborted === true;
 		try {
+			const hookSessionId = sessionId || uuidv4();
 			const executionWorkspace = resolveExecutionWorkspace(
 				this.workspace,
 				this.workdir,
 			);
 			const effectiveWorkdir = this.workdir ? executionWorkspace : null;
-			const loader =
-				normalize(executionWorkspace) === normalize(this.workspace)
-					? this.loader
-					: new AgentLoader(
-							this.configDir,
-							this.workspace,
-							this.wingmanConfig,
-							executionWorkspace,
-						);
+			const loader = new AgentLoader(
+				this.configDir,
+				this.workspace,
+				this.wingmanConfig,
+				executionWorkspace,
+				{
+					terminalOwnerId: `${agentName}:${hookSessionId}`,
+					terminalSessionManager: this.terminalSessionManager,
+				},
+			);
 
 			// Find the agent
 			const targetAgent = await loader.loadAgent(agentName);
@@ -493,9 +503,6 @@ export class AgentInvoker {
 				this.wingmanConfig.toolHooks,
 				targetAgent.toolHooks,
 			);
-
-			// Use provided session ID or generate new one for hooks
-			const hookSessionId = sessionId || uuidv4();
 
 			// Initialize MCP client if MCP servers configured
 			const mcpConfigs: MCPServersConfig[] = [];

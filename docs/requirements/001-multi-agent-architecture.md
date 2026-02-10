@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.5
-**Last Updated:** 2026-02-09
+**Version:** 1.2.6
+**Last Updated:** 2026-02-10
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -134,6 +134,7 @@ Modern AI assistants face several challenges:
 
 **Tools**:
 - `command_execute`: Run shell commands (5-minute timeout)
+- `background_terminal`: Session-scoped background terminal control for long-running or interactive command flows (start, stdin write, output poll in one tool)
 
 **Safety Features**:
 - Blocked destructive commands (rm, mv, format, sudo, etc.)
@@ -199,6 +200,7 @@ An agent is a fully scoped brain with its own workspace, agent directory, and se
 **Isolation rules:**
 - Each agent has a dedicated workspace that acts as the default cwd; relative paths resolve inside the workspace. Sandboxing is optional and configured per agent.
 - Gateway sessions may override this default via per-session `workdir`; when present, the session workdir becomes the execution root for that session's turns.
+- Background terminal sessions are scoped to `agent + session` ownership. A session cannot read/write terminal processes started from a different session context.
 - Each agent has a dedicated agentDir for auth profiles and per-agent config. Do not reuse agentDir across agents to avoid auth/session collisions.
 - Sessions are stored per agent under the gateway state directory.
 
@@ -482,6 +484,7 @@ Notes:
 - `internet_search`: Web search (Tavily or DuckDuckGo)
 - `web_crawler`: Multi-page web crawling
 - `command_execute`: Shell command execution
+- `background_terminal`: Start a background terminal session, then write/poll by `session_id`
 - `think`: Reasoning without side effects
 
 ### Subagent Nesting

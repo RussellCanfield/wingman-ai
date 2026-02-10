@@ -1,8 +1,13 @@
-import type { HookDefinition, HookEvent, HookDeliverConfig, InternalHooksConfig } from "./types.js";
-import { InternalHookLoader } from "./loader.js";
-import type { GatewayHttpContext } from "../http/types.js";
 import { AgentInvoker } from "@/cli/core/agentInvoker.js";
 import { OutputManager } from "@/cli/core/outputManager.js";
+import type { GatewayHttpContext } from "../http/types.js";
+import { InternalHookLoader } from "./loader.js";
+import type {
+	HookDefinition,
+	HookDeliverConfig,
+	HookEvent,
+	InternalHooksConfig,
+} from "./types.js";
 
 type EventKey = string;
 
@@ -51,7 +56,10 @@ export class InternalHookRegistry {
 		}
 	}
 
-	private async runHook(hook: HookDefinition, baseEvent: Omit<HookEvent, "messages">) {
+	private async runHook(
+		hook: HookDefinition,
+		baseEvent: Omit<HookEvent, "messages">,
+	) {
 		const event: HookEvent = { ...baseEvent, messages: [] };
 		try {
 			await hook.handler(event);
@@ -116,6 +124,7 @@ export class InternalHookRegistry {
 				outputManager,
 				logger: this.ctx.logger,
 				sessionManager: manager,
+				terminalSessionManager: this.ctx.getTerminalSessionManager(),
 				workdir,
 				defaultOutputDir,
 			});

@@ -1,5 +1,7 @@
 # macOS Publish Guide (Tauri Desktop Companion)
 
+For Windows x64 publishing, see `apps/desktop/docs/windows-publish.md`.
+
 ## Quick Start (Automated)
 
 Run from repo root:

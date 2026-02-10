@@ -1,18 +1,22 @@
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { isAbsolute, join, normalize } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import * as yaml from "js-yaml";
-import {
-	validateAgentConfig,
-	WingmanDirectory,
-	type WingmanAgentConfig,
-	type PromptRefinementConfig,
-} from "./agentConfig.js";
-import { createTools, UI_TOOL_NAMES, type ToolOptions } from "./toolRegistry.js";
-import { ModelFactory } from "./modelFactory.js";
-import { createLogger } from "../../logger.js";
 import type { WingmanAgent } from "@/types/agents.js";
+import type { MCPServersConfig } from "@/types/mcp.js";
 import type { WingmanConfigType } from "../../cli/config/schema.js";
-import { MCPServersConfig } from "@/types/mcp.js";
+import { createLogger } from "../../logger.js";
+import {
+	type PromptRefinementConfig,
+	validateAgentConfig,
+	type WingmanAgentConfig,
+	WingmanDirectory,
+} from "./agentConfig.js";
+import { ModelFactory } from "./modelFactory.js";
+import {
+	createTools,
+	type ToolOptions,
+	UI_TOOL_NAMES,
+} from "./toolRegistry.js";
 
 const logger = createLogger();
 const PROMPT_REFINEMENT_MARKER = "[[wingman:prompt-refinement]]";
@@ -68,6 +72,7 @@ export class AgentLoader {
 		private workspace: string = process.cwd(),
 		private wingmanConfig?: WingmanConfigType,
 		private executionWorkspace: string = workspace,
+		private runtimeToolOptions: Partial<ToolOptions> = {},
 	) {}
 
 	private resolveConfigPath(...segments: string[]): string {
@@ -97,9 +102,7 @@ export class AgentLoader {
 				const hasMarkdown = existsSync(agentMarkdownPath);
 
 				if (!hasJson && !hasMarkdown) {
-					logger.warn(
-						`Skipping ${agentDir}: agent.json or agent.md not found`,
-					);
+					logger.warn(`Skipping ${agentDir}: agent.json or agent.md not found`);
 					continue;
 				}
 
@@ -120,9 +123,7 @@ export class AgentLoader {
 					agents.push(validation.data);
 					logger.info(`Loaded agent config: ${validation.data.name}`);
 				} catch (error) {
-					logger.error(
-						`Failed to load agent from ${agentDirPath}: ${error}`,
-					);
+					logger.error(`Failed to load agent from ${agentDirPath}: ${error}`);
 				}
 			}
 		} else {
@@ -164,7 +165,9 @@ export class AgentLoader {
 	/**
 	 * Normalize legacy config fields
 	 */
-	private normalizeAgentConfig(config: Record<string, any>): Record<string, any> {
+	private normalizeAgentConfig(
+		config: Record<string, any>,
+	): Record<string, any> {
 		if (config.subagents && !config.subAgents) {
 			config.subAgents = config.subagents;
 			delete config.subagents;
@@ -236,7 +239,7 @@ export class AgentLoader {
 	 * Load a specific agent configuration by name
 	 */
 	async loadAgent(agentName: string): Promise<WingmanAgent | undefined> {
-		let agent: WingmanAgent | undefined = undefined;
+		let agent: WingmanAgent | undefined;
 
 		const customAgentsDir = this.resolveConfigPath("agents", agentName);
 		if (
@@ -350,6 +353,7 @@ export class AgentLoader {
 				mcpConfigs,
 				skillsDirectory,
 				dynamicUiEnabled,
+				...this.runtimeToolOptions,
 			};
 		};
 
@@ -417,10 +421,10 @@ export class AgentLoader {
 				}
 
 				if (subagent.tools && subagent.tools.length > 0) {
-					sub.tools = await createTools(
+					sub.tools = (await createTools(
 						subagent.tools,
 						buildToolOptions(subagent as WingmanAgentConfig),
-					) as any;
+					)) as any;
 				}
 
 				const subUiTools = (await createTools(

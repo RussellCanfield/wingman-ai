@@ -1,8 +1,8 @@
 # PRD-007: External Coding CLI Orchestration
 
-**Version:** 0.1 (Draft)
+**Version:** 0.2 (Draft)
 **Status:** Draft
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-02-10
 
 ---
 
@@ -49,12 +49,14 @@ Wingman already supports:
 
 - Root/subagent orchestration patterns (PRD-001)
 - Tool execution through `command_execute`
+- Session-scoped background terminal tool (`background_terminal`) for start/write/poll flows
 - Tool-driven UI prompts via static generative UI hints (Gateway/Web UI)
 - Planned gateway node protocol for streamed remote execution
 
-Current limitation:
+Current limitations:
 
 - `command_execute` is effectively one-shot and not designed for full interactive stdin/TTY dialogue. This limits seamless handling of surprise prompts from external CLIs.
+- Background terminal tools currently use shell streams (stdin/stdout/stderr), not full PTY emulation.
 
 ---
 
@@ -150,7 +152,7 @@ Each supported CLI implements an adapter with:
 ### C) Strict Non-Interactive Default
 MVP execution policy:
 - Non-interactive flags/env enabled by default
-- No long-lived TTY sessions by default
+- No long-lived PTY sessions by default
 - Idle timeout + max duration enforced
 - Known prompt/stall signatures trigger controlled abort
 
@@ -211,6 +213,12 @@ Draft stance:
 - Support 1-2 external CLIs behind adapters
 - Enforce strict non-interactive policy
 - Implement stall detection + clarification loop
+
+### Phase 1.5: Background Session Control (Shipped)
+- Add session-scoped background terminal tools for start/write/poll/kill/list flows
+- Keep ownership isolation at `agent + session` level
+- Apply bounded output buffering and timeout/idle cleanup
+- Keep PTY emulation as a future enhancement
 
 ### Phase 2: Session Enrichment
 - Add richer event mapping and incremental output normalization

@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.4
+**Version:** 1.5
 **Status:** In Development
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-02-10
 
 ---
 
@@ -175,6 +175,17 @@ To preserve conversation ordering, the gateway executes at most one in-flight re
 - The gateway also emits `event:agent` with `type: "request-queued"` for immediate UI feedback.
 - `req:agent:cancel` can cancel both active and queued requests (queued cancellations return `status: "cancelled_queued"`).
 - Clients can opt out of queueing per request with `queueIfBusy: false`, which returns an agent error if the session is busy.
+
+### Background Terminal Sessions
+
+Gateway runtime also supports session-scoped background terminal tools:
+- `background_terminal` (single tool for start + stdin write + output polling)
+
+Rules:
+- Ownership is scoped to `agentId + sessionKey`; sessions cannot access each other's terminal processes.
+- Output is buffered with bounded retention.
+- Runtime policy applies command blocks, timeout limits, idle cleanup, and per-owner session caps.
+- Tool lifecycle still uses the same `event:agent` stream protocol (`tool-start`, `tool-end`).
 
 ### Voice Providers (TTS)
 
@@ -1011,7 +1022,7 @@ Dynamic UI notes:
 - The gateway validates the path against `gateway.fsRoots`.
 - If no session folder is set, the agent defaults to `~/.wingman/outputs/<agentId>/`.
 - When set, the session working folder becomes the agent execution root for subsequent turns in that session:
-  - tool execution CWD (`command_execute`, `code_search`, `git_status`)
+  - tool execution CWD (`command_execute`, `background_terminal`, `code_search`, `git_status`)
   - primary file backend root (read/write operations)
 - The working folder is also injected into agent context via hidden middleware.
 

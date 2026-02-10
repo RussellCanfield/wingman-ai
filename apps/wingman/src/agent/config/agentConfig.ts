@@ -12,6 +12,7 @@ export const AvailableToolNames = z.enum([
 	"internet_search",
 	"web_crawler",
 	"command_execute",
+	"background_terminal",
 	"think",
 	"code_search",
 	"git_status",

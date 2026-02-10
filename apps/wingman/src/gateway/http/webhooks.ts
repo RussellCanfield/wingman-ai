@@ -1,11 +1,11 @@
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { AgentLoader } from "@/agent/config/agentLoader.js";
 import { AgentInvoker } from "@/cli/core/agentInvoker.js";
 import { OutputManager } from "@/cli/core/outputManager.js";
-import { SessionManager } from "@/cli/core/sessionManager.js";
-import { AgentLoader } from "@/agent/config/agentLoader.js";
+import type { SessionManager } from "@/cli/core/sessionManager.js";
 import type { GatewayHttpContext } from "./types.js";
-import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 
 export type WebhookConfig = {
 	id: string;
@@ -34,7 +34,9 @@ const formatGogGmailContent = (
 	webhookName: string,
 	eventLabel?: string,
 ): string => {
-	const payloadMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+	const payloadMessages = Array.isArray(payload?.messages)
+		? payload.messages
+		: [];
 	const dataMessages = Array.isArray(payload?.data?.messages)
 		? payload.data.messages
 		: [];
@@ -49,9 +51,7 @@ const formatGogGmailContent = (
 	const header = `Gmail update received${eventLabel ? ` (${eventLabel})` : ""} for "${webhookName}".`;
 
 	if (!candidate) {
-		const fallback = payload
-			? JSON.stringify(payload, null, 2)
-			: "{}";
+		const fallback = payload ? JSON.stringify(payload, null, 2) : "{}";
 		return `${header}\n\nPayload:\n${fallback}`;
 	}
 
@@ -69,11 +69,7 @@ const formatGogGmailContent = (
 	const body = candidate.body || candidate.text || candidate.html || "";
 	const id = candidate.id || candidate.messageId || "";
 
-	const lines = [
-		header,
-		`From: ${from}`,
-		`Subject: ${subject}`,
-	];
+	const lines = [header, `From: ${from}`, `Subject: ${subject}`];
 	if (id) lines.push(`Message ID: ${id}`);
 	if (snippet) lines.push(`Snippet: ${snippet}`);
 	if (body) lines.push("", body);
@@ -114,7 +110,8 @@ export const createWebhookStore = (
 			const path = resolvePath();
 			writeFileSync(path, JSON.stringify(webhooks, null, 2));
 		},
-		generateSecret: () => randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, ""),
+		generateSecret: () =>
+			randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, ""),
 	};
 };
 
@@ -256,15 +253,19 @@ export const handleWebhooksApi = async (
 			return new Response("Invalid agentId", { status: 400 });
 		}
 
-		const hasPreset = Object.prototype.hasOwnProperty.call(body ?? {}, "preset");
-		const presetValue = hasPreset ? normalizePreset(body?.preset) : webhook.preset;
-		if (hasPreset && body?.preset && !presetValue && body.preset.trim() !== "custom") {
+		const hasPreset = Object.hasOwn(body ?? {}, "preset");
+		const presetValue = hasPreset
+			? normalizePreset(body?.preset)
+			: webhook.preset;
+		if (
+			hasPreset &&
+			body?.preset &&
+			!presetValue &&
+			body.preset.trim() !== "custom"
+		) {
 			return new Response("Invalid preset", { status: 400 });
 		}
-		const hasSessionId = Object.prototype.hasOwnProperty.call(
-			body ?? {},
-			"sessionId",
-		);
+		const hasSessionId = Object.hasOwn(body ?? {}, "sessionId");
 		let nextSessionId = webhook.sessionId;
 		if (hasSessionId) {
 			const trimmed = body?.sessionId?.trim();
@@ -340,9 +341,7 @@ export const handleWebhookInvoke = async (
 	}
 
 	const secret =
-		req.headers.get("x-wingman-secret") ||
-		url.searchParams.get("secret") ||
-		"";
+		req.headers.get("x-wingman-secret") || url.searchParams.get("secret") || "";
 	if (!secret || secret !== webhook.secret) {
 		return new Response("Unauthorized", { status: 401 });
 	}
@@ -427,6 +426,7 @@ export const handleWebhookInvoke = async (
 			outputManager,
 			logger: ctx.logger,
 			sessionManager,
+			terminalSessionManager: ctx.getTerminalSessionManager(),
 			workdir,
 			defaultOutputDir,
 		});
@@ -442,7 +442,10 @@ export const handleWebhookInvoke = async (
 	);
 	store.save(updatedWebhooks);
 
-	return new Response(JSON.stringify({ ok: true, sessionId: sessionKey }, null, 2), {
-		headers: { "Content-Type": "application/json" },
-	});
+	return new Response(
+		JSON.stringify({ ok: true, sessionId: sessionKey }, null, 2),
+		{
+			headers: { "Content-Type": "application/json" },
+		},
+	);
 };

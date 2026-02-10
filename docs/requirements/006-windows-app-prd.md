@@ -1,8 +1,8 @@
 # PRD-006: Wingman Desktop Companion (Tauri)
 
-**Version:** 0.4
+**Version:** 0.5
 **Status:** In Progress
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-02-10
 
 ---
 
@@ -142,4 +142,27 @@ Current implementation status in this repository:
 - OS adapter layer exists with macOS-first implementation
 - macOS overlay now applies native AppKit window behavior (screen-saver level, all-spaces, transparent window)
 - macOS speech capture now launches a compiled bundled helper app (`WingmanSpeechBridge.app`) through LaunchServices so TCC permissions apply to a real app bundle context
-- Native macOS permission probing is scaffolded; direct probes are not implemented yet
+- Native macOS permission probes are active for key privacy surfaces (with helper-backed probes for microphone/speech/notifications)
+- Windows x64 release foundation exists:
+  - publish script: `apps/desktop/scripts/windows-publish.ps1`
+  - publish guide: `apps/desktop/docs/windows-publish.md`
+  - QA checklist: `apps/desktop/docs/windows-testing-checklist.md`
+  - CI matrix desktop build workflow: `.github/workflows/desktop-build.yml`
+- Windows adapter now exposes registry-backed permission snapshot + open-settings links for:
+  - Microphone (`ms-settings:privacy-microphone`)
+  - Speech Recognition (`ms-settings:privacy-speech`)
+  - Notifications (`ms-settings:notifications`)
+- Windows recording now supports testing mode with manual transcript entry through the overlay while native speech capture integration remains in progress
+
+### Windows x64 Rollout Phases
+
+1. **Foundation (current)**
+   - Build + package automation for Windows x64
+   - Signed artifact workflow support (`signtool` integration)
+   - CI validation for Windows x64 Tauri build outputs
+2. **Native parity**
+   - Replace Windows manual transcript testing mode with native speech capture integration
+   - Deep link registration/handling parity (`wingman://`)
+3. **Release hardening**
+   - Stable code signing and SmartScreen reputation strategy
+   - Full smoke coverage across tray, overlay, hotkeys, notifications, and gateway routing

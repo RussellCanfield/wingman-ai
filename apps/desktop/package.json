@@ -10,8 +10,11 @@
 		"test": "bun test src/lib src/*.test.ts",
 		"tauri:dev": "bunx --bun @tauri-apps/cli dev",
 		"tauri:build": "bunx --bun @tauri-apps/cli build",
+		"tauri:build:windows:x64": "bunx --bun @tauri-apps/cli build --target x86_64-pc-windows-msvc --bundles msi,nsis",
 		"publish:macos": "bash ./scripts/macos-publish.sh all",
-		"publish:macos:help": "bash ./scripts/macos-publish.sh --help"
+		"publish:macos:help": "bash ./scripts/macos-publish.sh --help",
+		"publish:windows": "pwsh -NoProfile -File ./scripts/windows-publish.ps1 all",
+		"publish:windows:help": "pwsh -NoProfile -File ./scripts/windows-publish.ps1 help"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.1.18",

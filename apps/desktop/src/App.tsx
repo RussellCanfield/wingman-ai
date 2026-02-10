@@ -3703,7 +3703,7 @@ function RuntimeScreen({
 						error: false,
 					}
 				: {
-						text: "Notification test failed. Check macOS notification permissions and retry.",
+						text: "Notification test failed. Check OS notification permissions and retry.",
 						error: true,
 				},
 		);

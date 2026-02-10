@@ -19,7 +19,7 @@ npm install -g @wingman-ai/gateway
 wingman init
 ```
 
-## Desktop Companion (macOS)
+## Desktop Companion (macOS + Windows x64 in progress)
 
 Wingman ships a standalone Desktop Companion app (Tauri-based) with native tray
 actions, recording overlay, gateway chat workflows, and session mirroring with
@@ -27,7 +27,9 @@ the Control Core web UI.
 
 - Download from
   [GitHub Releases](https://github.com/RussellCanfield/wingman-ai/releases).
-- Current packaged builds target macOS (Apple Silicon).
+- Current packaged releases target macOS (Apple Silicon).
+- Windows x64 build + installer automation exists for internal rollout and CI validation.
+- Windows recording currently supports manual transcript entry while native speech capture parity is in progress.
 - Configure the Gateway URL + optional auth in app settings.
 
 - Source location: `apps/desktop`
@@ -42,6 +44,7 @@ the Control Core web UI.
   - assistant message voice playback (manual and per-session auto-speak)
   - rich streamed chat rendering with structured UI blocks
 - Dev command: `bun run --cwd apps/desktop tauri:dev`
+- Windows publish automation: `bun run --cwd apps/desktop publish:windows`
 
 ## Legacy macOS Menu Bar App
 
