@@ -23,6 +23,7 @@ Each agent configuration file follows this schema:
   "systemPrompt": "Detailed instructions for the agent...",
   "tools": ["tool1", "tool2"],
   "model": "provider:model-name",
+  "reasoningEffort": "medium",
   "promptRefinement": {
     "enabled": true,
     "instructionsPath": "/memories/agents/agent-name/instructions.md"
@@ -33,7 +34,8 @@ Each agent configuration file follows this schema:
       "description": "Description of subagent",
       "systemPrompt": "Instructions for subagent...",
       "tools": ["tool1"],
-      "model": "provider:model-name"
+      "model": "provider:model-name",
+      "reasoningEffort": "low"
     }
   ]
 }
@@ -52,6 +54,10 @@ Each agent configuration file follows this schema:
 - **model**: Override the default model (format: `provider:model-name`)
   - Anthropic: `anthropic:claude-opus-4-5`, `anthropic:claude-sonnet-4-5-20250929`
   - OpenAI: `openai:gpt-4o`, `openai:gpt-4-turbo`
+- **reasoningEffort**: Optional reasoning/thinking effort for supported models
+  - Allowed values: `minimal`, `low`, `medium`, `high`
+  - If the selected model does not support effort controls, Wingman logs a warning and continues
+  - `thinkingEffort` is accepted as a legacy alias
 - **promptRefinement**: Allow the agent to maintain a durable prompt overlay under `/memories/`
   - `enabled`: Set true to allow updates from explicit user feedback
   - `instructionsPath`: Optional override for the overlay file location (virtual path)

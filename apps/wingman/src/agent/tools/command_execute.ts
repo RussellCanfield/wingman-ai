@@ -1,6 +1,6 @@
+import { type ChildProcess, spawn } from "node:child_process";
 import { tool } from "langchain";
 import { z } from "zod";
-import { spawn, type ChildProcess } from "node:child_process";
 
 export const DEFAULT_BLOCKED_COMMANDS = [
 	"rm",
@@ -21,6 +21,36 @@ export const DEFAULT_BLOCKED_COMMANDS = [
 	"su",
 ];
 
+const DEFAULT_MAX_OUTPUT_CHARS = 200_000;
+const TRUNCATION_HEAD_CHARS = 120_000;
+const TRUNCATION_TAIL_CHARS = 80_000;
+
+function appendCommandOutput(
+	existing: string,
+	incoming: string,
+	maxChars: number,
+): string {
+	if (!incoming) return existing;
+	if (maxChars <= 0) return "";
+	const combined = existing + incoming;
+	if (combined.length <= maxChars) {
+		return combined;
+	}
+
+	const headBudget = Math.min(
+		TRUNCATION_HEAD_CHARS,
+		Math.floor(maxChars * 0.6),
+	);
+	const tailBudget = Math.min(
+		TRUNCATION_TAIL_CHARS,
+		Math.max(0, maxChars - headBudget),
+	);
+	const head = combined.slice(0, headBudget);
+	const tail = tailBudget > 0 ? combined.slice(-tailBudget) : "";
+	const omitted = Math.max(0, combined.length - head.length - tail.length);
+	return `${head}\n\n[output truncated: omitted ${omitted} chars]\n\n${tail}`;
+}
+
 /**
  * Creates a tool that executes terminal commands safely
  */
@@ -30,6 +60,7 @@ export const createCommandExecuteTool = (
 	blockedCommands: string[] = DEFAULT_BLOCKED_COMMANDS,
 	allowScriptExecution = true,
 	timeoutInMilliseconds = 300000, // Default timeout of 5 minutes
+	maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
 ) => {
 	return tool(
 		async ({ command }: { command: string }) => {
@@ -63,7 +94,12 @@ export const createCommandExecuteTool = (
 					let hasExited = false;
 
 					// Create a sanitized environment for the child process
-					const { NODE_OPTIONS, NODE_DEBUG, VSCODE_INSPECTOR_OPTIONS, ...cleanEnv } = process.env;
+					const {
+						NODE_OPTIONS,
+						NODE_DEBUG,
+						VSCODE_INSPECTOR_OPTIONS,
+						...cleanEnv
+					} = process.env;
 					const safeEnv = {
 						...cleanEnv,
 						FORCE_COLOR: "0",
@@ -85,7 +121,7 @@ export const createCommandExecuteTool = (
 							hasExited = true;
 							try {
 								terminalProcess.kill();
-							} catch (e) {
+							} catch {
 								// Ignore kill errors
 							}
 							const result = `Command: "${command}" timed out after ${
@@ -107,11 +143,19 @@ export const createCommandExecuteTool = (
 					};
 
 					terminalProcess.stdout?.on("data", (data) => {
-						output += data.toString();
+						output = appendCommandOutput(
+							output,
+							data.toString(),
+							maxOutputChars,
+						);
 					});
 
 					terminalProcess.stderr?.on("data", (data) => {
-						output += data.toString();
+						output = appendCommandOutput(
+							output,
+							data.toString(),
+							maxOutputChars,
+						);
 					});
 
 					terminalProcess.on("error", (err) => {

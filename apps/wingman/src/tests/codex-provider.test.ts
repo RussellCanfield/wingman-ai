@@ -161,6 +161,35 @@ describe("codex provider", () => {
 		expect(payload.instructions).toBe("Use concise answers.");
 	});
 
+	it("overrides explicit store values to false when provided", async () => {
+		writeCodexAuth({
+			tokens: {
+				access_token: "file-token",
+			},
+		});
+
+		const baseFetch = vi.fn(
+			async (
+				_input: Parameters<typeof fetch>[0],
+				_init?: Parameters<typeof fetch>[1],
+			) => new Response("{}", { status: 200 }),
+		);
+		const codexFetch = createCodexFetch({ baseFetch });
+
+		await codexFetch("https://chatgpt.com/backend-api/codex/responses", {
+			method: "POST",
+			body: JSON.stringify({
+				model: "gpt-5.3-codex",
+				store: true,
+				input: "hello",
+			}),
+		});
+
+		const requestInit = baseFetch.mock.calls[0]?.[1];
+		const payload = JSON.parse(String(requestInit?.body));
+		expect(payload.store).toBe(false);
+	});
+
 	it("uses fallback token when codex auth file is unavailable", async () => {
 		const baseFetch = vi.fn(
 			async (

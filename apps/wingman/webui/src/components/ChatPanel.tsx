@@ -86,6 +86,7 @@ type ChatPanelProps = {
 	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
+	showStreamingIndicator?: boolean;
 	queuedPromptCount: number;
 	connected: boolean;
 	loading: boolean;
@@ -112,6 +113,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	fileAccept,
 	attachmentError,
 	isStreaming,
+	showStreamingIndicator,
 	queuedPromptCount,
 	connected,
 	loading,
@@ -168,6 +170,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const hasDraft = Boolean(prompt.trim() || attachments.length > 0);
 	const canSend = connected && !recording && hasDraft;
 	const canStop = isStreaming && !recording && !hasDraft;
+	const showStreamingGlow = showStreamingIndicator ?? isStreaming;
 
 	useEffect(() => {
 		autoScrollRef.current = true;
@@ -465,14 +468,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		voicePlayback.messageId || lastVoiceMessageIdRef.current;
 	const canToggleVoice = Boolean(activeThread);
 	const transcriptContent = useMemo(() => {
-		if (loading) {
+		const isEmptyThread = !activeThread || activeThread.messages.length === 0;
+		if (loading && isEmptyThread) {
 			return (
 				<div className="grid h-full place-items-center text-sm text-slate-400">
 					Loading messages...
 				</div>
 			);
 		}
-		if (!activeThread || activeThread.messages.length === 0) {
+		if (isEmptyThread) {
 			return (
 				<div className="grid h-full place-items-center text-sm text-slate-400">
 					<div className="max-w-sm text-center">
@@ -487,6 +491,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			);
 		}
 		return activeThread.messages.map((msg) => {
+			const isUserMessage = msg.role === "user";
 			const hasLegacyEvents =
 				msg.id === lastAssistantId &&
 				(legacyToolEvents.length > 0 || legacyThinkingEvents.length > 0);
@@ -514,81 +519,83 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			return (
 				<div
 					key={msg.id}
-					className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+					className={`flex ${isUserMessage ? "justify-end" : "justify-start"}`}
 				>
 					<div
-						className={`w-fit max-w-[90%] min-w-0 rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%] ${
-							msg.role === "user"
-								? "border-white/10 bg-slate-950/60 text-slate-100"
-								: "border-sky-400/40 bg-sky-500/10 text-slate-100"
-						}`}
+						className={`min-w-0 text-sm leading-relaxed ${isUserMessage
+							? "w-fit max-w-[90%] rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-slate-100 shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%]"
+							: "w-full max-w-full px-1 py-1 text-slate-100"
+							}`}
 					>
-						<div className="flex items-center justify-between gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-							<span>{msg.role === "user" ? "You" : "Wingman"}</span>
+						<div
+							className={`flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400 ${isUserMessage ? "justify-between" : "mb-1 justify-end"
+								}`}
+						>
+							{isUserMessage ? <span>You</span> : null}
 							<div className="flex items-center gap-2">
 								<span className="whitespace-nowrap">
 									{formatTime(msg.createdAt)}
 								</span>
 								{msg.role === "assistant" && (msg.content || msg.uiTextFallback)
 									? (() => {
-											const playbackStatus =
-												resolvedVoiceMessageId === msg.id
-													? voicePlayback.status
-													: "idle";
-											const playbackLabel =
-												getVoicePlaybackLabel(playbackStatus);
-											const isBusy =
-												playbackStatus === "pending" ||
-												playbackStatus === "loading";
-											const isPlaying = playbackStatus === "playing";
-											const playbackText =
-												msg.content || msg.uiTextFallback || "";
-											return (
-												<button
-													type="button"
-													onClick={() =>
-														resolvedVoiceMessageId === msg.id &&
+										const playbackStatus =
+											resolvedVoiceMessageId === msg.id
+												? voicePlayback.status
+												: "idle";
+										const playbackLabel =
+											getVoicePlaybackLabel(playbackStatus);
+										const isBusy =
+											playbackStatus === "pending" ||
+											playbackStatus === "loading";
+										const isPlaying = playbackStatus === "playing";
+										const playbackText =
+											msg.content || msg.uiTextFallback || "";
+										return (
+											<button
+												type="button"
+												title={playbackLabel}
+												aria-label={
+													isPlaying || isBusy
+														? "Stop voice playback"
+														: "Play assistant response"
+												}
+												onClick={() =>
+													resolvedVoiceMessageId === msg.id &&
 														voicePlayback.status !== "idle"
-															? onStopVoice()
-															: (() => {
-																	lastVoiceMessageIdRef.current = msg.id;
-																	onSpeakVoice(msg.id, playbackText);
-																})()
-													}
-													className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] transition hover:border-sky-400/60 hover:text-sky-100 ${
-														isBusy
-															? "border-sky-400/40 text-sky-100"
-															: isPlaying
-																? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
-																: "border-white/10 text-slate-300"
+														? onStopVoice()
+														: (() => {
+															lastVoiceMessageIdRef.current = msg.id;
+															onSpeakVoice(msg.id, playbackText);
+														})()
+												}
+												className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition hover:border-sky-400/60 hover:text-sky-100 ${isBusy
+													? "border-sky-400/50 bg-sky-500/12 text-sky-100"
+													: isPlaying
+														? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
+														: "border-white/10 text-slate-300"
 													}`}
-												>
-													{isBusy ? (
-														<FiLoader
-															className={`h-3 w-3 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
-														/>
-													) : playbackStatus === "playing" ? (
-														<FiStopCircle className="h-3 w-3 animate-pulse" />
-													) : (
-														<FiVolume2 className="h-3 w-3" />
-													)}
-													<span>{playbackLabel}</span>
-													{isPlaying ? (
-														<span className="flex items-end gap-0.5">
-															<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80" />
-															<span className="h-3 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:120ms]" />
-															<span className="h-2 w-0.5 animate-pulse rounded-full bg-emerald-200/80 [animation-delay:240ms]" />
-														</span>
-													) : null}
-												</button>
-											);
-										})()
+											>
+												{isBusy ? (
+													<FiLoader
+														className={`h-3.5 w-3.5 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
+													/>
+												) : playbackStatus === "playing" ? (
+													<FiStopCircle className="h-3.5 w-3.5 animate-pulse" />
+												) : (
+													<FiVolume2 className="h-3.5 w-3.5" />
+												)}
+												<span className="sr-only">{playbackLabel}</span>
+											</button>
+										);
+									})()
 									: null}
 							</div>
 						</div>
 						{msg.role === "assistant" &&
-						!displayText &&
-						(!uiBlocks || uiBlocks.length === 0) ? (
+							isActiveMessage &&
+							!hasNestedActivity &&
+							!displayText &&
+							(!uiBlocks || uiBlocks.length === 0) ? (
 							<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
 								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
 								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
@@ -600,7 +607,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								rehypePlugins={[
 									[rehypeHighlight, { detect: true, ignoreMissing: true }],
 								]}
-								className="markdown-content mt-2 text-sm leading-relaxed"
+								className={`markdown-content text-sm leading-relaxed ${isUserMessage ? "mt-2" : "mt-1"
+									}`}
 								components={{
 									a: ({ node, ...props }) => (
 										<a
@@ -809,12 +817,27 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			<div
 				ref={scrollRef}
 				onScroll={handleScroll}
-				className="flex-1 min-h-0 space-y-4 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80 p-3 sm:p-4"
+				className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80"
 			>
-				{transcriptContent}
+				<div className="min-h-full space-y-4 p-3 sm:p-4">{transcriptContent}</div>
+				{showStreamingGlow ? (
+					<div
+						aria-hidden="true"
+						className="pointer-events-none mb-2 inset-x-0 top-2 z-20 flex justify-center"
+					>
+						<div
+							data-testid="streaming-indicator"
+							className="flex h-6 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-slate-950/80 px-2.5 shadow-[0_0_18px_rgba(56,189,248,0.2)] backdrop-blur-sm"
+						>
+							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
+							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:160ms]" />
+							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:320ms]" />
+						</div>
+					</div>
+				) : null}
 			</div>
 
-			<div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+			<>
 				{!connected ? (
 					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
 						<div>
@@ -923,11 +946,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								type="button"
 								aria-pressed={recording}
 								aria-label={recording ? "Stop recording" : "Record audio"}
-								className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
-									recording
-										? "border-rose-400/60 bg-rose-500/20 text-rose-100"
-										: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
-								}`}
+								className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${recording
+									? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+									: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
+									}`}
 								style={audioGlow ? { boxShadow: audioGlow } : undefined}
 								onClick={recording ? stopRecording : startRecording}
 								disabled={isStreaming}
@@ -962,11 +984,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							style={{ overflowY: "hidden" }}
 						/>
 						<button
-							className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
-								canStop
-									? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
-									: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
-							}`}
+							className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${canStop
+								? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
+								: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
+								}`}
 							onClick={canStop ? onStopPrompt : onSendPrompt}
 							type="button"
 							aria-label={canStop ? "Stop response" : "Send prompt"}
@@ -989,7 +1010,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						onChange={handleFileChange}
 					/>
 				</div>
-			</div>
+			</>
 			{previewAttachment ? (
 				// biome-ignore lint/a11y/useSemanticElements: modal overlay backdrop requires grid layout for centering
 				<div

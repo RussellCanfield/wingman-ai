@@ -3,12 +3,16 @@ import { validateConfig } from "../cli/config/schema.js";
 import {
 	chunkHasAssistantText,
 	configureDeepAgentSummarizationMiddleware,
+	detectStreamErrorMessage,
 	detectToolEventContext,
+	evaluateStreamingCompletion,
+	isRootLangGraphTerminalEvent,
 	resolveHumanInTheLoopSettings,
 	resolveModelRetryMiddlewareSettings,
 	resolveSummarizationMiddlewareSettings,
 	resolveToolRetryMiddlewareSettings,
 	selectStreamingFallbackText,
+	trackRootLangGraphRunId,
 } from "../cli/core/agentInvoker.js";
 
 const parseConfig = (input: unknown) => {
@@ -213,6 +217,17 @@ describe("detectToolEventContext", () => {
 		});
 	});
 
+	it("extracts tool context for tool error events", () => {
+		const detected = detectToolEventContext({
+			event: "on_tool_error",
+			name: "grep",
+		});
+		expect(detected).toEqual({
+			event: "on_tool_error",
+			toolName: "grep",
+		});
+	});
+
 	it("returns null for non-tool events", () => {
 		const detected = detectToolEventContext({
 			event: "on_chat_model_stream",
@@ -252,46 +267,230 @@ describe("chunkHasAssistantText", () => {
 });
 
 describe("selectStreamingFallbackText", () => {
-	it("returns the most recent assistant message in the same invocation window", () => {
+	it("returns assistant text introduced during the current invocation", () => {
 		const selected = selectStreamingFallbackText(
 			[
 				{
 					role: "assistant",
-					createdAt: 1_000,
+					content: "stale message",
+				},
+			],
+			[
+				{
+					role: "assistant",
 					content: "stale message",
 				},
 				{
 					role: "assistant",
-					createdAt: 4_500,
 					content: "fresh fallback",
 				},
 			],
-			4_000,
 		);
 		expect(selected).toBe("fresh fallback");
 	});
 
-	it("ignores stale, user-role, and empty-content messages", () => {
+	it("returns undefined when no new assistant text is introduced", () => {
 		const selected = selectStreamingFallbackText(
 			[
 				{
 					role: "assistant",
-					createdAt: 1_000,
-					content: "too old",
+					content: "existing response",
 				},
+			],
+			[
 				{
 					role: "user",
-					createdAt: 4_900,
 					content: "not assistant",
 				},
 				{
 					role: "assistant",
-					createdAt: 5_000,
-					content: "   ",
+					content: "existing response",
 				},
 			],
-			5_000,
 		);
 		expect(selected).toBeUndefined();
+	});
+
+	it("handles repeated assistant messages by count", () => {
+		const selected = selectStreamingFallbackText(
+			[
+				{
+					role: "assistant",
+					content: "repeat",
+				},
+			],
+			[
+				{
+					role: "assistant",
+					content: "repeat",
+				},
+				{
+					role: "assistant",
+					content: "repeat",
+				},
+			],
+		);
+		expect(selected).toBe("repeat");
+	});
+});
+
+describe("detectStreamErrorMessage", () => {
+	it("extracts non-tool stream error messages", () => {
+		const detected = detectStreamErrorMessage({
+			event: "on_chat_model_error",
+			data: {
+				error: {
+					message: "Model call failed after retries",
+				},
+			},
+		});
+		expect(detected).toBe("Model call failed after retries");
+	});
+
+	it("ignores tool errors and non-error events", () => {
+		expect(
+			detectStreamErrorMessage({
+				event: "on_tool_error",
+				data: { error: "tool failed" },
+			}),
+		).toBeUndefined();
+		expect(
+			detectStreamErrorMessage({
+				event: "on_chat_model_stream",
+				data: { chunk: { text: "hello" } },
+			}),
+		).toBeUndefined();
+	});
+});
+
+describe("evaluateStreamingCompletion", () => {
+	it("blocks with stream_error when no assistant text and stream error exists", () => {
+		const result = evaluateStreamingCompletion({
+			sawAssistantText: false,
+			fallbackText: undefined,
+			streamErrorMessage: "provider timeout",
+		});
+
+		expect(result).toEqual({
+			status: "blocked",
+			reason: "stream_error",
+			message: "Model call failed: provider timeout",
+		});
+	});
+
+	it("blocks with empty_stream_response when no text or fallback is present", () => {
+		const result = evaluateStreamingCompletion({
+			sawAssistantText: false,
+			fallbackText: undefined,
+			streamErrorMessage: undefined,
+		});
+
+		expect(result).toEqual({
+			status: "blocked",
+			reason: "empty_stream_response",
+			message:
+				"Model completed without a response. Check provider logs for request errors.",
+		});
+	});
+
+	it("returns ok when assistant text exists", () => {
+		const result = evaluateStreamingCompletion({
+			sawAssistantText: true,
+			fallbackText: undefined,
+			streamErrorMessage: undefined,
+		});
+
+		expect(result).toEqual({ status: "ok" });
+	});
+});
+
+describe("LangGraph lifecycle termination", () => {
+	it("tracks root LangGraph run id from parentless on_chain_start", () => {
+		const rootRunId = trackRootLangGraphRunId(undefined, {
+			event: "on_chain_start",
+			name: "LangGraph",
+			run_id: "root-run",
+			parent_ids: [],
+		});
+		expect(rootRunId).toBe("root-run");
+	});
+
+	it("ignores non-root or non-LangGraph start events", () => {
+		const nestedRunId = trackRootLangGraphRunId(undefined, {
+			event: "on_chain_start",
+			name: "LangGraph",
+			run_id: "child-run",
+			parent_ids: ["root-run"],
+		});
+		expect(nestedRunId).toBeUndefined();
+
+		const otherChainRunId = trackRootLangGraphRunId(undefined, {
+			event: "on_chain_start",
+			name: "CustomChain",
+			run_id: "other-run",
+			parent_ids: [],
+		});
+		expect(otherChainRunId).toBeUndefined();
+	});
+
+	it("detects terminal root LangGraph on_chain_end by run id", () => {
+		expect(
+			isRootLangGraphTerminalEvent(
+				{
+					event: "on_chain_end",
+					name: "LangGraph",
+					run_id: "root-run",
+					parent_ids: [],
+				},
+				"root-run",
+			),
+		).toBe(true);
+	});
+
+	it("does not treat nested, mismatched, or non-LangGraph chain end as terminal", () => {
+		expect(
+			isRootLangGraphTerminalEvent(
+				{
+					event: "on_chain_end",
+					name: "LangGraph",
+					run_id: "child-run",
+					parent_ids: ["root-run"],
+				},
+				"root-run",
+			),
+		).toBe(false);
+		expect(
+			isRootLangGraphTerminalEvent(
+				{
+					event: "on_chain_end",
+					name: "LangGraph",
+					run_id: "other-run",
+					parent_ids: [],
+				},
+				"root-run",
+			),
+		).toBe(false);
+		expect(
+			isRootLangGraphTerminalEvent(
+				{
+					event: "on_chain_end",
+					name: "CustomChain",
+					run_id: "root-run",
+					parent_ids: [],
+				},
+				"root-run",
+			),
+		).toBe(false);
+		expect(
+			isRootLangGraphTerminalEvent(
+				{
+					event: "on_chain_end",
+					name: "LangGraph",
+					run_id: "root-run",
+					parent_ids: [],
+				},
+				undefined,
+			),
+		).toBe(false);
 	});
 });

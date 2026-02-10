@@ -36,6 +36,10 @@ describe("ModelFactory", () => {
 			const model = ModelFactory.createModel("codex:codex-mini-latest");
 
 			expect(model).toBeInstanceOf(ChatOpenAI);
+			expect((model as ChatOpenAI).useResponsesApi).toBe(true);
+			expect((model as ChatOpenAI & { zdrEnabled?: boolean }).zdrEnabled).toBe(
+				true,
+			);
 		});
 
 		it("should force OpenAI models onto the responses API", () => {
@@ -45,10 +49,61 @@ describe("ModelFactory", () => {
 			expect((model as ChatOpenAI).useResponsesApi).toBe(true);
 		});
 
+		it("should apply reasoning effort for supported OpenAI reasoning models", () => {
+			const model = ModelFactory.createModel("openai:gpt-5.2-codex", {
+				reasoningEffort: "high",
+			});
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+			expect(
+				(model as ChatOpenAI & { reasoning?: { effort?: string } }).reasoning,
+			).toEqual({ effort: "high" });
+		});
+
+		it("should ignore reasoning effort for unsupported OpenAI models", () => {
+			const model = ModelFactory.createModel("openai:gpt-4o", {
+				reasoningEffort: "medium",
+			});
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+			expect(
+				(model as ChatOpenAI & { reasoning?: { effort?: string } }).reasoning,
+			).toBeUndefined();
+		});
+
+		it("should map reasoning effort to anthropic thinking budget", () => {
+			const model = ModelFactory.createModel("anthropic:claude-sonnet-4-5", {
+				reasoningEffort: "medium",
+			});
+
+			expect(model).toBeInstanceOf(ChatAnthropic);
+			expect(
+				(
+					model as ChatAnthropic & {
+						thinking?: { type?: string; budget_tokens?: number };
+					}
+				).thinking,
+			).toEqual({
+				type: "enabled",
+				budget_tokens: 4096,
+			});
+		});
+
 		it("should create an OpenRouter model", () => {
 			const model = ModelFactory.createModel("openrouter:openai/gpt-4o");
 
 			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
+
+		it("should ignore reasoning effort for unsupported providers", () => {
+			const model = ModelFactory.createModel("openrouter:openai/gpt-5", {
+				reasoningEffort: "high",
+			});
+
+			expect(model).toBeInstanceOf(ChatOpenAI);
+			expect(
+				(model as ChatOpenAI & { reasoning?: { effort?: string } }).reasoning,
+			).toBeUndefined();
 		});
 
 		it("should create a Copilot model", () => {

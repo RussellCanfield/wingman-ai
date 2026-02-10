@@ -45,12 +45,15 @@ export type PromptTrainingConfig = {
 	instructionsPath?: string;
 };
 
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
+
 export type AgentSubAgent = {
 	id: string;
 	displayName: string;
 	description?: string;
 	tools: string[];
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	prompt?: string;
 	promptTraining?: PromptTrainingConfig | boolean;
 	promptRefinement?: PromptTrainingConfig | boolean;
@@ -62,6 +65,7 @@ export type AgentSummary = {
 	description?: string;
 	tools: string[];
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	voice?: AgentVoiceConfig;
 	promptTraining?: PromptTrainingConfig | boolean;
 	promptRefinement?: PromptTrainingConfig | boolean;
@@ -74,6 +78,7 @@ export type AgentDetail = {
 	description?: string;
 	tools: string[];
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	voice?: AgentVoiceConfig;
 	promptTraining?: PromptTrainingConfig | boolean;
 	promptRefinement?: PromptTrainingConfig | boolean;
@@ -135,6 +140,10 @@ export type ToolEvent = {
 	name: string;
 	node?: string;
 	actor?: string;
+	runId?: string;
+	parentRunIds?: string[];
+	delegatedByTaskId?: string;
+	delegatedSubagentType?: string;
 	args?: Record<string, any>;
 	status: "running" | "completed" | "error";
 	output?: any;

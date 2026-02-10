@@ -29,6 +29,8 @@ export type ParsedStreamEvent = {
 		id: string;
 		name: string;
 		node?: string;
+		runId?: string;
+		parentRunIds?: string[];
 		args?: Record<string, any>;
 		status: "running" | "completed" | "error";
 		output?: any;
@@ -89,6 +91,7 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 						id: toolCall.id,
 						name: toolCall.name,
 						node,
+						runId: toolCall.id,
 						args,
 						ui,
 						uiOnly,
@@ -120,6 +123,7 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 						id: toolResult.id,
 						name: toolResult.name || "tool",
 						node,
+						runId: toolResult.id,
 						status: toolResult.error ? "error" : "completed",
 						output,
 						ui,
@@ -151,6 +155,7 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				id: normalized.id,
 				name: normalized.name,
 				node: extractEventNode(chunk),
+				runId: normalized.id,
 				args,
 				ui,
 				uiOnly,
@@ -223,9 +228,11 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 
 	if (chunk.event === "on_tool_start") {
 		const toolName = typeof chunk.name === "string" ? chunk.name : "tool";
-		const toolId =
-			typeof chunk.run_id === "string" ? chunk.run_id : createEventId();
 		const node = extractEventNode(chunk);
+		const parentRunIds = extractParentRunIds(chunk);
+		const toolId =
+			resolveToolEventRunId(chunk, toolName, node, parentRunIds) ||
+			createEventId();
 		const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
 			normalizeToolArgs(chunk.data?.input),
 		);
@@ -236,6 +243,8 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 					id: toolId,
 					name: toolName,
 					node,
+					runId: toolId,
+					parentRunIds,
 					args,
 					ui,
 					uiOnly,
@@ -248,9 +257,15 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 	}
 
 	if (chunk.event === "on_tool_end") {
-		const toolId =
-			typeof chunk.run_id === "string" ? chunk.run_id : createEventId();
 		const node = extractEventNode(chunk);
+		const parentRunIds = extractParentRunIds(chunk);
+		const toolId =
+			resolveToolEventRunId(
+				chunk,
+				typeof chunk.name === "string" ? chunk.name : "tool",
+				node,
+				parentRunIds,
+			) || createEventId();
 		const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
 			chunk.data?.output,
 		);
@@ -261,12 +276,49 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 					id: toolId,
 					name: typeof chunk.name === "string" ? chunk.name : "tool",
 					node,
+					runId: toolId,
+					parentRunIds,
 					status: chunk.data?.error ? "error" : "completed",
 					output,
 					ui,
 					uiOnly,
 					textFallback,
 					error: chunk.data?.error,
+					timestamp: Date.now(),
+				},
+			],
+		};
+	}
+
+	if (chunk.event === "on_tool_error") {
+		const node = extractEventNode(chunk);
+		const parentRunIds = extractParentRunIds(chunk);
+		const toolId =
+			resolveToolEventRunId(
+				chunk,
+				typeof chunk.name === "string" ? chunk.name : "tool",
+				node,
+				parentRunIds,
+			) || createEventId();
+		const errorPayload = chunk.data?.error ?? chunk.error;
+		const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
+			chunk.data?.output ?? errorPayload,
+		);
+		return {
+			textEvents: [],
+			toolEvents: [
+				{
+					id: toolId,
+					name: typeof chunk.name === "string" ? chunk.name : "tool",
+					node,
+					runId: toolId,
+					parentRunIds,
+					status: "error",
+					output,
+					ui,
+					uiOnly,
+					textFallback,
+					error: normalizeErrorMessage(errorPayload),
 					timestamp: Date.now(),
 				},
 			],
@@ -444,6 +496,107 @@ function extractEventNode(chunk: any): string | undefined {
 	for (const candidate of candidates) {
 		const node = extractLanggraphNode(candidate);
 		if (node) return node;
+	}
+	return undefined;
+}
+
+function normalizeParentRunIds(value: unknown): string[] | undefined {
+	if (Array.isArray(value)) {
+		const ids = value
+			.filter((item): item is string => typeof item === "string")
+			.map((item) => item.trim())
+			.filter(Boolean);
+		return ids.length > 0 ? ids : undefined;
+	}
+	if (typeof value === "string" && value.trim()) {
+		return [value.trim()];
+	}
+	return undefined;
+}
+
+function normalizeRunIdentifier(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim();
+	return normalized.length > 0 ? normalized : undefined;
+}
+
+function buildToolEventFallbackRunId(params: {
+	toolName: string;
+	node?: string;
+	parentRunIds?: string[];
+	step?: string;
+}): string | undefined {
+	const parts = [
+		params.toolName.trim().toLowerCase(),
+		params.node?.trim().toLowerCase() || "",
+		params.parentRunIds?.join(">") || "",
+		params.step?.trim() || "",
+	].filter(Boolean);
+	if (parts.length === 0) return undefined;
+	return `derived:${parts.join("|")}`;
+}
+
+function resolveToolEventRunId(
+	chunk: any,
+	toolName: string,
+	node?: string,
+	parentRunIds?: string[],
+): string | undefined {
+	const directCandidates = [
+		chunk?.run_id,
+		chunk?.runId,
+		chunk?.data?.run_id,
+		chunk?.data?.runId,
+		chunk?.metadata?.run_id,
+		chunk?.metadata?.runId,
+		chunk?.data?.metadata?.run_id,
+		chunk?.data?.metadata?.runId,
+	];
+	for (const candidate of directCandidates) {
+		const normalized = normalizeRunIdentifier(candidate);
+		if (normalized) {
+			return normalized;
+		}
+	}
+
+	const stepCandidates = [
+		chunk?.metadata?.langgraph_step,
+		chunk?.metadata?.langgraphStep,
+		chunk?.data?.metadata?.langgraph_step,
+		chunk?.data?.metadata?.langgraphStep,
+	];
+	const step = stepCandidates
+		.map((candidate) =>
+			typeof candidate === "number"
+				? String(candidate)
+				: normalizeRunIdentifier(candidate),
+		)
+		.find(Boolean);
+
+	return buildToolEventFallbackRunId({
+		toolName,
+		node,
+		parentRunIds,
+		step,
+	});
+}
+
+function extractParentRunIds(chunk: any): string[] | undefined {
+	const candidates = [
+		chunk?.parent_ids,
+		chunk?.parentIds,
+		chunk?.metadata?.parent_ids,
+		chunk?.metadata?.parentIds,
+		chunk?.data?.parent_ids,
+		chunk?.data?.parentIds,
+		chunk?.data?.metadata?.parent_ids,
+		chunk?.data?.metadata?.parentIds,
+	];
+	for (const candidate of candidates) {
+		const parsed = normalizeParentRunIds(candidate);
+		if (parsed && parsed.length > 0) {
+			return parsed;
+		}
 	}
 	return undefined;
 }
@@ -670,6 +823,27 @@ function splitUiPayload(
 		uiOnly: typeof uiOnly === "boolean" ? uiOnly : undefined,
 		textFallback: typeof textFallback === "string" ? textFallback : undefined,
 	};
+}
+
+function normalizeErrorMessage(error: unknown): string | undefined {
+	if (!error) return undefined;
+	if (typeof error === "string") {
+		return error;
+	}
+	if (typeof error === "object") {
+		const message =
+			(error as { message?: unknown }).message ??
+			(error as { kwargs?: { message?: unknown } }).kwargs?.message;
+		if (typeof message === "string") {
+			return message;
+		}
+		try {
+			return JSON.stringify(error);
+		} catch {
+			return String(error);
+		}
+	}
+	return String(error);
 }
 
 function normalizeToolCall(

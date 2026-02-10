@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	extractSubagentName,
 	extractTaskSummary,
@@ -17,6 +17,7 @@ describe("toolDisplayHelpers", () => {
 		expect(extractSubagentName({ name: "Researcher" })).toBe("Researcher");
 		expect(extractSubagentName({ agent: "Planner" })).toBe("Planner");
 		expect(extractSubagentName({ subagent: "Runner" })).toBe("Runner");
+		expect(extractSubagentName({ subagent_type: "reviewer" })).toBe("reviewer");
 		expect(extractSubagentName({ agent: { name: "Writer" } })).toBe("Writer");
 	});
 

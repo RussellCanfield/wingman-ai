@@ -7,6 +7,7 @@ import type {
 	AgentVoiceConfig,
 	PromptTrainingConfig,
 	ProviderStatus,
+	ReasoningEffort,
 	VoiceProvider,
 } from "../types";
 import { agentSyncNotice } from "../utils/agentSyncNotice";
@@ -16,6 +17,7 @@ type AgentFormSubAgentPayload = {
 	id: string;
 	description?: string;
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	tools: string[];
 	prompt: string;
 	promptTraining?: PromptTrainingConfig | boolean | null;
@@ -25,6 +27,7 @@ type AgentPagePayload = {
 	displayName?: string;
 	description?: string;
 	model?: string;
+	reasoningEffort?: ReasoningEffort | null;
 	tools: string[];
 	prompt?: string;
 	voice?: AgentVoiceConfig | null;
@@ -36,6 +39,7 @@ type AgentSubAgentDraft = {
 	id: string;
 	description: string;
 	model: string;
+	reasoningEffort: ReasoningEffort | "";
 	prompt: string;
 	tools: string[];
 	promptTrainingEnabled: boolean;
@@ -53,6 +57,7 @@ type AgentsPageProps = {
 		displayName?: AgentPagePayload["displayName"];
 		description?: AgentPagePayload["description"];
 		model?: AgentPagePayload["model"];
+		reasoningEffort?: AgentPagePayload["reasoningEffort"];
 		tools: AgentPagePayload["tools"];
 		prompt?: AgentPagePayload["prompt"];
 		voice?: AgentPagePayload["voice"];
@@ -82,6 +87,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	const [displayName, setDisplayName] = useState("");
 	const [description, setDescription] = useState("");
 	const [model, setModel] = useState("");
+	const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | "">(
+		"",
+	);
 	const [prompt, setPrompt] = useState("");
 	const [promptTrainingEnabled, setPromptTrainingEnabled] = useState(false);
 	const [promptTrainingPath, setPromptTrainingPath] = useState("");
@@ -153,6 +161,15 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		() => new Set(subAgentTemplateOptions.map((option) => option.id)),
 		[subAgentTemplateOptions],
 	);
+	const reasoningEffortOptions: Array<{
+		value: ReasoningEffort;
+		label: string;
+	}> = [
+		{ value: "minimal", label: "Minimal" },
+		{ value: "low", label: "Low" },
+		{ value: "medium", label: "Medium" },
+		{ value: "high", label: "High" },
+	];
 
 	const parseNumber = (value: string): number | undefined => {
 		if (!value.trim()) return undefined;
@@ -192,6 +209,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		id: "",
 		description: "",
 		model: "",
+		reasoningEffort: "",
 		prompt: "",
 		tools: [],
 		promptTrainingEnabled: false,
@@ -352,6 +370,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			id: detail.id,
 			description: detail.description || "",
 			model: detail.model || "",
+			reasoningEffort: detail.reasoningEffort || "",
 			prompt: detail.prompt || "",
 			tools: detail.tools || [],
 			promptTrainingEnabled: templatePromptTraining.enabled,
@@ -380,6 +399,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 				sub.id.trim() ||
 				sub.description.trim() ||
 				sub.model.trim() ||
+				sub.reasoningEffort ||
 				sub.prompt.trim() ||
 				sub.tools.length > 0 ||
 				sub.promptTrainingEnabled ||
@@ -408,6 +428,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 				id: subId,
 				description: subDescription,
 				model: sub.model.trim() || undefined,
+				reasoningEffort: sub.reasoningEffort || undefined,
 				tools: sub.tools,
 				prompt: subPrompt,
 				promptTraining: buildPromptTrainingPayload(
@@ -423,6 +444,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			displayName: displayName.trim() || undefined,
 			description: description.trim() || undefined,
 			model: model.trim() || undefined,
+			reasoningEffort: reasoningEffort || undefined,
 			tools: selectedTools,
 			prompt: prompt.trim() || undefined,
 			voice: voicePayload,
@@ -445,6 +467,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			setDisplayName("");
 			setDescription("");
 			setModel("");
+			setReasoningEffort("");
 			setPrompt("");
 			setPromptTrainingEnabled(false);
 			setPromptTrainingPath("");
@@ -468,6 +491,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		setDisplayName(detail.displayName || "");
 		setDescription(detail.description || "");
 		setModel(detail.model || "");
+		setReasoningEffort(detail.reasoningEffort || "");
 		setPrompt(detail.prompt || "");
 		const promptTraining = parsePromptTraining(
 			detail.promptTraining ?? detail.promptRefinement,
@@ -484,6 +508,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 					id: sub.id || "",
 					description: sub.description || "",
 					model: sub.model || "",
+					reasoningEffort: sub.reasoningEffort || "",
 					prompt: sub.prompt || "",
 					tools: sub.tools || [],
 					promptTrainingEnabled: subPromptTraining.enabled,
@@ -501,6 +526,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		setDisplayName("");
 		setDescription("");
 		setModel("");
+		setReasoningEffort("");
 		setPrompt("");
 		setPromptTrainingEnabled(false);
 		setPromptTrainingPath("");
@@ -644,6 +670,31 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 									onChange={(event) => setModel(event.target.value)}
 									placeholder="(Example) provider:model-name"
 								/>
+								<div className="space-y-2">
+									<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+										Reasoning/Thinking Effort
+									</label>
+									<select
+										className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+										value={reasoningEffort}
+										onChange={(event) =>
+											setReasoningEffort(
+												event.target.value as ReasoningEffort | "",
+											)
+										}
+									>
+										<option value="">Default / Auto</option>
+										{reasoningEffortOptions.map((option) => (
+											<option key={option.value} value={option.value}>
+												{option.label}
+											</option>
+										))}
+									</select>
+									<p className="text-xs text-slate-400">
+										Applied only for models that support reasoning/thinking
+										effort.
+									</p>
+								</div>
 								<div className="rounded-xl border border-dashed border-white/10 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-300">
 									<div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
 										Model Format
@@ -850,9 +901,10 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										</div>
 										<p className="text-xs text-slate-400">
 											Selecting an existing agent copies its ID, prompt,
-											description, tools, model, and prompt training settings.
+											description, tools, model, reasoning effort, and prompt
+											training settings.
 										</p>
-										<div className="grid gap-3 md:grid-cols-2">
+										<div className="grid gap-3 md:grid-cols-3">
 											<input
 												className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 												value={subAgent.id}
@@ -875,6 +927,25 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 												}
 												placeholder="Optional model override"
 											/>
+											<select
+												className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+												value={subAgent.reasoningEffort}
+												onChange={(event) =>
+													updateSubAgent(subIndex, (current) => ({
+														...current,
+														reasoningEffort: event.target.value as
+															| ReasoningEffort
+															| "",
+													}))
+												}
+											>
+												<option value="">Default effort</option>
+												{reasoningEffortOptions.map((option) => (
+													<option key={option.value} value={option.value}>
+														{option.label}
+													</option>
+												))}
+											</select>
 										</div>
 										<textarea
 											className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
@@ -1147,6 +1218,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 											<span className="font-mono">{selectedAgent.model}</span>
 										</div>
 									) : null}
+									{selectedAgent.reasoningEffort ? (
+										<div className="text-xs text-slate-400">
+											Reasoning Effort:{" "}
+											<span className="font-mono">
+												{selectedAgent.reasoningEffort}
+											</span>
+										</div>
+									) : null}
 									<div className="flex flex-wrap gap-2">
 										{selectedAgent.tools.map((tool) => (
 											<span key={tool} className="pill">
@@ -1204,6 +1283,7 @@ function buildGraph(agents: AgentSummary[]) {
 			description?: string;
 			tools: string[];
 			model?: string;
+			reasoningEffort?: ReasoningEffort;
 			parentId?: string;
 		}
 	> = {};
@@ -1223,6 +1303,7 @@ function buildGraph(agents: AgentSummary[]) {
 			description: agent.description,
 			tools: agent.tools,
 			model: agent.model,
+			reasoningEffort: agent.reasoningEffort,
 		};
 
 		agent.subAgents?.forEach((subAgent, subIndex) => {
@@ -1241,6 +1322,7 @@ function buildGraph(agents: AgentSummary[]) {
 				description: subAgent.description,
 				tools: subAgent.tools,
 				model: subAgent.model,
+				reasoningEffort: subAgent.reasoningEffort,
 				parentId: agent.id,
 			};
 			edges.push({

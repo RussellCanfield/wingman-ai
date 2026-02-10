@@ -57,6 +57,20 @@ describe("CLI init", () => {
 		expect(existsSync(agentPath)).toBe(true);
 		const agent = JSON.parse(readFileSync(agentPath, "utf-8"));
 		expect(agent.name).toBe("wingman");
+
+		const codingAgentPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"coding",
+			"agent.md",
+		);
+		expect(existsSync(codingAgentPath)).toBe(true);
+		const codingPrompt = readFileSync(codingAgentPath, "utf-8");
+		expect(codingPrompt).toContain("write_todos");
+		expect(codingPrompt).not.toContain("update_plan");
+		expect(codingPrompt).not.toContain("subAgents:");
+		expect(codingPrompt).toContain("Do not delegate coding work to subagents");
 	});
 
 	it("merges existing config when --merge is set", async () => {

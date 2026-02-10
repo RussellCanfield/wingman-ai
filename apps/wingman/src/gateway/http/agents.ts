@@ -1,11 +1,15 @@
-import { AgentLoader } from "@/agent/config/agentLoader.js";
-import { getAvailableTools } from "@/agent/config/toolRegistry.js";
-import { GatewayRouter } from "../router.js";
-import type { GatewayHttpContext } from "./types.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as yaml from "js-yaml";
+import {
+	type ReasoningEffort,
+	ReasoningEffortSchema,
+} from "@/agent/config/agentConfig.js";
+import { AgentLoader } from "@/agent/config/agentLoader.js";
+import { getAvailableTools } from "@/agent/config/toolRegistry.js";
 import { AgentVoiceConfigSchema } from "@/types/voice.js";
+import { GatewayRouter } from "../router.js";
+import type { GatewayHttpContext } from "./types.js";
 
 type PromptTrainingConfig = Record<string, any> | boolean;
 
@@ -16,6 +20,8 @@ type SubAgentApiPayload = {
 	description?: string;
 	tools?: string[];
 	model?: string;
+	reasoningEffort?: ReasoningEffort | null;
+	thinkingEffort?: ReasoningEffort | null;
 	prompt?: string;
 	systemPrompt?: string;
 	promptTraining?: PromptTrainingConfig | null;
@@ -27,6 +33,7 @@ type NormalizedSubAgent = {
 	description: string;
 	tools: string[];
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	systemPrompt: string;
 	promptRefinement?: PromptTrainingConfig;
 };
@@ -46,6 +53,32 @@ const getPromptTrainingFromPayload = (
 	return undefined;
 };
 
+const getReasoningEffortFromPayload = (
+	payload: Record<string, any>,
+): ReasoningEffort | null | undefined => {
+	if (hasOwn(payload, "reasoningEffort")) {
+		return payload.reasoningEffort as ReasoningEffort | null | undefined;
+	}
+	if (hasOwn(payload, "thinkingEffort")) {
+		return payload.thinkingEffort as ReasoningEffort | null | undefined;
+	}
+	return undefined;
+};
+
+const parseReasoningEffort = (
+	value: unknown,
+	fieldPath: string,
+): { ok: true; value: ReasoningEffort } | { ok: false; error: string } => {
+	const parsed = ReasoningEffortSchema.safeParse(value);
+	if (!parsed.success) {
+		return {
+			ok: false,
+			error: `Invalid ${fieldPath}: expected one of minimal|low|medium|high`,
+		};
+	}
+	return { ok: true, value: parsed.data };
+};
+
 const mapPromptTrainingFields = (value: PromptTrainingConfig | undefined) => ({
 	promptTraining: value,
 	promptRefinement: value,
@@ -56,6 +89,7 @@ const mapSubAgentForResponse = (sub: {
 	description?: string;
 	tools?: string[];
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	systemPrompt?: string;
 	promptRefinement?: PromptTrainingConfig;
 }) => ({
@@ -64,6 +98,7 @@ const mapSubAgentForResponse = (sub: {
 	description: sub.description,
 	tools: sub.tools || [],
 	model: sub.model,
+	reasoningEffort: sub.reasoningEffort,
 	prompt: sub.systemPrompt,
 	...mapPromptTrainingFields(sub.promptRefinement),
 });
@@ -127,6 +162,20 @@ const normalizeSubAgents = (
 				error: `Invalid subAgents[${index}].promptTraining`,
 			};
 		}
+		const rawReasoningEffort = getReasoningEffortFromPayload(
+			item as Record<string, any>,
+		);
+		let reasoningEffort: ReasoningEffort | undefined;
+		if (rawReasoningEffort !== undefined && rawReasoningEffort !== null) {
+			const parsedEffort = parseReasoningEffort(
+				rawReasoningEffort,
+				`subAgents[${index}].reasoningEffort`,
+			);
+			if (!parsedEffort.ok) {
+				return { ok: false, error: parsedEffort.error };
+			}
+			reasoningEffort = parsedEffort.value;
+		}
 
 		const tools = Array.isArray(item.tools)
 			? item.tools.filter((tool) => availableTools.includes(tool as any))
@@ -137,6 +186,7 @@ const normalizeSubAgents = (
 			description,
 			tools,
 			model: item.model?.trim() || undefined,
+			reasoningEffort,
 			systemPrompt: prompt,
 		};
 		if (promptTraining !== undefined && promptTraining !== null) {
@@ -153,6 +203,7 @@ const buildAgentMarkdown = (params: {
 	description?: string;
 	tools: string[];
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	prompt?: string;
 	voice?: Record<string, any>;
 	promptRefinement?: PromptTrainingConfig;
@@ -163,6 +214,7 @@ const buildAgentMarkdown = (params: {
 		description,
 		tools,
 		model,
+		reasoningEffort,
 		prompt,
 		voice,
 		promptRefinement,
@@ -176,6 +228,9 @@ const buildAgentMarkdown = (params: {
 	if (model) {
 		metadata.model = model;
 	}
+	if (reasoningEffort) {
+		metadata.reasoningEffort = reasoningEffort;
+	}
 	if (voice) {
 		metadata.voice = voice;
 	}
@@ -188,7 +243,9 @@ const buildAgentMarkdown = (params: {
 	return serializeAgentMarkdown(metadata, prompt || "You are a Wingman agent.");
 };
 
-const parseAgentMarkdown = (content: string): {
+const parseAgentMarkdown = (
+	content: string,
+): {
 	metadata: Record<string, any>;
 	prompt: string;
 } => {
@@ -236,6 +293,7 @@ export const handleAgentsApi = async (
 				description: agent.description,
 				tools: agent.tools || [],
 				model: agent.model,
+				reasoningEffort: agent.reasoningEffort,
 				voice: agent.voice,
 				...mapPromptTrainingFields(agent.promptRefinement),
 				subAgents:
@@ -262,6 +320,8 @@ export const handleAgentsApi = async (
 				displayName?: string;
 				description?: string;
 				model?: string;
+				reasoningEffort?: ReasoningEffort | null;
+				thinkingEffort?: ReasoningEffort | null;
 				tools?: string[];
 				prompt?: string;
 				voice?: Record<string, any>;
@@ -285,9 +345,7 @@ export const handleAgentsApi = async (
 			}
 
 			const tools = Array.isArray(body.tools)
-				? body.tools.filter((tool) =>
-						getAvailableTools().includes(tool as any),
-					)
+				? body.tools.filter((tool) => getAvailableTools().includes(tool as any))
 				: [];
 			const promptTraining = getPromptTrainingFromPayload(
 				body as Record<string, any>,
@@ -301,6 +359,20 @@ export const handleAgentsApi = async (
 				return new Response("Invalid promptTraining configuration", {
 					status: 400,
 				});
+			}
+			const rawReasoningEffort = getReasoningEffortFromPayload(
+				body as Record<string, any>,
+			);
+			let reasoningEffort: ReasoningEffort | undefined;
+			if (rawReasoningEffort !== undefined && rawReasoningEffort !== null) {
+				const parsedEffort = parseReasoningEffort(
+					rawReasoningEffort,
+					"reasoningEffort",
+				);
+				if (!parsedEffort.ok) {
+					return new Response(parsedEffort.error, { status: 400 });
+				}
+				reasoningEffort = parsedEffort.value;
 			}
 
 			const rawSubAgents = hasOwn(body, "subAgents")
@@ -322,10 +394,10 @@ export const handleAgentsApi = async (
 				description: body.description,
 				tools,
 				model: body.model,
+				reasoningEffort,
 				prompt: body.prompt,
 				voice: parsedVoice,
-				promptRefinement:
-					promptTraining === null ? undefined : promptTraining,
+				promptRefinement: promptTraining === null ? undefined : promptTraining,
 				subAgents: subAgentsResult.value,
 			});
 			writeFileSync(join(agentsDir, "agent.md"), agentMarkdown);
@@ -354,6 +426,7 @@ export const handleAgentsApi = async (
 						description: body.description,
 						tools,
 						model: body.model,
+						reasoningEffort,
 						voice: parsedVoice,
 						...mapPromptTrainingFields(
 							promptTraining === null ? undefined : promptTraining,
@@ -397,6 +470,7 @@ export const handleAgentsApi = async (
 					description: agentConfig.description,
 					tools: agentConfig.tools || [],
 					model: agentConfig.model,
+					reasoningEffort: agentConfig.reasoningEffort,
 					voice: agentConfig.voice,
 					...mapPromptTrainingFields(agentConfig.promptRefinement),
 					subAgents:
@@ -419,6 +493,8 @@ export const handleAgentsApi = async (
 			displayName?: string;
 			description?: string;
 			model?: string;
+			reasoningEffort?: ReasoningEffort | null;
+			thinkingEffort?: ReasoningEffort | null;
 			tools?: string[];
 			prompt?: string;
 			voice?: Record<string, any>;
@@ -427,7 +503,7 @@ export const handleAgentsApi = async (
 			subAgents?: SubAgentApiPayload[] | null;
 			subagents?: SubAgentApiPayload[] | null;
 		};
-		let parsedVoice: Record<string, any> | undefined | null = undefined;
+		let parsedVoice: Record<string, any> | undefined | null;
 		if (body?.voice === null) {
 			parsedVoice = null;
 		} else if (body?.voice !== undefined) {
@@ -444,6 +520,22 @@ export const handleAgentsApi = async (
 
 		const nextDescription = body.description ?? agentConfig.description;
 		const nextModel = body.model ?? agentConfig.model;
+		const bodyReasoningEffort = getReasoningEffortFromPayload(
+			body as Record<string, any>,
+		);
+		let nextReasoningEffort = agentConfig.reasoningEffort;
+		if (bodyReasoningEffort === null) {
+			nextReasoningEffort = undefined;
+		} else if (bodyReasoningEffort !== undefined) {
+			const parsedEffort = parseReasoningEffort(
+				bodyReasoningEffort,
+				"reasoningEffort",
+			);
+			if (!parsedEffort.ok) {
+				return new Response(parsedEffort.error, { status: 400 });
+			}
+			nextReasoningEffort = parsedEffort.value;
+		}
 		const nextPrompt = body.prompt ?? agentConfig.systemPrompt;
 		const nextVoice =
 			parsedVoice === undefined ? agentConfig.voice : parsedVoice;
@@ -500,6 +592,12 @@ export const handleAgentsApi = async (
 			} else {
 				delete parsed.model;
 			}
+			if (nextReasoningEffort) {
+				parsed.reasoningEffort = nextReasoningEffort;
+			} else {
+				delete parsed.reasoningEffort;
+				delete parsed.thinkingEffort;
+			}
 			parsed.systemPrompt = nextPrompt;
 			if (nextVoice) {
 				parsed.voice = nextVoice;
@@ -528,6 +626,12 @@ export const handleAgentsApi = async (
 				metadata.model = nextModel;
 			} else {
 				delete metadata.model;
+			}
+			if (nextReasoningEffort) {
+				metadata.reasoningEffort = nextReasoningEffort;
+			} else {
+				delete metadata.reasoningEffort;
+				delete metadata.thinkingEffort;
 			}
 			if (nextVoice) {
 				metadata.voice = nextVoice;
@@ -575,6 +679,7 @@ export const handleAgentsApi = async (
 					description: nextDescription,
 					tools,
 					model: nextModel,
+					reasoningEffort: nextReasoningEffort,
 					voice: nextVoice,
 					...mapPromptTrainingFields(nextPromptRefinement),
 					subAgents: nextSubAgents.map((sub) => mapSubAgentForResponse(sub)),

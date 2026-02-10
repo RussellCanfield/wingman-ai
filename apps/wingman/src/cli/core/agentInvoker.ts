@@ -287,7 +287,7 @@ export const configureDeepAgentSummarizationMiddleware = (
 };
 
 type ToolEventContext = {
-	event: "on_tool_start" | "on_tool_end";
+	event: "on_tool_start" | "on_tool_end" | "on_tool_error";
 	toolName: string;
 };
 
@@ -300,7 +300,8 @@ export const detectToolEventContext = (
 	const eventChunk = chunk as Record<string, unknown>;
 	if (
 		eventChunk.event !== "on_tool_start" &&
-		eventChunk.event !== "on_tool_end"
+		eventChunk.event !== "on_tool_end" &&
+		eventChunk.event !== "on_tool_error"
 	) {
 		return null;
 	}
@@ -363,34 +364,246 @@ export const chunkHasAssistantText = (chunk: unknown): boolean => {
 };
 
 export const selectStreamingFallbackText = (
-	sessionMessages: Array<{
+	previousMessages: Array<{
 		role?: unknown;
-		createdAt?: unknown;
 		content?: unknown;
 	}>,
-	invocationStartedAt: number,
-	windowMs = 1000,
+	currentMessages: Array<{
+		role?: unknown;
+		content?: unknown;
+	}>,
 ): string | undefined => {
-	for (let i = sessionMessages.length - 1; i >= 0; i -= 1) {
-		const message = sessionMessages[i];
+	if (currentMessages.length === 0) {
+		return undefined;
+	}
+
+	const previousAssistantCounts = new Map<string, number>();
+	for (const message of previousMessages) {
 		if (!message || typeof message !== "object") {
 			continue;
 		}
 		if (message.role !== "assistant") {
 			continue;
 		}
-		if (
-			typeof message.createdAt !== "number" ||
-			message.createdAt < invocationStartedAt - windowMs
-		) {
+		if (typeof message.content !== "string") {
 			continue;
 		}
-		if (typeof message.content !== "string" || !message.content.trim()) {
+		const content = message.content.trim();
+		if (!content) {
 			continue;
 		}
-		return message.content;
+		previousAssistantCounts.set(
+			content,
+			(previousAssistantCounts.get(content) || 0) + 1,
+		);
+	}
+
+	let fallback: string | undefined;
+	for (const message of currentMessages) {
+		if (!message || typeof message !== "object") {
+			continue;
+		}
+		if (message.role !== "assistant") {
+			continue;
+		}
+		if (typeof message.content !== "string") {
+			continue;
+		}
+		const content = message.content.trim();
+		if (!content) {
+			continue;
+		}
+		const remaining = previousAssistantCounts.get(content) || 0;
+		if (remaining > 0) {
+			previousAssistantCounts.set(content, remaining - 1);
+			continue;
+		}
+		fallback = content;
+	}
+	return fallback;
+};
+
+export const detectStreamErrorMessage = (
+	chunk: unknown,
+): string | undefined => {
+	if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) {
+		return undefined;
+	}
+
+	const eventChunk = chunk as Record<string, unknown>;
+	const eventName =
+		typeof eventChunk.event === "string" ? eventChunk.event : undefined;
+	if (!eventName || !eventName.endsWith("_error")) {
+		return undefined;
+	}
+	if (eventName === "on_tool_error") {
+		return undefined;
+	}
+
+	const data =
+		eventChunk.data && typeof eventChunk.data === "object"
+			? (eventChunk.data as Record<string, unknown>)
+			: null;
+	const errorPayload =
+		data?.error || eventChunk.error || data?.output || data?.chunk;
+
+	if (typeof errorPayload === "string" && errorPayload.trim()) {
+		return errorPayload.trim();
+	}
+	if (errorPayload && typeof errorPayload === "object") {
+		const record = errorPayload as Record<string, unknown>;
+		if (typeof record.message === "string" && record.message.trim()) {
+			return record.message.trim();
+		}
+		if (typeof record.error === "string" && record.error.trim()) {
+			return record.error.trim();
+		}
+	}
+	if (errorPayload !== undefined && errorPayload !== null) {
+		return String(errorPayload);
+	}
+
+	return eventName;
+};
+
+const extractStreamEventRecord = (
+	chunk: unknown,
+): Record<string, unknown> | null => {
+	if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) {
+		return null;
+	}
+	const record = chunk as Record<string, unknown>;
+	return typeof record.event === "string" ? record : null;
+};
+
+const normalizeEventName = (value: unknown): string | undefined => {
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim();
+	return normalized.length > 0 ? normalized.toLowerCase() : undefined;
+};
+
+const normalizeEventParentRunIds = (value: unknown): string[] => {
+	if (Array.isArray(value)) {
+		return value
+			.filter((item): item is string => typeof item === "string")
+			.map((item) => item.trim())
+			.filter(Boolean);
+	}
+	if (typeof value === "string" && value.trim()) {
+		return [value.trim()];
+	}
+	return [];
+};
+
+const extractEventParentRunIds = (
+	eventRecord: Record<string, unknown>,
+): string[] => {
+	const parentCandidates = [
+		eventRecord.parent_ids,
+		eventRecord.parentIds,
+		(eventRecord.metadata as Record<string, unknown> | undefined)?.parent_ids,
+		(eventRecord.metadata as Record<string, unknown> | undefined)?.parentIds,
+		(eventRecord.data as Record<string, unknown> | undefined)?.parent_ids,
+		(eventRecord.data as Record<string, unknown> | undefined)?.parentIds,
+	];
+
+	for (const candidate of parentCandidates) {
+		const parentIds = normalizeEventParentRunIds(candidate);
+		if (parentIds.length > 0) {
+			return parentIds;
+		}
+	}
+	return [];
+};
+
+const extractEventRunId = (
+	eventRecord: Record<string, unknown>,
+): string | undefined => {
+	const runCandidates = [
+		eventRecord.run_id,
+		eventRecord.runId,
+		(eventRecord.data as Record<string, unknown> | undefined)?.run_id,
+		(eventRecord.data as Record<string, unknown> | undefined)?.runId,
+	];
+
+	for (const candidate of runCandidates) {
+		if (typeof candidate === "string" && candidate.trim()) {
+			return candidate.trim();
+		}
 	}
 	return undefined;
+};
+
+const isRootLangGraphChainEvent = (
+	eventRecord: Record<string, unknown>,
+	eventType: "on_chain_start" | "on_chain_end",
+): boolean => {
+	if (eventRecord.event !== eventType) {
+		return false;
+	}
+	const eventName = normalizeEventName(eventRecord.name);
+	if (eventName !== "langgraph") {
+		return false;
+	}
+	return extractEventParentRunIds(eventRecord).length === 0;
+};
+
+export const trackRootLangGraphRunId = (
+	currentRootLangGraphRunId: string | undefined,
+	chunk: unknown,
+): string | undefined => {
+	if (currentRootLangGraphRunId) {
+		return currentRootLangGraphRunId;
+	}
+	const eventRecord = extractStreamEventRecord(chunk);
+	if (!eventRecord || !isRootLangGraphChainEvent(eventRecord, "on_chain_start")) {
+		return currentRootLangGraphRunId;
+	}
+	return extractEventRunId(eventRecord) || currentRootLangGraphRunId;
+};
+
+export const isRootLangGraphTerminalEvent = (
+	chunk: unknown,
+	rootLangGraphRunId?: string,
+): boolean => {
+	if (!rootLangGraphRunId) return false;
+	const eventRecord = extractStreamEventRecord(chunk);
+	if (!eventRecord || !isRootLangGraphChainEvent(eventRecord, "on_chain_end")) {
+		return false;
+	}
+	const chunkRunId = extractEventRunId(eventRecord);
+	return Boolean(chunkRunId && chunkRunId === rootLangGraphRunId);
+};
+
+type StreamingCompletionOutcome =
+	| {
+			status: "blocked";
+			reason: "stream_error" | "empty_stream_response";
+			message: string;
+	  }
+	| { status: "ok" };
+
+type EvaluateStreamingCompletionInput = {
+	sawAssistantText: boolean;
+	fallbackText?: string;
+	streamErrorMessage?: string;
+};
+
+export const evaluateStreamingCompletion = (
+	input: EvaluateStreamingCompletionInput,
+): StreamingCompletionOutcome => {
+	if (!input.sawAssistantText && !input.fallbackText) {
+		const message = input.streamErrorMessage
+			? `Model call failed: ${input.streamErrorMessage}`
+			: "Model completed without a response. Check provider logs for request errors.";
+		return {
+			status: "blocked",
+			reason: input.streamErrorMessage ? "stream_error" : "empty_stream_response",
+			message,
+		};
+	}
+
+	return { status: "ok" };
 };
 
 export class AgentInvoker {
@@ -452,11 +665,16 @@ export class AgentInvoker {
 		attachments?: MediaAttachment[],
 		options?: InvokeAgentOptions,
 	): Promise<any> {
-		const invocationStartedAt = Date.now();
 		let cancellationHandled = false;
 		let activeToolName: string | null = null;
 		let lastToolName: string | null = null;
 		let sawAssistantText = false;
+		let streamErrorMessage: string | undefined;
+		let rootLangGraphRunId: string | undefined;
+		let preInvocationMessages: Array<{
+			role?: unknown;
+			content?: unknown;
+		}> | null = null;
 		const isCancelled = () => options?.signal?.aborted === true;
 		try {
 			const hookSessionId = sessionId || uuidv4();
@@ -696,6 +914,18 @@ export class AgentInvoker {
 			// Use streaming if session manager is available, otherwise fall back to invoke
 			if (this.sessionManager && sessionId) {
 				this.logger.debug(`Using streaming with session: ${sessionId}`);
+				try {
+					const messages = await this.sessionManager.listMessages(sessionId);
+					preInvocationMessages = messages.map((message) => ({
+						role: message.role,
+						content: message.content,
+					}));
+				} catch (stateError) {
+					this.logger.debug(
+						"Failed to capture pre-invocation session state",
+						stateError,
+					);
+				}
 
 				// Stream the agent response
 				const stream = await (standaloneAgent as any).streamEvents(
@@ -716,8 +946,15 @@ export class AgentInvoker {
 				);
 
 				for await (const chunk of stream) {
+					rootLangGraphRunId = trackRootLangGraphRunId(
+						rootLangGraphRunId,
+						chunk,
+					);
 					if (!sawAssistantText && chunkHasAssistantText(chunk)) {
 						sawAssistantText = true;
+					}
+					if (!streamErrorMessage) {
+						streamErrorMessage = detectStreamErrorMessage(chunk);
 					}
 					const toolEvent = detectToolEventContext(chunk);
 					if (toolEvent) {
@@ -739,6 +976,12 @@ export class AgentInvoker {
 					}
 					// Forward raw chunks to OutputManager for client-side interpretation
 					this.outputManager.emitAgentStream(chunk);
+					if (isRootLangGraphTerminalEvent(chunk, rootLangGraphRunId)) {
+						this.logger.debug(
+							"Detected root LangGraph on_chain_end event; finalizing stream without waiting for iterator shutdown",
+						);
+						break;
+					}
 				}
 				if (isCancelled()) {
 					cancellationHandled = true;
@@ -747,15 +990,22 @@ export class AgentInvoker {
 					return { cancelled: true };
 				}
 
-				this.logger.info("Agent streaming completed successfully");
 				let fallbackText: string | undefined;
-				if (!sawAssistantText && this.sessionManager && sessionId) {
+				if (
+					!sawAssistantText &&
+					this.sessionManager &&
+					sessionId &&
+					preInvocationMessages
+				) {
 					try {
 						const sessionMessages =
 							await this.sessionManager.listMessages(sessionId);
 						fallbackText = selectStreamingFallbackText(
-							sessionMessages,
-							invocationStartedAt,
+							preInvocationMessages,
+							sessionMessages.map((message) => ({
+								role: message.role,
+								content: message.content,
+							})),
 						);
 					} catch (stateError) {
 						this.logger.debug(
@@ -764,16 +1014,22 @@ export class AgentInvoker {
 						);
 					}
 				}
-				if (!sawAssistantText && !fallbackText) {
-					const emptyResponseMessage =
-						"Model completed without a response. Check provider logs for request errors.";
-					this.logger.warn(emptyResponseMessage);
-					this.outputManager.emitAgentError(emptyResponseMessage);
+				const completionOutcome = evaluateStreamingCompletion({
+					sawAssistantText,
+					fallbackText,
+					streamErrorMessage,
+				});
+				if (completionOutcome.status === "blocked") {
+					this.logger.warn(completionOutcome.message);
+					this.outputManager.emitAgentError(completionOutcome.message);
 					return {
 						blocked: true,
-						reason: "empty_stream_response",
+						reason: completionOutcome.reason,
 					};
 				}
+				this.logger.info("Agent streaming completed successfully", {
+					usedFallbackText: Boolean(fallbackText),
+				});
 				this.outputManager.emitAgentComplete({
 					streaming: true,
 					...(fallbackText ? { fallbackText } : {}),

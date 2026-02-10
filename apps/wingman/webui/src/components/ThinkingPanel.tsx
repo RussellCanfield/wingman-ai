@@ -20,7 +20,10 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 		.length;
 	const hasThinking = sortedThinking.length > 0;
 	const hasTools = toolEvents.length > 0;
-	const [isOpen, setIsOpen] = useState(() =>
+	if (!hasThinking && !hasTools) {
+		return null;
+	}
+	const [isThinkingOpen, setIsThinkingOpen] = useState(() =>
 		shouldOpenThinkingPanelByDefault({
 			isStreaming,
 			hasThinking,
@@ -33,22 +36,21 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 	});
 
 	return (
-		<details
-			className="rounded-2xl border border-sky-400/40 bg-sky-500/10 px-4 py-3 text-sm text-slate-200 shadow-[0_10px_18px_rgba(18,14,12,0.08)]"
-			open={isOpen}
-			onToggle={(event) => setIsOpen(event.currentTarget.open)}
-		>
-			<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-				<div className="flex items-center gap-3">
-					<span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-						Execution Trace
-					</span>
-					<span className="text-xs text-slate-400">{summary}</span>
-				</div>
-			</summary>
-			<div className="mt-3 space-y-3">
-				{hasThinking ? (
-					<div className="space-y-2">
+		<div className="space-y-3">
+			{hasTools ? <ToolEventPanel toolEvents={toolEvents} variant="inline" /> : null}
+			{hasThinking ? (
+				<details
+					className="rounded-xl border border-sky-400/35 bg-sky-500/10 px-3 py-2 text-sm text-slate-200"
+					open={isThinkingOpen}
+					onToggle={(event) => setIsThinkingOpen(event.currentTarget.open)}
+				>
+					<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+						<span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+							Subagent notes
+						</span>
+						<span className="text-xs text-slate-400">{summary}</span>
+					</summary>
+					<div className="mt-2 space-y-2">
 						{sortedThinking.map((event) => (
 							<details
 								key={event.id}
@@ -73,15 +75,9 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
 							</details>
 						))}
 					</div>
-				) : null}
-				{hasTools ? (
-					<ToolEventPanel
-						toolEvents={toolEvents}
-						variant="inline"
-					/>
-				) : null}
-			</div>
-		</details>
+				</details>
+			) : null}
+		</div>
 	);
 };
 

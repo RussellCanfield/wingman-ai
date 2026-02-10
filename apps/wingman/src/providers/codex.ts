@@ -138,6 +138,7 @@ function withCodexRequestDefaults(body: RequestInit["body"]): RequestInit["body"
 				? root.instructions.trim()
 				: extractInstructionsFromInput(root.input) || DEFAULT_CODEX_INSTRUCTIONS;
 
+		// Codex responses endpoint requires store=false.
 		return JSON.stringify({ ...root, store: false, instructions });
 	} catch {
 		return body;

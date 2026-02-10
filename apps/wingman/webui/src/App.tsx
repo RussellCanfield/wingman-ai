@@ -31,6 +31,7 @@ import type {
 	PromptTrainingConfig,
 	ProviderStatus,
 	ProviderStatusResponse,
+	ReasoningEffort,
 	Routine,
 	ThinkingEvent,
 	Thread,
@@ -44,6 +45,7 @@ import {
 	resolveToolActorLabel,
 } from "./utils/agentAttribution";
 import { buildRoutineAgents } from "./utils/agentOptions";
+import { appendAssistantErrorFeedback } from "./utils/assistantError";
 import {
 	FILE_INPUT_ACCEPT,
 	isPdfUploadFile,
@@ -52,10 +54,16 @@ import {
 } from "./utils/fileUpload";
 import { parseStreamEvents } from "./utils/streaming";
 import {
+	clearStreamMessageTargets,
+	resolveTextMessageTargetId,
+	resolveToolMessageTargetId,
+} from "./utils/streamMessageRouter";
+import {
 	DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
 	DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS,
 	shouldRecoverStream,
 } from "./utils/streamRecovery";
+import { appendLocalPromptMessagesToThread } from "./utils/threadState";
 import {
 	resolveSpeechVoice,
 	resolveVoiceConfig,
@@ -97,9 +105,15 @@ type AgentEditorSubAgentPayload = {
 	id: string;
 	description?: string;
 	model?: string;
+	reasoningEffort?: ReasoningEffort;
 	tools: string[];
 	prompt: string;
 	promptTraining?: PromptTrainingConfig | boolean | null;
+};
+
+type TaskDelegationContext = {
+	taskEventId: string;
+	subagentType?: string;
 };
 
 export const App: React.FC = () => {
@@ -122,6 +136,8 @@ export const App: React.FC = () => {
 	const [health, setHealth] = useState<GatewayHealth>({});
 	const [stats, setStats] = useState<GatewayStats>({});
 	const [isStreaming, setIsStreaming] = useState<boolean>(false);
+	const [showStreamingIndicator, setShowStreamingIndicator] =
+		useState<boolean>(false);
 	const [queuedPromptCount, setQueuedPromptCount] = useState<number>(0);
 	const [threads, setThreads] = useState<Thread[]>([]);
 	const [activeThreadId, setActiveThreadId] = useState<string>("");
@@ -154,6 +170,9 @@ export const App: React.FC = () => {
 	const wsRef = useRef<WebSocket | null>(null);
 	const connectRequestIdRef = useRef<string | null>(null);
 	const buffersRef = useRef<Map<string, string>>(new Map());
+	const requestStreamMessageRef = useRef<Map<string, Map<string, string>>>(
+		new Map(),
+	);
 	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(
 		new Map(),
 	);
@@ -176,6 +195,9 @@ export const App: React.FC = () => {
 	const streamLastActivityRef = useRef<number>(0);
 	const streamRecoveryTimerRef = useRef<number | null>(null);
 	const runningToolEventsRef = useRef<Map<string, Set<string>>>(new Map());
+	const taskDelegationRef = useRef<
+		Map<string, Map<string, TaskDelegationContext>>
+	>(new Map());
 
 	const agentOptions = useMemo(
 		() =>
@@ -272,7 +294,7 @@ export const App: React.FC = () => {
 	const syncRequestStreamingState = useCallback(() => {
 		const pendingSize = pendingRequestIdsRef.current.size;
 		const hasActiveRequest = Boolean(activeRequestIdRef.current);
-		setIsStreaming(pendingSize > 0);
+		setIsStreaming(pendingSize > 0 || hasActiveRequest);
 		setQueuedPromptCount(Math.max(pendingSize - (hasActiveRequest ? 1 : 0), 0));
 	}, []);
 
@@ -303,6 +325,7 @@ export const App: React.FC = () => {
 				streamLastActivityRef.current = 0;
 				runningToolEventsRef.current.clear();
 				syncRequestStreamingState();
+				setShowStreamingIndicator(false);
 				logEvent(
 					"Recovered from a stale stream on this device. Prompt input is re-enabled.",
 				);
@@ -324,6 +347,7 @@ export const App: React.FC = () => {
 	const registerPendingRequest = useCallback(
 		(requestId: string, startedAt: number) => {
 			pendingRequestIdsRef.current.add(requestId);
+			setShowStreamingIndicator(true);
 			if (!activeRequestIdRef.current) {
 				activeRequestIdRef.current = requestId;
 				streamStartedAtRef.current = startedAt;
@@ -338,6 +362,7 @@ export const App: React.FC = () => {
 	const markPendingRequestActive = useCallback(
 		(requestId: string) => {
 			if (!pendingRequestIdsRef.current.has(requestId)) return;
+			setShowStreamingIndicator(true);
 			if (activeRequestIdRef.current === requestId) return;
 			activeRequestIdRef.current = requestId;
 			const now = Date.now();
@@ -351,7 +376,8 @@ export const App: React.FC = () => {
 
 	const finalizePendingRequest = useCallback(
 		(requestId: string) => {
-			if (!pendingRequestIdsRef.current.delete(requestId)) return;
+			const removed = pendingRequestIdsRef.current.delete(requestId);
+			if (!removed && activeRequestIdRef.current !== requestId) return;
 			if (activeRequestIdRef.current === requestId) {
 				const nextActive = pendingRequestIdsRef.current.values().next().value;
 				activeRequestIdRef.current = nextActive ?? null;
@@ -364,6 +390,7 @@ export const App: React.FC = () => {
 					streamStartedAtRef.current = 0;
 					streamLastActivityRef.current = 0;
 					clearStreamRecoveryTimer();
+					setShowStreamingIndicator(false);
 				}
 			}
 			syncRequestStreamingState();
@@ -382,6 +409,7 @@ export const App: React.FC = () => {
 		streamLastActivityRef.current = 0;
 		runningToolEventsRef.current.clear();
 		clearStreamRecoveryTimer();
+		setShowStreamingIndicator(false);
 		syncRequestStreamingState();
 	}, [clearStreamRecoveryTimer, syncRequestStreamingState]);
 
@@ -857,116 +885,177 @@ export const App: React.FC = () => {
 		stopVoicePlayback();
 	}, [activeThreadId, stopVoicePlayback]);
 
-	const updateAssistant = useCallback((requestId: string, text: string) => {
-		const threadId = requestThreadRef.current.get(requestId);
-		if (!threadId) return;
-		if (uiOnlyRequestsRef.current.has(requestId)) {
-			return;
+	const getRequestMessageIds = useCallback((requestId: string): string[] => {
+		const ids = new Set<string>([requestId]);
+		const requestTargets = requestStreamMessageRef.current.get(requestId);
+		if (requestTargets) {
+			for (const targetId of requestTargets.values()) {
+				ids.add(targetId);
+			}
 		}
-		setThreads((prev) =>
-			prev.map((thread) =>
-				thread.id === threadId
-					? {
-							...thread,
-							messages: thread.messages.map((msg) =>
-								msg.id === requestId ? { ...msg, content: text } : msg,
-							),
-						}
-					: thread,
-			),
-		);
+		return [...ids];
 	}, []);
 
+	const resolveRequestMessageId = useCallback(
+		(requestId: string): string => {
+			const candidates = getRequestMessageIds(requestId);
+			for (let index = candidates.length - 1; index >= 0; index -= 1) {
+				const candidate = candidates[index];
+				if (
+					(buffersRef.current.get(candidate) || "").trim().length > 0 ||
+					uiFallbackRef.current.has(candidate) ||
+					uiOnlyRequestsRef.current.has(candidate)
+				) {
+					return candidate;
+				}
+			}
+			return candidates[candidates.length - 1] || requestId;
+		},
+		[getRequestMessageIds],
+	);
+
+	const updateAssistant = useCallback(
+		(input: {
+			requestId: string;
+			messageId: string;
+			text: string;
+			isDelta?: boolean;
+		}) => {
+			const { requestId, messageId, text, isDelta } = input;
+			const threadId = requestThreadRef.current.get(requestId);
+			if (!threadId) return;
+			if (uiOnlyRequestsRef.current.has(messageId)) {
+				return;
+			}
+
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+					return upsertAssistantMessage(
+						thread,
+						messageId,
+						(msg) => {
+							const merged = mergeAssistantStreamText(
+								msg.content,
+								text,
+								isDelta,
+							);
+							buffersRef.current.set(messageId, merged);
+							return { ...msg, content: merged };
+						},
+						requestId,
+					);
+				}),
+			);
+		},
+		[],
+	);
+
 	const updateToolEvents = useCallback(
-		(requestId: string, events: ToolEvent[]) => {
+		(requestId: string, messageId: string, events: ToolEvent[]) => {
 			const threadId = requestThreadRef.current.get(requestId);
 			if (!threadId || events.length === 0) return;
 
 			setThreads((prev) =>
 				prev.map((thread) => {
 					if (thread.id !== threadId) return thread;
-					const messages = thread.messages.map((msg) => {
-						if (msg.id !== requestId) return msg;
-						const existing = msg.toolEvents ? [...msg.toolEvents] : [];
-						const uiBlocks = msg.uiBlocks ? [...msg.uiBlocks] : [];
-						let clearContent = false;
-						for (const event of events) {
-							if (event.uiOnly && dynamicUiEnabled) {
-								uiOnlyRequestsRef.current.add(requestId);
-								clearContent = true;
-							}
-							if (event.textFallback) {
-								uiFallbackRef.current.set(requestId, event.textFallback);
-							}
-							const index = existing.findIndex((item) => item.id === event.id);
-							if (index >= 0) {
-								const resolvedName =
-									event.name && event.name !== "tool"
-										? event.name
-										: existing[index].name;
-								existing[index] = {
-									...existing[index],
-									...event,
-									name: resolvedName,
-									node: event.node || existing[index].node,
-									actor: event.actor || existing[index].actor,
-									startedAt: existing[index].startedAt || event.timestamp,
-									completedAt:
-										event.status === "completed" || event.status === "error"
-											? event.timestamp
-											: existing[index].completedAt,
-								};
-							} else {
-								existing.push({
-									id: event.id,
-									name: event.name,
-									node: event.node,
-									actor: event.actor,
-									args: event.args,
-									status: event.status,
-									output: event.output,
-									ui: event.ui,
-									uiOnly: event.uiOnly,
-									textFallback: event.textFallback,
-									error: event.error,
-									startedAt: event.timestamp,
-									completedAt:
-										event.status === "completed" || event.status === "error"
-											? event.timestamp
-											: undefined,
-								});
-							}
-							if (event.ui && dynamicUiEnabled) {
-								const existingBlock = uiBlocks.find(
-									(block) => block.id === event.id,
+					return upsertAssistantMessage(
+						thread,
+						messageId,
+						(msg) => {
+							const existing = msg.toolEvents ? [...msg.toolEvents] : [];
+							const uiBlocks = msg.uiBlocks ? [...msg.uiBlocks] : [];
+							let clearContent = false;
+							for (const event of events) {
+								if (event.uiOnly && dynamicUiEnabled) {
+									uiOnlyRequestsRef.current.add(messageId);
+									clearContent = true;
+								}
+								if (event.textFallback) {
+									uiFallbackRef.current.set(messageId, event.textFallback);
+								}
+								const index = existing.findIndex(
+									(item) => item.id === event.id,
 								);
-								if (!existingBlock) {
-									uiBlocks.push({
+								if (index >= 0) {
+									const resolvedName =
+										event.name && event.name !== "tool"
+											? event.name
+											: existing[index].name;
+									existing[index] = {
+										...existing[index],
+										...event,
+										name: resolvedName,
+										node: event.node || existing[index].node,
+										actor: event.actor || existing[index].actor,
+										runId: event.runId || existing[index].runId,
+										parentRunIds:
+											event.parentRunIds || existing[index].parentRunIds,
+										delegatedByTaskId:
+											event.delegatedByTaskId ||
+											existing[index].delegatedByTaskId,
+										delegatedSubagentType:
+											event.delegatedSubagentType ||
+											existing[index].delegatedSubagentType,
+										startedAt: existing[index].startedAt || event.timestamp,
+										completedAt:
+											event.status === "completed" || event.status === "error"
+												? event.timestamp
+												: existing[index].completedAt,
+									};
+								} else {
+									existing.push({
 										id: event.id,
-										spec: event.ui,
+										name: event.name,
+										node: event.node,
+										actor: event.actor,
+										runId: event.runId,
+										parentRunIds: event.parentRunIds,
+										delegatedByTaskId: event.delegatedByTaskId,
+										delegatedSubagentType: event.delegatedSubagentType,
+										args: event.args,
+										status: event.status,
+										output: event.output,
+										ui: event.ui,
 										uiOnly: event.uiOnly,
 										textFallback: event.textFallback,
+										error: event.error,
+										startedAt: event.timestamp,
+										completedAt:
+											event.status === "completed" || event.status === "error"
+												? event.timestamp
+												: undefined,
 									});
-								} else {
-									existingBlock.spec = event.ui;
-									existingBlock.uiOnly = event.uiOnly;
-									existingBlock.textFallback = event.textFallback;
+								}
+								if (event.ui && dynamicUiEnabled) {
+									const existingBlock = uiBlocks.find(
+										(block) => block.id === event.id,
+									);
+									if (!existingBlock) {
+										uiBlocks.push({
+											id: event.id,
+											spec: event.ui,
+											uiOnly: event.uiOnly,
+											textFallback: event.textFallback,
+										});
+									} else {
+										existingBlock.spec = event.ui;
+										existingBlock.uiOnly = event.uiOnly;
+										existingBlock.textFallback = event.textFallback;
+									}
 								}
 							}
-						}
-						return {
-							...msg,
-							content: clearContent ? "" : msg.content,
-							toolEvents: existing,
-							uiBlocks: dynamicUiEnabled ? uiBlocks : msg.uiBlocks,
-							uiTextFallback:
-								uiFallbackRef.current.get(requestId) ?? msg.uiTextFallback,
-						};
-					});
-					return {
-						...thread,
-						messages,
-					};
+							return {
+								...msg,
+								content: clearContent ? "" : msg.content,
+								toolEvents: existing,
+								uiBlocks: dynamicUiEnabled ? uiBlocks : msg.uiBlocks,
+								uiTextFallback:
+									uiFallbackRef.current.get(messageId) ?? msg.uiTextFallback,
+							};
+						},
+						requestId,
+					);
 				}),
 			);
 		},
@@ -974,48 +1063,59 @@ export const App: React.FC = () => {
 	);
 
 	const updateThinkingEvents = useCallback(
-		(requestId: string, events: ThinkingEvent[]) => {
+		(requestId: string, messageId: string, events: ThinkingEvent[]) => {
 			const threadId = requestThreadRef.current.get(requestId);
 			if (!threadId || events.length === 0) return;
 
 			setThreads((prev) =>
 				prev.map((thread) => {
 					if (thread.id !== threadId) return thread;
-					const messages = thread.messages.map((msg) => {
-						if (msg.id !== requestId) return msg;
-						const existing = msg.thinkingEvents ? [...msg.thinkingEvents] : [];
-						for (const event of events) {
-							const index = existing.findIndex((item) => item.id === event.id);
-							if (index >= 0) {
-								existing[index] = {
-									...existing[index],
-									...event,
-								};
-							} else {
-								existing.push(event);
+					return upsertAssistantMessage(
+						thread,
+						messageId,
+						(msg) => {
+							const existing = msg.thinkingEvents
+								? [...msg.thinkingEvents]
+								: [];
+							for (const event of events) {
+								const index = existing.findIndex(
+									(item) => item.id === event.id,
+								);
+								if (index >= 0) {
+									existing[index] = {
+										...existing[index],
+										...event,
+									};
+								} else {
+									existing.push(event);
+								}
 							}
-						}
-						return { ...msg, thinkingEvents: existing };
-					});
-					return {
-						...thread,
-						messages,
-					};
+							return { ...msg, thinkingEvents: existing };
+						},
+						requestId,
+					);
 				}),
 			);
 		},
 		[],
 	);
 
-	const cleanupRequestState = useCallback((requestId: string) => {
-		buffersRef.current.delete(requestId);
-		thinkingBuffersRef.current.delete(requestId);
-		requestThreadRef.current.delete(requestId);
-		requestAgentRef.current.delete(requestId);
-		uiOnlyRequestsRef.current.delete(requestId);
-		uiFallbackRef.current.delete(requestId);
-		runningToolEventsRef.current.delete(requestId);
-	}, []);
+	const cleanupRequestState = useCallback(
+		(requestId: string) => {
+			for (const messageId of getRequestMessageIds(requestId)) {
+				buffersRef.current.delete(messageId);
+				uiOnlyRequestsRef.current.delete(messageId);
+				uiFallbackRef.current.delete(messageId);
+			}
+			thinkingBuffersRef.current.delete(requestId);
+			requestThreadRef.current.delete(requestId);
+			requestAgentRef.current.delete(requestId);
+			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
+			runningToolEventsRef.current.delete(requestId);
+			taskDelegationRef.current.delete(requestId);
+		},
+		[getRequestMessageIds],
+	);
 
 	const finalizeAssistant = useCallback(
 		(
@@ -1023,6 +1123,7 @@ export const App: React.FC = () => {
 			options?: {
 				fallback?: string;
 				forceText?: boolean;
+				appendFallbackToExisting?: boolean;
 			},
 		) => {
 			const threadId = requestThreadRef.current.get(requestId);
@@ -1031,10 +1132,11 @@ export const App: React.FC = () => {
 				finalizePendingRequest(requestId);
 				return;
 			}
-			const uiFallback = uiFallbackRef.current.get(requestId);
+			const messageId = resolveRequestMessageId(requestId);
+			const uiFallback = uiFallbackRef.current.get(messageId);
 			const resolvedFallback = options?.fallback || uiFallback || "";
 			const finalText =
-				buffersRef.current.get(requestId) || resolvedFallback || "";
+				buffersRef.current.get(messageId) || resolvedFallback || "";
 			const spoken =
 				spokenMessagesRef.current.get(threadId) || new Set<string>();
 			if (
@@ -1042,14 +1144,14 @@ export const App: React.FC = () => {
 					text: finalText,
 					enabled: isVoiceAutoEnabledRef.current(threadId),
 					spokenMessages: spoken,
-					requestId,
+					requestId: messageId,
 				})
 			) {
-				spoken.add(requestId);
+				spoken.add(messageId);
 				spokenMessagesRef.current.set(threadId, spoken);
 				const agentForRequest = requestAgentRef.current.get(requestId);
 				void speakVoiceRef.current({
-					messageId: requestId,
+					messageId,
 					text: finalText,
 					agentId: agentForRequest,
 				});
@@ -1057,29 +1159,44 @@ export const App: React.FC = () => {
 			setThreads((prev) =>
 				prev.map((thread) => {
 					if (thread.id !== threadId) return thread;
-					return {
-						...thread,
-						messages: thread.messages.map((msg) => {
-							if (msg.id !== requestId) return msg;
-							if (!msg.content && resolvedFallback) {
-								const canRenderFallbackText =
-									options?.forceText ||
-									!uiOnlyRequestsRef.current.has(requestId) ||
-									!dynamicUiEnabled;
-								if (!canRenderFallbackText) {
-									return msg;
-								}
+					return upsertAssistantMessage(
+						thread,
+						messageId,
+						(msg) => {
+							const canRenderFallbackText =
+								options?.forceText ||
+								!uiOnlyRequestsRef.current.has(messageId) ||
+								!dynamicUiEnabled;
+							if (!canRenderFallbackText || !resolvedFallback) {
+								return msg;
+							}
+							if (!msg.content.trim()) {
 								return { ...msg, content: resolvedFallback };
 							}
+							if (options?.appendFallbackToExisting) {
+								const withFeedback = appendAssistantErrorFeedback(
+									msg.content,
+									resolvedFallback,
+								);
+								if (withFeedback !== msg.content) {
+									return { ...msg, content: withFeedback };
+								}
+							}
 							return msg;
-						}),
-					};
+						},
+						requestId,
+					);
 				}),
 			);
 			cleanupRequestState(requestId);
 			finalizePendingRequest(requestId);
 		},
-		[cleanupRequestState, dynamicUiEnabled, finalizePendingRequest],
+		[
+			cleanupRequestState,
+			dynamicUiEnabled,
+			finalizePendingRequest,
+			resolveRequestMessageId,
+		],
 	);
 
 	const handleAgentEvent = useCallback(
@@ -1273,19 +1390,23 @@ export const App: React.FC = () => {
 				});
 			}
 			if (payload.type === "agent-start") {
+				setShowStreamingIndicator(true);
 				logEvent(`Agent started: ${payload.agent || "unknown"}`);
 				return;
 			}
 			if (payload.type === "agent-stream") {
+				setShowStreamingIndicator(true);
 				const { textEvents, toolEvents } = parseStreamEvents(payload.chunk);
 				const agentForRequest = requestAgentRef.current.get(requestId);
 				const subagents = agentForRequest
 					? subagentMap.get(agentForRequest)
 					: undefined;
-				const assistantTexts: string[] = [];
 				const thinkingUpdates: ThinkingEvent[] = [];
+				const textEventNonce = `${Date.now().toString(36)}-${Math.random()
+					.toString(36)
+					.slice(2, 8)}`;
 
-				for (const event of textEvents) {
+				for (const [eventIndex, event] of textEvents.entries()) {
 					const nodeLabel = event.node?.trim();
 					const matchedSubagent = matchKnownSubagentLabel(nodeLabel, subagents);
 					const normalizedNode = matchedSubagent
@@ -1309,53 +1430,145 @@ export const App: React.FC = () => {
 							updatedAt: Date.now(),
 						});
 					} else {
-						assistantTexts.push(event.text);
+						const streamMessageId = event.messageId;
+						const looksLikeStandaloneDelta =
+							Boolean(event.isDelta) &&
+							!streamMessageId &&
+							event.text.trim().length >= 80 &&
+							/\s/.test(event.text);
+						const isDelta = looksLikeStandaloneDelta ? false : event.isDelta;
+						const targetMessageId = resolveTextMessageTargetId({
+							state: requestStreamMessageRef.current,
+							requestId,
+							fallbackMessageId: requestId,
+							streamMessageId,
+							isDelta,
+							eventKey: !event.isDelta
+								? `${textEventNonce}:${eventIndex}`
+								: looksLikeStandaloneDelta
+									? `standalone:${textEventNonce}:${eventIndex}`
+									: undefined,
+						});
+						updateAssistant({
+							requestId,
+							messageId: targetMessageId,
+							text: event.text,
+							isDelta,
+						});
 					}
 				}
 
-				if (assistantTexts.length > 0) {
-					const existing = buffersRef.current.get(requestId) || "";
-					const next = assistantTexts.reduce(
-						(acc, text) => mergeStreamText(acc, text),
-						existing,
-					);
-					buffersRef.current.set(requestId, next);
-					updateAssistant(requestId, next);
-				}
-
 				if (thinkingUpdates.length > 0) {
-					updateThinkingEvents(requestId, thinkingUpdates);
+					updateThinkingEvents(
+						requestId,
+						resolveRequestMessageId(requestId),
+						thinkingUpdates,
+					);
 				}
 
 				if (toolEvents.length > 0) {
-					const enrichedToolEvents = toolEvents.map((event) => ({
-						...event,
-						actor: resolveToolActorLabel(
+					const taskMap = taskDelegationRef.current.get(requestId) || new Map();
+					const enrichedToolEvents = toolEvents.map((event) => {
+						const runId = event.runId || event.id;
+						const parentRunIds = Array.isArray(event.parentRunIds)
+							? event.parentRunIds
+							: [];
+						let delegatedByTaskId: string | undefined;
+						let delegatedSubagentType: string | undefined;
+
+						for (let index = parentRunIds.length - 1; index >= 0; index -= 1) {
+							const parentId = parentRunIds[index];
+							if (!parentId) continue;
+							const parentTask = taskMap.get(parentId);
+							if (!parentTask) continue;
+							delegatedByTaskId = parentTask.taskEventId;
+							delegatedSubagentType = parentTask.subagentType;
+							break;
+						}
+
+						const taskTarget =
+							extractTaskSubagentType(event.args) ||
+							extractTaskSubagentType(event.output);
+						const toolName =
+							typeof event.name === "string"
+								? event.name.trim().toLowerCase()
+								: "";
+						if (toolName === "task" && runId) {
+							const existingTask = taskMap.get(runId);
+							const resolvedTaskTarget =
+								taskTarget ||
+								existingTask?.subagentType ||
+								delegatedSubagentType;
+							taskMap.set(runId, {
+								taskEventId: event.id,
+								subagentType: resolvedTaskTarget,
+							});
+							delegatedSubagentType = resolvedTaskTarget;
+						}
+
+						let actor = resolveToolActorLabel(
 							event.node,
 							event.args,
 							event.output,
 							subagents,
-						),
-					}));
-					updateToolEvents(requestId, enrichedToolEvents);
+						);
+						if (
+							actor === "orchestrator" &&
+							typeof delegatedSubagentType === "string" &&
+							delegatedSubagentType.trim()
+						) {
+							const known = matchKnownSubagentLabel(
+								delegatedSubagentType,
+								subagents,
+							);
+							actor = known || delegatedSubagentType;
+						}
+
+						return {
+							...event,
+							actor,
+							delegatedByTaskId,
+							delegatedSubagentType,
+						};
+					});
+					taskDelegationRef.current.set(requestId, taskMap);
+					const toolEventsByMessageId = new Map<string, ToolEvent[]>();
+					for (const event of enrichedToolEvents) {
+						const targetMessageId = resolveToolMessageTargetId({
+							state: requestStreamMessageRef.current,
+							requestId,
+							fallbackMessageId: requestId,
+							runId: event.runId || event.id,
+							parentRunIds: event.parentRunIds,
+						});
+						const bucket = toolEventsByMessageId.get(targetMessageId) || [];
+						bucket.push(event);
+						toolEventsByMessageId.set(targetMessageId, bucket);
+					}
+					for (const [messageId, groupedEvents] of toolEventsByMessageId) {
+						updateToolEvents(requestId, messageId, groupedEvents);
+					}
 					updateRunningToolState(requestId, enrichedToolEvents);
 				}
 				return;
 			}
 			if (payload.type === "agent-complete") {
+				setShowStreamingIndicator(false);
 				logEvent("Agent complete");
 				const fallback = buildAgentFallback(
 					payload.result,
-					requestId,
+					resolveRequestMessageId(requestId),
 					uiOnlyRequestsRef.current,
 				);
 				finalizeAssistant(requestId, { fallback });
 				return;
 			}
 			if (payload.type === "agent-error") {
+				setShowStreamingIndicator(false);
 				const errorText =
 					typeof payload.error === "string" ? payload.error : "Agent error";
-				if (/cancel/i.test(errorText)) {
+				const isCancel = /cancel/i.test(errorText);
+				if (isCancel) {
 					logEvent("Request stopped.");
 				} else {
 					logEvent(`Agent error: ${errorText || "unknown"}`);
@@ -1363,6 +1576,7 @@ export const App: React.FC = () => {
 				finalizeAssistant(requestId, {
 					fallback: errorText || "Agent error",
 					forceText: true,
+					appendFallbackToExisting: !isCancel,
 				});
 			}
 		},
@@ -1372,6 +1586,7 @@ export const App: React.FC = () => {
 			logEvent,
 			markPendingRequestActive,
 			markStreamActivity,
+			resolveRequestMessageId,
 			scheduleStreamRecoveryCheck,
 			subagentMap,
 			updateAssistant,
@@ -1630,22 +1845,15 @@ export const App: React.FC = () => {
 		};
 		setThreads((prev) =>
 			prev.map((thread) =>
-				thread.id === targetThread!.id
-					? {
-							...thread,
-							name:
-								thread.name === DEFAULT_THREAD_NAME
-									? (userMessage.content || attachmentPreview).slice(0, 32)
-									: thread.name,
-							messages: [...thread.messages, userMessage, assistantMessage],
-							messageCount: (thread.messageCount ?? thread.messages.length) + 1,
-							lastMessagePreview: (
-								userMessage.content || attachmentPreview
-							).slice(0, 200),
-							updatedAt: now,
-							thinkingEvents: [],
-						}
-					: thread,
+				appendLocalPromptMessagesToThread({
+					thread,
+					targetThreadId: targetThread!.id,
+					userMessage,
+					assistantMessage,
+					attachmentPreview,
+					now,
+					defaultThreadName: DEFAULT_THREAD_NAME,
+				}),
 			),
 		);
 		setPrompt("");
@@ -1655,7 +1863,9 @@ export const App: React.FC = () => {
 		requestAgentRef.current.set(requestId, targetThread.agentId);
 		registerPendingRequest(requestId, now);
 		if (pendingRequestIdsRef.current.size > 1) {
-			logEvent(`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`);
+			logEvent(
+				`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`,
+			);
 		}
 
 		const payload = {
@@ -1693,6 +1903,8 @@ export const App: React.FC = () => {
 	const stopPrompt = useCallback(() => {
 		const requestId = activeRequestIdRef.current;
 		if (!requestId) return;
+		setShowStreamingIndicator(false);
+		const messageId = resolveRequestMessageId(requestId);
 		const threadId = requestThreadRef.current.get(requestId);
 		if (threadId) {
 			setThreads((prev) =>
@@ -1701,7 +1913,7 @@ export const App: React.FC = () => {
 					return {
 						...thread,
 						messages: thread.messages.map((msg) => {
-							if (msg.id !== requestId) return msg;
+							if (msg.id !== messageId) return msg;
 							if (!msg.content.trim()) {
 								return { ...msg, content: "Request stopped." };
 							}
@@ -1725,7 +1937,12 @@ export const App: React.FC = () => {
 			};
 			ws.send(JSON.stringify(message));
 		}
-	}, [cleanupRequestState, finalizePendingRequest, logEvent]);
+	}, [
+		cleanupRequestState,
+		finalizePendingRequest,
+		logEvent,
+		resolveRequestMessageId,
+	]);
 
 	const clearChat = useCallback(async () => {
 		if (!activeThread) return;
@@ -2212,6 +2429,7 @@ export const App: React.FC = () => {
 			displayName?: string;
 			description?: string;
 			model?: string;
+			reasoningEffort?: ReasoningEffort | null;
 			tools: string[];
 			prompt?: string;
 			voice?: AgentVoiceConfig | null;
@@ -2248,6 +2466,7 @@ export const App: React.FC = () => {
 				displayName?: string;
 				description?: string;
 				model?: string;
+				reasoningEffort?: ReasoningEffort | null;
 				tools: string[];
 				prompt?: string;
 				voice?: AgentVoiceConfig | null;
@@ -2657,6 +2876,7 @@ export const App: React.FC = () => {
 										fileAccept={FILE_INPUT_ACCEPT}
 										attachmentError={attachmentError}
 										isStreaming={isStreaming}
+										showStreamingIndicator={showStreamingIndicator}
 										queuedPromptCount={queuedPromptCount}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
@@ -2774,6 +2994,91 @@ export const App: React.FC = () => {
 
 function normalizeName(value: string): string {
 	return value.trim().toLowerCase();
+}
+
+function extractTaskSubagentType(value: unknown): string | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const record = value as Record<string, unknown>;
+	const direct =
+		record.subagent_type ??
+		record.subagentType ??
+		record.subagent ??
+		record.subAgent;
+	if (typeof direct === "string" && direct.trim()) {
+		return direct.trim();
+	}
+	return undefined;
+}
+
+function isAssistantPlaceholder(message: ChatMessage): boolean {
+	return (
+		message.role === "assistant" &&
+		!message.content.trim() &&
+		!message.uiTextFallback &&
+		(!message.attachments || message.attachments.length === 0) &&
+		(!message.toolEvents || message.toolEvents.length === 0) &&
+		(!message.thinkingEvents || message.thinkingEvents.length === 0) &&
+		(!message.uiBlocks || message.uiBlocks.length === 0)
+	);
+}
+
+function upsertAssistantMessage(
+	thread: Thread,
+	messageId: string,
+	update: (message: ChatMessage) => ChatMessage,
+	placeholderId?: string,
+): Thread {
+	let found = false;
+	const nextMessages = thread.messages.map((message) => {
+		if (message.id !== messageId) return message;
+		found = true;
+		return update(message);
+	});
+
+	if (!found) {
+		const seeded = update({
+			id: messageId,
+			role: "assistant",
+			content: "",
+			createdAt: Date.now(),
+		});
+
+		if (placeholderId && placeholderId !== messageId) {
+			const placeholderIndex = nextMessages.findIndex(
+				(message) =>
+					message.id === placeholderId && isAssistantPlaceholder(message),
+			);
+			if (placeholderIndex >= 0) {
+				nextMessages[placeholderIndex] = seeded;
+			} else {
+				nextMessages.push(seeded);
+			}
+		} else {
+			nextMessages.push(seeded);
+		}
+	}
+
+	return {
+		...thread,
+		messages: nextMessages,
+		messageCount: Math.max(thread.messageCount ?? 0, nextMessages.length),
+		updatedAt: Date.now(),
+		messagesLoaded: true,
+	};
+}
+
+function mergeAssistantStreamText(
+	existing: string,
+	incoming: string,
+	isDelta?: boolean,
+): string {
+	if (!incoming) return existing;
+	if (isDelta) {
+		if (incoming.startsWith(existing)) return incoming;
+		return existing + incoming;
+	}
+	if (!existing.trim()) return incoming;
+	return `${existing}\n${incoming}`;
 }
 
 function mergeStreamText(existing: string, next: string): string {

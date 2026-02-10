@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	type KnownSubagentLookup,
 	matchKnownSubagentLabel,
 	resolveToolActorLabel,
-	type KnownSubagentLookup,
 } from "./agentAttribution";
 
 function createLookup(entries: Array<[string, string]>): KnownSubagentLookup {
@@ -16,15 +16,20 @@ describe("agentAttribution", () => {
 		expect(matchKnownSubagentLabel("langgraph_node:researcher", known)).toBe(
 			"Researcher",
 		);
-		expect(matchKnownSubagentLabel("__pregel_pull/researcher:step", known)).toBe(
-			"Researcher",
-		);
+		expect(
+			matchKnownSubagentLabel("__pregel_pull/researcher:step", known),
+		).toBe("Researcher");
 	});
 
 	it("prefers known subagent labels from node metadata", () => {
 		const known = createLookup([["implementor", "Implementor"]]);
 
-		const actor = resolveToolActorLabel("langgraph_node:implementor", undefined, undefined, known);
+		const actor = resolveToolActorLabel(
+			"langgraph_node:implementor",
+			undefined,
+			undefined,
+			known,
+		);
 
 		expect(actor).toBe("Implementor");
 	});
@@ -40,6 +45,19 @@ describe("agentAttribution", () => {
 		);
 
 		expect(actor).toBe("Reviewer");
+	});
+
+	it("extracts deepagents subagent_type actor keys", () => {
+		const known = createLookup([["research-agent", "Research Agent"]]);
+
+		const actor = resolveToolActorLabel(
+			undefined,
+			{ subagent_type: "research-agent", description: "Investigate context" },
+			undefined,
+			known,
+		);
+
+		expect(actor).toBe("Research Agent");
 	});
 
 	it("does not treat generic name/id payload fields as actor labels", () => {

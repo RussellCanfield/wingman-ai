@@ -221,6 +221,31 @@ function parseStreamEventChunk(chunk: any): ParsedChunk | null {
 		};
 	}
 
+	if (chunk.event === "on_tool_error") {
+		const toolId = typeof chunk.run_id === "string" ? chunk.run_id : undefined;
+		if (!toolId) return null;
+
+		const errorPayload = chunk.data?.error ?? chunk.error;
+		const error =
+			typeof errorPayload === "string"
+				? errorPayload
+				: typeof errorPayload?.message === "string"
+					? errorPayload.message
+					: errorPayload
+						? String(errorPayload)
+						: "Tool error";
+
+		return {
+			toolResult: {
+				id: toolId,
+				output: chunk.data?.output ?? "",
+				error,
+			},
+			type: "tool-result",
+			timestamp: Date.now(),
+		};
+	}
+
 	return null;
 }
 
@@ -372,7 +397,8 @@ function getMessageId(msg: any, entry: MessageEntry): string | undefined {
 }
 
 function extractTextContent(msg: any): string | undefined {
-	const content = msg?.content ?? msg?.kwargs?.content ?? msg?.additional_kwargs?.content;
+	const content =
+		msg?.content ?? msg?.kwargs?.content ?? msg?.additional_kwargs?.content;
 
 	if (typeof content === "string") {
 		return content.length > 0 ? content : undefined;
@@ -390,14 +416,13 @@ function extractTextContent(msg: any): string | undefined {
 	return undefined;
 }
 
-function extractToolCalls(
-	msg: any,
-	messageId?: string,
-): NormalizedToolCall[] {
+function extractToolCalls(msg: any, messageId?: string): NormalizedToolCall[] {
 	const calls: any[] = [];
 
 	const toolCalls =
-		msg?.tool_calls ?? msg?.kwargs?.tool_calls ?? msg?.additional_kwargs?.tool_calls;
+		msg?.tool_calls ??
+		msg?.kwargs?.tool_calls ??
+		msg?.additional_kwargs?.tool_calls;
 	if (Array.isArray(toolCalls)) {
 		calls.push(...toolCalls);
 	}
@@ -424,13 +449,10 @@ function normalizeToolCall(
 	const name = toolCall.name || toolCall.function?.name;
 	if (!name) return undefined;
 
-	const index =
-		typeof toolCall.index === "number" ? toolCall.index : undefined;
+	const index = typeof toolCall.index === "number" ? toolCall.index : undefined;
 	const id =
 		toolCall.id ||
-		(index !== undefined && messageId
-			? `${messageId}:${index}`
-			: undefined) ||
+		(index !== undefined && messageId ? `${messageId}:${index}` : undefined) ||
 		(messageId ? `${messageId}:${uuidv4()}` : uuidv4());
 
 	return {
@@ -468,7 +490,9 @@ function extractToolResult(msg: any): {
 	error?: string;
 } | null {
 	const toolCallId =
-		msg?.tool_call_id ?? msg?.kwargs?.tool_call_id ?? msg?.additional_kwargs?.tool_call_id;
+		msg?.tool_call_id ??
+		msg?.kwargs?.tool_call_id ??
+		msg?.additional_kwargs?.tool_call_id;
 	if (!toolCallId) return null;
 
 	return {

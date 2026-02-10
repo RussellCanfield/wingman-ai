@@ -1,6 +1,6 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.6
+**Version:** 1.2.7
 **Last Updated:** 2026-02-10
 
 ## Overview
@@ -73,7 +73,8 @@ Modern AI assistants face several challenges:
 **Capabilities**:
 - Autonomous handling of simple to moderate coding tasks
 - Intelligent delegation to planner/implementor/reviewer for complex work
-- Direct code implementation without tool usage (relies on backend)
+- Execution-backed coding workflow that requires tool activity for repository-affecting turns
+- Completion integrity guard: coding responses are blocked when no tool execution occurred
 
 **Delegation Strategy**:
 - Tasks < 50 lines: Handle directly
@@ -816,6 +817,7 @@ cli.send({
 ### Control UI Streaming UX
 - Main assistant output streams directly into the chat transcript.
 - Subagent output and tool activity are grouped into a collapsible "Thinking" section so users can feel progress without clutter.
+- Desktop chat rendering splits streamed assistant output into distinct message cards by model run/subagent run id instead of concatenating all deltas into one card.
 
 ### Multi-Device Scenarios
 

@@ -1,5 +1,8 @@
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
+	ThinkingPanel,
 	buildThinkingSummary,
 	shouldOpenThinkingPanelByDefault,
 } from "./ThinkingPanel";
@@ -42,5 +45,24 @@ describe("ThinkingPanel", () => {
 				toolCount: 3,
 			}),
 		).toBe("2 subagents • 3 tools");
+	});
+
+	it("renders tool rows without execution trace wrapper", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ThinkingPanel, {
+				isStreaming: true,
+				thinkingEvents: [],
+				toolEvents: [
+					{
+						id: "tool-1",
+						name: "edit_file",
+						status: "running",
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("edit_file");
+		expect(html).not.toContain("Execution Trace");
 	});
 });

@@ -8,6 +8,8 @@ export function extractSubagentName(args: Record<string, any>): string | null {
 	if (!args || typeof args !== "object") return null;
 
 	const directKeys = [
+		"subagent_type",
+		"subagentType",
 		"subagent",
 		"subAgent",
 		"agent",
@@ -52,7 +54,10 @@ export function extractTaskSummary(args: Record<string, any>): string | null {
 	return null;
 }
 
-function pickStringFromKeys(source: Record<string, any>, keys: string[]): string | null {
+function pickStringFromKeys(
+	source: Record<string, any>,
+	keys: string[],
+): string | null {
 	for (const key of keys) {
 		const value = source[key];
 		const picked = normalizeString(value);

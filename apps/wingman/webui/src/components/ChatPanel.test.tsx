@@ -7,6 +7,8 @@ import {
 	shouldRefocusComposer,
 } from "./ChatPanel";
 
+(globalThis as { React?: typeof React }).React = React;
+
 const baseProps: React.ComponentProps<typeof ChatPanel> = {
 	activeThread: {
 		id: "thread-1",
@@ -75,6 +77,11 @@ describe("ChatPanel prompt composer", () => {
 			"rounded-2xl border border-white/10 bg-slate-950/70 p-2",
 		);
 		expect(html).toContain('aria-label="Stop response"');
+		expect(html).toContain('data-testid="streaming-indicator"');
+		expect(html).toContain("absolute inset-x-0 top-2 z-20 flex justify-center");
+		expect(html).toContain(
+			"flex h-6 items-center justify-center gap-1.5 rounded-full",
+		);
 		expect(html).not.toContain('aria-label="Send prompt"');
 	});
 
@@ -92,12 +99,50 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("Streaming response... Enter to queue follow-up");
 	});
 
+	it("keeps voice toggle visible while streaming", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				isStreaming: true,
+				voiceAutoEnabled: true,
+			}),
+		);
+
+		expect(html).toContain(">Voice: Auto<");
+		expect(html).toContain('data-testid="streaming-indicator"');
+	});
+
+	it("hides bottom streaming status when not streaming", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				isStreaming: false,
+			}),
+		);
+
+		expect(html).not.toContain('data-testid="streaming-indicator"');
+	});
+
+	it("shows streaming glow when indicator override is enabled", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				isStreaming: false,
+				showStreamingIndicator: true,
+			}),
+		);
+
+		expect(html).toContain('data-testid="streaming-indicator"');
+	});
+
 	it("renders syntax-highlighted fenced code in chat messages", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
 				...baseProps,
 				activeThread: {
-					...baseProps.activeThread,
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
 					messages: [
 						{
 							id: "assistant-1",
@@ -114,6 +159,112 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("hljs");
 		expect(html).toContain('aria-label="Copy code block"');
 		expect(html).toContain(">Copy<");
+	});
+
+	it("keeps existing messages visible while loading", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				loading: true,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "user-1",
+							role: "user",
+							content: "Hello",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("Hello");
+		expect(html).not.toContain("Loading messages...");
+	});
+
+	it("does not render typing dots for assistant messages with tool activity", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-tools",
+							role: "assistant",
+							content: "",
+							createdAt: 1,
+							toolEvents: [
+								{
+									id: "tool-1",
+									name: "edit_file",
+									status: "completed",
+									timestamp: 1,
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("edit_file");
+		expect(html).not.toContain("Execution Trace");
+		expect(html).not.toContain("animate-pulse rounded-full bg-sky-400");
+	});
+
+	it("does not render the Wingman role label in assistant messages", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-plain",
+							role: "assistant",
+							content: "Hello from assistant",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).not.toContain(">Wingman<");
+		expect(html).toContain("Hello from assistant");
+	});
+
+	it("renders compact assistant voice control next to timestamp", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-voice",
+							role: "assistant",
+							content: "Can be played",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain('aria-label="Play assistant response"');
+		expect(html).toContain("inline-flex h-6 w-6 items-center justify-center");
 	});
 });
 

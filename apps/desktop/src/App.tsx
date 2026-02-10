@@ -121,6 +121,11 @@ import {
 	type SessionMirrorEventPayload,
 } from "./lib/sessionMirror.js";
 import {
+	clearStreamMessageTargets,
+	resolveTextMessageTargetId,
+	resolveToolMessageTargetId,
+} from "./streamMessageRouter.js";
+import {
 	collectWorkspaceLoadingTasks,
 	formatSlowLoadEvent,
 } from "./loadingState.js";
@@ -181,6 +186,11 @@ type ToggleRecordingResult = {
 	wasRecording: boolean;
 	isRecording: boolean;
 	transcriptBeforeToggle: string;
+};
+
+type ParsedToolStreamEvent = ToolEvent & {
+	runId?: string;
+	parentRunIds?: string[];
 };
 
 type WorkspaceState = {
@@ -410,6 +420,20 @@ function updateAssistantMessage(
 		updatedAt: Date.now(),
 		messagesLoaded: true,
 	};
+}
+
+function mergeAssistantStreamText(
+	existing: string,
+	incoming: string,
+	isDelta?: boolean,
+): string {
+	if (!incoming) return existing;
+	if (isDelta) {
+		if (incoming.startsWith(existing)) return incoming;
+		return existing + incoming;
+	}
+	if (!existing.trim()) return incoming;
+	return `${existing}\n${incoming}`;
 }
 
 function useRuntimeController(isOverlayView: boolean) {
@@ -983,6 +1007,9 @@ function useGatewayWorkspace(
 	const socketRef = useRef<GatewaySocketClient | null>(null);
 	const requestThreadRef = useRef<Map<string, string>>(new Map());
 	const requestMessageRef = useRef<Map<string, string>>(new Map());
+	const requestStreamMessageRef = useRef<Map<string, Map<string, string>>>(
+		new Map(),
+	);
 	const completionNonceRef = useRef(0);
 	const subscribedRef = useRef<Set<string>>(new Set());
 	const loadingMessagesRef = useRef<Set<string>>(new Set());
@@ -1037,6 +1064,7 @@ function useGatewayWorkspace(
 	const finalizePendingRequest = useCallback(
 		(requestId: string) => {
 			pendingRequestIdsRef.current.delete(requestId);
+			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
 			if (activeGatewayRequestIdRef.current === requestId) {
 				activeGatewayRequestIdRef.current = null;
 			}
@@ -1048,6 +1076,7 @@ function useGatewayWorkspace(
 	const resetPendingRequests = useCallback(() => {
 		pendingRequestIdsRef.current.clear();
 		activeGatewayRequestIdRef.current = null;
+		requestStreamMessageRef.current.clear();
 		syncRequestStreamingState();
 	}, [syncRequestStreamingState]);
 
@@ -1224,6 +1253,21 @@ function useGatewayWorkspace(
 				content?: string;
 				node?: string;
 			};
+			const eventType = typeof data.type === "string" ? data.type : "";
+			const shouldTrackAsStreaming =
+				eventType === "agent-start" ||
+				eventType === "agent-stream" ||
+				(!eventType &&
+					typeof payload === "object" &&
+					payload !== null &&
+					(Array.isArray((payload as Record<string, unknown>).messages) ||
+						typeof (payload as Record<string, unknown>).event === "string"));
+			if (
+				shouldTrackAsStreaming &&
+				!pendingRequestIdsRef.current.has(requestId)
+			) {
+				registerPendingRequest(requestId);
+			}
 			const sessionId = getSessionIdFromEventPayload(data);
 			const ensureSessionSubscribed = (id: string | undefined) => {
 				if (!id) return;
@@ -1246,8 +1290,8 @@ function useGatewayWorkspace(
 
 			let threadId = requestThreadRef.current.get(requestId);
 			let messageId = requestMessageRef.current.get(requestId) || requestId;
-				if (!threadId && sessionId) {
-					threadId = sessionId;
+			if (!threadId && sessionId) {
+				threadId = sessionId;
 				requestThreadRef.current.set(requestId, threadId);
 				requestMessageRef.current.set(requestId, messageId);
 				ensureSessionSubscribed(threadId);
@@ -1259,66 +1303,119 @@ function useGatewayWorkspace(
 						messageId,
 					}).threads,
 				}));
-				}
-				if (!threadId) return;
-				if (
-					pendingRequestIdsRef.current.has(requestId) &&
-					data.type !== "session-message"
-				) {
-					markRequestActive(requestId);
-				}
+			}
+			if (!threadId) return;
+			if (
+				pendingRequestIdsRef.current.has(requestId) &&
+				data.type !== "session-message"
+			) {
+				markRequestActive(requestId);
+			}
 
-				const parsed = parseStreamEvents(payload);
+			const parsed = parseStreamEvents(payload);
+			const parsedToolEvents = parsed.toolEvents as ParsedToolStreamEvent[];
 			const thinkingEvent: ThinkingEvent | null =
 				typeof data.type === "string" && data.type.includes("thinking")
 					? {
-						id: `${requestId}-thinking-${Date.now()}`,
-						node: data.node,
-						content: data.content || "",
-						updatedAt: Date.now(),
-					}
+							id: `${requestId}-thinking-${Date.now()}`,
+							node: data.node,
+							content: data.content || "",
+							updatedAt: Date.now(),
+						}
 					: null;
 
 			setWorkspace((prev) => ({
 				...prev,
 				threads: prev.threads.map((thread) => {
 					if (thread.id !== threadId) return thread;
-					return updateAssistantMessage(thread, messageId, (message) => {
-						let content = message.content;
-						for (const textEvent of parsed.textEvents) {
-							if (textEvent.isDelta) {
-								content += textEvent.text;
-							} else if (!content.trim()) {
-								content = textEvent.text;
-							} else {
-								content += `\n${textEvent.text}`;
-							}
+					let nextThread = thread;
+
+					for (const [eventIndex, textEvent] of parsed.textEvents.entries()) {
+						const streamMessageId = textEvent.messageId;
+						const looksLikeStandaloneDelta =
+							Boolean(textEvent.isDelta) &&
+							!streamMessageId &&
+							textEvent.text.trim().length >= 80 &&
+							/\s/.test(textEvent.text);
+						const targetMessageId = resolveTextMessageTargetId({
+							state: requestStreamMessageRef.current,
+							requestId,
+							fallbackMessageId: messageId,
+							streamMessageId,
+							isDelta: looksLikeStandaloneDelta ? false : textEvent.isDelta,
+							eventKey:
+								!textEvent.isDelta
+									? `${streamMessageId || "noid"}:${Date.now()}:${eventIndex}`
+									: looksLikeStandaloneDelta
+										? `standalone:${Date.now()}:${eventIndex}`
+									: undefined,
+						});
+						nextThread = updateAssistantMessage(
+							nextThread,
+							targetMessageId,
+							(message) => ({
+								...message,
+								content: mergeAssistantStreamText(
+									message.content,
+									textEvent.text,
+									textEvent.isDelta,
+								),
+							}),
+						);
+					}
+
+					if (parsedToolEvents.length > 0) {
+						const toolEventsByMessageId = new Map<string, ParsedToolStreamEvent[]>();
+						for (const toolEvent of parsedToolEvents) {
+							const targetMessageId = resolveToolMessageTargetId({
+								state: requestStreamMessageRef.current,
+								requestId,
+								fallbackMessageId: messageId,
+								runId: toolEvent.runId || toolEvent.id,
+								parentRunIds: toolEvent.parentRunIds,
+							});
+							const bucket = toolEventsByMessageId.get(targetMessageId) || [];
+							bucket.push(toolEvent);
+							toolEventsByMessageId.set(targetMessageId, bucket);
 						}
 
-						const toolEvents = mergeToolEvents(message.toolEvents, parsed.toolEvents as ToolEvent[]);
-						const uiBlocks = deriveUiBlocks(toolEvents);
-						const thinkingEvents = thinkingEvent
-							? [...(message.thinkingEvents || []), thinkingEvent]
-							: message.thinkingEvents;
+						for (const [toolMessageId, toolEvents] of toolEventsByMessageId) {
+							nextThread = updateAssistantMessage(
+								nextThread,
+								toolMessageId,
+								(message) => {
+									const mergedToolEvents = mergeToolEvents(
+										message.toolEvents,
+										toolEvents,
+									);
+									return {
+										...message,
+										toolEvents: mergedToolEvents,
+										uiBlocks: deriveUiBlocks(mergedToolEvents),
+									};
+								},
+							);
+						}
+					}
 
-						return {
+					if (thinkingEvent) {
+						nextThread = updateAssistantMessage(nextThread, messageId, (message) => ({
 							...message,
-							content,
-							toolEvents,
-							uiBlocks,
-							thinkingEvents,
-						};
-					});
+							thinkingEvents: [...(message.thinkingEvents || []), thinkingEvent],
+						}));
+					}
+
+					return nextThread;
 				}),
 			}));
 
-				if (data.type === "agent-error") {
-					finalizePendingRequest(requestId);
-					logEvent(`Agent error: ${data.error || "unknown error"}`);
-					requestThreadRef.current.delete(requestId);
-					requestMessageRef.current.delete(requestId);
-					return;
-				}
+			if (data.type === "agent-error") {
+				finalizePendingRequest(requestId);
+				logEvent(`Agent error: ${data.error || "unknown error"}`);
+				requestThreadRef.current.delete(requestId);
+				requestMessageRef.current.delete(requestId);
+				return;
+			}
 
 			if (data.type === "agent-complete") {
 				setWorkspace((prev) => {
@@ -1336,21 +1433,27 @@ function useGatewayWorkspace(
 							lastCompletion: {
 								nonce: nextNonce,
 								threadId: threadId || "",
-							messageId,
-							threadName: sourceThread?.name || "Current chat",
-							agentId: sourceThread?.agentId || "agent",
-							preview: previewMessage,
-						},
-					};
-					});
-					finalizePendingRequest(requestId);
-					requestThreadRef.current.delete(requestId);
-					requestMessageRef.current.delete(requestId);
-					void refreshSessionsData();
-				}
-			},
-			[finalizePendingRequest, logEvent, markRequestActive, refreshSessionsData],
-		);
+								messageId,
+								threadName: sourceThread?.name || "Current chat",
+								agentId: sourceThread?.agentId || "agent",
+								preview: previewMessage,
+							},
+						};
+				});
+				finalizePendingRequest(requestId);
+				requestThreadRef.current.delete(requestId);
+				requestMessageRef.current.delete(requestId);
+				void refreshSessionsData();
+			}
+		},
+		[
+			finalizePendingRequest,
+			logEvent,
+			markRequestActive,
+			refreshSessionsData,
+			registerPendingRequest,
+		],
+	);
 
 	const connectGateway = useCallback(async () => {
 		if (!isGatewayConfigValid(settings)) {
@@ -3116,7 +3219,15 @@ function ChatScreen({
 										</span>
 									</button>
 								</div>
-								<span className="px-1 text-[11px] text-slate-400">{composerStatusHint}</span>
+								<div className="flex items-center gap-2 px-1">
+									{workspace.isStreaming ? (
+										<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
+											<span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
+											Live
+										</span>
+									) : null}
+									<span className="text-[11px] text-slate-400">{composerStatusHint}</span>
+								</div>
 							</div>
 							<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
 								<textarea

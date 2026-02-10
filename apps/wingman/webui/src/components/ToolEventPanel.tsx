@@ -17,7 +17,9 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 		const bTime = b.startedAt ?? b.timestamp ?? b.completedAt ?? 0;
 		return aTime - bTime;
 	});
-	const completedCount = sorted.filter((event) => event.status === "completed").length;
+	const completedCount = sorted.filter(
+		(event) => event.status === "completed",
+	).length;
 	const errorCount = sorted.filter((event) => event.status === "error").length;
 	const invokedAgents = summarizeInvokedAgents(sorted);
 
@@ -32,7 +34,9 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 			{showHeader ? (
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div>
-						<h3 className="text-sm font-semibold text-slate-200">Tool activity</h3>
+						<h3 className="text-sm font-semibold text-slate-200">
+							Tool activity
+						</h3>
 						<p className="text-xs text-slate-400">Recent tool calls</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
@@ -78,6 +82,12 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 	const status = TOOL_STATUS_STYLES[event.status];
 	const actorLabel = resolveActorLabel(event);
+	const taskTarget = resolveTaskTarget(event);
+	const delegatedLabel =
+		getNormalizedToolName(event) === "task"
+			? null
+			: resolveDelegatedLabel(event);
+	const editDiffPreview = buildEditFileDiffPreview(event);
 	const argsText = stringifyToolEventValue(event.args);
 	const outputText = stringifyToolEventValue(
 		event.error ? { error: event.error } : event.output,
@@ -96,7 +106,9 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 		>
 			<summary className="flex cursor-pointer list-none items-start justify-between gap-3">
 				<div className="min-w-0 flex items-start gap-3">
-					<span className={`relative mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${status.iconTone}`}>
+					<span
+						className={`relative mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${status.iconTone}`}
+					>
 						<status.Icon className="h-4 w-4" />
 						{event.status === "running" ? (
 							<span className="absolute inset-0 rounded-lg border border-amber-300/60 animate-ping" />
@@ -107,6 +119,16 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 							<div className="truncate text-sm font-semibold text-slate-100">
 								{event.name}
 							</div>
+							{taskTarget ? (
+								<span className="rounded-full border border-violet-400/35 bg-violet-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200">
+									{taskTarget}
+								</span>
+							) : null}
+							{delegatedLabel ? (
+								<span className="rounded-full border border-violet-400/35 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-100">
+									via {delegatedLabel}
+								</span>
+							) : null}
 							{actorLabel ? (
 								<span className="rounded-full border border-sky-400/40 bg-sky-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200">
 									{actorLabel}
@@ -126,14 +148,17 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 								</span>
 							) : outputSummary ? (
 								<span className="max-w-[420px] truncate">
-									<span className="text-slate-500">output:</span> {outputSummary}
+									<span className="text-slate-500">output:</span>{" "}
+									{outputSummary}
 								</span>
 							) : null}
 						</div>
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center gap-2">
-					<span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${status.badgeTone}`}>
+					<span
+						className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${status.badgeTone}`}
+					>
 						{status.label}
 					</span>
 					<span className="hidden text-[10px] uppercase tracking-[0.14em] text-slate-500 transition group-open:text-slate-300 sm:inline">
@@ -142,11 +167,15 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 				</div>
 			</summary>
 			<div className="mt-3 space-y-3 border-t border-white/10 pt-3 text-xs text-slate-300">
-				{argsText ? (
-					<ToolPayload label="Args" value={argsText} />
+				{editDiffPreview ? (
+					<EditFileDiffPreview preview={editDiffPreview} />
 				) : null}
+				{argsText ? <ToolPayload label="Args" value={argsText} /> : null}
 				{outputText ? (
-					<ToolPayload label={event.error ? "Error" : "Output"} value={outputText} />
+					<ToolPayload
+						label={event.error ? "Error" : "Output"}
+						value={outputText}
+					/>
 				) : null}
 				{!argsText && !outputText ? (
 					<div className="rounded-lg border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-400">
@@ -184,12 +213,122 @@ function summarizeInvokedAgents(events: ToolEvent[]): Array<{
 	}
 	return Array.from(counts.entries())
 		.map(([label, value]) => ({ label, ...value }))
-		sort((a, b) => a.label.localeCompare(b.label));
+		.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-const ToolPayload: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+type EditFileDiffPreviewModel = {
+	filePath: string;
+	replaceAll: boolean;
+	diffText: string;
+};
+
+function resolveTaskTarget(event: ToolEvent): string | null {
+	if (!event?.args || typeof event.args !== "object") return null;
+	const direct =
+		event.args.subagent_type ??
+		event.args.subagentType ??
+		event.args.subagent ??
+		event.args.subAgent ??
+		event.args.agent;
+	if (typeof direct !== "string" || !direct.trim()) return null;
+	return direct.trim();
+}
+
+function resolveDelegatedLabel(event: ToolEvent): string | null {
+	const delegated = event.delegatedSubagentType;
+	if (typeof delegated !== "string" || !delegated.trim()) return null;
+	return delegated.trim();
+}
+
+function buildEditFileDiffPreview(
+	event: ToolEvent,
+): EditFileDiffPreviewModel | null {
+	if (getNormalizedToolName(event) !== "edit_file") return null;
+	const args = event.args;
+	if (!args || typeof args !== "object") return null;
+
+	const filePath =
+		typeof args.file_path === "string" && args.file_path.trim()
+			? args.file_path.trim()
+			: null;
+	const oldString =
+		typeof args.old_string === "string" ? args.old_string : null;
+	const newString =
+		typeof args.new_string === "string" ? args.new_string : null;
+	if (!filePath || oldString === null || newString === null) return null;
+
+	if (
+		oldString.includes("\u0000") ||
+		newString.includes("\u0000") ||
+		oldString.length > 4_000 ||
+		newString.length > 4_000
+	) {
+		return null;
+	}
+
+	const oldLines = clipDiffLines(oldString, "-");
+	const newLines = clipDiffLines(newString, "+");
+	const diffText = [
+		`--- ${filePath}`,
+		`+++ ${filePath}`,
+		"@@ replacement @@",
+		...oldLines,
+		...newLines,
+	].join("\n");
+
+	return {
+		filePath,
+		replaceAll: args.replace_all === true,
+		diffText,
+	};
+}
+
+function clipDiffLines(value: string, prefix: "-" | "+"): string[] {
+	const maxLines = 24;
+	const lines = value.split("\n");
+	const clipped = lines.slice(0, maxLines).map((line) => `${prefix}${line}`);
+	if (lines.length > maxLines) {
+		clipped.push(`${prefix}... (${lines.length - maxLines} more line(s))`);
+	}
+	return clipped;
+}
+
+function getNormalizedToolName(event: ToolEvent): string {
+	if (typeof event?.name !== "string") return "";
+	return event.name.trim().toLowerCase();
+}
+
+const EditFileDiffPreview: React.FC<{ preview: EditFileDiffPreviewModel }> = ({
+	preview,
+}) => (
 	<div>
-		<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">{label}</span>
+		<div className="flex flex-wrap items-center gap-2">
+			<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+				Diff preview
+			</span>
+			<span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
+				{preview.filePath}
+			</span>
+			{preview.replaceAll ? (
+				<span className="rounded-full border border-amber-400/35 bg-amber-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100">
+					replace all
+				</span>
+			) : null}
+		</div>
+		<pre className="mt-2 max-h-52 w-full min-w-0 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-white/10 bg-slate-950/80 p-2 text-[11px] text-slate-300">
+			{preview.diffText}
+		</pre>
+	</div>
+);
+
+const ToolPayload: React.FC<{ label: string; value: string }> = ({
+	label,
+	value,
+}) => (
+	<div>
+		<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+			{label}
+		</span>
 		<pre className="mt-2 max-h-40 w-full min-w-0 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-white/10 bg-slate-950/80 p-2 text-[11px] text-slate-300">
 			{value}
 		</pre>
@@ -208,21 +347,24 @@ const TOOL_STATUS_STYLES: Record<ToolEvent["status"], ToolStatusStyle> = {
 	running: {
 		label: "Running",
 		Icon: FiClock,
-		frameTone: "border-amber-400/35 from-amber-500/8 via-slate-900/70 to-slate-950/70",
+		frameTone:
+			"border-amber-400/35 from-amber-500/8 via-slate-900/70 to-slate-950/70",
 		iconTone: "border-amber-400/50 bg-amber-500/15 text-amber-200",
 		badgeTone: "border-amber-400/45 bg-amber-500/15 text-amber-200",
 	},
 	completed: {
 		label: "Completed",
 		Icon: FiCheckCircle,
-		frameTone: "border-emerald-400/30 from-emerald-500/8 via-slate-900/70 to-slate-950/70",
+		frameTone:
+			"border-emerald-400/30 from-emerald-500/8 via-slate-900/70 to-slate-950/70",
 		iconTone: "border-emerald-400/45 bg-emerald-500/15 text-emerald-200",
 		badgeTone: "border-emerald-400/40 bg-emerald-500/12 text-emerald-200",
 	},
 	error: {
 		label: "Error",
 		Icon: FiAlertTriangle,
-		frameTone: "border-rose-400/35 from-rose-500/10 via-slate-900/70 to-slate-950/70",
+		frameTone:
+			"border-rose-400/35 from-rose-500/10 via-slate-900/70 to-slate-950/70",
 		iconTone: "border-rose-400/45 bg-rose-500/15 text-rose-200",
 		badgeTone: "border-rose-400/45 bg-rose-500/15 text-rose-200",
 	},
@@ -269,7 +411,8 @@ export function formatToolEventDuration(
 ): string | null {
 	const start = event.startedAt ?? event.timestamp;
 	if (!start) return null;
-	const end = event.completedAt ?? (event.status === "running" ? now : undefined);
+	const end =
+		event.completedAt ?? (event.status === "running" ? now : undefined);
 	if (!end || end < start) return null;
 
 	const durationMs = Math.max(0, end - start);

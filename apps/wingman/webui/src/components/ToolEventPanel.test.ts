@@ -134,4 +134,68 @@ describe("ToolEventPanel helpers", () => {
 		expect(html).toContain("researcher active");
 		expect(html).toContain("reviewer 1");
 	});
+
+	it("renders edit_file diff preview when replacement args are available", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-diff-1",
+						name: "edit_file",
+						status: "completed",
+						args: {
+							file_path: "src/file.ts",
+							old_string: "const before = 1;",
+							new_string: "const after = 2;",
+							replace_all: false,
+						},
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Diff preview");
+		expect(html).toContain("--- src/file.ts");
+		expect(html).toContain("-const before = 1;");
+		expect(html).toContain("+const after = 2;");
+	});
+
+	it("renders task target badge for deepagents task calls", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-task-1",
+						name: "task",
+						status: "running",
+						args: {
+							subagent_type: "researcher",
+							description: "Collect references",
+						},
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("researcher");
+	});
+
+	it("handles malformed tool events that are missing a string name", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-bad-1",
+						name: undefined as unknown as string,
+						status: "running",
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Running");
+	});
 });

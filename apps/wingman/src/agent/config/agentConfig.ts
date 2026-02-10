@@ -23,6 +23,18 @@ export const AvailableToolNames = z.enum([
 
 export type AvailableToolName = z.infer<typeof AvailableToolNames>;
 
+export const ReasoningEffortSchema = z.preprocess(
+	(value) => {
+		if (typeof value === "string") {
+			return value.trim().toLowerCase();
+		}
+		return value;
+	},
+	z.enum(["minimal", "low", "medium", "high"]),
+);
+
+export type ReasoningEffort = z.infer<typeof ReasoningEffortSchema>;
+
 const PromptRefinementSchema = z.preprocess(
 	(value) => {
 		if (value === undefined) return undefined;
@@ -78,6 +90,9 @@ const BaseAgentConfigSchema = z.object({
 		.describe(
 			'Model override in format "provider:model-name" (e.g., "anthropic:claude-opus-4-5", "codex:codex-mini-latest", "openrouter:openai/gpt-4o", "copilot:gpt-4o")',
 		),
+	reasoningEffort: ReasoningEffortSchema.optional().describe(
+		"Optional reasoning/thinking effort for supported models (ignored when unsupported)",
+	),
 	blockedCommands: z
 		.array(z.string())
 		.optional()

@@ -6,6 +6,8 @@ const DIRECT_ACTOR_KEYS = [
 	"sub_agent",
 	"subagentName",
 	"subAgentName",
+	"subagent_type",
+	"subagentType",
 	"agent",
 	"agentName",
 	"agent_id",

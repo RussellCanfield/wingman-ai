@@ -6,7 +6,7 @@ export default defineConfig({
   root: path.join(__dirname, 'docs'),
   title: 'Wingman Docs',
   description: 'Multi-agent orchestration for local and distributed coding teams.',
-  icon: '/wingman_icon.webp',
+  icon: '/favicon-32x32.png',
   logo: {
     light: '/wingman_logo.webp',
     dark: '/wingman_logo.webp',

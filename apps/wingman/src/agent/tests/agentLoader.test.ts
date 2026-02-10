@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentLoader } from "../config/agentLoader";
 
 const TEST_CONFIG_DIR = ".wingman-test";
@@ -139,7 +139,10 @@ Markdown agent`;
 			};
 
 			writeFileSync(join(validDir, "agent.json"), JSON.stringify(validAgent));
-			writeFileSync(join(invalidDir, "agent.json"), JSON.stringify(invalidAgent));
+			writeFileSync(
+				join(invalidDir, "agent.json"),
+				JSON.stringify(invalidAgent),
+			);
 
 			const loader = new AgentLoader(TEST_CONFIG_DIR);
 			const agents = loader.loadAllAgentConfigs();
@@ -266,6 +269,55 @@ Markdown agent`;
 			expect(agent?.systemPrompt).toContain(
 				"/memories/agents/refiner-agent/instructions.md",
 			);
+			expect(agent?.systemPrompt).toContain(
+				"overlay as secondary preference memory",
+			);
+		});
+
+		it("should apply reasoningEffort when model supports it", async () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "reasoning-agent");
+			mkdirSync(agentDir, { recursive: true });
+
+			const config = {
+				name: "reasoning-agent",
+				description: "Agent with reasoning effort",
+				systemPrompt: "You are a reasoner",
+				model: "openai:gpt-5.2-codex",
+				reasoningEffort: "high",
+			};
+
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
+
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agent = await loader.loadAgent("reasoning-agent");
+			const model = agent?.model as {
+				reasoning?: { effort?: string };
+			};
+
+			expect(model.reasoning?.effort).toBe("high");
+		});
+
+		it("should normalize thinkingEffort alias to reasoningEffort", async () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "legacy-thinking-agent");
+			mkdirSync(agentDir, { recursive: true });
+
+			const config = {
+				name: "legacy-thinking-agent",
+				description: "Agent with legacy thinking effort field",
+				systemPrompt: "You are a reasoner",
+				model: "openai:gpt-5.2-codex",
+				thinkingEffort: "medium",
+			};
+
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
+
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agent = await loader.loadAgent("legacy-thinking-agent");
+			const model = agent?.model as {
+				reasoning?: { effort?: string };
+			};
+
+			expect(model.reasoning?.effort).toBe("medium");
 		});
 	});
 });

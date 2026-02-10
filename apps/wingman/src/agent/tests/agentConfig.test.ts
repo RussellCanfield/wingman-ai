@@ -26,6 +26,7 @@ describe("Agent Configuration Schema", () => {
 				systemPrompt: "You are a data analyst",
 				tools: ["command_execute", "think"],
 				model: "anthropic:claude-opus-4-5",
+				reasoningEffort: "high",
 				blockedCommands: ["rm", "mv"],
 				allowScriptExecution: true,
 				commandTimeout: 300000,
@@ -36,6 +37,7 @@ describe("Agent Configuration Schema", () => {
 			if (result.success) {
 				expect(result.data.tools).toEqual(["command_execute", "think"]);
 				expect(result.data.model).toBe("anthropic:claude-opus-4-5");
+				expect(result.data.reasoningEffort).toBe("high");
 				expect(result.data.blockedCommands).toEqual(["rm", "mv"]);
 				expect(result.data.allowScriptExecution).toBe(true);
 				expect(result.data.commandTimeout).toBe(300000);
@@ -53,6 +55,7 @@ describe("Agent Configuration Schema", () => {
 						description: "Researches topics",
 						systemPrompt: "You are a researcher",
 						model: "openai:gpt-4o",
+						reasoningEffort: "low",
 					},
 				],
 			};
@@ -61,6 +64,7 @@ describe("Agent Configuration Schema", () => {
 			expect(result.success).toBe(true);
 			if (result.success) {
 				expect(result.data.subAgents?.[0].model).toBe("openai:gpt-4o");
+				expect(result.data.subAgents?.[0].reasoningEffort).toBe("low");
 			}
 		});
 
@@ -139,6 +143,21 @@ describe("Agent Configuration Schema", () => {
 
 			const result = validateAgentConfig(config);
 			expect(result.success).toBe(false);
+		});
+
+		it("should fail validation for invalid reasoning effort", () => {
+			const config = {
+				name: "test-agent",
+				description: "Test",
+				systemPrompt: "Test",
+				reasoningEffort: "extreme",
+			};
+
+			const result = validateAgentConfig(config);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error).toContain("reasoningEffort");
+			}
 		});
 
 		it("should apply default values for optional fields", () => {

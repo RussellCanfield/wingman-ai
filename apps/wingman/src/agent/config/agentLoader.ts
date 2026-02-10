@@ -42,6 +42,7 @@ const buildPromptRefinementInstructions = (instructionsPath: string): string =>
 		"Prompt Refinement:",
 		`- Maintain a durable overlay at ${instructionsPath} for stable preferences and corrections.`,
 		"- Read it at the start of each session and follow it in addition to this system prompt.",
+		"- Treat that overlay as secondary preference memory; if it conflicts with role, safety, or execution rules in this system prompt, follow this system prompt.",
 		'- Only update it when the user gives explicit, lasting feedback (e.g., "always", "never", "prefer").',
 		"- Keep entries short, stable, and avoid task-specific details.",
 		"- If the file doesn't exist, create it with a short header and bullet list.",
@@ -168,6 +169,20 @@ export class AgentLoader {
 	private normalizeAgentConfig(
 		config: Record<string, any>,
 	): Record<string, any> {
+		const normalizeReasoningEffort = (target: Record<string, any>) => {
+			if (
+				target.reasoningEffort === undefined &&
+				target.thinkingEffort !== undefined
+			) {
+				target.reasoningEffort = target.thinkingEffort;
+			}
+			if ("thinkingEffort" in target) {
+				delete target.thinkingEffort;
+			}
+		};
+
+		normalizeReasoningEffort(config);
+
 		if (config.subagents && !config.subAgents) {
 			config.subAgents = config.subagents;
 			delete config.subagents;
@@ -175,6 +190,8 @@ export class AgentLoader {
 
 		if (Array.isArray(config.subAgents)) {
 			for (const subagent of config.subAgents) {
+				normalizeReasoningEffort(subagent);
+
 				if (subagent?.subagents && !subagent.subAgents) {
 					subagent.subAgents = subagent.subagents;
 					delete subagent.subagents;
@@ -392,7 +409,10 @@ export class AgentLoader {
 		// Add model override if specified
 		if (config.model) {
 			try {
-				agent.model = ModelFactory.createModel(config.model) as any;
+				agent.model = ModelFactory.createModel(config.model, {
+					reasoningEffort: config.reasoningEffort,
+					ownerLabel: `Agent "${config.name}"`,
+				}) as any;
 				logger.info(`Agent "${config.name}" using model: ${config.model}`);
 			} catch (error) {
 				logger.error(
@@ -400,6 +420,10 @@ export class AgentLoader {
 				);
 				logger.info(`Agent "${config.name}" will use default model`);
 			}
+		} else if (config.reasoningEffort) {
+			logger.warn(
+				`Agent "${config.name}" set reasoningEffort="${config.reasoningEffort}" but has no model override. Ignoring.`,
+			);
 		}
 
 		// Add subagents if specified
@@ -445,7 +469,10 @@ export class AgentLoader {
 
 				if (subagent.model) {
 					try {
-						sub.model = ModelFactory.createModel(subagent.model) as any;
+						sub.model = ModelFactory.createModel(subagent.model, {
+							reasoningEffort: subagent.reasoningEffort,
+							ownerLabel: `Subagent "${subagent.name}"`,
+						}) as any;
 						logger.info(
 							`Subagent "${subagent.name}" using model: ${subagent.model}`,
 						);
@@ -454,6 +481,10 @@ export class AgentLoader {
 							`Failed to create model for subagent "${subagent.name}": ${error}`,
 						);
 					}
+				} else if (subagent.reasoningEffort) {
+					logger.warn(
+						`Subagent "${subagent.name}" set reasoningEffort="${subagent.reasoningEffort}" but has no model override. Ignoring.`,
+					);
 				}
 
 				subagents.push(sub);
