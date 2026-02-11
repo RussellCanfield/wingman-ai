@@ -134,6 +134,11 @@ import {
 	computeComposerTextareaLayout,
 	shouldRefocusComposer,
 } from "./composer.js";
+import { ToolEventPanel } from "./components/ToolEventPanel.js";
+import {
+	resolveLastAssistantMessageId,
+	shouldShowAssistantTypingIndicator,
+} from "./chatStreamingIndicators.js";
 
 type NativeState = {
 	connected?: boolean;
@@ -367,6 +372,11 @@ function mapSessionName(prompt: string, fallback: string): string {
 }
 
 function mergeToolEvents(existing: ToolEvent[] | undefined, next: ToolEvent[]): ToolEvent[] {
+	type SortableToolEvent = ToolEvent & {
+		startedAt?: number;
+		completedAt?: number;
+		timestamp?: number;
+	};
 	const byId = new Map<string, ToolEvent>();
 	for (const item of existing || []) {
 		byId.set(item.id, item);
@@ -375,7 +385,15 @@ function mergeToolEvents(existing: ToolEvent[] | undefined, next: ToolEvent[]): 
 		const current = byId.get(item.id);
 		byId.set(item.id, current ? { ...current, ...item } : item);
 	}
-	return [...byId.values()].sort((a, b) => a.timestamp - b.timestamp);
+	return [...byId.values()].sort((a, b) => {
+		const sortableA = a as SortableToolEvent;
+		const sortableB = b as SortableToolEvent;
+		const aTime =
+			sortableA.startedAt ?? sortableA.timestamp ?? sortableA.completedAt ?? 0;
+		const bTime =
+			sortableB.startedAt ?? sortableB.timestamp ?? sortableB.completedAt ?? 0;
+		return aTime - bTime;
+	});
 }
 
 function deriveUiBlocks(toolEvents: ToolEvent[] | undefined): ChatMessage["uiBlocks"] {
@@ -2925,6 +2943,11 @@ function ChatScreen({
 			: activeThreadMessagesLoading
 				? "Syncing session history..."
 				: "Enter to send, Shift+Enter for newline";
+	const lastAssistantMessageId = useMemo(
+		() => resolveLastAssistantMessageId(activeThread?.messages),
+		[activeThread?.messages],
+	);
+	const showStreamingGlow = workspace.isStreaming;
 
 	const handleTalkButtonClick = useCallback(async () => {
 		const toggleResult = await runtimeActions.toggleRecording();
@@ -3090,32 +3113,54 @@ function ChatScreen({
 					</div>
 				</div>
 
-				<div ref={messageViewportRef} className="mt-4 max-h-[46vh] space-y-3 overflow-auto pr-1">
-					{activeThreadMessagesLoading ? (
-						<div className="rounded-2xl border border-white/10 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
-							Loading chat history...
+				<div className="relative mt-4">
+					<div
+						ref={messageViewportRef}
+						className="max-h-[46vh] space-y-3 overflow-auto pr-1"
+					>
+						{activeThreadMessagesLoading ? (
+							<div className="rounded-2xl border border-white/10 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+								Loading chat history...
+							</div>
+						) : activeThread?.messages.length ? (
+							activeThread.messages.map((message) => (
+								<MessageCard
+									key={message.id}
+									message={message}
+									isStreaming={workspace.isStreaming}
+									activeAssistantMessageId={lastAssistantMessageId}
+									voicePlayback={voicePlayback}
+									onSpeak={(messageId, text) =>
+										onSpeakVoice(messageId, text, activeThread?.agentId)
+									}
+									onStop={onStopVoice}
+								/>
+							))
+						) : workspace.sessionsLoading ? (
+							<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+								Loading sessions...
+							</div>
+						) : (
+							<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+								No chat messages yet. Send a prompt to begin.
+							</div>
+						)}
+					</div>
+					{showStreamingGlow ? (
+						<div
+							aria-hidden="true"
+							className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center"
+						>
+							<div
+								data-testid="streaming-indicator"
+								className="flex h-6 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-slate-950/80 px-2.5 shadow-[0_0_18px_rgba(56,189,248,0.2)] backdrop-blur-sm"
+							>
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:160ms]" />
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:320ms]" />
+							</div>
 						</div>
-					) : activeThread?.messages.length ? (
-						activeThread.messages.map((message) => (
-							<MessageCard
-								key={message.id}
-								message={message}
-								voicePlayback={voicePlayback}
-								onSpeak={(messageId, text) =>
-									onSpeakVoice(messageId, text, activeThread?.agentId)
-								}
-								onStop={onStopVoice}
-							/>
-						))
-					) : workspace.sessionsLoading ? (
-						<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
-							Loading sessions...
-						</div>
-					) : (
-						<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
-							No chat messages yet. Send a prompt to begin.
-						</div>
-					)}
+					) : null}
 				</div>
 
 					<div className="mt-4">
@@ -4497,20 +4542,35 @@ function MainView({
 }
 type MessageCardProps = {
 	message: ChatMessage;
+	isStreaming: boolean;
+	activeAssistantMessageId?: string;
 	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
 	onSpeak: (messageId: string, text: string) => void;
 	onStop: () => void;
 };
 
-function MessageCard({ message, voicePlayback, onSpeak, onStop }: MessageCardProps) {
+function MessageCard({
+	message,
+	isStreaming,
+	activeAssistantMessageId,
+	voicePlayback,
+	onSpeak,
+	onStop,
+}: MessageCardProps) {
 	const isUser = message.role === "user";
-	const canSpeak = !isUser && !!message.content.trim();
+	const displayText = message.content || message.uiTextFallback || "";
+	const canSpeak = !isUser && !!displayText.trim();
 	const isVoiceTarget = voicePlayback.messageId === message.id;
 	const isVoiceBusy = voicePlayback.status !== "idle";
 	const voiceLabel =
 		isVoiceTarget && isVoiceBusy
 			? getVoicePlaybackLabel(voicePlayback.status)
 			: "Play";
+	const showTypingIndicator = shouldShowAssistantTypingIndicator({
+		message,
+		isStreaming,
+		activeAssistantMessageId,
+	});
 	return (
 		<div
 			className={`rounded-2xl border p-3 ${
@@ -4533,7 +4593,7 @@ function MessageCard({ message, voicePlayback, onSpeak, onStop }: MessageCardPro
 									onStop();
 									return;
 								}
-								onSpeak(message.id, message.content);
+								onSpeak(message.id, displayText);
 							}}
 						>
 							{voiceLabel}
@@ -4542,9 +4602,20 @@ function MessageCard({ message, voicePlayback, onSpeak, onStop }: MessageCardPro
 					<span>{new Date(message.createdAt).toLocaleTimeString()}</span>
 				</div>
 			</div>
-			<div className="whitespace-pre-wrap text-sm text-slate-100">
-				{message.content || message.uiTextFallback || "..."}
-			</div>
+			{showTypingIndicator ? (
+				<div
+					data-testid="message-streaming-indicator"
+					className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400"
+				>
+					<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+					<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
+					<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
+				</div>
+			) : displayText ? (
+				<div className="whitespace-pre-wrap text-sm text-slate-100">
+					{displayText}
+				</div>
+			) : null}
 
 			{message.attachments?.length ? (
 				<div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -4588,16 +4659,8 @@ function MessageCard({ message, voicePlayback, onSpeak, onStop }: MessageCardPro
 			) : null}
 
 			{message.toolEvents?.length ? (
-				<div className="mt-3 space-y-2">
-					{message.toolEvents.map((tool) => (
-						<div key={tool.id} className="rounded-lg border border-white/10 bg-slate-900/70 px-2 py-2 text-xs">
-							<div className="flex items-center justify-between">
-								<span className="font-semibold">{tool.name}</span>
-								<span className="font-mono text-slate-300">{tool.status}</span>
-							</div>
-							{tool.error ? <p className="mt-1 text-rose-300">{tool.error}</p> : null}
-						</div>
-					))}
+				<div className="mt-3">
+					<ToolEventPanel toolEvents={message.toolEvents} variant="inline" />
 				</div>
 			) : null}
 

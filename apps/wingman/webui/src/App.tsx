@@ -53,6 +53,7 @@ import {
 	isSupportedTextUploadFile,
 	readUploadFileText,
 } from "./utils/fileUpload";
+import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
 import { parseStreamEvents } from "./utils/streaming";
 import {
@@ -554,14 +555,21 @@ export const App: React.FC = () => {
 					return;
 				}
 				const data = (await res.json()) as ChatMessage[];
+				const sanitizedMessages = data.map((message) => {
+					if (message.role !== "assistant") return message;
+					return {
+						...message,
+						content: sanitizeAssistantDisplayText(message.content) ?? "",
+					};
+				});
 				setThreads((prev) =>
 					prev.map((item) =>
 						item.id === thread.id
 							? {
 									...item,
-									messages: data,
+									messages: sanitizedMessages,
 									messagesLoaded: true,
-									messageCount: data.length,
+									messageCount: sanitizedMessages.length,
 								}
 							: item,
 					),
@@ -952,6 +960,8 @@ export const App: React.FC = () => {
 			if (uiOnlyRequestsRef.current.has(messageId)) {
 				return;
 			}
+			const sanitizedText = sanitizeAssistantDisplayText(text);
+			if (!sanitizedText) return;
 
 			setThreads((prev) =>
 				prev.map((thread) => {
@@ -962,7 +972,7 @@ export const App: React.FC = () => {
 						(msg) => {
 							const merged = mergeAssistantStreamText(
 								msg.content,
-								text,
+								sanitizedText,
 								isDelta,
 							);
 							buffersRef.current.set(messageId, merged);
@@ -3207,7 +3217,7 @@ function buildAgentFallback(
 			typeof record.fallbackText === "string" &&
 			record.fallbackText.trim().length > 0
 		) {
-			return record.fallbackText;
+			return sanitizeAssistantDisplayText(record.fallbackText);
 		}
 		const keys = Object.keys(result as Record<string, unknown>);
 		if (keys.length === 1 && keys[0] === "streaming") {
@@ -3215,9 +3225,9 @@ function buildAgentFallback(
 		}
 	}
 	try {
-		return JSON.stringify(result, null, 2);
+		return sanitizeAssistantDisplayText(JSON.stringify(result, null, 2));
 	} catch {
-		return String(result);
+		return sanitizeAssistantDisplayText(String(result));
 	}
 }
 
