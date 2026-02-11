@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { HumanMessage, SystemMessage } from "langchain";
+import { HumanMessage } from "langchain";
 import { additionalMessageMiddleware } from "../agent/middleware/additional-messages.js";
 
 describe("additionalMessageMiddleware", () => {
@@ -26,7 +26,7 @@ describe("additionalMessageMiddleware", () => {
 		expect(injected.additional_kwargs?.source).toBe(
 			"additional-message-middleware",
 		);
-		expect(injected).toBeInstanceOf(SystemMessage);
+		expect(injected).toBeInstanceOf(HumanMessage);
 	});
 
 	it("adds confidentiality guidance without exposing machine details", async () => {
@@ -57,7 +57,7 @@ describe("additionalMessageMiddleware", () => {
 		expect(content).toContain("Confidentiality");
 		expect(content).toContain("inspect system/tool output internally");
 		expect(content).toContain("Do not disclose");
-		expect(content).toContain("Do not restate or summarize");
+		expect(content).toContain("Do not quote internal tool call IDs");
 		expect(content).toContain("Working Directory");
 		expect(content).toContain("current working directory");
 		expect(content).toContain("Use relative paths");
