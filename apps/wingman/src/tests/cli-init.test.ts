@@ -1,15 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { executeInitCommand } from "../cli/commands/init";
 import {
 	existsSync,
-	mkdtempSync,
 	mkdirSync,
+	mkdtempSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { executeInitCommand } from "../cli/commands/init";
 
 describe("CLI init", () => {
 	let workspace: string;
@@ -37,11 +37,7 @@ describe("CLI init", () => {
 			{ workspace },
 		);
 
-		const configPath = join(
-			workspace,
-			".wingman",
-			"wingman.config.json",
-		);
+		const configPath = join(workspace, ".wingman", "wingman.config.json");
 		expect(existsSync(configPath)).toBe(true);
 		const config = JSON.parse(readFileSync(configPath, "utf-8"));
 		expect(config.defaultAgent).toBe("wingman");
@@ -71,6 +67,55 @@ describe("CLI init", () => {
 		expect(codingPrompt).not.toContain("update_plan");
 		expect(codingPrompt).not.toContain("subAgents:");
 		expect(codingPrompt).toContain("Do not delegate coding work to subagents");
+
+		const codingV2AgentPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"coding-v2",
+			"agent.md",
+		);
+		expect(existsSync(codingV2AgentPath)).toBe(true);
+		const codingV2Prompt = readFileSync(codingV2AgentPath, "utf-8");
+		expect(codingV2Prompt).toContain("name: coding-v2");
+		expect(codingV2Prompt).toContain("subAgents:");
+		expect(codingV2Prompt).toContain("name: coding-worker");
+		expect(codingV2Prompt).toContain("promptFile: ./implementor.md");
+		expect(codingV2Prompt).toContain("`task` tool");
+		expect(codingV2Prompt).toContain("write_todos");
+
+		const codingV2ImplementorPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"coding-v2",
+			"implementor.md",
+		);
+		const codingV2PlannerPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"coding-v2",
+			"planner.md",
+		);
+		const codingV2ReviewerPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"coding-v2",
+			"reviewer.md",
+		);
+		const codingV2ResearcherPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"coding-v2",
+			"researcher.md",
+		);
+		expect(existsSync(codingV2ImplementorPath)).toBe(true);
+		expect(existsSync(codingV2PlannerPath)).toBe(false);
+		expect(existsSync(codingV2ReviewerPath)).toBe(false);
+		expect(existsSync(codingV2ResearcherPath)).toBe(false);
 	});
 
 	it("merges existing config when --merge is set", async () => {
