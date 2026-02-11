@@ -91,6 +91,44 @@ describe("ToolEventPanel helpers", () => {
 		expect(html).toContain("[overflow-wrap:anywhere]");
 	});
 
+	it("hides completed badge text and uses chevron detail affordance", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-4a",
+						name: "read_file",
+						status: "completed",
+					},
+				],
+			}),
+		);
+
+		expect(html).not.toContain(">Completed<");
+		expect(html).not.toContain("Details");
+		expect(html).toContain("group-open:rotate-180");
+	});
+
+	it("centers the tool status icon vertically in the row", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-4b",
+						name: "command_execute",
+						status: "running",
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("list-none items-center justify-between");
+		expect(html).toContain("min-w-0 flex items-center gap-3");
+		expect(html).not.toContain("mt-0.5");
+	});
+
 	it("renders actor labels when subagent metadata is present", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ToolEventPanel, {

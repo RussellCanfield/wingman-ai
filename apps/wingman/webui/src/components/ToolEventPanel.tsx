@@ -1,6 +1,11 @@
 import React from "react";
 import type { IconType } from "react-icons";
-import { FiAlertTriangle, FiCheckCircle, FiClock } from "react-icons/fi";
+import {
+	FiAlertTriangle,
+	FiCheckCircle,
+	FiChevronDown,
+	FiClock,
+} from "react-icons/fi";
 import type { ToolEvent } from "../types";
 
 type ToolEventPanelProps = {
@@ -81,6 +86,7 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 
 const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 	const status = TOOL_STATUS_STYLES[event.status];
+	const showStatusBadge = event.status !== "completed";
 	const actorLabel = resolveActorLabel(event);
 	const taskTarget = resolveTaskTarget(event);
 	const delegatedLabel =
@@ -98,16 +104,20 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 	);
 	const duration = formatToolEventDuration(event);
 	const startedAt = event.startedAt ?? event.timestamp;
-	const startTimeLabel = formatToolEventTime(startedAt);
+	const completedAt = event.completedAt;
+	const startedLabel = formatToolEventTime(startedAt);
+	const completedLabel = formatToolEventTime(completedAt);
+	const hasTimingMeta =
+		startedLabel !== "--" || completedLabel !== "--" || Boolean(duration);
 
 	return (
 		<details
 			className={`group w-full min-w-0 rounded-xl border bg-gradient-to-br px-3 py-2 shadow-[0_8px_20px_rgba(2,8,20,0.35)] ${status.frameTone}`}
 		>
-			<summary className="flex cursor-pointer list-none items-start justify-between gap-3">
-				<div className="min-w-0 flex items-start gap-3">
+			<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+				<div className="min-w-0 flex items-center gap-3">
 					<span
-						className={`relative mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${status.iconTone}`}
+						className={`relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${status.iconTone}`}
 					>
 						<status.Icon className="h-4 w-4" />
 						{event.status === "running" ? (
@@ -141,7 +151,6 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 							) : null}
 						</div>
 						<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
-							{startTimeLabel !== "--" ? <span>{startTimeLabel}</span> : null}
 							{argsSummary ? (
 								<span className="max-w-[420px] truncate">
 									<span className="text-slate-500">args:</span> {argsSummary}
@@ -156,17 +165,43 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center gap-2">
-					<span
-						className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${status.badgeTone}`}
-					>
-						{status.label}
-					</span>
-					<span className="hidden text-[10px] uppercase tracking-[0.14em] text-slate-500 transition group-open:text-slate-300 sm:inline">
-						Details
+					{showStatusBadge ? (
+						<span
+							className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${status.badgeTone}`}
+						>
+							{status.label}
+						</span>
+					) : null}
+					<span className="inline-flex h-5 w-5 items-center justify-center text-slate-500 transition group-open:rotate-180 group-open:text-slate-300">
+						<FiChevronDown className="h-4 w-4" />
+						<span className="sr-only">Toggle details</span>
 					</span>
 				</div>
 			</summary>
 			<div className="mt-3 space-y-3 border-t border-white/10 pt-3 text-xs text-slate-300">
+				{hasTimingMeta ? (
+					<div
+						data-testid="tool-timing-meta"
+						className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400"
+					>
+						{startedLabel !== "--" ? (
+							<span>
+								<span className="text-slate-500">Started:</span> {startedLabel}
+							</span>
+						) : null}
+						{completedLabel !== "--" ? (
+							<span>
+								<span className="text-slate-500">Completed:</span>{" "}
+								{completedLabel}
+							</span>
+						) : null}
+						{duration ? (
+							<span>
+								<span className="text-slate-500">Duration:</span> {duration}
+							</span>
+						) : null}
+					</div>
+				) : null}
 				{editDiffPreview ? (
 					<EditFileDiffPreview preview={editDiffPreview} />
 				) : null}

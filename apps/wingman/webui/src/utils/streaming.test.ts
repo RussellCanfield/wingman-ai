@@ -286,4 +286,45 @@ describe("parseStreamEvents", () => {
 		expect(result.textEvents).toHaveLength(1);
 		expect(result.textEvents[0].text).toBe("nested stream hello");
 	});
+
+	it("strips leaked internal tool envelope text while preserving assistant content", () => {
+		const chunk = {
+			event: "on_chat_model_stream",
+			run_id: "run-leak-1",
+			data: {
+				chunk: {
+					content:
+						"I'll inspect integration usage first.\nassistant to=multi_tool_use.parallel commentary json {\"tool_uses\":[{\"recipient_name\":\"functions.read_file\",\"parameters\":{\"file_path\":\"./a.ts\"}}]}",
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]?.text).toBe("I'll inspect integration usage first.");
+	});
+
+	it("drops chunks that are only leaked internal tool envelopes", () => {
+		const chunk = {
+			content:
+				"assistant to=multi_tool_use.parallel commentary json {\"tool_uses\":[{\"recipient_name\":\"functions.grep\",\"parameters\":{\"pattern\":\"x\"}}]}",
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+	});
+
+	it("keeps normal prose that references function names", () => {
+		const chunk = {
+			content:
+				'Use `functions.read_file` for local file access and `functions.grep` for quick search.',
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]?.text).toContain("functions.read_file");
+	});
 });

@@ -53,6 +53,12 @@ type AgentPayload = {
 	sessionId?: string;
 };
 
+type ParsedGatewayInput = {
+	content: string;
+	attachments?: unknown;
+	agentId?: string;
+};
+
 class AsyncEventQueue<T> {
 	private items: T[] = [];
 	private waiters: Array<(result: IteratorResult<T>) => void> = [];
@@ -154,6 +160,29 @@ const extractPromptText = (input: unknown): string => {
 	return "";
 };
 
+const parseGatewayInput = (input: unknown): ParsedGatewayInput => {
+	if (typeof input === "string") {
+		return { content: input };
+	}
+
+	const inputRecord = asRecord(input);
+	if (!inputRecord) {
+		return { content: input == null ? "" : String(input) };
+	}
+
+	const content = extractPromptText(inputRecord);
+	const attachments = Array.isArray(inputRecord.attachments)
+		? inputRecord.attachments
+		: undefined;
+	const agentId = asString(inputRecord.agentId);
+
+	return {
+		content: content || "",
+		attachments,
+		agentId,
+	};
+};
+
 const normalizeAgentError = (error: unknown): string => {
 	if (typeof error === "string" && error.trim()) return error.trim();
 	const record = asRecord(error);
@@ -226,7 +255,7 @@ export const createGatewayLangGraphTransport = (
 			const requestId = requestIdFactory();
 			const threadId =
 				asString(payload?.config?.configurable?.thread_id) || options.sessionId;
-			const promptText = extractPromptText(payload.input);
+			const parsedInput = parseGatewayInput(payload.input);
 			const queue = new AsyncEventQueue<LangGraphEvent>();
 			let unsubscribed = false;
 
@@ -293,8 +322,11 @@ export const createGatewayLangGraphTransport = (
 				type: "req:agent",
 				id: requestId,
 				payload: {
-					agentId: options.agentId,
-					content: promptText,
+					agentId: parsedInput.agentId || options.agentId,
+					content: parsedInput.content,
+					...(parsedInput.attachments
+						? { attachments: parsedInput.attachments }
+						: {}),
 					queueIfBusy,
 					...(threadId ? { sessionKey: threadId } : {}),
 				},

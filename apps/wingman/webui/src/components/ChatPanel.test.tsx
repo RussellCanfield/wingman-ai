@@ -78,7 +78,9 @@ describe("ChatPanel prompt composer", () => {
 		);
 		expect(html).toContain('aria-label="Stop response"');
 		expect(html).toContain('data-testid="streaming-indicator"');
-		expect(html).toContain("absolute inset-x-0 top-2 z-20 flex justify-center");
+		expect(html).toContain(
+			"pointer-events-none mb-2 inset-x-0 top-2 z-20 flex justify-center",
+		);
 		expect(html).toContain(
 			"flex h-6 items-center justify-center gap-1.5 rounded-full",
 		);
@@ -265,6 +267,128 @@ describe("ChatPanel prompt composer", () => {
 
 		expect(html).toContain('aria-label="Play assistant response"');
 		expect(html).toContain("inline-flex h-6 w-6 items-center justify-center");
+	});
+
+	it("shows one voice control per continuous assistant turn", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-turn-a-1",
+							role: "assistant",
+							content: "First chunk in turn A",
+							createdAt: 1,
+						},
+						{
+							id: "assistant-turn-a-2",
+							role: "assistant",
+							content: "Second chunk in turn A",
+							createdAt: 2,
+						},
+						{
+							id: "user-break",
+							role: "user",
+							content: "next",
+							createdAt: 3,
+						},
+						{
+							id: "assistant-turn-b-1",
+							role: "assistant",
+							content: "First chunk in turn B",
+							createdAt: 4,
+						},
+					],
+				},
+			}),
+		);
+
+		const voiceControlCount = (
+			html.match(/aria-label="Play assistant response"/g) || []
+		).length;
+		expect(voiceControlCount).toBe(2);
+	});
+
+	it("uses compact spacing for consecutive assistant chunks", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-a-1",
+							role: "assistant",
+							content: "First chunk",
+							createdAt: 1,
+						},
+						{
+							id: "assistant-a-2",
+							role: "assistant",
+							content: "Second chunk",
+							createdAt: 2,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("flex justify-start mt-0");
+		expect(html).toContain("flex justify-start mt-2");
+		expect(html).not.toContain("min-h-full space-y-4 p-3 sm:p-4");
+	});
+
+	it("shows assistant timestamp only at the start of a continuous assistant turn", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-turn-start",
+							role: "assistant",
+							content: "",
+							createdAt: 1_700_000_000_000,
+							toolEvents: [
+								{
+									id: "tool-a",
+									name: "read_file",
+									status: "completed",
+									timestamp: 1_700_000_000_010,
+								},
+							],
+						},
+						{
+							id: "assistant-turn-next",
+							role: "assistant",
+							content: "",
+							createdAt: 1_700_000_000_500,
+							toolEvents: [
+								{
+									id: "tool-b",
+									name: "command_execute",
+									status: "completed",
+									timestamp: 1_700_000_000_510,
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const timestampCount = (html.match(/class="whitespace-nowrap"/g) || [])
+			.length;
+		expect(timestampCount).toBe(1);
 	});
 });
 

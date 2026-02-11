@@ -1,3 +1,4 @@
+import { useStream } from "@langchain/langgraph-sdk/react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FiMenu, FiX } from "react-icons/fi";
@@ -52,6 +53,7 @@ import {
 	isSupportedTextUploadFile,
 	readUploadFileText,
 } from "./utils/fileUpload";
+import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
 import { parseStreamEvents } from "./utils/streaming";
 import {
 	clearStreamMessageTargets,
@@ -168,6 +170,9 @@ export const App: React.FC = () => {
 	const dynamicUiEnabled = config.dynamicUiEnabled !== false;
 
 	const wsRef = useRef<WebSocket | null>(null);
+	const agentEventSubscribersRef = useRef<
+		Set<(message: GatewayMessage) => void>
+	>(new Set());
 	const connectRequestIdRef = useRef<string | null>(null);
 	const buffersRef = useRef<Map<string, string>>(new Map());
 	const requestStreamMessageRef = useRef<Map<string, Map<string, string>>>(
@@ -191,6 +196,7 @@ export const App: React.FC = () => {
 	const autoConnectFailureRef = useRef<boolean>(false);
 	const activeRequestIdRef = useRef<string | null>(null);
 	const pendingRequestIdsRef = useRef<Set<string>>(new Set());
+	const queuedStreamRequestIdsRef = useRef<string[]>([]);
 	const streamStartedAtRef = useRef<number>(0);
 	const streamLastActivityRef = useRef<number>(0);
 	const streamRecoveryTimerRef = useRef<number | null>(null);
@@ -251,6 +257,24 @@ export const App: React.FC = () => {
 			const next = [message, ...prev];
 			return next.slice(0, 25);
 		});
+	}, []);
+
+	const subscribeToAgentEvents = useCallback(
+		(handler: (message: GatewayMessage) => void) => {
+			agentEventSubscribersRef.current.add(handler);
+			return () => {
+				agentEventSubscribersRef.current.delete(handler);
+			};
+		},
+		[],
+	);
+
+	const sendGatewayMessage = useCallback((message: GatewayMessage) => {
+		const ws = wsRef.current;
+		if (!ws || ws.readyState !== WebSocket.OPEN) {
+			throw new Error("Gateway is not connected.");
+		}
+		ws.send(JSON.stringify(message));
 	}, []);
 
 	const clearStreamRecoveryTimer = useCallback(() => {
@@ -405,6 +429,7 @@ export const App: React.FC = () => {
 	const resetPendingRequests = useCallback(() => {
 		pendingRequestIdsRef.current.clear();
 		activeRequestIdRef.current = null;
+		queuedStreamRequestIdsRef.current = [];
 		streamStartedAtRef.current = 0;
 		streamLastActivityRef.current = 0;
 		runningToolEventsRef.current.clear();
@@ -1199,6 +1224,47 @@ export const App: React.FC = () => {
 		],
 	);
 
+	const gatewayStreamTransport = useMemo(
+		() =>
+			createGatewayLangGraphTransport({
+				socket: {
+					send: sendGatewayMessage,
+					subscribe: subscribeToAgentEvents,
+				},
+				agentId: currentAgentId,
+				requestIdFactory: () => {
+					const queued = queuedStreamRequestIdsRef.current.shift();
+					if (queued) return queued;
+					return `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+				},
+			}),
+		[currentAgentId, sendGatewayMessage, subscribeToAgentEvents],
+	);
+
+	const gatewayStream = useStream<Record<string, unknown>>({
+		assistantId: currentAgentId || "main",
+		transport: gatewayStreamTransport,
+		threadId: null,
+		throttle: false,
+		onError: (error) => {
+			const errorText =
+				error instanceof Error
+					? error.message
+					: String(error || "Stream error");
+			logEvent(`Stream transport error: ${errorText}`);
+			const requestId = activeRequestIdRef.current;
+			if (!requestId) {
+				resetPendingRequests();
+				return;
+			}
+			finalizeAssistant(requestId, {
+				fallback: `Stream transport error: ${errorText}`,
+				forceText: true,
+				appendFallbackToExisting: true,
+			});
+		},
+	});
+
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
 			if (!payload) return;
@@ -1601,6 +1667,8 @@ export const App: React.FC = () => {
 			window.clearTimeout(autoConnectTimerRef.current);
 			autoConnectTimerRef.current = null;
 		}
+		queuedStreamRequestIdsRef.current = [];
+		void gatewayStream.stop();
 		resetPendingRequests();
 		autoConnectAttemptsRef.current = 0;
 		autoConnectFailureRef.current = false;
@@ -1612,7 +1680,7 @@ export const App: React.FC = () => {
 		}
 		setConnected(false);
 		setConnecting(false);
-	}, [resetPendingRequests]);
+	}, [gatewayStream, resetPendingRequests]);
 
 	const connect = useCallback(() => {
 		if (!wsUrl) {
@@ -1688,6 +1756,17 @@ export const App: React.FC = () => {
 			}
 
 			if (msg.type === "event:agent" && msg.id) {
+				for (const subscriber of agentEventSubscribersRef.current) {
+					try {
+						subscriber(msg);
+					} catch (error) {
+						const errorText =
+							error instanceof Error
+								? error.message
+								: String(error || "Unknown subscriber error");
+						logEvent(`Agent stream subscriber error: ${errorText}`);
+					}
+				}
 				try {
 					handleAgentEvent(msg.id, msg.payload);
 				} catch (error) {
@@ -1715,6 +1794,7 @@ export const App: React.FC = () => {
 		};
 
 		ws.onerror = () => {
+			void gatewayStream.stop();
 			resetPendingRequests();
 			setConnected(false);
 			setConnecting(false);
@@ -1723,6 +1803,7 @@ export const App: React.FC = () => {
 		};
 
 		ws.onclose = () => {
+			void gatewayStream.stop();
 			resetPendingRequests();
 			setConnected(false);
 			setConnecting(false);
@@ -1754,6 +1835,7 @@ export const App: React.FC = () => {
 		deviceId,
 		disconnect,
 		finalizeAssistant,
+		gatewayStream,
 		handleAgentEvent,
 		logEvent,
 		password,
@@ -1867,33 +1949,27 @@ export const App: React.FC = () => {
 				`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`,
 			);
 		}
-
-		const payload = {
-			agentId: targetThread.agentId,
-			content: userMessage.content,
-			attachments: attachments.length > 0 ? attachments : undefined,
-			queueIfBusy: true,
-			routing: {
-				channel: "webui",
-				peer: { kind: "channel", id: deviceId },
+		queuedStreamRequestIdsRef.current.push(requestId);
+		void gatewayStream.submit(
+			{
+				agentId: targetThread.agentId,
+				content: userMessage.content,
+				attachments: attachments.length > 0 ? attachments : undefined,
 			},
-			sessionKey: targetThread.id,
-		};
-
-		const message: GatewayMessage = {
-			type: "req:agent",
-			id: requestId,
-			payload,
-			timestamp: Date.now(),
-		};
-
-		wsRef.current.send(JSON.stringify(message));
+			{
+				config: {
+					configurable: {
+						thread_id: targetThread.id,
+					},
+				},
+			},
+		);
 	}, [
 		activeThread,
 		agentId,
 		attachments,
 		createThread,
-		deviceId,
+		gatewayStream,
 		loadThreadMessages,
 		logEvent,
 		prompt,
@@ -1926,27 +2002,20 @@ export const App: React.FC = () => {
 		cleanupRequestState(requestId);
 		finalizePendingRequest(requestId);
 		logEvent("Stopping current response...");
-
-		const ws = wsRef.current;
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			const message: GatewayMessage = {
-				type: "req:agent:cancel",
-				id: `cancel-${Date.now()}`,
-				payload: { requestId },
-				timestamp: Date.now(),
-			};
-			ws.send(JSON.stringify(message));
-		}
+		void gatewayStream.stop();
 	}, [
 		cleanupRequestState,
 		finalizePendingRequest,
+		gatewayStream,
 		logEvent,
 		resolveRequestMessageId,
 	]);
 
+	const uiStreaming = isStreaming || gatewayStream.isLoading;
+
 	const clearChat = useCallback(async () => {
 		if (!activeThread) return;
-		if (isStreaming) {
+		if (uiStreaming) {
 			logEvent("Wait for the current response to finish");
 			return;
 		}
@@ -1980,11 +2049,11 @@ export const App: React.FC = () => {
 					: thread,
 			),
 		);
-	}, [activeThread, isStreaming, logEvent, stopVoicePlayback]);
+	}, [activeThread, uiStreaming, logEvent, stopVoicePlayback]);
 
 	const deleteThread = useCallback(
 		async (threadId: string) => {
-			if (isStreaming && activeThread?.id === threadId) {
+			if (uiStreaming && activeThread?.id === threadId) {
 				logEvent("Wait for the current response to finish");
 				return;
 			}
@@ -2018,7 +2087,7 @@ export const App: React.FC = () => {
 		[
 			activeThread?.id,
 			activeThreadId,
-			isStreaming,
+			uiStreaming,
 			logEvent,
 			stopVoicePlayback,
 			threads,
@@ -2875,8 +2944,10 @@ export const App: React.FC = () => {
 										attachments={attachments}
 										fileAccept={FILE_INPUT_ACCEPT}
 										attachmentError={attachmentError}
-										isStreaming={isStreaming}
-										showStreamingIndicator={showStreamingIndicator}
+										isStreaming={uiStreaming}
+										showStreamingIndicator={
+											showStreamingIndicator || gatewayStream.isLoading
+										}
 										queuedPromptCount={queuedPromptCount}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}

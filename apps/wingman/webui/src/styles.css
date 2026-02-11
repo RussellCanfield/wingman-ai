@@ -68,7 +68,7 @@
   }
 
   .markdown-content p {
-    @apply mb-3;
+    @apply mb-2 last:mb-0;
   }
 
   .markdown-content h1 {

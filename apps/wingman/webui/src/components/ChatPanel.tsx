@@ -490,8 +490,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				</div>
 			);
 		}
-		return activeThread.messages.map((msg) => {
+		let hasSpeakableAssistantInTurn = false;
+		return activeThread.messages.map((msg, index) => {
 			const isUserMessage = msg.role === "user";
+			if (msg.role !== "assistant") {
+				hasSpeakableAssistantInTurn = false;
+			}
+			const previousMessage = index > 0 ? activeThread.messages[index - 1] : null;
+			const previousRole = previousMessage?.role;
+			const messageSpacingClass =
+				index === 0
+					? "mt-0"
+					: msg.role === "assistant" && previousRole === "assistant"
+						? "mt-2"
+						: "mt-4";
+			const isAssistantTurnStart =
+				msg.role === "assistant" &&
+				(!previousMessage || previousMessage.role !== "assistant");
+			const showTimestamp = isUserMessage || isAssistantTurnStart;
 			const hasLegacyEvents =
 				msg.id === lastAssistantId &&
 				(legacyToolEvents.length > 0 || legacyThinkingEvents.length > 0);
@@ -515,29 +531,41 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			const uiBlocks = dynamicUiEnabled ? msg.uiBlocks : undefined;
 			const displayText =
 				msg.content || (!dynamicUiEnabled ? msg.uiTextFallback || "" : "");
+			const hasSpeakableText = Boolean(msg.content || msg.uiTextFallback);
+			const showVoiceButton =
+				msg.role === "assistant" &&
+				hasSpeakableText &&
+				!hasSpeakableAssistantInTurn;
+			if (showVoiceButton) {
+				hasSpeakableAssistantInTurn = true;
+			}
+			const showMetaRow = isUserMessage || showTimestamp || showVoiceButton;
 
-			return (
-				<div
-					key={msg.id}
-					className={`flex ${isUserMessage ? "justify-end" : "justify-start"}`}
-				>
+				return (
+					<div
+						key={msg.id}
+						className={`flex ${isUserMessage ? "justify-end" : "justify-start"} ${messageSpacingClass}`}
+					>
 					<div
 						className={`min-w-0 text-sm leading-relaxed ${isUserMessage
 							? "w-fit max-w-[90%] rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-slate-100 shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%]"
 							: "w-full max-w-full px-1 py-1 text-slate-100"
 							}`}
 					>
-						<div
-							className={`flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400 ${isUserMessage ? "justify-between" : "mb-1 justify-end"
-								}`}
-						>
-							{isUserMessage ? <span>You</span> : null}
-							<div className="flex items-center gap-2">
-								<span className="whitespace-nowrap">
-									{formatTime(msg.createdAt)}
-								</span>
-								{msg.role === "assistant" && (msg.content || msg.uiTextFallback)
-									? (() => {
+						{showMetaRow ? (
+							<div
+								className={`flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400 ${isUserMessage ? "justify-between" : "mb-1 justify-end"
+									}`}
+							>
+								{isUserMessage ? <span>You</span> : null}
+								<div className="flex items-center gap-2">
+									{showTimestamp ? (
+										<span className="whitespace-nowrap">
+											{formatTime(msg.createdAt)}
+										</span>
+									) : null}
+									{showVoiceButton
+										? (() => {
 										const playbackStatus =
 											resolvedVoiceMessageId === msg.id
 												? voicePlayback.status
@@ -588,9 +616,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											</button>
 										);
 									})()
-									: null}
+										: null}
+								</div>
 							</div>
-						</div>
+						) : null}
 						{msg.role === "assistant" &&
 							isActiveMessage &&
 							!hasNestedActivity &&
@@ -607,8 +636,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								rehypePlugins={[
 									[rehypeHighlight, { detect: true, ignoreMissing: true }],
 								]}
-								className={`markdown-content text-sm leading-relaxed ${isUserMessage ? "mt-2" : "mt-1"
-									}`}
+								className={`markdown-content text-sm leading-relaxed ${
+									isUserMessage ? "mt-2" : showMetaRow ? "mt-1" : "mt-0"
+								}`}
 								components={{
 									a: ({ node, ...props }) => (
 										<a
@@ -819,7 +849,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				onScroll={handleScroll}
 				className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80"
 			>
-				<div className="min-h-full space-y-4 p-3 sm:p-4">{transcriptContent}</div>
+				<div className="min-h-full p-3 sm:p-4">{transcriptContent}</div>
 				{showStreamingGlow ? (
 					<div
 						aria-hidden="true"

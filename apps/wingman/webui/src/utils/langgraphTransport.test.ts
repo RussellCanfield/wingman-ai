@@ -154,6 +154,39 @@ describe("createGatewayLangGraphTransport", () => {
 		expect(done.done).toBe(true);
 	});
 
+	it("forwards agentId and attachments from submit input", async () => {
+		const socket = new FakeGatewaySocket();
+		const transport = createGatewayLangGraphTransport({
+			socket,
+			agentId: "fallback-agent",
+			requestIdFactory: () => "req-fixed-attachments",
+		});
+		await transport.stream({
+			input: {
+				content: "check this file",
+				agentId: "coding",
+				attachments: [
+					{ kind: "file", name: "README.md", textContent: "content" },
+				],
+			},
+			config: { configurable: { thread_id: "session-2" } },
+			signal: new AbortController().signal,
+		});
+
+		expect(socket.sent[0]).toMatchObject({
+			type: "req:agent",
+			id: "req-fixed-attachments",
+			payload: {
+				agentId: "coding",
+				content: "check this file",
+				attachments: [
+					{ kind: "file", name: "README.md", textContent: "content" },
+				],
+				sessionKey: "session-2",
+			},
+		});
+	});
+
 	it("emits an error event and closes when agent-error arrives", async () => {
 		const socket = new FakeGatewaySocket();
 		const transport = createGatewayLangGraphTransport({

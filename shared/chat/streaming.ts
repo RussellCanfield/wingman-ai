@@ -101,7 +101,7 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 					});
 				}
 
-				const text = extractTextContent(msg);
+				const text = sanitizeDisplayText(extractTextContent(msg));
 				if (text) {
 					textEvents.push({
 						text,
@@ -141,7 +141,10 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 	}
 
 	if (typeof chunk.content === "string") {
-		textEvents.push({ text: chunk.content });
+		const text = sanitizeDisplayText(chunk.content);
+		if (text) {
+			textEvents.push({ text });
+		}
 	}
 
 	if (chunk.tool_calls && Array.isArray(chunk.tool_calls)) {
@@ -189,7 +192,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 
 	if (chunk.event === "on_chat_model_stream") {
 		const messageChunk = chunk.data?.chunk ?? chunk.data?.message;
-		const text = extractTextContent(messageChunk);
+		const text = sanitizeDisplayText(extractTextContent(messageChunk));
 		if (!text) return null;
 		return {
 			textEvents: [
@@ -212,6 +215,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		} else if (typeof llmChunk?.text === "string") {
 			text = llmChunk.text;
 		}
+		text = sanitizeDisplayText(text);
 		if (!text) return null;
 		return {
 			textEvents: [
@@ -710,6 +714,56 @@ function extractTextContent(message: any): string | undefined {
 		return blocks.length > 0 ? blocks.join("") : undefined;
 	}
 	return undefined;
+}
+
+const INTERNAL_TOOL_ENVELOPE_MARKERS: RegExp[] = [
+	/\bassistant\s+to=[a-z0-9_.:-]+\b/i,
+	/\bto=multi_tool_use(?:\.[a-z_]+)?\b/i,
+	/"tool_uses"\s*:\s*\[/i,
+	/"recipient_name"\s*:\s*"functions\.[^"]+"/i,
+	/"parameters"\s*:\s*\{/i,
+	/\bcommentary\s+json\b/i,
+];
+
+function sanitizeDisplayText(text: string | undefined): string | undefined {
+	if (typeof text !== "string") return undefined;
+	if (text.trim().length === 0) return undefined;
+
+	let envelopeStart = -1;
+	for (const marker of INTERNAL_TOOL_ENVELOPE_MARKERS) {
+		const index = text.search(marker);
+		if (index < 0) continue;
+		envelopeStart = envelopeStart < 0 ? index : Math.min(envelopeStart, index);
+	}
+
+	if (envelopeStart === 0 && isLikelyInternalToolEnvelope(text)) {
+		return undefined;
+	}
+
+	if (envelopeStart > 0 && isLikelyInternalToolEnvelope(text.slice(envelopeStart))) {
+		const prefix = text.slice(0, envelopeStart).replace(/\s+$/, "");
+		return prefix.length > 0 ? prefix : undefined;
+	}
+
+	return text;
+}
+
+function isLikelyInternalToolEnvelope(value: string): boolean {
+	if (value.trim().length === 0) return false;
+	if (/^\s*assistant\s+to=[a-z0-9_.:-]+\b/i.test(value)) return true;
+	if (
+		/^\s*\{[\s\S]*"tool_uses"\s*:\s*\[[\s\S]*"recipient_name"\s*:\s*"functions\.[^"]+"/i.test(
+			value,
+		)
+	) {
+		return true;
+	}
+
+	let markerCount = 0;
+	for (const marker of INTERNAL_TOOL_ENVELOPE_MARKERS) {
+		if (marker.test(value)) markerCount += 1;
+	}
+	return markerCount >= 2;
 }
 
 function extractToolCalls(

@@ -97,7 +97,8 @@ export const createBackgroundTerminalTool = (
 
 				if (!command && !session_id) {
 					return buildTerminalResponse({
-						error: "Provide command to start a session or session_id to poll/write",
+						error:
+							"Provide command to start a session or session_id to poll/write",
 					});
 				}
 
@@ -166,7 +167,7 @@ export const createBackgroundTerminalTool = (
 		{
 			name: "background_terminal",
 			description:
-				"Single background terminal interface. Start a session with command, then poll or write using session_id. Use normal shell commands in-session (for example ps/jobs/kill) and control chars like \\u0003 to interrupt running programs.",
+				"Single background terminal interface for long-running sessions. Use this for commands that may not exit on their own (for example web servers, test watchers, or log tailing). Start a session with command, then poll or write using session_id. Use normal shell commands in-session (for example ps/jobs/kill) and control chars like \\u0003 to interrupt running programs.",
 			schema: z.object({
 				command: z
 					.string()
