@@ -4,7 +4,7 @@
  * Validation schemas for hook configurations and runtime execution context
  */
 
-import { z } from "zod";
+import * as z from "zod";
 import type { ToolCallRequest, ToolMessage } from "langchain";
 
 /**

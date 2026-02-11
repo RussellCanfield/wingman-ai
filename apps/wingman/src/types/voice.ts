@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 export const VoiceProviderSchema = z.enum(["web_speech", "elevenlabs"]);
 export type VoiceProvider = z.infer<typeof VoiceProviderSchema>;

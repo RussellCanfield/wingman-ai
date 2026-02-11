@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { tool } from "langchain";
-import { z } from "zod";
+import * as z from "zod";
 
 export const DEFAULT_BLOCKED_COMMANDS = [
 	"rm",

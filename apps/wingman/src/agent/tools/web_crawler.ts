@@ -1,5 +1,5 @@
 import { tool } from "langchain";
-import { z } from "zod";
+import * as z from "zod";
 import { createLogger } from "@/logger.js";
 
 const logger = createLogger();

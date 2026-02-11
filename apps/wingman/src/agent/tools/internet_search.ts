@@ -1,7 +1,7 @@
 import { tool } from "langchain";
 import { DuckDuckGoSearch } from "@langchain/community/tools/duckduckgo_search";
 import { ChatOpenAI } from "@langchain/openai";
-import { z } from "zod";
+import * as z from "zod";
 import type { SearchConfig } from "../../cli/config/schema.js";
 
 const DEFAULT_DDG_MIN_DELAY_MS = 2000;

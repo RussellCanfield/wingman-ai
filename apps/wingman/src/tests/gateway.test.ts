@@ -225,7 +225,7 @@ describeIfBun("Gateway", () => {
 	it("should broadcast messages to group members", async () => {
 		return new Promise<void>((resolve, reject) => {
 			let client1NodeId: string | null = null;
-			let messagesReceived = 0;
+			let broadcastGroupId: string | null = null;
 
 			const client1 = new GatewayClient(
 				`ws://localhost:${port}/ws`,
@@ -236,7 +236,8 @@ describeIfBun("Gateway", () => {
 							client1NodeId = nodeId;
 							await client1.joinGroup("broadcast-test");
 						},
-						joinedGroup: () => {
+						joinedGroup: (groupId) => {
+							broadcastGroupId = groupId;
 							// Client 1 joined, now connect client 2
 							client2.connect().catch(reject);
 						},
@@ -254,14 +255,13 @@ describeIfBun("Gateway", () => {
 						},
 						joinedGroup: () => {
 							// Both clients in group, send broadcast
-							client1.broadcast("broadcast-test", {
+							client1.broadcast(broadcastGroupId || "broadcast-test", {
 								message: "Hello from client 1",
 							});
 						},
 						broadcast: (message: any, fromNodeId) => {
 							expect(fromNodeId).toBe(client1NodeId);
 							expect(message.message).toBe("Hello from client 1");
-							messagesReceived++;
 
 							// Cleanup
 							client1.disconnect();
@@ -728,19 +728,20 @@ describeIfBun("Gateway", () => {
 		const createRes = await fetch(`http://localhost:${port}/api/sessions`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ agentId: "main", name: "Clear Test" }),
+			body: JSON.stringify({ name: "Clear Test" }),
 		});
 		expect(createRes.ok).toBe(true);
-		const session = (await createRes.json()) as { id: string };
+		const session = (await createRes.json()) as { id: string; agentId?: string };
+		const sessionAgentId = session.agentId || "main";
 
-		const manager = await (server as any).getSessionManager("main");
+		const manager = await (server as any).getSessionManager(sessionAgentId);
 		manager.updateSession(session.id, {
 			messageCount: 3,
 			lastMessagePreview: "Hello",
 		});
 
 		const clearRes = await fetch(
-			`http://localhost:${port}/api/sessions/${encodeURIComponent(session.id)}/messages?agentId=main`,
+			`http://localhost:${port}/api/sessions/${encodeURIComponent(session.id)}/messages?agentId=${encodeURIComponent(sessionAgentId)}`,
 			{ method: "DELETE" },
 		);
 		expect(clearRes.ok).toBe(true);

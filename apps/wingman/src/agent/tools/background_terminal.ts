@@ -1,5 +1,5 @@
 import { tool } from "langchain";
-import { z } from "zod";
+import * as z from "zod";
 import { DEFAULT_BLOCKED_COMMANDS } from "./command_execute.js";
 import type {
 	TerminalSessionManager,

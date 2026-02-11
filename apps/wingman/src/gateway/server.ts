@@ -275,6 +275,12 @@ export class GatewayServer {
 					return undefined;
 				}
 
+				// Always serve API routes from the gateway port, even when the
+				// control UI is hosted on a separate port.
+				if (url.pathname.startsWith("/api/")) {
+					return this.handleUiRequest(req);
+				}
+
 				const webhookResponse = await handleWebhookInvoke(
 					this.getHttpContext(),
 					this.webhookStore,

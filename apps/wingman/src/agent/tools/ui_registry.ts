@@ -1,5 +1,5 @@
 import { tool } from "@langchain/core/tools";
-import { z } from "zod";
+import * as z from "zod";
 import {
 	getExpectedRegistryPaths,
 	loadUiRegistry,

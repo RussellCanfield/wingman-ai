@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { HooksConfigSchema } from "@/agent/middleware/hooks/types.js";
 import { MCPServersConfigSchema } from "@/types/mcp.js";
 import { AgentVoiceConfigSchema } from "@/types/voice.js";

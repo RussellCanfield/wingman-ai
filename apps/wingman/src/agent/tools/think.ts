@@ -1,5 +1,5 @@
 import { tool } from "@langchain/core/tools";
-import { z } from "zod";
+import * as z from "zod";
 
 export const readFileSchema = z.object({
 	thought: z.object({

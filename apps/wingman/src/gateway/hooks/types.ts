@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type { RoutingInfo } from "../types.js";
 
 export const HookDeliverSchema = z.object({

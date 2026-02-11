@@ -1,5 +1,5 @@
 import { tool } from "langchain";
-import { z } from "zod";
+import * as z from "zod";
 import { spawn } from "node:child_process";
 
 /**
