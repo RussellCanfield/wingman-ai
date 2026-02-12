@@ -7,10 +7,13 @@ For Windows x64 publishing, see `apps/desktop/docs/windows-publish.md`.
 Run from repo root:
 
 ```bash
-IDENTITY="Developer ID Application: Your Company (TEAMID)" \
 NOTARY_PROFILE="wingman-notary" \
 bun run --cwd apps/desktop publish:macos
 ```
+
+`IDENTITY` is optional if exactly one `Developer ID Application` certificate is
+available in Keychain. If multiple are installed, pass `--identity` (or set
+`IDENTITY` / `MACOS_SIGN_IDENTITY`) to choose one explicitly.
 
 The publish script is at `apps/desktop/scripts/macos-publish.sh` and supports:
 `build`, `sign`, `notarize`, `verify`, and `all`.

@@ -12,6 +12,7 @@ APP_PATH="${APP_PATH:-$BUNDLE_DIR/macos/$APP_NAME.app}"
 DMG_PATH="${DMG_PATH:-}"
 STAGE_DIR="${STAGE_DIR:-/tmp/wingman-sign-stage}"
 IDENTITY="${IDENTITY:-}"
+IDENTITY="${IDENTITY:-${MACOS_SIGN_IDENTITY:-}}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-wingman-notary}"
 SKIP_WEB_BUILD=0
 DRY_RUN=0
@@ -41,7 +42,7 @@ Options:
   --help                     Show this message
 
 Environment variables:
-  IDENTITY, NOTARY_PROFILE, APP_PATH, DMG_PATH, STAGE_DIR, APP_NAME
+  IDENTITY, MACOS_SIGN_IDENTITY, NOTARY_PROFILE, APP_PATH, DMG_PATH, STAGE_DIR, APP_NAME
 EOF
 }
 
@@ -96,10 +97,44 @@ build_artifacts() {
 	run bun run --cwd "$DESKTOP_DIR" tauri:build
 }
 
+resolve_signing_identity() {
+	if [[ -n "$IDENTITY" ]]; then
+		return
+	fi
+
+	require_cmd security
+
+	local count=0
+	local identities_text=""
+
+	identities_text="$(
+		security find-identity -v -p codesigning 2>/dev/null \
+			| sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' \
+			| awk '!seen[$0]++'
+	)"
+
+	if [[ -z "$identities_text" ]]; then
+		fail "No Developer ID Application identity found. Pass --identity or set IDENTITY."
+	fi
+
+	count="$(printf '%s\n' "$identities_text" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+	if [[ "$count" -gt 1 ]]; then
+		log "Found multiple Developer ID Application identities:"
+		while IFS= read -r identity; do
+			[[ -n "$identity" ]] || continue
+			log "  - $identity"
+		done <<< "$identities_text"
+		fail "Multiple signing identities found. Pass --identity to choose one."
+	fi
+
+	IDENTITY="$identities_text"
+	log "Using signing identity: $IDENTITY"
+}
+
 sign_artifacts() {
 	require_cmd codesign
 	require_cmd hdiutil
-	[[ -n "$IDENTITY" ]] || fail "--identity is required for sign"
+	resolve_signing_identity
 	[[ -d "$APP_PATH" ]] || fail "App bundle not found: $APP_PATH"
 	resolve_dmg_path
 
