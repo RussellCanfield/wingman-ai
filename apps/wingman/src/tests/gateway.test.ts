@@ -42,6 +42,9 @@ vi.mock("@/cli/core/agentInvoker.js", () => ({
 				this.outputManager?.emitAgentError?.("Request cancelled");
 				return { cancelled: true };
 			}
+			if (content === "return-no-event") {
+				return { streaming: true };
+			}
 			this.outputManager?.emitAgentComplete?.({ streaming: true });
 			return { streaming: true };
 		}
@@ -144,6 +147,30 @@ describeIfBun("Gateway", () => {
 				resolve(msg);
 			};
 			ws.addEventListener("message", handler);
+		});
+
+	const collectMessages = (
+		ws: WebSocket,
+		predicate: (msg: any) => boolean,
+		durationMs = 600,
+	) =>
+		new Promise<any[]>((resolve) => {
+			const matches: any[] = [];
+			const handler = (event: any) => {
+				let msg: any;
+				try {
+					msg = JSON.parse(event.data as string);
+				} catch {
+					return;
+				}
+				if (!predicate(msg)) return;
+				matches.push(msg);
+			};
+			ws.addEventListener("message", handler);
+			setTimeout(() => {
+				ws.removeEventListener("message", handler);
+				resolve(matches);
+			}, durationMs);
 		});
 
 	it("should start the gateway server", async () => {
@@ -520,6 +547,74 @@ describeIfBun("Gateway", () => {
 		requester.close();
 	});
 
+	it("should emit agent-complete when invocation returns without terminal output events", async () => {
+		const requester = await connectClient(
+			"session-complete-fallback-requester",
+		);
+		const requestId = "req-complete-fallback";
+		const sessionId = "session-complete-fallback";
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: requestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "return-no-event",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const completeMsg = await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-complete",
+		);
+		expect(completeMsg.payload?.sessionId).toBe(sessionId);
+		expect(completeMsg.payload?.agentId).toBe("main");
+		expect(completeMsg.payload?.result).toEqual({ streaming: true });
+
+		requester.close();
+	});
+
+	it("should emit a single agent-complete terminal event per request", async () => {
+		const requester = await connectClient("session-single-complete-requester");
+		const requestId = "req-single-complete";
+		const sessionId = "session-single-complete";
+		const completionEventsPromise = collectMessages(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-complete",
+			1000,
+		);
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: requestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "single-complete",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const completionEvents = await completionEventsPromise;
+		expect(completionEvents).toHaveLength(1);
+		expect(completionEvents[0].payload?.sessionId).toBe(sessionId);
+		expect(completionEvents[0].payload?.agentId).toBe("main");
+
+		requester.close();
+	});
+
 	it("should cancel an in-flight agent request", async () => {
 		const requester = await connectClient("session-cancel-requester");
 		const requestId = "req-cancel-test";
@@ -713,6 +808,17 @@ describeIfBun("Gateway", () => {
 			10000,
 		);
 		expect(cancelAck.payload?.status).toBe("cancelled_queued");
+		const cancelEvent = await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === secondRequestId &&
+				msg.payload?.type === "agent-error" &&
+				/cancel/i.test(String(msg.payload?.error || "")),
+			10000,
+		);
+		expect(cancelEvent.payload?.sessionId).toBe(sessionId);
+		expect(cancelEvent.payload?.agentId).toBe("main");
 
 		await waitForMessage(
 			requester,

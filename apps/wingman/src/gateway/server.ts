@@ -859,18 +859,33 @@ export class GatewayServer {
 		this.activeSessionRequests.set(sessionQueueKey, msg.id!);
 		const outputManager = new OutputManager("interactive");
 		let emittedAgentError = false;
+		let streamedCompletionResult: unknown = undefined;
 		const outputHandler = (event: unknown) => {
 			const payloadWithSession = this.attachSessionContext(
 				event,
 				sessionKey,
 				agentId,
 			);
-			if (
+			const payloadType =
 				payloadWithSession &&
 				typeof payloadWithSession === "object" &&
 				!Array.isArray(payloadWithSession) &&
-				(payloadWithSession as Record<string, unknown>).type === "agent-error"
-			) {
+					typeof (payloadWithSession as Record<string, unknown>).type === "string"
+						? ((payloadWithSession as Record<string, unknown>).type as string)
+						: "";
+			if (payloadType === "agent-complete") {
+				if (
+					payloadWithSession &&
+					typeof payloadWithSession === "object" &&
+					!Array.isArray(payloadWithSession)
+				) {
+					streamedCompletionResult = (
+						payloadWithSession as Record<string, unknown>
+					).result;
+				}
+				return;
+			}
+			if (payloadType === "agent-error") {
 				emittedAgentError = true;
 			}
 			const baseMessage: GatewayMessage = {
@@ -907,40 +922,74 @@ export class GatewayServer {
 			abortController,
 		});
 
-			try {
-				await invoker.invokeAgent(agentId, content, sessionKey, attachments, {
+		try {
+			const invocationResult = await invoker.invokeAgent(
+				agentId,
+				content,
+				sessionKey,
+				attachments,
+				{
 					signal: abortController.signal,
+				},
+			);
+			if (msg.id) {
+				sessionManager.clearPendingMessagesForRequest(sessionKey, msg.id);
+			}
+			if (emittedAgentError) {
+				return;
+			}
+			const invocationCancelled =
+				abortController.signal.aborted ||
+				(typeof invocationResult === "object" &&
+					invocationResult !== null &&
+					!Array.isArray(invocationResult) &&
+					(invocationResult as Record<string, unknown>).cancelled === true);
+			if (invocationCancelled) {
+				this.sendAgentError(ws, msg.id!, "Request cancelled", {
+					sessionId: sessionKey,
+					agentId,
+					broadcastToSession: true,
+					exclude: ws,
 				});
-				if (msg.id) {
-					sessionManager.clearPendingMessagesForRequest(sessionKey, msg.id);
-				}
-			} catch (error) {
-				this.logger.error("Agent invocation failed", error);
-				const message = error instanceof Error ? error.message : String(error);
-				if (msg.id) {
-					try {
-						sessionManager.persistPendingMessage({
-							sessionId: sessionKey,
-							requestId: msg.id,
-							message: {
-								id: msg.id,
-								role: "assistant",
-								content: message,
-								createdAt: Date.now(),
-							},
-						});
-					} catch (persistError) {
-						this.logger.warn(
-							"Failed to persist pending assistant error message",
-							persistError,
-						);
-					}
-				}
-				if (!emittedAgentError) {
-					const stack = error instanceof Error ? error.stack : undefined;
-					this.sendAgentError(ws, msg.id!, message, {
+				return;
+			}
+			const completionResult =
+				streamedCompletionResult === undefined
+					? invocationResult
+					: streamedCompletionResult;
+			this.sendAgentComplete(ws, msg.id!, completionResult, {
+				sessionId: sessionKey,
+				agentId,
+				broadcastToSession: true,
+				exclude: ws,
+			});
+		} catch (error) {
+			this.logger.error("Agent invocation failed", error);
+			const message = error instanceof Error ? error.message : String(error);
+			if (msg.id) {
+				try {
+					sessionManager.persistPendingMessage({
 						sessionId: sessionKey,
-						agentId,
+						requestId: msg.id,
+						message: {
+							id: msg.id,
+							role: "assistant",
+							content: message,
+							createdAt: Date.now(),
+						},
+					});
+				} catch (persistError) {
+					this.logger.warn(
+						"Failed to persist pending assistant error message",
+						persistError,
+					);
+				}
+			}
+			if (!emittedAgentError) {
+				const stack = error instanceof Error ? error.stack : undefined;
+				this.sendAgentError(ws, msg.id!, message, {
+					sessionId: sessionKey,
+					agentId,
 					stack,
 					broadcastToSession: true,
 					exclude: ws,
@@ -1050,6 +1099,12 @@ export class GatewayServer {
 					status: "cancelled_queued",
 				},
 				timestamp: Date.now(),
+			});
+			this.sendAgentError(ws, requestId, "Request cancelled", {
+				sessionId: queued.sessionKey,
+				agentId: queued.agentId,
+				broadcastToSession: true,
+				exclude: ws,
 			});
 			return;
 		}
@@ -1370,12 +1425,38 @@ export class GatewayServer {
 	/**
 	 * Send a message to a WebSocket
 	 */
-	private sendMessage(ws: GatewaySocket, message: GatewayMessage): void {
+	private sendMessage(ws: GatewaySocket, message: GatewayMessage): boolean {
 		try {
-			ws.send(JSON.stringify(message));
+			const result = ws.send(JSON.stringify(message));
+			if (typeof result === "number" && result <= 0) {
+				return false;
+			}
+			return true;
 		} catch (error) {
 			this.log("error", "Failed to send message", error);
+			return false;
 		}
+	}
+
+	private sendMessageWithRetry(
+		ws: GatewaySocket,
+		message: GatewayMessage,
+		attempt = 0,
+	): void {
+		if (this.sendMessage(ws, message)) {
+			return;
+		}
+		if (attempt >= 2) {
+			this.log("warn", "Dropping websocket message after retry attempts", {
+				type: message.type,
+				id: message.id,
+			});
+			return;
+		}
+		const delayMs = 25 * (attempt + 1);
+		setTimeout(() => {
+			this.sendMessageWithRetry(ws, message, attempt + 1);
+		}, delayMs);
 	}
 
 	/**
@@ -1392,6 +1473,50 @@ export class GatewayServer {
 			payload: errorPayload,
 			timestamp: Date.now(),
 		});
+	}
+
+	private sendAgentComplete(
+		ws: GatewaySocket,
+		requestId: string,
+		result: unknown,
+		options?: {
+			sessionId?: string;
+			agentId?: string;
+			broadcastToSession?: boolean;
+			exclude?: GatewaySocket;
+		},
+	): void {
+		let payload: Record<string, unknown> = {
+			type: "agent-complete",
+			result: result ?? null,
+			timestamp: new Date().toISOString(),
+		};
+		if (options?.sessionId && options?.agentId) {
+			payload = this.attachSessionContext(
+				payload,
+				options.sessionId,
+				options.agentId,
+			) as Record<string, unknown>;
+		}
+
+		const baseMessage: GatewayMessage = {
+			type: "event:agent",
+			id: requestId,
+			payload,
+			timestamp: Date.now(),
+		};
+		this.sendMessageWithRetry(ws, {
+			...baseMessage,
+			clientId: ws.data.clientId,
+		});
+		if (options?.broadcastToSession && options.sessionId) {
+			this.broadcastSessionEvent(
+				options.sessionId,
+				baseMessage,
+				options.exclude,
+				true,
+			);
+		}
 	}
 
 	private sendAgentError(
@@ -1428,7 +1553,7 @@ export class GatewayServer {
 			payload,
 			timestamp: Date.now(),
 		};
-		this.sendMessage(ws, {
+		this.sendMessageWithRetry(ws, {
 			...baseMessage,
 			clientId: ws.data.clientId,
 		});
@@ -1437,6 +1562,7 @@ export class GatewayServer {
 				options.sessionId,
 				baseMessage,
 				options.exclude,
+				true,
 			);
 		}
 	}
@@ -1483,6 +1609,7 @@ export class GatewayServer {
 		sessionId: string,
 		message: GatewayMessage,
 		exclude?: GatewaySocket,
+		reliable = false,
 	): number {
 		const subscribers = this.sessionSubscriptions.get(sessionId);
 		if (!subscribers || subscribers.size === 0) {
@@ -1494,7 +1621,11 @@ export class GatewayServer {
 			if (exclude && ws === exclude) {
 				continue;
 			}
-			this.sendMessage(ws, message);
+			if (reliable) {
+				this.sendMessageWithRetry(ws, message);
+			} else {
+				this.sendMessage(ws, message);
+			}
 			sent++;
 		}
 		return sent;
@@ -2190,7 +2321,9 @@ function buildAttachmentPreview(
 	return count > 1 ? "Image attachments" : "Image attachment";
 }
 
-function mapAttachmentsForPendingMessage(attachments: MediaAttachment[]): Array<{
+function mapAttachmentsForPendingMessage(
+	attachments: MediaAttachment[],
+): Array<{
 	kind: "image" | "audio" | "file";
 	dataUrl: string;
 	name?: string;

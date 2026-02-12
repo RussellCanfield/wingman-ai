@@ -108,6 +108,10 @@ workspace to `gateway.fsRoots`, and copies bundled agent templates from the pack
 `.wingman/agents/` into `.wingman/agents/` in the workspace. It can optionally store
 provider credentials and set a default model.
 
+Bundled templates include specialist options such as `coding-v2` and `game-dev`.
+The `game-dev` template includes sub-agents for art generation, asset refinement,
+planning, and UI, with explicit UV/geometry-aware texture guidance in its art flow.
+
 When run interactively, the init wizard lets users pick a default agent and choose
 which bundled agents to copy.
 

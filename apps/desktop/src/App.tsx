@@ -1102,10 +1102,13 @@ function useGatewayWorkspace(
 		agentDetailsRef.current = workspace.agentDetailsById;
 	}, [workspace.agentDetailsById]);
 
-	const refreshSessionsData = useCallback(async () => {
+	const refreshSessionsData = useCallback(async (options?: { silent?: boolean }) => {
 		return runWithInFlightGuard(sessionsRefreshInFlightRef, async () => {
 			const startedAt = performance.now();
-			setWorkspace((prev) => ({ ...prev, sessionsLoading: true }));
+			const silent = options?.silent === true;
+			if (!silent) {
+				setWorkspace((prev) => ({ ...prev, sessionsLoading: true }));
+			}
 			try {
 				const sessions = await fetchSessions(settings, { limit: 200 });
 				setWorkspace((prev) => {
@@ -1131,12 +1134,14 @@ function useGatewayWorkspace(
 			} catch (error) {
 				logEvent(`Failed to load sessions: ${String(error)}`);
 			} finally {
-				setWorkspace((prev) => ({ ...prev, sessionsLoading: false }));
-				const slowEvent = formatSlowLoadEvent(
-					"sessions",
-					performance.now() - startedAt,
-				);
-				if (slowEvent) logEvent(slowEvent);
+				if (!silent) {
+					setWorkspace((prev) => ({ ...prev, sessionsLoading: false }));
+					const slowEvent = formatSlowLoadEvent(
+						"sessions",
+						performance.now() - startedAt,
+					);
+					if (slowEvent) logEvent(slowEvent);
+				}
 			}
 		});
 	}, [logEvent, settings]);
@@ -1461,7 +1466,7 @@ function useGatewayWorkspace(
 				finalizePendingRequest(requestId);
 				requestThreadRef.current.delete(requestId);
 				requestMessageRef.current.delete(requestId);
-				void refreshSessionsData();
+				void refreshSessionsData({ silent: true });
 			}
 		},
 		[
@@ -3116,7 +3121,7 @@ function ChatScreen({
 				<div className="relative mt-4">
 					<div
 						ref={messageViewportRef}
-						className="max-h-[46vh] space-y-3 overflow-auto pr-1"
+						className="h-[clamp(260px,46vh,540px)] space-y-3 overflow-auto pr-1"
 					>
 						{activeThreadMessagesLoading ? (
 							<div className="rounded-2xl border border-white/10 bg-slate-950/50 p-6 text-center text-sm text-slate-300">

@@ -57,6 +57,7 @@ type ParsedGatewayInput = {
 	content: string;
 	attachments?: unknown;
 	agentId?: string;
+	requestId?: string;
 };
 
 class AsyncEventQueue<T> {
@@ -175,11 +176,13 @@ const parseGatewayInput = (input: unknown): ParsedGatewayInput => {
 		? inputRecord.attachments
 		: undefined;
 	const agentId = asString(inputRecord.agentId);
+	const requestId = asString(inputRecord.requestId);
 
 	return {
 		content: content || "",
 		attachments,
 		agentId,
+		requestId,
 	};
 };
 
@@ -252,10 +255,10 @@ export const createGatewayLangGraphTransport = (
 
 	return {
 		async stream(payload: StreamPayload) {
-			const requestId = requestIdFactory();
+			const parsedInput = parseGatewayInput(payload.input);
+			const requestId = parsedInput.requestId || requestIdFactory();
 			const threadId =
 				asString(payload?.config?.configurable?.thread_id) || options.sessionId;
-			const parsedInput = parseGatewayInput(payload.input);
 			const queue = new AsyncEventQueue<LangGraphEvent>();
 			let unsubscribed = false;
 

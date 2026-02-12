@@ -88,12 +88,11 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).not.toContain('aria-label="Send prompt"');
 	});
 
-	it("keeps streaming indicator visible when override is false but stream is active", () => {
+	it("keeps streaming indicator visible while stream is active", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
 				...baseProps,
 				isStreaming: true,
-				showStreamingIndicator: false,
 			}),
 		);
 
@@ -138,16 +137,15 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).not.toContain('data-testid="streaming-indicator"');
 	});
 
-	it("shows streaming glow when indicator override is enabled", () => {
+	it("shows no streaming glow when not streaming", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
 				...baseProps,
 				isStreaming: false,
-				showStreamingIndicator: true,
 			}),
 		);
 
-		expect(html).toContain('data-testid="streaming-indicator"');
+		expect(html).not.toContain('data-testid="streaming-indicator"');
 	});
 
 	it("renders image preview modal above side panels", () => {

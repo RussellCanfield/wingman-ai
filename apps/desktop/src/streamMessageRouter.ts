@@ -55,6 +55,10 @@ const resolveOrCreateTarget = (
 	const requestMap = getRequestMap(state, requestId);
 	const existing = requestMap.get(runKey);
 	if (existing) return existing;
+	if (requestMap.size === 0) {
+		requestMap.set(runKey, fallbackMessageId);
+		return fallbackMessageId;
+	}
 	const derivedId =
 		runKey === fallbackMessageId
 			? fallbackMessageId

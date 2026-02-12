@@ -43,7 +43,7 @@ describe("streamMessageRouter", () => {
 		});
 
 		expect(first).toBe(second);
-		expect(first).not.toBe("assistant-2");
+		expect(first).toBe("assistant-2");
 	});
 
 	it("routes different runs to different derived message ids", () => {
@@ -62,9 +62,10 @@ describe("streamMessageRouter", () => {
 		});
 
 		expect(first).not.toBe(second);
+		expect(first).toBe("assistant-3");
 	});
 
-	it("routes non-delta no-id events to unique derived messages", () => {
+	it("anchors first non-delta no-id event to fallback and derives additional targets", () => {
 		const state = new Map<string, Map<string, string>>();
 		const first = resolveTextMessageTargetId({
 			state,
@@ -88,7 +89,7 @@ describe("streamMessageRouter", () => {
 			eventKey: "evt-1",
 		});
 
-		expect(first).not.toBe("assistant-3a");
+		expect(first).toBe("assistant-3a");
 		expect(second).not.toBe("assistant-3a");
 		expect(first).not.toBe(second);
 		expect(firstAgain).toBe(first);

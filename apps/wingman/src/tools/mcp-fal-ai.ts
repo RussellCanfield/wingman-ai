@@ -43,7 +43,7 @@ const FAL_REVIEW_MODE = normalizeReviewMode(process.env.FAL_MCP_REVIEW_MODE);
 const FAL_MODELS = {
 	imageOrTexture:
 		process.env.FAL_MODEL_IMAGE_OR_TEXTURE?.trim() ||
-		"fal-ai/kling-image/v3/text-to-image",
+		"fal-ai/nano-banana-pro",
 	imageEdit:
 		process.env.FAL_MODEL_IMAGE_EDIT?.trim() ||
 		"fal-ai/kling-image/v3/image-to-image",

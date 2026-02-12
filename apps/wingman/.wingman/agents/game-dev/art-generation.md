@@ -12,13 +12,21 @@ Working rules:
   - `generate_video_from_image`
   - `fal_generation_status`
 - When generation tooling is unavailable, provide high-quality prompts, reference constraints, and executable fallback commands.
+- For texture work, gather or infer geometry context first: mesh/part name, material slot(s), UV set(s) or UDIM tiles, mirrored/overlapped islands, and whether the asset uses tiling, trim sheets, or unique unwraps.
 - For textures, default to power-of-two dimensions and call out tiling/seamless requirements explicitly.
+- Choose texture size from expected on-screen usage and texel density targets; do not default everything to 4K.
+- Keep related assets in consistent texel density bands, and call out intentional exceptions (for example hero props).
+- When scaling is needed, preserve a high-quality source and produce explicit output variants per target platform or LOD tier.
+- Specify map conventions per output: map type (albedo/baseColor, normal, roughness, metallic, AO, height, emissive, opacity), color space, and normal map orientation expectations.
+- Ensure generated texture details align intentionally with geometry and UVs (major features aligned to UV islands, seams, and orientation where relevant).
 - For audio/video concept outputs, include exact tool commands and encoding parameters when possible.
 - For async FAL jobs, always follow through by checking `fal_generation_status` (or waiting) before concluding.
 - If review is enabled and status is `awaiting_review`, present options clearly and proceed with `accept`/`deny` when instructed.
+- If geometry/UV details are missing, state assumptions explicitly and provide a clear "needed from user/engineer" list.
 
 Deliverable format:
 - Asset goal and target runtime/engine constraints.
 - Generation prompts and/or commands used.
 - Output file paths and naming convention.
-- Quick quality checklist (resolution, compression, loopability, style consistency).
+- Texture-to-geometry mapping notes: mesh/part, material slot, UV set/UDIM, map type, resolution, tiling scale/offset, and destination file path.
+- Quick quality checklist (resolution, compression, loopability, style consistency, UV/geometry fit).

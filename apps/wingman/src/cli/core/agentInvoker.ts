@@ -574,7 +574,10 @@ export const trackRootLangGraphRunId = (
 		return currentRootLangGraphRunId;
 	}
 	const eventRecord = extractStreamEventRecord(chunk);
-	if (!eventRecord || !isRootLangGraphChainEvent(eventRecord, "on_chain_start")) {
+	if (
+		!eventRecord ||
+		!isRootLangGraphChainEvent(eventRecord, "on_chain_start")
+	) {
 		return currentRootLangGraphRunId;
 	}
 	return extractEventRunId(eventRecord) || currentRootLangGraphRunId;
@@ -584,44 +587,36 @@ export const isRootLangGraphTerminalEvent = (
 	chunk: unknown,
 	rootLangGraphRunId?: string,
 ): boolean => {
-	if (!rootLangGraphRunId) return false;
 	const eventRecord = extractStreamEventRecord(chunk);
 	if (!eventRecord || !isRootLangGraphChainEvent(eventRecord, "on_chain_end")) {
 		return false;
 	}
+	if (!rootLangGraphRunId) {
+		return true;
+	}
 	const chunkRunId = extractEventRunId(eventRecord);
+	if (!chunkRunId) {
+		return true;
+	}
 	return Boolean(chunkRunId && chunkRunId === rootLangGraphRunId);
 };
 
-type StreamingCompletionOutcome =
-	| {
-			status: "blocked";
-			reason: "stream_error" | "empty_stream_response";
-			message: string;
-	  }
-	| { status: "ok" };
-
-type EvaluateStreamingCompletionInput = {
-	sawAssistantText: boolean;
-	fallbackText?: string;
-	streamErrorMessage?: string;
-};
-
-export const evaluateStreamingCompletion = (
-	input: EvaluateStreamingCompletionInput,
-): StreamingCompletionOutcome => {
-	if (!input.sawAssistantText && !input.fallbackText) {
-		const message = input.streamErrorMessage
-			? `Model call failed: ${input.streamErrorMessage}`
-			: "Model completed without a response. Check provider logs for request errors.";
-		return {
-			status: "blocked",
-			reason: input.streamErrorMessage ? "stream_error" : "empty_stream_response",
-			message,
-		};
+export const emitCompletionAndContinuePostProcessing = (input: {
+	outputManager: Pick<OutputManager, "emitAgentComplete">;
+	result: unknown;
+	postProcess?: () => Promise<void>;
+	logger?: Pick<Logger, "debug">;
+}): void => {
+	input.outputManager.emitAgentComplete(input.result);
+	if (!input.postProcess) {
+		return;
 	}
-
-	return { status: "ok" };
+	void input.postProcess().catch((error) => {
+		input.logger?.debug(
+			"Failed post-completion processing for streamed agent response",
+			error,
+		);
+	});
 };
 
 export class AgentInvoker {
@@ -686,13 +681,7 @@ export class AgentInvoker {
 		let cancellationHandled = false;
 		let activeToolName: string | null = null;
 		let lastToolName: string | null = null;
-		let sawAssistantText = false;
-		let streamErrorMessage: string | undefined;
 		let rootLangGraphRunId: string | undefined;
-		let preInvocationMessages: Array<{
-			role?: unknown;
-			content?: unknown;
-		}> | null = null;
 		const isCancelled = () => options?.signal?.aborted === true;
 		try {
 			const hookSessionId = sessionId || uuidv4();
@@ -937,18 +926,6 @@ export class AgentInvoker {
 			// Use streaming if session manager is available, otherwise fall back to invoke
 			if (this.sessionManager && sessionId) {
 				this.logger.debug(`Using streaming with session: ${sessionId}`);
-				try {
-					const messages = await this.sessionManager.listMessages(sessionId);
-					preInvocationMessages = messages.map((message) => ({
-						role: message.role,
-						content: message.content,
-					}));
-				} catch (stateError) {
-					this.logger.debug(
-						"Failed to capture pre-invocation session state",
-						stateError,
-					);
-				}
 
 				// Stream the agent response
 				const stream = await (standaloneAgent as any).streamEvents(
@@ -973,12 +950,6 @@ export class AgentInvoker {
 						rootLangGraphRunId,
 						chunk,
 					);
-					if (!sawAssistantText && chunkHasAssistantText(chunk)) {
-						sawAssistantText = true;
-					}
-					if (!streamErrorMessage) {
-						streamErrorMessage = detectStreamErrorMessage(chunk);
-					}
 					const toolEvent = detectToolEventContext(chunk);
 					if (toolEvent) {
 						lastToolName = toolEvent.toolName;
@@ -1013,50 +984,13 @@ export class AgentInvoker {
 					return { cancelled: true };
 				}
 
-				let fallbackText: string | undefined;
-				if (
-					!sawAssistantText &&
-					this.sessionManager &&
-					sessionId &&
-					preInvocationMessages
-				) {
-					try {
-						const sessionMessages =
-							await this.sessionManager.listMessages(sessionId);
-						fallbackText = selectStreamingFallbackText(
-							preInvocationMessages,
-							sessionMessages.map((message) => ({
-								role: message.role,
-								content: message.content,
-							})),
-						);
-					} catch (stateError) {
-						this.logger.debug(
-							"Failed to derive streaming fallback text from session state",
-							stateError,
-						);
-					}
-				}
-				const completionOutcome = evaluateStreamingCompletion({
-					sawAssistantText,
-					fallbackText,
-					streamErrorMessage,
-				});
-				if (completionOutcome.status === "blocked") {
-					this.logger.warn(completionOutcome.message);
-					this.outputManager.emitAgentError(completionOutcome.message);
-					return {
-						blocked: true,
-						reason: completionOutcome.reason,
-					};
-				}
-				this.logger.info("Agent streaming completed successfully", {
-					usedFallbackText: Boolean(fallbackText),
-				});
-				await this.materializeSessionImages(sessionId);
-				this.outputManager.emitAgentComplete({
-					streaming: true,
-					...(fallbackText ? { fallbackText } : {}),
+				this.logger.info("Agent streaming completed successfully");
+				const completionPayload = { streaming: true };
+				emitCompletionAndContinuePostProcessing({
+					outputManager: this.outputManager,
+					result: completionPayload,
+					postProcess: () => this.materializeSessionImages(sessionId),
+					logger: this.logger,
 				});
 				return { streaming: true };
 			} else {
@@ -1091,8 +1025,12 @@ export class AgentInvoker {
 				}
 
 				this.logger.info("Agent completed successfully");
-				await this.materializeSessionImages(sessionId);
-				this.outputManager.emitAgentComplete(result);
+				emitCompletionAndContinuePostProcessing({
+					outputManager: this.outputManager,
+					result,
+					postProcess: () => this.materializeSessionImages(sessionId),
+					logger: this.logger,
+				});
 
 				return result;
 			}
@@ -1151,14 +1089,7 @@ export class AgentInvoker {
 
 	private async materializeSessionImages(sessionId?: string): Promise<void> {
 		if (!this.sessionManager || !sessionId) return;
-		try {
-			await this.sessionManager.listMessages(sessionId);
-		} catch (error) {
-			this.logger.debug(
-				"Failed to materialize session image attachments",
-				error,
-			);
-		}
+		await this.sessionManager.listMessages(sessionId);
 	}
 }
 

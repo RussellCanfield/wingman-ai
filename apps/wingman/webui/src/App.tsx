@@ -49,6 +49,11 @@ import { buildRoutineAgents } from "./utils/agentOptions";
 import { appendAssistantErrorFeedback } from "./utils/assistantError";
 import { mergeAssistantStreamText } from "./utils/assistantStream";
 import {
+	drainAssistantContentUpdates,
+	queueAssistantContentUpdate,
+	type QueuedAssistantUpdate,
+} from "./utils/assistantUpdateQueue";
+import {
 	FILE_INPUT_ACCEPT,
 	isPdfUploadFile,
 	isSupportedTextUploadFile,
@@ -56,7 +61,11 @@ import {
 } from "./utils/fileUpload";
 import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
-import { isLocallyTrackedRequest } from "./utils/requestTracking";
+import {
+	isLocallyTrackedRequest,
+	resolveTerminalRequestId,
+} from "./utils/requestTracking";
+import { shouldMarkRequestActive } from "./utils/requestLifecycle";
 import {
 	buildCancelGatewayMessage,
 	resolveStoppableRequestId,
@@ -67,11 +76,6 @@ import {
 	resolveToolMessageTargetId,
 } from "./utils/streamMessageRouter";
 import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
-import {
-	DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
-	DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS,
-	shouldRecoverStream,
-} from "./utils/streamRecovery";
 import { appendLocalPromptMessagesToThread } from "./utils/threadState";
 import {
 	resolveSpeechVoice,
@@ -145,8 +149,6 @@ export const App: React.FC = () => {
 	const [health, setHealth] = useState<GatewayHealth>({});
 	const [stats, setStats] = useState<GatewayStats>({});
 	const [isStreaming, setIsStreaming] = useState<boolean>(false);
-	const [showStreamingIndicator, setShowStreamingIndicator] =
-		useState<boolean>(false);
 	const [queuedPromptCount, setQueuedPromptCount] = useState<number>(0);
 	const [threads, setThreads] = useState<Thread[]>([]);
 	const [activeThreadId, setActiveThreadId] = useState<string>("");
@@ -203,11 +205,10 @@ export const App: React.FC = () => {
 	const autoConnectFailureRef = useRef<boolean>(false);
 	const activeRequestIdRef = useRef<string | null>(null);
 	const pendingRequestIdsRef = useRef<Set<string>>(new Set());
-	const queuedStreamRequestIdsRef = useRef<string[]>([]);
-	const streamStartedAtRef = useRef<number>(0);
-	const streamLastActivityRef = useRef<number>(0);
-	const streamRecoveryTimerRef = useRef<number | null>(null);
-	const runningToolEventsRef = useRef<Map<string, Set<string>>>(new Map());
+	const queuedAssistantUpdatesRef = useRef<Map<string, QueuedAssistantUpdate>>(
+		new Map(),
+	);
+	const assistantFlushFrameRef = useRef<number | null>(null);
 	const taskDelegationRef = useRef<
 		Map<string, Map<string, TaskDelegationContext>>
 	>(new Map());
@@ -283,44 +284,6 @@ export const App: React.FC = () => {
 		ws.send(JSON.stringify(message));
 	}, []);
 
-	const clearStreamRecoveryTimer = useCallback(() => {
-		if (streamRecoveryTimerRef.current !== null) {
-			window.clearTimeout(streamRecoveryTimerRef.current);
-			streamRecoveryTimerRef.current = null;
-		}
-	}, []);
-
-	const markStreamActivity = useCallback((requestId: string) => {
-		if (activeRequestIdRef.current !== requestId) return;
-		streamLastActivityRef.current = Date.now();
-	}, []);
-
-	const updateRunningToolState = useCallback(
-		(requestId: string, events: ToolEvent[]): boolean => {
-			const running = new Set(
-				runningToolEventsRef.current.get(requestId) || [],
-			);
-			for (const event of events) {
-				if (!event?.id) continue;
-				if (event.status === "running") {
-					running.add(event.id);
-					continue;
-				}
-				if (event.status === "completed" || event.status === "error") {
-					running.delete(event.id);
-				}
-			}
-
-			if (running.size > 0) {
-				runningToolEventsRef.current.set(requestId, running);
-			} else {
-				runningToolEventsRef.current.delete(requestId);
-			}
-			return running.size > 0;
-		},
-		[],
-	);
-
 	const syncRequestStreamingState = useCallback(() => {
 		const pendingSize = pendingRequestIdsRef.current.size;
 		const hasActiveRequest = Boolean(activeRequestIdRef.current);
@@ -328,80 +291,25 @@ export const App: React.FC = () => {
 		setQueuedPromptCount(Math.max(pendingSize - (hasActiveRequest ? 1 : 0), 0));
 	}, []);
 
-	const scheduleStreamRecoveryCheck = useCallback(() => {
-		clearStreamRecoveryTimer();
-		if (!activeRequestIdRef.current) return;
-
-		const check = () => {
-			const activeRequestId = activeRequestIdRef.current;
-			if (!activeRequestId) return;
-			const hasRunningTools =
-				(runningToolEventsRef.current.get(activeRequestId)?.size || 0) > 0;
-
-			if (
-				shouldRecoverStream({
-					activeRequestId,
-					lastActivityAt: streamLastActivityRef.current,
-					startedAt: streamStartedAtRef.current,
-					hasRunningTools,
-					now: Date.now(),
-					idleTimeoutMs: DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS,
-					hardTimeoutMs: DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
-				})
-			) {
-				pendingRequestIdsRef.current.clear();
-				activeRequestIdRef.current = null;
-				streamStartedAtRef.current = 0;
-				streamLastActivityRef.current = 0;
-				runningToolEventsRef.current.clear();
-				syncRequestStreamingState();
-				setShowStreamingIndicator(false);
-				logEvent(
-					"Recovered from a stale stream on this device. Prompt input is re-enabled.",
-				);
-				return;
-			}
-
-			streamRecoveryTimerRef.current = window.setTimeout(
-				check,
-				Math.max(750, Math.floor(DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS / 2)),
-			);
-		};
-
-		streamRecoveryTimerRef.current = window.setTimeout(
-			check,
-			Math.max(750, Math.floor(DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS / 2)),
-		);
-	}, [clearStreamRecoveryTimer, logEvent, syncRequestStreamingState]);
-
 	const registerPendingRequest = useCallback(
-		(requestId: string, startedAt: number) => {
+		(requestId: string) => {
 			pendingRequestIdsRef.current.add(requestId);
-			setShowStreamingIndicator(true);
 			if (!activeRequestIdRef.current) {
 				activeRequestIdRef.current = requestId;
-				streamStartedAtRef.current = startedAt;
-				streamLastActivityRef.current = 0;
-				scheduleStreamRecoveryCheck();
 			}
 			syncRequestStreamingState();
 		},
-		[scheduleStreamRecoveryCheck, syncRequestStreamingState],
+		[syncRequestStreamingState],
 	);
 
 	const markPendingRequestActive = useCallback(
 		(requestId: string) => {
 			if (!pendingRequestIdsRef.current.has(requestId)) return;
-			setShowStreamingIndicator(true);
 			if (activeRequestIdRef.current === requestId) return;
 			activeRequestIdRef.current = requestId;
-			const now = Date.now();
-			streamStartedAtRef.current = now;
-			streamLastActivityRef.current = now;
-			scheduleStreamRecoveryCheck();
 			syncRequestStreamingState();
 		},
-		[scheduleStreamRecoveryCheck, syncRequestStreamingState],
+		[syncRequestStreamingState],
 	);
 
 	const finalizePendingRequest = useCallback(
@@ -411,44 +319,22 @@ export const App: React.FC = () => {
 			if (activeRequestIdRef.current === requestId) {
 				const nextActive = pendingRequestIdsRef.current.values().next().value;
 				activeRequestIdRef.current = nextActive ?? null;
-				if (nextActive) {
-					streamStartedAtRef.current = Date.now();
-					streamLastActivityRef.current = 0;
-					scheduleStreamRecoveryCheck();
-				} else {
-					streamStartedAtRef.current = 0;
-					streamLastActivityRef.current = 0;
-					clearStreamRecoveryTimer();
-					setShowStreamingIndicator(false);
-				}
 			}
 			syncRequestStreamingState();
 		},
-		[
-			clearStreamRecoveryTimer,
-			scheduleStreamRecoveryCheck,
-			syncRequestStreamingState,
-		],
+		[syncRequestStreamingState],
 	);
 
 	const resetPendingRequests = useCallback(() => {
 		pendingRequestIdsRef.current.clear();
 		activeRequestIdRef.current = null;
-		queuedStreamRequestIdsRef.current = [];
-		streamStartedAtRef.current = 0;
-		streamLastActivityRef.current = 0;
-		runningToolEventsRef.current.clear();
-		clearStreamRecoveryTimer();
-		setShowStreamingIndicator(false);
+		queuedAssistantUpdatesRef.current.clear();
+		if (assistantFlushFrameRef.current !== null) {
+			window.cancelAnimationFrame(assistantFlushFrameRef.current);
+			assistantFlushFrameRef.current = null;
+		}
 		syncRequestStreamingState();
-	}, [clearStreamRecoveryTimer, syncRequestStreamingState]);
-
-	useEffect(
-		() => () => {
-			clearStreamRecoveryTimer();
-		},
-		[clearStreamRecoveryTimer],
-	);
+	}, [syncRequestStreamingState]);
 
 	const formatDuration = (ms?: number) => {
 		if (!ms && ms !== 0) return "--";
@@ -950,13 +836,67 @@ export const App: React.FC = () => {
 		[getRequestMessageIds],
 	);
 
-	const updateAssistant = useCallback(
-		(input: {
-			requestId: string;
-			messageId: string;
-			text: string;
-		}) => {
+	const applyQueuedAssistantUpdates = useCallback(
+		(queuedUpdates: QueuedAssistantUpdate[]) => {
+			if (queuedUpdates.length === 0) return;
+			const updatesByThread = new Map<string, QueuedAssistantUpdate[]>();
+			for (const update of queuedUpdates) {
+				const existing = updatesByThread.get(update.threadId) || [];
+				existing.push(update);
+				updatesByThread.set(update.threadId, existing);
+			}
+
+			setThreads((prev) =>
+				prev.map((thread) => {
+					const threadUpdates = updatesByThread.get(thread.id);
+					if (!threadUpdates || threadUpdates.length === 0) {
+						return thread;
+					}
+					let nextThread = thread;
+					for (const update of threadUpdates) {
+						nextThread = upsertAssistantMessage(
+							nextThread,
+							update.messageId,
+							(message) =>
+								message.content === update.content
+									? message
+									: { ...message, content: update.content },
+							update.requestId,
+						);
+					}
+					return nextThread;
+				}),
+			);
+		},
+		[],
+	);
+
+	const flushQueuedAssistantUpdates = useCallback(() => {
+		if (assistantFlushFrameRef.current !== null) {
+			window.cancelAnimationFrame(assistantFlushFrameRef.current);
+			assistantFlushFrameRef.current = null;
+		}
+		const queuedUpdates = drainAssistantContentUpdates(
+			queuedAssistantUpdatesRef.current,
+		);
+		applyQueuedAssistantUpdates(queuedUpdates);
+	}, [applyQueuedAssistantUpdates]);
+
+	const scheduleQueuedAssistantUpdateFlush = useCallback(() => {
+		if (assistantFlushFrameRef.current !== null) return;
+		assistantFlushFrameRef.current = window.requestAnimationFrame(() => {
+			assistantFlushFrameRef.current = null;
+			const queuedUpdates = drainAssistantContentUpdates(
+				queuedAssistantUpdatesRef.current,
+			);
+			applyQueuedAssistantUpdates(queuedUpdates);
+		});
+	}, [applyQueuedAssistantUpdates]);
+
+	const queueAssistantUpdate = useCallback(
+		(input: { requestId: string; messageId: string; text: string }) => {
 			const { requestId, messageId, text } = input;
+			if (!text) return;
 			const threadId = requestThreadRef.current.get(requestId);
 			if (!threadId) return;
 			if (uiOnlyRequestsRef.current.has(messageId)) {
@@ -974,20 +914,26 @@ export const App: React.FC = () => {
 					preserveTrailingWhitespace: true,
 				}) ?? previousCleaned;
 
-			setThreads((prev) =>
-				prev.map((thread) => {
-					if (thread.id !== threadId) return thread;
-					return upsertAssistantMessage(
-						thread,
-						messageId,
-						(msg) => ({ ...msg, content: cleaned }),
-						requestId,
-					);
-				}),
-			);
+			queueAssistantContentUpdate(queuedAssistantUpdatesRef.current, {
+				threadId,
+				requestId,
+				messageId,
+				content: cleaned,
+			});
+			scheduleQueuedAssistantUpdateFlush();
 		},
-		[],
+		[scheduleQueuedAssistantUpdateFlush],
 	);
+
+	useEffect(() => {
+		return () => {
+			if (assistantFlushFrameRef.current !== null) {
+				window.cancelAnimationFrame(assistantFlushFrameRef.current);
+				assistantFlushFrameRef.current = null;
+			}
+			queuedAssistantUpdatesRef.current.clear();
+		};
+	}, []);
 
 	const updateToolEvents = useCallback(
 		(requestId: string, messageId: string, events: ToolEvent[]) => {
@@ -1140,6 +1086,10 @@ export const App: React.FC = () => {
 
 	const cleanupRequestState = useCallback(
 		(requestId: string) => {
+			for (const [key, update] of queuedAssistantUpdatesRef.current) {
+				if (update.requestId !== requestId) continue;
+				queuedAssistantUpdatesRef.current.delete(key);
+			}
 			for (const messageId of getRequestMessageIds(requestId)) {
 				buffersRef.current.delete(messageId);
 				uiOnlyRequestsRef.current.delete(messageId);
@@ -1149,7 +1099,6 @@ export const App: React.FC = () => {
 			requestThreadRef.current.delete(requestId);
 			requestAgentRef.current.delete(requestId);
 			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
-			runningToolEventsRef.current.delete(requestId);
 			taskDelegationRef.current.delete(requestId);
 		},
 		[getRequestMessageIds],
@@ -1253,11 +1202,6 @@ export const App: React.FC = () => {
 					subscribe: subscribeToAgentEvents,
 				},
 				agentId: currentAgentId,
-				requestIdFactory: () => {
-					const queued = queuedStreamRequestIdsRef.current.shift();
-					if (queued) return queued;
-					return `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-				},
 			}),
 		[currentAgentId, sendGatewayMessage, subscribeToAgentEvents],
 	);
@@ -1278,6 +1222,7 @@ export const App: React.FC = () => {
 				resetPendingRequests();
 				return;
 			}
+			flushQueuedAssistantUpdates();
 			finalizeAssistant(requestId, {
 				fallback: `Stream transport error: ${errorText}`,
 				forceText: true,
@@ -1294,12 +1239,8 @@ export const App: React.FC = () => {
 				pendingRequestIds: pendingRequestIdsRef.current,
 				activeRequestId: activeRequestIdRef.current,
 			});
-			if (trackedRequest && payload.type !== "session-message") {
+			if (trackedRequest && shouldMarkRequestActive(payload?.type)) {
 				markPendingRequestActive(requestId);
-			}
-			if (activeRequestIdRef.current === requestId) {
-				markStreamActivity(requestId);
-				scheduleStreamRecoveryCheck();
 			}
 			if (payload.type === "request-queued") {
 				const position =
@@ -1438,16 +1379,10 @@ export const App: React.FC = () => {
 				});
 			}
 			if (payload.type === "agent-start") {
-				if (trackedRequest) {
-					setShowStreamingIndicator(true);
-				}
 				logEvent(`Agent started: ${payload.agent || "unknown"}`);
 				return;
 			}
 			if (payload.type === "agent-stream") {
-				if (trackedRequest) {
-					setShowStreamingIndicator(true);
-				}
 				const { textEvents, toolEvents } = parseStreamEvents(payload.chunk);
 				const shouldHandleDeltaTextStream = isAssistantTextStreamChunk(
 					payload.chunk,
@@ -1491,7 +1426,7 @@ export const App: React.FC = () => {
 							updatedAt: Date.now(),
 						});
 					} else {
-						updateAssistant({
+						queueAssistantUpdate({
 							requestId,
 							messageId: requestId,
 							text: event.text,
@@ -1589,21 +1524,32 @@ export const App: React.FC = () => {
 					for (const [messageId, groupedEvents] of toolEventsByMessageId) {
 						updateToolEvents(requestId, messageId, groupedEvents);
 					}
-					updateRunningToolState(requestId, enrichedToolEvents);
 				}
 				return;
 			}
 			if (payload.type === "agent-complete") {
+				flushQueuedAssistantUpdates();
+				const terminalRequestId = resolveTerminalRequestId({
+					requestId,
+					pendingRequestIds: pendingRequestIdsRef.current,
+					activeRequestId: activeRequestIdRef.current,
+				});
 				logEvent("Agent complete");
 				const fallback = buildAgentFallback(
 					payload.result,
-					resolveRequestMessageId(requestId),
+					resolveRequestMessageId(terminalRequestId),
 					uiOnlyRequestsRef.current,
 				);
-				finalizeAssistant(requestId, { fallback });
+				finalizeAssistant(terminalRequestId, { fallback });
 				return;
 			}
 			if (payload.type === "agent-error") {
+				flushQueuedAssistantUpdates();
+				const terminalRequestId = resolveTerminalRequestId({
+					requestId,
+					pendingRequestIds: pendingRequestIdsRef.current,
+					activeRequestId: activeRequestIdRef.current,
+				});
 				const errorText =
 					typeof payload.error === "string" ? payload.error : "Agent error";
 				const isCancel = /cancel/i.test(errorText);
@@ -1612,7 +1558,7 @@ export const App: React.FC = () => {
 				} else {
 					logEvent(`Agent error: ${errorText || "unknown"}`);
 				}
-				finalizeAssistant(requestId, {
+				finalizeAssistant(terminalRequestId, {
 					fallback: errorText || "Agent error",
 					forceText: true,
 					appendFallbackToExisting: !isCancel,
@@ -1622,14 +1568,12 @@ export const App: React.FC = () => {
 		[
 			agentId,
 			finalizeAssistant,
+			flushQueuedAssistantUpdates,
 			logEvent,
 			markPendingRequestActive,
-			markStreamActivity,
+			queueAssistantUpdate,
 			resolveRequestMessageId,
-			scheduleStreamRecoveryCheck,
 			subagentMap,
-			updateAssistant,
-			updateRunningToolState,
 			updateThinkingEvents,
 			updateToolEvents,
 		],
@@ -1640,7 +1584,6 @@ export const App: React.FC = () => {
 			window.clearTimeout(autoConnectTimerRef.current);
 			autoConnectTimerRef.current = null;
 		}
-		queuedStreamRequestIdsRef.current = [];
 		void gatewayStream.stop();
 		resetPendingRequests();
 		autoConnectAttemptsRef.current = 0;
@@ -1748,6 +1691,7 @@ export const App: React.FC = () => {
 							? error.message
 							: String(error || "Unknown error");
 					logEvent(`Agent event processing error: ${errorText}`);
+					flushQueuedAssistantUpdates();
 					if (
 						activeRequestIdRef.current === msg.id ||
 						pendingRequestIdsRef.current.has(msg.id)
@@ -1808,6 +1752,7 @@ export const App: React.FC = () => {
 		deviceId,
 		disconnect,
 		finalizeAssistant,
+		flushQueuedAssistantUpdates,
 		gatewayStream,
 		handleAgentEvent,
 		logEvent,
@@ -1916,15 +1861,15 @@ export const App: React.FC = () => {
 		setAttachmentError("");
 		requestThreadRef.current.set(requestId, targetThread.id);
 		requestAgentRef.current.set(requestId, targetThread.agentId);
-		registerPendingRequest(requestId, now);
+		registerPendingRequest(requestId);
 		if (pendingRequestIdsRef.current.size > 1) {
 			logEvent(
 				`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`,
 			);
 		}
-		queuedStreamRequestIdsRef.current.push(requestId);
 		void gatewayStream.submit(
 			{
+				requestId,
 				agentId: targetThread.agentId,
 				content: userMessage.content,
 				attachments: attachments.length > 0 ? attachments : undefined,
@@ -1962,7 +1907,6 @@ export const App: React.FC = () => {
 			logEvent("Cancel signal could not be delivered; stopping local stream.");
 		}
 
-		setShowStreamingIndicator(false);
 		const messageId = resolveRequestMessageId(requestId);
 		const threadId = requestThreadRef.current.get(requestId);
 		if (threadId) {
@@ -1982,18 +1926,9 @@ export const App: React.FC = () => {
 				}),
 			);
 		}
-		cleanupRequestState(requestId);
-		finalizePendingRequest(requestId);
 		logEvent("Stopping current response...");
 		void gatewayStream.stop();
-	}, [
-		cleanupRequestState,
-		finalizePendingRequest,
-		gatewayStream,
-		logEvent,
-		resolveRequestMessageId,
-		sendGatewayMessage,
-	]);
+	}, [gatewayStream, logEvent, resolveRequestMessageId, sendGatewayMessage]);
 
 	const uiStreaming = isStreaming;
 
@@ -2942,7 +2877,6 @@ export const App: React.FC = () => {
 										fileAccept={FILE_INPUT_ACCEPT}
 										attachmentError={attachmentError}
 										isStreaming={uiStreaming}
-										showStreamingIndicator={showStreamingIndicator}
 										queuedPromptCount={queuedPromptCount}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}

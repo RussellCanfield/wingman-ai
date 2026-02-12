@@ -10,7 +10,7 @@ describe("fal summary", () => {
 			toolName: "generate_image_or_texture",
 			jobId: "job-123",
 			status: "completed",
-			modelId: "fal-ai/kling-image/v3/text-to-image",
+			modelId: "fal-ai/nano-banana-pro",
 			reviewState: "accepted",
 			media: [
 				{
@@ -24,7 +24,7 @@ describe("fal summary", () => {
 
 		expect(summary).toContain("FAL job `job-123`");
 		expect(summary).toContain("**completed**");
-		expect(summary).toContain("- Model: `fal-ai/kling-image/v3/text-to-image`");
+		expect(summary).toContain("- Model: `fal-ai/nano-banana-pro`");
 		expect(summary).toContain("- Assets: 1");
 		expect(summary).toContain("[image] ./generated/images/asset.png image/png");
 	});

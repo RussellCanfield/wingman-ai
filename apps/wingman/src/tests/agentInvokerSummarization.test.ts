@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { validateConfig } from "../cli/config/schema.js";
 import {
 	chunkHasAssistantText,
 	configureDeepAgentSummarizationMiddleware,
 	detectStreamErrorMessage,
 	detectToolEventContext,
-	evaluateStreamingCompletion,
+	emitCompletionAndContinuePostProcessing,
 	isRootLangGraphTerminalEvent,
 	resolveHumanInTheLoopSettings,
 	resolveModelRetryMiddlewareSettings,
@@ -363,47 +363,6 @@ describe("detectStreamErrorMessage", () => {
 	});
 });
 
-describe("evaluateStreamingCompletion", () => {
-	it("blocks with stream_error when no assistant text and stream error exists", () => {
-		const result = evaluateStreamingCompletion({
-			sawAssistantText: false,
-			fallbackText: undefined,
-			streamErrorMessage: "provider timeout",
-		});
-
-		expect(result).toEqual({
-			status: "blocked",
-			reason: "stream_error",
-			message: "Model call failed: provider timeout",
-		});
-	});
-
-	it("blocks with empty_stream_response when no text or fallback is present", () => {
-		const result = evaluateStreamingCompletion({
-			sawAssistantText: false,
-			fallbackText: undefined,
-			streamErrorMessage: undefined,
-		});
-
-		expect(result).toEqual({
-			status: "blocked",
-			reason: "empty_stream_response",
-			message:
-				"Model completed without a response. Check provider logs for request errors.",
-		});
-	});
-
-	it("returns ok when assistant text exists", () => {
-		const result = evaluateStreamingCompletion({
-			sawAssistantText: true,
-			fallbackText: undefined,
-			streamErrorMessage: undefined,
-		});
-
-		expect(result).toEqual({ status: "ok" });
-	});
-});
-
 describe("LangGraph lifecycle termination", () => {
 	it("tracks root LangGraph run id from parentless on_chain_start", () => {
 		const rootRunId = trackRootLangGraphRunId(undefined, {
@@ -481,6 +440,9 @@ describe("LangGraph lifecycle termination", () => {
 				"root-run",
 			),
 		).toBe(false);
+	});
+
+	it("treats root LangGraph on_chain_end as terminal even without tracked run id", () => {
 		expect(
 			isRootLangGraphTerminalEvent(
 				{
@@ -491,6 +453,67 @@ describe("LangGraph lifecycle termination", () => {
 				},
 				undefined,
 			),
-		).toBe(false);
+		).toBe(true);
+	});
+
+	it("treats root LangGraph on_chain_end as terminal when run id is missing", () => {
+		expect(
+			isRootLangGraphTerminalEvent(
+				{
+					event: "on_chain_end",
+					name: "LangGraph",
+					parent_ids: [],
+				},
+				"root-run",
+			),
+		).toBe(true);
+	});
+});
+
+describe("emitCompletionAndContinuePostProcessing", () => {
+	it("emits completion before post-processing resolves", () => {
+		const callOrder: string[] = [];
+		let resolvePostProcess: (() => void) | undefined;
+		const postProcess = () =>
+			new Promise<void>((resolve) => {
+				callOrder.push("post-process-start");
+				resolvePostProcess = resolve;
+			});
+
+		emitCompletionAndContinuePostProcessing({
+			outputManager: {
+				emitAgentComplete: () => {
+					callOrder.push("emit-complete");
+				},
+			},
+			result: { ok: true },
+			postProcess,
+		});
+
+		expect(callOrder).toEqual(["emit-complete", "post-process-start"]);
+		resolvePostProcess?.();
+	});
+
+	it("logs and swallows post-processing failures", async () => {
+		const debug = vi.fn();
+		emitCompletionAndContinuePostProcessing({
+			outputManager: {
+				emitAgentComplete: vi.fn(),
+			},
+			result: { ok: true },
+			postProcess: async () => {
+				throw new Error("materialization failed");
+			},
+			logger: {
+				debug,
+			},
+		});
+
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(debug).toHaveBeenCalledWith(
+			"Failed post-completion processing for streamed agent response",
+			expect.any(Error),
+		);
 	});
 });

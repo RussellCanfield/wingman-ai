@@ -187,6 +187,33 @@ describe("createGatewayLangGraphTransport", () => {
 		});
 	});
 
+	it("uses requestId from submit input when provided", async () => {
+		const socket = new FakeGatewaySocket();
+		const transport = createGatewayLangGraphTransport({
+			socket,
+			agentId: "fallback-agent",
+			requestIdFactory: () => "req-should-not-be-used",
+		});
+		await transport.stream({
+			input: {
+				requestId: "req-direct-input",
+				content: "check id",
+			},
+			config: { configurable: { thread_id: "session-3" } },
+			signal: new AbortController().signal,
+		});
+
+		expect(socket.sent[0]).toMatchObject({
+			type: "req:agent",
+			id: "req-direct-input",
+			payload: {
+				agentId: "fallback-agent",
+				content: "check id",
+				sessionKey: "session-3",
+			},
+		});
+	});
+
 	it("emits an error event and closes when agent-error arrives", async () => {
 		const socket = new FakeGatewaySocket();
 		const transport = createGatewayLangGraphTransport({

@@ -101,7 +101,6 @@ type ChatPanelProps = {
 	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
-	showStreamingIndicator?: boolean;
 	queuedPromptCount: number;
 	connected: boolean;
 	loading: boolean;
@@ -130,7 +129,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	fileAccept,
 	attachmentError,
 	isStreaming,
-	showStreamingIndicator,
 	queuedPromptCount,
 	connected,
 	loading,
@@ -187,7 +185,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const hasDraft = Boolean(prompt.trim() || attachments.length > 0);
 	const canSend = connected && !recording && hasDraft;
 	const canStop = isStreaming && !recording && !hasDraft;
-	const showStreamingGlow = isStreaming || Boolean(showStreamingIndicator);
+	const showStreamingGlow = isStreaming;
 
 	useEffect(() => {
 		autoScrollRef.current = true;

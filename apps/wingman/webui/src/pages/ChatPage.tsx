@@ -12,7 +12,6 @@ type ChatPageProps = {
 	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
-	showStreamingIndicator?: boolean;
 	queuedPromptCount: number;
 	connected: boolean;
 	loadingThread: boolean;
@@ -43,7 +42,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	fileAccept,
 	attachmentError,
 	isStreaming,
-	showStreamingIndicator,
 	queuedPromptCount,
 	connected,
 	loadingThread,
@@ -100,7 +98,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 				fileAccept={fileAccept}
 				attachmentError={attachmentError}
 				isStreaming={isStreaming}
-				showStreamingIndicator={showStreamingIndicator}
 				queuedPromptCount={queuedPromptCount}
 				connected={connected}
 				loading={loadingThread}

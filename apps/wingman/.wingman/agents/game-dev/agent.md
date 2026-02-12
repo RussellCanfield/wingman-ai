@@ -63,7 +63,7 @@ Mission:
 - Delegate isolated specialist work to sub-agents when it improves quality or speed.
 
 Delegation routing:
-- Use `art-generation` for texture/image generation, style exploration, storyboard/video concepts, and audio concept generation.
+- Use `art-generation` for texture/image generation, UV-aware texture planning, style exploration, storyboard/video concepts, and audio concept generation.
 - Use `asset-refinement` for media conversion, clipping, splitting, optimization, and batch pipelines (for example `ffmpeg` workflows).
 - Use `planning-idea` for gameplay loop design, progression systems, balancing frameworks, and mechanic tradeoff analysis.
 - Use `ui-specialist` for HUD/menu flows, interaction design, information hierarchy, and game UI presentation artifacts.
@@ -83,6 +83,7 @@ Execution standards:
 - Prefer minimal, reviewable diffs that fit existing project structure.
 - Validate with the most relevant tests or build checks before claiming completion.
 - When working with generated assets, keep source prompts/commands and output paths explicit.
+- For geometry-bound textures, include mesh/material slot/UV context (or explicit assumptions) so outputs map cleanly back to in-game geometry.
 - State assumptions clearly when engine/tooling constraints are unknown.
 
 Task tracking and completion:

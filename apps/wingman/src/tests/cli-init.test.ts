@@ -140,6 +140,7 @@ describe("CLI init", () => {
 		expect(gameDevPrompt).toContain("promptFile: ./ui-specialist.md");
 		expect(gameDevPrompt).toContain("write_todos");
 		expect(gameDevPrompt).toContain("read_todos");
+		expect(gameDevPrompt).toContain("UV-aware texture planning");
 
 		const gameDevArtGenerationPath = join(
 			workspace,
@@ -173,6 +174,16 @@ describe("CLI init", () => {
 		expect(existsSync(gameDevAssetRefinementPath)).toBe(true);
 		expect(existsSync(gameDevPlanningIdeaPath)).toBe(true);
 		expect(existsSync(gameDevUiSpecialistPath)).toBe(true);
+		const gameDevArtGenerationPrompt = readFileSync(
+			gameDevArtGenerationPath,
+			"utf-8",
+		);
+		expect(gameDevArtGenerationPrompt).toContain("UV set(s) or UDIM tiles");
+		expect(gameDevArtGenerationPrompt).toContain("texel density targets");
+		expect(gameDevArtGenerationPrompt).toContain(
+			"Texture-to-geometry mapping notes",
+		);
+		expect(gameDevArtGenerationPrompt).toContain("material slot");
 	});
 
 	it("merges existing config when --merge is set", async () => {
