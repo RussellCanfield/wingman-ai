@@ -37,7 +37,7 @@ wingman init --skip-config --skip-provider --agents main,coding
 wingman init --skip-config --skip-provider --force
 ```
 
-Typical bundled agents include:
+Bundled templates currently include:
 
 - `main` (general-purpose)
 - `coding` (direct-execution coding specialist with tool-backed completion guard)
@@ -45,9 +45,96 @@ Typical bundled agents include:
 - `game-dev` (game feature orchestrator with specialist sub-agents, including UV/geometry-aware texture generation guidance)
 - `researcher` (source-first web research)
 - `stock-trader` (market data research workflows)
-- `wingman` (workspace-specific assistant)
 
 Edit these in-place to customize prompts, tools, or sub-agents. Treat them as templates—clone and rename as needed for each project.
+
+`wingman init` also creates a default `wingman` starter agent in your workspace if one is not already present.
+
+## Agent overview (including MCP dependency)
+
+MCP dependency levels used below:
+
+- **None**: the template does not rely on MCP to do its core job.
+- **Optional**: the template can use MCP if configured, but works without it.
+- **Recommended**: MCP materially improves core workflows.
+- **Required**: core workflow assumes MCP tools are available.
+
+| Agent | Primary role | Sub-agents | MCP dependency | MCP details |
+| --- | --- | --- | --- | --- |
+| `main` | General-purpose coding/research/problem solving | No | Optional | Template sets `mcpUseGlobal: true`; media generation guidance prefers FAL tools when available. |
+| `coding` | Direct single-agent coding execution | No | Optional | Template sets `mcpUseGlobal: true` but does not require MCP-specific tools. |
+| `coding-v2` | Coding orchestrator with one generic coding worker | Yes (1) | Optional | Template sets `mcpUseGlobal: true`; no hard MCP dependency. |
+| `game-dev` | Game feature orchestrator (code + assets + UI) | Yes (4) | Recommended | Template prefers FAL MCP media tools for generation flows. |
+| `researcher` | Web/documentation research | No | None | Uses built-in `internet_search`/`web_crawler`; no MCP fields in the template. |
+| `stock-trader` | Options-oriented trading research workflows | Yes (8) | Required | Template expects finance MCP tools (`finnhub.*` and `options.analyze`) for data-backed output. |
+| `wingman` (generated starter) | Workspace default assistant created by `init` | No | None by default | Generated as `agent.json` starter when missing; add `mcpUseGlobal` or per-agent `mcp` only if needed. |
+
+## MCP-focused config examples
+
+### 1) No MCP dependency (`researcher`)
+
+```md
+---
+name: researcher
+description: Source-first research agent
+tools:
+  - internet_search
+  - web_crawler
+promptRefinement: true
+---
+```
+
+### 2) Required MCP dependency (`stock-trader` with global finance MCP)
+
+```json
+// .wingman/wingman.config.json
+{
+  "mcp": {
+    "servers": [
+      {
+        "name": "finnhub",
+        "transport": "stdio",
+        "command": "node",
+        "args": ["./node_modules/@wingman-ai/gateway/dist/tools/mcp-finance.js"],
+        "env": { "FINNHUB_API_KEY": "your_key_here" }
+      }
+    ]
+  }
+}
+```
+
+```md
+---
+name: stock-trader
+mcpUseGlobal: true
+---
+```
+
+### 3) Recommended MCP dependency (`game-dev` or `main` with FAL MCP)
+
+```json
+// .wingman/wingman.config.json
+{
+  "mcp": {
+    "servers": [
+      {
+        "name": "fal-ai",
+        "transport": "stdio",
+        "command": "node",
+        "args": ["./node_modules/@wingman-ai/gateway/dist/tools/mcp-fal-ai.js"],
+        "env": { "FAL_API_KEY": "your_key_here" }
+      }
+    ]
+  }
+}
+```
+
+```md
+---
+name: game-dev
+mcpUseGlobal: true
+---
+```
 
 :::warning
 The `stock-trader` agent is for research and education only. It does not provide financial advice or execute trades.

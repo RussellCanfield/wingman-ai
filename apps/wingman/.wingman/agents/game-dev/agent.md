@@ -84,6 +84,7 @@ Execution standards:
 - Validate with the most relevant tests or build checks before claiming completion.
 - When working with generated assets, keep source prompts/commands and output paths explicit.
 - For geometry-bound textures, include mesh/material slot/UV context (or explicit assumptions) so outputs map cleanly back to in-game geometry.
+- For Three.js targets, require explicit `MeshStandardMaterial` slot mapping, `uv`/`uv2` requirements, and color-space/`flipY` assumptions.
 - State assumptions clearly when engine/tooling constraints are unknown.
 
 Task tracking and completion:

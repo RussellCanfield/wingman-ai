@@ -13,11 +13,15 @@ Working rules:
   - `fal_generation_status`
 - When generation tooling is unavailable, provide high-quality prompts, reference constraints, and executable fallback commands.
 - For texture work, gather or infer geometry context first: mesh/part name, material slot(s), UV set(s) or UDIM tiles, mirrored/overlapped islands, and whether the asset uses tiling, trim sheets, or unique unwraps.
+- For Three.js targets, plan UV requirements explicitly: textured meshes need `uv`, and `aoMap`/`lightMap` need `uv2`.
 - For textures, default to power-of-two dimensions and call out tiling/seamless requirements explicitly.
 - Choose texture size from expected on-screen usage and texel density targets; do not default everything to 4K.
 - Keep related assets in consistent texel density bands, and call out intentional exceptions (for example hero props).
 - When scaling is needed, preserve a high-quality source and produce explicit output variants per target platform or LOD tier.
 - Specify map conventions per output: map type (albedo/baseColor, normal, roughness, metallic, AO, height, emissive, opacity), color space, and normal map orientation expectations.
+- For Three.js PBR outputs, map generated textures to `MeshStandardMaterial` slots (`map`, `normalMap`, `roughnessMap`, `metalnessMap`, `aoMap`, `emissiveMap`, `alphaMap`) and call out omitted slots intentionally.
+- In Three.js, keep albedo/baseColor in sRGB and data maps in linear color space; flag mismatches before final delivery.
+- For Three.js + glTF workflows, call out when textures should use `flipY = false` and document tiling transforms (`RepeatWrapping`, repeat/offset/rotation).
 - Ensure generated texture details align intentionally with geometry and UVs (major features aligned to UV islands, seams, and orientation where relevant).
 - For audio/video concept outputs, include exact tool commands and encoding parameters when possible.
 - For async FAL jobs, always follow through by checking `fal_generation_status` (or waiting) before concluding.
@@ -29,4 +33,5 @@ Deliverable format:
 - Generation prompts and/or commands used.
 - Output file paths and naming convention.
 - Texture-to-geometry mapping notes: mesh/part, material slot, UV set/UDIM, map type, resolution, tiling scale/offset, and destination file path.
+- For Three.js targets, include a concise material binding map and UV requirements (`uv`/`uv2`) per mesh/material.
 - Quick quality checklist (resolution, compression, loopability, style consistency, UV/geometry fit).

@@ -141,6 +141,8 @@ describe("CLI init", () => {
 		expect(gameDevPrompt).toContain("write_todos");
 		expect(gameDevPrompt).toContain("read_todos");
 		expect(gameDevPrompt).toContain("UV-aware texture planning");
+		expect(gameDevPrompt).toContain("MeshStandardMaterial");
+		expect(gameDevPrompt).toContain("uv`/`uv2");
 
 		const gameDevArtGenerationPath = join(
 			workspace,
@@ -184,6 +186,9 @@ describe("CLI init", () => {
 			"Texture-to-geometry mapping notes",
 		);
 		expect(gameDevArtGenerationPrompt).toContain("material slot");
+		expect(gameDevArtGenerationPrompt).toContain("need `uv`, and `aoMap`");
+		expect(gameDevArtGenerationPrompt).toContain("flipY = false");
+		expect(gameDevArtGenerationPrompt).toContain("RepeatWrapping");
 	});
 
 	it("merges existing config when --merge is set", async () => {
