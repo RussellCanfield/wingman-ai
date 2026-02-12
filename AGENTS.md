@@ -28,6 +28,7 @@ After you've finished making changes, ensure all tests and builds pass.
 - Always ensure there are no TypeScript errors.
 - Always lint and format code after changes.
 - Always ensure builds and tests pass before considering work complete.
+- More code = more debt, aim to accomplish more with less code.
 
 ## Docs-site Updates
 Keep major feature descriptions in `./apps/docs-website` updated when you ship or change significant capabilities.
