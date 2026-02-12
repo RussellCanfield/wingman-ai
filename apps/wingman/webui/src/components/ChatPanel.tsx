@@ -1,8 +1,13 @@
 import type React from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import rehypeHighlight from "rehype-highlight";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import { createPortal } from "react-dom";
 import {
 	FiAlertTriangle,
 	FiFileText,
@@ -13,18 +18,26 @@ import {
 	FiStopCircle,
 	FiVolume2,
 } from "react-icons/fi";
+import ReactMarkdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
+import remarkGfm from "remark-gfm";
+import { SguiRenderer } from "../sgui/SguiRenderer";
 import type { ChatAttachment, Thread } from "../types";
 import { extractImageFiles } from "../utils/attachments";
+import { getAudioAvailability } from "../utils/media";
+import { shouldAutoScroll } from "../utils/scroll";
 import {
 	getVoicePlaybackLabel,
 	type VoicePlaybackStatus,
 } from "../utils/voicePlayback";
-import { getAudioAvailability } from "../utils/media";
 import { ThinkingPanel } from "./ThinkingPanel";
-import { SguiRenderer } from "../sgui/SguiRenderer";
-import { shouldAutoScroll } from "../utils/scroll";
 
 const COMPOSER_MAX_LINES = 4;
+const RETURN_SYMBOL_LINE_BREAK_PATTERN =
+	/[\u0085\u2028\u2029\u21B5\u23CE\u240A\u2424]/g;
+const AUDIO_FILE_EXTENSION_PATTERN =
+	/\.(mp3|wav|ogg|m4a|aac|flac|opus|weba|webm)(?:$|[?#])/i;
+const AUDIO_REFERENCE_TOKEN_PATTERN = /[^\s"'`<>]+/g;
 
 type MarkdownCodeBlockProps = {
 	className?: string;
@@ -81,8 +94,10 @@ const MarkdownCodeBlock: React.FC<MarkdownCodeBlockProps> = ({
 
 type ChatPanelProps = {
 	activeThread?: Thread;
+	defaultOutputDir?: string | null;
 	prompt: string;
 	attachments: ChatAttachment[];
+	initialPreviewAttachment?: ChatAttachment | null;
 	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
@@ -108,8 +123,10 @@ type ChatPanelProps = {
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
 	activeThread,
+	defaultOutputDir,
 	prompt,
 	attachments,
+	initialPreviewAttachment,
 	fileAccept,
 	attachmentError,
 	isStreaming,
@@ -148,7 +165,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const analyserDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
 	const analyserRafRef = useRef<number | null>(null);
 	const [previewAttachment, setPreviewAttachment] =
-		useState<ChatAttachment | null>(null);
+		useState<ChatAttachment | null>(initialPreviewAttachment ?? null);
 	const [recording, setRecording] = useState(false);
 	const [recordingDuration, setRecordingDuration] = useState(0);
 	const [recordingError, setRecordingError] = useState("");
@@ -170,7 +187,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const hasDraft = Boolean(prompt.trim() || attachments.length > 0);
 	const canSend = connected && !recording && hasDraft;
 	const canStop = isStreaming && !recording && !hasDraft;
-	const showStreamingGlow = showStreamingIndicator ?? isStreaming;
+	const showStreamingGlow = isStreaming || Boolean(showStreamingIndicator);
 
 	useEffect(() => {
 		autoScrollRef.current = true;
@@ -496,13 +513,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			if (msg.role !== "assistant") {
 				hasSpeakableAssistantInTurn = false;
 			}
-			const previousMessage = index > 0 ? activeThread.messages[index - 1] : null;
+			const previousMessage =
+				index > 0 ? activeThread.messages[index - 1] : null;
 			const previousRole = previousMessage?.role;
 			const messageSpacingClass =
 				index === 0
 					? "mt-0"
 					: msg.role === "assistant" && previousRole === "assistant"
-						? "mt-2"
+						? "mt-0"
 						: "mt-4";
 			const isAssistantTurnStart =
 				msg.role === "assistant" &&
@@ -529,8 +547,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			const isActiveMessage =
 				msg.role === "assistant" && isStreaming && msg.id === lastAssistantId;
 			const uiBlocks = dynamicUiEnabled ? msg.uiBlocks : undefined;
-			const displayText =
-				msg.content || (!dynamicUiEnabled ? msg.uiTextFallback || "" : "");
+			const normalizedText = normalizeMessageLineBreaks(
+				msg.content || (!dynamicUiEnabled ? msg.uiTextFallback || "" : ""),
+			);
+			const displayText = normalizedText;
+			const previewWorkingDirectory =
+				activeThread?.workdir || defaultOutputDir || null;
+			const assistantAudioPreviews =
+				msg.role === "assistant"
+					? extractAssistantAudioPreviews(displayText, previewWorkingDirectory)
+					: [];
 			const hasSpeakableText = Boolean(msg.content || msg.uiTextFallback);
 			const showVoiceButton =
 				msg.role === "assistant" &&
@@ -541,11 +567,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			}
 			const showMetaRow = isUserMessage || showTimestamp || showVoiceButton;
 
-				return (
-					<div
-						key={msg.id}
-						className={`flex ${isUserMessage ? "justify-end" : "justify-start"} ${messageSpacingClass}`}
-					>
+			return (
+				<div
+					key={msg.id}
+					className={`flex ${isUserMessage ? "justify-end" : "justify-start"} ${messageSpacingClass}`}
+				>
 					<div
 						className={`min-w-0 text-sm leading-relaxed ${isUserMessage
 							? "w-fit max-w-[90%] rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-slate-100 shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%]"
@@ -566,56 +592,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									) : null}
 									{showVoiceButton
 										? (() => {
-										const playbackStatus =
-											resolvedVoiceMessageId === msg.id
-												? voicePlayback.status
-												: "idle";
-										const playbackLabel =
-											getVoicePlaybackLabel(playbackStatus);
-										const isBusy =
-											playbackStatus === "pending" ||
-											playbackStatus === "loading";
-										const isPlaying = playbackStatus === "playing";
-										const playbackText =
-											msg.content || msg.uiTextFallback || "";
-										return (
-											<button
-												type="button"
-												title={playbackLabel}
-												aria-label={
-													isPlaying || isBusy
-														? "Stop voice playback"
-														: "Play assistant response"
-												}
-												onClick={() =>
-													resolvedVoiceMessageId === msg.id &&
-														voicePlayback.status !== "idle"
-														? onStopVoice()
-														: (() => {
-															lastVoiceMessageIdRef.current = msg.id;
-															onSpeakVoice(msg.id, playbackText);
-														})()
-												}
-												className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition hover:border-sky-400/60 hover:text-sky-100 ${isBusy
-													? "border-sky-400/50 bg-sky-500/12 text-sky-100"
-													: isPlaying
-														? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
-														: "border-white/10 text-slate-300"
-													}`}
-											>
-												{isBusy ? (
-													<FiLoader
-														className={`h-3.5 w-3.5 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
-													/>
-												) : playbackStatus === "playing" ? (
-													<FiStopCircle className="h-3.5 w-3.5 animate-pulse" />
-												) : (
-													<FiVolume2 className="h-3.5 w-3.5" />
-												)}
-												<span className="sr-only">{playbackLabel}</span>
-											</button>
-										);
-									})()
+											const playbackStatus =
+												resolvedVoiceMessageId === msg.id
+													? voicePlayback.status
+													: "idle";
+											const playbackLabel =
+												getVoicePlaybackLabel(playbackStatus);
+											const isBusy =
+												playbackStatus === "pending" ||
+												playbackStatus === "loading";
+											const isPlaying = playbackStatus === "playing";
+											const playbackText = normalizeMessageLineBreaks(
+												msg.content || msg.uiTextFallback || "",
+											);
+											return (
+												<button
+													type="button"
+													title={playbackLabel}
+													aria-label={
+														isPlaying || isBusy
+															? "Stop voice playback"
+															: "Play assistant response"
+													}
+													onClick={() =>
+														resolvedVoiceMessageId === msg.id &&
+															voicePlayback.status !== "idle"
+															? onStopVoice()
+															: (() => {
+																lastVoiceMessageIdRef.current = msg.id;
+																onSpeakVoice(msg.id, playbackText);
+															})()
+													}
+													className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition hover:border-sky-400/60 hover:text-sky-100 ${isBusy
+														? "border-sky-400/50 bg-sky-500/12 text-sky-100"
+														: isPlaying
+															? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
+															: "border-white/10 text-slate-300"
+														}`}
+												>
+													{isBusy ? (
+														<FiLoader
+															className={`h-3.5 w-3.5 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
+														/>
+													) : playbackStatus === "playing" ? (
+														<FiStopCircle className="h-3.5 w-3.5 animate-pulse" />
+													) : (
+														<FiVolume2 className="h-3.5 w-3.5" />
+													)}
+													<span className="sr-only">{playbackLabel}</span>
+												</button>
+											);
+										})()
 										: null}
 								</div>
 							</div>
@@ -636,18 +663,41 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								rehypePlugins={[
 									[rehypeHighlight, { detect: true, ignoreMissing: true }],
 								]}
-								className={`markdown-content text-sm leading-relaxed ${
-									isUserMessage ? "mt-2" : showMetaRow ? "mt-1" : "mt-0"
-								}`}
+								className={`markdown-content text-sm leading-relaxed ${isUserMessage ? "mt-2" : showMetaRow ? "mt-1" : "mt-0"
+									}`}
 								components={{
-									a: ({ node, ...props }) => (
-										<a
-											{...props}
-											className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
-											target="_blank"
-											rel="noreferrer"
-										/>
-									),
+									a: ({ node, ...props }) => {
+										const href =
+											typeof props.href === "string" ? props.href : "";
+										if (!isUserMessage && isLikelyAudioUrl(href)) {
+											return (
+												<span className="my-2 block max-w-[420px]">
+													<audio
+														controls
+														preload="metadata"
+														src={href}
+														className="w-full min-w-[220px]"
+													/>
+													<a
+														href={href}
+														className="mt-1 inline-block text-xs text-sky-300 underline decoration-sky-400/40 underline-offset-4"
+														target="_blank"
+														rel="noreferrer"
+													>
+														Open audio in new tab
+													</a>
+												</span>
+											);
+										}
+										return (
+											<a
+												{...props}
+												className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
+												target="_blank"
+												rel="noreferrer"
+											/>
+										);
+									},
 									code: ({ node, className, children, ...props }) => {
 										const isBlock =
 											Boolean(className?.includes("language-")) ||
@@ -668,7 +718,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										);
 									},
 									ul: ({ node, ...props }) => (
-										<ul {...props} className="ml-5 list-disc space-y-1" />
+										<ul {...props} className="ml-5 list-disc space-y-1 mb-1" />
 									),
 									ol: ({ node, ...props }) => (
 										<ol {...props} className="ml-5 list-decimal space-y-1" />
@@ -684,6 +734,28 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								{displayText}
 							</ReactMarkdown>
 						)}
+						{assistantAudioPreviews.length > 0 ? (
+							<div className="mt-3 space-y-2">
+								{assistantAudioPreviews.map((preview) => (
+									<div
+										key={preview.src}
+										className="max-w-[420px] rounded-xl border border-white/10 bg-slate-950/40 p-3"
+									>
+										<audio
+											controls
+											preload="metadata"
+											src={preview.src}
+											className="w-full min-w-[220px]"
+										/>
+										{preview.label ? (
+											<div className="mt-1 truncate text-[11px] text-slate-400">
+												{preview.label}
+											</div>
+										) : null}
+									</div>
+								))}
+							</div>
+						) : null}
 						{uiBlocks && uiBlocks.length > 0 ? (
 							<div className="mt-3 space-y-3">
 								{uiBlocks.map((block) => (
@@ -814,7 +886,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	]);
 
 	return (
-		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-4 p-4 sm:gap-4 sm:p-4">
 			<header className="flex flex-wrap items-center justify-between gap-4">
 				<div>
 					<h2 className="text-lg font-semibold">Mission Stream</h2>
@@ -849,22 +921,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				onScroll={handleScroll}
 				className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80"
 			>
-				<div className="min-h-full p-3 sm:p-4">{transcriptContent}</div>
-				{showStreamingGlow ? (
-					<div
-						aria-hidden="true"
-						className="pointer-events-none mb-2 inset-x-0 top-2 z-20 flex justify-center"
-					>
+				<div className="min-h-full p-3 sm:p-4">
+					{transcriptContent}
+					{showStreamingGlow ? (
 						<div
-							data-testid="streaming-indicator"
-							className="flex h-6 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-slate-950/80 px-2.5 shadow-[0_0_18px_rgba(56,189,248,0.2)] backdrop-blur-sm"
+							aria-hidden="true"
+							className="pointer-events-none mt-3 flex justify-center pb-1"
 						>
-							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
-							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:160ms]" />
-							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:320ms]" />
+							<div
+								data-testid="streaming-indicator"
+								className="flex h-6 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-slate-950/80 px-2.5 shadow-[0_0_18px_rgba(56,189,248,0.2)] backdrop-blur-sm"
+							>
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:160ms]" />
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:320ms]" />
+							</div>
 						</div>
-					</div>
-				) : null}
+					) : null}
+				</div>
 			</div>
 
 			<>
@@ -1000,7 +1074,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									: "Enter to send, Shift+Enter for newline"}
 						</span>
 					</div>
-					<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
+					<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 pl-2 pr-1.5">
 						<textarea
 							ref={composerTextareaRef}
 							id="prompt-textarea"
@@ -1014,7 +1088,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							style={{ overflowY: "hidden" }}
 						/>
 						<button
-							className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${canStop
+							className={`my-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${canStop
 								? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
 								: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
 								}`}
@@ -1041,46 +1115,55 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					/>
 				</div>
 			</>
-			{previewAttachment ? (
-				// biome-ignore lint/a11y/useSemanticElements: modal overlay backdrop requires grid layout for centering
-				<div
-					role="button"
-					tabIndex={0}
-					className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-6"
-					onClick={() => setPreviewAttachment(null)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							setPreviewAttachment(null);
-						}
-					}}
-				>
-					<div
-						role="dialog"
-						aria-modal="true"
-						className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-slate-950 shadow-2xl"
-						onClick={(event) => event.stopPropagation()}
-						onKeyDown={(event) => event.stopPropagation()}
-					>
-						<img
-							src={previewAttachment.dataUrl}
-							alt={previewAttachment.name || "Attachment preview"}
-							className="max-h-[85vh] max-w-[90vw] object-contain"
-						/>
-						<div className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-2 text-xs text-slate-400">
-							<span className="truncate">
-								{previewAttachment.name || "Image preview"}
-							</span>
-							<button
-								type="button"
-								className="text-slate-400 transition hover:text-slate-300"
-								onClick={() => setPreviewAttachment(null)}
+			{previewAttachment
+				? (() => {
+					const previewModal = (
+						// biome-ignore lint/a11y/useSemanticElements: modal overlay backdrop requires grid layout for centering
+						<div
+							role="button"
+							tabIndex={0}
+							className="fixed inset-0 z-[120] grid place-items-center bg-black/70 p-6"
+							onClick={() => setPreviewAttachment(null)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									setPreviewAttachment(null);
+								}
+							}}
+						>
+							<div
+								role="dialog"
+								aria-modal="true"
+								className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-slate-950 shadow-2xl"
+								onClick={(event) => event.stopPropagation()}
+								onKeyDown={(event) => event.stopPropagation()}
 							>
-								Close
-							</button>
+								<img
+									src={previewAttachment.dataUrl}
+									alt={previewAttachment.name || "Attachment preview"}
+									className="max-h-[85vh] max-w-[90vw] object-contain"
+								/>
+								<div className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-2 text-xs text-slate-400">
+									<span className="truncate">
+										{previewAttachment.name || "Image preview"}
+									</span>
+									<button
+										type="button"
+										className="text-slate-400 transition hover:text-slate-300"
+										onClick={() => setPreviewAttachment(null)}
+									>
+										Close
+									</button>
+								</div>
+							</div>
 						</div>
-					</div>
-				</div>
-			) : null}
+					);
+
+					if (typeof document !== "undefined") {
+						return createPortal(previewModal, document.body);
+					}
+					return previewModal;
+				})()
+				: null}
 		</section>
 	);
 };
@@ -1115,6 +1198,13 @@ export function shouldRefocusComposer({
 	isStreaming: boolean;
 }): boolean {
 	return wasStreaming && !isStreaming;
+}
+
+function normalizeMessageLineBreaks(value: string): string {
+	if (!value) return value;
+	return value
+		.replace(/\r\n?/g, "\n")
+		.replace(RETURN_SYMBOL_LINE_BREAK_PATTERN, "\n");
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -1226,4 +1316,150 @@ function resolveAudioExtension(mimeType?: string): string {
 	if (normalized.includes("mpeg") || normalized.includes("mp3")) return "mp3";
 	if (normalized.includes("webm")) return "webm";
 	return "webm";
+}
+
+function isLikelyAudioUrl(value: string): boolean {
+	const url = value.trim();
+	if (!url) return false;
+	if (url.startsWith("data:audio/")) return true;
+
+	let parsed: URL;
+	try {
+		parsed = new URL(url, "https://wingman.local");
+	} catch {
+		return false;
+	}
+
+	if (hasAudioFileExtension(parsed.pathname)) return true;
+
+	for (const key of ["path", "file", "filename", "url"]) {
+		const candidate = parsed.searchParams.get(key);
+		if (candidate && hasAudioFileExtension(candidate)) {
+			return true;
+		}
+	}
+
+	for (const key of [
+		"mime",
+		"mimeType",
+		"contentType",
+		"type",
+		"format",
+		"modality",
+		"mediaType",
+	]) {
+		const candidate = parsed.searchParams.get(key);
+		if (!candidate) continue;
+		const normalized = candidate.toLowerCase();
+		if (normalized.includes("audio")) return true;
+	}
+
+	return false;
+}
+
+function hasAudioFileExtension(value: string): boolean {
+	const normalized = value.toLowerCase();
+	try {
+		return AUDIO_FILE_EXTENSION_PATTERN.test(decodeURIComponent(normalized));
+	} catch {
+		return AUDIO_FILE_EXTENSION_PATTERN.test(normalized);
+	}
+}
+
+function extractAssistantAudioPreviews(
+	text: string,
+	workingDirectory: string | null = null,
+	maxItems = 3,
+): Array<{ src: string; label?: string }> {
+	if (!text.trim()) return [];
+
+	const previews: Array<{ src: string; label?: string }> = [];
+	const seen = new Set<string>();
+	const matches = text.matchAll(AUDIO_REFERENCE_TOKEN_PATTERN);
+
+	for (const match of matches) {
+		const token = match[0];
+		const candidate = normalizeAudioReferenceToken(token);
+		if (!candidate) continue;
+		if (!isLikelyAudioUrl(candidate)) continue;
+
+		const src = resolveAssistantAudioPreviewSrc(candidate, workingDirectory);
+		if (!src || seen.has(src)) continue;
+		seen.add(src);
+		previews.push({
+			src,
+			label: deriveAudioPreviewLabel(candidate),
+		});
+		if (previews.length >= maxItems) break;
+	}
+
+	return previews;
+}
+
+function normalizeAudioReferenceToken(value: string): string | null {
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+	const stripped = trimmed
+		.replace(/^[([{<"']+/, "")
+		.replace(/[)\]}>",;:!?]+$/, "");
+	if (!stripped) return null;
+	return stripped;
+}
+
+function resolveAssistantAudioPreviewSrc(
+	value: string,
+	workingDirectory: string | null = null,
+): string | null {
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+	if (
+		trimmed.startsWith("http://") ||
+		trimmed.startsWith("https://") ||
+		trimmed.startsWith("data:audio/") ||
+		trimmed.startsWith("/api/fs/file?")
+	) {
+		return trimmed;
+	}
+
+	const resolvedPath =
+		workingDirectory && isRelativeFilesystemPath(trimmed)
+			? joinWorkingDirectoryPath(workingDirectory, trimmed)
+			: trimmed;
+	return `/api/fs/file?path=${encodeURIComponent(resolvedPath)}`;
+}
+
+function deriveAudioPreviewLabel(value: string): string | undefined {
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+	const parts = trimmed.split(/[\\/]/);
+	return parts.length > 0 ? parts[parts.length - 1] : undefined;
+}
+
+function isRelativeFilesystemPath(value: string): boolean {
+	if (!value) return false;
+	if (value.startsWith("/")) return false;
+	if (value.startsWith("~/")) return false;
+	if (/^[a-zA-Z]:[\\/]/.test(value)) return false;
+	return true;
+}
+
+function joinWorkingDirectoryPath(basePath: string, relativePath: string): string {
+	const base = basePath.trim();
+	const relative = relativePath
+		.trim()
+		.replace(/^(\.\/|\.\\)+/, "")
+		.replace(/^[/\\]+/, "");
+	if (!base) return relativePath.trim();
+	if (!relative) return base;
+
+	const useBackslash = base.includes("\\") && !base.includes("/");
+	if (useBackslash) {
+		const normalizedBase = base.replace(/[\\]+$/, "");
+		const normalizedRelative = relative.replace(/[\\/]+/g, "\\");
+		return `${normalizedBase}\\${normalizedRelative}`;
+	}
+
+	const normalizedBase = base.replace(/[\\/]+$/, "");
+	const normalizedRelative = relative.replace(/[\\]+/g, "/");
+	return `${normalizedBase}/${normalizedRelative}`;
 }

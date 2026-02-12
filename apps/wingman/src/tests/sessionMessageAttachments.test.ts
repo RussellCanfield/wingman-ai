@@ -31,6 +31,35 @@ describe("extractImageAttachments", () => {
 			{ kind: "image", dataUrl: "data:image/png;base64,zzz" },
 		]);
 	});
+
+	it("extracts MCP image blocks with inline base64 payload", () => {
+		const blocks = [
+			{
+				type: "image",
+				mimeType: "image/png",
+				data: "abc123",
+			},
+		];
+		expect(extractImageAttachments(blocks)).toEqual([
+			{ kind: "image", dataUrl: "data:image/png;base64,abc123" },
+		]);
+	});
+
+	it("extracts resource_link image blocks", () => {
+		const blocks = [
+			{
+				type: "resource_link",
+				uri: "/api/fs/file?path=%2Ftmp%2Fgenerated.png",
+				mimeType: "image/png",
+			},
+		];
+		expect(extractImageAttachments(blocks)).toEqual([
+			{
+				kind: "image",
+				dataUrl: "/api/fs/file?path=%2Ftmp%2Fgenerated.png",
+			},
+		]);
+	});
 });
 
 describe("extractAttachments", () => {

@@ -53,7 +53,10 @@ describe("ChatPanel prompt composer", () => {
 		);
 		expect(html).toContain("flex items-center justify-between gap-2 px-1 pb-2");
 		expect(html).toContain(
-			"flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2",
+			"flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 pl-2 pr-1.5",
+		);
+		expect(html).toContain(
+			"my-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition",
 		);
 		expect(html).toContain('aria-label="Send prompt"');
 		expect(html).toContain('aria-label="Add files"');
@@ -78,13 +81,23 @@ describe("ChatPanel prompt composer", () => {
 		);
 		expect(html).toContain('aria-label="Stop response"');
 		expect(html).toContain('data-testid="streaming-indicator"');
-		expect(html).toContain(
-			"pointer-events-none mb-2 inset-x-0 top-2 z-20 flex justify-center",
-		);
+		expect(html).toContain("pointer-events-none mt-3 flex justify-center pb-1");
 		expect(html).toContain(
 			"flex h-6 items-center justify-center gap-1.5 rounded-full",
 		);
 		expect(html).not.toContain('aria-label="Send prompt"');
+	});
+
+	it("keeps streaming indicator visible when override is false but stream is active", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				isStreaming: true,
+				showStreamingIndicator: false,
+			}),
+		);
+
+		expect(html).toContain('data-testid="streaming-indicator"');
 	});
 
 	it("keeps send action available while streaming when draft text exists", () => {
@@ -137,6 +150,23 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain('data-testid="streaming-indicator"');
 	});
 
+	it("renders image preview modal above side panels", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				initialPreviewAttachment: {
+					id: "preview-1",
+					kind: "image",
+					dataUrl: "data:image/png;base64,abc",
+					name: "preview.png",
+				},
+			}),
+		);
+
+		expect(html).toContain("fixed inset-0 z-[120] grid place-items-center");
+		expect(html).toContain("preview.png");
+	});
+
 	it("renders syntax-highlighted fenced code in chat messages", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
@@ -161,6 +191,217 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("hljs");
 		expect(html).toContain('aria-label="Copy code block"');
 		expect(html).toContain(">Copy<");
+	});
+
+	it("renders an audio player for assistant markdown audio links", () => {
+		const audioUrl = "https://cdn.example.com/sfx/whoosh.wav";
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-audio-link",
+							role: "assistant",
+							content: `[Preview audio](${audioUrl})`,
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("<audio");
+		expect(html).toContain(`src="${audioUrl}"`);
+		expect(html).toContain(">Open audio in new tab<");
+	});
+
+	it("keeps user markdown audio links as normal anchors", () => {
+		const audioUrl = "https://cdn.example.com/sfx/whoosh.wav";
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "user-audio-link",
+							role: "user",
+							content: `[Preview audio](${audioUrl})`,
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).not.toContain("<audio");
+		expect(html).toContain(`href="${audioUrl}"`);
+	});
+
+	it("renders an audio player for assistant inline code file paths", () => {
+		const path = "./generated/audio/test-sfx.wav";
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-audio-path",
+							role: "assistant",
+							content: `File: \`${path}\``,
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("<audio");
+		expect(html).toContain(
+			`src="/api/fs/file?path=${encodeURIComponent(path)}"`,
+		);
+		expect(html).toContain("test-sfx.wav");
+	});
+
+	it("resolves assistant inline audio paths against thread workdir", () => {
+		const workdir = "/Users/test/.wingman/outputs/game-dev";
+		const path = "./generated/audio/test-sfx.wav";
+		const expected = `${workdir}/generated/audio/test-sfx.wav`;
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					workdir,
+					messages: [
+						{
+							id: "assistant-audio-path-workdir",
+							role: "assistant",
+							content: `File: \`${path}\``,
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain(
+			`src="/api/fs/file?path=${encodeURIComponent(expected)}"`,
+		);
+	});
+
+	it("resolves assistant inline audio paths against default output dir when workdir is unset", () => {
+		const defaultOutputDir = "/Users/test/.wingman/outputs/game-dev";
+		const path = "./generated/audio/test-sfx.wav";
+		const expected = `${defaultOutputDir}/generated/audio/test-sfx.wav`;
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				defaultOutputDir,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					workdir: null,
+					messages: [
+						{
+							id: "assistant-audio-path-default-output",
+							role: "assistant",
+							content: `File: \`${path}\``,
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain(
+			`src="/api/fs/file?path=${encodeURIComponent(expected)}"`,
+		);
+	});
+
+	it("does not render audio previews for user inline code file paths", () => {
+		const path = "./generated/audio/test-sfx.wav";
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "user-audio-path",
+							role: "user",
+							content: `File: \`${path}\``,
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).not.toContain("<audio");
+	});
+
+	it("applies compact bottom spacing to markdown unordered lists", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-list",
+							role: "assistant",
+							content: "- First\n- Second",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain('<ul class="ml-5 list-disc space-y-1 mb-1">');
+	});
+
+	it("normalizes return symbols so streamed markdown lists render correctly", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-list-return-symbol",
+							role: "assistant",
+							content: "- Item one↵- Item two↵- Item three",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain('<ul class="ml-5 list-disc space-y-1 mb-1">');
+		expect(html).toContain("<li>Item one</li>");
+		expect(html).toContain("<li>Item two</li>");
+		expect(html).toContain("<li>Item three</li>");
 	});
 
 	it("keeps existing messages visible while loading", () => {
@@ -340,7 +581,7 @@ describe("ChatPanel prompt composer", () => {
 		);
 
 		expect(html).toContain("flex justify-start mt-0");
-		expect(html).toContain("flex justify-start mt-2");
+		expect(html).not.toContain("flex justify-start mt-1");
 		expect(html).not.toContain("min-h-full space-y-4 p-3 sm:p-4");
 	});
 

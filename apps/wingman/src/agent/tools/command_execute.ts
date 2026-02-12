@@ -175,7 +175,7 @@ export const createCommandExecuteTool = (
 		{
 			name: "command_execute",
 			description:
-				"Executes a command in a terminal and reports the output. Cannot execute potentially destructive commands like rm, mv, chmod, sudo, etc. Use for safe operations like running tests, builds, or other validation commands. Do not run long-running commands like dev servers. Commands run with a timeout in the active execution workspace context.",
+				"Executes a command in a terminal and reports the output. Cannot execute potentially destructive commands like rm, mv, chmod, sudo, etc. Use for safe operations like running tests, builds, or other validation commands. Not for image generation/editing requests when dedicated image tools are available. Do not run long-running commands like dev servers. Commands run with a timeout in the active execution workspace context.",
 			schema: z.object({
 				command: z.string().describe("The command to execute in the terminal"),
 			}),

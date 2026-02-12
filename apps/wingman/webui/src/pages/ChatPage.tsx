@@ -77,8 +77,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 
 	const messageCount = activeThread?.messageCount ?? activeThread?.messages.length ?? 0;
 	const baseOutputRoot = outputRoot ? outputRoot.replace(/\/+$/, "") : "";
-	const defaultOutputDir =
-		activeThread && baseOutputRoot ? `${baseOutputRoot}/${activeThread.agentId}` : baseOutputRoot || "--";
+	const resolvedDefaultOutputDir =
+		activeThread && baseOutputRoot ? `${baseOutputRoot}/${activeThread.agentId}` : null;
+	const defaultOutputDir = resolvedDefaultOutputDir || "--";
 
 	const handleSaveWorkdir = async (path: string | null) => {
 		if (!activeThread) return false;
@@ -93,6 +94,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 		<section className="grid gap-6 lg:grid-cols-[1fr_280px]">
 			<ChatPanel
 				activeThread={activeThread}
+				defaultOutputDir={resolvedDefaultOutputDir}
 				prompt={prompt}
 				attachments={attachments}
 				fileAccept={fileAccept}

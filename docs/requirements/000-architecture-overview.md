@@ -305,6 +305,8 @@ OAuth flows are planned; today, `wingman provider login` stores subscription tok
 └─────────────────────────────────────────────────────────────┘
 ```
 
+Session storage now also materializes assistant image attachments to disk under each agent/session state directory so generated images can be reused across follow-up turns.
+
 ### Gateway Data Flow
 
 ```

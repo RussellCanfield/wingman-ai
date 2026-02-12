@@ -66,6 +66,18 @@ describe("shouldRecoverStream", () => {
 		).toBe(true);
 	});
 
+	it("recovers on hard timeout even before first activity is observed", () => {
+		expect(
+			shouldRecoverStream({
+				activeRequestId: "req-1",
+				lastActivityAt: 0,
+				startedAt: 10_000,
+				hasRunningTools: false,
+				now: 10_000 + DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
+			}),
+		).toBe(true);
+	});
+
 	it("returns false when timestamps are invalid", () => {
 		expect(
 			shouldRecoverStream({

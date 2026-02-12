@@ -2,10 +2,12 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
-	ToolEventPanel,
+	extractToolAudioPreviews,
+	extractToolImagePreviews,
 	formatToolEventDuration,
-	summarizeToolEventValue,
 	stringifyToolEventValue,
+	summarizeToolEventValue,
+	ToolEventPanel,
 } from "./ToolEventPanel";
 
 describe("ToolEventPanel helpers", () => {
@@ -20,6 +22,14 @@ describe("ToolEventPanel helpers", () => {
 		const result = stringifyToolEventValue("x".repeat(20), 10);
 
 		expect(result).toBe("xxxxxxxxxx...");
+	});
+
+	it("drops leaked internal tool envelope payload text", () => {
+		const result = stringifyToolEventValue(
+			'assistant to=multi_tool_use.parallel commentary json {"tool_uses":[{"recipient_name":"functions.git_status","parameters":{"includeStaged":true}}]}',
+		);
+
+		expect(result).toBeNull();
 	});
 
 	it("summarizes payload text into one compact line", () => {
@@ -235,5 +245,178 @@ describe("ToolEventPanel helpers", () => {
 		);
 
 		expect(html).toContain("Running");
+	});
+
+	it("extracts image previews from structured tool output", () => {
+		const previews = extractToolImagePreviews({
+			structuredContent: {
+				images: [
+					{
+						path: "/tmp/generated.png",
+					},
+					{
+						url: "/api/fs/file?path=%2Ftmp%2Fgenerated-2.png",
+					},
+				],
+			},
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated.png",
+				label: undefined,
+			},
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated-2.png",
+				label: undefined,
+			},
+		]);
+	});
+
+	it("extracts image previews from resource_link content", () => {
+		const previews = extractToolImagePreviews({
+			content: [
+				{ type: "text", text: "Generated image." },
+				{
+					type: "resource_link",
+					uri: "/api/fs/file?path=%2Ftmp%2Fgenerated.png",
+					mimeType: "image/png",
+					name: "generated.png",
+				},
+			],
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated.png",
+				label: "generated.png",
+			},
+		]);
+	});
+
+	it("extracts image previews from artifact image blocks", () => {
+		const previews = extractToolImagePreviews({
+			artifact: [
+				{
+					type: "image",
+					mimeType: "image/png",
+					data: "abc123",
+				},
+			],
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "data:image/png;base64,abc123",
+			},
+		]);
+	});
+
+	it("extracts audio previews from structured media output", () => {
+		const previews = extractToolAudioPreviews({
+			structuredContent: {
+				media: [
+					{
+						modality: "audio",
+						path: "/tmp/generated-sfx.wav",
+						name: "impact.wav",
+						mimeType: "audio/wav",
+					},
+					{
+						modality: "audio",
+						url: "/api/fs/file?path=%2Ftmp%2Fgenerated-sfx-2.wav",
+						name: "reverb.wav",
+						mimeType: "audio/wav",
+					},
+				],
+			},
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated-sfx.wav",
+				label: "impact.wav",
+			},
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated-sfx-2.wav",
+				label: "reverb.wav",
+			},
+		]);
+	});
+
+	it("extracts audio previews from resource_link content", () => {
+		const previews = extractToolAudioPreviews({
+			content: [
+				{ type: "text", text: "Generated audio." },
+				{
+					type: "resource_link",
+					uri: "/api/fs/file?path=%2Ftmp%2Fgenerated.mp3",
+					mimeType: "audio/mpeg",
+					name: "generated.mp3",
+				},
+			],
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated.mp3",
+				label: "generated.mp3",
+			},
+		]);
+	});
+
+	it("renders image previews in tool details", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-image-1",
+						name: "generate_image_or_texture",
+						status: "completed",
+						output: {
+							structuredContent: {
+								images: [{ path: "/tmp/generated.png" }],
+							},
+						},
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Images");
+		expect(html).toContain('src="/api/fs/file?path=%2Ftmp%2Fgenerated.png"');
+	});
+
+	it("renders audio previews in tool details", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-audio-1",
+						name: "generate_audio_or_music",
+						status: "completed",
+						output: {
+							structuredContent: {
+								media: [
+									{
+										modality: "audio",
+										path: "/tmp/generated-sfx.wav",
+										name: "impact.wav",
+										mimeType: "audio/wav",
+									},
+								],
+							},
+						},
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Audio");
+		expect(html).toContain("<audio");
+		expect(html).toContain('src="/api/fs/file?path=%2Ftmp%2Fgenerated-sfx.wav"');
+		expect(html).toContain("impact.wav");
 	});
 });

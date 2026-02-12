@@ -10,6 +10,7 @@ tools:
   - background_terminal
 model: codex:gpt-5.3-codex
 reasoningEffort: "high"
+mcpUseGlobal: true
 promptRefinement: false
 ---
 
@@ -91,6 +92,8 @@ Note that plans are not for padding out simple work with filler steps or stating
 Do not repeat the full contents of the plan after a `write_todos` call — the harness already displays it. Instead, summarize the change made and highlight any important context or next step.
 
 Before running a command, consider whether or not you have completed the previous step, and make sure to mark it as completed before moving on to the next step. It may be the case that you complete all steps in your plan after a single pass of implementation. If this is the case, you can simply mark all the planned steps as completed. Sometimes, you may need to change plans in the middle of a task: call `write_todos` with the updated list and statuses.
+
+Before finalizing a non-trivial task, call `read_todos` (when available) to verify there are no remaining `pending` or `in_progress` items.
 
 Use a plan when:
 
@@ -306,3 +309,5 @@ To create a plan, call `write_todos` with a `todos` array of short 1-sentence st
 When steps are completed, call `write_todos` again with the updated list: mark finished steps as `completed` and set the next active step to `in_progress`. Keep exactly one `in_progress` step until everything is done.
 
 If all steps are complete, call `write_todos` with all steps marked `completed`.
+
+Before your final response on non-trivial tasks, call `read_todos` (when available) and ensure all todo items are `completed`.

@@ -1,13 +1,42 @@
-import { MultiServerMCPClient } from "@langchain/mcp-adapters";
-import { tool as createTool } from "@langchain/core/tools";
 import type { StructuredTool } from "@langchain/core/tools";
-import type {
-	MCPServersConfig,
-	MCPServerConfiguration,
-	MCPStdioConfig,
-	MCPSSEConfig,
-} from "@/types/mcp.js";
+import { tool as createTool } from "@langchain/core/tools";
+import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import type { Logger } from "@/logger.js";
+import type {
+	MCPServerConfiguration,
+	MCPServersConfig,
+	MCPSSEConfig,
+	MCPStdioConfig,
+} from "@/types/mcp.js";
+
+type MCPClientStdioServerConfig = {
+	transport: "stdio";
+	command: string;
+	args: string[];
+	env: Record<string, string>;
+	defaultToolTimeout?: number;
+};
+
+type MCPClientSseServerConfig = {
+	transport: "sse";
+	url: string;
+	headers: Record<string, string>;
+	defaultToolTimeout?: number;
+};
+
+type MCPClientServerConfig =
+	| MCPClientStdioServerConfig
+	| MCPClientSseServerConfig;
+
+type MCPClientConfig = {
+	mcpServers: Record<string, MCPClientServerConfig>;
+	useStandardContentBlocks: boolean;
+	outputHandling: {
+		image: "artifact";
+		audio: "artifact";
+		resource: "artifact";
+	};
+};
 
 /**
  * Manages MCP server connections and tool retrieval
@@ -17,10 +46,16 @@ export class MCPClientManager {
 	private client: MultiServerMCPClient | null = null;
 	private logger: Logger;
 	private serverConfigs: MCPServerConfiguration[];
+	private executionWorkspace: string | null;
 
-	constructor(configs: MCPServersConfig[], logger: Logger) {
+	constructor(
+		configs: MCPServersConfig[],
+		logger: Logger,
+		options?: { executionWorkspace?: string | null },
+	) {
 		this.logger = logger;
 		this.serverConfigs = this.mergeConfigs(configs);
+		this.executionWorkspace = options?.executionWorkspace?.trim() || null;
 	}
 
 	/**
@@ -44,8 +79,8 @@ export class MCPClientManager {
 	/**
 	 * Convert Wingman MCP config to MultiServerMCPClient format
 	 */
-	private buildClientConfig(): Record<string, any> {
-		const clientConfig: Record<string, any> = {};
+	private buildClientConfig(): MCPClientConfig {
+		const mcpServers: Record<string, MCPClientServerConfig> = {};
 
 		for (const server of this.serverConfigs) {
 			if (server.transport === "stdio") {
@@ -54,23 +89,44 @@ export class MCPClientManager {
 				for (const [key, value] of Object.entries(stdioServer.env || {})) {
 					resolvedEnv[key] = resolveEnvValue(value);
 				}
-				clientConfig[server.name] = {
+				const runtimeEnv = this.applyRuntimeEnv(resolvedEnv);
+				const defaultToolTimeout = getDefaultToolTimeout(stdioServer);
+				mcpServers[server.name] = {
 					transport: "stdio",
 					command: stdioServer.command,
 					args: stdioServer.args || [],
-					env: resolvedEnv,
+					env: runtimeEnv,
+					...(defaultToolTimeout !== undefined ? { defaultToolTimeout } : {}),
 				};
 			} else if (server.transport === "sse") {
 				const sseServer = server as MCPSSEConfig;
-				clientConfig[server.name] = {
+				const defaultToolTimeout = getDefaultToolTimeout(sseServer);
+				mcpServers[server.name] = {
 					transport: "sse",
 					url: sseServer.url,
 					headers: sseServer.headers || {},
+					...(defaultToolTimeout !== undefined ? { defaultToolTimeout } : {}),
 				};
 			}
 		}
 
-		return clientConfig;
+		return {
+			mcpServers,
+			useStandardContentBlocks: false,
+			// Keep large binary outputs out of LLM context; they remain available in tool artifacts.
+			outputHandling: {
+				image: "artifact",
+				audio: "artifact",
+				resource: "artifact",
+			},
+		};
+	}
+
+	private applyRuntimeEnv(env: Record<string, string>): Record<string, string> {
+		if (!this.executionWorkspace) return env;
+		const next = { ...env };
+		next.WINGMAN_WORKDIR = this.executionWorkspace;
+		return next;
 	}
 
 	/**
@@ -105,7 +161,9 @@ export class MCPClientManager {
 	 */
 	async getTools(): Promise<StructuredTool[]> {
 		if (!this.client) {
-			this.logger.debug("No MCP client initialized, returning empty tools array");
+			this.logger.debug(
+				"No MCP client initialized, returning empty tools array",
+			);
 			return [];
 		}
 
@@ -113,7 +171,9 @@ export class MCPClientManager {
 			this.logger.debug("Retrieving tools from MCP servers");
 			const tools = await this.client.getTools();
 			const sanitized = this.sanitizeToolNames(tools);
-			this.logger.info(`Retrieved ${sanitized.length} tool(s) from MCP servers`);
+			this.logger.info(
+				`Retrieved ${sanitized.length} tool(s) from MCP servers`,
+			);
 			return sanitized;
 		} catch (error) {
 			this.logger.error(
@@ -155,7 +215,11 @@ export class MCPClientManager {
 				? `${tool.description}\n\n${originalLabel}`
 				: originalLabel;
 
-			const schema = (tool as any).schema ?? (tool as any).inputSchema;
+			const toolWithSchema = tool as StructuredTool & {
+				schema?: unknown;
+				inputSchema?: unknown;
+			};
+			const schema = toolWithSchema.schema ?? toolWithSchema.inputSchema;
 			if (!schema) {
 				try {
 					tool.name = sanitized;
@@ -169,7 +233,7 @@ export class MCPClientManager {
 			return createTool(async (input) => tool.invoke(input), {
 				name: sanitized,
 				description,
-				schema,
+				schema: schema as never,
 			});
 		});
 	}
@@ -209,4 +273,13 @@ function resolveEnvValue(value: string): string {
 	if (!match) return value;
 	const envValue = process.env[match[1]];
 	return envValue ?? "";
+}
+
+function getDefaultToolTimeout(
+	server: MCPServerConfiguration,
+): number | undefined {
+	const candidate = server.defaultToolTimeout;
+	if (typeof candidate !== "number") return undefined;
+	if (!Number.isFinite(candidate) || candidate <= 0) return undefined;
+	return Math.floor(candidate);
 }

@@ -1,7 +1,11 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+	resolveAgentMemorySources,
 	OUTPUT_VIRTUAL_PATH,
+	resolveAgentExecutionWorkspace,
 	resolveExecutionWorkspace,
 	resolveExternalOutputMount,
 	toWorkspaceAliasVirtualPath,
@@ -88,6 +92,31 @@ describe("resolveExecutionWorkspace", () => {
 	});
 });
 
+describe("resolveAgentExecutionWorkspace", () => {
+	const workspace = path.resolve("workspace");
+
+	it("prefers explicit workdir over default output dir", () => {
+		const workdir = path.resolve("outside", "session-output");
+		const defaultOutputDir = path.resolve("outside", "default-output");
+		expect(
+			resolveAgentExecutionWorkspace(workspace, workdir, defaultOutputDir),
+		).toBe(path.normalize(workdir));
+	});
+
+	it("uses default output dir when session workdir is unset", () => {
+		const defaultOutputDir = path.resolve("outside", "default-output");
+		expect(
+			resolveAgentExecutionWorkspace(workspace, null, defaultOutputDir),
+		).toBe(path.normalize(defaultOutputDir));
+	});
+
+	it("falls back to workspace when neither workdir nor default output dir exist", () => {
+		expect(resolveAgentExecutionWorkspace(workspace, null, null)).toBe(
+			path.normalize(workspace),
+		);
+	});
+});
+
 describe("toWorkspaceAliasVirtualPath", () => {
 	it("builds an alias path for absolute workspaces", () => {
 		const absolute = path.resolve("outside", "session-output");
@@ -98,5 +127,41 @@ describe("toWorkspaceAliasVirtualPath", () => {
 
 	it("returns null for non-absolute workspace paths", () => {
 		expect(toWorkspaceAliasVirtualPath("relative/workspace")).toBeNull();
+	});
+});
+
+describe("resolveAgentMemorySources", () => {
+	const tempDirs: string[] = [];
+
+	afterEach(() => {
+		for (const dir of tempDirs) {
+			rmSync(dir, { recursive: true, force: true });
+		}
+		tempDirs.length = 0;
+	});
+
+	it("returns /AGENTS.md when present in execution workspace", () => {
+		const workspace = mkdtempSync(path.join(tmpdir(), "wingman-memory-"));
+		tempDirs.push(workspace);
+		writeFileSync(path.join(workspace, "AGENTS.md"), "# Agent Memory");
+
+		expect(resolveAgentMemorySources(workspace)).toEqual(["/AGENTS.md"]);
+	});
+
+	it("returns no sources when AGENTS.md is absent", () => {
+		const workspace = mkdtempSync(path.join(tmpdir(), "wingman-memory-"));
+		tempDirs.push(workspace);
+
+		expect(resolveAgentMemorySources(workspace)).toEqual([]);
+	});
+
+	it("ignores .deepagents/AGENTS.md when top-level AGENTS.md is missing", () => {
+		const workspace = mkdtempSync(path.join(tmpdir(), "wingman-memory-"));
+		tempDirs.push(workspace);
+		const deepagentsDir = path.join(workspace, ".deepagents");
+		mkdirSync(deepagentsDir, { recursive: true });
+		writeFileSync(path.join(deepagentsDir, "AGENTS.md"), "# Nested Memory");
+
+		expect(resolveAgentMemorySources(workspace)).toEqual([]);
 	});
 });

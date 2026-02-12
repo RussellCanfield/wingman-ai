@@ -65,8 +65,12 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		return parseStreamEvents(unwrappedChunk);
 	}
 
-	const eventParsed = parseStreamEventChunk(chunk);
-	if (eventParsed) return eventParsed;
+	if (typeof chunk.event === "string") {
+		const eventParsed = parseStreamEventChunk(chunk);
+		if (eventParsed) return eventParsed;
+		// Ignore unsupported LangGraph lifecycle events.
+		return { textEvents, toolEvents };
+	}
 
 	const messageEntries = normalizeMessagesFromChunk(chunk);
 	if (messageEntries.length > 0) {
@@ -75,18 +79,23 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 			const messageType = getMessageType(msg);
 			const normalizedType = messageType ? messageType.toLowerCase() : "";
 			const role = getMessageRole(msg);
-			const isAIMessage = isAIMessageType(normalizedType) || role === "assistant";
+			const isAIMessage =
+				isAIMessageType(normalizedType) || role === "assistant";
 			const isToolMessage = isToolMessageType(normalizedType);
 			if (role === "user" && !isAIMessage && !isToolMessage) continue;
 
 			if (isAIMessage) {
 				const messageId = getMessageId(msg, entry);
 				const node = extractNodeLabel(msg, entry.meta);
+				const isDelta = isMessageDelta(msg, normalizedType);
 				const toolCalls = extractToolCalls(msg, messageId);
 				for (const toolCall of toolCalls) {
-					const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
-						toolCall.args,
-					);
+					const {
+						ui,
+						uiOnly,
+						textFallback,
+						data: args,
+					} = splitUiPayload(toolCall.args);
 					toolEvents.push({
 						id: toolCall.id,
 						name: toolCall.name,
@@ -101,13 +110,16 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 					});
 				}
 
-				const text = sanitizeDisplayText(extractTextContent(msg));
-				if (text) {
+				const rawText = extractTextContent(msg);
+				const text = isDelta
+					? sanitizeDeltaDisplayText(rawText)
+					: sanitizeDisplayText(rawText);
+				if (text !== undefined) {
 					textEvents.push({
 						text,
 						messageId,
 						node,
-						isDelta: isMessageDelta(msg, normalizedType),
+						isDelta,
 					});
 				}
 			}
@@ -116,9 +128,12 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				const toolResult = extractToolResult(msg);
 				if (toolResult) {
 					const node = extractNodeLabel(msg, entry.meta);
-					const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
-						toolResult.output,
-					);
+					const {
+						ui,
+						uiOnly,
+						textFallback,
+						data: output,
+					} = splitUiPayload(toolResult.output);
 					toolEvents.push({
 						id: toolResult.id,
 						name: toolResult.name || "tool",
@@ -151,9 +166,12 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		for (const toolCall of chunk.tool_calls) {
 			const normalized = normalizeToolCall(toolCall);
 			if (!normalized) continue;
-			const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
-				normalized.args,
-			);
+			const {
+				ui,
+				uiOnly,
+				textFallback,
+				data: args,
+			} = splitUiPayload(normalized.args);
 			toolEvents.push({
 				id: normalized.id,
 				name: normalized.name,
@@ -192,13 +210,15 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 
 	if (chunk.event === "on_chat_model_stream") {
 		const messageChunk = chunk.data?.chunk ?? chunk.data?.message;
-		const text = sanitizeDisplayText(extractTextContent(messageChunk));
-		if (!text) return null;
+		if (!isAIChatModelChunk(messageChunk)) return null;
+		const text = sanitizeDeltaDisplayText(extractTextContent(messageChunk));
+		if (text === undefined) return null;
 		return {
 			textEvents: [
 				{
 					text,
-					messageId: typeof chunk.run_id === "string" ? chunk.run_id : undefined,
+					messageId:
+						typeof chunk.run_id === "string" ? chunk.run_id : undefined,
 					node: extractEventNode(chunk),
 					isDelta: true,
 				},
@@ -215,13 +235,14 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		} else if (typeof llmChunk?.text === "string") {
 			text = llmChunk.text;
 		}
-		text = sanitizeDisplayText(text);
-		if (!text) return null;
+		text = sanitizeDeltaDisplayText(text);
+		if (text === undefined) return null;
 		return {
 			textEvents: [
 				{
 					text,
-					messageId: typeof chunk.run_id === "string" ? chunk.run_id : undefined,
+					messageId:
+						typeof chunk.run_id === "string" ? chunk.run_id : undefined,
 					node: extractEventNode(chunk),
 					isDelta: true,
 				},
@@ -237,9 +258,12 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		const toolId =
 			resolveToolEventRunId(chunk, toolName, node, parentRunIds) ||
 			createEventId();
-		const { ui, uiOnly, textFallback, data: args } = splitUiPayload(
-			normalizeToolArgs(chunk.data?.input),
-		);
+		const {
+			ui,
+			uiOnly,
+			textFallback,
+			data: args,
+		} = splitUiPayload(normalizeToolArgs(chunk.data?.input));
 		return {
 			textEvents: [],
 			toolEvents: [
@@ -270,9 +294,12 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 				node,
 				parentRunIds,
 			) || createEventId();
-		const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
-			chunk.data?.output,
-		);
+		const {
+			ui,
+			uiOnly,
+			textFallback,
+			data: output,
+		} = splitUiPayload(chunk.data?.output);
 		return {
 			textEvents: [],
 			toolEvents: [
@@ -305,9 +332,12 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 				parentRunIds,
 			) || createEventId();
 		const errorPayload = chunk.data?.error ?? chunk.error;
-		const { ui, uiOnly, textFallback, data: output } = splitUiPayload(
-			chunk.data?.output ?? errorPayload,
-		);
+		const {
+			ui,
+			uiOnly,
+			textFallback,
+			data: output,
+		} = splitUiPayload(chunk.data?.output ?? errorPayload);
 		return {
 			textEvents: [],
 			toolEvents: [
@@ -330,6 +360,58 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 	}
 
 	return null;
+}
+
+function isAIChatModelChunk(message: any): boolean {
+	if (!message || typeof message !== "object") return false;
+
+	const role = getMessageRole(message);
+	if (typeof role === "string") {
+		const normalizedRole = role.toLowerCase();
+		return normalizedRole === "assistant" || normalizedRole === "ai";
+	}
+
+	const directType = getMessageType(message);
+	if (typeof directType === "string") {
+		const normalizedType = directType.toLowerCase();
+		if (isAIMessageType(normalizedType)) return true;
+		if (
+			normalizedType.includes("human") ||
+			normalizedType.includes("user") ||
+			isToolMessageType(normalizedType)
+		) {
+			return false;
+		}
+	}
+
+	const constructorType =
+		typeof message.type === "string" ? message.type.toLowerCase() : "";
+	if (constructorType === "constructor") {
+		const idParts = Array.isArray(message.id)
+			? message.id
+			: Array.isArray(message.lc_id)
+				? message.lc_id
+				: [];
+		if (
+			idParts.some((part: any) =>
+				String(part).toLowerCase().includes("aimessage"),
+			)
+		) {
+			return true;
+		}
+		if (
+			idParts.some((part: any) => {
+				const value = String(part).toLowerCase();
+				return value.includes("humanmessage") || value.includes("usermessage");
+			})
+		) {
+			return false;
+		}
+	}
+
+	// Most on_chat_model_stream payloads are assistant chunks; if they are
+	// untyped, allow them unless we explicitly detect a non-AI role/type.
+	return true;
 }
 
 function normalizeMessagesFromChunk(chunk: any): MessageEntry[] {
@@ -359,7 +441,10 @@ function normalizeMessagesFromChunk(chunk: any): MessageEntry[] {
 	return entries;
 }
 
-function normalizeMessagesPayload(payload: any, sourceKey?: string): MessageEntry[] {
+function normalizeMessagesPayload(
+	payload: any,
+	sourceKey?: string,
+): MessageEntry[] {
 	if (!Array.isArray(payload) || payload.length === 0) return [];
 
 	if (payload.length === 2 && !Array.isArray(payload[0])) {
@@ -617,7 +702,8 @@ function extractLanggraphNode(meta: any): string | undefined {
 		return directNode.trim();
 	}
 
-	const tagNode = extractNodeFromTagList(meta.tags) || extractNodeFromTagList(meta.ls_tags);
+	const tagNode =
+		extractNodeFromTagList(meta.tags) || extractNodeFromTagList(meta.ls_tags);
 	if (tagNode) return tagNode;
 
 	const checkpointNode =
@@ -706,7 +792,8 @@ function extractTextContent(message: any): string | undefined {
 		message.content ??
 		message?.kwargs?.content ??
 		message?.additional_kwargs?.content;
-	if (typeof content === "string") return content.length > 0 ? content : undefined;
+	if (typeof content === "string")
+		return content.length > 0 ? content : undefined;
 	if (Array.isArray(content)) {
 		const blocks = content
 			.filter((block: any) => block && block.type === "text" && block.text)
@@ -727,25 +814,58 @@ const INTERNAL_TOOL_ENVELOPE_MARKERS: RegExp[] = [
 
 function sanitizeDisplayText(text: string | undefined): string | undefined {
 	if (typeof text !== "string") return undefined;
-	if (text.trim().length === 0) return undefined;
+	const cleanedText = stripDisplayNoise(text);
+	if (cleanedText.trim().length === 0) return undefined;
 
 	let envelopeStart = -1;
 	for (const marker of INTERNAL_TOOL_ENVELOPE_MARKERS) {
-		const index = text.search(marker);
+		const index = cleanedText.search(marker);
 		if (index < 0) continue;
 		envelopeStart = envelopeStart < 0 ? index : Math.min(envelopeStart, index);
 	}
 
-	if (envelopeStart === 0 && isLikelyInternalToolEnvelope(text)) {
+	if (envelopeStart === 0 && isLikelyInternalToolEnvelope(cleanedText)) {
 		return undefined;
 	}
 
-	if (envelopeStart > 0 && isLikelyInternalToolEnvelope(text.slice(envelopeStart))) {
-		const prefix = text.slice(0, envelopeStart).replace(/\s+$/, "");
+	if (
+		envelopeStart > 0 &&
+		isLikelyInternalToolEnvelope(cleanedText.slice(envelopeStart))
+	) {
+		const prefix = stripDisplayNoise(cleanedText.slice(0, envelopeStart));
 		return prefix.length > 0 ? prefix : undefined;
 	}
 
-	return text;
+	return cleanedText;
+}
+
+function sanitizeDeltaDisplayText(text: string | undefined): string | undefined {
+	if (typeof text !== "string") return undefined;
+	const normalized = normalizeDeltaWhitespace(text);
+	if (normalized.length === 0) return undefined;
+	if (normalized.trim().length === 0) {
+		// Preserve pure whitespace deltas so streamed paragraph/list breaks survive.
+		return normalized;
+	}
+
+	const trailingMatch = normalized.match(/\s+$/);
+	const trailingWhitespace = trailingMatch ? trailingMatch[0] : "";
+	const content =
+		trailingWhitespace.length > 0
+			? normalized.slice(0, -trailingWhitespace.length)
+			: normalized;
+	const cleanedContent = sanitizeDisplayText(content);
+	if (!cleanedContent) return undefined;
+	return trailingWhitespace
+		? `${cleanedContent}${trailingWhitespace}`
+		: cleanedContent;
+}
+
+function normalizeDeltaWhitespace(value: string): string {
+	let output = normalizeLineBreakChars(value);
+	output = stripAsciiControlChars(output);
+	output = output.replace(/\uFFFD/g, "");
+	return output;
 }
 
 function isLikelyInternalToolEnvelope(value: string): boolean {
@@ -766,10 +886,57 @@ function isLikelyInternalToolEnvelope(value: string): boolean {
 	return markerCount >= 2;
 }
 
-function extractToolCalls(
-	msg: any,
-	messageId?: string,
-): NormalizedToolCall[] {
+function stripDisplayNoise(value: string): string {
+	let output = normalizeLineBreakChars(value);
+	output = stripAsciiControlChars(output);
+	output = output.replace(/\uFFFD/g, "");
+	output = stripTrailingSymbolNoise(output);
+	return output.replace(/\s+$/, "");
+}
+
+function stripTrailingSymbolNoise(value: string): string {
+	const lines = value.split("\n");
+	while (lines.length > 0) {
+		const tail = lines[lines.length - 1]?.trim() || "";
+		if (!tail) {
+			lines.pop();
+			continue;
+		}
+		if (isSymbolNoiseToken(tail)) {
+			lines.pop();
+			continue;
+		}
+		break;
+	}
+
+	let output = lines.join("\n");
+	output = output.replace(/(^|[\s.,;:!?()[\]{}'"-])[#+]{6,}\s*$/g, "$1");
+	return output.replace(/\s+$/, "");
+}
+
+function isSymbolNoiseToken(value: string): boolean {
+	return value.length >= 6 && /^[#+]+$/.test(value);
+}
+
+function normalizeLineBreakChars(value: string): string {
+	return value
+		.replace(/\r\n?/g, "\n")
+		.replace(/[\u0085\u2028\u2029\u21B5\u23CE\u240A\u2424]/g, "\n");
+}
+
+function stripAsciiControlChars(value: string): string {
+	let output = "";
+	for (const char of value) {
+		const code = char.charCodeAt(0);
+		const isControl = (code >= 0x00 && code <= 0x1f) || code === 0x7f;
+		const isAllowedWhitespace = code === 0x09 || code === 0x0a || code === 0x0d;
+		if (isControl && !isAllowedWhitespace) continue;
+		output += char;
+	}
+	return output;
+}
+
+function extractToolCalls(msg: any, messageId?: string): NormalizedToolCall[] {
 	const calls: any[] = [];
 
 	const toolCalls =
@@ -819,9 +986,7 @@ function normalizeToolArgs(args: any): Record<string, any> {
 	return { value: args };
 }
 
-function splitUiPayload(
-	payload: any,
-): {
+function splitUiPayload(payload: any): {
 	ui?: UiRenderSpec;
 	uiOnly?: boolean;
 	textFallback?: string;
@@ -829,10 +994,10 @@ function splitUiPayload(
 } {
 	if (typeof payload === "string") {
 		try {
-		const parsed = JSON.parse(payload);
-		if (parsed && typeof parsed === "object") {
-			return splitUiPayload(parsed);
-		}
+			const parsed = JSON.parse(payload);
+			if (parsed && typeof parsed === "object") {
+				return splitUiPayload(parsed);
+			}
 		} catch {
 			return { data: payload };
 		}
@@ -923,7 +1088,9 @@ function extractToolResult(msg: any): {
 	error?: string;
 } | null {
 	const toolCallId =
-		msg?.tool_call_id ?? msg?.kwargs?.tool_call_id ?? msg?.additional_kwargs?.tool_call_id;
+		msg?.tool_call_id ??
+		msg?.kwargs?.tool_call_id ??
+		msg?.additional_kwargs?.tool_call_id;
 	if (!toolCallId) return null;
 
 	return {

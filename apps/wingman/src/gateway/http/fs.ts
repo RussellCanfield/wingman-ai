@@ -56,5 +56,26 @@ export const handleFsApi = async (
 		);
 	}
 
+	if (url.pathname === "/api/fs/file" && req.method === "GET") {
+		const rawPath = url.searchParams.get("path");
+		if (!rawPath) {
+			return new Response("path required", { status: 400 });
+		}
+		const resolved = ctx.resolveFsPath(rawPath);
+		const roots = ctx.resolveFsRoots();
+		if (!ctx.isPathWithinRoots(resolved, roots)) {
+			return new Response("path not allowed", { status: 403 });
+		}
+		if (!existsSync(resolved) || !statSync(resolved).isFile()) {
+			return new Response("path not found", { status: 404 });
+		}
+
+		return new Response(Bun.file(resolved), {
+			headers: {
+				"Cache-Control": "no-store",
+			},
+		});
+	}
+
 	return null;
 };

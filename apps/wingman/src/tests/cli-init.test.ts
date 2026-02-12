@@ -64,6 +64,7 @@ describe("CLI init", () => {
 		expect(existsSync(codingAgentPath)).toBe(true);
 		const codingPrompt = readFileSync(codingAgentPath, "utf-8");
 		expect(codingPrompt).toContain("write_todos");
+		expect(codingPrompt).toContain("read_todos");
 		expect(codingPrompt).not.toContain("update_plan");
 		expect(codingPrompt).not.toContain("subAgents:");
 		expect(codingPrompt).toContain("Do not delegate coding work to subagents");
@@ -83,6 +84,7 @@ describe("CLI init", () => {
 		expect(codingV2Prompt).toContain("promptFile: ./implementor.md");
 		expect(codingV2Prompt).toContain("`task` tool");
 		expect(codingV2Prompt).toContain("write_todos");
+		expect(codingV2Prompt).toContain("read_todos");
 
 		const codingV2ImplementorPath = join(
 			workspace,
@@ -116,6 +118,61 @@ describe("CLI init", () => {
 		expect(existsSync(codingV2PlannerPath)).toBe(false);
 		expect(existsSync(codingV2ReviewerPath)).toBe(false);
 		expect(existsSync(codingV2ResearcherPath)).toBe(false);
+
+		const gameDevAgentPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"game-dev",
+			"agent.md",
+		);
+		expect(existsSync(gameDevAgentPath)).toBe(true);
+		const gameDevPrompt = readFileSync(gameDevAgentPath, "utf-8");
+		expect(gameDevPrompt).toContain("name: game-dev");
+		expect(gameDevPrompt).toContain("subAgents:");
+		expect(gameDevPrompt).toContain("name: art-generation");
+		expect(gameDevPrompt).toContain("promptFile: ./art-generation.md");
+		expect(gameDevPrompt).toContain("name: asset-refinement");
+		expect(gameDevPrompt).toContain("promptFile: ./asset-refinement.md");
+		expect(gameDevPrompt).toContain("name: planning-idea");
+		expect(gameDevPrompt).toContain("promptFile: ./planning-idea.md");
+		expect(gameDevPrompt).toContain("name: ui-specialist");
+		expect(gameDevPrompt).toContain("promptFile: ./ui-specialist.md");
+		expect(gameDevPrompt).toContain("write_todos");
+		expect(gameDevPrompt).toContain("read_todos");
+
+		const gameDevArtGenerationPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"game-dev",
+			"art-generation.md",
+		);
+		const gameDevAssetRefinementPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"game-dev",
+			"asset-refinement.md",
+		);
+		const gameDevPlanningIdeaPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"game-dev",
+			"planning-idea.md",
+		);
+		const gameDevUiSpecialistPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"game-dev",
+			"ui-specialist.md",
+		);
+		expect(existsSync(gameDevArtGenerationPath)).toBe(true);
+		expect(existsSync(gameDevAssetRefinementPath)).toBe(true);
+		expect(existsSync(gameDevPlanningIdeaPath)).toBe(true);
+		expect(existsSync(gameDevUiSpecialistPath)).toBe(true);
 	});
 
 	it("merges existing config when --merge is set", async () => {

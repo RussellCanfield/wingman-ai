@@ -1,6 +1,7 @@
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { createDeepAgent } from "deepagents";
 import { v4 as uuidv4 } from "uuid";
+import { persistAssistantImagesToDisk } from "./imagePersistence.js";
 
 type DatabaseLike = {
 	prepare: (sql: string) => {
@@ -53,10 +54,19 @@ export interface SessionAttachment {
 	name?: string;
 	mimeType?: string;
 	size?: number;
+	path?: string;
 }
 
 type CheckpointRow = {
 	checkpoint?: string | Uint8Array;
+};
+
+type PendingMessageRow = {
+	id: string;
+	role: "user" | "assistant";
+	content: string;
+	attachments: string | null;
+	created_at: number;
 };
 
 /**
@@ -104,9 +114,9 @@ export class SessionManager {
 
 		// Create custom sessions table for UI/metadata
 		this.db.run(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
+	      CREATE TABLE IF NOT EXISTS sessions (
+	        id TEXT PRIMARY KEY,
+	        name TEXT NOT NULL,
         agent_name TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
@@ -116,11 +126,24 @@ export class SessionManager {
         metadata TEXT
       );
 
-      CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_name);
-      CREATE INDEX IF NOT EXISTS idx_sessions_status_updated ON sessions(status, updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_sessions_status_agent_updated ON sessions(status, agent_name, updated_at DESC);
-    `);
+	      CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
+	      CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_name);
+	      CREATE INDEX IF NOT EXISTS idx_sessions_status_updated ON sessions(status, updated_at DESC);
+	      CREATE INDEX IF NOT EXISTS idx_sessions_status_agent_updated ON sessions(status, agent_name, updated_at DESC);
+
+	      CREATE TABLE IF NOT EXISTS session_pending_messages (
+	        id TEXT PRIMARY KEY,
+	        session_id TEXT NOT NULL,
+	        request_id TEXT NOT NULL,
+	        role TEXT NOT NULL,
+	        content TEXT NOT NULL,
+	        attachments TEXT,
+	        created_at INTEGER NOT NULL
+	      );
+
+	      CREATE INDEX IF NOT EXISTS idx_pending_messages_session_created ON session_pending_messages(session_id, created_at ASC);
+	      CREATE INDEX IF NOT EXISTS idx_pending_messages_session_request ON session_pending_messages(session_id, request_id);
+	    `);
 	}
 
 	/**
@@ -373,6 +396,11 @@ export class SessionManager {
 			"DELETE FROM writes WHERE thread_id = ?",
 		);
 		writesStmt.run(sessionId);
+
+		const pendingStmt = this.db.prepare(
+			"DELETE FROM session_pending_messages WHERE session_id = ?",
+		);
+		pendingStmt.run(sessionId);
 	}
 
 	/**
@@ -393,12 +421,63 @@ export class SessionManager {
 		);
 		writesStmt.run(sessionId);
 
+		const pendingStmt = this.db.prepare(
+			"DELETE FROM session_pending_messages WHERE session_id = ?",
+		);
+		pendingStmt.run(sessionId);
+
 		const sessionStmt = this.db.prepare(`
-      UPDATE sessions
-      SET message_count = 0, last_message_preview = NULL, updated_at = ?
-      WHERE id = ?
-    `);
+	      UPDATE sessions
+	      SET message_count = 0, last_message_preview = NULL, updated_at = ?
+	      WHERE id = ?
+	    `);
 		sessionStmt.run(Date.now(), sessionId);
+	}
+
+	persistPendingMessage(input: {
+		sessionId: string;
+		requestId: string;
+		message: SessionMessage;
+	}): void {
+		if (!this.db) {
+			throw new Error("SessionManager not initialized");
+		}
+
+		const attachments =
+			Array.isArray(input.message.attachments) && input.message.attachments.length > 0
+				? JSON.stringify(input.message.attachments)
+				: null;
+		const stmt = this.db.prepare(`
+	      INSERT INTO session_pending_messages (
+	        id, session_id, request_id, role, content, attachments, created_at
+	      )
+	      VALUES (?, ?, ?, ?, ?, ?, ?)
+	      ON CONFLICT(id) DO UPDATE SET
+	        role = excluded.role,
+	        content = excluded.content,
+	        attachments = excluded.attachments,
+	        created_at = excluded.created_at
+	    `);
+		stmt.run(
+			input.message.id,
+			input.sessionId,
+			input.requestId,
+			input.message.role,
+			input.message.content || "",
+			attachments,
+			input.message.createdAt,
+		);
+	}
+
+	clearPendingMessagesForRequest(sessionId: string, requestId: string): void {
+		if (!this.db) {
+			throw new Error("SessionManager not initialized");
+		}
+		const stmt = this.db.prepare(`
+	      DELETE FROM session_pending_messages
+	      WHERE session_id = ? AND request_id = ?
+	    `);
+		stmt.run(sessionId, requestId);
 	}
 
 	/**
@@ -419,9 +498,15 @@ export class SessionManager {
 			throw new Error("SessionManager not initialized");
 		}
 
+		const pendingMessages = this.listPendingMessages(sessionId);
 		const stateMessages = await this.loadMessagesFromState(sessionId);
 		if (stateMessages !== null) {
-			return stateMessages;
+			const mergedStateMessages = mergePendingMessages(
+				stateMessages,
+				pendingMessages,
+			);
+			this.persistAssistantImageAttachments(sessionId, mergedStateMessages);
+			return mergedStateMessages;
 		}
 
 		const rawCheckpoints = this.loadRecentCheckpoints(sessionId, 25);
@@ -436,7 +521,10 @@ export class SessionManager {
 			...rawCheckpoints,
 			...(fallbackTuple?.checkpoint ? [fallbackTuple.checkpoint as any] : []),
 		];
-		if (checkpoints.length === 0) return [];
+		if (checkpoints.length === 0) {
+			this.persistAssistantImageAttachments(sessionId, pendingMessages);
+			return pendingMessages;
+		}
 
 		let bestScore = -1;
 		let bestMessages: SessionMessage[] = [];
@@ -476,9 +564,18 @@ export class SessionManager {
 			}
 		}
 
-		if (bestMessages.length === 0) return [];
+		if (bestMessages.length === 0) {
+			this.persistAssistantImageAttachments(sessionId, pendingMessages);
+			return pendingMessages;
+		}
 
-		return filterEmptyAssistantMessages(bestMessages);
+		const filteredMessages = filterEmptyAssistantMessages(bestMessages);
+		const mergedMessages = mergePendingMessages(
+			filteredMessages,
+			pendingMessages,
+		);
+		this.persistAssistantImageAttachments(sessionId, mergedMessages);
+		return mergedMessages;
 	}
 
 	/**
@@ -574,6 +671,142 @@ export class SessionManager {
 			return null;
 		}
 	}
+
+	private persistAssistantImageAttachments(
+		sessionId: string,
+		messages: SessionMessage[],
+	): void {
+		try {
+			persistAssistantImagesToDisk({
+				dbPath: this.dbPath,
+				sessionId,
+				messages: messages as Array<{
+					role: "user" | "assistant";
+					attachments?: Array<{
+						kind: "image" | "audio" | "file";
+						dataUrl: string;
+						mimeType?: string;
+						name?: string;
+						size?: number;
+						path?: string;
+					}>;
+				}>,
+			});
+		} catch {
+			// Non-fatal: sessions should still load even if image materialization fails.
+		}
+	}
+
+	private listPendingMessages(sessionId: string): SessionMessage[] {
+		if (!this.db) return [];
+		const stmt = this.db.prepare(`
+	      SELECT id, role, content, attachments, created_at
+	      FROM session_pending_messages
+	      WHERE session_id = ?
+	      ORDER BY created_at ASC, rowid ASC
+	    `);
+		const rows = stmt.all(sessionId) as PendingMessageRow[];
+		if (!rows.length) return [];
+
+		return rows
+			.map((row) => {
+				const attachments = parseSessionAttachments(row.attachments);
+				return {
+					id: row.id,
+					role: row.role,
+					content: row.content || "",
+					attachments,
+					createdAt: row.created_at || Date.now(),
+				} satisfies SessionMessage;
+			})
+			.filter(
+				(message) =>
+					message.role === "user" ||
+					message.content.trim().length > 0 ||
+					(message.attachments?.length || 0) > 0,
+			);
+	}
+}
+
+function mergePendingMessages(
+	persisted: SessionMessage[],
+	pending: SessionMessage[],
+): SessionMessage[] {
+	if (pending.length === 0) return persisted;
+	if (persisted.length === 0) return pending;
+
+	const merged = [...persisted];
+	for (const candidate of pending) {
+		const duplicate = merged.some((message) =>
+			isLikelyDuplicateMessage(message, candidate),
+		);
+		if (!duplicate) {
+			merged.push(candidate);
+		}
+	}
+
+	merged.sort((a, b) => {
+		if (a.createdAt === b.createdAt) {
+			if (a.role === b.role) return 0;
+			return a.role === "user" ? -1 : 1;
+		}
+		return a.createdAt - b.createdAt;
+	});
+	return merged;
+}
+
+function isLikelyDuplicateMessage(
+	left: SessionMessage,
+	right: SessionMessage,
+): boolean {
+	if (left.id && right.id && left.id === right.id) return true;
+	if (left.role !== right.role) return false;
+	if ((left.content || "").trim() !== (right.content || "").trim()) return false;
+
+	const leftAttachments = left.attachments || [];
+	const rightAttachments = right.attachments || [];
+	if (leftAttachments.length !== rightAttachments.length) return false;
+	for (let index = 0; index < leftAttachments.length; index += 1) {
+		if (!isAttachmentEquivalent(leftAttachments[index], rightAttachments[index])) {
+			return false;
+		}
+	}
+
+	return Math.abs((left.createdAt || 0) - (right.createdAt || 0)) < 30_000;
+}
+
+function isAttachmentEquivalent(
+	left?: SessionAttachment,
+	right?: SessionAttachment,
+): boolean {
+	if (!left || !right) return left === right;
+	return (
+		left.kind === right.kind &&
+		(left.dataUrl || "") === (right.dataUrl || "") &&
+		(left.name || "") === (right.name || "") &&
+		(left.mimeType || "") === (right.mimeType || "") &&
+		(left.size || 0) === (right.size || 0)
+	);
+}
+
+function parseSessionAttachments(
+	raw: string | null | undefined,
+): SessionAttachment[] | undefined {
+	if (!raw) return undefined;
+	try {
+		const parsed = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return undefined;
+		const attachments = parsed.filter(
+			(item) =>
+				item &&
+				typeof item === "object" &&
+				typeof (item as any).kind === "string" &&
+				typeof (item as any).dataUrl === "string",
+		) as SessionAttachment[];
+		return attachments.length > 0 ? attachments : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 function isMessageLike(entry: any): boolean {
@@ -606,25 +839,30 @@ function toSessionMessage(
 
 	if (role !== "user" && role !== "assistant") {
 		if (isToolMessage(entry)) {
-			const toolContent = extractMessageContent(
-				entry,
-				extractContentBlocks(entry),
-			);
+			const blocks = extractContentBlocks(entry);
+			const toolContent = extractMessageContent(entry, blocks);
 			const ui = extractUiFromPayload(toolContent);
-			if (ui?.spec) {
+			const attachments = extractAttachments(blocks);
+			if (ui?.spec || attachments.length > 0) {
+				const content = toolContent || ui?.textFallback || "";
 				return {
 					id: `msg-${index}`,
 					role: "assistant",
-					content: "",
+					content,
+					attachments: attachments.length > 0 ? attachments : undefined,
 					createdAt: baseTime + index,
-					uiBlocks: [
-						{
-							spec: ui.spec,
-							uiOnly: ui.uiOnly,
-							textFallback: ui.textFallback,
-						},
-					],
-					uiTextFallback: ui.textFallback,
+					...(ui?.spec
+						? {
+								uiBlocks: [
+									{
+										spec: ui.spec,
+										uiOnly: ui.uiOnly,
+										textFallback: ui.textFallback,
+									},
+								],
+								uiTextFallback: ui.textFallback,
+							}
+						: {}),
 				};
 			}
 		}
@@ -691,13 +929,71 @@ function extractContentBlocks(entry: any): any[] {
 		entry?.kwargs?.content,
 		entry?.additional_kwargs?.content,
 		entry?.data?.content,
+		entry?.artifact,
+		entry?.kwargs?.artifact,
+		entry?.additional_kwargs?.artifact,
+		entry?.data?.artifact,
 	];
 	for (const candidate of candidates) {
-		if (Array.isArray(candidate)) {
-			return candidate;
-		}
+		const blocks = extractContentBlocksFromValue(candidate);
+		if (blocks.length > 0) return blocks;
 	}
 	return [];
+}
+
+function extractContentBlocksFromValue(value: unknown, depth = 0): any[] {
+	if (depth > 5 || value === null || value === undefined) return [];
+	if (Array.isArray(value)) {
+		const unwrapped: any[] = [];
+		for (const item of value) {
+			const parsedBlocks = extractBlocksFromTextLikeItem(item, depth + 1);
+			if (parsedBlocks.length > 0) {
+				unwrapped.push(...parsedBlocks);
+				continue;
+			}
+			unwrapped.push(item);
+		}
+		return unwrapped;
+	}
+	if (typeof value === "string") {
+		const parsed = tryParseJsonPayload(value);
+		return parsed ? extractContentBlocksFromValue(parsed, depth + 1) : [];
+	}
+	if (typeof value !== "object") return [];
+
+	const record = value as Record<string, unknown>;
+	const candidates = [
+		record.content,
+		(record as any)?.kwargs?.content,
+		(record as any)?.additional_kwargs?.content,
+		(record as any)?.data?.content,
+	];
+	for (const candidate of candidates) {
+		const blocks = extractContentBlocksFromValue(candidate, depth + 1);
+		if (blocks.length > 0) return blocks;
+	}
+	return [];
+}
+
+function extractBlocksFromTextLikeItem(value: unknown, depth = 0): any[] {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+	const record = value as Record<string, unknown>;
+
+	const text =
+		typeof record.text === "string"
+			? record.text
+			: typeof record.value === "string" && isTextLikeContentType(record.type)
+				? record.value
+				: typeof record.output_text === "string"
+					? record.output_text
+					: typeof record.input_text === "string"
+						? record.input_text
+						: null;
+	if (!text) return [];
+
+	const parsed = tryParseJsonPayload(text);
+	if (!parsed) return [];
+	return extractContentBlocksFromValue(parsed, depth + 1);
 }
 
 function extractMessageContent(entry: any, blocks: any[] = []): string {
@@ -729,6 +1025,11 @@ function extractTextContent(value: unknown, depth = 0): string {
 		return "";
 	}
 	if (typeof value === "string") {
+		const parsed = tryParseJsonPayload(value);
+		if (parsed !== null) {
+			const extracted = extractTextContent(parsed, depth + 1).trim();
+			if (extracted) return extracted;
+		}
 		return value;
 	}
 	if (Array.isArray(value)) {
@@ -744,6 +1045,11 @@ function extractTextContent(value: unknown, depth = 0): string {
 	const record = value as Record<string, unknown>;
 
 	if (typeof record.text === "string") {
+		const parsed = tryParseJsonPayload(record.text);
+		if (parsed !== null) {
+			const extracted = extractTextContent(parsed, depth + 1).trim();
+			if (extracted) return extracted;
+		}
 		return record.text;
 	}
 	if (
@@ -754,12 +1060,27 @@ function extractTextContent(value: unknown, depth = 0): string {
 		return (record.text as Record<string, unknown>).value as string;
 	}
 	if (typeof record.output_text === "string") {
+		const parsed = tryParseJsonPayload(record.output_text);
+		if (parsed !== null) {
+			const extracted = extractTextContent(parsed, depth + 1).trim();
+			if (extracted) return extracted;
+		}
 		return record.output_text;
 	}
 	if (typeof record.input_text === "string") {
+		const parsed = tryParseJsonPayload(record.input_text);
+		if (parsed !== null) {
+			const extracted = extractTextContent(parsed, depth + 1).trim();
+			if (extracted) return extracted;
+		}
 		return record.input_text;
 	}
 	if (typeof record.value === "string" && isTextLikeContentType(record.type)) {
+		const parsed = tryParseJsonPayload(record.value);
+		if (parsed !== null) {
+			const extracted = extractTextContent(parsed, depth + 1).trim();
+			if (extracted) return extracted;
+		}
 		return record.value;
 	}
 
@@ -768,6 +1089,19 @@ function extractTextContent(value: unknown, depth = 0): string {
 	}
 
 	return "";
+}
+
+function tryParseJsonPayload(value: string): unknown | null {
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+	if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) {
+		return null;
+	}
+	try {
+		return JSON.parse(trimmed);
+	} catch {
+		return null;
+	}
 }
 
 function isTextLikeContentType(type: unknown): boolean {
@@ -831,12 +1165,14 @@ function filterUiOnlyAssistantMessages(messages: any[]): any[] {
 
 	for (const entry of messages) {
 		if (isToolMessage(entry)) {
-			const content = extractMessageContent(entry, extractContentBlocks(entry));
+			const blocks = extractContentBlocks(entry);
+			const content = extractMessageContent(entry, blocks);
 			const ui = extractUiFromPayload(content);
+			const attachments = extractAttachments(blocks);
 			if (ui?.uiOnly && ui?.textFallback) {
 				pendingFallback = ui.textFallback.trim();
 			}
-			if (ui?.spec) {
+			if (ui?.spec || attachments.length > 0) {
 				filtered.push(entry);
 			}
 			continue;
@@ -944,6 +1280,53 @@ export function extractImageUrl(block: any): string | null {
 		const data = block.source.data;
 		if (mediaType && data) {
 			return `data:${mediaType};base64,${data}`;
+		}
+	}
+	if (block.type === "image") {
+		const sourceType = block.source_type || block.sourceType;
+		const mimeType =
+			block.mime_type ||
+			block.mimeType ||
+			block.media_type ||
+			block.mediaType ||
+			"image/png";
+		if (sourceType === "base64" && typeof block.data === "string") {
+			return `data:${mimeType};base64,${block.data}`;
+		}
+		if (sourceType === "url" && typeof block.url === "string") {
+			return block.url;
+		}
+		if (typeof block.data === "string") {
+			return `data:${mimeType};base64,${block.data}`;
+		}
+	}
+	if (block.type === "output_image") {
+		if (typeof block.image_url === "string") return block.image_url;
+		if (typeof block.image_url?.url === "string") return block.image_url.url;
+		if (typeof block.url === "string") return block.url;
+	}
+	if (block.type === "resource_link") {
+		const mimeType =
+			typeof block.mimeType === "string"
+				? block.mimeType.trim().toLowerCase()
+				: "";
+		const uri = typeof block.uri === "string" ? block.uri.trim() : "";
+		if (uri && (!mimeType || mimeType.startsWith("image/"))) {
+			return uri;
+		}
+	}
+	if (block.type === "resource" && block.resource) {
+		const resource = block.resource;
+		const mimeType =
+			typeof resource.mimeType === "string"
+				? resource.mimeType.trim().toLowerCase()
+				: "";
+		if (!mimeType || !mimeType.startsWith("image/")) return null;
+		if (typeof resource.blob === "string" && resource.blob.trim()) {
+			return `data:${mimeType};base64,${resource.blob.trim()}`;
+		}
+		if (typeof resource.uri === "string" && resource.uri.trim()) {
+			return resource.uri.trim();
 		}
 	}
 	return null;

@@ -22,6 +22,55 @@ describe("sanitizeAssistantDisplayText", () => {
 		expect(result).toBeUndefined();
 	});
 
+	it("drops JSON-only tool envelope payloads with quoted keys", () => {
+		const input =
+			'{"tool_uses":[{"recipient_name":"functions.git_status","parameters":{"includeDiff":true}}]}';
+
+		const result = sanitizeAssistantDisplayText(input);
+
+		expect(result).toBeUndefined();
+	});
+
+	it("drops fragmented tool envelope JSON starts", () => {
+		const input = '{"tool_uses":[';
+
+		const result = sanitizeAssistantDisplayText(input);
+
+		expect(result).toBeUndefined();
+	});
+
+	it("strips trailing symbol-noise lines", () => {
+		const input = [
+			"I've switched to file-based textures; next I'll run npm run build and confirm output.",
+			"+#+#+#+#+#+",
+		].join("\n");
+
+		const result = sanitizeAssistantDisplayText(input);
+
+		expect(result).toBe(
+			"I've switched to file-based textures; next I'll run npm run build and confirm output.",
+		);
+	});
+
+	it("strips trailing inline symbol-noise suffixes", () => {
+		const input =
+			"I've switched to file-based textures; next I'll run npm run build and confirm output. +#+#+#+#+#+";
+
+		const result = sanitizeAssistantDisplayText(input);
+
+		expect(result).toBe(
+			"I've switched to file-based textures; next I'll run npm run build and confirm output.",
+		);
+	});
+
+	it("drops content that is only symbol noise", () => {
+		const input = "\n  +#+#+#+#+#+#+\n";
+
+		const result = sanitizeAssistantDisplayText(input);
+
+		expect(result).toBeUndefined();
+	});
+
 	it("keeps normal prose that references function names", () => {
 		const input =
 			"Use `functions.command_execute` and check the result in the next line.";
@@ -29,5 +78,15 @@ describe("sanitizeAssistantDisplayText", () => {
 		const result = sanitizeAssistantDisplayText(input);
 
 		expect(result).toBe(input);
+	});
+
+	it("preserves trailing whitespace when requested for streaming markdown", () => {
+		const input = "- Item one\n- Item two\n\n";
+
+		const result = sanitizeAssistantDisplayText(input, {
+			preserveTrailingWhitespace: true,
+		});
+
+		expect(result).toBe("- Item one\n- Item two\n\n");
 	});
 });

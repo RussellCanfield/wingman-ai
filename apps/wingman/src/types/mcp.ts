@@ -13,6 +13,8 @@ export interface MCPServerConfig {
 	name: string;
 	/** Transport protocol */
 	transport: MCPTransport;
+	/** Optional default timeout in milliseconds for MCP tool calls */
+	defaultToolTimeout?: number;
 }
 
 /**
@@ -58,6 +60,12 @@ export interface MCPServersConfig {
 export const MCPStdioConfigSchema = z.object({
 	name: z.string().min(1).describe("Unique server name"),
 	transport: z.literal("stdio"),
+	defaultToolTimeout: z
+		.number()
+		.int()
+		.positive()
+		.optional()
+		.describe("Default timeout in milliseconds for tool execution"),
 	command: z
 		.string()
 		.min(1)
@@ -72,6 +80,12 @@ export const MCPStdioConfigSchema = z.object({
 export const MCPSSEConfigSchema = z.object({
 	name: z.string().min(1).describe("Unique server name"),
 	transport: z.literal("sse"),
+	defaultToolTimeout: z
+		.number()
+		.int()
+		.positive()
+		.optional()
+		.describe("Default timeout in milliseconds for tool execution"),
 	url: z.string().url().describe("Server URL"),
 	headers: z
 		.record(z.string(), z.string())

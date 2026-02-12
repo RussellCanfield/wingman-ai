@@ -118,3 +118,70 @@ YAHOO_INCLUDE_PREPOST            # set to 1 to include pre/post market candles
 :::warning
 The finance MCP tools are intended for research and education only. They do not provide financial advice or execute trades.
 :::
+
+## FAL AI MCP server
+
+Use the bundled FAL AI MCP server for queue-backed multimodal generation (image, image edit, audio/music, and video from image).
+
+### 1) Provide a FAL API key
+
+Set `FAL_API_KEY` (or `FAL_KEY`) in your shell or inline in the MCP server config.
+
+### 2) Register the server (stdio example)
+
+```json
+{
+  "mcp": {
+    "servers": [
+      {
+        "name": "fal-ai",
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "./node_modules/@wingman-ai/gateway/dist/tools/mcp-fal-ai.js"
+        ],
+        "env": {
+          "FAL_API_KEY": "your_key_here",
+          "FAL_MCP_REVIEW_MODE": "auto",
+          "FAL_MCP_POLL_INTERVAL_MS": "2500",
+          "FAL_MCP_STATUS_TIMEOUT_MS": "60000",
+          "FAL_MODEL_IMAGE_OR_TEXTURE": "fal-ai/kling-image/v3/text-to-image",
+          "FAL_MODEL_IMAGE_EDIT": "fal-ai/kling-image/v3/image-to-image",
+          "FAL_MODEL_AUDIO_OR_MUSIC": "fal-ai/elevenlabs/music",
+          "FAL_MODEL_SOUND_EFFECT": "beatoven/sound-effect-generation",
+          "FAL_MODEL_VIDEO_FROM_IMAGE": "fal-ai/kling-video/o3/standard/image-to-video"
+        }
+      }
+    ]
+  }
+}
+```
+
+If you are working from the Wingman repo directly, the server file is located at:
+
+```text
+apps/wingman/dist/tools/mcp-fal-ai.js
+```
+
+### 3) Use it from agents
+
+- `generate_image_or_texture`
+- `generate_image_edit`
+- `generate_audio_or_music`
+- `generate_video_from_image`
+- `fal_generation_status`
+
+Default local paths:
+
+```text
+<workdir>/generated/
+<workdir>/.wingman/fal-ai/
+```
+
+If `FAL_MCP_REVIEW_MODE=hil`, completed jobs are staged under `<workdir>/.wingman/fal-ai/pending/<jobId>/` until `fal_generation_status` is called with `action=accept` or `action=deny`.
+
+Assistant message images are also materialized to disk from session history under:
+
+```text
+<stateDir>/agents/<agentId>/sessions/media/<sessionId>/
+```

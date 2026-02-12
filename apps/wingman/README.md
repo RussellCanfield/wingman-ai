@@ -253,6 +253,7 @@ wingman gateway start --discovery tailscale --name "Work Gateway"
 - **Hooks** for pre/post tool automation.
 - **Skills** for reusable, domain-specific instruction sets.
 - **MCP tools** to connect external systems and custom integrations.
+- **Bundled MCP servers** for finance (`bun run mcp:finance`) and FAL AI multimodal generation (`bun run mcp:fal-ai`).
 
 ## Development
 

@@ -21,6 +21,104 @@ describe("parseStreamEvents", () => {
 		});
 	});
 
+	it("preserves newline-only chat model delta chunks", () => {
+		const chunk = {
+			event: "on_chat_model_stream",
+			run_id: "run-newline",
+			data: { chunk: { content: "\n\n" } },
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]).toMatchObject({
+			text: "\n\n",
+			messageId: "run-newline",
+			isDelta: true,
+		});
+	});
+
+	it("preserves trailing line returns in chat model delta chunks", () => {
+		const chunk = {
+			event: "on_chat_model_stream",
+			run_id: "run-heading",
+			data: { chunk: { content: "## Heading\n" } },
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]?.text).toBe("## Heading\n");
+	});
+
+	it("normalizes return-symbol list separators to newlines", () => {
+		const chunk = {
+			event: "on_chat_model_stream",
+			run_id: "run-list-return-symbol",
+			data: {
+				chunk: {
+					content: [
+						{
+							type: "text",
+							text: "- Item one↵- Item two↵- Item three",
+							index: 0,
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]).toMatchObject({
+			messageId: "run-list-return-symbol",
+			isDelta: true,
+			text: "- Item one\n- Item two\n- Item three",
+		});
+	});
+
+	it("ignores on_chain_end text payloads", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-1",
+			data: {
+				output: {
+					messages: [
+						{ type: "human", content: "hello?" },
+						{ type: "ai", content: "Hey! How can I help?" },
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+	});
+
+	it("ignores chat-model stream chunks that are not AI messages", () => {
+		const chunk = {
+			event: "on_chat_model_stream",
+			run_id: "run-human",
+			data: {
+				chunk: {
+					type: "constructor",
+					id: ["langchain_core", "messages", "HumanMessageChunk"],
+					kwargs: {
+						content: [{ type: "text", text: "this should not render" }],
+					},
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+	});
+
 	it("parses tuple-based message payloads with langgraph metadata", () => {
 		const chunk = [
 			"stream-1",
@@ -294,7 +392,7 @@ describe("parseStreamEvents", () => {
 			data: {
 				chunk: {
 					content:
-						"I'll inspect integration usage first.\nassistant to=multi_tool_use.parallel commentary json {\"tool_uses\":[{\"recipient_name\":\"functions.read_file\",\"parameters\":{\"file_path\":\"./a.ts\"}}]}",
+						'I\'ll inspect integration usage first.\nassistant to=multi_tool_use.parallel commentary json {"tool_uses":[{"recipient_name":"functions.read_file","parameters":{"file_path":"./a.ts"}}]}',
 				},
 			},
 		};
@@ -302,13 +400,15 @@ describe("parseStreamEvents", () => {
 		const result = parseStreamEvents(chunk);
 
 		expect(result.textEvents).toHaveLength(1);
-		expect(result.textEvents[0]?.text).toBe("I'll inspect integration usage first.");
+		expect(result.textEvents[0]?.text).toBe(
+			"I'll inspect integration usage first.",
+		);
 	});
 
 	it("drops chunks that are only leaked internal tool envelopes", () => {
 		const chunk = {
 			content:
-				"assistant to=multi_tool_use.parallel commentary json {\"tool_uses\":[{\"recipient_name\":\"functions.grep\",\"parameters\":{\"pattern\":\"x\"}}]}",
+				'assistant to=multi_tool_use.parallel commentary json {"tool_uses":[{"recipient_name":"functions.grep","parameters":{"pattern":"x"}}]}',
 		};
 
 		const result = parseStreamEvents(chunk);
@@ -319,12 +419,61 @@ describe("parseStreamEvents", () => {
 	it("keeps normal prose that references function names", () => {
 		const chunk = {
 			content:
-				'Use `functions.read_file` for local file access and `functions.grep` for quick search.',
+				"Use `functions.read_file` for local file access and `functions.grep` for quick search.",
 		};
 
 		const result = parseStreamEvents(chunk);
 
 		expect(result.textEvents).toHaveLength(1);
 		expect(result.textEvents[0]?.text).toContain("functions.read_file");
+	});
+
+	it("strips trailing symbol-noise lines from streamed text", () => {
+		const chunk = {
+			content:
+				"I've switched to file-based textures; next I'll run npm run build and confirm output.\n#+#+#+#+#+",
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]?.text).toBe(
+			"I've switched to file-based textures; next I'll run npm run build and confirm output.",
+		);
+	});
+
+	it("drops chunks that are only symbol noise", () => {
+		const chunk = {
+			content: "  +#+#+#+#+#+#+  ",
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+	});
+
+	it("ignores lifecycle end events with historical messages", () => {
+		const chunk = {
+			event: "on_chain_end",
+			data: {
+				output: {
+					messages: [
+						{
+							type: "human",
+							content: [{ type: "text", text: "Prompt" }],
+						},
+						{
+							type: "ai",
+							content: [{ type: "text", text: "- Item one\n- Item two" }],
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
 	});
 });

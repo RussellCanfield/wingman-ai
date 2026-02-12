@@ -697,14 +697,34 @@ export class GatewayServer {
 		const existingSession = sessionManager.getSession(sessionKey);
 		const session =
 			existingSession || sessionManager.getOrCreateSession(sessionKey, agentId);
+		const requestId = msg.id || `req-${Date.now()}`;
 		const workdir = session.metadata?.workdir ?? null;
 		const defaultOutputDir = this.resolveDefaultOutputDir(agentId);
 		const preview = hasContent
 			? content.trim()
 			: buildAttachmentPreview(attachments);
 		sessionManager.updateSession(session.id, {
+			messageCount: (session.messageCount ?? 0) + 1,
 			lastMessagePreview: preview.substring(0, 200),
 		});
+		try {
+			sessionManager.persistPendingMessage({
+				sessionId: sessionKey,
+				requestId,
+				message: {
+					id: `user-${requestId}`,
+					role: "user",
+					content,
+					attachments:
+						attachments.length > 0
+							? mapAttachmentsForPendingMessage(attachments)
+							: undefined,
+					createdAt: Date.now(),
+				},
+			});
+		} catch (error) {
+			this.logger.warn("Failed to persist pending user message", error);
+		}
 
 		if (!existingSession) {
 			this.internalHooks?.emit({
@@ -887,25 +907,40 @@ export class GatewayServer {
 			abortController,
 		});
 
-		try {
-			await invoker.invokeAgent(agentId, content, sessionKey, attachments, {
-				signal: abortController.signal,
-			});
-
-			const updated = sessionManager.getSession(sessionKey);
-			if (updated) {
-				sessionManager.updateSession(sessionKey, {
-					messageCount: updated.messageCount + 1,
+			try {
+				await invoker.invokeAgent(agentId, content, sessionKey, attachments, {
+					signal: abortController.signal,
 				});
-			}
-		} catch (error) {
-			this.logger.error("Agent invocation failed", error);
-			if (!emittedAgentError) {
+				if (msg.id) {
+					sessionManager.clearPendingMessagesForRequest(sessionKey, msg.id);
+				}
+			} catch (error) {
+				this.logger.error("Agent invocation failed", error);
 				const message = error instanceof Error ? error.message : String(error);
-				const stack = error instanceof Error ? error.stack : undefined;
-				this.sendAgentError(ws, msg.id!, message, {
-					sessionId: sessionKey,
-					agentId,
+				if (msg.id) {
+					try {
+						sessionManager.persistPendingMessage({
+							sessionId: sessionKey,
+							requestId: msg.id,
+							message: {
+								id: msg.id,
+								role: "assistant",
+								content: message,
+								createdAt: Date.now(),
+							},
+						});
+					} catch (persistError) {
+						this.logger.warn(
+							"Failed to persist pending assistant error message",
+							persistError,
+						);
+					}
+				}
+				if (!emittedAgentError) {
+					const stack = error instanceof Error ? error.stack : undefined;
+					this.sendAgentError(ws, msg.id!, message, {
+						sessionId: sessionKey,
+						agentId,
 					stack,
 					broadcastToSession: true,
 					exclude: ws,
@@ -2153,6 +2188,29 @@ function buildAttachmentPreview(
 		return count > 1 ? "Audio attachments" : "Audio attachment";
 	}
 	return count > 1 ? "Image attachments" : "Image attachment";
+}
+
+function mapAttachmentsForPendingMessage(attachments: MediaAttachment[]): Array<{
+	kind: "image" | "audio" | "file";
+	dataUrl: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+}> {
+	return attachments.map((attachment) => {
+		const kind = isFileAttachment(attachment)
+			? "file"
+			: isAudioAttachment(attachment)
+				? "audio"
+				: "image";
+		return {
+			kind,
+			dataUrl: attachment.dataUrl,
+			name: attachment.name,
+			mimeType: attachment.mimeType,
+			size: attachment.size,
+		};
+	});
 }
 
 function isAudioAttachment(attachment: MediaAttachment): boolean {

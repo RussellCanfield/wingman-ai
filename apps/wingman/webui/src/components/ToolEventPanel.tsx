@@ -7,6 +7,7 @@ import {
 	FiClock,
 } from "react-icons/fi";
 import type { ToolEvent } from "../types";
+import { sanitizeAssistantDisplayText } from "../utils/internalToolEnvelope";
 
 type ToolEventPanelProps = {
 	toolEvents: ToolEvent[];
@@ -95,13 +96,12 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 			: resolveDelegatedLabel(event);
 	const editDiffPreview = buildEditFileDiffPreview(event);
 	const argsText = stringifyToolEventValue(event.args);
-	const outputText = stringifyToolEventValue(
-		event.error ? { error: event.error } : event.output,
-	);
+	const outputValue = event.error ? { error: event.error } : event.output;
+	const imagePreviews = event.error ? [] : extractToolImagePreviews(event.output);
+	const audioPreviews = event.error ? [] : extractToolAudioPreviews(event.output);
+	const outputText = stringifyToolEventValue(outputValue);
 	const argsSummary = summarizeToolEventValue(event.args);
-	const outputSummary = summarizeToolEventValue(
-		event.error ? { error: event.error } : event.output,
-	);
+	const outputSummary = summarizeToolEventValue(outputValue);
 	const duration = formatToolEventDuration(event);
 	const startedAt = event.startedAt ?? event.timestamp;
 	const completedAt = event.completedAt;
@@ -206,6 +206,12 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 					<EditFileDiffPreview preview={editDiffPreview} />
 				) : null}
 				{argsText ? <ToolPayload label="Args" value={argsText} /> : null}
+				{imagePreviews.length > 0 ? (
+					<ToolImagePreviewGrid previews={imagePreviews} />
+				) : null}
+				{audioPreviews.length > 0 ? (
+					<ToolAudioPreviewList previews={audioPreviews} />
+				) : null}
 				{outputText ? (
 					<ToolPayload
 						label={event.error ? "Error" : "Output"}
@@ -370,6 +376,76 @@ const ToolPayload: React.FC<{ label: string; value: string }> = ({
 	</div>
 );
 
+type ToolImagePreview = {
+	src: string;
+	label?: string;
+};
+
+type ToolAudioPreview = {
+	src: string;
+	label?: string;
+};
+
+const ToolImagePreviewGrid: React.FC<{
+	previews: ToolImagePreview[];
+}> = ({ previews }) => (
+	<div>
+		<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+			Images
+		</span>
+		<div className="mt-2 grid gap-2 sm:grid-cols-2">
+			{previews.map((preview) => (
+				<div
+					key={`${preview.src}:${preview.label || ""}`}
+					className="overflow-hidden rounded-lg border border-white/10 bg-slate-950/80"
+				>
+					<img
+						src={preview.src}
+						alt={preview.label || "Generated image"}
+						className="h-40 w-full object-cover"
+						loading="lazy"
+					/>
+					{preview.label ? (
+						<div className="truncate border-t border-white/10 px-2 py-1 text-[11px] text-slate-400">
+							{preview.label}
+						</div>
+					) : null}
+				</div>
+			))}
+		</div>
+	</div>
+);
+
+const ToolAudioPreviewList: React.FC<{
+	previews: ToolAudioPreview[];
+}> = ({ previews }) => (
+	<div>
+		<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+			Audio
+		</span>
+		<div className="mt-2 space-y-2">
+			{previews.map((preview) => (
+				<div
+					key={`${preview.src}:${preview.label || ""}`}
+					className="rounded-lg border border-white/10 bg-slate-950/80 p-2"
+				>
+					<audio
+						controls
+						preload="metadata"
+						src={preview.src}
+						className="w-full"
+					/>
+					{preview.label ? (
+						<div className="mt-1 truncate text-[11px] text-slate-400">
+							{preview.label}
+						</div>
+					) : null}
+				</div>
+			))}
+		</div>
+	</div>
+);
+
 type ToolStatusStyle = {
 	label: string;
 	Icon: IconType;
@@ -420,6 +496,8 @@ export function stringifyToolEventValue(
 			text = String(value);
 		}
 	}
+	text = sanitizeAssistantDisplayText(text) ?? "";
+	if (!text) return null;
 	if (text.length > maxLength) {
 		return `${text.slice(0, maxLength)}...`;
 	}
@@ -438,6 +516,245 @@ export function summarizeToolEventValue(
 		return `${compact.slice(0, maxLength)}...`;
 	}
 	return compact;
+}
+
+export function extractToolImagePreviews(
+	value: unknown,
+	maxItems = 4,
+): ToolImagePreview[] {
+	if (!value || typeof value !== "object") return [];
+	const record = value as Record<string, unknown>;
+	const containers: unknown[] = [];
+
+	if (record.structuredContent && typeof record.structuredContent === "object") {
+		containers.push(record.structuredContent);
+	}
+	if (Array.isArray(record.artifact)) {
+		containers.push({ content: record.artifact });
+	}
+	containers.push(record);
+
+	const previews: ToolImagePreview[] = [];
+	const seen = new Set<string>();
+
+	for (const container of containers) {
+		const sourceRecord =
+			container && typeof container === "object"
+				? (container as Record<string, unknown>)
+				: null;
+		if (!sourceRecord) continue;
+		const images = Array.isArray(sourceRecord.images) ? sourceRecord.images : [];
+		for (const image of images) {
+			const imageRecord =
+				image && typeof image === "object"
+					? (image as Record<string, unknown>)
+					: null;
+			if (!imageRecord) continue;
+			const src = resolveToolImageSrc(imageRecord);
+			if (!src || seen.has(src)) continue;
+			seen.add(src);
+			previews.push({
+				src,
+				label:
+					typeof imageRecord.name === "string" ? imageRecord.name : undefined,
+			});
+			if (previews.length >= maxItems) return previews;
+		}
+
+		const content = Array.isArray(sourceRecord.content)
+			? sourceRecord.content
+			: [];
+		for (const part of content) {
+			const partRecord =
+				part && typeof part === "object"
+					? (part as Record<string, unknown>)
+					: null;
+			if (!partRecord) continue;
+			if (partRecord.type === "image") {
+				const sourceType =
+					typeof partRecord.source_type === "string"
+						? partRecord.source_type
+						: typeof partRecord.sourceType === "string"
+							? partRecord.sourceType
+							: "";
+				const url = typeof partRecord.url === "string" ? partRecord.url.trim() : "";
+				if (sourceType === "url" && url) {
+					if (seen.has(url)) continue;
+					seen.add(url);
+					previews.push({ src: url });
+					if (previews.length >= maxItems) return previews;
+					continue;
+				}
+				const data =
+					typeof partRecord.data === "string" ? partRecord.data.trim() : "";
+				const mimeType =
+					typeof partRecord.mimeType === "string"
+						? partRecord.mimeType.trim().toLowerCase()
+						: "image/png";
+				if (!data) continue;
+				const src = `data:${mimeType};base64,${data}`;
+				if (seen.has(src)) continue;
+				seen.add(src);
+				previews.push({ src });
+				if (previews.length >= maxItems) return previews;
+				continue;
+			}
+			if (partRecord.type === "resource_link") {
+				const uri = typeof partRecord.uri === "string" ? partRecord.uri.trim() : "";
+				if (!uri || seen.has(uri)) continue;
+				seen.add(uri);
+				previews.push({
+					src: uri,
+					label:
+						typeof partRecord.name === "string" ? partRecord.name : undefined,
+				});
+				if (previews.length >= maxItems) return previews;
+			}
+		}
+	}
+
+	return previews;
+}
+
+export function extractToolAudioPreviews(
+	value: unknown,
+	maxItems = 4,
+): ToolAudioPreview[] {
+	if (!value || typeof value !== "object") return [];
+	const record = value as Record<string, unknown>;
+	const containers: unknown[] = [];
+
+	if (record.structuredContent && typeof record.structuredContent === "object") {
+		containers.push(record.structuredContent);
+	}
+	if (Array.isArray(record.artifact)) {
+		containers.push({ content: record.artifact });
+	}
+	containers.push(record);
+
+	const previews: ToolAudioPreview[] = [];
+	const seen = new Set<string>();
+
+	for (const container of containers) {
+		const sourceRecord =
+			container && typeof container === "object"
+				? (container as Record<string, unknown>)
+				: null;
+		if (!sourceRecord) continue;
+
+		const media = Array.isArray(sourceRecord.media) ? sourceRecord.media : [];
+		for (const item of media) {
+			const mediaRecord =
+				item && typeof item === "object"
+					? (item as Record<string, unknown>)
+					: null;
+			if (!mediaRecord) continue;
+			const modality =
+				typeof mediaRecord.modality === "string"
+					? mediaRecord.modality.trim().toLowerCase()
+					: "";
+			const mimeType =
+				typeof mediaRecord.mimeType === "string"
+					? mediaRecord.mimeType.trim().toLowerCase()
+					: "";
+			if (modality !== "audio" && !mimeType.startsWith("audio/")) continue;
+			const src = resolveToolAudioSrc(mediaRecord);
+			if (!src || seen.has(src)) continue;
+			seen.add(src);
+			previews.push({
+				src,
+				label:
+					typeof mediaRecord.name === "string" ? mediaRecord.name : undefined,
+			});
+			if (previews.length >= maxItems) return previews;
+		}
+
+		const content = Array.isArray(sourceRecord.content)
+			? sourceRecord.content
+			: [];
+		for (const part of content) {
+			const partRecord =
+				part && typeof part === "object"
+					? (part as Record<string, unknown>)
+					: null;
+			if (!partRecord) continue;
+
+			if (partRecord.type === "audio") {
+				const sourceType =
+					typeof partRecord.source_type === "string"
+						? partRecord.source_type
+						: typeof partRecord.sourceType === "string"
+							? partRecord.sourceType
+							: "";
+				const url = typeof partRecord.url === "string" ? partRecord.url.trim() : "";
+				if (sourceType === "url" && url) {
+					if (seen.has(url)) continue;
+					seen.add(url);
+					previews.push({ src: url });
+					if (previews.length >= maxItems) return previews;
+					continue;
+				}
+				const data =
+					typeof partRecord.data === "string" ? partRecord.data.trim() : "";
+				const mimeType =
+					typeof partRecord.mimeType === "string"
+						? partRecord.mimeType.trim().toLowerCase()
+						: "audio/mpeg";
+				if (!data) continue;
+				const src = `data:${mimeType};base64,${data}`;
+				if (seen.has(src)) continue;
+				seen.add(src);
+				previews.push({ src });
+				if (previews.length >= maxItems) return previews;
+				continue;
+			}
+
+			if (partRecord.type === "resource_link") {
+				const mimeType =
+					typeof partRecord.mimeType === "string"
+						? partRecord.mimeType.trim().toLowerCase()
+						: "";
+				if (!mimeType.startsWith("audio/")) continue;
+				const uri = typeof partRecord.uri === "string" ? partRecord.uri.trim() : "";
+				if (!uri || seen.has(uri)) continue;
+				seen.add(uri);
+				previews.push({
+					src: uri,
+					label:
+						typeof partRecord.name === "string" ? partRecord.name : undefined,
+				});
+				if (previews.length >= maxItems) return previews;
+			}
+		}
+	}
+
+	return previews;
+}
+
+function resolveToolImageSrc(imageRecord: Record<string, unknown>): string | null {
+	for (const key of ["url", "webUrl", "dataUrl", "src"]) {
+		const candidate = imageRecord[key];
+		if (typeof candidate === "string" && candidate.trim()) {
+			return candidate.trim();
+		}
+	}
+	if (typeof imageRecord.path === "string" && imageRecord.path.trim()) {
+		return `/api/fs/file?path=${encodeURIComponent(imageRecord.path.trim())}`;
+	}
+	return null;
+}
+
+function resolveToolAudioSrc(audioRecord: Record<string, unknown>): string | null {
+	for (const key of ["url", "webUrl", "dataUrl", "src", "remoteUrl"]) {
+		const candidate = audioRecord[key];
+		if (typeof candidate === "string" && candidate.trim()) {
+			return candidate.trim();
+		}
+	}
+	if (typeof audioRecord.path === "string" && audioRecord.path.trim()) {
+		return `/api/fs/file?path=${encodeURIComponent(audioRecord.path.trim())}`;
+	}
+	return null;
 }
 
 export function formatToolEventDuration(

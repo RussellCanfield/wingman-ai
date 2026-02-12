@@ -75,4 +75,121 @@ describe("extractMessagesFromState", () => {
 			content: "Here is the plan.",
 		});
 	});
+
+	it("promotes tool image outputs into assistant attachments", () => {
+		const state = {
+			createdAt: 3000,
+			values: {
+				messages: [
+					{ role: "user", content: "Create a puppy image." },
+					{
+						role: "tool",
+						content: JSON.stringify({
+							content: [
+								{ type: "text", text: "Generated image." },
+								{
+									type: "resource_link",
+									uri: "/api/fs/file?path=%2Ftmp%2Fpuppy.png",
+									mimeType: "image/png",
+								},
+							],
+						}),
+					},
+				],
+			},
+		};
+
+		const result = extractMessagesFromState(state);
+		expect(result).not.toBeNull();
+		expect(result).toHaveLength(2);
+		expect(result?.[1]).toMatchObject({
+			role: "assistant",
+			content: "Generated image.",
+			attachments: [
+				{
+					kind: "image",
+					dataUrl: "/api/fs/file?path=%2Ftmp%2Fpuppy.png",
+				},
+			],
+		});
+	});
+
+	it("extracts tool attachments when MCP payload is wrapped in a text block", () => {
+		const state = {
+			createdAt: 4000,
+			values: {
+				messages: [
+					{ role: "user", content: "Generate a landscape image." },
+					{
+						role: "tool",
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify({
+									content: [
+										{ type: "text", text: "Image ready." },
+										{
+											type: "resource_link",
+											uri: "/api/fs/file?path=%2Ftmp%2Flandscape.png",
+											mimeType: "image/png",
+										},
+									],
+								}),
+							},
+						],
+					},
+				],
+			},
+		};
+
+		const result = extractMessagesFromState(state);
+		expect(result).not.toBeNull();
+		expect(result).toHaveLength(2);
+		expect(result?.[1]).toMatchObject({
+			role: "assistant",
+			content: "Image ready.",
+			attachments: [
+				{
+					kind: "image",
+					dataUrl: "/api/fs/file?path=%2Ftmp%2Flandscape.png",
+				},
+			],
+		});
+	});
+
+	it("extracts tool image attachments from artifact blocks", () => {
+		const state = {
+			createdAt: 5000,
+			values: {
+				messages: [
+					{ role: "user", content: "Generate another image." },
+					{
+						role: "tool",
+						content: "Generated image.",
+						artifact: [
+							{
+								type: "image",
+								mimeType: "image/png",
+								data: "abc123",
+							},
+						],
+					},
+				],
+			},
+		};
+
+		const result = extractMessagesFromState(state);
+		expect(result).not.toBeNull();
+		expect(result).toHaveLength(2);
+		expect(result?.[1]).toMatchObject({
+			role: "assistant",
+			content: "Generated image.",
+			attachments: [
+				{
+					kind: "image",
+					dataUrl: "data:image/png;base64,abc123",
+				},
+			],
+		});
+	});
 });

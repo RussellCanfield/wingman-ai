@@ -147,7 +147,10 @@ export async function createTools(
 	// Add MCP tools if configured
 	if (options.mcpConfigs && options.mcpConfigs.length > 0) {
 		try {
-			const mcpManager = new MCPClientManager(options.mcpConfigs, logger);
+			const mcpManager = new MCPClientManager(options.mcpConfigs, logger, {
+				executionWorkspace:
+					options.executionWorkspace || options.workspace || null,
+			});
 			await mcpManager.initialize();
 			const mcpTools = await mcpManager.getTools();
 

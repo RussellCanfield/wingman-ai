@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { GatewayServer, GatewayClient } from "../gateway/index.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { GatewayClient, GatewayServer } from "../gateway/index.js";
 
 const isBun = typeof (globalThis as any).Bun !== "undefined";
 const describeIfBun = isBun ? describe : describe.skip;
@@ -48,14 +51,19 @@ vi.mock("@/cli/core/agentInvoker.js", () => ({
 describeIfBun("Gateway", () => {
 	let server: GatewayServer;
 	let port = 0;
+	let testWorkspace: string;
 
 	beforeAll(async () => {
+		testWorkspace = mkdtempSync(join(tmpdir(), "wingman-gateway-test-"));
 		const instance = new GatewayServer({
 			port: 0,
 			host: "localhost",
 			requireAuth: false,
 			auth: { mode: "none" },
 			logLevel: "silent",
+			workspace: testWorkspace,
+			configDir: ".wingman-test-config",
+			stateDir: ".wingman-test-state",
 		});
 		await instance.start();
 		server = instance;
@@ -70,6 +78,9 @@ describeIfBun("Gateway", () => {
 	afterAll(async () => {
 		if (server) {
 			await server.stop();
+		}
+		if (testWorkspace) {
+			rmSync(testWorkspace, { recursive: true, force: true });
 		}
 	});
 
@@ -139,7 +150,7 @@ describeIfBun("Gateway", () => {
 		const response = await fetch(`http://localhost:${port}/health`);
 		expect(response.ok).toBe(true);
 
-		const health = await response.json() as { status: string };
+		const health = (await response.json()) as { status: string };
 		expect(health.status).toBe("healthy");
 	});
 
@@ -277,10 +288,7 @@ describeIfBun("Gateway", () => {
 
 			client1.connect().catch(reject);
 
-			setTimeout(
-				() => reject(new Error("Broadcast test timeout")),
-				10000,
-			);
+			setTimeout(() => reject(new Error("Broadcast test timeout")), 10000);
 		});
 	});
 
@@ -443,7 +451,10 @@ describeIfBun("Gateway", () => {
 	});
 
 	it("should broadcast user messages to desktop clients without session subscribe", async () => {
-		const desktopClient = await connectClient("session-desktop-listener", "desktop");
+		const desktopClient = await connectClient(
+			"session-desktop-listener",
+			"desktop",
+		);
 		const requester = await connectClient("session-desktop-requester");
 		const sessionId = "session-desktop-test";
 
@@ -731,7 +742,10 @@ describeIfBun("Gateway", () => {
 			body: JSON.stringify({ name: "Clear Test" }),
 		});
 		expect(createRes.ok).toBe(true);
-		const session = (await createRes.json()) as { id: string; agentId?: string };
+		const session = (await createRes.json()) as {
+			id: string;
+			agentId?: string;
+		};
 		const sessionAgentId = session.agentId || "main";
 
 		const manager = await (server as any).getSessionManager(sessionAgentId);
@@ -751,5 +765,70 @@ describeIfBun("Gateway", () => {
 		const updated = manager.getSession(session.id);
 		expect(updated?.messageCount).toBe(0);
 		expect(updated?.lastMessagePreview).toBeNull();
+	});
+
+	it("persists failed first-turn messages so the thread survives reload", async () => {
+		const requester = await connectClient("persist-failed-turn-requester");
+		const sessionId = `session-persist-failed-${Date.now()}`;
+		const requestId = `req-persist-failed-${Date.now()}`;
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: requestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "throw-no-event",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-error",
+			10000,
+		);
+
+		const sessionsRes = await fetch(
+			`http://localhost:${port}/api/sessions?limit=100`,
+		);
+		expect(sessionsRes.ok).toBe(true);
+		const sessions = (await sessionsRes.json()) as Array<{
+			id: string;
+			messageCount?: number;
+		}>;
+		const created = sessions.find((session) => session.id === sessionId);
+		expect(created).toBeTruthy();
+		expect(created?.messageCount).toBe(1);
+
+		const messagesRes = await fetch(
+			`http://localhost:${port}/api/sessions/${encodeURIComponent(sessionId)}/messages?agentId=main`,
+		);
+		expect(messagesRes.ok).toBe(true);
+		const messages = (await messagesRes.json()) as Array<{
+			role: "user" | "assistant";
+			content: string;
+		}>;
+		expect(messages.some((message) => message.role === "user")).toBe(true);
+		expect(
+			messages.some(
+				(message) =>
+					message.role === "user" && message.content.includes("throw-no-event"),
+			),
+		).toBe(true);
+		expect(
+			messages.some(
+				(message) =>
+					message.role === "assistant" &&
+					message.content.includes("Synthetic invocation failure"),
+			),
+		).toBe(true);
+
+		requester.close();
 	});
 });

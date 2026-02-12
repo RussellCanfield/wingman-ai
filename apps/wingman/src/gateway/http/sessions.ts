@@ -1,6 +1,41 @@
-import type { GatewayHttpContext } from "./types.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
+import { AgentLoader } from "@/agent/config/agentLoader.js";
+import type { GatewayHttpContext } from "./types.js";
+
+const getSessionAgents = (
+	ctx: GatewayHttpContext,
+	explicitAgentId?: string,
+): string[] => {
+	if (explicitAgentId) {
+		return [explicitAgentId];
+	}
+
+	const config = ctx.getWingmanConfig();
+	const configuredAgents =
+		config.agents?.list
+			?.map((agent) => agent.id?.trim())
+			.filter((id): id is string => Boolean(id)) ?? [];
+
+	let discoveredAgents: string[] = [];
+	try {
+		const loader = new AgentLoader(ctx.configDir, ctx.workspace, config);
+		discoveredAgents = loader
+			.loadAllAgentConfigs()
+			.map((agent) => agent.name?.trim())
+			.filter((id): id is string => Boolean(id));
+	} catch (error) {
+		if (typeof ctx.logger?.warn === "function") {
+			ctx.logger.warn(
+				"Failed to load discovered agents while listing sessions",
+				error,
+			);
+		}
+	}
+
+	const agents = [...new Set([...configuredAgents, ...discoveredAgents])];
+	return agents.length > 0 ? agents : ["main"];
+};
 
 export const handleSessionsApi = async (
 	ctx: GatewayHttpContext,
@@ -11,12 +46,13 @@ export const handleSessionsApi = async (
 		if (req.method === "GET") {
 			const limit = Number(url.searchParams.get("limit") || "100");
 			const status =
-				(url.searchParams.get("status") as "active" | "archived" | "deleted" | null) ||
-				"active";
+				(url.searchParams.get("status") as
+					| "active"
+					| "archived"
+					| "deleted"
+					| null) || "active";
 			const agentId = url.searchParams.get("agentId") || undefined;
-			const agents = agentId
-				? [agentId]
-				: ctx.getWingmanConfig().agents?.list?.map((agent) => agent.id) || ["main"];
+			const agents = getSessionAgents(ctx, agentId);
 
 			const sessions: Array<Record<string, unknown>> = [];
 			for (const agent of agents) {
@@ -65,7 +101,11 @@ export const handleSessionsApi = async (
 				body.sessionId || `agent:${selectedAgent}:webui:thread:${randomUUID()}`;
 
 			const manager = await ctx.getSessionManager(selectedAgent);
-			const session = manager.getOrCreateSession(sessionId, selectedAgent, body.name);
+			const session = manager.getOrCreateSession(
+				sessionId,
+				selectedAgent,
+				body.name,
+			);
 
 			return new Response(
 				JSON.stringify({
@@ -85,7 +125,9 @@ export const handleSessionsApi = async (
 		return new Response("Method Not Allowed", { status: 405 });
 	}
 
-	const sessionMessagesMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/messages$/);
+	const sessionMessagesMatch = url.pathname.match(
+		/^\/api\/sessions\/(.+)\/messages$/,
+	);
 	if (sessionMessagesMatch) {
 		const sessionId = decodeURIComponent(sessionMessagesMatch[1]);
 		const agentId = url.searchParams.get("agentId");
@@ -119,7 +161,9 @@ export const handleSessionsApi = async (
 		}
 	}
 
-	const sessionWorkdirMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/workdir$/);
+	const sessionWorkdirMatch = url.pathname.match(
+		/^\/api\/sessions\/(.+)\/workdir$/,
+	);
 	if (sessionWorkdirMatch && req.method === "POST") {
 		const sessionId = decodeURIComponent(sessionWorkdirMatch[1]);
 		const agentId = url.searchParams.get("agentId");
@@ -192,8 +236,10 @@ export const handleSessionsApi = async (
 				createdAt: updated?.createdAt.getTime() || session.createdAt.getTime(),
 				updatedAt: updated?.updatedAt.getTime() || Date.now(),
 				messageCount: updated?.messageCount ?? session.messageCount,
-				lastMessagePreview: updated?.lastMessagePreview ?? session.lastMessagePreview,
-				workdir: updated?.metadata?.workdir ?? session.metadata?.workdir ?? null,
+				lastMessagePreview:
+					updated?.lastMessagePreview ?? session.lastMessagePreview,
+				workdir:
+					updated?.metadata?.workdir ?? session.metadata?.workdir ?? null,
 			}),
 			{ headers: { "Content-Type": "application/json" } },
 		);

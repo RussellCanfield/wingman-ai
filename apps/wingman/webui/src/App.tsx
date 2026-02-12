@@ -47,6 +47,7 @@ import {
 } from "./utils/agentAttribution";
 import { buildRoutineAgents } from "./utils/agentOptions";
 import { appendAssistantErrorFeedback } from "./utils/assistantError";
+import { mergeAssistantStreamText } from "./utils/assistantStream";
 import {
 	FILE_INPUT_ACCEPT,
 	isPdfUploadFile,
@@ -55,12 +56,17 @@ import {
 } from "./utils/fileUpload";
 import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
+import { isLocallyTrackedRequest } from "./utils/requestTracking";
+import {
+	buildCancelGatewayMessage,
+	resolveStoppableRequestId,
+} from "./utils/stopPrompt";
 import { parseStreamEvents } from "./utils/streaming";
 import {
 	clearStreamMessageTargets,
-	resolveTextMessageTargetId,
 	resolveToolMessageTargetId,
 } from "./utils/streamMessageRouter";
+import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
 import {
 	DEFAULT_STREAM_RECOVERY_HARD_TIMEOUT_MS,
 	DEFAULT_STREAM_RECOVERY_IDLE_TIMEOUT_MS,
@@ -210,9 +216,8 @@ export const App: React.FC = () => {
 		() =>
 			buildRoutineAgents({
 				catalog: agentCatalog,
-				configAgents: config.agents,
 			}),
-		[agentCatalog, config.agents],
+		[agentCatalog],
 	);
 
 	const subagentMap = useMemo(() => {
@@ -376,7 +381,7 @@ export const App: React.FC = () => {
 			if (!activeRequestIdRef.current) {
 				activeRequestIdRef.current = requestId;
 				streamStartedAtRef.current = startedAt;
-				streamLastActivityRef.current = startedAt;
+				streamLastActivityRef.current = 0;
 				scheduleStreamRecoveryCheck();
 			}
 			syncRequestStreamingState();
@@ -407,9 +412,8 @@ export const App: React.FC = () => {
 				const nextActive = pendingRequestIdsRef.current.values().next().value;
 				activeRequestIdRef.current = nextActive ?? null;
 				if (nextActive) {
-					const now = Date.now();
-					streamStartedAtRef.current = now;
-					streamLastActivityRef.current = now;
+					streamStartedAtRef.current = Date.now();
+					streamLastActivityRef.current = 0;
 					scheduleStreamRecoveryCheck();
 				} else {
 					streamStartedAtRef.current = 0;
@@ -540,8 +544,13 @@ export const App: React.FC = () => {
 	}, [logEvent]);
 
 	const loadThreadMessages = useCallback(
-		async (thread: Thread) => {
-			if (thread.messagesLoaded) return;
+		async (
+			thread: Thread,
+			options?: {
+				force?: boolean;
+			},
+		) => {
+			if (thread.messagesLoaded && !options?.force) return;
 			setLoadingThreadId(thread.id);
 			try {
 				const params = new URLSearchParams({
@@ -555,13 +564,7 @@ export const App: React.FC = () => {
 					return;
 				}
 				const data = (await res.json()) as ChatMessage[];
-				const sanitizedMessages = data.map((message) => {
-					if (message.role !== "assistant") return message;
-					return {
-						...message,
-						content: sanitizeAssistantDisplayText(message.content) ?? "",
-					};
-				});
+				const sanitizedMessages = data.map(normalizeSessionMessage);
 				setThreads((prev) =>
 					prev.map((item) =>
 						item.id === thread.id
@@ -952,16 +955,24 @@ export const App: React.FC = () => {
 			requestId: string;
 			messageId: string;
 			text: string;
-			isDelta?: boolean;
 		}) => {
-			const { requestId, messageId, text, isDelta } = input;
+			const { requestId, messageId, text } = input;
 			const threadId = requestThreadRef.current.get(requestId);
 			if (!threadId) return;
 			if (uiOnlyRequestsRef.current.has(messageId)) {
 				return;
 			}
-			const sanitizedText = sanitizeAssistantDisplayText(text);
-			if (!sanitizedText) return;
+			const existingRaw = buffersRef.current.get(messageId) ?? "";
+			const mergedRaw = mergeAssistantStreamText(existingRaw, text);
+			buffersRef.current.set(messageId, mergedRaw);
+			const previousCleaned =
+				sanitizeAssistantDisplayText(existingRaw, {
+					preserveTrailingWhitespace: true,
+				}) ?? "";
+			const cleaned =
+				sanitizeAssistantDisplayText(mergedRaw, {
+					preserveTrailingWhitespace: true,
+				}) ?? previousCleaned;
 
 			setThreads((prev) =>
 				prev.map((thread) => {
@@ -969,15 +980,7 @@ export const App: React.FC = () => {
 					return upsertAssistantMessage(
 						thread,
 						messageId,
-						(msg) => {
-							const merged = mergeAssistantStreamText(
-								msg.content,
-								sanitizedText,
-								isDelta,
-							);
-							buffersRef.current.set(messageId, merged);
-							return { ...msg, content: merged };
-						},
+						(msg) => ({ ...msg, content: cleaned }),
 						requestId,
 					);
 				}),
@@ -1170,8 +1173,9 @@ export const App: React.FC = () => {
 			const messageId = resolveRequestMessageId(requestId);
 			const uiFallback = uiFallbackRef.current.get(messageId);
 			const resolvedFallback = options?.fallback || uiFallback || "";
-			const finalText =
-				buffersRef.current.get(messageId) || resolvedFallback || "";
+			const bufferedRaw = buffersRef.current.get(messageId) || "";
+			const bufferedText = sanitizeAssistantDisplayText(bufferedRaw) || "";
+			const finalText = bufferedText || resolvedFallback || "";
 			const spoken =
 				spokenMessagesRef.current.get(threadId) || new Set<string>();
 			if (
@@ -1198,26 +1202,33 @@ export const App: React.FC = () => {
 						thread,
 						messageId,
 						(msg) => {
+							let nextMessage = msg;
+							if (bufferedText && bufferedText !== msg.content) {
+								nextMessage = {
+									...nextMessage,
+									content: bufferedText,
+								};
+							}
 							const canRenderFallbackText =
 								options?.forceText ||
 								!uiOnlyRequestsRef.current.has(messageId) ||
 								!dynamicUiEnabled;
 							if (!canRenderFallbackText || !resolvedFallback) {
-								return msg;
+								return nextMessage;
 							}
-							if (!msg.content.trim()) {
-								return { ...msg, content: resolvedFallback };
+							if (!nextMessage.content.trim()) {
+								return { ...nextMessage, content: resolvedFallback };
 							}
 							if (options?.appendFallbackToExisting) {
 								const withFeedback = appendAssistantErrorFeedback(
-									msg.content,
+									nextMessage.content,
 									resolvedFallback,
 								);
-								if (withFeedback !== msg.content) {
-									return { ...msg, content: withFeedback };
+								if (withFeedback !== nextMessage.content) {
+									return { ...nextMessage, content: withFeedback };
 								}
 							}
-							return msg;
+							return nextMessage;
 						},
 						requestId,
 					);
@@ -1278,10 +1289,12 @@ export const App: React.FC = () => {
 	const handleAgentEvent = useCallback(
 		(requestId: string, payload: any) => {
 			if (!payload) return;
-			if (
-				pendingRequestIdsRef.current.has(requestId) &&
-				payload.type !== "session-message"
-			) {
+			const trackedRequest = isLocallyTrackedRequest({
+				requestId,
+				pendingRequestIds: pendingRequestIdsRef.current,
+				activeRequestId: activeRequestIdRef.current,
+			});
+			if (trackedRequest && payload.type !== "session-message") {
 				markPendingRequestActive(requestId);
 			}
 			if (activeRequestIdRef.current === requestId) {
@@ -1307,52 +1320,7 @@ export const App: React.FC = () => {
 					? payload.attachments
 					: [];
 				const mappedAttachments = rawAttachments
-					.map((attachment: any) => {
-						if (!attachment || typeof attachment !== "object") return null;
-						const dataUrl =
-							typeof attachment.dataUrl === "string" ? attachment.dataUrl : "";
-						const textContent =
-							typeof attachment.textContent === "string"
-								? attachment.textContent
-								: undefined;
-						const mimeType =
-							typeof attachment.mimeType === "string"
-								? attachment.mimeType
-								: undefined;
-						const name =
-							typeof attachment.name === "string" ? attachment.name : undefined;
-						const size =
-							typeof attachment.size === "number" ? attachment.size : undefined;
-						const isAudio =
-							attachment.kind === "audio" ||
-							mimeType?.startsWith("audio/") ||
-							dataUrl.startsWith("data:audio/");
-						const isFile =
-							attachment.kind === "file" ||
-							(typeof textContent === "string" &&
-								!isAudio &&
-								!dataUrl.startsWith("data:image/"));
-						if (isFile) {
-							return {
-								id: createAttachmentId(),
-								kind: "file" as const,
-								dataUrl,
-								textContent: textContent || "",
-								mimeType,
-								name,
-								size,
-							};
-						}
-						if (!dataUrl) return null;
-						return {
-							id: createAttachmentId(),
-							kind: isAudio ? "audio" : "image",
-							dataUrl,
-							mimeType,
-							name,
-							size,
-						};
-					})
+					.map((attachment: any) => normalizeIncomingAttachment(attachment))
 					.filter(Boolean) as ChatAttachment[];
 				const userMessage: ChatMessage = {
 					id: `user-${requestId || now}`,
@@ -1412,7 +1380,11 @@ export const App: React.FC = () => {
 				});
 				return;
 			}
-			if (sessionId && !requestThreadRef.current.has(requestId)) {
+			if (
+				sessionId &&
+				payload.type !== "session-message" &&
+				!requestThreadRef.current.has(requestId)
+			) {
 				requestThreadRef.current.set(requestId, sessionId);
 				if (typeof payload?.agentId === "string") {
 					requestAgentRef.current.set(requestId, payload.agentId);
@@ -1466,23 +1438,33 @@ export const App: React.FC = () => {
 				});
 			}
 			if (payload.type === "agent-start") {
-				setShowStreamingIndicator(true);
+				if (trackedRequest) {
+					setShowStreamingIndicator(true);
+				}
 				logEvent(`Agent started: ${payload.agent || "unknown"}`);
 				return;
 			}
 			if (payload.type === "agent-stream") {
-				setShowStreamingIndicator(true);
+				if (trackedRequest) {
+					setShowStreamingIndicator(true);
+				}
 				const { textEvents, toolEvents } = parseStreamEvents(payload.chunk);
+				const shouldHandleDeltaTextStream = isAssistantTextStreamChunk(
+					payload.chunk,
+				);
 				const agentForRequest = requestAgentRef.current.get(requestId);
 				const subagents = agentForRequest
 					? subagentMap.get(agentForRequest)
 					: undefined;
 				const thinkingUpdates: ThinkingEvent[] = [];
-				const textEventNonce = `${Date.now().toString(36)}-${Math.random()
-					.toString(36)
-					.slice(2, 8)}`;
 
-				for (const [eventIndex, event] of textEvents.entries()) {
+				for (const event of textEvents) {
+					if (!shouldHandleDeltaTextStream) {
+						continue;
+					}
+					if (!event.isDelta) {
+						continue;
+					}
 					const nodeLabel = event.node?.trim();
 					const matchedSubagent = matchKnownSubagentLabel(nodeLabel, subagents);
 					const normalizedNode = matchedSubagent
@@ -1497,39 +1479,22 @@ export const App: React.FC = () => {
 							new Map<string, string>();
 						const previous = buffer.get(normalizedNode) || "";
 						const next = mergeStreamText(previous, event.text);
-						buffer.set(normalizedNode, next);
+						const cleaned =
+							sanitizeAssistantDisplayText(next) ??
+							(previous.trim().length > 0 ? previous : "");
+						buffer.set(normalizedNode, cleaned);
 						thinkingBuffersRef.current.set(requestId, buffer);
 						thinkingUpdates.push({
 							id: `think-${requestId}-${normalizedNode}`,
 							node: matchedSubagent,
-							content: next,
+							content: cleaned,
 							updatedAt: Date.now(),
 						});
 					} else {
-						const streamMessageId = event.messageId;
-						const looksLikeStandaloneDelta =
-							Boolean(event.isDelta) &&
-							!streamMessageId &&
-							event.text.trim().length >= 80 &&
-							/\s/.test(event.text);
-						const isDelta = looksLikeStandaloneDelta ? false : event.isDelta;
-						const targetMessageId = resolveTextMessageTargetId({
-							state: requestStreamMessageRef.current,
-							requestId,
-							fallbackMessageId: requestId,
-							streamMessageId,
-							isDelta,
-							eventKey: !event.isDelta
-								? `${textEventNonce}:${eventIndex}`
-								: looksLikeStandaloneDelta
-									? `standalone:${textEventNonce}:${eventIndex}`
-									: undefined,
-						});
 						updateAssistant({
 							requestId,
-							messageId: targetMessageId,
+							messageId: requestId,
 							text: event.text,
-							isDelta,
 						});
 					}
 				}
@@ -1629,7 +1594,6 @@ export const App: React.FC = () => {
 				return;
 			}
 			if (payload.type === "agent-complete") {
-				setShowStreamingIndicator(false);
 				logEvent("Agent complete");
 				const fallback = buildAgentFallback(
 					payload.result,
@@ -1640,7 +1604,6 @@ export const App: React.FC = () => {
 				return;
 			}
 			if (payload.type === "agent-error") {
-				setShowStreamingIndicator(false);
 				const errorText =
 					typeof payload.error === "string" ? payload.error : "Agent error";
 				const isCancel = /cancel/i.test(errorText);
@@ -1987,8 +1950,18 @@ export const App: React.FC = () => {
 	]);
 
 	const stopPrompt = useCallback(() => {
-		const requestId = activeRequestIdRef.current;
+		const requestId = resolveStoppableRequestId({
+			activeRequestId: activeRequestIdRef.current,
+			pendingRequestIds: pendingRequestIdsRef.current,
+		});
 		if (!requestId) return;
+
+		try {
+			sendGatewayMessage(buildCancelGatewayMessage(requestId, Date.now()));
+		} catch {
+			logEvent("Cancel signal could not be delivered; stopping local stream.");
+		}
+
 		setShowStreamingIndicator(false);
 		const messageId = resolveRequestMessageId(requestId);
 		const threadId = requestThreadRef.current.get(requestId);
@@ -2019,9 +1992,10 @@ export const App: React.FC = () => {
 		gatewayStream,
 		logEvent,
 		resolveRequestMessageId,
+		sendGatewayMessage,
 	]);
 
-	const uiStreaming = isStreaming || gatewayStream.isLoading;
+	const uiStreaming = isStreaming;
 
 	const clearChat = useCallback(async () => {
 		if (!activeThread) return;
@@ -2361,13 +2335,26 @@ export const App: React.FC = () => {
 	}, [config.gatewayHost, config.gatewayPort]);
 
 	useEffect(() => {
-		const defaultAgent =
+		const validAgentIds = new Set(agentOptions.map((agent) => agent.id));
+		const preferredConfigAgent =
 			config.defaultAgentId ||
 			config.agents.find((agent) => agent.default)?.id ||
-			config.agents[0]?.id ||
+			config.agents[0]?.id;
+		const defaultAgent =
+			(preferredConfigAgent && validAgentIds.has(preferredConfigAgent)
+				? preferredConfigAgent
+				: undefined) ||
+			agentOptions[0]?.id ||
 			"main";
 		setAgentId(defaultAgent);
-	}, [config]);
+	}, [config, agentOptions]);
+
+	useEffect(() => {
+		if (agentOptions.some((agent) => agent.id === agentId)) {
+			return;
+		}
+		setAgentId(agentOptions[0]?.id || "main");
+	}, [agentId, agentOptions]);
 
 	useEffect(() => {
 		if (!autoConnect) return;
@@ -2955,9 +2942,7 @@ export const App: React.FC = () => {
 										fileAccept={FILE_INPUT_ACCEPT}
 										attachmentError={attachmentError}
 										isStreaming={uiStreaming}
-										showStreamingIndicator={
-											showStreamingIndicator || gatewayStream.isLoading
-										}
+										showStreamingIndicator={showStreamingIndicator}
 										queuedPromptCount={queuedPromptCount}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
@@ -3148,20 +3133,6 @@ function upsertAssistantMessage(
 	};
 }
 
-function mergeAssistantStreamText(
-	existing: string,
-	incoming: string,
-	isDelta?: boolean,
-): string {
-	if (!incoming) return existing;
-	if (isDelta) {
-		if (incoming.startsWith(existing)) return incoming;
-		return existing + incoming;
-	}
-	if (!existing.trim()) return incoming;
-	return `${existing}\n${incoming}`;
-}
-
 function mergeStreamText(existing: string, next: string): string {
 	if (!next) return existing;
 	if (next.startsWith(existing)) return next;
@@ -3202,6 +3173,78 @@ function createAttachmentId(): string {
 		return window.crypto.randomUUID();
 	}
 	return `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeSessionMessage(message: ChatMessage): ChatMessage {
+	const rawAttachments = Array.isArray((message as any)?.attachments)
+		? ((message as any).attachments as any[])
+		: [];
+	const attachments = rawAttachments
+		.map((attachment) => normalizeIncomingAttachment(attachment))
+		.filter(Boolean) as ChatAttachment[];
+
+	if (message.role !== "assistant") {
+		return {
+			...message,
+			attachments: attachments.length > 0 ? attachments : undefined,
+		};
+	}
+
+	return {
+		...message,
+		content: sanitizeAssistantDisplayText(message.content) ?? "",
+		attachments: attachments.length > 0 ? attachments : undefined,
+	};
+}
+
+function normalizeIncomingAttachment(raw: any): ChatAttachment | null {
+	if (!raw || typeof raw !== "object") return null;
+
+	const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl : "";
+	const textContent =
+		typeof raw.textContent === "string" ? raw.textContent : undefined;
+	const mimeType = typeof raw.mimeType === "string" ? raw.mimeType : undefined;
+	const name = typeof raw.name === "string" ? raw.name : undefined;
+	const size = typeof raw.size === "number" ? raw.size : undefined;
+
+	const isAudio =
+		raw.kind === "audio" ||
+		mimeType?.startsWith("audio/") ||
+		dataUrl.startsWith("data:audio/");
+	const isFile =
+		raw.kind === "file" ||
+		(typeof textContent === "string" &&
+			!isAudio &&
+			!dataUrl.startsWith("data:image/"));
+
+	if (isFile) {
+		return {
+			id:
+				typeof raw.id === "string" && raw.id.trim().length > 0
+					? raw.id
+					: createAttachmentId(),
+			kind: "file",
+			dataUrl,
+			textContent: textContent || "",
+			mimeType,
+			name,
+			size,
+		};
+	}
+
+	if (!dataUrl) return null;
+
+	return {
+		id:
+			typeof raw.id === "string" && raw.id.trim().length > 0
+				? raw.id
+				: createAttachmentId(),
+		kind: isAudio ? "audio" : "image",
+		dataUrl,
+		mimeType,
+		name,
+		size,
+	};
 }
 
 function buildAgentFallback(

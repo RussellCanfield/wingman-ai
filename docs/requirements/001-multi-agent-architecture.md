@@ -186,6 +186,8 @@ Modern AI assistants face several challenges:
 
 **Tools**:
 - MCP tools for domain data (e.g., Finnhub quotes/news/options); candle tools enforce conservative lookback caps (intraday default 180 days, daily default 365 days). Candle sourcing defaults to Yahoo Finance chart data (non‑premium Finnhub) and can fall back to Finnhub when configured.
+- Built-in MCP multimodal tooling includes FAL AI generation tools (`generate_image_or_texture`, `generate_image_edit`, `generate_audio_or_music`, `generate_video_from_image`) plus `fal_generation_status` for queue polling, cancellation, and optional review decisions.
+- MCP server entries may define `defaultToolTimeout` (milliseconds) to extend per-tool call deadlines for long-running providers (for example, FAL audio/sfx jobs).
 - `think` for structured reasoning
 - Optional `web_crawler` for user-supplied URLs
 
@@ -210,6 +212,7 @@ An agent is a fully scoped brain with its own workspace, agent directory, and se
 - Agent workspace: `~/wingman-<agentId>` (example)
 - Agent dir: `~/.wingman/agents/<agentId>/agent`
 - Sessions: `~/.wingman/agents/<agentId>/sessions`
+- Session image materialization: `<stateDir>/agents/<agentId>/sessions/media/<sessionId>/`
 - Auth profiles: `~/.wingman/agents/<agentId>/agent/auth-profiles.json`
 - Shared skills: `~/.wingman/skills` and per-workspace `skills/`
 

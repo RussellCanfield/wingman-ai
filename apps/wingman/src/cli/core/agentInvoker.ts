@@ -102,6 +102,7 @@ type UserContentPart =
 
 export const WORKDIR_VIRTUAL_PATH = "/workdir/";
 export const OUTPUT_VIRTUAL_PATH = "/output/";
+export const AGENTS_MEMORY_VIRTUAL_PATHS = ["/AGENTS.md"] as const;
 
 export type ExternalOutputMount = {
 	virtualPath: string | null;
@@ -156,6 +157,23 @@ export const resolveExecutionWorkspace = (
 	if (!workdir) return normalize(workspace);
 	if (isAbsolute(workdir)) return normalize(workdir);
 	return normalize(join(workspace, workdir));
+};
+
+export const resolveAgentExecutionWorkspace = (
+	workspace: string,
+	workdir?: string | null,
+	defaultOutputDir?: string | null,
+): string => {
+	const preferredWorkdir = workdir || defaultOutputDir || null;
+	return resolveExecutionWorkspace(workspace, preferredWorkdir);
+};
+
+export const resolveAgentMemorySources = (
+	executionWorkspace: string,
+): string[] => {
+	return AGENTS_MEMORY_VIRTUAL_PATHS.filter((memoryPath) =>
+		existsSync(join(executionWorkspace, memoryPath.replace(/^\/+/, ""))),
+	);
 };
 
 export const toWorkspaceAliasVirtualPath = (
@@ -678,9 +696,10 @@ export class AgentInvoker {
 		const isCancelled = () => options?.signal?.aborted === true;
 		try {
 			const hookSessionId = sessionId || uuidv4();
-			const executionWorkspace = resolveExecutionWorkspace(
+			const executionWorkspace = resolveAgentExecutionWorkspace(
 				this.workspace,
 				this.workdir,
+				this.defaultOutputDir,
 			);
 			const effectiveWorkdir = this.workdir ? executionWorkspace : null;
 			const loader = new AgentLoader(
@@ -733,7 +752,9 @@ export class AgentInvoker {
 
 			if (mcpConfigs.length > 0) {
 				this.logger.debug("Initializing MCP client for agent invocation");
-				this.mcpManager = new MCPClientManager(mcpConfigs, this.logger);
+				this.mcpManager = new MCPClientManager(mcpConfigs, this.logger, {
+					executionWorkspace,
+				});
 				await this.mcpManager.initialize();
 
 				// Get MCP tools and add to agent tools
@@ -761,6 +782,7 @@ export class AgentInvoker {
 				effectiveWorkdir,
 				this.defaultOutputDir,
 			);
+			const memorySources = resolveAgentMemorySources(executionWorkspace);
 			const middleware = [
 				mediaCompatibilityMiddleware({ model: targetAgent.model }),
 				additionalMessageMiddleware({
@@ -894,6 +916,7 @@ export class AgentInvoker {
 				middleware: middleware as any,
 				interruptOn: hitlSettings?.interruptOn,
 				skills: skillsSources,
+				memory: memorySources,
 				subagents: (targetAgent.subagents || []) as any,
 				checkpointer: checkpointer as any,
 			});
@@ -1030,6 +1053,7 @@ export class AgentInvoker {
 				this.logger.info("Agent streaming completed successfully", {
 					usedFallbackText: Boolean(fallbackText),
 				});
+				await this.materializeSessionImages(sessionId);
 				this.outputManager.emitAgentComplete({
 					streaming: true,
 					...(fallbackText ? { fallbackText } : {}),
@@ -1067,6 +1091,7 @@ export class AgentInvoker {
 				}
 
 				this.logger.info("Agent completed successfully");
+				await this.materializeSessionImages(sessionId);
 				this.outputManager.emitAgentComplete(result);
 
 				return result;
@@ -1122,6 +1147,18 @@ export class AgentInvoker {
 			name: a.name,
 			description: a.description,
 		}));
+	}
+
+	private async materializeSessionImages(sessionId?: string): Promise<void> {
+		if (!this.sessionManager || !sessionId) return;
+		try {
+			await this.sessionManager.listMessages(sessionId);
+		} catch (error) {
+			this.logger.debug(
+				"Failed to materialize session image attachments",
+				error,
+			);
+		}
 	}
 }
 
