@@ -80,5 +80,9 @@ describe("HeroPanel", () => {
 
 		expect(html).toContain('aria-label="Collapse mission console"');
 		expect(html).not.toContain('aria-label="Expand mission console"');
+		expect(html).toContain(
+			"lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]",
+		);
+		expect(html).toContain('class="min-w-0 space-y-4"');
 	});
 });

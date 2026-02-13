@@ -411,6 +411,31 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("<li>Item three</li>");
 	});
 
+	it("normalizes escaped newline sequences in assistant output", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-escaped-newline",
+							role: "assistant",
+							content: "Line one\\n\\n- Item A\\n- Item B",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).not.toContain("\\n");
+		expect(html).toContain("<li>Item A</li>");
+		expect(html).toContain("<li>Item B</li>");
+	});
+
 	it("keeps existing messages visible while loading", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {

@@ -1,5 +1,5 @@
 import { tool } from "langchain";
-import { DuckDuckGoSearch } from "@langchain/community/tools/duckduckgo_search";
+import { search as duckDuckGoSearch } from "duck-duck-scrape";
 import { ChatOpenAI } from "@langchain/openai";
 import * as z from "zod";
 import type { SearchConfig } from "../../cli/config/schema.js";
@@ -97,13 +97,23 @@ const formatDdgError = (error: unknown, attempts: number): Error =>
 	);
 
 async function runDuckDuckGoSearch(query: string, maxResults: number) {
-	const search = new DuckDuckGoSearch({ maxResults });
 	let attempt = 0;
 	let delayMs = ddgBackoffBaseMs;
 
 	while (true) {
 		try {
-			return await ddgRateLimiter.run(() => search._call(query));
+			return await ddgRateLimiter.run(async () => {
+				const { results } = await duckDuckGoSearch(query);
+				return JSON.stringify(
+					results
+						.map((result) => ({
+							title: result.title,
+							link: result.url,
+							snippet: result.description,
+						}))
+						.slice(0, maxResults),
+				);
+			});
 		} catch (error) {
 			const shouldRetry = isDdgAnomalyError(error);
 			if (!shouldRetry || attempt >= ddgMaxRetries) {

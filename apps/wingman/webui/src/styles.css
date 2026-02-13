@@ -60,6 +60,11 @@
     @apply rounded-full border border-dashed border-white/20 bg-transparent px-4 py-2 text-sm font-semibold text-slate-400 shadow-none transition;
   }
 
+  .markdown-content {
+    @apply break-words;
+    overflow-wrap: anywhere;
+  }
+
   .markdown-content h1,
   .markdown-content h2,
   .markdown-content h3,
@@ -68,7 +73,7 @@
   }
 
   .markdown-content p {
-    @apply mb-0;
+    @apply mb-2 last:mb-0;
   }
 
   .markdown-content h1 {

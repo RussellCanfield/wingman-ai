@@ -24,15 +24,12 @@ const loadSearchModule = async (
 		}
 	}
 	vi.resetModules();
-	const callMock = vi.fn();
-	vi.doMock("@langchain/community/tools/duckduckgo_search", () => ({
-		DuckDuckGoSearch: class {
-			_call = callMock;
-			constructor() {}
-		},
+	const searchMock = vi.fn();
+	vi.doMock("duck-duck-scrape", () => ({
+		search: searchMock,
 	}));
 	const module = await import("../tools/internet_search");
-	return { ...module, callMock };
+	return { ...module, searchMock };
 };
 
 beforeEach(() => {
@@ -48,20 +45,28 @@ afterEach(() => {
 
 describe("Internet search tool (DuckDuckGo)", () => {
 	it("retries on DDG anomaly and succeeds", async () => {
-		const { createInternetSearchTool, callMock } = await loadSearchModule({
+		const { createInternetSearchTool, searchMock } = await loadSearchModule({
 			WINGMAN_DDG_MIN_DELAY_MS: "0",
 			WINGMAN_DDG_BACKOFF_BASE_MS: "1",
 			WINGMAN_DDG_BACKOFF_MAX_MS: "1",
 			WINGMAN_DDG_MAX_RETRIES: "2",
 		});
 
-		callMock
+		searchMock
 			.mockRejectedValueOnce(
 				new Error(
 					"DDG detected an anomaly in the request, you are likely making requests too quickly.",
 				),
 			)
-			.mockResolvedValueOnce("ok");
+			.mockResolvedValueOnce({
+				results: [
+					{
+						title: "Wingman",
+						url: "https://wingman.ai",
+						description: "Agentic coding assistant",
+					},
+				],
+			});
 
 		const tool = createInternetSearchTool({
 			provider: "duckduckgo",
@@ -69,21 +74,21 @@ describe("Internet search tool (DuckDuckGo)", () => {
 		});
 
 		const resultPromise = tool.invoke({ query: "test" });
-		const expectation = expect(resultPromise).resolves.toBe("ok");
+		const expectation = expect(resultPromise).resolves.toContain("Wingman");
 		await vi.runAllTimersAsync();
 		await expectation;
-		expect(callMock).toHaveBeenCalledTimes(2);
+		expect(searchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it("throws a friendly error after retry exhaustion", async () => {
-		const { createInternetSearchTool, callMock } = await loadSearchModule({
+		const { createInternetSearchTool, searchMock } = await loadSearchModule({
 			WINGMAN_DDG_MIN_DELAY_MS: "0",
 			WINGMAN_DDG_BACKOFF_BASE_MS: "1",
 			WINGMAN_DDG_BACKOFF_MAX_MS: "1",
 			WINGMAN_DDG_MAX_RETRIES: "1",
 		});
 
-		callMock.mockRejectedValue(
+		searchMock.mockRejectedValue(
 			new Error(
 				"DDG detected an anomaly in the request, you are likely making requests too quickly.",
 			),
@@ -98,18 +103,18 @@ describe("Internet search tool (DuckDuckGo)", () => {
 		const expectation = expect(resultPromise).rejects.toThrow(/rate-limited|anomaly/i);
 		await vi.runAllTimersAsync();
 		await expectation;
-		expect(callMock).toHaveBeenCalledTimes(2);
+		expect(searchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not retry on non-anomaly errors", async () => {
-		const { createInternetSearchTool, callMock } = await loadSearchModule({
+		const { createInternetSearchTool, searchMock } = await loadSearchModule({
 			WINGMAN_DDG_MIN_DELAY_MS: "0",
 			WINGMAN_DDG_BACKOFF_BASE_MS: "1",
 			WINGMAN_DDG_BACKOFF_MAX_MS: "1",
 			WINGMAN_DDG_MAX_RETRIES: "2",
 		});
 
-		callMock.mockRejectedValue(new Error("network down"));
+		searchMock.mockRejectedValue(new Error("network down"));
 
 		const tool = createInternetSearchTool({
 			provider: "duckduckgo",
@@ -120,6 +125,6 @@ describe("Internet search tool (DuckDuckGo)", () => {
 		const expectation = expect(resultPromise).rejects.toThrow("network down");
 		await vi.runAllTimersAsync();
 		await expectation;
-		expect(callMock).toHaveBeenCalledTimes(1);
+		expect(searchMock).toHaveBeenCalledTimes(1);
 	});
 });

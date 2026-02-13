@@ -108,8 +108,8 @@ export const HeroPanel: React.FC<HeroPanelProps> = ({
 						<HiMiniChevronUp className="pointer-events-none block h-5 w-5" />
 					</button>
 				</div>
-				<div className="relative z-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-					<div className="space-y-4">
+				<div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+					<div className="min-w-0 space-y-4">
 						<p className="text-xs uppercase tracking-[0.3em] text-slate-400">
 							Wingman Control Core
 						</p>
@@ -119,13 +119,13 @@ export const HeroPanel: React.FC<HeroPanelProps> = ({
 						<p className="text-sm text-slate-300">
 							Run your agent fleet, inspect runtime state, and stream intelligence through a single command deck.
 						</p>
-						<div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+						<div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-slate-300">
 							<span className="pill">channel: webui</span>
 							<span className="pill">active agent: {agentId}</span>
 							<span className="pill">thread: {activeThreadName || "--"}</span>
 						</div>
 					</div>
-					<div className="space-y-4">
+					<div className="min-w-0 space-y-4">
 						<div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 shadow-[0_10px_24px_rgba(18,14,12,0.12)]">
 							<div>
 								<p className="text-xs uppercase tracking-[0.2em] text-slate-400">Status</p>

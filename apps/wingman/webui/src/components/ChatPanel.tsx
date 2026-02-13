@@ -1200,9 +1200,21 @@ export function shouldRefocusComposer({
 
 function normalizeMessageLineBreaks(value: string): string {
 	if (!value) return value;
-	return value
+	const decoded = decodeEscapedLineBreaks(value);
+	return decoded
 		.replace(/\r\n?/g, "\n")
 		.replace(RETURN_SYMBOL_LINE_BREAK_PATTERN, "\n");
+}
+
+function decodeEscapedLineBreaks(value: string): string {
+	const escapedNewlineCount = (value.match(/\\n/g) || []).length;
+	if (escapedNewlineCount < 2) return value;
+	const actualNewlineCount = (value.match(/\n/g) || []).length;
+	if (actualNewlineCount > escapedNewlineCount) return value;
+	return value
+		.replace(/\\r\\n/g, "\n")
+		.replace(/\\n/g, "\n")
+		.replace(/\\t/g, "\t");
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
