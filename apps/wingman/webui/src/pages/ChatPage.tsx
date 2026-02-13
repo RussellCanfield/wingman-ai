@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from "react";
-import type { ChatAttachment, Thread } from "../types";
+import type React from "react";
+import { useMemo, useState } from "react";
 import { ChatPanel } from "../components/ChatPanel";
 import { WorkdirModal } from "../components/WorkdirModal";
+import type { AgentSummary, ChatAttachment, Thread } from "../types";
 import type { VoicePlaybackStatus } from "../utils/voicePlayback";
 
 type ChatPageProps = {
 	agentId: string;
+	activeAgent?: AgentSummary;
 	activeThread?: Thread;
 	prompt: string;
 	attachments: ChatAttachment[];
@@ -36,6 +38,7 @@ type ChatPageProps = {
 
 export const ChatPage: React.FC<ChatPageProps> = ({
 	agentId,
+	activeAgent,
 	activeThread,
 	prompt,
 	attachments,
@@ -73,11 +76,18 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 		? new Date(activeThread.createdAt).toLocaleString()
 		: "--";
 
-	const messageCount = activeThread?.messageCount ?? activeThread?.messages.length ?? 0;
+	const messageCount =
+		activeThread?.messageCount ?? activeThread?.messages.length ?? 0;
 	const baseOutputRoot = outputRoot ? outputRoot.replace(/\/+$/, "") : "";
 	const resolvedDefaultOutputDir =
-		activeThread && baseOutputRoot ? `${baseOutputRoot}/${activeThread.agentId}` : null;
+		activeThread && baseOutputRoot
+			? `${baseOutputRoot}/${activeThread.agentId}`
+			: null;
 	const defaultOutputDir = resolvedDefaultOutputDir || "--";
+	const modelLabel = activeAgent?.model?.trim() || "Default";
+	const tools = activeAgent?.tools || [];
+	const mcpServers = activeAgent?.mcpServers || [];
+	const mcpUsesGlobal = Boolean(activeAgent?.mcpUseGlobal);
 
 	const handleSaveWorkdir = async (path: string | null) => {
 		if (!activeThread) return false;
@@ -89,35 +99,37 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	};
 
 	return (
-		<section className="grid gap-6 lg:grid-cols-[1fr_280px]">
-			<ChatPanel
-				activeThread={activeThread}
-				defaultOutputDir={resolvedDefaultOutputDir}
-				prompt={prompt}
-				attachments={attachments}
-				fileAccept={fileAccept}
-				attachmentError={attachmentError}
-				isStreaming={isStreaming}
-				queuedPromptCount={queuedPromptCount}
-				connected={connected}
-				loading={loadingThread}
-				voiceAutoEnabled={voiceAutoEnabled}
-				voicePlayback={voicePlayback}
-				dynamicUiEnabled={dynamicUiEnabled}
-				onToggleVoiceAuto={onToggleVoiceAuto}
-				onSpeakVoice={onSpeakVoice}
-				onStopVoice={onStopVoice}
-				onPromptChange={onPromptChange}
-				onSendPrompt={onSendPrompt}
-				onStopPrompt={onStopPrompt}
-				onAddAttachments={onAddAttachments}
-				onRemoveAttachment={onRemoveAttachment}
-				onClearAttachments={onClearAttachments}
-				onClearChat={onClearChat}
-				onOpenCommandDeck={onOpenCommandDeck}
-			/>
+		<section className="flex min-h-0 flex-1 flex-col gap-6 lg:flex-row">
+			<div className="min-h-0 flex-1">
+				<ChatPanel
+					activeThread={activeThread}
+					defaultOutputDir={resolvedDefaultOutputDir}
+					prompt={prompt}
+					attachments={attachments}
+					fileAccept={fileAccept}
+					attachmentError={attachmentError}
+					isStreaming={isStreaming}
+					queuedPromptCount={queuedPromptCount}
+					connected={connected}
+					loading={loadingThread}
+					voiceAutoEnabled={voiceAutoEnabled}
+					voicePlayback={voicePlayback}
+					dynamicUiEnabled={dynamicUiEnabled}
+					onToggleVoiceAuto={onToggleVoiceAuto}
+					onSpeakVoice={onSpeakVoice}
+					onStopVoice={onStopVoice}
+					onPromptChange={onPromptChange}
+					onSendPrompt={onSendPrompt}
+					onStopPrompt={onStopPrompt}
+					onAddAttachments={onAddAttachments}
+					onRemoveAttachment={onRemoveAttachment}
+					onClearAttachments={onClearAttachments}
+					onClearChat={onClearChat}
+					onOpenCommandDeck={onOpenCommandDeck}
+				/>
+			</div>
 
-			<aside className="panel-card animate-rise space-y-4 p-5 lg:order-none order-last">
+			<aside className="panel-card animate-rise order-last space-y-4 p-5 lg:order-none lg:min-h-0 lg:w-[280px] lg:overflow-y-auto">
 				<div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
 					<div className="flex items-center justify-between text-sm font-semibold text-slate-200">
 						<span>Working Folder</span>
@@ -135,12 +147,81 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 							<div className="break-all font-mono">{activeThread.workdir}</div>
 						) : (
 							<div>
-								<span className="uppercase tracking-[0.2em] text-slate-400">Default</span>
-								<div className="mt-2 break-all font-mono">{defaultOutputDir}</div>
+								<span className="uppercase tracking-[0.2em] text-slate-400">
+									Default
+								</span>
+								<div className="mt-2 break-all font-mono">
+									{defaultOutputDir}
+								</div>
 							</div>
 						)}
 					</div>
 				</div>
+
+				<details className="group rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
+					<summary className="cursor-pointer list-none text-sm font-semibold text-slate-200">
+						Agent Details
+					</summary>
+					<div className="mt-4 space-y-3 text-xs text-slate-300">
+						<div className="flex items-center justify-between">
+							<span>Agent</span>
+							<span className="pill">
+								{activeAgent?.displayName || agentId}
+							</span>
+						</div>
+						<div className="flex items-center justify-between gap-2">
+							<span>Model</span>
+							<span className="pill break-all">{modelLabel}</span>
+						</div>
+						{activeAgent?.reasoningEffort ? (
+							<div className="flex items-center justify-between">
+								<span>Reasoning</span>
+								<span className="pill">{activeAgent.reasoningEffort}</span>
+							</div>
+						) : null}
+						<div>
+							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+								Tools
+							</span>
+							{tools.length > 0 ? (
+								<div className="mt-2 flex flex-wrap gap-2">
+									{tools.map((tool) => (
+										<span key={tool} className="pill">
+											{tool}
+										</span>
+									))}
+								</div>
+							) : (
+								<div className="mt-2 rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-400">
+									No custom tools configured.
+								</div>
+							)}
+						</div>
+						<div>
+							<div className="flex items-center justify-between gap-2">
+								<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+									MCP Servers
+								</span>
+								{mcpUsesGlobal ? (
+									<span className="pill">Global enabled</span>
+								) : null}
+							</div>
+							{mcpServers.length > 0 ? (
+								<div className="mt-2 flex flex-wrap gap-2">
+									{mcpServers.map((server) => (
+										<span key={server} className="pill">
+											{server}
+										</span>
+									))}
+								</div>
+							) : (
+								<div className="mt-2 rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-400">
+									No MCP servers configured.
+								</div>
+							)}
+						</div>
+					</div>
+				</details>
 
 				<details className="group rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
 					<summary className="cursor-pointer list-none text-sm font-semibold text-slate-200">
@@ -164,7 +245,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 							<span className="pill">{createdAt}</span>
 						</div>
 						<div>
-							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Session Key</span>
+							<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+								Session Key
+							</span>
 							<div className="mt-2 break-all rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 font-mono text-[11px] text-slate-400">
 								{sessionKey}
 							</div>

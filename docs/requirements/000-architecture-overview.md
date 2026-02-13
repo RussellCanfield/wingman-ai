@@ -1,8 +1,8 @@
 # Wingman Architecture Overview
 
-**Version:** 1.1
+**Version:** 1.2
 **Status:** Active
-**Last Updated:** 2026-02-01
+**Last Updated:** 2026-02-13
 
 ---
 
@@ -106,7 +106,9 @@ The CLI is the primary interface for configuring the gateway and invoking agents
 `wingman init` creates a workspace `.wingman/wingman.config.json`, adds the current
 workspace to `gateway.fsRoots`, and copies bundled agent templates from the package
 `.wingman/agents/` into `.wingman/agents/` in the workspace. It can optionally store
-provider credentials and set a default model.
+provider credentials and set a default model. It also supports a sync-focused mode
+for re-copying bundled templates without config/provider onboarding:
+`wingman init --mode sync --only agents`.
 
 Bundled templates include specialist options such as `coding-v2` and `game-dev`.
 The `game-dev` template includes sub-agents for art generation, asset refinement,
@@ -293,6 +295,7 @@ OAuth flows are planned; today, `wingman provider login` stores subscription tok
 │                       │              │                       │
 │                       │              ├──▶ Tools              │
 │                       │              │     (command_execute, │
+│                       │              │      browser_control, │
 │                       │              │      web_crawler,     │
 │                       │              │      internet_search) │
 │                       │              │                       │

@@ -1,0 +1,133 @@
+# Browser Control
+
+`browser_control` is Wingman's native browser automation tool.
+
+- Native runtime capability, not an MCP server.
+- Supports persistent named profiles (`browserProfile`) for reusable login state.
+- Supports config-driven transport selection: `auto`, `playwright`, or `relay`.
+- Persistent profiles launch with Playwright persistent-context by default for reliability.
+- Non-persistent sessions use CDP first, with automatic persistent-context fallback if CDP fails.
+- Supports loading unpacked extensions from host config mappings.
+- Includes a bundled first-party extension install flow via `wingman browser extension install --default`.
+
+For setup, see:
+
+- [Browser Automation](/configuration/browser-automation)
+- [Playwright Setup](/configuration/browser-playwright)
+- [Relay Setup](/configuration/browser-relay)
+
+## Input shape
+
+```json
+{
+  "url": "https://example.com",
+  "actions": [{ "type": "navigate", "url": "https://example.com" }],
+  "headless": true,
+  "timeoutMs": 60000,
+  "executablePath": "/path/to/chrome"
+}
+```
+
+- `url`: optional initial URL
+- `actions`: ordered list of browser actions
+- `headless`: defaults to `true` for non-persistent runs. Persistent `browserProfile` runs default to headed for session reliability unless `headless: true` is explicitly requested.
+- `timeoutMs`: per-action timeout (ms)
+- `executablePath`: optional Chrome/Chromium path override
+
+## Action types
+
+Canonical actions:
+
+- `navigate`
+- `click`
+- `type`
+- `press`
+- `wait`
+- `wait_for`
+- `extract_text`
+- `evaluate`
+- `screenshot`
+
+Accepted aliases:
+
+- Navigation: `url`, `open`, `goto`
+- Wait delay: `ms`, `sleep`, `pause`
+- Conditional wait: `wait_until`
+- Text extraction: `selector`, `extract`, `getContent`, `get_content`, `querySelector`, `query_selector`
+- JS eval: `expression`, `js`, `script`
+- Screenshot: `path`, `snapshot`, `capture`
+
+## Examples
+
+Navigate and read a page:
+
+```json
+{
+  "actions": [
+    { "type": "navigate", "url": "https://example.com/docs" },
+    { "type": "wait_for", "selector": "main" },
+    { "type": "extract_text", "selector": "main", "maxChars": 6000 }
+  ]
+}
+```
+
+Conditional wait can be expressed either as `wait_for` or as `wait` with condition fields:
+
+```json
+{
+  "actions": [
+    { "type": "goto", "url": "https://support.robinhood.com" },
+    { "type": "wait", "load": "networkidle", "timeoutMs": 60000 }
+  ]
+}
+```
+
+Evaluate JavaScript and capture screenshot:
+
+```json
+{
+  "actions": [
+    { "type": "navigate", "url": "https://example.com" },
+    { "type": "evaluate", "expression": "document.title" },
+    { "type": "screenshot", "path": "artifacts/home.png", "fullPage": true }
+  ]
+}
+```
+
+Aliases for lower-friction prompting:
+
+```json
+{
+  "actions": [
+    { "type": "url", "url": "https://example.com" },
+    { "type": "ms", "ms": 2000 },
+    { "type": "selector", "selector": "body", "maxChars": 2000 },
+    { "type": "expression", "expression": "document.title" },
+    { "type": "snapshot", "path": "artifacts/example.png", "fullPage": true }
+  ]
+}
+```
+
+## Output summary
+
+Returns structured JSON including:
+
+- `browser`: `chrome-cdp`, `chrome-playwright`, or `chrome-relay`
+- `transport`: `cdp`, `persistent-context`, or `relay-cdp`
+- `transportRequested`: configured preference (`auto`, `playwright`, `relay`)
+- `transportUsed`: runtime transport after fallback decisions
+- `fallbackReason`: reason when auto mode switches transports
+- `mode`: `headless` or `headed`
+- `persistentProfile`: whether a named profile was used
+- `profileId`: profile ID when set
+- `extensions`: loaded extension IDs
+- `finalUrl`
+- `title`
+- `actionResults`
+
+## Troubleshooting
+
+- Schema errors like `Invalid input at actions[n].type`: use one of the supported canonical types or aliases.
+- `Browser profile is already in use`: another run is holding the profile lock.
+- `ProcessSingleton` profile-in-use errors: close any manually opened Chrome window using that same profile, then retry.
+- CDP timeout/refused: this usually affects non-persistent sessions; persistent profiles already use persistent-context by default.

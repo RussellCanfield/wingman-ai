@@ -25,12 +25,13 @@ export async function executeSkillCommand(
 	// Create bridged logger
 	const logger = createBridgedLogger(outputManager, args.verbosity);
 
-	// Load configuration
-	const configLoader = new WingmanConfigLoader();
-	const config = configLoader.loadConfig();
-
 	// Get workspace (default to current directory)
 	const workspace = options.workspace || process.cwd();
+	const configDir = options.configDir || ".wingman";
+
+	// Load configuration
+	const configLoader = new WingmanConfigLoader(configDir, workspace);
+	const config = configLoader.loadConfig();
 
 	try {
 		// Create repository and service

@@ -31,7 +31,7 @@ describe("CLI init", () => {
 				args: [],
 				verbosity: "silent",
 				outputMode: "json",
-				options: { yes: true, "skip-provider": true },
+				options: { yes: true, only: "config,agents" },
 				agent: "wingman",
 			},
 			{ workspace },
@@ -53,6 +53,7 @@ describe("CLI init", () => {
 		expect(existsSync(agentPath)).toBe(true);
 		const agent = JSON.parse(readFileSync(agentPath, "utf-8"));
 		expect(agent.name).toBe("wingman");
+		expect(agent.tools).toContain("browser_control");
 
 		const codingAgentPath = join(
 			workspace,
@@ -214,7 +215,7 @@ describe("CLI init", () => {
 				args: [],
 				verbosity: "silent",
 				outputMode: "json",
-				options: { merge: true, "skip-provider": true },
+				options: { merge: true, only: "config" },
 				agent: "wingman",
 			},
 			{ workspace },
@@ -226,5 +227,40 @@ describe("CLI init", () => {
 		expect(updated.gateway.fsRoots).toEqual(
 			expect.arrayContaining(["./existing", "."]),
 		);
+	});
+
+	it("sync mode copies bundled agents without creating config", async () => {
+		await executeInitCommand(
+			{
+				subcommand: "",
+				args: [],
+				verbosity: "silent",
+				outputMode: "json",
+				options: { mode: "sync", only: "agents", force: true },
+				agent: "wingman",
+			},
+			{ workspace },
+		);
+
+		const configPath = join(workspace, ".wingman", "wingman.config.json");
+		expect(existsSync(configPath)).toBe(false);
+
+		const codingAgentPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"coding",
+			"agent.md",
+		);
+		expect(existsSync(codingAgentPath)).toBe(true);
+
+		const starterAgentPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"wingman",
+			"agent.json",
+		);
+		expect(existsSync(starterAgentPath)).toBe(false);
 	});
 });

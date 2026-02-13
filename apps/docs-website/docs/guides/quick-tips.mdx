@@ -7,19 +7,19 @@ This page is a one-stop checklist for the most common "fix it now" tasks in Wing
 If your local `.wingman/agents/` is missing bundled agents (or you want fresh templates), re-copy them without changing config/provider setup:
 
 ```bash
-wingman init --skip-config --skip-provider
+wingman init --mode sync --only agents
 ```
 
 Only sync specific bundled agents:
 
 ```bash
-wingman init --skip-config --skip-provider --agents main,coding
+wingman init --mode sync --only agents --agents main,coding
 ```
 
 Force overwrite existing agent template files:
 
 ```bash
-wingman init --skip-config --skip-provider --force
+wingman init --mode sync --only agents --force
 ```
 
 See full agent details: [Agents & Sub-Agents](/configuration/agents)

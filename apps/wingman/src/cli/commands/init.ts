@@ -57,6 +57,7 @@ const DEFAULT_TOOLS = [
 	"code_search",
 	"git_status",
 	"command_execute",
+	"browser_control",
 	"internet_search",
 	"think",
 ];
@@ -68,6 +69,28 @@ const DEFAULT_MODELS: Record<string, string> = {
 	openrouter: "openrouter:openai/gpt-4o",
 	copilot: "copilot:gpt-4o",
 	xai: "xai:grok-beta",
+};
+type InitMode = "onboard" | "sync";
+type InitComponent = "config" | "agents" | "provider";
+
+const DEFAULT_INIT_MODE: InitMode = "onboard";
+const DEFAULT_ONBOARD_COMPONENTS: InitComponent[] = [
+	"config",
+	"agents",
+	"provider",
+];
+const DEFAULT_SYNC_COMPONENTS: InitComponent[] = ["agents"];
+const INIT_COMPONENT_ALIASES: Record<string, InitComponent> = {
+	config: "config",
+	configs: "config",
+	agent: "agents",
+	agents: "agents",
+	prompt: "agents",
+	prompts: "agents",
+	provider: "provider",
+	providers: "provider",
+	credential: "provider",
+	credentials: "provider",
 };
 
 /**
@@ -92,18 +115,24 @@ export async function executeInitCommand(
 		}
 
 		const optionMap = args.options || {};
+		assertNoDeprecatedSkipOptions(optionMap);
 		const nonInteractive =
 			outputManager.getMode() !== "interactive" ||
 			getBooleanOption(optionMap, ["yes", "non-interactive"], false);
-		const skipConfig = getBooleanOption(optionMap, ["skip-config"], false);
-		const skipAgent = getBooleanOption(optionMap, ["skip-agent"], false);
-		const skipProvider = getBooleanOption(optionMap, ["skip-provider"], false);
+		const mode = resolveInitMode(optionMap);
+		const components = resolveInitComponents(optionMap, mode);
+		const runConfig = components.has("config");
+		const runAgents = components.has("agents");
+		const runProvider = components.has("provider");
+		const syncAgentsOnly =
+			mode === "sync" && runAgents && components.size === 1;
+		const explicitModel = getStringOption(optionMap, ["model"]);
 		const force = getBooleanOption(optionMap, ["force"], false);
 		const merge = getBooleanOption(optionMap, ["merge"], false);
 		const fsRoot = getStringOption(optionMap, ["fs-root"]) || DEFAULT_FS_ROOT;
 
 		const useClack = shouldUseClack(outputManager, nonInteractive);
-		renderInitBanner(outputManager, nonInteractive);
+		renderInitBanner(outputManager, nonInteractive, mode, components);
 
 		const bundledAgentsPath = resolveBundledAgentsPath();
 		const bundledAgents = bundledAgentsPath
@@ -116,30 +145,46 @@ export async function executeInitCommand(
 				!isHelpCommand(args.subcommand) &&
 				!args.subcommand.startsWith("-"));
 
-		const agentPlan = await resolveAgentPlan({
-			explicitAgent,
-			defaultAgentId: resolveAgentId(args),
-			bundledAgents,
-			nonInteractive,
-			optionMap,
-			outputManager,
-		});
+		const defaultAgentId = resolveAgentId(args);
+		const agentPlan =
+			runConfig || runAgents
+				? syncAgentsOnly
+					? resolveAgentSyncPlan({
+							defaultAgentId,
+							bundledAgents,
+							optionMap,
+						})
+					: await resolveAgentPlan({
+							explicitAgent,
+							defaultAgentId,
+							bundledAgents,
+							nonInteractive,
+							optionMap,
+							outputManager,
+							ensureDefaultAgentInSelection: runConfig,
+						})
+				: { defaultAgentId: sanitizeAgentId(defaultAgentId) };
 
-		const providerName = await resolveProviderSelection({
-			nonInteractive,
-			skipProvider,
-			optionMap,
-			outputManager,
-		});
+		const providerName = runProvider
+			? await resolveProviderSelection({
+					nonInteractive,
+					optionMap,
+					outputManager,
+				})
+			: undefined;
 
-		const model = await resolveModelSelection({
-			nonInteractive,
-			optionMap,
-			providerName,
-			outputManager,
-		});
+		const shouldResolveModel =
+			runAgents && (mode === "onboard" || Boolean(explicitModel));
+		const model = shouldResolveModel
+			? await resolveModelSelection({
+					nonInteractive,
+					optionMap,
+					providerName,
+					outputManager,
+				})
+			: undefined;
 
-		if (!skipConfig) {
+		if (runConfig) {
 			await runStep(useClack, "Writing workspace config", async () =>
 				handleConfigSetup({
 					configPath,
@@ -153,10 +198,13 @@ export async function executeInitCommand(
 				}),
 			);
 		} else {
-			writeLine(outputManager, "Skipping config setup (--skip-config).");
+			writeLine(
+				outputManager,
+				"Skipping config setup (--only excludes config).",
+			);
 		}
 
-		if (!skipAgent) {
+		if (runAgents) {
 			await runStep(useClack, "Installing bundled agents", async () =>
 				handleAgentSetup({
 					configRoot,
@@ -167,13 +215,17 @@ export async function executeInitCommand(
 					outputManager,
 					bundledAgentsPath,
 					copyAgents: agentPlan.copyAgents,
+					ensureDefaultAgent: !syncAgentsOnly,
 				}),
 			);
 		} else {
-			writeLine(outputManager, "Skipping starter agent (--skip-agent).");
+			writeLine(
+				outputManager,
+				"Skipping agent setup (--only excludes agents).",
+			);
 		}
 
-		if (!skipProvider) {
+		if (runProvider) {
 			await runStep(useClack, "Connecting providers", async () =>
 				handleProviderSetup({
 					providerName,
@@ -183,7 +235,10 @@ export async function executeInitCommand(
 				}),
 			);
 		} else {
-			writeLine(outputManager, "Skipping provider setup (--skip-provider).");
+			writeLine(
+				outputManager,
+				"Skipping provider setup (--only excludes provider).",
+			);
 		}
 
 		if (useClack) {
@@ -196,10 +251,10 @@ export async function executeInitCommand(
 		writeLine(outputManager, `Config: ${configPath}`);
 		writeLine(
 			outputManager,
-			`Agent: ${skipAgent ? "skipped" : agentPlan.defaultAgentId}`,
+			`Agent: ${runAgents ? agentPlan.defaultAgentId : "unchanged"}`,
 		);
 
-		if (!model) {
+		if (runAgents && shouldResolveModel && !model) {
 			writeLine(
 				outputManager,
 				"Note: No model set yet. Update your agent config with a model string.",
@@ -208,11 +263,24 @@ export async function executeInitCommand(
 
 		writeLine(outputManager, "");
 		writeLine(outputManager, "Next steps:");
-		writeLine(
-			outputManager,
-			`  1) wingman agent --local --agent ${agentPlan.defaultAgentId} "hello"`,
-		);
-		writeLine(outputManager, "  2) wingman gateway start");
+		if (syncAgentsOnly) {
+			const suggestedAgent =
+				agentPlan.copyAgents?.[0] || agentPlan.defaultAgentId;
+			writeLine(
+				outputManager,
+				"  1) wingman init --mode sync --only agents --force",
+			);
+			writeLine(
+				outputManager,
+				`  2) wingman agent --local --agent ${suggestedAgent} "hello"`,
+			);
+		} else {
+			writeLine(
+				outputManager,
+				`  1) wingman agent --local --agent ${agentPlan.defaultAgentId} "hello"`,
+			);
+			writeLine(outputManager, "  2) wingman gateway start");
+		}
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
 		const logFile = getLogFilePath();
@@ -232,6 +300,8 @@ export async function executeInitCommand(
 function renderInitBanner(
 	outputManager: OutputManager,
 	nonInteractive: boolean,
+	mode: InitMode,
+	components: Set<InitComponent>,
 ): void {
 	if (outputManager.getMode() !== "interactive" || nonInteractive) {
 		return;
@@ -254,10 +324,9 @@ function renderInitBanner(
 		: (text: string) => text;
 
 	intro(accent(title));
+	const componentSummary = Array.from(components).join(", ");
 	note(
-		muted(
-			"We will set up config, install bundled agents, and connect providers.",
-		),
+		muted(`Mode: ${mode}. Components: ${componentSummary}.`),
 		emphasis("Wingman Init Wizard"),
 	);
 	note(muted("Press Enter to accept defaults."), emphasis("Tip"));
@@ -268,7 +337,7 @@ function isHelpCommand(subcommand: string): boolean {
 }
 
 function resolveAgentId(args: InitCommandArgs): string {
-	if (args.agent && args.agent.trim()) {
+	if (args.agent?.trim()) {
 		return args.agent.trim();
 	}
 	if (
@@ -288,6 +357,7 @@ async function resolveAgentPlan(input: {
 	nonInteractive: boolean;
 	optionMap: Record<string, unknown>;
 	outputManager: OutputManager;
+	ensureDefaultAgentInSelection: boolean;
 }): Promise<{ defaultAgentId: string; copyAgents?: string[] }> {
 	const {
 		explicitAgent,
@@ -296,6 +366,7 @@ async function resolveAgentPlan(input: {
 		nonInteractive,
 		optionMap,
 		outputManager,
+		ensureDefaultAgentInSelection,
 	} = input;
 
 	let nextDefaultAgent = sanitizeAgentId(defaultAgentId);
@@ -311,11 +382,9 @@ async function resolveAgentPlan(input: {
 	const rawAgentsList = getStringOption(optionMap, ["agents"]);
 	if (rawAgentsList) {
 		const selected = parseAgentList(rawAgentsList, availableAgents);
-		const unique = ensureIncludesDefault(
-			selected,
-			nextDefaultAgent,
-			availableAgents,
-		);
+		const unique = ensureDefaultAgentInSelection
+			? ensureIncludesDefault(selected, nextDefaultAgent, availableAgents)
+			: selected;
 		return { defaultAgentId: nextDefaultAgent, copyAgents: unique };
 	}
 
@@ -332,11 +401,9 @@ async function resolveAgentPlan(input: {
 		availableAgents,
 		nextDefaultAgent,
 	);
-	const finalAgents = ensureIncludesDefault(
-		selectedAgents,
-		nextDefaultAgent,
-		availableAgents,
-	);
+	const finalAgents = ensureDefaultAgentInSelection
+		? ensureIncludesDefault(selectedAgents, nextDefaultAgent, availableAgents)
+		: selectedAgents;
 
 	if (finalAgents.length === 0) {
 		writeLine(outputManager, "No bundled agents selected.");
@@ -344,6 +411,26 @@ async function resolveAgentPlan(input: {
 	}
 
 	return { defaultAgentId: nextDefaultAgent, copyAgents: finalAgents };
+}
+
+function resolveAgentSyncPlan(input: {
+	defaultAgentId: string;
+	bundledAgents: string[];
+	optionMap: Record<string, unknown>;
+}): { defaultAgentId: string; copyAgents?: string[] } {
+	const { defaultAgentId, bundledAgents, optionMap } = input;
+	const sanitizedDefault = sanitizeAgentId(defaultAgentId);
+	const rawAgentsList = getStringOption(optionMap, ["agents"]);
+	if (rawAgentsList) {
+		return {
+			defaultAgentId: sanitizedDefault,
+			copyAgents: parseAgentList(rawAgentsList, bundledAgents),
+		};
+	}
+	return {
+		defaultAgentId: sanitizedDefault,
+		copyAgents: bundledAgents.length > 0 ? bundledAgents : undefined,
+	};
 }
 
 function sanitizeAgentId(value: string): string {
@@ -505,6 +592,7 @@ async function handleAgentSetup(input: {
 	outputManager: OutputManager;
 	bundledAgentsPath: string | null;
 	copyAgents?: string[];
+	ensureDefaultAgent?: boolean;
 }): Promise<void> {
 	const {
 		configRoot,
@@ -515,6 +603,7 @@ async function handleAgentSetup(input: {
 		outputManager,
 		bundledAgentsPath,
 		copyAgents,
+		ensureDefaultAgent = true,
 	} = input;
 
 	const copiedAgents = bundledAgentsPath
@@ -535,6 +624,10 @@ async function handleAgentSetup(input: {
 				"agents",
 			)}`,
 		);
+	}
+
+	if (!ensureDefaultAgent) {
+		return;
 	}
 
 	const expectedAgentDir = join(configRoot, "agents", agentId);
@@ -560,8 +653,8 @@ async function handleAgentSetup(input: {
 
 function resolveBundledAgentsPath(): string | null {
 	const candidates = [
-		new URL("../../../../.wingman/agents", import.meta.url),
-		new URL("../../../.wingman/agents", import.meta.url),
+		new URL("../../../../templates/agents", import.meta.url),
+		new URL("../../../templates/agents", import.meta.url),
 	];
 
 	for (const candidate of candidates) {
@@ -571,7 +664,7 @@ function resolveBundledAgentsPath(): string | null {
 		}
 	}
 
-	const cwdFallback = join(process.cwd(), ".wingman", "agents");
+	const cwdFallback = join(process.cwd(), "templates", "agents");
 	if (existsSync(cwdFallback) && statSync(cwdFallback).isDirectory()) {
 		return cwdFallback;
 	}
@@ -711,14 +804,10 @@ function applyModelToAgent(
 
 async function resolveProviderSelection(input: {
 	nonInteractive: boolean;
-	skipProvider: boolean;
 	optionMap: Record<string, unknown>;
 	outputManager: OutputManager;
 }): Promise<string | undefined> {
-	const { nonInteractive, skipProvider, optionMap, outputManager } = input;
-	if (skipProvider) {
-		return undefined;
-	}
+	const { nonInteractive, optionMap, outputManager } = input;
 
 	const providerOption = getStringOption(optionMap, ["provider"]);
 	if (providerOption) {
@@ -909,6 +998,73 @@ function getStringOption(
 	return undefined;
 }
 
+function assertNoDeprecatedSkipOptions(options: Record<string, unknown>): void {
+	const deprecatedFlags = ["skip-config", "skip-agent", "skip-provider"];
+	const used = deprecatedFlags.filter((flag) => options[flag] !== undefined);
+	if (used.length === 0) {
+		return;
+	}
+
+	throw new Error(
+		`Deprecated init option(s): ${used.join(", ")}. Use --only <config,agents,provider> and --mode sync instead.`,
+	);
+}
+
+function resolveInitMode(options: Record<string, unknown>): InitMode {
+	const rawMode = getStringOption(options, ["mode"]);
+	if (!rawMode) {
+		return DEFAULT_INIT_MODE;
+	}
+
+	const normalized = rawMode.toLowerCase();
+	if (normalized === "onboard") {
+		return "onboard";
+	}
+	if (normalized === "sync") {
+		return "sync";
+	}
+
+	throw new Error(
+		`Unknown init mode "${rawMode}". Supported values: onboard, sync.`,
+	);
+}
+
+function resolveInitComponents(
+	options: Record<string, unknown>,
+	mode: InitMode,
+): Set<InitComponent> {
+	const only = getStringOption(options, ["only"]);
+	if (!only) {
+		const defaults =
+			mode === "sync" ? DEFAULT_SYNC_COMPONENTS : DEFAULT_ONBOARD_COMPONENTS;
+		return new Set(defaults);
+	}
+
+	const selected = only
+		.split(/[,\s]+/)
+		.map((value) => value.trim().toLowerCase())
+		.filter(Boolean)
+		.map((value) => INIT_COMPONENT_ALIASES[value]);
+
+	const unknown = only
+		.split(/[,\s]+/)
+		.map((value) => value.trim().toLowerCase())
+		.filter((value) => value && !INIT_COMPONENT_ALIASES[value]);
+	if (unknown.length > 0) {
+		throw new Error(
+			`Unknown --only value(s): ${unknown.join(", ")}. Supported values: config, agents, provider.`,
+		);
+	}
+
+	if (selected.length === 0) {
+		throw new Error(
+			"Init selection is empty. Choose at least one --only target.",
+		);
+	}
+
+	return new Set(selected);
+}
+
 function parseAgentList(raw: string, bundledAgents: string[]): string[] {
 	const normalized = raw
 		.split(/[,\s]+/)
@@ -1088,6 +1244,8 @@ Usage:
 
 Options:
   --agent <name>         Agent name (default: wingman)
+  --mode <name>          Init mode (onboard|sync). Default: onboard
+  --only <targets>       Run only selected setup targets (config,agents,provider)
   --agents <list>        Copy only these bundled agents (comma-separated)
   --model <provider:model>
                          Set model for the starter agent
@@ -1095,9 +1253,6 @@ Options:
   --token <token>        Save provider token (non-interactive)
   --api-key <key>        Alias for --token
   --fs-root <path>       Add fs root (default: ".")
-  --skip-config          Skip wingman.config.json setup
-  --skip-agent           Skip starter agent creation
-  --skip-provider        Skip provider credential setup
   --merge                Merge recommended settings into existing config
   --force                Overwrite existing config or agent files
   --yes                  Accept defaults without prompts
@@ -1107,6 +1262,8 @@ Examples:
   wingman init coder --model openai:gpt-4o
   wingman init --provider anthropic
   wingman init --provider openai --api-key="sk-..."
+  wingman init --mode sync --only agents
+  wingman init --only config,agents --force
 `);
 	} else {
 		outputManager.emitLog("info", "Init help requested");

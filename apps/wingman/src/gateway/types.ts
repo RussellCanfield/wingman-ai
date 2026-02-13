@@ -86,6 +86,10 @@ export interface AgentRequestPayload {
 	agentId?: string;
 	content?: string;
 	attachments?: MediaAttachment[];
+	execution?: {
+		workspace?: string;
+		configDir?: string;
+	};
 	routing?: RoutingInfo;
 	sessionKey?: string;
 	queueIfBusy?: boolean;

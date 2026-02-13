@@ -42,6 +42,15 @@ const baseProps: React.ComponentProps<typeof ChatPanel> = {
 };
 
 describe("ChatPanel prompt composer", () => {
+	it("uses flexible panel sizing without hardcoded min-height overflow", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, baseProps),
+		);
+
+		expect(html).toContain("panel-card animate-rise flex h-full min-h-0");
+		expect(html).not.toContain("min-h-[1200px]");
+	});
+
 	it("removes quick prompts and renders a single-bar composer with icon controls", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, baseProps),

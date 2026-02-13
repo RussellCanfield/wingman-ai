@@ -3,6 +3,7 @@
 import { getGatewayTokenFromEnv } from "@/gateway/env.js";
 import { createLogger, getLogFilePath, type LogLevel } from "../logger.js";
 import { executeAgentCommand } from "./commands/agent.js";
+import { executeBrowserCommand } from "./commands/browser.js";
 import type { GatewayCommandArgs } from "./commands/gateway.js";
 import { executeGatewayCommand } from "./commands/gateway.js";
 import { executeInitCommand } from "./commands/init.js";
@@ -10,6 +11,8 @@ import { executeProviderCommand } from "./commands/provider.js";
 import { executeSkillCommand } from "./commands/skill.js";
 import { WingmanConfigLoader } from "./config/loader.js";
 import { OutputManager } from "./core/outputManager.js";
+import { resolveWorkspaceRoot } from "./core/workspace.js";
+import type { BrowserCommandArgs } from "./types/browser.js";
 import type { InitCommandArgs } from "./types/init.js";
 import type { ProviderCommandArgs } from "./types/provider.js";
 import type { SkillCommandArgs } from "./types/skill.js";
@@ -75,13 +78,14 @@ function parseArgs(argv: string[]): {
 		} else if (arg.startsWith("--")) {
 			// Parse command options
 			const [key, value] = arg.slice(2).split("=");
+			parsed.commandOptions ||= {};
 			if (value !== undefined) {
-				parsed.commandOptions![key] = value;
+				parsed.commandOptions[key] = value;
 			} else if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
-				parsed.commandOptions![key] = args[i + 1];
+				parsed.commandOptions[key] = args[i + 1];
 				i++;
 			} else {
-				parsed.commandOptions![key] = true;
+				parsed.commandOptions[key] = true;
 			}
 		} else {
 			// Everything else is part of the prompt
@@ -116,6 +120,19 @@ function determineVerbosity(
 	return configLevel;
 }
 
+function getStringCommandOption(
+	options: Record<string, unknown> | undefined,
+	key: string,
+): string | undefined {
+	const value = options?.[key];
+	if (typeof value !== "string") {
+		return undefined;
+	}
+
+	const trimmed = value.trim();
+	return trimmed || undefined;
+}
+
 /**
  * Display help message
  */
@@ -128,11 +145,12 @@ Usage:
   wingman init [options]
   wingman skill <subcommand> [args]
   wingman provider <subcommand> [options]
+  wingman browser <subcommand> [options]
   wingman gateway <subcommand> [options]
 
 Commands:
   agent                        Invoke a specific agent directly
-  init                         Create a starter config + agent (onboarding)
+  init                         Onboard workspace and sync bundled agents
   skill browse                 Browse available skills from repository
   skill install <name>         Install a skill
   skill list                   List installed skills
@@ -140,6 +158,11 @@ Commands:
   provider login <provider>    Store provider credentials
   provider logout <provider>   Remove stored provider credentials
   provider status              Show provider configuration status
+  browser profile init <id>    Create/configure a browser_control profile
+  browser profile open [id]    Open a profile in Chrome for interactive login
+  browser extension install [id] Register bundled Wingman extension or custom unpacked extension
+  browser extension pair       Configure secure local relay pairing token
+  browser extension list       List configured browser extensions
   gateway start                Start the gateway server
   gateway stop                 Stop the gateway server
   gateway status               Show gateway status
@@ -147,6 +170,8 @@ Commands:
 
 Options:
   --agent <name>      Agent name to invoke (required for agent command)
+  --workspace <path>  Workspace root (defaults to nearest ancestor with .wingman/)
+  --config-dir <dir>  Config directory name (default: .wingman)
   --local             Run agent locally instead of via gateway
   --gateway <url>     Gateway URL (default from config)
   --token <token>     Gateway auth token
@@ -162,12 +187,18 @@ Examples:
   wingman agent --agent coder --local "fix the tests"
   wingman agent --agent coder --gateway ws://localhost:18789/ws --token sk-... "ship it"
   wingman init
+  wingman init --mode sync --only agents --force
   wingman skill browse
   wingman skill install pdf
   wingman skill list
   wingman provider status
   wingman provider login codex
   wingman provider login copilot --token="<token>"
+  wingman browser profile init trading
+  wingman browser profile open trading --url https://robinhood.com/login
+  wingman browser extension install --default
+  wingman browser extension pair
+  wingman browser extension install relay --source ./relay-extension --default
   wingman gateway start
   wingman gateway join ws://localhost:3000/ws --name="agent-1"
 
@@ -192,8 +223,18 @@ async function main() {
 			process.exit(0);
 		}
 
+		const configDir =
+			getStringCommandOption(parsed.commandOptions, "config-dir") ||
+			getStringCommandOption(parsed.commandOptions, "configDir") ||
+			".wingman";
+		const workspace = resolveWorkspaceRoot(
+			process.cwd(),
+			getStringCommandOption(parsed.commandOptions, "workspace"),
+			configDir,
+		);
+
 		// Load configuration
-		const configLoader = new WingmanConfigLoader();
+		const configLoader = new WingmanConfigLoader(configDir, workspace);
 		const config = configLoader.loadConfig();
 
 		// Determine output mode (CLI flag > config > auto-detect)
@@ -234,6 +275,8 @@ async function main() {
 				gatewayConfig?.auth?.password;
 
 			await executeAgentCommand(commandArgs, {
+				workspace,
+				configDir,
 				local: Boolean(parsed.commandOptions?.local),
 				gatewayUrl,
 				token,
@@ -247,7 +290,7 @@ async function main() {
 				outputMode,
 			};
 
-			await executeSkillCommand(commandArgs);
+			await executeSkillCommand(commandArgs, { workspace, configDir });
 		} else if (parsed.command === "gateway") {
 			const commandArgs: GatewayCommandArgs = {
 				subcommand: parsed.subcommand,
@@ -255,7 +298,7 @@ async function main() {
 				options: parsed.commandOptions || {},
 			};
 
-			await executeGatewayCommand(commandArgs);
+			await executeGatewayCommand(commandArgs, { workspace, configDir });
 		} else if (parsed.command === "provider") {
 			const commandArgs: ProviderCommandArgs = {
 				subcommand: parsed.subcommand,
@@ -266,6 +309,16 @@ async function main() {
 			};
 
 			await executeProviderCommand(commandArgs);
+		} else if (parsed.command === "browser") {
+			const commandArgs: BrowserCommandArgs = {
+				subcommand: parsed.subcommand,
+				args: parsed.subcommandArgs,
+				verbosity,
+				outputMode,
+				options: parsed.commandOptions || {},
+			};
+
+			await executeBrowserCommand(commandArgs, { workspace, configDir });
 		} else if (parsed.command === "init" || parsed.command === "onboard") {
 			const commandArgs: InitCommandArgs = {
 				subcommand: parsed.subcommand,
@@ -276,7 +329,7 @@ async function main() {
 				agent: parsed.agent,
 			};
 
-			await executeInitCommand(commandArgs);
+			await executeInitCommand(commandArgs, { workspace, configDir });
 		} else {
 			const logFile = getLogFilePath();
 			createLogger(verbosity).error(`Unknown command: ${parsed.command}`);

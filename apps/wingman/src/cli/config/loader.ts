@@ -140,6 +140,21 @@ export class WingmanConfigLoader {
 				repositoryName: "skills",
 				skillsDirectory: "skills",
 			},
+			browser: {
+				profilesDir: ".wingman/browser-profiles",
+				profiles: {},
+				extensionsDir: ".wingman/browser-extensions",
+				extensions: {},
+				defaultExtensions: [],
+				transport: "auto",
+				relay: {
+					enabled: false,
+					host: "127.0.0.1",
+					port: 18792,
+					requireAuth: true,
+					maxMessageBytes: 262_144,
+				},
+			},
 			gateway: {
 				host: "127.0.0.1",
 				port: 18789,

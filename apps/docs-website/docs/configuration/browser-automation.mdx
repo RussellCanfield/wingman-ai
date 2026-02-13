@@ -1,0 +1,65 @@
+# Browser Automation
+
+Use this page to choose how `browser_control` should run.
+
+Related references:
+
+- Tool behavior and action schema: [Browser Control](/reference/browser-control)
+- Command catalog: [CLI Reference](/reference/cli)
+- Global config schema: [wingman.config.json](/configuration/wingman-config)
+
+## Choose a mode
+
+Wingman supports two user-facing browser modes:
+
+1. **Playwright mode** (`browserTransport: "playwright"` or `auto`)
+- Agent launches and controls its own Chrome/Chromium session.
+- Best for unattended automation and repeatable runs.
+- Use this when you want persistent profiles (`browserProfile`) and headless automation.
+
+2. **Relay mode** (`browserTransport: "relay"` or `auto` fallback)
+- Agent controls a tab you open and attach through the Wingman Chrome extension.
+- Best for controlling your live, already-open browser tab/profile.
+- Use this when you want explicit user-visible tab control.
+
+## Fast decision guide
+
+- Want reliable unattended automation? Use [Playwright Setup](/configuration/browser-playwright).
+- Want to control your active Chrome tab directly? Use [Relay Setup](/configuration/browser-relay).
+- Unsure? Start with `browser.transport: "auto"` and test both.
+
+## Shared concepts
+
+- `browserProfile`: persistent login/session state for agent-run browser sessions.
+- `browserExtensions`: extension IDs loaded for `browser_control` runs.
+- `browser.transport`: global default transport (`auto`, `playwright`, `relay`).
+- `browser.relay.*`: local secure relay settings for extension-based control.
+
+## Minimal config example
+
+```json
+{
+  "browser": {
+    "profilesDir": ".wingman/browser-profiles",
+    "defaultProfile": "trading",
+    "transport": "auto",
+    "extensionsDir": ".wingman/browser-extensions",
+    "extensions": {
+      "wingman": ".wingman/browser-extensions/wingman"
+    },
+    "defaultExtensions": ["wingman"],
+    "relay": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 18792,
+      "requireAuth": true,
+      "authToken": "replace-with-generated-token"
+    }
+  }
+}
+```
+
+Next steps:
+
+1. Follow [Playwright Setup](/configuration/browser-playwright) for agent-launched automation.
+2. Follow [Relay Setup](/configuration/browser-relay) for extension-attached live-tab automation.

@@ -366,6 +366,18 @@ export class AgentLoader {
 				blockedCommands: source.blockedCommands,
 				allowScriptExecution: source.allowScriptExecution,
 				timeout: source.commandTimeout,
+				browserProfile:
+					source.browserProfile || this.wingmanConfig?.browser?.defaultProfile,
+				browserTransport:
+					source.browserTransport || this.wingmanConfig?.browser?.transport,
+				browserProfilesDirectory: this.wingmanConfig?.browser?.profilesDir,
+				browserProfiles: this.wingmanConfig?.browser?.profiles,
+				browserExtensions: source.browserExtensions,
+				browserExtensionsDirectory: this.wingmanConfig?.browser?.extensionsDir,
+				browserExtensionsById: this.wingmanConfig?.browser?.extensions,
+				browserDefaultExtensions:
+					this.wingmanConfig?.browser?.defaultExtensions,
+				browserRelay: this.wingmanConfig?.browser?.relay,
 				searchConfig: this.wingmanConfig?.search,
 				mcpConfigs,
 				skillsDirectory,

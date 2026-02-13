@@ -19,6 +19,25 @@ export interface AgentCommandOptions {
 	password?: string;
 }
 
+function toErrorMessage(error: unknown): string {
+	if (error instanceof Error) {
+		return error.message;
+	}
+	if (typeof error === "string") {
+		return error;
+	}
+	if (error && typeof error === "object") {
+		const typed = error as Record<string, unknown>;
+		if (typeof typed.message === "string" && typed.message.trim()) {
+			return typed.message.trim();
+		}
+		if (typeof typed.type === "string" && typed.type.trim()) {
+			return `Unexpected ${typed.type.trim()} event`;
+		}
+	}
+	return String(error);
+}
+
 /**
  * Execute the agent command
  * This is the handler for: wingman agent --agent <name> <prompt>
@@ -91,6 +110,10 @@ export async function executeAgentCommand(
 				{
 					agentId: args.agent,
 					content: args.prompt,
+					execution: {
+						workspace: options.workspace,
+						configDir: options.configDir,
+					},
 					routing: {
 						channel: "cli",
 						peer: { kind: "channel", id: "cli" },
@@ -169,7 +192,7 @@ export async function executeAgentCommand(
 			inkInstance.unmount();
 		}
 	} catch (error) {
-		const errorMsg = error instanceof Error ? error.message : String(error);
+		const errorMsg = toErrorMessage(error);
 		const logFile = getLogFilePath();
 		logger.error("Agent command failed", { error: errorMsg });
 
@@ -192,7 +215,7 @@ export async function executeAgentCommand(
 				error instanceof Error && (error as any).isAgentError,
 			);
 			if (!isAgentError) {
-				outputManager.emitAgentError(error as Error);
+				outputManager.emitAgentError(errorMsg);
 			}
 			process.exit(1);
 		}

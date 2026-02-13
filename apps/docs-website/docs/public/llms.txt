@@ -26,6 +26,9 @@ Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestratio
 - https://docs.getwingmanai.com/configuration/discord-adapter : Discord adapter config, channel sessions, session command, setup checklist.
 - https://docs.getwingmanai.com/configuration/voice : Web Speech vs ElevenLabs TTS, policies, per-agent overrides, API behavior.
 - https://docs.getwingmanai.com/configuration/search : internet_search config, DuckDuckGo/Perplexity providers, rate-limit env vars.
+- https://docs.getwingmanai.com/configuration/browser-automation : Browser mode chooser (Playwright vs Relay), shared config model, quick decision guide.
+- https://docs.getwingmanai.com/configuration/browser-playwright : Agent-launched browser setup with persistent profiles and automation smoke tests.
+- https://docs.getwingmanai.com/configuration/browser-relay : Extension relay setup for controlling attached live Chrome tabs.
 
 ## Guides
 - https://docs.getwingmanai.com/guides/multi-agent-workflows : Define squads with sub-agents, routing via bindings, safety tips.

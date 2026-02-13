@@ -38,6 +38,9 @@ type NormalizedSubAgent = {
 	promptRefinement?: PromptTrainingConfig;
 };
 
+type McpServerName = { name?: unknown };
+type McpServersConfigLike = { servers?: McpServerName[] };
+
 const hasOwn = (value: unknown, key: string): boolean =>
 	Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
 
@@ -83,6 +86,42 @@ const mapPromptTrainingFields = (value: PromptTrainingConfig | undefined) => ({
 	promptTraining: value,
 	promptRefinement: value,
 });
+
+const extractMcpServerNames = (mcpConfig: unknown): string[] => {
+	if (!mcpConfig || typeof mcpConfig !== "object") {
+		return [];
+	}
+	const servers = (mcpConfig as McpServersConfigLike).servers;
+	if (!Array.isArray(servers)) {
+		return [];
+	}
+	const names = new Set<string>();
+	for (const server of servers) {
+		const rawName = typeof server?.name === "string" ? server.name.trim() : "";
+		if (!rawName) continue;
+		names.add(rawName);
+	}
+	return Array.from(names);
+};
+
+const buildAgentMcpFields = (
+	agent: { mcp?: unknown; mcpUseGlobal?: boolean },
+	globalMcp: unknown,
+) => {
+	const names = new Set<string>();
+	for (const name of extractMcpServerNames(agent.mcp)) {
+		names.add(name);
+	}
+	if (agent.mcpUseGlobal) {
+		for (const name of extractMcpServerNames(globalMcp)) {
+			names.add(name);
+		}
+	}
+	return {
+		mcpServers: Array.from(names),
+		mcpUseGlobal: Boolean(agent.mcpUseGlobal),
+	};
+};
 
 const mapSubAgentForResponse = (sub: {
 	name: string;
@@ -295,6 +334,7 @@ export const handleAgentsApi = async (
 				model: agent.model,
 				reasoningEffort: agent.reasoningEffort,
 				voice: agent.voice,
+				...buildAgentMcpFields(agent, config.mcp),
 				...mapPromptTrainingFields(agent.promptRefinement),
 				subAgents:
 					agent.subAgents?.map((sub) => mapSubAgentForResponse(sub)) || [],
@@ -472,6 +512,7 @@ export const handleAgentsApi = async (
 					model: agentConfig.model,
 					reasoningEffort: agentConfig.reasoningEffort,
 					voice: agentConfig.voice,
+					...buildAgentMcpFields(agentConfig, config.mcp),
 					...mapPromptTrainingFields(agentConfig.promptRefinement),
 					subAgents:
 						agentConfig.subAgents?.map((sub) => mapSubAgentForResponse(sub)) ||

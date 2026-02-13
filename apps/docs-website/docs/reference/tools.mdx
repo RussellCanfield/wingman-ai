@@ -10,6 +10,7 @@ Wingman ships with a curated tool set. Agents can only use tools listed in their
 - **background_terminal**: single tool for session-scoped terminal control (start with `command`, then write/poll using `session_id`).
 - **internet_search**: web search (DuckDuckGo or Perplexity).
 - **web_crawler**: fetch and parse web pages.
+- **browser_control**: native browser automation with Chrome/Chromium runtime control (CDP with automatic persistent-context fallback when needed) for interactive flows, JS-rendered pages, and screenshots.
 - **think**: private reasoning step (no external side effects).
 
 ## UI tools
@@ -19,6 +20,13 @@ Wingman ships with a curated tool set. Agents can only use tools listed in their
 - **ui_present**: render a UI component with props (requires `textFallback`).
 
 See [Dynamic UI (SGUI)](/guides/dynamic-ui) for end-to-end guidance and examples.
+
+Browser-specific docs:
+
+- Tool behavior and actions: [Browser Control](/reference/browser-control)
+- Mode selection + setup: [Browser Automation](/configuration/browser-automation)
+- Agent-launched setup: [Playwright Setup](/configuration/browser-playwright)
+- Live-tab extension setup: [Relay Setup](/configuration/browser-relay)
 
 ## Example: allow only safe tools
 

@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
-import type { FsListResponse, FsRootResponse } from "../types";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FiX } from "react-icons/fi";
+import type { FsListResponse, FsMkdirResponse, FsRootResponse } from "../types";
 
 type WorkdirModalProps = {
 	open: boolean;
@@ -24,8 +26,10 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 	const [parentPath, setParentPath] = useState<string | null>(null);
 	const [loading, setLoading] = useState<boolean>(false);
 	const [saving, setSaving] = useState<boolean>(false);
+	const [creating, setCreating] = useState<boolean>(false);
 	const [error, setError] = useState<string>("");
 	const [pathInput, setPathInput] = useState<string>("");
+	const [newFolderName, setNewFolderName] = useState<string>("");
 
 	const hasRoots = roots.length > 0;
 
@@ -34,7 +38,30 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 		return outputRoot.replace(/\/+$/, "");
 	}, [outputRoot]);
 
-	const loadRoots = async () => {
+	const loadList = useCallback(async (path: string) => {
+		if (!path) return;
+		setLoading(true);
+		setError("");
+		try {
+			const params = new URLSearchParams({ path });
+			const res = await fetch(`/api/fs/list?${params.toString()}`);
+			if (!res.ok) {
+				setError("Folder is not accessible or not allowed.");
+				return;
+			}
+			const data = (await res.json()) as FsListResponse;
+			setCurrentPath(data.path);
+			setPathInput(data.path);
+			setEntries(data.entries || []);
+			setParentPath(data.parent ?? null);
+		} catch {
+			setError("Unable to load folder.");
+		} finally {
+			setLoading(false);
+		}
+	}, []);
+
+	const loadRoots = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
@@ -57,35 +84,12 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 		} finally {
 			setLoading(false);
 		}
-	};
-
-	const loadList = async (path: string) => {
-		if (!path) return;
-		setLoading(true);
-		setError("");
-		try {
-			const params = new URLSearchParams({ path });
-			const res = await fetch(`/api/fs/list?${params.toString()}`);
-			if (!res.ok) {
-				setError("Folder is not accessible or not allowed.");
-				return;
-			}
-			const data = (await res.json()) as FsListResponse;
-			setCurrentPath(data.path);
-			setPathInput(data.path);
-			setEntries(data.entries || []);
-			setParentPath(data.parent ?? null);
-		} catch {
-			setError("Unable to load folder.");
-		} finally {
-			setLoading(false);
-		}
-	};
+	}, [currentWorkdir, outputRoot, loadList]);
 
 	useEffect(() => {
 		if (!open) return;
 		void loadRoots();
-	}, [open]);
+	}, [open, loadRoots]);
 
 	const handleSelectRoot = (event: React.ChangeEvent<HTMLSelectElement>) => {
 		const next = event.target.value;
@@ -97,6 +101,40 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 	const handleGo = () => {
 		if (pathInput.trim()) {
 			void loadList(pathInput.trim());
+		}
+	};
+
+	const handleCreateFolder = async () => {
+		const parentPath = currentPath.trim();
+		const folderName = newFolderName.trim();
+		if (!parentPath) {
+			setError("Select a parent folder before creating a new folder.");
+			return;
+		}
+		if (!folderName) {
+			setError("Folder name is required.");
+			return;
+		}
+		setCreating(true);
+		setError("");
+		try {
+			const res = await fetch("/api/fs/mkdir", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ path: parentPath, name: folderName }),
+			});
+			if (!res.ok) {
+				const message = (await res.text()) || "Unable to create folder.";
+				setError(message);
+				return;
+			}
+			const payload = (await res.json()) as FsMkdirResponse;
+			setNewFolderName("");
+			await loadList(payload.path || parentPath);
+		} catch {
+			setError("Unable to create folder.");
+		} finally {
+			setCreating(false);
 		}
 	};
 
@@ -131,8 +169,13 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 							Choose where the agent should write outputs for this session.
 						</p>
 					</div>
-					<button className="button-ghost px-3 py-1 text-xs" onClick={onClose} type="button">
-						Close
+					<button
+						className="button-ghost px-3 py-1 text-xs"
+						aria-label="Close dialog"
+						onClick={onClose}
+						type="button"
+					>
+						<FiX className="h-4 w-4" />
 					</button>
 				</div>
 
@@ -145,10 +188,14 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 				<div className="space-y-3">
 					<div className="flex flex-wrap items-center gap-3">
 						<div className="flex-1">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+							<label
+								className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+								htmlFor="workdir-root-select"
+							>
 								Root
 							</label>
 							<select
+								id="workdir-root-select"
 								className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm"
 								onChange={handleSelectRoot}
 								value={
@@ -171,7 +218,8 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 							</select>
 						</div>
 						<div className="text-xs text-slate-400">
-							Default output root: <span className="font-mono">{defaultHint}</span>
+							Default output root:{" "}
+							<span className="font-mono">{defaultHint}</span>
 						</div>
 					</div>
 
@@ -182,7 +230,11 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 							onChange={(event) => setPathInput(event.target.value)}
 							placeholder="Select or paste a folder path"
 						/>
-						<button className="button-secondary px-3 py-2 text-xs" onClick={handleGo} type="button">
+						<button
+							className="button-secondary px-3 py-2 text-xs"
+							onClick={handleGo}
+							type="button"
+						>
 							Go
 						</button>
 						{parentPath ? (
@@ -194,6 +246,25 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 								Up
 							</button>
 						) : null}
+					</div>
+
+					<div className="flex flex-wrap items-center gap-2">
+						<input
+							className="flex-1 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+							value={newFolderName}
+							onChange={(event) => setNewFolderName(event.target.value)}
+							placeholder="New folder name"
+						/>
+						<button
+							className="button-secondary px-3 py-2 text-xs"
+							onClick={handleCreateFolder}
+							type="button"
+							disabled={
+								creating || !currentPath.trim() || !newFolderName.trim()
+							}
+						>
+							{creating ? "Creating..." : "Create Folder"}
+						</button>
 					</div>
 
 					<div className="max-h-56 space-y-2 overflow-auto rounded-2xl border border-white/10 bg-slate-900/60 p-3">
@@ -214,7 +285,9 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 									onClick={() => void loadList(entry.path)}
 								>
 									<span>{entry.name}</span>
-									<span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Open</span>
+									<span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
+										Open
+									</span>
 								</button>
 							))
 						)}
@@ -223,13 +296,24 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 
 				<div className="flex flex-wrap items-center justify-between gap-3 pt-2">
 					<div className="text-xs text-slate-400">
-						Current selection: <span className="font-mono">{currentPath || "--"}</span>
+						Current selection:{" "}
+						<span className="font-mono">{currentPath || "--"}</span>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
-						<button className="button-secondary" onClick={handleClear} type="button" disabled={saving}>
+						<button
+							className="button-secondary"
+							onClick={handleClear}
+							type="button"
+							disabled={saving}
+						>
 							Clear
 						</button>
-						<button className="button-primary" onClick={handleSave} type="button" disabled={saving || !currentPath}>
+						<button
+							className="button-primary"
+							onClick={handleSave}
+							type="button"
+							disabled={saving || !currentPath}
+						>
 							Use Folder
 						</button>
 					</div>

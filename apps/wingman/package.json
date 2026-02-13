@@ -2,7 +2,7 @@
 	"name": "@wingman-ai/gateway",
 	"displayName": "Wingman Agent",
 	"description": "Wingman-AI agentic coding assistant that works with Anthropic, OpenAI, Google, xAI and LMStudio.",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"main": "index.js",
 	"bin": {
 		"wingman": "./bin/wingman"
@@ -14,7 +14,8 @@
 		"dist",
 		"bin",
 		"skills",
-		".wingman/agents"
+		"extensions",
+		"templates/agents"
 	],
 	"publishConfig": {
 		"access": "public"
@@ -22,12 +23,12 @@
 	"packageManager": "bun@1.1.42",
 	"scripts": {
 		"test": "vitest",
-		"test:unit": "vitest run --dir src/tests --exclude '**/*integration*'",
-		"test:integration": "vitest run --dir src/tests/integration",
+		"test:unit": "vitest run src/tests --exclude '**/*integration*'",
+		"test:integration": "vitest run src/tests/integration",
 		"test:coverage": "vitest run --coverage",
 		"test:watch": "vitest watch",
-		"test:watch:unit": "vitest watch --dir src/tests --exclude '**/*integration*'",
-		"test:watch:integration": "vitest watch --dir src/tests/integration",
+		"test:watch:unit": "vitest watch src/tests --exclude '**/*integration*'",
+		"test:watch:integration": "vitest watch src/tests/integration",
 		"build": "rslib build && bun run webui:build",
 		"dev": "concurrently -n gateway,webui -c emerald,orange \"bun --watch ./src/cli/index.ts gateway run\" \"bun run webui:dev\"",
 		"dev:gateway": "bun --watch ./src/cli/index.ts gateway run",
@@ -108,6 +109,7 @@
 		"js-yaml": "^4.1.1",
 		"langchain": "^1.2.23",
 		"multicast-dns": "^7.2.5",
+		"playwright-core": "^1.58.2",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
 		"react-icons": "^5.3.0",

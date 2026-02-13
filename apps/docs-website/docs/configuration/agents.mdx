@@ -32,9 +32,9 @@ wingman init --agents main,coding,stock-trader
 To re-copy bundled agents later without changing config or provider settings:
 
 ```bash
-wingman init --skip-config --skip-provider
-wingman init --skip-config --skip-provider --agents main,coding
-wingman init --skip-config --skip-provider --force
+wingman init --mode sync --only agents
+wingman init --mode sync --only agents --agents main,coding
+wingman init --mode sync --only agents --force
 ```
 
 Bundled templates currently include:
@@ -65,9 +65,11 @@ MCP dependency levels used below:
 | `coding` | Direct single-agent coding execution | No | Optional | Template sets `mcpUseGlobal: true` but does not require MCP-specific tools. |
 | `coding-v2` | Coding orchestrator with one generic coding worker | Yes (1) | Optional | Template sets `mcpUseGlobal: true`; no hard MCP dependency. |
 | `game-dev` | Game feature orchestrator (code + assets + UI) | Yes (4) | Recommended | Template prefers FAL MCP media tools for generation flows. |
-| `researcher` | Web/documentation research | No | None | Uses built-in `internet_search`/`web_crawler`; no MCP fields in the template. |
+| `researcher` | Web/documentation research | No | None | Uses built-in `internet_search`/`web_crawler`/`browser_control`; no MCP fields in the template. |
 | `stock-trader` | Options-oriented trading research workflows | Yes (8) | Required | Template expects finance MCP tools (`finnhub.*` and `options.analyze`) for data-backed output. |
 | `wingman` (generated starter) | Workspace default assistant created by `init` | No | None by default | Generated as `agent.json` starter when missing; add `mcpUseGlobal` or per-agent `mcp` only if needed. |
+
+`browser_control` is native to Wingman runtime (CDP with automatic persistent-context fallback when needed). It is not provided through MCP.
 
 ## MCP-focused config examples
 
@@ -80,6 +82,7 @@ description: Source-first research agent
 tools:
   - internet_search
   - web_crawler
+  - browser_control
 promptRefinement: true
 ---
 ```
@@ -160,8 +163,10 @@ XAI_API_KEY
   "name": "wingman",
   "description": "General-purpose coding assistant for this repo.",
   "systemPrompt": "Be concise. Ask clarifying questions when needed.",
-  "tools": ["code_search", "git_status", "command_execute", "internet_search"],
+  "tools": ["code_search", "git_status", "command_execute", "browser_control", "internet_search"],
   "model": "anthropic:claude-sonnet-4-5",
+  "browserProfile": "trading",
+  "browserTransport": "auto",
   "promptRefinement": {
     "enabled": true,
     "instructionsPath": "/memories/agents/wingman/instructions.md"
@@ -198,6 +203,7 @@ promptRefinement:
 tools:
   - internet_search
   - web_crawler
+  - browser_control
   - think
 ---
 You are a researcher. Summarize sources and provide citations.
@@ -267,6 +273,7 @@ Agents can only use the tools listed in the `tools` array. Available tool names:
 
 - `internet_search`
 - `web_crawler`
+- `browser_control`
 - `command_execute`
 - `background_terminal`
 - `think`
@@ -288,12 +295,31 @@ Agents can only use the tools listed in the `tools` array. Available tool names:
 - Updates only happen when users give clear, durable preferences (e.g., “always do X”, “never do Y”).
 - Keep the file short and stable: preferences, workflow rules, and corrections.
 
-## MCP and voice overrides
+## Browser, MCP, and voice overrides
 
+- `browserProfile`: named persistent `browser_control` profile ID (for example `trading`). Initialize one with `wingman browser profile init trading`.
+- `browserTransport`: optional transport preference override (`auto`, `playwright`, `relay`) for `browser_control`
+- `browserExtensions`: optional extension IDs loaded for this agent (mapped from `browser.extensions` in `wingman.config.json`)
 - `mcp`: agent-specific MCP servers
 - `mcpUseGlobal`: include global MCP servers from `wingman.config.json`
 - `voice`: overrides global voice configuration for this agent
 - `promptRefinement`: enable/disable prompt refinement and set the overlay path
+
+### Browser profile setup patterns
+
+- Shared default profile across browser-enabled agents:
+  - Run `wingman browser profile init trading --default`
+  - Omit `browserProfile` in agents and rely on `browser.defaultProfile`
+- Per-agent profile isolation:
+  - Run `wingman browser profile init <id>` for each profile
+  - Set `browserProfile` per agent (`research`, `trading`, etc.)
+- Per-agent extension set:
+  - Run `wingman browser extension install --default` for Wingman's bundled extension, or `wingman browser extension install <id> --source <dir>` for a custom one
+  - Set `browserExtensions` in agent config when an agent needs non-default extensions
+- Custom storage location:
+  - Run `wingman browser profile init trading --profiles-dir .wingman/profiles`
+
+For full examples, see [Browser Automation](/configuration/browser-automation), [Playwright Setup](/configuration/browser-playwright), and [Relay Setup](/configuration/browser-relay).
 
 ## Why voice is duplicated in agent config
 

@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as yaml from "js-yaml";
@@ -270,5 +276,79 @@ describeIfBun("agents API", () => {
 		expect(createRes?.ok).toBe(true);
 		const created = (await createRes!.json()) as Record<string, any>;
 		expect(created.reasoningEffort).toBe("medium");
+	});
+
+	it("includes effective MCP server names in list and detail responses", async () => {
+		config = {
+			...config,
+			mcp: {
+				servers: [
+					{
+						name: "global-finance",
+						transport: "sse",
+						url: "http://localhost:8900/mcp",
+					},
+				],
+			},
+			agents: {
+				list: [{ id: "mcp-agent", name: "MCP Agent" }],
+				bindings: [],
+			},
+		};
+		const agentDir = join(tempDir, "agents", "mcp-agent");
+		mkdirSync(agentDir, { recursive: true });
+		writeFileSync(
+			join(agentDir, "agent.md"),
+			[
+				"---",
+				"name: mcp-agent",
+				"description: MCP aware",
+				"tools:",
+				"  - think",
+				"mcp:",
+				"  servers:",
+				"    - name: local-fal",
+				"      transport: sse",
+				"      url: http://localhost:8800/mcp",
+				"    - name: global-finance",
+				"      transport: sse",
+				"      url: http://localhost:8900/mcp",
+				"mcpUseGlobal: true",
+				"---",
+				"",
+				"You are MCP aware.",
+				"",
+			].join("\n"),
+		);
+
+		const listReq = new Request("http://localhost/api/agents", {
+			method: "GET",
+		});
+		const listRes = await handleAgentsApi(
+			ctx as any,
+			listReq,
+			new URL(listReq.url),
+		);
+		expect(listRes?.ok).toBe(true);
+		const listPayload = (await listRes!.json()) as {
+			agents: Array<Record<string, any>>;
+		};
+		const listed = listPayload.agents.find((agent) => agent.id === "mcp-agent");
+		expect(listed).toBeTruthy();
+		expect(listed?.mcpUseGlobal).toBe(true);
+		expect(listed?.mcpServers).toEqual(["local-fal", "global-finance"]);
+
+		const detailReq = new Request("http://localhost/api/agents/mcp-agent", {
+			method: "GET",
+		});
+		const detailRes = await handleAgentsApi(
+			ctx as any,
+			detailReq,
+			new URL(detailReq.url),
+		);
+		expect(detailRes?.ok).toBe(true);
+		const detail = (await detailRes!.json()) as Record<string, any>;
+		expect(detail.mcpUseGlobal).toBe(true);
+		expect(detail.mcpServers).toEqual(["local-fal", "global-finance"]);
 	});
 });

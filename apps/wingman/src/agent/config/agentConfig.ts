@@ -11,6 +11,7 @@ export const WingmanDirectory = ".wingman";
 export const AvailableToolNames = z.enum([
 	"internet_search",
 	"web_crawler",
+	"browser_control",
 	"command_execute",
 	"background_terminal",
 	"think",
@@ -34,6 +35,12 @@ export const ReasoningEffortSchema = z.preprocess(
 );
 
 export type ReasoningEffort = z.infer<typeof ReasoningEffortSchema>;
+
+export const AgentBrowserTransportSchema = z.enum([
+	"auto",
+	"playwright",
+	"relay",
+]);
 
 const PromptRefinementSchema = z.preprocess(
 	(value) => {
@@ -109,6 +116,22 @@ const BaseAgentConfigSchema = z.object({
 		.optional()
 		.default(300000)
 		.describe("Command execution timeout in milliseconds (default: 300000)"),
+	browserProfile: z
+		.string()
+		.min(1)
+		.optional()
+		.describe(
+			"Optional named browser profile ID for persistent browser_control sessions",
+		),
+	browserTransport: AgentBrowserTransportSchema.optional().describe(
+		'Optional browser_control transport preference ("auto", "playwright", or "relay")',
+	),
+	browserExtensions: z
+		.array(z.string().min(1))
+		.optional()
+		.describe(
+			"Optional extension IDs to load for browser_control sessions (maps from wingman.config browser.extensions)",
+		),
 	toolHooks: HooksConfigSchema.optional().describe(
 		"Agent-specific tool hooks configuration",
 	),

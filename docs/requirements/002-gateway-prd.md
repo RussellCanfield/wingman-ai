@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.5
+**Version:** 1.7
 **Status:** In Development
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-13
 
 ---
 
@@ -186,6 +186,24 @@ Rules:
 - Output is buffered with bounded retention.
 - Runtime policy applies command blocks, timeout limits, idle cleanup, and per-owner session caps.
 - Tool lifecycle still uses the same `event:agent` stream protocol (`tool-start`, `tool-end`).
+
+### Native Browser Automation
+
+Gateway runtime exposes `browser_control` as a first-class built-in tool for browser automation.
+
+- Backed by Chrome/Chromium runtime control using CDP and Playwright persistent-context.
+- Non-persistent runs should prefer CDP and automatically fall back to persistent-context launch when CDP attach fails.
+- Persistent named profile runs should launch via persistent-context by default; headed is the default mode, with optional explicit headless mode for automation.
+- Intended for JS-rendered pages, interaction-required flows, and screenshots.
+- This capability is native to Wingman runtime and is not modeled as an MCP server.
+- Supports optional persistent named profiles configured by host settings and selected per agent.
+- Profile runs must use lock protection so concurrent executions do not share the same profile simultaneously.
+- Supports optional extension mappings in host config with default/per-agent extension selection.
+- CLI/browser setup includes first-party extension bootstrap (`wingman browser extension install --default`) in addition to custom unpacked extension mappings.
+- Relay mode security requirements:
+  - Relay bind host must remain loopback-only (`127.0.0.1` / `localhost` / `::1`).
+  - Relay clients (extension/CDP) must support token-based authentication.
+  - Extension relay handshake should include explicit hello/ack before CDP forwarding begins.
 
 ### Voice Providers (TTS)
 
@@ -732,12 +750,15 @@ wingman agent --local --agent <id> "prompt"
 # Bootstrap workspace config + starter agent
 wingman init [options]
   --agent <name>          Agent name (default: wingman)
+  --mode <name>           Init mode (onboard|sync). Default: onboard
+  --only <targets>        Run only selected setup targets (config,agents,provider)
   --agents <list>         Copy only bundled agents (comma-separated)
   --model <provider:model>  Set model for the starter agent
   --provider <name>       Configure provider credentials
   --token <string>        Provider token (non-interactive)
-  --skip-config           Skip config setup
-  --skip-agent            Skip agent scaffolding
+
+# Re-copy bundled templates only
+wingman init --mode sync --only agents
 ```
 
 #### Utilities
@@ -1022,7 +1043,7 @@ Dynamic UI notes:
 - The gateway validates the path against `gateway.fsRoots`.
 - If no session folder is set, the agent defaults to `~/.wingman/outputs/<agentId>/`.
 - When set, the session working folder becomes the agent execution root for subsequent turns in that session:
-  - tool execution CWD (`command_execute`, `background_terminal`, `code_search`, `git_status`)
+  - tool execution CWD (`command_execute`, `background_terminal`, `browser_control`, `code_search`, `git_status`)
   - primary file backend root (read/write operations)
 - The working folder is also injected into agent context via hidden middleware.
 

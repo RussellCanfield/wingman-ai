@@ -74,6 +74,14 @@ npm install -g @wingman-ai/gateway
 wingman init
 ```
 
+### Re-sync Bundled Agent Templates
+
+```bash
+wingman init --mode sync --only agents
+wingman init --mode sync --only agents --agents main,coding
+wingman init --mode sync --only agents --force
+```
+
 ### Start the Gateway
 
 ```bash

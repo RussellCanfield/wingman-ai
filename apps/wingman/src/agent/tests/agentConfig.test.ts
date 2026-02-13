@@ -30,6 +30,8 @@ describe("Agent Configuration Schema", () => {
 				blockedCommands: ["rm", "mv"],
 				allowScriptExecution: true,
 				commandTimeout: 300000,
+				browserProfile: "trading",
+				browserTransport: "relay",
 			};
 
 			const result = validateAgentConfig(config);
@@ -41,6 +43,8 @@ describe("Agent Configuration Schema", () => {
 				expect(result.data.blockedCommands).toEqual(["rm", "mv"]);
 				expect(result.data.allowScriptExecution).toBe(true);
 				expect(result.data.commandTimeout).toBe(300000);
+				expect(result.data.browserProfile).toBe("trading");
+				expect(result.data.browserTransport).toBe("relay");
 			}
 		});
 
@@ -211,6 +215,7 @@ describe("Agent Configuration Schema", () => {
 			const validTools = [
 				"internet_search",
 				"web_crawler",
+				"browser_control",
 				"command_execute",
 				"background_terminal",
 				"think",

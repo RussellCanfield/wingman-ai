@@ -82,6 +82,21 @@ describe("CLI Config Loader", () => {
 					repositoryName: "skills",
 					skillsDirectory: "skills",
 				},
+				browser: {
+					profilesDir: ".wingman/browser-profiles",
+					profiles: {},
+					extensionsDir: ".wingman/browser-extensions",
+					extensions: {},
+					defaultExtensions: [],
+					transport: "auto",
+					relay: {
+						enabled: false,
+						host: "127.0.0.1",
+						port: 18792,
+						requireAuth: true,
+						maxMessageBytes: 262_144,
+					},
+				},
 				gateway: {
 					host: "127.0.0.1",
 					port: 18789,
@@ -186,6 +201,41 @@ describe("CLI Config Loader", () => {
 			const config = loader.loadConfig();
 
 			expect(config).toMatchObject(configData);
+		});
+
+		it("should load browser profile configuration", () => {
+			const configData = {
+				browser: {
+					profilesDir: ".wingman/browser-profiles",
+					defaultProfile: "trading",
+					profiles: {
+						trading: ".wingman/browser-profiles/trading",
+					},
+				},
+			};
+
+			writeFileSync(
+				join(configDir, "wingman.config.json"),
+				JSON.stringify(configData),
+			);
+
+			const loader = new WingmanConfigLoader(".wingman", testDir);
+			const config = loader.loadConfig();
+
+			expect(config.browser).toEqual({
+				...configData.browser,
+				extensionsDir: ".wingman/browser-extensions",
+				extensions: {},
+				defaultExtensions: [],
+				transport: "auto",
+				relay: {
+					enabled: false,
+					host: "127.0.0.1",
+					port: 18792,
+					requireAuth: true,
+					maxMessageBytes: 262_144,
+				},
+			});
 		});
 
 		it("should allow disabling summarization middleware", () => {

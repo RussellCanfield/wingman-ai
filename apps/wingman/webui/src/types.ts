@@ -67,6 +67,8 @@ export type AgentSummary = {
 	model?: string;
 	reasoningEffort?: ReasoningEffort;
 	voice?: AgentVoiceConfig;
+	mcpServers?: string[];
+	mcpUseGlobal?: boolean;
 	promptTraining?: PromptTrainingConfig | boolean;
 	promptRefinement?: PromptTrainingConfig | boolean;
 	subAgents?: AgentSubAgent[];
@@ -80,6 +82,8 @@ export type AgentDetail = {
 	model?: string;
 	reasoningEffort?: ReasoningEffort;
 	voice?: AgentVoiceConfig;
+	mcpServers?: string[];
+	mcpUseGlobal?: boolean;
 	promptTraining?: PromptTrainingConfig | boolean;
 	promptRefinement?: PromptTrainingConfig | boolean;
 	subAgents?: AgentSubAgent[];
@@ -251,6 +255,10 @@ export type FsListResponse = {
 	path: string;
 	parent?: string | null;
 	entries: FsEntry[];
+};
+
+export type FsMkdirResponse = {
+	path: string;
 };
 
 export type ProviderStatus = {

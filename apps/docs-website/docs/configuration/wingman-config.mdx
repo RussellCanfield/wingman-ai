@@ -71,6 +71,19 @@ The global config lives at `.wingman/wingman.config.json`. It controls logging, 
     "repositoryName": "skills",
     "skillsDirectory": "skills"
   },
+  "browser": {
+    "profilesDir": ".wingman/browser-profiles",
+    "extensionsDir": ".wingman/browser-extensions",
+    "defaultProfile": "trading",
+    "transport": "auto",
+    "defaultExtensions": ["wingman"],
+    "profiles": {
+      "trading": ".wingman/browser-profiles/trading"
+    },
+    "extensions": {
+      "wingman": ".wingman/browser-extensions/wingman"
+    }
+  },
   "gateway": {
     "host": "127.0.0.1",
     "port": 18789,
@@ -180,9 +193,21 @@ Minimal example:
 - **voice**: global voice settings; can be overridden per-agent
 - **cli**: CLI theme and output mode (`auto | interactive | json`)
 - **skills**: GitHub repo + local directory for skills
+- **browser**: named persistent profile + extension settings for `browser_control`
 - **gateway**: host, port, auth, control UI, adapters
 - **agents**: optional list/bindings used by the gateway for routing
 - **mcp**: global MCP server definitions
+
+## Browser settings
+
+`browser` keys in `wingman.config.json` control profile and extension mappings for `browser_control`:
+
+- `profilesDir`, `profiles`, `defaultProfile`, `transport`
+- `extensionsDir`, `extensions`, `defaultExtensions`
+- `relay.enabled`, `relay.host`, `relay.port`, `relay.requireAuth`, `relay.authToken`, `relay.maxMessageBytes`
+
+For full setup steps, login bootstrap, command examples, and troubleshooting, see:
+[Browser Automation](/configuration/browser-automation), [Playwright Setup](/configuration/browser-playwright), and [Relay Setup](/configuration/browser-relay).
 
 ## Summarization settings
 

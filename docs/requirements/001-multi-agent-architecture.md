@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.7
-**Last Updated:** 2026-02-10
+**Version:** 1.2.10
+**Last Updated:** 2026-02-13
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -54,11 +54,17 @@ Modern AI assistants face several challenges:
 **Capabilities**:
 - Internet search (Tavily API or DuckDuckGo fallback)
 - Multi-page web crawling with content extraction
+- Native browser automation for JS-rendered pages and interaction-required flows
 - Report writing and information synthesis
 
 **Tools**:
 - `internet_search`: Search web for current information
 - `web_crawler`: Deep crawl websites (up to 10 pages)
+- `browser_control`: Native Chrome/Chromium automation via CDP and Playwright persistent-context (first-class runtime tool, not MCP)
+  - Supports optional persistent named profiles configured in `wingman.config.json` and selected per agent via `browserProfile`
+  - Supports optional extension mappings (`browser.extensions`) and agent-level extension selection (`browserExtensions`)
+  - CLI includes `wingman browser profile init <profile-id>` and `wingman browser profile open [profile-id] --url <url>` for profile provisioning and interactive login bootstrap
+  - CLI includes `wingman browser extension install --default` to install Wingman's bundled first-party extension
 - `think`: Reasoning without side effects
 
 **Use Cases**:
@@ -487,6 +493,12 @@ Notes:
 ### Available Tools
 - `internet_search`: Web search (Tavily or DuckDuckGo)
 - `web_crawler`: Multi-page web crawling
+- `browser_control`: Native browser automation via Chrome/Chromium runtime control (not an MCP server)
+  - Non-persistent runs use CDP with automatic persistent-context fallback when CDP connection is unavailable
+  - Persistent named profiles launch with persistent-context by default and may run headed (default) or headless when explicitly requested
+  - Supports optional persistent named profiles with lock protection to avoid concurrent profile corruption
+  - Supports optional extension loading from host config mappings and per-agent overrides
+  - Supports optional secure local relay mode (loopback-only, token-authenticated) for extension-mediated browser control workflows
 - `command_execute`: Shell command execution
 - `background_terminal`: Start a background terminal session, then write/poll by `session_id`
 - `think`: Reasoning without side effects

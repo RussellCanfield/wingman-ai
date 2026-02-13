@@ -884,7 +884,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	]);
 
 	return (
-		<section className="panel-card animate-rise flex h-[calc(100vh-120px)] min-h-[1200px] flex-col gap-4 p-4 sm:gap-4 sm:p-4">
+		<section className="panel-card animate-rise flex h-full min-h-0 flex-col gap-4 p-4 sm:gap-4 sm:p-4">
 			<header className="flex flex-wrap items-center justify-between gap-4">
 				<div>
 					<h2 className="text-lg font-semibold">Mission Stream</h2>

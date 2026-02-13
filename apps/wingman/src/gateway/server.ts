@@ -12,6 +12,7 @@ import { SessionManager } from "@/cli/core/sessionManager.js";
 import { createLogger, type Logger, type LogLevel } from "@/logger.js";
 import { DiscordGatewayAdapter } from "./adapters/discord.js";
 import { GatewayAuth } from "./auth.js";
+import { BrowserRelayServer } from "./browserRelayServer.js";
 import { BroadcastGroupManager } from "./broadcast.js";
 import {
 	MDNSDiscoveryService,
@@ -73,6 +74,8 @@ type PendingAgentRequest = {
 	sessionManager: SessionManager;
 	workdir: string | null;
 	defaultOutputDir: string;
+	workspaceOverride: string | null;
+	configDirOverride: string | null;
 };
 
 const API_CORS_HEADERS: Record<string, string> = {
@@ -93,6 +96,34 @@ function withApiCors(response: Response): Response {
 		statusText: response.statusText,
 		headers,
 	});
+}
+
+export function resolveExecutionWorkspaceOverride(
+	payload: AgentRequestPayload | undefined,
+): string | null {
+	const rawWorkspace = payload?.execution?.workspace;
+	if (typeof rawWorkspace !== "string") {
+		return null;
+	}
+
+	const trimmed = rawWorkspace.trim();
+	if (!trimmed || !isAbsolute(trimmed)) {
+		return null;
+	}
+
+	return normalize(trimmed);
+}
+
+export function resolveExecutionConfigDirOverride(
+	payload: AgentRequestPayload | undefined,
+): string | null {
+	const rawConfigDir = payload?.execution?.configDir;
+	if (typeof rawConfigDir !== "string") {
+		return null;
+	}
+
+	const trimmed = rawConfigDir.trim();
+	return trimmed || null;
 }
 
 /**
@@ -127,6 +158,7 @@ export class GatewayServer {
 	private controlUiPort: number = 18790;
 	private controlUiSamePort: boolean = false;
 	private uiDistDir: string | null = null;
+	private browserRelayServer: BrowserRelayServer | null = null;
 	private webhookStore: ReturnType<typeof createWebhookStore>;
 	private routineStore: ReturnType<typeof createRoutineStore>;
 	private internalHooks: InternalHookRegistry | null = null;
@@ -210,6 +242,20 @@ export class GatewayServer {
 		this.controlUiSamePort =
 			this.controlUiEnabled && this.controlUiPort === this.config.port;
 		this.uiDistDir = this.controlUiEnabled ? this.resolveControlUiDir() : null;
+		const relayConfig = this.wingmanConfig.browser?.relay;
+		if (relayConfig?.enabled) {
+			this.browserRelayServer = new BrowserRelayServer(
+				{
+					enabled: relayConfig.enabled,
+					host: relayConfig.host || "127.0.0.1",
+					port: relayConfig.port || 18792,
+					requireAuth: relayConfig.requireAuth ?? true,
+					authToken: relayConfig.authToken,
+					maxMessageBytes: relayConfig.maxMessageBytes || 262_144,
+				},
+				this.logger,
+			);
+		}
 		this.terminalSessionManager = new TerminalSessionManager();
 	}
 
@@ -339,6 +385,8 @@ export class GatewayServer {
 			);
 		}
 
+		this.browserRelayServer?.start();
+
 		// Start discovery if enabled
 		if (this.config.discovery?.enabled) {
 			await this.startDiscovery();
@@ -383,6 +431,10 @@ export class GatewayServer {
 		if (this.uiServer) {
 			this.uiServer.stop();
 			this.uiServer = null;
+		}
+
+		if (this.browserRelayServer) {
+			this.browserRelayServer.stop();
 		}
 		this.terminalSessionManager.dispose();
 
@@ -675,6 +727,8 @@ export class GatewayServer {
 		const attachments = Array.isArray(payload?.attachments)
 			? payload.attachments
 			: [];
+		const workspaceOverride = resolveExecutionWorkspaceOverride(payload);
+		const configDirOverride = resolveExecutionConfigDirOverride(payload);
 		const hasContent = content.trim().length > 0;
 		const hasAttachments = attachments.length > 0;
 		if (!hasContent && !hasAttachments) {
@@ -783,6 +837,8 @@ export class GatewayServer {
 			sessionManager,
 			workdir,
 			defaultOutputDir,
+			workspaceOverride,
+			configDirOverride,
 		};
 		this.requestSessionKeys.set(msg.id, sessionQueueKey);
 
@@ -854,6 +910,8 @@ export class GatewayServer {
 			sessionManager,
 			workdir,
 			defaultOutputDir,
+			workspaceOverride,
+			configDirOverride,
 		} = request;
 
 		this.activeSessionRequests.set(sessionQueueKey, msg.id!);
@@ -905,10 +963,12 @@ export class GatewayServer {
 
 		outputManager.on("output-event", outputHandler);
 
-		const workspace = this.resolveAgentWorkspace(agentId);
+		const workspace =
+			workspaceOverride || this.resolveAgentWorkspace(agentId);
+		const configDir = configDirOverride || this.configDir;
 		const invoker = new AgentInvoker({
 			workspace,
-			configDir: this.configDir,
+			configDir,
 			outputManager,
 			logger: this.logger,
 			sessionManager,

@@ -4,6 +4,44 @@ import { createLogger } from "@/logger.js";
 
 const logger = createLogger();
 
+export function describeWebSocketError(
+	error: unknown,
+	url: string,
+): string {
+	if (error instanceof Error) {
+		const message = error.message.trim();
+		return message
+			? `WebSocket connection failed to ${url}: ${message}`
+			: `WebSocket connection failed to ${url}.`;
+	}
+
+	if (typeof error === "string" && error.trim()) {
+		return `WebSocket connection failed to ${url}: ${error.trim()}`;
+	}
+
+	if (error && typeof error === "object") {
+		const typed = error as Record<string, unknown>;
+		const eventType =
+			typeof typed.type === "string" && typed.type.trim()
+				? typed.type.trim()
+				: "error";
+		const message =
+			typeof typed.message === "string" && typed.message.trim()
+				? typed.message.trim()
+				: null;
+		const reason =
+			typeof typed.reason === "string" && typed.reason.trim()
+				? typed.reason.trim()
+				: null;
+		const detail = message || reason;
+		return detail
+			? `WebSocket ${eventType} while connecting to ${url}: ${detail}`
+			: `WebSocket ${eventType} while connecting to ${url}.`;
+	}
+
+	return `WebSocket connection failed to ${url}.`;
+}
+
 /**
  * WebSocket transport client
  */
@@ -28,20 +66,37 @@ export class WebSocketTransport implements TransportClient {
 
 	async connect(): Promise<void> {
 		return new Promise((resolve, reject) => {
+			let settled = false;
+			const rejectOnce = (reason: Error) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timeout);
+				reject(reason);
+			};
+			const resolveOnce = () => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timeout);
+				resolve();
+			};
+
 			const timeout = setTimeout(() => {
 				if (this.ws) {
 					this.ws.close();
 				}
-				reject(new Error("Connection timeout"));
+				rejectOnce(
+					new Error(
+						`WebSocket connection timeout after ${this.options.connectionTimeout}ms (${this.url}).`,
+					),
+				);
 			}, this.options.connectionTimeout);
 
 			try {
 				this.ws = new WebSocket(this.url);
 
 				this.ws.onopen = () => {
-					clearTimeout(timeout);
 					this.reconnectAttempts = 0;
-					resolve();
+					resolveOnce();
 				};
 
 				this.ws.onmessage = (event) => {
@@ -56,11 +111,28 @@ export class WebSocketTransport implements TransportClient {
 				};
 
 				this.ws.onerror = (error) => {
-					clearTimeout(timeout);
-					reject(error);
+					rejectOnce(new Error(describeWebSocketError(error, this.url)));
 				};
 
-				this.ws.onclose = () => {
+				this.ws.onclose = (event) => {
+					if (!settled) {
+						const code =
+							event && typeof event.code === "number"
+								? String(event.code)
+								: "unknown";
+						const reason =
+							event &&
+							typeof event.reason === "string" &&
+							event.reason.trim()
+								? ` (${event.reason.trim()})`
+								: "";
+						rejectOnce(
+							new Error(
+								`WebSocket closed before connection was established (${this.url}, code=${code})${reason}.`,
+							),
+						);
+						return;
+					}
 					this.ws = null;
 					if (
 						this.options.autoReconnect &&
@@ -70,8 +142,7 @@ export class WebSocketTransport implements TransportClient {
 					}
 				};
 			} catch (error) {
-				clearTimeout(timeout);
-				reject(error);
+				rejectOnce(new Error(describeWebSocketError(error, this.url)));
 			}
 		});
 	}

@@ -6,12 +6,16 @@ import { GatewayClient, GatewayServer } from "../gateway/index.js";
 
 const isBun = typeof (globalThis as any).Bun !== "undefined";
 const describeIfBun = isBun ? describe : describe.skip;
+const invokerConstructOptions: Array<Record<string, unknown>> = [];
 
 vi.mock("@/cli/core/agentInvoker.js", () => ({
 	AgentInvoker: class {
 		private outputManager: any;
 		constructor(options: { outputManager?: any }) {
 			this.outputManager = options?.outputManager;
+			invokerConstructOptions.push(
+				(options as Record<string, unknown>) || {},
+			);
 		}
 		async invokeAgent(
 			_agentId: string,
@@ -57,6 +61,7 @@ describeIfBun("Gateway", () => {
 	let testWorkspace: string;
 
 	beforeAll(async () => {
+		invokerConstructOptions.length = 0;
 		testWorkspace = mkdtempSync(join(tmpdir(), "wingman-gateway-test-"));
 		const instance = new GatewayServer({
 			port: 0,
@@ -611,6 +616,48 @@ describeIfBun("Gateway", () => {
 		expect(completionEvents).toHaveLength(1);
 		expect(completionEvents[0].payload?.sessionId).toBe(sessionId);
 		expect(completionEvents[0].payload?.agentId).toBe("main");
+
+		requester.close();
+	});
+
+	it("uses request execution workspace/configDir overrides for agent invocation", async () => {
+		const requester = await connectClient("session-workspace-override-requester");
+		const requestId = "req-workspace-override";
+		const sessionId = "session-workspace-override";
+		const workspaceOverride = "/tmp/wingman-override-workspace";
+		const configDirOverride = ".wingman-custom";
+		const beforeCount = invokerConstructOptions.length;
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: requestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "workspace override test",
+					execution: {
+						workspace: workspaceOverride,
+						configDir: configDirOverride,
+					},
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-complete",
+			10000,
+		);
+
+		expect(invokerConstructOptions.length).toBeGreaterThan(beforeCount);
+		const lastOptions = invokerConstructOptions.at(-1) || {};
+		expect(lastOptions.workspace).toBe(workspaceOverride);
+		expect(lastOptions.configDir).toBe(configDirOverride);
 
 		requester.close();
 	});

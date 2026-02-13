@@ -6,9 +6,9 @@ describe("agentSyncNotice", () => {
 		expect(agentSyncNotice.heading).toBe("Agent Sync");
 		expect(agentSyncNotice.body).toContain(".wingman/agents/");
 		expect(agentSyncNotice.commands).toEqual([
-			"wingman init --skip-config --skip-provider",
-			"wingman init --skip-config --skip-provider --agents main,coding",
-			"wingman init --skip-config --skip-provider --force",
+			"wingman init --mode sync --only agents",
+			"wingman init --mode sync --only agents --agents main,coding",
+			"wingman init --mode sync --only agents --force",
 		]);
 		expect(agentSyncNotice.note).toContain("only sync bundled agent templates");
 	});

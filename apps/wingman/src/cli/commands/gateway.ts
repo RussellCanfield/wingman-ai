@@ -24,17 +24,23 @@ export interface GatewayCommandArgs {
 	options: Record<string, unknown>;
 }
 
+export interface GatewayCommandOptions {
+	workspace?: string;
+	configDir?: string;
+}
+
 /**
  * Execute gateway command
  */
 export async function executeGatewayCommand(
 	args: GatewayCommandArgs,
+	commandOptions: GatewayCommandOptions = {},
 ): Promise<void> {
 	const { subcommand, options } = args;
 
 	switch (subcommand) {
 		case "start":
-			await handleStart(options);
+			await handleStart(options, commandOptions);
 			break;
 		case "stop":
 			await handleStop();
@@ -46,7 +52,7 @@ export async function executeGatewayCommand(
 			await handleStatus();
 			break;
 		case "run":
-			await handleRun(options);
+			await handleRun(options, commandOptions);
 			break;
 		case "join":
 			await handleJoin(args.args, options);
@@ -72,8 +78,11 @@ export async function executeGatewayCommand(
 /**
  * Start the gateway as a daemon
  */
-async function handleStart(options: Record<string, unknown>): Promise<void> {
-	const configLoader = new WingmanConfigLoader();
+async function handleStart(
+	options: Record<string, unknown>,
+	commandOptions: GatewayCommandOptions,
+): Promise<void> {
+	const configLoader = createConfigLoader(commandOptions);
 	const wingmanConfig = configLoader.loadConfig();
 	const gatewayDefaults = wingmanConfig.gateway;
 	const envToken = getGatewayTokenFromEnv();
@@ -99,6 +108,8 @@ async function handleStart(options: Record<string, unknown>): Promise<void> {
 	const config: GatewayConfig = {
 		port: (options.port as number) || gatewayDefaults.port || 18789,
 		host: (options.host as string) || gatewayDefaults.host || "127.0.0.1",
+		workspace: commandOptions.workspace,
+		configDir: commandOptions.configDir,
 		requireAuth: auth?.mode !== "none",
 		authToken: auth?.token,
 		auth,
@@ -209,7 +220,10 @@ async function handleStatus(): Promise<void> {
 /**
  * Run the gateway server (not as daemon)
  */
-async function handleRun(options: Record<string, unknown>): Promise<void> {
+async function handleRun(
+	options: Record<string, unknown>,
+	commandOptions: GatewayCommandOptions,
+): Promise<void> {
 	let config: GatewayConfig;
 
 	// Check if running as daemon with config file
@@ -219,8 +233,10 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 			"utf-8",
 		);
 		config = JSON.parse(configStr);
+		config.workspace = config.workspace || commandOptions.workspace || process.cwd();
+		config.configDir = config.configDir || commandOptions.configDir || ".wingman";
 	} else {
-		const configLoader = new WingmanConfigLoader();
+		const configLoader = createConfigLoader(commandOptions);
 		const wingmanConfig = configLoader.loadConfig();
 		const gatewayDefaults = wingmanConfig.gateway;
 		const envToken = getGatewayTokenFromEnv();
@@ -245,6 +261,8 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 		config = {
 			port: (options.port as number) || gatewayDefaults.port || 18789,
 			host: (options.host as string) || gatewayDefaults.host || "127.0.0.1",
+			workspace: commandOptions.workspace,
+			configDir: commandOptions.configDir,
 			requireAuth: auth?.mode !== "none",
 			authToken: auth?.token,
 			auth,
@@ -287,6 +305,14 @@ async function handleRun(options: Record<string, unknown>): Promise<void> {
 		reportGatewayError("Failed to start gateway", error);
 		process.exit(1);
 	}
+}
+
+function createConfigLoader(
+	commandOptions: GatewayCommandOptions,
+): WingmanConfigLoader {
+	const workspace = commandOptions.workspace || process.cwd();
+	const configDir = commandOptions.configDir || ".wingman";
+	return new WingmanConfigLoader(configDir, workspace);
 }
 
 /**

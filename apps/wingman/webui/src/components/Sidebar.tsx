@@ -61,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 						/>
 						<div>
 							<p className="text-xs uppercase tracking-[0.3em] text-slate-400">Navigation</p>
-							<h2 className="mt-1 text-lg font-semibold">Command Panel</h2>
+							<h2 className="mt-1 text-lg font-semibold">Wingman</h2>
 						</div>
 					</div>
 				</div>

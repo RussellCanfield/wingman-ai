@@ -25,6 +25,13 @@ describe("Tool Registry", () => {
 			expect(tool?.name).toBe("web_crawler");
 		});
 
+		it("should create browser_control tool", () => {
+			const tool = createTool("browser_control");
+
+			expect(tool).not.toBeNull();
+			expect(tool?.name).toBe("browser_control");
+		});
+
 		it("should create command_execute tool with default options", () => {
 			const tool = createTool("command_execute");
 
@@ -147,6 +154,7 @@ describe("Tool Registry", () => {
 			expect(tools).toEqual([
 				"internet_search",
 				"web_crawler",
+				"browser_control",
 				"command_execute",
 				"background_terminal",
 				"think",

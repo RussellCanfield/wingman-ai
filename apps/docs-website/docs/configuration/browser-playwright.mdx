@@ -1,0 +1,70 @@
+# Playwright Setup
+
+Use this mode when the agent should launch and control its own browser session.
+
+## 1) Initialize a persistent profile
+
+```bash
+wingman browser profile init trading --default
+wingman browser profile open trading --url https://robinhood.com/login
+```
+
+Sign in once in that window, then close it.
+
+## 2) Set agent/browser config
+
+In `wingman.config.json`:
+
+```json
+{
+  "browser": {
+    "defaultProfile": "trading",
+    "transport": "playwright"
+  }
+}
+```
+
+Optional per-agent override in `agent.json` / `agent.md` frontmatter:
+
+```json
+{
+  "name": "main",
+  "tools": ["browser_control"],
+  "browserProfile": "trading",
+  "browserTransport": "playwright"
+}
+```
+
+## 3) Optional extension auto-load
+
+If you want Wingman's extension loaded in agent-launched Chrome:
+
+```bash
+wingman browser extension install --default
+```
+
+This registers `wingman` and adds it to `browser.defaultExtensions`.
+
+## 4) Run a smoke test
+
+```bash
+wingman agent --agent main "Use browser_control once: navigate to https://robinhood.com, wait 2000 ms, extract_text from body maxChars 3000, and return the raw tool JSON."
+```
+
+Expected output fields:
+
+- `transportRequested`: `playwright` (or `auto`)
+- `transport`: `persistent-context` or `cdp` (with fallback handled automatically)
+- `browser`: `chrome-playwright` or `chrome-cdp`
+- `persistentProfile`: `true`
+
+## 5) Headless automation
+
+Persistent profile runs default to headed for login/session reliability.
+After bootstrap login, you can explicitly run headless in tool calls with `headless: true`.
+
+## Troubleshooting
+
+- `Browser profile is already in use`: close other Chrome runs using that same profile path.
+- `ProcessSingleton` errors: another Chromium instance holds the profile lock.
+- Browser opens at `about:blank` and does nothing: inspect tool output JSON and verify action types are valid.

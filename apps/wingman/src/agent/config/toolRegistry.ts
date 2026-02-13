@@ -3,6 +3,7 @@ import type { MCPServersConfig } from "@/types/mcp.js";
 import type { SearchConfig } from "../../cli/config/schema.js";
 import { createLogger } from "../../logger.js";
 import { createBackgroundTerminalTool } from "../tools/background_terminal.js";
+import { createBrowserControlTool } from "../tools/browser_control.js";
 import { createCodeSearchTool } from "../tools/code_search.js";
 import { createCommandExecuteTool } from "../tools/command_execute.js";
 import { createGitStatusTool } from "../tools/git_status.js";
@@ -29,6 +30,21 @@ export interface ToolOptions {
 	blockedCommands?: string[];
 	allowScriptExecution?: boolean;
 	timeout?: number;
+	browserProfile?: string;
+	browserTransport?: "auto" | "playwright" | "relay";
+	browserProfilesDirectory?: string;
+	browserProfiles?: Record<string, string>;
+	browserExtensions?: string[];
+	browserExtensionsDirectory?: string;
+	browserExtensionsById?: Record<string, string>;
+	browserDefaultExtensions?: string[];
+	browserRelay?: {
+		enabled?: boolean;
+		host?: string;
+		port?: number;
+		requireAuth?: boolean;
+		authToken?: string;
+	};
 	terminalOwnerId?: string;
 	terminalSessionManager?: TerminalSessionManager;
 	searchConfig?: SearchConfig;
@@ -79,6 +95,22 @@ export function createTool(
 
 		case "web_crawler":
 			return webCrawler;
+
+		case "browser_control":
+			return createBrowserControlTool({
+				workspace: runtimeWorkspace,
+				configWorkspace: workspace,
+				launchTimeoutMs: timeout,
+				browserProfile: options.browserProfile,
+				browserTransport: options.browserTransport,
+				profilesRootDir: options.browserProfilesDirectory,
+				profilePaths: options.browserProfiles,
+				browserExtensions: options.browserExtensions,
+				extensionsRootDir: options.browserExtensionsDirectory,
+				extensionPaths: options.browserExtensionsById,
+				defaultExtensions: options.browserDefaultExtensions,
+				relayConfig: options.browserRelay,
+			});
 
 		case "command_execute":
 			return createCommandExecuteTool(
@@ -182,6 +214,7 @@ export function getAvailableTools(): AvailableToolName[] {
 	return [
 		"internet_search",
 		"web_crawler",
+		"browser_control",
 		"command_execute",
 		"background_terminal",
 		"think",

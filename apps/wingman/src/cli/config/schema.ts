@@ -43,6 +43,111 @@ export const SkillsConfigSchema = z.object({
 
 export type SkillsConfig = z.infer<typeof SkillsConfigSchema>;
 
+export const BrowserTransportSchema = z
+	.enum(["auto", "playwright", "relay"])
+	.describe("Browser automation transport preference");
+
+export type BrowserTransport = z.infer<typeof BrowserTransportSchema>;
+
+export const BrowserConfigSchema = z.object({
+	profilesDir: z
+		.string()
+		.optional()
+		.default(".wingman/browser-profiles")
+		.describe(
+			"Base directory for named browser_control profiles (relative to workspace unless absolute)",
+		),
+	profiles: z
+		.record(z.string(), z.string())
+		.optional()
+		.default({})
+		.describe(
+			"Optional mapping of profile ID to explicit profile path (relative to workspace unless absolute)",
+		),
+	extensionsDir: z
+		.string()
+		.optional()
+		.default(".wingman/browser-extensions")
+		.describe(
+			"Base directory for named browser extensions (relative to workspace unless absolute)",
+		),
+	extensions: z
+		.record(z.string(), z.string())
+		.optional()
+		.default({})
+		.describe(
+			"Optional mapping of extension ID to unpacked extension path (relative to workspace unless absolute)",
+		),
+	defaultExtensions: z
+		.array(z.string().min(1))
+		.optional()
+		.default([])
+		.describe(
+			"Optional default extension IDs loaded for browser profile open and browser_control runs",
+		),
+	defaultProfile: z
+		.string()
+		.min(1)
+		.optional()
+		.describe(
+			"Optional default browser profile ID used when an agent does not specify browserProfile",
+		),
+	transport: BrowserTransportSchema.optional()
+		.default("auto")
+		.describe(
+			'Default browser transport preference for browser_control ("auto", "playwright", or "relay")',
+		),
+	relay: z
+		.object({
+			enabled: z
+				.boolean()
+				.optional()
+				.default(false)
+				.describe("Enable local browser relay server for extension/CDP bridging"),
+			host: z
+				.string()
+				.optional()
+				.default("127.0.0.1")
+				.describe("Relay bind host (security: keep this loopback)"),
+			port: z
+				.number()
+				.int()
+				.min(1)
+				.max(65535)
+				.optional()
+				.default(18792)
+				.describe("Relay bind port"),
+			requireAuth: z
+				.boolean()
+				.optional()
+				.default(true)
+				.describe("Require relay clients to authenticate with a token"),
+			authToken: z
+				.string()
+				.min(16)
+				.optional()
+				.describe("Relay shared secret for extension/CDP clients"),
+			maxMessageBytes: z
+				.number()
+				.int()
+				.min(1024)
+				.max(2_097_152)
+				.optional()
+				.default(262_144)
+				.describe("Maximum relay websocket message size"),
+		})
+		.optional()
+		.default({
+			enabled: false,
+			host: "127.0.0.1",
+			port: 18792,
+			requireAuth: true,
+			maxMessageBytes: 262_144,
+		}),
+});
+
+export type BrowserConfig = z.infer<typeof BrowserConfigSchema>;
+
 export const SummarizationConfigSchema = z.object({
 	enabled: z
 		.boolean()
@@ -350,6 +455,21 @@ export const WingmanConfigSchema = z.object({
 		repositoryOwner: "anthropics",
 		repositoryName: "skills",
 		skillsDirectory: "skills",
+	}),
+	browser: BrowserConfigSchema.optional().default({
+		profilesDir: ".wingman/browser-profiles",
+		profiles: {},
+		extensionsDir: ".wingman/browser-extensions",
+		extensions: {},
+		defaultExtensions: [],
+		transport: "auto",
+		relay: {
+			enabled: false,
+			host: "127.0.0.1",
+			port: 18792,
+			requireAuth: true,
+			maxMessageBytes: 262_144,
+		},
 	}),
 	gateway: GatewayConfigSchema.optional().default({
 		host: "127.0.0.1",

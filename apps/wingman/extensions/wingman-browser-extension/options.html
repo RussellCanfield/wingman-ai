@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wingman Browser Relay Options</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        background: linear-gradient(180deg, #f7f9fc, #eef3fb);
+        color: #0f172a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: linear-gradient(180deg, #0f172a, #111827);
+          color: #e5e7eb;
+        }
+      }
+
+      .card {
+        max-width: 760px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 14px;
+        padding: 20px;
+        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.1);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .card {
+          background: rgba(17, 24, 39, 0.9);
+          border-color: rgba(229, 231, 235, 0.2);
+          box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+        }
+      }
+
+      h1 {
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-size: 22px;
+      }
+
+      p {
+        margin: 0 0 10px;
+        line-height: 1.45;
+      }
+
+      .group {
+        margin-top: 16px;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      input {
+        width: 160px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(15, 23, 42, 0.3);
+        background: #ffffff;
+        color: #0f172a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        input {
+          border-color: rgba(229, 231, 235, 0.3);
+          background: #111827;
+          color: #e5e7eb;
+        }
+      }
+
+      .buttons {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-weight: 600;
+        background: #2563eb;
+        color: white;
+      }
+
+      button.secondary {
+        background: #475569;
+      }
+
+      code {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+      }
+
+      #status {
+        margin-top: 12px;
+        min-height: 18px;
+        font-size: 13px;
+      }
+
+      #status[data-level="ok"] {
+        color: #15803d;
+      }
+
+      #status[data-level="error"] {
+        color: #dc2626;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Wingman Browser Relay</h1>
+      <p>Click the extension button on a tab to attach or detach relay control.</p>
+      <p>
+        Docs: <a href="https://wingman.ai/docs/configuration/browser-automation" target="_blank" rel="noreferrer">wingman.ai/docs/configuration/browser-automation</a>
+      </p>
+
+      <div class="group">
+        <label for="relay-port">Relay Port</label>
+        <input id="relay-port" inputmode="numeric" pattern="[0-9]*" />
+      </div>
+
+      <div class="group">
+        <label for="relay-token">Relay Token</label>
+        <input id="relay-token" type="password" autocomplete="off" />
+        <p>
+          Generate with <code>wingman browser extension pair</code>, then paste
+          here.
+        </p>
+        <div class="buttons">
+          <button id="save" type="button">Save</button>
+          <button id="test" type="button" class="secondary">Test Connection</button>
+        </div>
+      </div>
+
+      <p class="group">
+        Relay URL: <code id="relay-url">http://127.0.0.1:18792/</code>
+      </p>
+      <p id="status"></p>
+    </div>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

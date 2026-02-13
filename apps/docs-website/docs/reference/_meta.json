@@ -1,5 +1,6 @@
 [
   { "type": "file", "name": "cli", "label": "CLI Reference" },
   { "type": "file", "name": "http-api", "label": "Gateway HTTP API" },
+  { "type": "file", "name": "browser-control", "label": "Browser Control" },
   { "type": "file", "name": "tools", "label": "Tool Catalog" }
 ]

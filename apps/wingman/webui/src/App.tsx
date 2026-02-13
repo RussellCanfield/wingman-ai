@@ -253,6 +253,10 @@ export const App: React.FC = () => {
 	}, [activeThreadId, threads]);
 
 	const currentAgentId = activeThread?.agentId || agentId;
+	const activeAgentSummary = useMemo(
+		() => agentCatalog.find((agent) => agent.id === currentAgentId),
+		[agentCatalog, currentAgentId],
+	);
 
 	useEffect(() => {
 		setAttachments([]);
@@ -2423,6 +2427,7 @@ export const App: React.FC = () => {
 		? "Auth required by gateway. Provide a token or password."
 		: "Auth is not required for this gateway.";
 	const hostLabel = `${config.gatewayHost}:${config.gatewayPort}`;
+	const isChatRoute = location.pathname === "/chat";
 
 	const createAgent = useCallback(
 		async (payload: {
@@ -2732,8 +2737,18 @@ export const App: React.FC = () => {
 				<div className="gridlines" />
 			</div>
 			<div className="noise z-[1]" />
-			<main className="relative z-10 mx-auto max-w-screen-2xl px-6 pb-16 pt-8">
-				<div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+			<main
+				className={`relative z-10 mx-auto max-w-screen-2xl px-6 ${
+					isChatRoute
+						? "pb-12 pt-8 lg:h-dvh lg:overflow-hidden lg:py-6"
+						: "pb-16 pt-8"
+				}`}
+			>
+				<div
+					className={`grid gap-6 lg:grid-cols-[280px_1fr] ${
+						isChatRoute ? "lg:h-full lg:min-h-0" : ""
+					}`}
+				>
 					{/* Desktop Sidebar - Hidden on mobile */}
 					<div className="hidden lg:block">
 						<Sidebar
@@ -2854,7 +2869,11 @@ export const App: React.FC = () => {
 						</>
 					)}
 
-					<section className="space-y-6">
+					<section
+						className={
+							isChatRoute ? "flex min-h-0 flex-col gap-6" : "space-y-6"
+						}
+					>
 						<HeroPanel
 							agentId={currentAgentId}
 							activeThreadName={activeThread?.name}
@@ -2871,6 +2890,7 @@ export const App: React.FC = () => {
 								element={
 									<ChatPage
 										agentId={currentAgentId}
+										activeAgent={activeAgentSummary}
 										activeThread={activeThread}
 										prompt={prompt}
 										attachments={attachments}

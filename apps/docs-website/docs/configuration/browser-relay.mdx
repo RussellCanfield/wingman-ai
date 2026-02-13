@@ -1,0 +1,85 @@
+# Relay Setup
+
+Use this mode when the agent should control a tab in your already-open Chrome session via the Wingman extension.
+
+## 1) Install extension mapping
+
+```bash
+wingman browser extension install --default
+wingman browser extension path wingman
+```
+
+Load the printed unpacked path in Chrome at `chrome://extensions` (Developer mode -> Load unpacked).
+
+## 2) Pair relay token
+
+```bash
+wingman browser extension pair
+```
+
+Copy the token from CLI output, then open extension options and set:
+
+- `relayPort` (default `18792`)
+- `relayToken` (the token from `pair`)
+
+## 3) Enable relay transport
+
+In `wingman.config.json`:
+
+```json
+{
+  "browser": {
+    "transport": "relay",
+    "relay": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 18792,
+      "requireAuth": true,
+      "authToken": "same-token-used-in-extension-options"
+    }
+  }
+}
+```
+
+Optional per-agent override:
+
+```json
+{
+  "name": "main",
+  "tools": ["browser_control"],
+  "browserTransport": "relay"
+}
+```
+
+## 4) Start gateway (relay host)
+
+```bash
+wingman gateway start
+```
+
+## 5) Attach a target tab
+
+1. Open Chrome to your target page (example: `https://robinhood.com`).
+2. Click the Wingman extension icon while that tab is active.
+3. Confirm badge/title indicates attached.
+
+Relay controls only attached tabs.
+
+## 6) Run a smoke test
+
+```bash
+wingman agent --agent main "Use browser_control once: navigate to https://robinhood.com, wait 2000 ms, extract_text from body maxChars 3000, and return the raw tool JSON."
+```
+
+Expected output fields:
+
+- `transportRequested`: `relay` (or `auto`)
+- `transport`: `relay-cdp`
+- `browser`: `chrome-relay`
+
+## Troubleshooting
+
+- Extension not visible in toolbar: pin it from the Chrome puzzle icon.
+- `Relay token is not configured`: run `wingman browser extension pair` and paste token into extension options.
+- No tab control: make sure you clicked the extension icon on the active target tab to attach it.
+- `No extension is connected to browser relay`: gateway not running, token mismatch, or extension not attached.

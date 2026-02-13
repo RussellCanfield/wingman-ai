@@ -1,5 +1,8 @@
 [
   { "type": "file", "name": "wingman-config", "label": "wingman.config.json" },
+  { "type": "file", "name": "browser-automation", "label": "Browser Automation" },
+  { "type": "file", "name": "browser-playwright", "label": "Browser Playwright Setup" },
+  { "type": "file", "name": "browser-relay", "label": "Browser Relay Setup" },
   { "type": "file", "name": "providers", "label": "Providers & Models" },
   { "type": "file", "name": "agents", "label": "Agents & Sub-Agents" },
   { "type": "file", "name": "gateway", "label": "Gateway Settings" },

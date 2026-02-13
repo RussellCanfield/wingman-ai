@@ -68,6 +68,7 @@ tsconfig.tsbuildinfo
 **/.wingman/webhooks.json
 **/.wingman/memories
 **/.wingman/routines.json
+**/.wingman/browser-profiles
 
 .tmp
 

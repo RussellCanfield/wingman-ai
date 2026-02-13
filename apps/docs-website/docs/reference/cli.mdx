@@ -1,5 +1,10 @@
 # CLI Reference
 
+## Global options
+
+- `--workspace <path>`: workspace root to use for `.wingman` config, agents, browser profiles, and extensions
+- `--config-dir <dir>`: config directory name (default: `.wingman`)
+
 ## wingman agent
 
 Run an agent with a prompt.
@@ -31,20 +36,21 @@ wingman init <agent-name>
 Options:
 
 - `--agent <name>`
+- `--mode <name>` (`onboard` | `sync`)
+- `--only <targets>` (`config,agents,provider`)
 - `--agents <list>` (comma-separated bundled agents)
 - `--model <provider:model>`
 - `--provider <name>` (anthropic | openai | codex | openrouter | copilot | xai)
 - `--token` / `--api-key`
 - `--fs-root <path>`
-- `--skip-config`, `--skip-agent`, `--skip-provider`
 - `--merge`, `--force`, `--yes`
 
 Bundled agent sync (no config/provider changes):
 
 ```bash
-wingman init --skip-config --skip-provider
-wingman init --skip-config --skip-provider --agents main,coding
-wingman init --skip-config --skip-provider --force
+wingman init --mode sync --only agents
+wingman init --mode sync --only agents --agents main,coding
+wingman init --mode sync --only agents --force
 ```
 
 ## wingman provider
@@ -63,6 +69,30 @@ wingman skill install <name>
 wingman skill list
 wingman skill remove <name>
 ```
+
+## wingman browser
+
+Browser command details live on the dedicated setup page:
+[Browser Automation](/configuration/browser-automation).
+
+Mode-specific guides:
+
+- [Playwright Setup](/configuration/browser-playwright)
+- [Relay Setup](/configuration/browser-relay)
+
+```bash
+wingman browser profile init <profile-id>
+wingman browser profile open [profile-id]
+wingman browser extension install [extension-id]
+wingman browser extension pair
+wingman browser extension path <extension-id>
+wingman browser extension list
+```
+
+Notes:
+
+- `wingman browser extension install` with no ID installs Wingman's bundled extension as `wingman`.
+- `wingman browser extension pair` enables secure local relay settings and generates a relay token for the extension options page.
 
 ## wingman gateway
 

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Wingman Browser Relay",
+  "version": "0.2.0",
+  "description": "Connect active Chrome tabs to Wingman's local browser relay.",
+  "permissions": ["debugger", "tabs", "activeTab", "storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Wingman Relay (click to attach or detach)"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}
