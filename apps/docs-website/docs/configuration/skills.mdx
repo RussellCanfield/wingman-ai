@@ -41,6 +41,8 @@ Security scan notes:
 - Skill installs are staged, validated, scanned, and only then copied into the active skills directory.
 - Default scanner execution uses `uvx` + `mcp-scan`.
 - Wingman checks for `uv` only when `skills.security.scanOnInstall` is enabled and the scanner command is `uv`/`uvx`.
+- Set `"scanOnInstall": false` to disable scanning for `wingman skill install`.
+- If `uv` is missing while scan is enabled, install fails with an error (no interactive prompt).
 
 ## Where skills live
 

@@ -136,3 +136,4 @@ Behavior notes:
 - When disabled (`enabled: false`), MCP servers run exactly as configured.
 - When enabled, Wingman rewrites stdio MCP process launches to execute through the proxy command.
 - Wingman checks for `uv` only when this feature is enabled and the proxy command is `uv`/`uvx`.
+- If `uv` is missing in this mode, gateway startup fails with an error (no interactive prompt).
