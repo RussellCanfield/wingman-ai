@@ -78,9 +78,31 @@ describe("CLI Config Loader", () => {
 					outputMode: "auto",
 				},
 				skills: {
+					provider: "github",
 					repositoryOwner: "anthropics",
 					repositoryName: "skills",
+					clawhubBaseUrl: "https://clawhub.ai",
 					skillsDirectory: "skills",
+					security: {
+						scanOnInstall: true,
+						scannerCommand: "uvx",
+						scannerArgs: [
+							"--from",
+							"mcp-scan>=0.4,<0.5",
+							"mcp-scan",
+							"--json",
+							"--skills",
+						],
+						blockIssueCodes: [
+							"MCP501",
+							"MCP506",
+							"MCP507",
+							"MCP508",
+							"MCP509",
+							"MCP510",
+							"MCP511",
+						],
+					},
 				},
 				browser: {
 					profilesDir: ".wingman/browser-profiles",
@@ -112,6 +134,13 @@ describe("CLI Config Loader", () => {
 						allowInsecureAuth: false,
 					},
 					dynamicUiEnabled: true,
+					mcpProxy: {
+						enabled: false,
+						command: "uvx",
+						baseArgs: ["invariant-gateway@latest", "mcp"],
+						projectName: "wingman-gateway",
+						pushExplorer: false,
+					},
 					adapters: {},
 				},
 				agents: {

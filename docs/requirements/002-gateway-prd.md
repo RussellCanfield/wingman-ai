@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.7
+**Version:** 1.8
 **Status:** In Development
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-15
 
 ---
 
@@ -993,6 +993,15 @@ Attachment handling notes:
       "allowInsecureAuth": false
     },
     "dynamicUiEnabled": true,
+    "mcpProxy": {
+      "enabled": false,
+      "command": "uvx",
+      "baseArgs": ["invariant-gateway@latest", "mcp"],
+      "projectName": "wingman-gateway",
+      "pushExplorer": false,
+      "apiKey": "optional-key",
+      "apiUrl": "optional-url"
+    },
     "nodes": {
       "enabled": true,
       "pairingRequired": true,
@@ -1037,6 +1046,13 @@ Discord adapter notes:
 
 Dynamic UI notes:
 - `dynamicUiEnabled`: when false, clients ignore UI render specs and agents should respond with text only.
+
+MCP proxy notes:
+- `gateway.mcpProxy.enabled` wraps stdio MCP commands with a proxy runtime.
+- When disabled, MCP processes run directly with their configured command/args.
+- Startup dependency checks for `uv` must be conditional:
+  - run only when `gateway.mcpProxy.enabled` is true
+  - and only when proxy command is `uv`/`uvx`
 
 ### Session Working Folder (Control UI)
 - Each session can optionally set a working folder (`workdir`).

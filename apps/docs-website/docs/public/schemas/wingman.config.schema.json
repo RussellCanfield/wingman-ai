@@ -1,0 +1,1466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getwingmanai.com/schemas/wingman.config.schema.json",
+  "title": "Wingman Config",
+  "description": "Schema for .wingman/wingman.config.json",
+  "type": "object",
+  "properties": {
+    "logLevel": {
+      "default": "info",
+      "type": "string",
+      "enum": [
+        "debug",
+        "info",
+        "warn",
+        "error",
+        "silent"
+      ]
+    },
+    "defaultAgent": {
+      "type": "string"
+    },
+    "recursionLimit": {
+      "default": 5000,
+      "type": "number",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "summarization": {
+      "default": {
+        "enabled": true,
+        "maxTokensBeforeSummary": 12000,
+        "messagesToKeep": 8
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Enable conversation history summarization",
+          "type": "boolean"
+        },
+        "maxTokensBeforeSummary": {
+          "default": 12000,
+          "description": "Token threshold before summarizing conversation history",
+          "type": "number",
+          "minimum": 1000,
+          "maximum": 1000000
+        },
+        "messagesToKeep": {
+          "default": 8,
+          "description": "How many most recent messages to keep after summarization",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "enabled",
+        "maxTokensBeforeSummary",
+        "messagesToKeep"
+      ],
+      "additionalProperties": false
+    },
+    "modelRetry": {
+      "default": {
+        "enabled": true,
+        "maxRetries": 2,
+        "backoffFactor": 2,
+        "initialDelayMs": 1000,
+        "maxDelayMs": 60000,
+        "jitter": true,
+        "onFailure": "continue"
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Enable retry middleware",
+          "type": "boolean"
+        },
+        "maxRetries": {
+          "default": 2,
+          "description": "Maximum number of retry attempts",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "backoffFactor": {
+          "default": 2,
+          "description": "Exponential backoff multiplier",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "initialDelayMs": {
+          "default": 1000,
+          "description": "Initial delay before first retry in milliseconds",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120000
+        },
+        "maxDelayMs": {
+          "default": 60000,
+          "description": "Maximum backoff delay in milliseconds",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 300000
+        },
+        "jitter": {
+          "default": true,
+          "description": "Add randomized jitter to retry delays",
+          "type": "boolean"
+        },
+        "onFailure": {
+          "default": "continue",
+          "description": "Behavior when retries are exhausted",
+          "type": "string",
+          "enum": [
+            "continue",
+            "error"
+          ]
+        }
+      },
+      "required": [
+        "enabled",
+        "maxRetries",
+        "backoffFactor",
+        "initialDelayMs",
+        "maxDelayMs",
+        "jitter",
+        "onFailure"
+      ],
+      "additionalProperties": false
+    },
+    "toolRetry": {
+      "default": {
+        "enabled": false,
+        "maxRetries": 2,
+        "backoffFactor": 2,
+        "initialDelayMs": 1000,
+        "maxDelayMs": 60000,
+        "jitter": true,
+        "onFailure": "continue"
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Enable retry middleware",
+          "type": "boolean"
+        },
+        "maxRetries": {
+          "default": 2,
+          "description": "Maximum number of retry attempts",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "backoffFactor": {
+          "default": 2,
+          "description": "Exponential backoff multiplier",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "initialDelayMs": {
+          "default": 1000,
+          "description": "Initial delay before first retry in milliseconds",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120000
+        },
+        "maxDelayMs": {
+          "default": 60000,
+          "description": "Maximum backoff delay in milliseconds",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 300000
+        },
+        "jitter": {
+          "default": true,
+          "description": "Add randomized jitter to retry delays",
+          "type": "boolean"
+        },
+        "onFailure": {
+          "default": "continue",
+          "description": "Behavior when retries are exhausted",
+          "type": "string",
+          "enum": [
+            "continue",
+            "error"
+          ]
+        },
+        "tools": {
+          "description": "Optional list of tool names to apply retry logic to",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "maxRetries",
+        "backoffFactor",
+        "initialDelayMs",
+        "maxDelayMs",
+        "jitter",
+        "onFailure"
+      ],
+      "additionalProperties": false
+    },
+    "humanInTheLoop": {
+      "default": {
+        "enabled": false,
+        "interruptOn": {}
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Enable human-in-the-loop tool approval",
+          "type": "boolean"
+        },
+        "interruptOn": {
+          "default": {},
+          "description": "Per-tool approval policy mapping",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "allowedDecisions": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "approve",
+                        "edit",
+                        "reject"
+                      ]
+                    },
+                    "description": "Allowed decisions for this tool"
+                  },
+                  "description": {
+                    "description": "Optional custom review prompt for this tool",
+                    "type": "string"
+                  },
+                  "argsSchema": {
+                    "description": "Optional argument schema for edit decisions",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "allowedDecisions"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "interruptOn"
+      ],
+      "additionalProperties": false
+    },
+    "toolHooks": {
+      "description": "Global tool hooks configuration",
+      "type": "object",
+      "properties": {
+        "PreToolUse": {
+          "description": "Hooks that fire before tool execution (can block)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "Pattern to match tool names (pipe-separated, wildcard, or regex)",
+                "type": "string"
+              },
+              "hooks": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "command",
+                      "description": "Type of hook - currently only 'command' is supported"
+                    },
+                    "command": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Shell command to execute"
+                    },
+                    "timeout": {
+                      "default": 60,
+                      "description": "Timeout in seconds (default: 60)",
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "command",
+                    "timeout"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Array of hooks to execute when pattern matches"
+              }
+            },
+            "required": [
+              "hooks"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "PostToolUse": {
+          "description": "Hooks that fire after tool completes (non-blocking)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "Pattern to match tool names (pipe-separated, wildcard, or regex)",
+                "type": "string"
+              },
+              "hooks": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "command",
+                      "description": "Type of hook - currently only 'command' is supported"
+                    },
+                    "command": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Shell command to execute"
+                    },
+                    "timeout": {
+                      "default": 60,
+                      "description": "Timeout in seconds (default: 60)",
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "command",
+                    "timeout"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Array of hooks to execute when pattern matches"
+              }
+            },
+            "required": [
+              "hooks"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "Stop": {
+          "description": "Hooks that fire when agent completes (non-blocking)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hooks": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "command",
+                      "description": "Type of hook - currently only 'command' is supported"
+                    },
+                    "command": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Shell command to execute"
+                    },
+                    "timeout": {
+                      "default": 60,
+                      "description": "Timeout in seconds (default: 60)",
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "command",
+                    "timeout"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Array of hooks to execute when agent stops"
+              }
+            },
+            "required": [
+              "hooks"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "hooks": {
+      "description": "Internal hook configuration",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "entries": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "default": true,
+                "type": "boolean"
+              },
+              "deliver": {
+                "type": "object",
+                "properties": {
+                  "agentId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionKey": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "agentId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "load": {
+          "type": "object",
+          "properties": {
+            "extraDirs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "search": {
+      "default": {
+        "provider": "duckduckgo",
+        "maxResults": 5
+      },
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "duckduckgo",
+          "description": "Search provider to use",
+          "type": "string",
+          "enum": [
+            "duckduckgo",
+            "perplexity"
+          ]
+        },
+        "maxResults": {
+          "default": 5,
+          "description": "Maximum number of search results to return",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 20
+        }
+      },
+      "required": [
+        "provider",
+        "maxResults"
+      ],
+      "additionalProperties": false
+    },
+    "voice": {
+      "default": {
+        "provider": "web_speech",
+        "defaultPolicy": "off",
+        "webSpeech": {},
+        "elevenlabs": {}
+      },
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "web_speech",
+          "type": "string",
+          "enum": [
+            "web_speech",
+            "elevenlabs"
+          ]
+        },
+        "defaultPolicy": {
+          "default": "off",
+          "type": "string",
+          "enum": [
+            "off",
+            "manual",
+            "auto"
+          ]
+        },
+        "webSpeech": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "voiceName": {
+              "type": "string"
+            },
+            "lang": {
+              "type": "string"
+            },
+            "rate": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 4
+            },
+            "pitch": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "volume": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "elevenlabs": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "voiceId": {
+              "type": "string"
+            },
+            "modelId": {
+              "type": "string"
+            },
+            "stability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "similarityBoost": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "style": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerBoost": {
+              "type": "boolean"
+            },
+            "speed": {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 4
+            },
+            "outputFormat": {
+              "type": "string"
+            },
+            "optimizeStreamingLatency": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 4
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "provider",
+        "defaultPolicy",
+        "webSpeech",
+        "elevenlabs"
+      ],
+      "additionalProperties": false
+    },
+    "cli": {
+      "default": {
+        "theme": "default",
+        "outputMode": "auto"
+      },
+      "type": "object",
+      "properties": {
+        "theme": {
+          "default": "default",
+          "type": "string"
+        },
+        "outputMode": {
+          "default": "auto",
+          "type": "string",
+          "enum": [
+            "auto",
+            "interactive",
+            "json"
+          ]
+        }
+      },
+      "required": [
+        "theme",
+        "outputMode"
+      ],
+      "additionalProperties": false
+    },
+    "skills": {
+      "default": {
+        "provider": "github",
+        "repositoryOwner": "anthropics",
+        "repositoryName": "skills",
+        "clawhubBaseUrl": "https://clawhub.ai",
+        "skillsDirectory": "skills",
+        "security": {
+          "scanOnInstall": true,
+          "scannerCommand": "uvx",
+          "scannerArgs": [
+            "--from",
+            "mcp-scan>=0.4,<0.5",
+            "mcp-scan",
+            "--json",
+            "--skills"
+          ],
+          "blockIssueCodes": [
+            "MCP501",
+            "MCP506",
+            "MCP507",
+            "MCP508",
+            "MCP509",
+            "MCP510",
+            "MCP511"
+          ]
+        }
+      },
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "github",
+          "description": "Skill source provider",
+          "type": "string",
+          "enum": [
+            "github",
+            "clawhub"
+          ]
+        },
+        "repositoryOwner": {
+          "default": "anthropics",
+          "description": "GitHub repository owner for skills",
+          "type": "string"
+        },
+        "repositoryName": {
+          "default": "skills",
+          "description": "GitHub repository name for skills",
+          "type": "string"
+        },
+        "githubToken": {
+          "description": "GitHub personal access token for higher API rate limits",
+          "type": "string"
+        },
+        "clawhubBaseUrl": {
+          "default": "https://clawhub.ai",
+          "description": "Base URL for ClawHub skill API",
+          "type": "string"
+        },
+        "skillsDirectory": {
+          "default": "skills",
+          "description": "Directory to install skills in",
+          "type": "string"
+        },
+        "security": {
+          "default": {
+            "scanOnInstall": true,
+            "scannerCommand": "uvx",
+            "scannerArgs": [
+              "--from",
+              "mcp-scan>=0.4,<0.5",
+              "mcp-scan",
+              "--json",
+              "--skills"
+            ],
+            "blockIssueCodes": [
+              "MCP501",
+              "MCP506",
+              "MCP507",
+              "MCP508",
+              "MCP509",
+              "MCP510",
+              "MCP511"
+            ]
+          },
+          "type": "object",
+          "properties": {
+            "scanOnInstall": {
+              "default": true,
+              "description": "Run a security scan for downloaded skills before installation",
+              "type": "boolean"
+            },
+            "scannerCommand": {
+              "default": "uvx",
+              "description": "Scanner runner command",
+              "type": "string"
+            },
+            "scannerArgs": {
+              "default": [
+                "--from",
+                "mcp-scan>=0.4,<0.5",
+                "mcp-scan",
+                "--json",
+                "--skills"
+              ],
+              "description": "Arguments prepended before the skill path for scanner execution",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "blockIssueCodes": {
+              "default": [
+                "MCP501",
+                "MCP506",
+                "MCP507",
+                "MCP508",
+                "MCP509",
+                "MCP510",
+                "MCP511"
+              ],
+              "description": "Scanner issue codes that block installation",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "scanOnInstall",
+            "scannerCommand",
+            "scannerArgs",
+            "blockIssueCodes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "provider",
+        "repositoryOwner",
+        "repositoryName",
+        "clawhubBaseUrl",
+        "skillsDirectory",
+        "security"
+      ],
+      "additionalProperties": false
+    },
+    "browser": {
+      "default": {
+        "profilesDir": ".wingman/browser-profiles",
+        "profiles": {},
+        "extensionsDir": ".wingman/browser-extensions",
+        "extensions": {},
+        "defaultExtensions": [],
+        "transport": "auto",
+        "relay": {
+          "enabled": false,
+          "host": "127.0.0.1",
+          "port": 18792,
+          "requireAuth": true,
+          "maxMessageBytes": 262144
+        }
+      },
+      "type": "object",
+      "properties": {
+        "profilesDir": {
+          "default": ".wingman/browser-profiles",
+          "description": "Base directory for named browser_control profiles (relative to workspace unless absolute)",
+          "type": "string"
+        },
+        "profiles": {
+          "default": {},
+          "description": "Optional mapping of profile ID to explicit profile path (relative to workspace unless absolute)",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "extensionsDir": {
+          "default": ".wingman/browser-extensions",
+          "description": "Base directory for named browser extensions (relative to workspace unless absolute)",
+          "type": "string"
+        },
+        "extensions": {
+          "default": {},
+          "description": "Optional mapping of extension ID to unpacked extension path (relative to workspace unless absolute)",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "defaultExtensions": {
+          "default": [],
+          "description": "Optional default extension IDs loaded for browser profile open and browser_control runs",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "defaultProfile": {
+          "description": "Optional default browser profile ID used when an agent does not specify browserProfile",
+          "type": "string",
+          "minLength": 1
+        },
+        "transport": {
+          "default": "auto",
+          "description": "Default browser transport preference for browser_control (\"auto\", \"playwright\", or \"relay\")",
+          "type": "string",
+          "enum": [
+            "auto",
+            "playwright",
+            "relay"
+          ]
+        },
+        "relay": {
+          "default": {
+            "enabled": false,
+            "host": "127.0.0.1",
+            "port": 18792,
+            "requireAuth": true,
+            "maxMessageBytes": 262144
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Enable local browser relay server for extension/CDP bridging",
+              "type": "boolean"
+            },
+            "host": {
+              "default": "127.0.0.1",
+              "description": "Relay bind host (security: keep this loopback)",
+              "type": "string"
+            },
+            "port": {
+              "default": 18792,
+              "description": "Relay bind port",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "requireAuth": {
+              "default": true,
+              "description": "Require relay clients to authenticate with a token",
+              "type": "boolean"
+            },
+            "authToken": {
+              "description": "Relay shared secret for extension/CDP clients",
+              "type": "string",
+              "minLength": 16
+            },
+            "maxMessageBytes": {
+              "default": 262144,
+              "description": "Maximum relay websocket message size",
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 2097152
+            }
+          },
+          "required": [
+            "enabled",
+            "host",
+            "port",
+            "requireAuth",
+            "maxMessageBytes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "profilesDir",
+        "profiles",
+        "extensionsDir",
+        "extensions",
+        "defaultExtensions",
+        "transport",
+        "relay"
+      ],
+      "additionalProperties": false
+    },
+    "gateway": {
+      "default": {
+        "host": "127.0.0.1",
+        "port": 18789,
+        "fsRoots": [],
+        "auth": {
+          "mode": "none",
+          "allowTailscale": false
+        },
+        "controlUi": {
+          "enabled": true,
+          "port": 18790,
+          "pairingRequired": true,
+          "allowInsecureAuth": false
+        },
+        "dynamicUiEnabled": true,
+        "mcpProxy": {
+          "enabled": false,
+          "command": "uvx",
+          "baseArgs": [
+            "invariant-gateway@latest",
+            "mcp"
+          ],
+          "projectName": "wingman-gateway",
+          "pushExplorer": false
+        },
+        "adapters": {}
+      },
+      "type": "object",
+      "properties": {
+        "host": {
+          "default": "127.0.0.1",
+          "type": "string"
+        },
+        "port": {
+          "default": 18789,
+          "type": "number",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "stateDir": {
+          "type": "string"
+        },
+        "fsRoots": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "auth": {
+          "default": {
+            "mode": "none",
+            "allowTailscale": false
+          },
+          "type": "object",
+          "properties": {
+            "mode": {
+              "default": "none",
+              "type": "string",
+              "enum": [
+                "token",
+                "password",
+                "none"
+              ]
+            },
+            "token": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "allowTailscale": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "mode",
+            "allowTailscale"
+          ],
+          "additionalProperties": false
+        },
+        "controlUi": {
+          "default": {
+            "enabled": true,
+            "port": 18790,
+            "pairingRequired": true,
+            "allowInsecureAuth": false
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "port": {
+              "default": 18790,
+              "type": "number",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "pairingRequired": {
+              "default": true,
+              "type": "boolean"
+            },
+            "allowInsecureAuth": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled",
+            "port",
+            "pairingRequired",
+            "allowInsecureAuth"
+          ],
+          "additionalProperties": false
+        },
+        "dynamicUiEnabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mcpProxy": {
+          "default": {
+            "enabled": false,
+            "command": "uvx",
+            "baseArgs": [
+              "invariant-gateway@latest",
+              "mcp"
+            ],
+            "projectName": "wingman-gateway",
+            "pushExplorer": false
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Enable MCP stdio proxy wrapper for gateway agent execution",
+              "type": "boolean"
+            },
+            "command": {
+              "default": "uvx",
+              "description": "Proxy runner command",
+              "type": "string"
+            },
+            "baseArgs": {
+              "default": [
+                "invariant-gateway@latest",
+                "mcp"
+              ],
+              "description": "Base arguments used before gateway proxy flags",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "projectName": {
+              "default": "wingman-gateway",
+              "description": "Project name passed to the proxy runtime",
+              "type": "string"
+            },
+            "pushExplorer": {
+              "default": false,
+              "description": "Enable remote trace push in proxy runtime",
+              "type": "boolean"
+            },
+            "apiKey": {
+              "description": "Optional proxy API key",
+              "type": "string"
+            },
+            "apiUrl": {
+              "description": "Optional proxy API URL",
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled",
+            "command",
+            "baseArgs",
+            "projectName",
+            "pushExplorer"
+          ],
+          "additionalProperties": false
+        },
+        "adapters": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "discord": {
+              "default": {
+                "enabled": false,
+                "mentionOnly": true,
+                "allowBots": false,
+                "allowedGuilds": [],
+                "allowedChannels": [],
+                "channelSessions": {},
+                "sessionCommand": "!session",
+                "responseChunkSize": 1900
+              },
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "token": {
+                  "type": "string"
+                },
+                "mentionOnly": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "allowBots": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "allowedGuilds": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "allowedChannels": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "channelSessions": {
+                  "default": {},
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "sessionCommand": {
+                  "default": "!session",
+                  "type": "string"
+                },
+                "gatewayUrl": {
+                  "type": "string"
+                },
+                "gatewayToken": {
+                  "type": "string"
+                },
+                "gatewayPassword": {
+                  "type": "string"
+                },
+                "responseChunkSize": {
+                  "default": 1900,
+                  "type": "number",
+                  "minimum": 500,
+                  "maximum": 2000
+                }
+              },
+              "required": [
+                "enabled",
+                "mentionOnly",
+                "allowBots",
+                "allowedGuilds",
+                "allowedChannels",
+                "channelSessions",
+                "sessionCommand",
+                "responseChunkSize"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "fsRoots",
+        "auth",
+        "controlUi",
+        "dynamicUiEnabled",
+        "mcpProxy",
+        "adapters"
+      ],
+      "additionalProperties": false
+    },
+    "agents": {
+      "default": {
+        "list": [],
+        "bindings": []
+      },
+      "type": "object",
+      "properties": {
+        "list": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "default": {
+                "type": "boolean"
+              },
+              "workspace": {
+                "type": "string"
+              },
+              "agentDir": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "bindings": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agentId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "match": {
+                "type": "object",
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "accountId": {
+                    "type": "string"
+                  },
+                  "guildId": {
+                    "type": "string"
+                  },
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "peer": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "dm",
+                          "group",
+                          "channel"
+                        ]
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "channel"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "agentId",
+              "match"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "list",
+        "bindings"
+      ],
+      "additionalProperties": false
+    },
+    "mcp": {
+      "description": "Global MCP server configurations",
+      "type": "object",
+      "properties": {
+        "servers": {
+          "description": "List of MCP servers",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Unique server name"
+                  },
+                  "transport": {
+                    "type": "string",
+                    "const": "stdio"
+                  },
+                  "defaultToolTimeout": {
+                    "description": "Default timeout in milliseconds for tool execution",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "command": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Command to execute (e.g., 'node', 'python')"
+                  },
+                  "args": {
+                    "description": "Command arguments",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "env": {
+                    "description": "Environment variables",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "transport",
+                  "command"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Unique server name"
+                  },
+                  "transport": {
+                    "type": "string",
+                    "const": "sse"
+                  },
+                  "defaultToolTimeout": {
+                    "description": "Default timeout in milliseconds for tool execution",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Server URL"
+                  },
+                  "headers": {
+                    "description": "HTTP headers for authentication",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "transport",
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "logLevel",
+    "recursionLimit",
+    "summarization",
+    "modelRetry",
+    "toolRetry",
+    "humanInTheLoop",
+    "search",
+    "voice",
+    "cli",
+    "skills",
+    "browser",
+    "gateway",
+    "agents"
+  ],
+  "additionalProperties": false
+}

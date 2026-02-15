@@ -63,9 +63,18 @@ export interface SkillCommandArgs {
  * Options for skill repository operations
  */
 export interface SkillRepositoryOptions {
+	provider?: "github" | "clawhub";
 	repositoryOwner?: string;
 	repositoryName?: string;
 	githubToken?: string;
+	clawhubBaseUrl?: string;
+}
+
+export interface SkillSecurityOptions {
+	scanOnInstall?: boolean;
+	scannerCommand?: string;
+	scannerArgs?: string[];
+	blockIssueCodes?: string[];
 }
 
 /**
@@ -75,4 +84,5 @@ export interface SkillServiceOptions {
 	workspace: string;
 	skillsDirectory?: string;
 	outputMode: OutputMode;
+	security?: SkillSecurityOptions;
 }

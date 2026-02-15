@@ -2,7 +2,7 @@
 	"name": "@wingman-ai/gateway",
 	"displayName": "Wingman Agent",
 	"description": "Wingman-AI agentic coding assistant that works with Anthropic, OpenAI, Google, xAI and LMStudio.",
-	"version": "0.3.2",
+	"version": "0.4.0",
 	"main": "index.js",
 	"bin": {
 		"wingman": "./bin/wingman"
@@ -48,6 +48,7 @@
 		"gateway:stop": "./bin/wingman gateway stop",
 		"gateway:status": "./bin/wingman gateway status",
 		"debug:terminal-probe": "bun ./scripts/observe-terminal-events.ts",
+		"schema:export": "bun ./scripts/export-wingman-config-schema.ts",
 		"mcp:finance": "bun ./src/tools/mcp-finance.ts",
 		"mcp:fal-ai": "bun ./src/tools/mcp-fal-ai.ts"
 	},

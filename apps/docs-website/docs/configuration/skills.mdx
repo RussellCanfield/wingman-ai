@@ -1,6 +1,6 @@
 # Skills
 
-Skills extend Wingman with reusable workflows. Wingman can browse and install skills from a GitHub repository.
+Skills extend Wingman with reusable workflows. Wingman can browse and install skills from GitHub or ClawHub.
 
 ## Commands
 
@@ -16,15 +16,31 @@ wingman skill remove pdf
 ```json
 {
   "skills": {
+    "provider": "github",
     "repositoryOwner": "anthropics",
     "repositoryName": "skills",
     "githubToken": "optional-token",
-    "skillsDirectory": "skills"
+    "clawhubBaseUrl": "https://clawhub.ai",
+    "skillsDirectory": "skills",
+    "security": {
+      "scanOnInstall": true,
+      "scannerCommand": "uvx",
+      "scannerArgs": ["--from", "mcp-scan>=0.4,<0.5", "mcp-scan", "--json", "--skills"],
+      "blockIssueCodes": ["MCP501", "MCP506", "MCP507", "MCP508", "MCP509", "MCP510", "MCP511"]
+    }
   }
 }
 ```
 
-You can also set `GITHUB_TOKEN` for higher GitHub API rate limits.
+Provider notes:
+- `provider: "github"` uses `repositoryOwner` and `repositoryName`.
+- `provider: "clawhub"` uses `clawhubBaseUrl`.
+- `GITHUB_TOKEN` is still supported for GitHub API rate limits.
+
+Security scan notes:
+- Skill installs are staged, validated, scanned, and only then copied into the active skills directory.
+- Default scanner execution uses `uvx` + `mcp-scan`.
+- Wingman checks for `uv` only when `skills.security.scanOnInstall` is enabled and the scanner command is `uv`/`uvx`.
 
 ## Where skills live
 

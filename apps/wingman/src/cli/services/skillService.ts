@@ -1,13 +1,16 @@
 import * as fs from "node:fs/promises";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import type {
 	InstalledSkill,
+	SkillSecurityOptions,
 	SkillServiceOptions,
 } from "../types/skill.js";
 import type { SkillRepository } from "./skillRepository.js";
 import type { OutputManager } from "../core/outputManager.js";
 import { getLogFilePath, type Logger } from "../../logger.js";
+import { scanSkillDirectory } from "./skillSecurityScanner.js";
 
 export class SkillService {
 	private readonly workspace: string;
@@ -15,6 +18,7 @@ export class SkillService {
 	private readonly repository: SkillRepository;
 	private readonly outputManager: OutputManager;
 	private readonly logger: Logger;
+	private readonly security: SkillSecurityOptions;
 
 	constructor(
 		repository: SkillRepository,
@@ -27,6 +31,7 @@ export class SkillService {
 		this.logger = logger;
 		this.workspace = options.workspace;
 		this.skillsDirectory = options.skillsDirectory || "skills";
+		this.security = options.security || {};
 	}
 
 	/**
@@ -99,6 +104,8 @@ export class SkillService {
 	 * Install a skill from the repository
 	 */
 	async installSkill(skillName: string): Promise<void> {
+		let stagingRoot: string | null = null;
+		let shouldReplaceExisting = false;
 		try {
 			// Validate skill name format
 			const nameRegex = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -124,9 +131,7 @@ export class SkillService {
 						console.log("\nInstallation cancelled.");
 						return;
 					}
-
-					this.logger.info("Removing existing skill...");
-					await fs.rm(skillPath, { recursive: true, force: true });
+					shouldReplaceExisting = true;
 				} else {
 					// JSON mode - fail with error
 					throw new Error(
@@ -154,17 +159,17 @@ export class SkillService {
 			// Download all skill files
 			this.logger.info("Downloading skill files...");
 			const files = await this.repository.downloadSkill(skillName);
+			stagingRoot = await fs.mkdtemp(path.join(tmpdir(), "wingman-skill-"));
+			const stagedSkillPath = path.join(stagingRoot, skillName);
+			await fs.mkdir(stagedSkillPath, { recursive: true });
 
-			// Ensure skills directory exists
-			await fs.mkdir(this.getSkillsPath(), { recursive: true });
-
-			// Create skill directory
-			await fs.mkdir(skillPath, { recursive: true });
-
-			// Write all files
-			this.logger.info(`Writing ${files.size} files...`);
+			// Write all files to staging before validation + scanning.
+			this.logger.info(`Writing ${files.size} files to staging...`);
 			for (const [relativePath, content] of files) {
-				const filePath = path.join(skillPath, relativePath);
+				const filePath = this.resolveSafeInstallPath(
+					stagedSkillPath,
+					relativePath,
+				);
 				const fileDir = path.dirname(filePath);
 
 				// Ensure subdirectories exist
@@ -174,8 +179,20 @@ export class SkillService {
 				await fs.writeFile(filePath, content);
 			}
 
-			// Validate the installed SKILL.md
-			await this.validateSkillMd(skillPath);
+			await this.validateSkillMd(stagedSkillPath);
+			await scanSkillDirectory(stagedSkillPath, this.logger, this.security);
+
+			// Ensure skills directory exists
+			await fs.mkdir(this.getSkillsPath(), { recursive: true });
+
+			if (shouldReplaceExisting) {
+				this.logger.info("Replacing existing skill...");
+				await fs.rm(skillPath, { recursive: true, force: true });
+			}
+
+			// Create skill directory and copy validated content.
+			await fs.mkdir(skillPath, { recursive: true });
+			await fs.cp(stagedSkillPath, skillPath, { recursive: true, force: true });
 
 			if (this.outputManager.getMode() === "interactive") {
 				console.log(
@@ -208,6 +225,10 @@ export class SkillService {
 			}
 
 			throw error;
+		} finally {
+			if (stagingRoot) {
+				await fs.rm(stagingRoot, { recursive: true, force: true });
+			}
 		}
 	}
 
@@ -413,6 +434,30 @@ export class SkillService {
 				`Invalid SKILL.md: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
+	}
+
+	private resolveSafeInstallPath(root: string, relativePath: string): string {
+		const normalized = path.posix
+			.normalize(relativePath.replace(/\\/g, "/"))
+			.replace(/^\/+/, "");
+		if (!normalized || normalized === "." || normalized.startsWith("../")) {
+			throw new Error(
+				`Unsafe skill file path '${relativePath}' rejected during installation`,
+			);
+		}
+
+		const rootResolved = path.resolve(root);
+		const filePath = path.resolve(rootResolved, normalized);
+		if (
+			filePath !== rootResolved &&
+			!filePath.startsWith(rootResolved + path.sep)
+		) {
+			throw new Error(
+				`Unsafe skill file path '${relativePath}' rejected during installation`,
+			);
+		}
+
+		return filePath;
 	}
 
 	/**

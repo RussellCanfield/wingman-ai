@@ -23,6 +23,10 @@ export type SearchConfig = z.infer<typeof SearchConfigSchema>;
 
 // Zod schema for skills configuration
 export const SkillsConfigSchema = z.object({
+	provider: z
+		.enum(["github", "clawhub"])
+		.default("github")
+		.describe("Skill source provider"),
 	repositoryOwner: z
 		.string()
 		.default("anthropics")
@@ -35,10 +39,74 @@ export const SkillsConfigSchema = z.object({
 		.string()
 		.optional()
 		.describe("GitHub personal access token for higher API rate limits"),
+	clawhubBaseUrl: z
+		.string()
+		.default("https://clawhub.ai")
+		.describe("Base URL for ClawHub skill API"),
 	skillsDirectory: z
 		.string()
 		.default("skills")
 		.describe("Directory to install skills in"),
+	security: z
+		.object({
+			scanOnInstall: z
+				.boolean()
+				.optional()
+				.default(true)
+				.describe(
+					"Run a security scan for downloaded skills before installation",
+				),
+			scannerCommand: z
+				.string()
+				.optional()
+				.default("uvx")
+				.describe("Scanner runner command"),
+			scannerArgs: z
+				.array(z.string().min(1))
+				.optional()
+				.default([
+					"--from",
+					"mcp-scan>=0.4,<0.5",
+					"mcp-scan",
+					"--json",
+					"--skills",
+				])
+				.describe("Arguments prepended before the skill path for scanner execution"),
+			blockIssueCodes: z
+				.array(z.string().min(1))
+				.optional()
+				.default([
+					"MCP501",
+					"MCP506",
+					"MCP507",
+					"MCP508",
+					"MCP509",
+					"MCP510",
+					"MCP511",
+				])
+				.describe("Scanner issue codes that block installation"),
+		})
+		.optional()
+		.default({
+			scanOnInstall: true,
+			scannerCommand: "uvx",
+			scannerArgs: [
+				"--from",
+				"mcp-scan>=0.4,<0.5",
+				"mcp-scan",
+				"--json",
+				"--skills",
+			],
+			blockIssueCodes: [
+				"MCP501",
+				"MCP506",
+				"MCP507",
+				"MCP508",
+				"MCP509",
+				"MCP510",
+				"MCP511",
+			],
+		}),
 });
 
 export type SkillsConfig = z.infer<typeof SkillsConfigSchema>;
@@ -320,6 +388,50 @@ const GatewayAdaptersSchema = z
 	})
 	.default({});
 
+const GatewayMcpProxySchema = z
+	.object({
+		enabled: z
+			.boolean()
+			.optional()
+			.default(false)
+			.describe("Enable MCP stdio proxy wrapper for gateway agent execution"),
+		command: z
+			.string()
+			.optional()
+			.default("uvx")
+			.describe("Proxy runner command"),
+		baseArgs: z
+			.array(z.string().min(1))
+			.optional()
+			.default(["invariant-gateway@latest", "mcp"])
+			.describe("Base arguments used before gateway proxy flags"),
+		projectName: z
+			.string()
+			.optional()
+			.default("wingman-gateway")
+			.describe("Project name passed to the proxy runtime"),
+		pushExplorer: z
+			.boolean()
+			.optional()
+			.default(false)
+			.describe("Enable remote trace push in proxy runtime"),
+		apiKey: z
+			.string()
+			.optional()
+			.describe("Optional proxy API key"),
+		apiUrl: z
+			.string()
+			.optional()
+			.describe("Optional proxy API URL"),
+	})
+	.default({
+		enabled: false,
+		command: "uvx",
+		baseArgs: ["invariant-gateway@latest", "mcp"],
+		projectName: "wingman-gateway",
+		pushExplorer: false,
+	});
+
 export const GatewayConfigSchema = z
 	.object({
 		host: z.string().default("127.0.0.1"),
@@ -337,6 +449,13 @@ export const GatewayConfigSchema = z
 			allowInsecureAuth: false,
 		}),
 		dynamicUiEnabled: z.boolean().optional().default(true),
+		mcpProxy: GatewayMcpProxySchema.optional().default({
+			enabled: false,
+			command: "uvx",
+			baseArgs: ["invariant-gateway@latest", "mcp"],
+			projectName: "wingman-gateway",
+			pushExplorer: false,
+		}),
 		adapters: GatewayAdaptersSchema.optional().default({}),
 	})
 	.default({
@@ -354,6 +473,13 @@ export const GatewayConfigSchema = z
 			allowInsecureAuth: false,
 		},
 		dynamicUiEnabled: true,
+		mcpProxy: {
+			enabled: false,
+			command: "uvx",
+			baseArgs: ["invariant-gateway@latest", "mcp"],
+			projectName: "wingman-gateway",
+			pushExplorer: false,
+		},
 		adapters: {},
 	});
 
@@ -452,9 +578,31 @@ export const WingmanConfigSchema = z.object({
 		})
 		.default({ theme: "default", outputMode: "auto" }),
 	skills: SkillsConfigSchema.optional().default({
+		provider: "github",
 		repositoryOwner: "anthropics",
 		repositoryName: "skills",
+		clawhubBaseUrl: "https://clawhub.ai",
 		skillsDirectory: "skills",
+		security: {
+			scanOnInstall: true,
+			scannerCommand: "uvx",
+			scannerArgs: [
+				"--from",
+				"mcp-scan>=0.4,<0.5",
+				"mcp-scan",
+				"--json",
+				"--skills",
+			],
+			blockIssueCodes: [
+				"MCP501",
+				"MCP506",
+				"MCP507",
+				"MCP508",
+				"MCP509",
+				"MCP510",
+				"MCP511",
+			],
+		},
 	}),
 	browser: BrowserConfigSchema.optional().default({
 		profilesDir: ".wingman/browser-profiles",
@@ -486,6 +634,13 @@ export const WingmanConfigSchema = z.object({
 			allowInsecureAuth: false,
 		},
 		dynamicUiEnabled: true,
+		mcpProxy: {
+			enabled: false,
+			command: "uvx",
+			baseArgs: ["invariant-gateway@latest", "mcp"],
+			projectName: "wingman-gateway",
+			pushExplorer: false,
+		},
 		adapters: {},
 	}),
 	agents: AgentsConfigSchema.optional().default({

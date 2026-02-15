@@ -15,7 +15,12 @@ const getClientConfig = (
 ): {
 	mcpServers: Record<
 		string,
-		{ env: Record<string, string>; defaultToolTimeout?: number }
+		{
+			command: string;
+			args?: string[];
+			env: Record<string, string>;
+			defaultToolTimeout?: number;
+		}
 	>;
 } =>
 	(
@@ -23,7 +28,12 @@ const getClientConfig = (
 			buildClientConfig: () => {
 				mcpServers: Record<
 					string,
-					{ env: Record<string, string>; defaultToolTimeout?: number }
+					{
+						command: string;
+						args?: string[];
+						env: Record<string, string>;
+						defaultToolTimeout?: number;
+					}
 				>;
 			};
 		}
@@ -130,5 +140,54 @@ describe("MCPClientManager runtime env", () => {
 		const manager = new MCPClientManager(configs, testLogger);
 		const clientConfig = getClientConfig(manager);
 		expect(clientConfig.mcpServers["fal-ai"].defaultToolTimeout).toBe(300000);
+	});
+
+	it("wraps stdio servers with proxy command when enabled", () => {
+		const configs: MCPServersConfig[] = [
+			{
+				servers: [
+					{
+						name: "fal-ai",
+						transport: "stdio",
+						command: "bun",
+						args: ["run", "src/tools/mcp-fal-ai.ts"],
+						env: { EXISTING: "value" },
+					},
+				],
+			},
+		];
+
+		const manager = new MCPClientManager(configs, testLogger, {
+			proxyConfig: {
+				enabled: true,
+				command: "uvx",
+				baseArgs: ["invariant-gateway@latest", "mcp"],
+				projectName: "wingman-gateway",
+				apiKey: "test-api-key",
+				apiUrl: "https://explorer.invariantlabs.ai",
+			},
+		});
+		const clientConfig = getClientConfig(manager);
+		const server = clientConfig.mcpServers["fal-ai"];
+
+		expect(server.command).toBe("uvx");
+		expect(server.args).toEqual([
+			"invariant-gateway@latest",
+			"mcp",
+			"--project-name",
+			"wingman-gateway",
+			"--exec",
+			"bun",
+			"run",
+			"src/tools/mcp-fal-ai.ts",
+		]);
+		expect(server.env.EXISTING).toBe("value");
+		expect(server.env.INVARIANT_API_KEY).toBe("test-api-key");
+		expect(server.env.INVARIANT_API_URL).toBe(
+			"https://explorer.invariantlabs.ai",
+		);
+		expect(server.env.GUARDRAILS_API_URL).toBe(
+			"https://explorer.invariantlabs.ai",
+		);
 	});
 });

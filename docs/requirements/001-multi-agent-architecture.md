@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.10
-**Last Updated:** 2026-02-13
+**Version:** 1.2.11
+**Last Updated:** 2026-02-15
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -570,9 +570,20 @@ description: What the skill does
 
 ### Loading Strategy
 - Skills loaded from filesystem paths: `["/skills/"]`
-- Multiple sources supported
+- Registry-backed install sources supported: GitHub and ClawHub
 - Later sources override earlier ones
 - Applied to all subagents
+
+### Installation Security Requirements
+- Skill install flow must use staging:
+  - Download files to a temporary directory
+  - Validate `SKILL.md` structure and required metadata
+  - Run security scan before copying into active skills directory
+- Security scanning defaults to `mcp-scan` via `uvx` with configurable command/args
+- Blocking issue codes are configurable; default block list includes high-risk MCP codes (`MCP501`, `MCP506`-`MCP511`)
+- `uv` availability checks must be conditional:
+  - only when scan-on-install is enabled
+  - and only when configured scanner command is `uv`/`uvx`
 
 ### Use Cases
 - Domain-specific workflows

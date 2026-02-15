@@ -38,6 +38,16 @@ type MCPClientConfig = {
 	};
 };
 
+export type MCPProxyConfig = {
+	enabled?: boolean;
+	command?: string;
+	baseArgs?: string[];
+	projectName?: string;
+	pushExplorer?: boolean;
+	apiKey?: string;
+	apiUrl?: string;
+};
+
 /**
  * Manages MCP server connections and tool retrieval
  * Handles server lifecycle: initialization, tool loading, and cleanup
@@ -47,15 +57,20 @@ export class MCPClientManager {
 	private logger: Logger;
 	private serverConfigs: MCPServerConfiguration[];
 	private executionWorkspace: string | null;
+	private proxyConfig: MCPProxyConfig | undefined;
 
 	constructor(
 		configs: MCPServersConfig[],
 		logger: Logger,
-		options?: { executionWorkspace?: string | null },
+		options?: {
+			executionWorkspace?: string | null;
+			proxyConfig?: MCPProxyConfig;
+		},
 	) {
 		this.logger = logger;
 		this.serverConfigs = this.mergeConfigs(configs);
 		this.executionWorkspace = options?.executionWorkspace?.trim() || null;
+		this.proxyConfig = options?.proxyConfig;
 	}
 
 	/**
@@ -91,13 +106,11 @@ export class MCPClientManager {
 				}
 				const runtimeEnv = this.applyRuntimeEnv(resolvedEnv);
 				const defaultToolTimeout = getDefaultToolTimeout(stdioServer);
-				mcpServers[server.name] = {
-					transport: "stdio",
-					command: stdioServer.command,
-					args: stdioServer.args || [],
-					env: runtimeEnv,
-					...(defaultToolTimeout !== undefined ? { defaultToolTimeout } : {}),
-				};
+				mcpServers[server.name] = this.buildStdioServerConfig(
+					stdioServer,
+					runtimeEnv,
+					defaultToolTimeout,
+				);
 			} else if (server.transport === "sse") {
 				const sseServer = server as MCPSSEConfig;
 				const defaultToolTimeout = getDefaultToolTimeout(sseServer);
@@ -119,6 +132,56 @@ export class MCPClientManager {
 				audio: "artifact",
 				resource: "artifact",
 			},
+		};
+	}
+
+	private buildStdioServerConfig(
+		server: MCPStdioConfig,
+		env: Record<string, string>,
+		defaultToolTimeout?: number,
+	): MCPClientStdioServerConfig {
+		const baseConfig: MCPClientStdioServerConfig = {
+			transport: "stdio",
+			command: server.command,
+			args: server.args || [],
+			env,
+			...(defaultToolTimeout !== undefined ? { defaultToolTimeout } : {}),
+		};
+
+		if (!this.proxyConfig?.enabled) {
+			return baseConfig;
+		}
+
+		const proxyCommand = this.proxyConfig.command?.trim() || "uvx";
+		const proxyBaseArgs =
+			this.proxyConfig.baseArgs && this.proxyConfig.baseArgs.length > 0
+				? this.proxyConfig.baseArgs
+				: ["invariant-gateway@latest", "mcp"];
+		const proxyEnv: Record<string, string> = { ...env };
+		if (this.proxyConfig.apiKey) {
+			proxyEnv.INVARIANT_API_KEY = this.proxyConfig.apiKey;
+		}
+		if (this.proxyConfig.apiUrl) {
+			proxyEnv.INVARIANT_API_URL = this.proxyConfig.apiUrl;
+			proxyEnv.GUARDRAILS_API_URL = this.proxyConfig.apiUrl;
+		}
+
+		const proxyArgs = [
+			...proxyBaseArgs,
+			"--project-name",
+			this.proxyConfig.projectName || "wingman-gateway",
+			...(this.proxyConfig.pushExplorer ? ["--push-explorer"] : []),
+			"--exec",
+			baseConfig.command,
+			...(baseConfig.args || []),
+		];
+
+		return {
+			transport: "stdio",
+			command: proxyCommand,
+			args: proxyArgs,
+			env: proxyEnv,
+			...(defaultToolTimeout !== undefined ? { defaultToolTimeout } : {}),
 		};
 	}
 

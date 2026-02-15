@@ -177,6 +177,15 @@ export interface GatewayConfig {
 		method: "mdns" | "tailscale";
 		name: string;
 	};
+	mcpProxy?: {
+		enabled: boolean;
+		command?: string;
+		baseArgs?: string[];
+		projectName?: string;
+		pushExplorer?: boolean;
+		apiKey?: string;
+		apiUrl?: string;
+	};
 }
 
 export interface GatewayAuthConfig {

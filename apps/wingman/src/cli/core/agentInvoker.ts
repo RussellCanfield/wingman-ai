@@ -12,7 +12,10 @@ import {
 } from "langchain";
 import { v4 as uuidv4 } from "uuid";
 import type { WingmanAgentConfig } from "@/agent/config/agentConfig.js";
-import { MCPClientManager } from "@/agent/config/mcpClientManager.js";
+import {
+	MCPClientManager,
+	type MCPProxyConfig,
+} from "@/agent/config/mcpClientManager.js";
 import { additionalMessageMiddleware } from "@/agent/middleware/additional-messages.js";
 import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
@@ -40,6 +43,7 @@ export interface AgentInvokerOptions {
 	terminalSessionManager?: TerminalSessionManager;
 	workdir?: string | null;
 	defaultOutputDir?: string | null;
+	mcpProxyConfig?: MCPProxyConfig;
 }
 
 export interface InvokeAgentOptions {
@@ -631,6 +635,7 @@ export class AgentInvoker {
 	private terminalSessionManager: TerminalSessionManager;
 	private workdir: string | null = null;
 	private defaultOutputDir: string | null = null;
+	private mcpProxyConfig: MCPProxyConfig | undefined;
 
 	constructor(options: AgentInvokerOptions) {
 		this.outputManager = options.outputManager;
@@ -642,6 +647,7 @@ export class AgentInvoker {
 			options.terminalSessionManager || getSharedTerminalSessionManager();
 		this.workdir = options.workdir || null;
 		this.defaultOutputDir = options.defaultOutputDir || null;
+		this.mcpProxyConfig = options.mcpProxyConfig;
 
 		// Load wingman config and pass to AgentLoader
 		const configLoader = new WingmanConfigLoader(
@@ -741,9 +747,10 @@ export class AgentInvoker {
 
 			if (mcpConfigs.length > 0) {
 				this.logger.debug("Initializing MCP client for agent invocation");
-				this.mcpManager = new MCPClientManager(mcpConfigs, this.logger, {
-					executionWorkspace,
-				});
+					this.mcpManager = new MCPClientManager(mcpConfigs, this.logger, {
+						executionWorkspace,
+						proxyConfig: this.mcpProxyConfig,
+					});
 				await this.mcpManager.initialize();
 
 				// Get MCP tools and add to agent tools

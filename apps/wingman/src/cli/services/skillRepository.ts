@@ -8,27 +8,79 @@ import { createLogger } from "@/logger.js";
 
 const logger = createLogger();
 
+type ClawHubSkillListItem = {
+	slug: string;
+	displayName?: string;
+	summary?: string | null;
+	latestVersion?: {
+		version?: string;
+	};
+};
+
+type ClawHubSkillListResponse = {
+	items?: ClawHubSkillListItem[];
+};
+
+type ClawHubSkillDetailResponse = {
+	skill?: {
+		slug?: string;
+		displayName?: string;
+		summary?: string | null;
+	};
+	latestVersion?: {
+		version?: string;
+		changelog?: string;
+		createdAt?: number;
+	};
+	owner?: {
+		handle?: string | null;
+		userId?: string | null;
+		displayName?: string | null;
+	};
+	moderation?: {
+		isSuspicious?: boolean;
+		isMalwareBlocked?: boolean;
+	} | null;
+};
+
+type ClawHubVersionFilesResponse = {
+	version?: {
+		version?: string;
+		files?: Array<{
+			path: string;
+			sha256?: string;
+			size?: number;
+		}>;
+	};
+};
+
 /**
  * GitHub API client for interacting with the skills repository
  */
 export class SkillRepository {
-	private readonly baseUrl = "https://api.github.com";
+	private readonly githubBaseUrl = "https://api.github.com";
 	private readonly owner: string;
 	private readonly repo: string;
 	private readonly token?: string;
+	private readonly provider: "github" | "clawhub";
+	private readonly clawhubBaseUrl: string;
 
 	constructor(options: SkillRepositoryOptions = {}) {
+		this.provider = options.provider || "github";
 		this.owner = options.repositoryOwner || "anthropics";
 		this.repo = options.repositoryName || "skills";
 		this.token =
 			options.githubToken || process.env.GITHUB_TOKEN || undefined;
+		this.clawhubBaseUrl = (
+			options.clawhubBaseUrl || "https://clawhub.ai"
+		).replace(/\/+$/, "");
 	}
 
 	/**
 	 * Fetch data from GitHub API
 	 */
-	private async fetch<T>(path: string): Promise<T> {
-		const url = `${this.baseUrl}${path}`;
+	private async fetchGitHub<T>(path: string): Promise<T> {
+		const url = `${this.githubBaseUrl}${path}`;
 		const headers: Record<string, string> = {
 			Accept: "application/vnd.github.v3+json",
 			"User-Agent": "wingman-cli",
@@ -72,33 +124,10 @@ export class SkillRepository {
 	 */
 	async listAvailableSkills(): Promise<SkillInfo[]> {
 		try {
-			const contents = await this.fetch<GitHubContentItem[]>(
-				`/repos/${this.owner}/${this.repo}/contents/skills`,
-			);
-
-			const skills: SkillInfo[] = [];
-
-			for (const item of contents) {
-				if (item.type === "dir") {
-					try {
-						const metadata = await this.getSkillMetadata(item.name);
-						skills.push({
-							name: item.name,
-							description: metadata.description || "No description",
-							path: item.path,
-							metadata,
-						});
-					} catch (error) {
-						// Skip skills that can't be read
-						logger.warn(
-							`Could not read skill ${item.name}`,
-							error instanceof Error ? error.message : String(error),
-						);
-					}
-				}
+			if (this.provider === "clawhub") {
+				return await this.listSkillsFromClawhub();
 			}
-
-			return skills;
+			return await this.listSkillsFromGitHub();
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(`Failed to list skills: ${error.message}`);
@@ -107,13 +136,44 @@ export class SkillRepository {
 		}
 	}
 
+	private async fetchJson<T>(
+		url: string,
+		options?: { headers?: Record<string, string> },
+	): Promise<T> {
+		const response = await fetch(url, {
+			headers: options?.headers,
+		});
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status} ${response.statusText}`);
+		}
+		return (await response.json()) as T;
+	}
+
+	private async fetchBinary(
+		url: string,
+		options?: { headers?: Record<string, string> },
+	): Promise<Buffer> {
+		const response = await fetch(url, {
+			headers: options?.headers,
+		});
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status} ${response.statusText}`);
+		}
+		const arrayBuffer = await response.arrayBuffer();
+		return Buffer.from(arrayBuffer);
+	}
+
 	/**
 	 * Get skill metadata by fetching and parsing SKILL.md
 	 */
 	async getSkillMetadata(skillName: string): Promise<SkillMetadata> {
+		if (this.provider === "clawhub") {
+			return await this.getClawhubSkillMetadata(skillName);
+		}
+
 		try {
 			const skillMdPath = `/repos/${this.owner}/${this.repo}/contents/skills/${skillName}/SKILL.md`;
-			const skillMd = await this.fetch<GitHubContentItem>(skillMdPath);
+			const skillMd = await this.fetchGitHub<GitHubContentItem>(skillMdPath);
 
 			if (skillMd.type !== "file" || !skillMd.content) {
 				throw new Error("SKILL.md not found or invalid");
@@ -128,6 +188,50 @@ export class SkillRepository {
 			const metadata = this.parseSkillMetadata(content);
 
 			return metadata;
+		} catch (error) {
+			if (error instanceof Error) {
+				throw new Error(
+					`Failed to fetch skill metadata for ${skillName}: ${error.message}`,
+				);
+			}
+			throw error;
+		}
+	}
+
+	private async getClawhubSkillMetadata(
+		skillName: string,
+	): Promise<SkillMetadata> {
+		try {
+			const detail = await this.fetchJson<ClawHubSkillDetailResponse>(
+				`${this.clawhubBaseUrl}/api/v1/skills/${encodeURIComponent(skillName)}`,
+				{
+					headers: {
+						Accept: "application/json",
+						"User-Agent": "wingman-cli",
+					},
+				},
+			);
+			const slug = detail.skill?.slug?.trim() || skillName.trim();
+			const description =
+				detail.skill?.summary?.trim() ||
+				detail.skill?.displayName?.trim() ||
+				"No description";
+			const nameRegex = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+			if (!nameRegex.test(slug)) {
+				throw new Error(
+					`Invalid skill name '${slug}': must be lowercase alphanumeric with hyphens only`,
+				);
+			}
+			return {
+				name: slug,
+				description,
+				metadata: {
+					...(detail.latestVersion?.version
+						? { version: detail.latestVersion.version }
+						: {}),
+					...(detail.owner?.handle ? { owner: detail.owner.handle } : {}),
+				},
+			};
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(
@@ -214,6 +318,9 @@ export class SkillRepository {
 	async downloadSkill(
 		skillName: string,
 	): Promise<Map<string, string | Buffer>> {
+		if (this.provider === "clawhub") {
+			return await this.downloadSkillFromClawhub(skillName);
+		}
 		try {
 			const files = new Map<string, string | Buffer>();
 			await this.downloadDirectory(
@@ -232,6 +339,61 @@ export class SkillRepository {
 		}
 	}
 
+	private async downloadSkillFromClawhub(
+		skillName: string,
+	): Promise<Map<string, string | Buffer>> {
+		try {
+			const detail = await this.fetchJson<ClawHubSkillDetailResponse>(
+				`${this.clawhubBaseUrl}/api/v1/skills/${encodeURIComponent(skillName)}`,
+				{
+					headers: {
+						Accept: "application/json",
+						"User-Agent": "wingman-cli",
+					},
+				},
+			);
+			const slug = detail.skill?.slug || skillName;
+			const version = detail.latestVersion?.version;
+			if (!version) {
+				throw new Error("No latest version available");
+			}
+
+			const filesResponse = await this.fetchJson<ClawHubVersionFilesResponse>(
+				`${this.clawhubBaseUrl}/api/v1/skills/${encodeURIComponent(slug)}/versions/${encodeURIComponent(version)}`,
+				{
+					headers: {
+						Accept: "application/json",
+						"User-Agent": "wingman-cli",
+					},
+				},
+			);
+			const files = filesResponse.version?.files || [];
+			const output = new Map<string, string | Buffer>();
+			for (const file of files) {
+				const fileUrl = new URL(
+					`${this.clawhubBaseUrl}/api/v1/skills/${encodeURIComponent(slug)}/file`,
+				);
+				fileUrl.searchParams.set("path", file.path);
+				fileUrl.searchParams.set("version", version);
+				const content = await this.fetchBinary(fileUrl.toString(), {
+					headers: {
+						Accept: "text/plain, application/octet-stream",
+						"User-Agent": "wingman-cli",
+					},
+				});
+				output.set(file.path, content);
+			}
+			return output;
+		} catch (error) {
+			if (error instanceof Error) {
+				throw new Error(
+					`Failed to download skill ${skillName}: ${error.message}`,
+				);
+			}
+			throw error;
+		}
+	}
+
 	/**
 	 * Recursively download all files in a directory
 	 */
@@ -240,7 +402,7 @@ export class SkillRepository {
 		files: Map<string, string | Buffer>,
 		skillName: string,
 	): Promise<void> {
-		const contents = await this.fetch<GitHubContentItem[]>(
+		const contents = await this.fetchGitHub<GitHubContentItem[]>(
 			`/repos/${this.owner}/${this.repo}/contents/${path}`,
 		);
 
@@ -248,8 +410,8 @@ export class SkillRepository {
 			if (item.type === "file") {
 				if (!item.content) {
 					// If content is not included, fetch the file directly
-					const fileData = await this.fetch<GitHubContentItem>(
-						item.url.replace(this.baseUrl, ""),
+					const fileData = await this.fetchGitHub<GitHubContentItem>(
+						item.url.replace(this.githubBaseUrl, ""),
 					);
 					if (fileData.content && fileData.encoding === "base64") {
 						const content = Buffer.from(
@@ -277,5 +439,71 @@ export class SkillRepository {
 				await this.downloadDirectory(item.path, files, skillName);
 			}
 		}
+	}
+
+	private async listSkillsFromClawhub(): Promise<SkillInfo[]> {
+		const allSkills: SkillInfo[] = [];
+		let cursor: string | null = null;
+		do {
+			const url = new URL(`${this.clawhubBaseUrl}/api/v1/skills`);
+			url.searchParams.set("sort", "downloads");
+			url.searchParams.set("limit", "100");
+			if (cursor) {
+				url.searchParams.set("cursor", cursor);
+			}
+			const response = await this.fetchJson<
+				ClawHubSkillListResponse & { nextCursor?: string | null }
+			>(url.toString(), {
+				headers: {
+					Accept: "application/json",
+					"User-Agent": "wingman-cli",
+				},
+			});
+			for (const item of response.items || []) {
+				allSkills.push({
+					name: item.slug,
+					description:
+						item.summary?.trim() || item.displayName?.trim() || "No description",
+					path: item.slug,
+					metadata: {
+						name: item.slug,
+						description:
+							item.summary?.trim() || item.displayName?.trim() || "No description",
+					},
+				});
+			}
+			cursor = response.nextCursor || null;
+		} while (cursor);
+		return allSkills;
+	}
+
+	private async listSkillsFromGitHub(): Promise<SkillInfo[]> {
+		const contents = await this.fetchGitHub<GitHubContentItem[]>(
+			`/repos/${this.owner}/${this.repo}/contents/skills`,
+		);
+
+		const skills: SkillInfo[] = [];
+
+		for (const item of contents) {
+			if (item.type === "dir") {
+				try {
+					const metadata = await this.getSkillMetadata(item.name);
+					skills.push({
+						name: item.name,
+						description: metadata.description || "No description",
+						path: item.path,
+						metadata,
+					});
+				} catch (error) {
+					// Skip skills that can't be read
+					logger.warn(
+						`Could not read skill ${item.name}`,
+						error instanceof Error ? error.message : String(error),
+					);
+				}
+			}
+		}
+
+		return skills;
 	}
 }

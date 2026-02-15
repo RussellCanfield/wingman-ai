@@ -36,15 +36,18 @@ export async function executeSkillCommand(
 	try {
 		// Create repository and service
 		const repository = new SkillRepository({
+			provider: config.skills?.provider,
 			repositoryOwner: config.skills?.repositoryOwner,
 			repositoryName: config.skills?.repositoryName,
 			githubToken: config.skills?.githubToken,
+			clawhubBaseUrl: config.skills?.clawhubBaseUrl,
 		});
 
 		const service = new SkillService(repository, outputManager, logger, {
 			workspace,
 			skillsDirectory: config.skills?.skillsDirectory,
 			outputMode: args.outputMode,
+			security: config.skills?.security,
 		});
 
 		// Route to subcommand
@@ -117,7 +120,7 @@ export async function executeSkillCommand(
 function showSkillHelp(outputManager: OutputManager): void {
 	if (outputManager.getMode() === "interactive") {
 		console.log(`
-Wingman Skill Manager - Install skills from the Anthropic skills repository
+Wingman Skill Manager - Install skills from configured registries
 
 Usage:
   wingman skill browse              Browse available skills
@@ -140,10 +143,15 @@ Configuration:
   Skills can be configured in .wingman/wingman.config.json:
   {
     "skills": {
+      "provider": "github",
       "repositoryOwner": "anthropics",
       "repositoryName": "skills",
       "githubToken": "optional-token",
-      "skillsDirectory": "skills"
+      "clawhubBaseUrl": "https://clawhub.ai",
+      "skillsDirectory": "skills",
+      "security": {
+        "scanOnInstall": true
+      }
     }
   }
 `);

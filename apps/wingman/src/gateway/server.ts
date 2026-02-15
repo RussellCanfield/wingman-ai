@@ -10,6 +10,7 @@ import { AgentInvoker } from "@/cli/core/agentInvoker.js";
 import { OutputManager } from "@/cli/core/outputManager.js";
 import { SessionManager } from "@/cli/core/sessionManager.js";
 import { createLogger, type Logger, type LogLevel } from "@/logger.js";
+import { ensureUvAvailableForFeature } from "@/utils/uv.js";
 import { DiscordGatewayAdapter } from "./adapters/discord.js";
 import { GatewayAuth } from "./auth.js";
 import { BrowserRelayServer } from "./browserRelayServer.js";
@@ -266,6 +267,13 @@ export class GatewayServer {
 		if (typeof (globalThis as any).Bun === "undefined") {
 			throw new Error(
 				"Gateway server requires Bun runtime. Start with `bun ./bin/wingman gateway start`.",
+			);
+		}
+		const proxyConfig = this.wingmanConfig.gateway?.mcpProxy;
+		if (proxyConfig?.enabled) {
+			ensureUvAvailableForFeature(
+				proxyConfig.command || "uvx",
+				"gateway.mcpProxy.enabled",
 			);
 		}
 		this.startedAt = Date.now();
@@ -966,16 +974,17 @@ export class GatewayServer {
 		const workspace =
 			workspaceOverride || this.resolveAgentWorkspace(agentId);
 		const configDir = configDirOverride || this.configDir;
-		const invoker = new AgentInvoker({
-			workspace,
-			configDir,
-			outputManager,
-			logger: this.logger,
-			sessionManager,
-			terminalSessionManager: this.terminalSessionManager,
-			workdir,
-			defaultOutputDir,
-		});
+			const invoker = new AgentInvoker({
+				workspace,
+				configDir,
+				outputManager,
+				logger: this.logger,
+				sessionManager,
+				terminalSessionManager: this.terminalSessionManager,
+				workdir,
+				defaultOutputDir,
+				mcpProxyConfig: this.wingmanConfig.gateway?.mcpProxy,
+			});
 		const abortController = new AbortController();
 		this.activeAgentRequests.set(msg.id!, {
 			socket: ws,
