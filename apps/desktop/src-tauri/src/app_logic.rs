@@ -14,6 +14,16 @@ fn overlay_visible_after_stop(source: RecordingSource) -> bool {
     source == RecordingSource::Ui
 }
 
+fn should_queue_quick_send(
+    source: RecordingSource,
+    quick_send_on_record_hotkey: bool,
+    transcript: &str,
+) -> bool {
+    source == RecordingSource::Hotkey
+        && quick_send_on_record_hotkey
+        && !transcript.trim().is_empty()
+}
+
 fn snapshot(shared: &SharedState) -> Result<AppState, String> {
     let guard = shared
         .0
@@ -47,7 +57,7 @@ pub fn toggle_recording_with_source<R: Runtime>(
     shared: &SharedState,
     source: RecordingSource,
 ) -> Result<AppState, String> {
-    let (start_recording, stopped_with_hotkey_source) = {
+    let start_recording = {
         let mut guard = shared
             .0
             .lock()
@@ -60,10 +70,7 @@ pub fn toggle_recording_with_source<R: Runtime>(
         } else {
             guard.overlay_visible = overlay_visible_after_stop(source);
         }
-        (
-            guard.recording,
-            !guard.recording && guard.recording_started_by_hotkey,
-        )
+        guard.recording
     };
 
     if start_recording {
@@ -79,17 +86,15 @@ pub fn toggle_recording_with_source<R: Runtime>(
         }
     } else {
         speech::stop_capture(shared);
-        if stopped_with_hotkey_source {
-            let mut guard = shared
-                .0
-                .lock()
-                .map_err(|_| "state lock poisoned".to_string())?;
-            let should_queue_quick_send =
-                guard.quick_send_on_record_hotkey && !guard.transcript.trim().is_empty();
-            guard.recording_started_by_hotkey = false;
-            if should_queue_quick_send {
-                guard.quick_send_nonce = guard.quick_send_nonce.saturating_add(1);
-            }
+        let mut guard = shared
+            .0
+            .lock()
+            .map_err(|_| "state lock poisoned".to_string())?;
+        let should_queue =
+            should_queue_quick_send(source, guard.quick_send_on_record_hotkey, &guard.transcript);
+        guard.recording_started_by_hotkey = false;
+        if should_queue {
+            guard.quick_send_nonce = guard.quick_send_nonce.saturating_add(1);
         }
     }
 
@@ -167,7 +172,7 @@ pub fn queue_quick_send(shared: &SharedState) -> Result<AppState, String> {
 mod tests {
     use super::{
         overlay_visible_after_stop, queue_quick_send, reset_recording_state_for_shutdown,
-        RecordingSource,
+        should_queue_quick_send, RecordingSource,
     };
     use crate::state::SharedState;
 
@@ -179,6 +184,38 @@ mod tests {
     #[test]
     fn hides_overlay_when_stopping_from_hotkey() {
         assert!(!overlay_visible_after_stop(RecordingSource::Hotkey));
+    }
+
+    #[test]
+    fn queues_quick_send_when_stop_comes_from_hotkey() {
+        assert!(should_queue_quick_send(
+            RecordingSource::Hotkey,
+            true,
+            "hello",
+        ));
+    }
+
+    #[test]
+    fn does_not_queue_quick_send_when_stop_comes_from_ui() {
+        assert!(!should_queue_quick_send(RecordingSource::Ui, true, "hello"));
+    }
+
+    #[test]
+    fn does_not_queue_quick_send_when_transcript_is_empty() {
+        assert!(!should_queue_quick_send(
+            RecordingSource::Hotkey,
+            true,
+            "   ",
+        ));
+    }
+
+    #[test]
+    fn does_not_queue_quick_send_when_feature_is_disabled() {
+        assert!(!should_queue_quick_send(
+            RecordingSource::Hotkey,
+            false,
+            "hello",
+        ));
     }
 
     #[test]

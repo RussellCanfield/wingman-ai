@@ -11,6 +11,8 @@ the gateway Web UI and uses an OS adapter model (macOS-first parity work).
 - Tray-first command model and shared app state
 - Desktop Gateway workspace with:
   - gateway connection test + websocket connect/disconnect
+  - node mode enable/revoke for this device via gateway `/api/nodes`
+  - node execution handlers for `system.notify` and `system.run`
   - session list + session load/create/rename/delete
   - cross-client session mirroring with the gateway web UI for shared sessions
   - agent list + agent detail fetch
@@ -47,6 +49,21 @@ bun run --cwd apps/desktop tauri:build
   development machine with Rust + Bun installed.
 - The tray, global hotkeys, toast notifications, and deep link registration
   are designed in the Rust shell and can be expanded per-OS adapter.
+
+## Node Mode (macOS)
+
+Current desktop node flow:
+- Connect the desktop app to your gateway.
+- In Gateway settings, toggle `Enable this device as a node`.
+- The app is approved through `/api/nodes/:clientId` and registers node capabilities.
+
+Current node capabilities in desktop app:
+- `system.notify` (used by `node_notify`)
+- `system.run` (used by `node_run`)
+
+Revocation:
+- Turn off `Enable this device as a node` in desktop settings, or
+- call `DELETE /api/nodes/:clientId` from gateway API/CLI tooling.
 
 ## Shipping
 

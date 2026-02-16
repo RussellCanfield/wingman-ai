@@ -11,6 +11,26 @@ type WorkdirModalProps = {
 	onSave: (workdir: string | null) => Promise<boolean>;
 };
 
+const TOKEN_KEY = "wingman_webui_token";
+const PASSWORD_KEY = "wingman_webui_password";
+
+function withGatewayAuthHeaders(initHeaders?: HeadersInit): Headers {
+	const headers = new Headers(initHeaders || undefined);
+	try {
+		const token = (window.localStorage.getItem(TOKEN_KEY) || "").trim();
+		const password = (window.localStorage.getItem(PASSWORD_KEY) || "").trim();
+		if (token) {
+			headers.set("Authorization", `Bearer ${token}`);
+		}
+		if (password) {
+			headers.set("X-Wingman-Password", password);
+		}
+	} catch {
+		// Ignore localStorage access errors and fall back to anonymous fetch.
+	}
+	return headers;
+}
+
 export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 	open,
 	currentWorkdir,
@@ -44,7 +64,9 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 		setError("");
 		try {
 			const params = new URLSearchParams({ path });
-			const res = await fetch(`/api/fs/list?${params.toString()}`);
+			const res = await fetch(`/api/fs/list?${params.toString()}`, {
+				headers: withGatewayAuthHeaders(),
+			});
 			if (!res.ok) {
 				setError("Folder is not accessible or not allowed.");
 				return;
@@ -65,7 +87,9 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 		setLoading(true);
 		setError("");
 		try {
-			const res = await fetch("/api/fs/roots");
+			const res = await fetch("/api/fs/roots", {
+				headers: withGatewayAuthHeaders(),
+			});
 			if (!res.ok) {
 				setError("Unable to load folder roots.");
 				return;
@@ -120,7 +144,9 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 		try {
 			const res = await fetch("/api/fs/mkdir", {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: withGatewayAuthHeaders({
+					"Content-Type": "application/json",
+				}),
 				body: JSON.stringify({ path: parentPath, name: folderName }),
 			});
 			if (!res.ok) {

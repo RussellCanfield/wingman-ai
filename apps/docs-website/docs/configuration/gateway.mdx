@@ -78,6 +78,53 @@ wingman gateway status
 wingman gateway stop
 ```
 
+## Node enablement and revocation
+
+Node execution is explicitly device-gated. A connected client is not a node until it is approved.
+
+- Enable/disable a device with `PUT /api/nodes/:clientId`
+- Revoke with `DELETE /api/nodes/:clientId`
+- Inspect all node approvals + live node connections with `GET /api/nodes`
+
+Example:
+
+```bash
+# Enable this desktop device as a node
+curl -X PUT http://127.0.0.1:18789/api/nodes/desktop-abc123 \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":true,"name":"Wingman Desktop"}'
+
+# Revoke later
+curl -X DELETE http://127.0.0.1:18789/api/nodes/desktop-abc123
+```
+
+Desktop app flow:
+- User connects to gateway
+- User toggles `Enable this device as a node`
+- App registers as a node and can service `req:node` invocations (`system.notify`, `system.run`)
+- Agents can invoke these capabilities via `node_notify` and `node_run` tools
+
+
+## Cloudflare deployment
+
+Use the dedicated Cloudflare app at `apps/cloudflare` to run Wingman Gateway on Cloudflare Workers + Containers.
+
+```bash
+cd apps/cloudflare
+bun install
+bun run dev
+# or
+bun run deploy
+```
+
+This deployment proxies all HTTP/WebSocket traffic to a containerized gateway process started with:
+
+```bash
+wingman gateway run --host 0.0.0.0 --port 8080
+```
+
+Before exposing publicly, switch gateway auth from `none` to `token` and set `WINGMAN_GATEWAY_TOKEN`.
+
 Additional utilities:
 
 ```bash

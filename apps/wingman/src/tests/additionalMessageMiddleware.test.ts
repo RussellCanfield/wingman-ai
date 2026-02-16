@@ -135,4 +135,121 @@ describe("additionalMessageMiddleware", () => {
 
 		expect(injectedCount).toBe(1);
 	});
+
+	it("refreshes injected node context on each invocation", async () => {
+		let connectedIds = ["node-a"];
+		const middleware = additionalMessageMiddleware({
+			nodeConnectedIdsProvider: () => connectedIds,
+		});
+		const beforeAgent =
+			typeof middleware.beforeAgent === "function"
+				? middleware.beforeAgent
+				: middleware.beforeAgent?.hook;
+		if (!beforeAgent) {
+			throw new Error("beforeAgent hook not configured");
+		}
+
+		const first = (await (beforeAgent as any)(
+			{ messages: [new HumanMessage("Hello")] },
+			{},
+		)) as {
+			messages: Array<{ content?: string }>;
+		};
+		const firstContent = first.messages[0]?.content ?? "";
+		expect(firstContent).toContain("Connected node IDs: node-a");
+
+		connectedIds = ["node-b"];
+		const second = (await (beforeAgent as any)(
+			{ messages: first.messages as any },
+			{},
+		)) as {
+			messages: Array<{ content?: string }>;
+		};
+		const secondContent = second.messages[0]?.content ?? "";
+		expect(secondContent).toContain("Connected node IDs: node-b");
+		expect(secondContent).not.toContain("Connected node IDs: node-a");
+	});
+
+	it("injects connected node IDs for node tool targeting when provided", async () => {
+		const middleware = additionalMessageMiddleware({
+			nodeConnectedIdsProvider: () => [
+				"node-b",
+				"node-a",
+				"",
+				"node-b",
+			],
+		});
+		const input = { messages: [new HumanMessage("Hello")] };
+		const beforeAgent =
+			typeof middleware.beforeAgent === "function"
+				? middleware.beforeAgent
+				: middleware.beforeAgent?.hook;
+		if (!beforeAgent) {
+			throw new Error("beforeAgent hook not configured");
+		}
+
+		const result = (await (beforeAgent as any)(input, {})) as {
+			messages: Array<{ content?: string }>;
+		};
+		const content = result.messages[0]?.content ?? "";
+
+		expect(content).toContain("Connected Node Targets");
+		expect(content).toContain("Connected node IDs: node-b, node-a");
+		expect(content).toContain("target.nodeId or target.clientId");
+	});
+
+	it("injects default node target clientId when present", async () => {
+		const middleware = additionalMessageMiddleware({
+			nodeConnectedIdsProvider: () => [],
+			defaultNodeTargetClientId: "desktop-abc123",
+		});
+		const input = { messages: [new HumanMessage("Hello")] };
+		const beforeAgent =
+			typeof middleware.beforeAgent === "function"
+				? middleware.beforeAgent
+				: middleware.beforeAgent?.hook;
+		if (!beforeAgent) {
+			throw new Error("beforeAgent hook not configured");
+		}
+
+		const result = (await (beforeAgent as any)(input, {})) as {
+			messages: Array<{ content?: string }>;
+		};
+		const content = result.messages[0]?.content ?? "";
+
+		expect(content).toContain("Connected node IDs: (none currently connected)");
+		expect(content).toContain(
+			"Default node target clientId for this request: desktop-abc123",
+		);
+	});
+
+	it("injects connected node metadata when provided", async () => {
+		const middleware = additionalMessageMiddleware({
+			nodeConnectedTargetsProvider: () => [
+				{
+					nodeId: "node-a",
+					clientId: "desktop-a",
+					name: "Russell MacBook",
+					capabilities: ["system.notify", "system.run"],
+				},
+			],
+		});
+		const input = { messages: [new HumanMessage("Hello")] };
+		const beforeAgent =
+			typeof middleware.beforeAgent === "function"
+				? middleware.beforeAgent
+				: middleware.beforeAgent?.hook;
+		if (!beforeAgent) {
+			throw new Error("beforeAgent hook not configured");
+		}
+
+		const result = (await (beforeAgent as any)(input, {})) as {
+			messages: Array<{ content?: string }>;
+		};
+		const content = result.messages[0]?.content ?? "";
+
+		expect(content).toContain("Connected node metadata:");
+		expect(content).toContain("node-a (clientId: desktop-a; name: Russell MacBook;");
+		expect(content).toContain("capabilities: system.notify, system.run");
+	});
 });

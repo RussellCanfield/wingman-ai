@@ -6,7 +6,7 @@ The Wingman Gateway is the central runtime for agents, sessions, routing, and ch
 
 **Version:** 1.8
 **Status:** In Development
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-02-16
 
 ---
 
@@ -278,7 +278,7 @@ Channels normalize inbound messages into a common shape (channel, accountId, pee
 
 Rooms are explicit broadcast groups for swarm-style responses. They do not replace deterministic routing and are only used when broadcast is requested.
 
-### Nodes (Planned)
+### Nodes
 
 Nodes are remote tool executors that connect to the gateway and expose capabilities. The first target is the Wingman macOS app, which runs a local node host service and proxies UI/TCC-sensitive tools to the app over IPC.
 
@@ -294,6 +294,14 @@ Nodes are remote tool executors that connect to the gateway and expose capabilit
 - Surface node status + permissions in stats and Control UI
 
 See the Node Protocol Spec for message schemas and pairing UX: `docs/requirements/004-node-protocol.md`
+
+**Current implementation status (2026-02-16):**
+- Implemented: device-level node enable/revoke API at `/api/nodes`
+- Implemented: desktop/macOS node pairing flow via connect + explicit `Enable this device as a node` toggle
+- Implemented: node registration gate (approved client ID required when pairing is enabled)
+- Implemented: `req:node` request forwarding with `event:node`/`res`/`error` response routing
+- Implemented: agent-callable node tools (`node_notify`, `node_run`) routed through gateway node invocation
+- Pending: full pairing UX in Control UI, permission map reporting, and policy-rich exec approvals
 
 ### Swarm vs Orchestrated Patterns
 
@@ -324,7 +332,7 @@ See the Node Protocol Spec for message schemas and pairing UX: `docs/requirement
 
 ### Planned / Later
 - Broadcast rooms for explicit swarm workflows
-- Node pairing, permission reporting, and remote tool execution (macOS companion app + node host service)
+- Node permission reporting, richer pairing UX, and policy-rich remote tool execution (macOS companion app + node host service)
 - mDNS discovery
 - Tailscale discovery
 - HTTP bridge transport
@@ -1261,7 +1269,7 @@ CMD ["bun", "run", "wingman", "gateway", "run"]
 
 ### Cloudflare Workers (Optional Adapter)
 ```bash
-cd apps/wingman/cloudflare
+cd apps/cloudflare
 wrangler deploy
 ```
 

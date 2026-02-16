@@ -30,7 +30,7 @@ Wingman is an agent system, not a single “coding assistant.” Example use cas
 - **Wingman Gateway**: stateful runtime for agents, routing, sessions, and channels
 - **Wingman CLI**: local control plane for onboarding, config, and agent invocation
 - **Control UI**: chat + streaming interface (served by the gateway)
-- **Wingman macOS App (planned)**: menu-bar companion that exposes macOS-only capabilities as a node
+- **Wingman Desktop Companion (macOS available)**: native app that can be enabled as a node (`system.notify`, `system.run`)
 
 By default, the CLI connects to a local gateway. For isolated, local-only runs, use `--local`.
 
@@ -53,8 +53,10 @@ Key docs:
 
 ## Repository Layout
 
-- `apps/macos`: macOS app (Xcode project)
+- `apps/desktop`: Desktop Companion app (Tauri; macOS build supports node mode)
+- `apps/macos`: legacy macOS app (Xcode project, transitional)
 - `apps/wingman`: Gateway + CLI + Control UI (Bun)
+- `apps/cloudflare`: Cloudflare Worker + container deployment for Wingman
 - `apps/docs-website`: documentation site (Rspress)
 - `apps/website`: marketing site (Vite)
 - `docs/requirements`: PRDs (source of truth)
@@ -114,128 +116,46 @@ wingman provider login ollama     # Optional
 wingman agent --local --agent <id> "prompt"
 ```
 
-## Gateway Configuration (All the Ways + Why)
+## Secure Skills + MCP Proxy (TL;DR)
 
-Gateway behavior can be configured in three layers (higher priority wins): runtime flags, environment variables, and `wingman.config.json`. Use the config file for persistent defaults, then override per run when needed.
+Main point: skill scanning and MCP proxy are separate toggles, both explicit, and `uv` checks only happen when the feature is enabled.
 
-### 1) `wingman.config.json` (persistent defaults)
-
-- `gateway.host` / `gateway.port` - bind address + port. Use `0.0.0.0` for LAN access, or change the port to avoid conflicts.
-- `gateway.stateDir` - where durable sessions and gateway state live. Point to fast local storage or a shared volume.
-- `gateway.fsRoots` - allowlist for Control UI working folders and output paths. Keep this tight for safety.
-- `gateway.auth.mode` / `gateway.auth.token` / `gateway.auth.password` - gateway auth strategy (token, password, or none) for remote access.
-- `gateway.auth.allowTailscale` - trust Tailscale identity headers so Tailnet users can access without tokens.
-- `gateway.controlUi.enabled` / `gateway.controlUi.port` - enable/disable Control UI and choose its port.
-- `gateway.controlUi.pairingRequired` - require pairing for Control UI clients (recommended).
-- `gateway.controlUi.allowInsecureAuth` - only for local dev when testing auth flows.
-- `gateway.adapters.discord.*` - Discord output adapter:
-  - `enabled`, `token`, `mentionOnly`, `allowBots`, `allowedGuilds`, `allowedChannels`
-  - `channelSessions` to pin channels to a session (or `agent:<id>:` to force routing)
-  - `sessionCommand` for ad-hoc session overrides
-  - `responseChunkSize` to fit Discord message limits
-  - Optional `gatewayUrl`, `gatewayToken`, `gatewayPassword` to point the adapter at a remote gateway
-
-### 2) Runtime flags (`wingman gateway start` / `run`)
-
-- `--host`, `--port` - override bind address + port for this run.
-- `--auth`, `--auth-mode`, `--token`, `--password` - enable auth without editing config.
-- `--discovery mdns|tailscale`, `--name` - advertise your gateway for LAN or Tailnet discovery.
-- `--max-nodes`, `--ping-interval`, `--ping-timeout` - tune scale and heartbeat behavior.
-- `--log-level` - dial verbosity for debugging or production.
-
-### 3) Environment overrides
-
-- `WINGMAN_GATEWAY_TOKEN` - supply a token at runtime so you don't store secrets in config.
-
-### Related gateway behavior (configured elsewhere)
-
-- `agents.bindings` - deterministic routing rules used by the gateway to select an agent per inbound channel/message.
-- `voice` - gateway TTS defaults (provider + settings), with optional per-agent overrides for voice-enabled UIs.
-
-### Example configs (common setups)
-
-#### 1) Local dev (single user, no auth)
-
-```json
-{
-  "gateway": {
-    "host": "127.0.0.1",
-    "port": 18789,
-    "auth": { "mode": "none" },
-    "controlUi": { "enabled": true, "port": 18790 }
-  }
-}
-```
-
-#### 2) Shared LAN gateway (token auth + restricted outputs)
-
-```json
-{
-  "gateway": {
-    "host": "0.0.0.0",
-    "port": 18789,
-    "fsRoots": ["~/Projects", "~/.wingman/outputs"],
-    "auth": { "mode": "token" },
-    "controlUi": { "enabled": true, "port": 18790, "pairingRequired": true }
-  }
-}
-```
-
-Tip: set `WINGMAN_GATEWAY_TOKEN` at runtime so you do not store tokens in config.
-
-#### 3) Headless gateway + Discord output adapter
-
-```json
-{
-  "gateway": {
-    "host": "0.0.0.0",
-    "port": 18789,
-    "auth": { "mode": "token" },
-    "controlUi": { "enabled": false },
-    "adapters": {
-      "discord": {
-        "enabled": true,
-        "token": "DISCORD_BOT_TOKEN",
-        "mentionOnly": true,
-        "allowedGuilds": ["123456789012345678"],
-        "allowedChannels": ["987654321098765432"],
-        "channelSessions": {
-          "987654321098765432": "agent:support:discord:channel:987654321098765432"
-        }
-      }
-    }
-  }
-}
-```
-
-#### 4) Remote access over Tailscale + voice TTS
-
-```json
-{
-  "gateway": {
-    "host": "0.0.0.0",
-    "port": 18789,
-    "auth": { "mode": "token", "allowTailscale": true },
-    "controlUi": { "enabled": true, "port": 18790, "pairingRequired": true }
-  },
-  "voice": {
-    "provider": "elevenlabs",
-    "defaultPolicy": "off",
-    "elevenlabs": {
-      "voiceId": "VOICE_ID",
-      "modelId": "eleven_multilingual_v2",
-      "stability": 0.4,
-      "similarityBoost": 0.7
-    }
-  }
-}
-```
-
-Start discovery at runtime:
+Key CLI commands:
 
 ```bash
-wingman gateway start --discovery tailscale --name "Work Gateway"
+# gateway auth token
+wingman gateway token --generate
+export WINGMAN_GATEWAY_TOKEN="<token>"
+
+# gateway runtime
+wingman gateway start
+
+# skills
+wingman skill browse
+wingman skill install <skill-name>
+wingman skill list
+wingman skill remove <skill-name>
 ```
+
+- Skill scan runs on each `wingman skill install` only when `skills.security.scanOnInstall` is enabled.
+- MCP proxy runs at agent runtime only when `gateway.mcpProxy.enabled` is enabled.
+- If `uv` is missing for an enabled feature, Wingman fails with an error (no interactive prompt).
+- Full config examples: `apps/docs-website/docs/configuration/skills.mdx`, `apps/docs-website/docs/configuration/gateway.mdx`, `apps/docs-website/docs/configuration/wingman-config.mdx`.
+
+## Configuration
+
+Where to configure:
+
+- Runtime flags: `wingman gateway start --help`
+- Environment secret: `WINGMAN_GATEWAY_TOKEN`
+- Persistent config: `.wingman/wingman.config.json`
+- JSON schema: `https://getwingmanai.com/schemas/wingman.config.schema.json`
+
+Docs (full examples):
+
+- Gateway: `apps/docs-website/docs/configuration/gateway.mdx`
+- Skills: `apps/docs-website/docs/configuration/skills.mdx`
+- Full config: `apps/docs-website/docs/configuration/wingman-config.mdx`
 
 ## Core Concepts
 

@@ -8,6 +8,8 @@ Wingman ships with a curated tool set. Agents can only use tools listed in their
 - **git_status**: summarize repo status.
 - **command_execute**: run shell commands in the active execution workspace (honors `blockedCommands`, `allowScriptExecution`, `commandTimeout`).
 - **background_terminal**: single tool for session-scoped terminal control (start with `command`, then write/poll using `session_id`).
+- **node_notify**: send notifications to an approved connected node device (`system.notify`).
+- **node_run**: execute commands on an approved connected node device (`system.run`).
 - **internet_search**: web search (DuckDuckGo or Perplexity).
 - **web_crawler**: fetch and parse web pages.
 - **browser_control**: native browser automation with Chrome/Chromium runtime control (CDP with automatic persistent-context fallback when needed) for interactive flows, JS-rendered pages, and screenshots.

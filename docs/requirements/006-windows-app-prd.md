@@ -1,8 +1,8 @@
 # PRD-006: Wingman Desktop Companion (Tauri)
 
-**Version:** 0.5
+**Version:** 0.6
 **Status:** In Progress
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-16
 
 ---
 
@@ -57,6 +57,9 @@ gateway and acts as a native endpoint for voice capture and OS-specific tools.
 ### Gateway Workspace (Desktop Companion)
 - Connection test against `/api/config`, `/api/health`, `/api/stats`
 - WebSocket connect/disconnect using gateway `connect` handshake
+- Node mode controls:
+  - enable/revoke this desktop device as a node (`/api/nodes/:clientId`)
+  - status feedback for node registration and revocation
 - Provider controls:
   - list providers and credential source status
   - save/clear provider credentials via gateway APIs
@@ -136,6 +139,8 @@ Without a trusted key, the app prompts for explicit confirmation.
 Current implementation status in this repository:
 - Standalone app scaffold exists at `apps/desktop`
 - Frontend gateway workspace exists with session + agent + rich chat flows
+- Desktop app supports node mode enable/revoke for the connected device
+- Desktop node handlers currently service `system.notify` and `system.run`
 - Provider + voice settings are configurable in desktop runtime UI
 - Chat supports manual voice playback and per-session auto-speak toggle
 - Rust tray/state scaffolding exists

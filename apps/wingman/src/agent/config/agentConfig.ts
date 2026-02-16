@@ -14,6 +14,8 @@ export const AvailableToolNames = z.enum([
 	"browser_control",
 	"command_execute",
 	"background_terminal",
+	"node_notify",
+	"node_run",
 	"think",
 	"code_search",
 	"git_status",

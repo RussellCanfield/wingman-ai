@@ -16,7 +16,10 @@ import {
 	MCPClientManager,
 	type MCPProxyConfig,
 } from "@/agent/config/mcpClientManager.js";
-import { additionalMessageMiddleware } from "@/agent/middleware/additional-messages.js";
+import {
+	additionalMessageMiddleware,
+	type ConnectedNodeTarget,
+} from "@/agent/middleware/additional-messages.js";
 import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
 import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
@@ -24,6 +27,7 @@ import {
 	getSharedTerminalSessionManager,
 	type TerminalSessionManager,
 } from "@/agent/tools/terminal_session_manager.js";
+import type { NodeInvokeRequest, NodeInvokeResult } from "@/agent/tools/node_invoke.js";
 import { getBundledSkillsPath } from "@/agent/uiRegistry.js";
 import type { WingmanAgent } from "@/types/agents.js";
 import type { MCPServersConfig } from "@/types/mcp.js";
@@ -44,6 +48,11 @@ export interface AgentInvokerOptions {
 	workdir?: string | null;
 	defaultOutputDir?: string | null;
 	mcpProxyConfig?: MCPProxyConfig;
+	nodeInvoker?: (request: NodeInvokeRequest) => Promise<NodeInvokeResult>;
+	nodeDefaultTargetClientId?: string;
+	nodeConnectedIdsProvider?: () => string[] | Promise<string[]>;
+	nodeConnectedTargetsProvider?: () =>
+		ConnectedNodeTarget[] | Promise<ConnectedNodeTarget[]>;
 }
 
 export interface InvokeAgentOptions {
@@ -636,6 +645,16 @@ export class AgentInvoker {
 	private workdir: string | null = null;
 	private defaultOutputDir: string | null = null;
 	private mcpProxyConfig: MCPProxyConfig | undefined;
+	private nodeInvoker:
+		| ((request: NodeInvokeRequest) => Promise<NodeInvokeResult>)
+		| undefined;
+	private nodeDefaultTargetClientId: string | undefined;
+	private nodeConnectedIdsProvider:
+		| (() => string[] | Promise<string[]>)
+		| undefined;
+	private nodeConnectedTargetsProvider:
+		| (() => ConnectedNodeTarget[] | Promise<ConnectedNodeTarget[]>)
+		| undefined;
 
 	constructor(options: AgentInvokerOptions) {
 		this.outputManager = options.outputManager;
@@ -648,6 +667,10 @@ export class AgentInvoker {
 		this.workdir = options.workdir || null;
 		this.defaultOutputDir = options.defaultOutputDir || null;
 		this.mcpProxyConfig = options.mcpProxyConfig;
+		this.nodeInvoker = options.nodeInvoker;
+		this.nodeDefaultTargetClientId = options.nodeDefaultTargetClientId;
+		this.nodeConnectedIdsProvider = options.nodeConnectedIdsProvider;
+		this.nodeConnectedTargetsProvider = options.nodeConnectedTargetsProvider;
 
 		// Load wingman config and pass to AgentLoader
 		const configLoader = new WingmanConfigLoader(
@@ -659,6 +682,13 @@ export class AgentInvoker {
 			this.configDir,
 			this.workspace,
 			this.wingmanConfig,
+			this.workspace,
+			{
+				terminalOwnerId: "default",
+				terminalSessionManager: this.terminalSessionManager,
+				nodeInvoker: this.nodeInvoker,
+				nodeDefaultTargetClientId: this.nodeDefaultTargetClientId,
+			},
 		);
 	}
 
@@ -702,11 +732,13 @@ export class AgentInvoker {
 				this.workspace,
 				this.wingmanConfig,
 				executionWorkspace,
-				{
-					terminalOwnerId: `${agentName}:${hookSessionId}`,
-					terminalSessionManager: this.terminalSessionManager,
-				},
-			);
+					{
+						terminalOwnerId: `${agentName}:${hookSessionId}`,
+						terminalSessionManager: this.terminalSessionManager,
+						nodeInvoker: this.nodeInvoker,
+						nodeDefaultTargetClientId: this.nodeDefaultTargetClientId,
+					},
+				);
 
 			// Find the agent
 			const targetAgent = await loader.loadAgent(agentName);
@@ -789,6 +821,9 @@ export class AgentInvoker {
 					dynamicUiEnabled:
 						this.wingmanConfig?.gateway?.dynamicUiEnabled !== false,
 					skillsDirectory,
+					nodeConnectedIdsProvider: this.nodeConnectedIdsProvider,
+					nodeConnectedTargetsProvider: this.nodeConnectedTargetsProvider,
+					defaultNodeTargetClientId: this.nodeDefaultTargetClientId,
 				}),
 			];
 			const summarizationSettings = resolveSummarizationMiddlewareSettings(

@@ -12,6 +12,13 @@ import {
 	summarizeUiRegistry,
 } from "../uiRegistry.js";
 
+export type ConnectedNodeTarget = {
+	nodeId: string;
+	clientId?: string;
+	name?: string;
+	capabilities?: string[];
+};
+
 type AdditionalMessageContext = {
 	workspaceRoot?: string | null;
 	workdir?: string | null;
@@ -19,7 +26,12 @@ type AdditionalMessageContext = {
 	outputVirtualPath?: string | null;
 	dynamicUiEnabled?: boolean;
 	skillsDirectory?: string;
+	nodeConnectedIdsProvider?: () => string[] | Promise<string[]>;
+	nodeConnectedTargetsProvider?: () =>
+		ConnectedNodeTarget[] | Promise<ConnectedNodeTarget[]>;
+	defaultNodeTargetClientId?: string;
 };
+const INJECTION_SOURCE = "additional-message-middleware";
 
 const normalizeRelativePath = (value: string): string =>
 	value.replace(/\\/g, "/");
@@ -72,26 +84,169 @@ const buildWorkingDirectoryMessage = (
 	].join("\n");
 };
 
+const resolveConnectedNodeIds = async (
+	context: AdditionalMessageContext,
+): Promise<string[]> => {
+	if (context.nodeConnectedTargetsProvider) {
+		try {
+			const rawTargets = await context.nodeConnectedTargetsProvider();
+			if (!Array.isArray(rawTargets)) {
+				return [];
+			}
+			const seen = new Set<string>();
+			const normalized: string[] = [];
+			for (const target of rawTargets) {
+				if (!target || typeof target !== "object") continue;
+				const nodeId = (target as ConnectedNodeTarget).nodeId?.trim();
+				if (!nodeId || seen.has(nodeId)) continue;
+				seen.add(nodeId);
+				normalized.push(nodeId);
+			}
+			return normalized;
+		} catch {
+			return [];
+		}
+	}
+	if (!context.nodeConnectedIdsProvider) {
+		return [];
+	}
+	try {
+		const rawIds = await context.nodeConnectedIdsProvider();
+		if (!Array.isArray(rawIds)) {
+			return [];
+		}
+		const seen = new Set<string>();
+		const normalized: string[] = [];
+		for (const value of rawIds) {
+			if (typeof value !== "string") continue;
+			const trimmed = value.trim();
+			if (!trimmed || seen.has(trimmed)) continue;
+			seen.add(trimmed);
+			normalized.push(trimmed);
+		}
+		return normalized;
+	} catch {
+		return [];
+	}
+};
+
+const resolveConnectedNodeTargets = async (
+	context: AdditionalMessageContext,
+): Promise<ConnectedNodeTarget[]> => {
+	if (context.nodeConnectedTargetsProvider) {
+		try {
+			const rawTargets = await context.nodeConnectedTargetsProvider();
+			if (!Array.isArray(rawTargets)) {
+				return [];
+			}
+			const seen = new Set<string>();
+			const normalized: ConnectedNodeTarget[] = [];
+			for (const target of rawTargets) {
+				if (!target || typeof target !== "object") continue;
+				const typedTarget = target as ConnectedNodeTarget;
+				const nodeId = typedTarget.nodeId?.trim();
+				if (!nodeId || seen.has(nodeId)) continue;
+				seen.add(nodeId);
+				const rawCapabilities = typedTarget.capabilities;
+				const capabilities = Array.isArray(rawCapabilities)
+					? rawCapabilities
+							.filter((value): value is string => typeof value === "string")
+							.map((value) => value.trim())
+							.filter(Boolean)
+					: [];
+				normalized.push({
+					nodeId,
+					clientId: typedTarget.clientId?.trim() || undefined,
+					name: typedTarget.name?.trim() || undefined,
+					capabilities: capabilities.length > 0 ? capabilities : undefined,
+				});
+			}
+			return normalized;
+		} catch {
+			return [];
+		}
+	}
+
+	const nodeIds = await resolveConnectedNodeIds(context);
+	return nodeIds.map((nodeId) => ({ nodeId }));
+};
+
+const buildNodeTargetsMessage = async (
+	context: AdditionalMessageContext,
+): Promise<string | null> => {
+	const connectedNodeTargets = await resolveConnectedNodeTargets(context);
+	const connectedNodeIds = connectedNodeTargets.map((target) => target.nodeId);
+	const defaultClientId = context.defaultNodeTargetClientId?.trim();
+	if (connectedNodeIds.length === 0 && !defaultClientId) {
+		return null;
+	}
+
+	const lines = ["** Connected Node Targets **"];
+	if (connectedNodeIds.length > 0) {
+		lines.push(`- Connected node IDs: ${connectedNodeIds.join(", ")}`);
+	} else {
+		lines.push("- Connected node IDs: (none currently connected)");
+	}
+	const withMetadata = connectedNodeTargets.filter(
+		(target) =>
+			Boolean(target.clientId) ||
+			Boolean(target.name) ||
+			(target.capabilities && target.capabilities.length > 0),
+	);
+	if (withMetadata.length > 0) {
+		lines.push("- Connected node metadata:");
+		for (const target of withMetadata.slice(0, 8)) {
+			const details: string[] = [];
+			if (target.clientId) {
+				details.push(`clientId: ${target.clientId}`);
+			}
+			if (target.name) {
+				details.push(`name: ${target.name}`);
+			}
+			if (target.capabilities && target.capabilities.length > 0) {
+				const preview = target.capabilities.slice(0, 6).join(", ");
+				const remaining = target.capabilities.length - 6;
+				details.push(
+					remaining > 0
+						? `capabilities: ${preview} (+${remaining} more)`
+						: `capabilities: ${preview}`,
+				);
+			}
+			if (details.length > 0) {
+				lines.push(`  - ${target.nodeId} (${details.join("; ")})`);
+			}
+		}
+		if (withMetadata.length > 8) {
+			lines.push(`  - ... ${withMetadata.length - 8} more connected node(s)`);
+		}
+	}
+	if (defaultClientId) {
+		lines.push(
+			`- Default node target clientId for this request: ${defaultClientId}`,
+		);
+	}
+	lines.push(
+		"- For node_notify/node_run, set target.nodeId or target.clientId when the user specifies a device.",
+	);
+	return lines.join("\n");
+};
+
 export const additionalMessageMiddleware = (
 	context: AdditionalMessageContext = {},
 ): AgentMiddleware => {
 	return {
-		name: "additional-message-middleware",
+		name: INJECTION_SOURCE,
 		[MIDDLEWARE_BRAND]: true,
 		beforeAgent: async (input: {
 			messages: BaseMessage[];
 		}): Promise<{
 			messages: BaseMessage[];
 		}> => {
-			const alreadyInjected = input.messages.some(
+			const messagesWithoutInjected = input.messages.filter(
 				(message) =>
 					(message as { additional_kwargs?: { source?: string } })
-						?.additional_kwargs?.source === "additional-message-middleware",
+						?.additional_kwargs?.source !== INJECTION_SOURCE,
 			);
-
-			if (alreadyInjected) {
-				return input;
-			}
 
 			const lines = [
 				getConfidentialityNotice(),
@@ -105,6 +260,10 @@ export const additionalMessageMiddleware = (
 			const workingDirectory = buildWorkingDirectoryMessage(context);
 			if (workingDirectory) {
 				lines.push(workingDirectory);
+			}
+			const nodeTargets = await buildNodeTargetsMessage(context);
+			if (nodeTargets) {
+				lines.push(nodeTargets);
 			}
 
 			lines.push(
@@ -144,16 +303,19 @@ export const additionalMessageMiddleware = (
 				}
 			}
 
-			input.messages.unshift(
-				new HumanMessage({
-					content: lines.join("\n\n"),
-					additional_kwargs: {
-						ui_hidden: true,
-						source: "additional-message-middleware",
-					},
-				}),
-			);
-			return input;
+			return {
+				...input,
+				messages: [
+					new HumanMessage({
+						content: lines.join("\n\n"),
+						additional_kwargs: {
+							ui_hidden: true,
+							source: INJECTION_SOURCE,
+						},
+					}),
+					...messagesWithoutInjected,
+				],
+			};
 		},
 	};
 };

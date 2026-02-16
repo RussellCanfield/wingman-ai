@@ -501,6 +501,8 @@ Notes:
   - Supports optional secure local relay mode (loopback-only, token-authenticated) for extension-mediated browser control workflows
 - `command_execute`: Shell command execution
 - `background_terminal`: Start a background terminal session, then write/poll by `session_id`
+- `node_notify`: Invoke node `system.notify` on an approved connected device
+- `node_run`: Invoke node `system.run` on an approved connected device
 - `think`: Reasoning without side effects
 
 ### Subagent Nesting

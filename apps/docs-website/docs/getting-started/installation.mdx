@@ -36,6 +36,7 @@ the Control Core web UI.
 - Configure the Gateway URL + optional auth in app settings
 - Desktop workspace includes:
   - gateway connection test
+  - node mode toggle for this device (enable/revoke via gateway `/api/nodes`)
   - session list and session management
   - mirrored live session streams between desktop and Control Core web UI for the same session
   - agent selection and new agent creation
@@ -43,8 +44,16 @@ the Control Core web UI.
   - configurable voice defaults and playback policy
   - assistant message voice playback (manual and per-session auto-speak)
   - rich streamed chat rendering with structured UI blocks
+  - node request handlers for `system.notify` and `system.run` (agent tools: `node_notify`, `node_run`)
 - Dev command: `bun run --cwd apps/desktop tauri:dev`
 - Windows publish automation: `bun run --cwd apps/desktop publish:windows`
+
+### Node mode quick start (macOS desktop)
+
+1. Connect the Desktop Companion to your gateway.
+2. Turn on `Enable this device as a node` in desktop Gateway settings.
+3. Use an agent with `node_notify` or `node_run` to invoke this device.
+4. Revoke at any time by turning the toggle off or deleting `/api/nodes/:clientId`.
 
 ## Legacy macOS Menu Bar App
 

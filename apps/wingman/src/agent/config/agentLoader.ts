@@ -14,12 +14,14 @@ import {
 import { ModelFactory } from "./modelFactory.js";
 import {
 	createTools,
+	NODE_TOOL_NAMES,
 	type ToolOptions,
 	UI_TOOL_NAMES,
 } from "./toolRegistry.js";
 
 const logger = createLogger();
 const PROMPT_REFINEMENT_MARKER = "[[wingman:prompt-refinement]]";
+const ALWAYS_ON_TOOL_NAMES = [...UI_TOOL_NAMES, ...NODE_TOOL_NAMES] as const;
 
 const normalizePromptRefinementPath = (
 	agentName: string,
@@ -386,6 +388,29 @@ export class AgentLoader {
 			};
 		};
 
+		const addAlwaysOnTools = async (
+			existingTools: any[] | undefined,
+			source: WingmanAgentConfig,
+		): Promise<any[]> => {
+			const alwaysOnTools = (await createTools(
+				[...ALWAYS_ON_TOOL_NAMES],
+				buildToolOptions(source),
+			)) as any[];
+			if (alwaysOnTools.length === 0) {
+				return existingTools || [];
+			}
+
+			if (existingTools && existingTools.length > 0) {
+				const existing = new Set(existingTools.map((tool: any) => tool.name));
+				const uniqueAlwaysOnTools = alwaysOnTools.filter(
+					(tool: any) => !existing.has(tool.name),
+				);
+				return [...existingTools, ...uniqueAlwaysOnTools];
+			}
+
+			return alwaysOnTools;
+		};
+
 		// Add tools if specified
 		if (config.tools && config.tools.length > 0) {
 			agent.tools = (await createTools(
@@ -394,21 +419,7 @@ export class AgentLoader {
 			)) as any;
 		}
 
-		const uiTools = (await createTools(
-			UI_TOOL_NAMES,
-			buildToolOptions(config),
-		)) as any;
-		if (uiTools.length > 0) {
-			if (agent.tools && agent.tools.length > 0) {
-				const existing = new Set(agent.tools.map((tool: any) => tool.name));
-				const uniqueUiTools = uiTools.filter(
-					(tool: any) => !existing.has(tool.name),
-				);
-				agent.tools = [...agent.tools, ...uniqueUiTools];
-			} else {
-				agent.tools = uiTools;
-			}
-		}
+		agent.tools = await addAlwaysOnTools(agent.tools, config);
 
 		// Store MCP config on agent for reference
 		if (config.mcp) {
@@ -463,21 +474,10 @@ export class AgentLoader {
 					)) as any;
 				}
 
-				const subUiTools = (await createTools(
-					UI_TOOL_NAMES,
-					buildToolOptions(subagent as WingmanAgentConfig),
-				)) as any;
-				if (subUiTools.length > 0) {
-					if (sub.tools && sub.tools.length > 0) {
-						const existing = new Set(sub.tools.map((tool: any) => tool.name));
-						const uniqueUiTools = subUiTools.filter(
-							(tool: any) => !existing.has(tool.name),
-						);
-						sub.tools = [...sub.tools, ...uniqueUiTools];
-					} else {
-						sub.tools = subUiTools;
-					}
-				}
+				sub.tools = await addAlwaysOnTools(
+					sub.tools,
+					subagent as WingmanAgentConfig,
+				);
 
 				if (subagent.model) {
 					try {

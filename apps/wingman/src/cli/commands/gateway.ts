@@ -790,6 +790,6 @@ Examples:
 Deployment:
   Local:      Run on localhost or LAN
   Tailscale:  Accessible over Tailscale network
-  Cloudflare: Deploy to Cloudflare Workers (see cloudflare/README.md)
+  Cloudflare: Deploy to Cloudflare Workers (see apps/cloudflare/README.md)
   `);
 }

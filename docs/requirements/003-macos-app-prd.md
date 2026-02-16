@@ -1,8 +1,8 @@
 # PRD-003: Wingman macOS App
 
-**Version:** 1.1
+**Version:** 1.2
 **Status:** In Progress
-**Last Updated:** 2026-02-03
+**Last Updated:** 2026-02-16
 
 ---
 
@@ -91,6 +91,27 @@ Capabilities include:
 
 The node must report a permissions map (granted/denied/prompt/restricted) for
 each relevant TCC capability.
+
+Current implementation status (2026-02-16):
+- Desktop runtime handlers exist for `system.notify` and `system.run` node requests.
+- Desktop app node pairing currently uses explicit device enablement (`Enable this device as a node`) after gateway connection.
+- Full permission-map reporting and policy-rich approval UX remain in progress.
+
+## Node Enablement + Revocation (Current Desktop Flow)
+
+Current implementation flow:
+1. User connects the desktop app to a gateway.
+2. User enables `Enable this device as a node` in desktop settings.
+3. Desktop app calls `PUT /api/nodes/:clientId` with `enabled: true` and registers node capabilities over WebSocket.
+4. Gateway can now route `req:node` calls to this desktop node.
+
+Revocation:
+- User disables `Enable this device as a node`, or
+- Gateway/API revokes with `DELETE /api/nodes/:clientId`.
+
+Current node tools serviced by desktop app:
+- `system.notify` (`node_notify`)
+- `system.run` (`node_run`)
 
 ---
 

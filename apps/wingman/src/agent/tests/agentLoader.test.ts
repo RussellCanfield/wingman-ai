@@ -217,6 +217,57 @@ Markdown agent`;
 	});
 
 	describe("loadAgent", () => {
+		it("should always inject node tools for top-level agents", async () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "node-enabled-agent");
+			mkdirSync(agentDir, { recursive: true });
+
+			const config = {
+				name: "node-enabled-agent",
+				description: "Agent with default node tools",
+				systemPrompt: "You are node capable",
+			};
+
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
+
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agent = await loader.loadAgent("node-enabled-agent");
+			const toolNames = (agent?.tools || []).map((tool: any) => tool.name);
+
+			expect(toolNames).toContain("node_notify");
+			expect(toolNames).toContain("node_run");
+		});
+
+		it("should always inject and deduplicate node tools for subagents", async () => {
+			const agentDir = join(TEST_CONFIG_DIR, "agents", "node-subagent-parent");
+			mkdirSync(agentDir, { recursive: true });
+
+			const config = {
+				name: "node-subagent-parent",
+				description: "Parent agent",
+				systemPrompt: "You are the parent",
+				subAgents: [
+					{
+						name: "node-subagent",
+						description: "Subagent",
+						systemPrompt: "You are a subagent",
+						tools: ["node_run"],
+					},
+				],
+			};
+
+			writeFileSync(join(agentDir, "agent.json"), JSON.stringify(config));
+
+			const loader = new AgentLoader(TEST_CONFIG_DIR);
+			const agent = await loader.loadAgent("node-subagent-parent");
+			const sub = agent?.subagents?.[0] as any;
+			const toolNames = (sub?.tools || []).map((tool: any) => tool.name);
+
+			expect(toolNames).toContain("node_notify");
+			expect(toolNames.filter((name: string) => name === "node_run")).toHaveLength(
+				1,
+			);
+		});
+
 		it("should hydrate subagent tools for runtime use", async () => {
 			const agentDir = join(TEST_CONFIG_DIR, "agents", "parent-agent");
 			mkdirSync(agentDir, { recursive: true });

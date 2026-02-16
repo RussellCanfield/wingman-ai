@@ -9,6 +9,8 @@ export type MessageType =
 	| "req:agent" // Request agent execution
 	| "req:agent:cancel" // Cancel in-flight agent execution
 	| "event:agent" // Agent stream events
+	| "req:node" // Request node tool execution
+	| "event:node" // Node stream events
 	| "session_subscribe" // Subscribe to session events
 	| "session_unsubscribe" // Unsubscribe from session events
 	| "register" // Node registration
@@ -119,6 +121,7 @@ export interface RoutingInfo {
 export interface NodeMetadata {
 	id: string;
 	name: string;
+	clientId?: string;
 	capabilities?: string[];
 	groups: Set<string>;
 	connectedAt: number;
@@ -133,7 +136,13 @@ export interface NodeMetadata {
  * Node with WebSocket connection
  */
 export interface Node extends NodeMetadata {
-	ws: ServerWebSocket<{ nodeId: string }>;
+	ws: ServerWebSocket<{
+		nodeId: string;
+		clientId?: string;
+		clientType?: string;
+		authenticated?: boolean;
+		tailscaleUser?: string;
+	}>;
 }
 
 /**

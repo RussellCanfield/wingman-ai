@@ -24,6 +24,7 @@ import {
 	fetchVoiceConfig,
 	mapSessionToThread,
 	renameSession,
+	setNodeEnabled,
 	saveProviderToken,
 	speakVoice,
 	updateAgent,
@@ -173,6 +174,7 @@ type RuntimeState = {
 	quickSendNonce: number;
 	autoConnectOnLaunch: boolean;
 	notifyOnAgentFinish: boolean;
+	enableNodeMode: boolean;
 };
 
 type SpeechRecognitionLike = {
@@ -225,6 +227,8 @@ type WorkspaceState = {
 	attachmentError: string;
 	isStreaming: boolean;
 	queuedPromptCount: number;
+	nodeModeState: "disabled" | "enabling" | "enabled" | "error";
+	nodeModeMessage: string;
 	eventLog: string[];
 	createAgentDraft: CreateAgentDraft;
 	creatingAgent: boolean;
@@ -473,12 +477,13 @@ function useRuntimeController(isOverlayView: boolean) {
 			settingsSavedAt: Date.now(),
 			recordHotkey: "CommandOrControl+Shift+R",
 			overlayHotkey: "CommandOrControl+Shift+O",
-				quickSendOnRecordHotkey: true,
-				quickSendNonce: 0,
-				autoConnectOnLaunch: desktopPrefs.autoConnectOnLaunch,
-				notifyOnAgentFinish: desktopPrefs.notifyOnAgentFinish,
-			};
-		});
+			quickSendOnRecordHotkey: true,
+			quickSendNonce: 0,
+			autoConnectOnLaunch: desktopPrefs.autoConnectOnLaunch,
+			notifyOnAgentFinish: desktopPrefs.notifyOnAgentFinish,
+			enableNodeMode: desktopPrefs.enableNodeMode,
+		};
+	});
 
 	const stateRef = useRef(state);
 	const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -736,6 +741,7 @@ function useRuntimeController(isOverlayView: boolean) {
 			saveDesktopPreferences({
 				autoConnectOnLaunch: next.autoConnectOnLaunch,
 				notifyOnAgentFinish: next.notifyOnAgentFinish,
+				enableNodeMode: next.enableNodeMode,
 			});
 			return next;
 		});
@@ -747,6 +753,19 @@ function useRuntimeController(isOverlayView: boolean) {
 			saveDesktopPreferences({
 				autoConnectOnLaunch: next.autoConnectOnLaunch,
 				notifyOnAgentFinish: next.notifyOnAgentFinish,
+				enableNodeMode: next.enableNodeMode,
+			});
+			return next;
+		});
+	}, []);
+
+	const updateEnableNodeMode = useCallback((enabled: boolean) => {
+		setState((prev) => {
+			const next = { ...prev, enableNodeMode: enabled };
+			saveDesktopPreferences({
+				autoConnectOnLaunch: next.autoConnectOnLaunch,
+				notifyOnAgentFinish: next.notifyOnAgentFinish,
+				enableNodeMode: next.enableNodeMode,
 			});
 			return next;
 		});
@@ -966,6 +985,7 @@ function useRuntimeController(isOverlayView: boolean) {
 			updateSetting,
 			updateAutoConnectOnLaunch,
 			updateNotifyOnAgentFinish,
+			updateEnableNodeMode,
 			updateTranscript,
 			clearTranscript,
 			hideOverlay,
@@ -983,6 +1003,7 @@ function useRuntimeController(isOverlayView: boolean) {
 
 function useGatewayWorkspace(
 	settings: GatewaySettings,
+	enableNodeMode: boolean,
 	setGlobalStatus: (message: string, isError?: boolean) => void,
 ) {
 	const [workspace, setWorkspace] = useState<WorkspaceState>({
@@ -1006,10 +1027,12 @@ function useGatewayWorkspace(
 		selectedAgentId: settings.agentId || "main",
 		prompt: "",
 			attachments: [],
-			attachmentError: "",
-			isStreaming: false,
-			queuedPromptCount: 0,
-			eventLog: [],
+		attachmentError: "",
+		isStreaming: false,
+		queuedPromptCount: 0,
+		nodeModeState: "disabled",
+		nodeModeMessage: "Node mode disabled",
+		eventLog: [],
 		createAgentDraft: createEmptyAgentDraft(),
 		creatingAgent: false,
 		agentFormMode: "create",
@@ -1478,6 +1501,53 @@ function useGatewayWorkspace(
 		],
 	);
 
+	const setNodeExecutionEnabled = useCallback(
+		async (enabled: boolean): Promise<boolean> => {
+			const clientId = `desktop-${deviceIdRef.current}`;
+			setWorkspace((prev) => ({
+				...prev,
+				nodeModeState: enabled ? "enabling" : "disabled",
+				nodeModeMessage: enabled
+					? "Enabling node mode..."
+					: "Disabling node mode...",
+			}));
+			try {
+				const record = await setNodeEnabled(settings, {
+					clientId,
+					enabled,
+					name: "Wingman Desktop",
+				});
+				if (enabled) {
+					socketRef.current?.enableNode({
+						name: record.name || "Wingman Desktop",
+						capabilities: ["system.notify", "system.run"],
+					});
+				} else {
+					socketRef.current?.disableNode();
+				}
+				setWorkspace((prev) => ({
+					...prev,
+					nodeModeState: enabled ? "enabled" : "disabled",
+					nodeModeMessage: enabled
+						? "Node mode enabled for this device."
+						: "Node mode disabled for this device.",
+				}));
+				return true;
+			} catch (error) {
+				const message = `Failed to ${enabled ? "enable" : "disable"} node mode: ${String(error)}`;
+				setWorkspace((prev) => ({
+					...prev,
+					nodeModeState: "error",
+					nodeModeMessage: message,
+				}));
+				logEvent(message);
+				setGlobalStatus(message, true);
+				return false;
+			}
+		},
+		[logEvent, setGlobalStatus, settings],
+	);
+
 	const connectGateway = useCallback(async () => {
 		if (!isGatewayConfigValid(settings)) {
 			setGlobalStatus("Gateway URL is invalid", true);
@@ -1510,7 +1580,11 @@ function useGatewayWorkspace(
 			setGlobalStatus(summary, true);
 			return;
 		}
-		if (check.config?.requireAuth && !settings.token.trim() && !settings.password.trim()) {
+		if (
+			check.config?.requireAuth &&
+			!settings.token.trim() &&
+			!settings.password.trim()
+		) {
 			setWorkspace((prev) => ({
 				...prev,
 				connectionStatus: "disconnected",
@@ -1533,22 +1607,36 @@ function useGatewayWorkspace(
 		}));
 
 		socketRef.current?.disconnect();
-			socketRef.current = new GatewaySocketClient({
-				onConnectionChanged: (connected, message) => {
-					if (!connected) {
-						resetPendingRequests();
-					}
-					setWorkspace((prev) => ({
-						...prev,
-						connectionStatus: connected ? "connected" : "disconnected",
-						connectionMessage: message,
-					}));
-					setGlobalStatus(message, !connected && message.toLowerCase().includes("failed"));
-					if (connected) {
+		socketRef.current = new GatewaySocketClient({
+			onConnectionChanged: (connected, message) => {
+				if (!connected) {
+					resetPendingRequests();
+				}
+				setWorkspace((prev) => ({
+					...prev,
+					connectionStatus: connected ? "connected" : "disconnected",
+					connectionMessage: message,
+					nodeModeState:
+						connected || !enableNodeMode ? prev.nodeModeState : "disabled",
+					nodeModeMessage:
+						connected || !enableNodeMode
+							? prev.nodeModeMessage
+							: "Node mode waiting for reconnect.",
+				}));
+				setGlobalStatus(
+					message,
+					!connected && message.toLowerCase().includes("failed"),
+				);
+				if (connected) {
 					void refreshSessionsData();
 					void refreshAgentsData();
 					void refreshProvidersData();
 					void refreshVoiceConfigData();
+					if (enableNodeMode) {
+						void setNodeExecutionEnabled(true);
+					} else {
+						socketRef.current?.disableNode();
+					}
 				}
 			},
 			onAgentEvent: applyAgentEvent,
@@ -1559,55 +1647,65 @@ function useGatewayWorkspace(
 		const socketSettings =
 			check.config?.gatewayHost && check.config?.gatewayPort
 				? (() => {
-					try {
-						const parsed = new URL(settings.url);
-						const isSecure = parsed.protocol === "wss:" || parsed.protocol === "https:";
-						const defaultPort = isSecure ? "443" : "80";
-						const currentPort = parsed.port || defaultPort;
-						const nextPort = String(check.config?.gatewayPort);
-						const nextHost = check.config?.gatewayHost;
-						const normalizedNextHost =
-							nextHost === "0.0.0.0" || nextHost === "::" ? parsed.hostname : nextHost;
-						const shouldNormalizeSocket =
-							parsed.hostname !== normalizedNextHost ||
-							currentPort !== nextPort ||
-							parsed.pathname === "/" ||
-							parsed.pathname === "";
-						if (!shouldNormalizeSocket || !normalizedNextHost) {
+						try {
+							const parsed = new URL(settings.url);
+							const isSecure =
+								parsed.protocol === "wss:" || parsed.protocol === "https:";
+							const defaultPort = isSecure ? "443" : "80";
+							const currentPort = parsed.port || defaultPort;
+							const nextPort = String(check.config?.gatewayPort);
+							const nextHost = check.config?.gatewayHost;
+							const normalizedNextHost =
+								nextHost === "0.0.0.0" || nextHost === "::"
+									? parsed.hostname
+									: nextHost;
+							const shouldNormalizeSocket =
+								parsed.hostname !== normalizedNextHost ||
+								currentPort !== nextPort ||
+								parsed.pathname === "/" ||
+								parsed.pathname === "";
+							if (!shouldNormalizeSocket || !normalizedNextHost) {
+								return settings;
+							}
+							const protocol = isSecure ? "wss" : "ws";
+							const url = `${protocol}://${normalizedNextHost}:${nextPort}/ws`;
+							logEvent(`Using gateway socket from config: ${url}`);
+							return { ...settings, url };
+						} catch {
 							return settings;
 						}
-						const protocol = isSecure ? "wss" : "ws";
-						const url = `${protocol}://${normalizedNextHost}:${nextPort}/ws`;
-						logEvent(`Using gateway socket from config: ${url}`);
-						return { ...settings, url };
-					} catch {
-						return settings;
-					}
-				})()
+					})()
 				: settings;
 		socketRef.current.connect(socketSettings, deviceIdRef.current);
 	}, [
 		applyAgentEvent,
+		enableNodeMode,
 		logEvent,
 		refreshAgentsData,
-			refreshProvidersData,
-			refreshSessionsData,
-			refreshVoiceConfigData,
-			resetPendingRequests,
-			setGlobalStatus,
-			settings,
-		]);
+		refreshProvidersData,
+		refreshSessionsData,
+		refreshVoiceConfigData,
+		resetPendingRequests,
+		setGlobalStatus,
+		setNodeExecutionEnabled,
+		settings,
+	]);
 
 	const disconnectGateway = useCallback(() => {
+		socketRef.current?.disableNode();
 		socketRef.current?.disconnect();
 		resetPendingRequests();
 		setWorkspace((prev) => ({
 			...prev,
 			connectionStatus: "disconnected",
 			connectionMessage: "Disconnected",
+			nodeModeState: enableNodeMode ? "disabled" : prev.nodeModeState,
+			nodeModeMessage: enableNodeMode
+				? "Node mode waiting for reconnect."
+				: prev.nodeModeMessage,
 		}));
 		setGlobalStatus("Disconnected from gateway.");
-	}, [resetPendingRequests, setGlobalStatus]);
+	}, [enableNodeMode, resetPendingRequests, setGlobalStatus]);
 
 	const testConnection = useCallback(async () => {
 		setWorkspace((prev) => ({ ...prev, checkingConnection: true }));
@@ -2310,6 +2408,7 @@ function useGatewayWorkspace(
 		actions: {
 			connectGateway,
 			disconnectGateway,
+			setNodeExecutionEnabled,
 			testConnection,
 			refreshAgentsData,
 			refreshProvidersData,
@@ -2347,7 +2446,11 @@ type AppProps = {
 
 export function App({ overlayMode }: AppProps) {
 	const runtime = useRuntimeController(overlayMode);
-	const gateway = useGatewayWorkspace(runtime.state.settings, runtime.setStatus);
+	const gateway = useGatewayWorkspace(
+		runtime.state.settings,
+		runtime.state.enableNodeMode,
+		runtime.setStatus,
+	);
 	const handledQuickSendNonceRef = useRef(0);
 	const handledCompletionNonceRef = useRef(0);
 	const autoConnectAttemptedRef = useRef(false);
@@ -2820,6 +2923,9 @@ function GatewayScreen({
 				{" · "}
 				{workspace.connectionMessage}
 			</p>
+			<p className="mt-1 text-xs text-slate-400">
+				Node mode: {workspace.nodeModeMessage}
+			</p>
 			<div className="mt-3 flex flex-wrap gap-2">
 				<button
 					type="button"
@@ -2842,8 +2948,49 @@ function GatewayScreen({
 				</button>
 			</div>
 
-			<details className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3" open>
-				<summary className="cursor-pointer text-sm font-semibold">Settings</summary>
+			<div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3">
+				<p className="text-sm font-semibold text-slate-100">Quick Controls</p>
+				<p className="mt-1 text-[11px] text-slate-400">
+					Common runtime behavior controls for this device.
+				</p>
+				<div className="mt-3 grid gap-2 lg:grid-cols-3">
+					<label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+						<span>Auto-connect on launch</span>
+						<input
+							type="checkbox"
+							checked={runtimeState.autoConnectOnLaunch}
+							onChange={(event) =>
+								runtimeActions.updateAutoConnectOnLaunch(event.target.checked)
+							}
+						/>
+					</label>
+					<label className="flex items-center justify-between gap-3 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+						<span>Notify when agent finishes</span>
+						<input
+							type="checkbox"
+							checked={runtimeState.notifyOnAgentFinish}
+							onChange={(event) =>
+								runtimeActions.updateNotifyOnAgentFinish(event.target.checked)
+							}
+						/>
+					</label>
+					<label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+						<span>Enable this device as a node</span>
+						<input
+							type="checkbox"
+							checked={runtimeState.enableNodeMode}
+							onChange={(event) => {
+								const next = event.target.checked;
+								runtimeActions.updateEnableNodeMode(next);
+								void workspaceActions.setNodeExecutionEnabled(next);
+							}}
+						/>
+					</label>
+				</div>
+			</div>
+
+			<details className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3" open>
+				<summary className="cursor-pointer text-sm font-semibold">Connection Settings</summary>
 				<div className="mt-3 grid gap-2 sm:grid-cols-2">
 					<Field
 						label="Gateway URL"
@@ -2873,26 +3020,6 @@ function GatewayScreen({
 					</span>
 					.
 				</p>
-				<label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
-					<input
-						type="checkbox"
-						checked={runtimeState.autoConnectOnLaunch}
-						onChange={(event) =>
-							runtimeActions.updateAutoConnectOnLaunch(event.target.checked)
-						}
-					/>
-					<span>Auto-connect on launch (single startup attempt)</span>
-				</label>
-				<label className="mt-2 flex items-center gap-2 text-xs text-slate-300">
-					<input
-						type="checkbox"
-						checked={runtimeState.notifyOnAgentFinish}
-						onChange={(event) =>
-							runtimeActions.updateNotifyOnAgentFinish(event.target.checked)
-						}
-					/>
-					<span>Notify when agent finishes a response</span>
-				</label>
 				<p className="mt-3 text-xs text-slate-300">
 					HTTP base: <span className="font-mono text-slate-100">{resolvedUi || "(invalid)"}</span>
 				</p>
@@ -3967,22 +4094,67 @@ function RuntimeScreen({
 		() => [...workspace.providers].sort((a, b) => a.label.localeCompare(b.label)),
 		[workspace.providers],
 	);
+	const configuredProviderCount = providerList.filter(
+		(provider) => provider.source !== "missing",
+	).length;
+	const notificationPermission = runtimeState.permissions.items.find(
+		(entry) => entry.id === "notifications",
+	);
 
 	return (
 		<section className="space-y-4 rounded-2xl border border-white/10 bg-slate-900/70 p-4 backdrop-blur">
 			<div>
 				<h2 className="text-lg font-semibold">Runtime</h2>
 				<p className="mt-1 text-xs text-slate-300">
-					Native profile: {runtimeState.platform.os}. Configure overlay and hotkeys here.
+					Native profile: {runtimeState.platform.os}. Manage local runtime behavior and OS integration.
 				</p>
 			</div>
-			<p className="text-xs text-slate-300">
-				Transcript: <span className="font-mono text-slate-100">{runtimeState.transcript || "(empty)"}</span>
-			</p>
-				<div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
-					<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-						Hotkeys
+
+			<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Connection</p>
+					<p className={runtimeState.connected ? "text-sm text-emerald-200" : "text-sm text-rose-200"}>
+						{runtimeState.connected ? "Connected" : "Disconnected"}
 					</p>
+				</div>
+				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Recording</p>
+					<p className={runtimeState.recording ? "text-sm text-cyan-200" : "text-sm text-slate-200"}>
+						{runtimeState.recording ? "Active" : "Idle"}
+					</p>
+				</div>
+				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Overlay</p>
+					<p className={runtimeState.overlayVisible ? "text-sm text-cyan-200" : "text-sm text-slate-200"}>
+						{runtimeState.overlayVisible ? "Visible" : "Hidden"}
+					</p>
+				</div>
+				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Finish Notification</p>
+					<p
+						className={
+							runtimeState.notifyOnAgentFinish ? "text-sm text-emerald-200" : "text-sm text-slate-200"
+						}
+					>
+						{runtimeState.notifyOnAgentFinish ? "Enabled" : "Disabled"}
+					</p>
+				</div>
+			</div>
+
+			<div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+				<p className="text-sm font-semibold text-slate-100">Current Transcript</p>
+				<p className="mt-2 rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 font-mono text-xs text-slate-100">
+					{runtimeState.transcript || "(empty)"}
+				</p>
+			</div>
+
+			<details className="rounded-xl border border-white/10 bg-slate-950/40 p-3" open>
+				<summary className="cursor-pointer text-sm font-semibold text-slate-100">
+					Hotkeys
+				</summary>
+				<p className="mt-2 text-[11px] text-slate-400">
+					Configure shortcuts for recording and overlay controls.
+				</p>
 				<div className="mt-2 grid gap-2 sm:grid-cols-2">
 					<Field
 						label="Record Toggle"
@@ -4010,7 +4182,7 @@ function RuntimeScreen({
 							setHotkeySaveFeedback(null);
 						}}
 					/>
-					<span>Quick-send transcript when record hotkey session stops</span>
+					<span>Quick-send transcript when stop is triggered by the record hotkey</span>
 				</label>
 				<button
 					type="button"
@@ -4032,8 +4204,7 @@ function RuntimeScreen({
 				<p className="mt-1 text-[11px] text-slate-400">
 					Active shortcuts:{" "}
 					<span className="font-mono text-slate-300">{runtimeState.recordHotkey}</span> (record),{" "}
-					<span className="font-mono text-slate-300">{runtimeState.overlayHotkey}</span>{" "}
-					(overlay)
+					<span className="font-mono text-slate-300">{runtimeState.overlayHotkey}</span> (overlay)
 				</p>
 				<p className="mt-2 text-[11px] text-slate-400">
 					Use Tauri accelerator syntax (example:{" "}
@@ -4042,268 +4213,267 @@ function RuntimeScreen({
 				<p className="mt-1 text-[11px] text-slate-400">
 					Overlay visibility is controlled by recording start/stop and the overlay hotkey.
 				</p>
-				</div>
-				<div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
-					<div className="flex items-center justify-between gap-2">
-						<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-							Providers
-						</p>
-						<button
-							type="button"
-							className="rounded-full border border-white/20 px-3 py-1 text-[11px]"
-							onClick={() => void workspaceActions.refreshProvidersData()}
-							disabled={workspace.providersLoading}
-						>
-							{workspace.providersLoading ? "Refreshing..." : "Refresh"}
-						</button>
-					</div>
-					<p className="mt-1 text-[11px] text-slate-400">
-						Store API credentials in the gateway profile used by this desktop app.
-					</p>
-					{workspace.providersUpdatedAt ? (
-						<p className="mt-1 text-[11px] text-slate-400">
-							Updated {new Date(workspace.providersUpdatedAt).toLocaleString()}
-						</p>
-					) : null}
-					{workspace.credentialsPath ? (
-						<p className="mt-1 break-all text-[11px] text-slate-400">
-							Credentials path:{" "}
-							<span className="font-mono text-slate-300">{workspace.credentialsPath}</span>
-						</p>
-					) : null}
-					<div className="mt-2 space-y-2">
-						{providerList.length === 0 ? (
-							<div className="rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-slate-400">
-								No providers found yet.
-							</div>
-						) : (
-							providerList.map((provider) => (
-								<div
-									key={provider.name}
-									className="rounded-lg border border-white/10 bg-slate-900/60 p-2"
-								>
-									<div className="mb-2 flex items-center justify-between gap-2">
-										<div className="min-w-0">
-											<p className="truncate text-xs font-semibold text-slate-100">
-												{provider.label}
-											</p>
-											<p className="truncate text-[10px] uppercase tracking-[0.12em] text-slate-400">
-												{provider.category || "model"} · {provider.source}
-											</p>
-										</div>
-										<span
-											className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
-												provider.source === "missing"
-													? "border-rose-300/40 text-rose-200"
-													: "border-emerald-300/40 text-emerald-200"
-											}`}
-										>
-											{provider.source}
-										</span>
-									</div>
-									<div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-										<input
-											type="password"
-											autoComplete="off"
-											placeholder={`Token for ${provider.label}`}
-											value={providerDrafts[provider.name] || ""}
-											onChange={(event) =>
-												setProviderDrafts((prev) => ({
-													...prev,
-													[provider.name]: event.target.value,
-												}))
-											}
-											className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
-										/>
-										<button
-											type="button"
-											className="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100"
-											onClick={() => void handleSaveProvider(provider.name)}
-											disabled={updatingProviderName === provider.name}
-										>
-											{updatingProviderName === provider.name ? "Saving..." : "Save"}
-										</button>
-										<button
-											type="button"
-											className="rounded-full border border-white/20 px-3 py-1.5 text-xs"
-											onClick={() => void handleClearProvider(provider.name)}
-											disabled={updatingProviderName === provider.name}
-										>
-											Clear
-										</button>
-									</div>
-								</div>
-							))
-						)}
-					</div>
-					{providerFeedback ? (
-						<p
-							className={`mt-2 text-xs ${
-								providerFeedback.error ? "text-rose-300" : "text-emerald-300"
-							}`}
-						>
-							{providerFeedback.text}
-						</p>
-					) : null}
-				</div>
-				<div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
-					<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-						Voice
-					</p>
-					<p className="mt-1 text-[11px] text-slate-400">
-						Set default text-to-speech behavior for chat playback.
-					</p>
-					<div className="mt-2 grid gap-2 sm:grid-cols-2">
-						<label className="grid gap-1 text-xs text-slate-300">
-							<span>Provider</span>
-							<select
-								className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
-								value={voiceProvider}
-								onChange={(event) => setVoiceProvider(event.target.value as VoiceConfig["provider"])}
-							>
-								<option value="web_speech">Web Speech</option>
-								<option value="elevenlabs">ElevenLabs</option>
-							</select>
-						</label>
-						<label className="grid gap-1 text-xs text-slate-300">
-							<span>Default Policy</span>
-							<select
-								className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
-								value={voicePolicy}
-								onChange={(event) =>
-									setVoicePolicy(
-										event.target.value as NonNullable<VoiceConfig["defaultPolicy"]>,
-									)
-								}
-							>
-								<option value="off">Off</option>
-								<option value="manual">Manual</option>
-								<option value="auto">Auto</option>
-							</select>
-						</label>
-					</div>
-					{voiceProvider === "web_speech" ? (
-						<div className="mt-2 grid gap-2 sm:grid-cols-2">
-							<Field label="Voice Name" value={voiceName} onChange={setVoiceName} />
-							<Field label="Language" value={voiceLang} onChange={setVoiceLang} />
-							<Field label="Rate" value={voiceRate} onChange={setVoiceRate} />
-							<Field label="Pitch" value={voicePitch} onChange={setVoicePitch} />
-							<Field label="Volume" value={voiceVolume} onChange={setVoiceVolume} />
-						</div>
-					) : null}
-					{voiceProvider === "elevenlabs" ? (
-						<div className="mt-2 grid gap-2 sm:grid-cols-2">
-							<Field label="Voice ID" value={elevenVoiceId} onChange={setElevenVoiceId} />
-							<Field label="Model ID" value={elevenModelId} onChange={setElevenModelId} />
-							<Field label="Stability" value={elevenStability} onChange={setElevenStability} />
-							<Field
-								label="Similarity Boost"
-								value={elevenSimilarityBoost}
-								onChange={setElevenSimilarityBoost}
-							/>
-							<Field label="Style" value={elevenStyle} onChange={setElevenStyle} />
-							<Field label="Speed" value={elevenSpeed} onChange={setElevenSpeed} />
-							<Field
-								label="Output Format"
-								value={elevenOutputFormat}
-								onChange={setElevenOutputFormat}
-							/>
-							<Field
-								label="Streaming Latency"
-								value={elevenLatency}
-								onChange={setElevenLatency}
-							/>
-							<label className="flex items-center gap-2 rounded-lg border border-white/20 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
-								<input
-									type="checkbox"
-									checked={elevenSpeakerBoost === true}
-									onChange={(event) =>
-										setElevenSpeakerBoost(event.target.checked ? true : false)
-									}
-								/>
-								<span>Use speaker boost</span>
-							</label>
-						</div>
-					) : null}
+			</details>
+
+			<details className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+				<summary className="cursor-pointer text-sm font-semibold text-slate-100">
+					Providers ({configuredProviderCount}/{providerList.length} configured)
+				</summary>
+				<div className="mt-3 flex items-center justify-end gap-2">
 					<button
 						type="button"
-						className="mt-3 rounded-full border border-white/20 px-4 py-2 text-sm"
-						onClick={() => void handleSaveVoice()}
-						disabled={savingVoice}
+						className="rounded-full border border-white/20 px-3 py-1 text-[11px]"
+						onClick={() => void workspaceActions.refreshProvidersData()}
+						disabled={workspace.providersLoading}
 					>
-						{savingVoice ? "Saving..." : "Save Voice Settings"}
+						{workspace.providersLoading ? "Refreshing..." : "Refresh"}
 					</button>
-					{voiceFeedback ? (
-						<p
-							className={`mt-2 text-xs ${
-								voiceFeedback.error ? "text-rose-300" : "text-emerald-300"
-							}`}
-						>
-							{voiceFeedback.text}
-						</p>
-					) : null}
 				</div>
-				<div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
-					<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-						Permissions
-					</p>
+				<p className="mt-1 text-[11px] text-slate-400">
+					Store API credentials in the gateway profile used by this desktop app.
+				</p>
+				{workspace.providersUpdatedAt ? (
 					<p className="mt-1 text-[11px] text-slate-400">
-						Use these shortcuts to jump directly to OS privacy settings.
+						Updated {new Date(workspace.providersUpdatedAt).toLocaleString()}
 					</p>
-					<div className="mt-2 space-y-2">
-						{runtimeState.permissions.items.map((entry) => (
+				) : null}
+				{workspace.credentialsPath ? (
+					<p className="mt-1 break-all text-[11px] text-slate-400">
+						Credentials path:{" "}
+						<span className="font-mono text-slate-300">{workspace.credentialsPath}</span>
+					</p>
+				) : null}
+				<div className="mt-2 space-y-2">
+					{providerList.length === 0 ? (
+						<div className="rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-slate-400">
+							No providers found yet.
+						</div>
+					) : (
+						providerList.map((provider) => (
 							<div
-								key={entry.id}
-								className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs"
+								key={provider.name}
+								className="rounded-lg border border-white/10 bg-slate-900/60 p-2"
 							>
-								<div className="min-w-0">
-									<p>{entry.label}</p>
-									<p className="mt-0.5 font-mono text-[10px] text-slate-300">
-										{statusLabel(entry.status)}
-									</p>
+								<div className="mb-2 flex items-center justify-between gap-2">
+									<div className="min-w-0">
+										<p className="truncate text-xs font-semibold text-slate-100">
+											{provider.label}
+										</p>
+										<p className="truncate text-[10px] uppercase tracking-[0.12em] text-slate-400">
+											{provider.category || "model"} · {provider.source}
+										</p>
+									</div>
+									<span
+										className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
+											provider.source === "missing"
+												? "border-rose-300/40 text-rose-200"
+												: "border-emerald-300/40 text-emerald-200"
+										}`}
+									>
+										{provider.source}
+									</span>
 								</div>
-								<div className="flex items-center gap-1.5">
-									{entry.canOpenSettings ? (
-										<button
-											type="button"
-											className="rounded-full border border-white/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-100 transition hover:border-cyan-300/50"
-											onClick={() => void runtimeActions.openPermissionSettings(entry.id)}
-										>
-											Open Settings
-										</button>
-									) : null}
-									{entry.id === "notifications" ? (
-										<button
-											type="button"
-											className="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-300/70"
-											onClick={() => void handleSendTestNotification()}
-											disabled={sendingNotification}
-										>
-											{sendingNotification ? "Testing..." : "Send Test"}
-										</button>
-									) : null}
-									{!entry.canOpenSettings && entry.id !== "notifications" ? (
-										<span className="text-[10px] uppercase tracking-[0.12em] text-slate-500">
-											No action
-										</span>
-									) : null}
+								<div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+									<input
+										type="password"
+										autoComplete="off"
+										placeholder={`Token for ${provider.label}`}
+										value={providerDrafts[provider.name] || ""}
+										onChange={(event) =>
+											setProviderDrafts((prev) => ({
+												...prev,
+												[provider.name]: event.target.value,
+											}))
+										}
+										className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+									/>
+									<button
+										type="button"
+										className="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100"
+										onClick={() => void handleSaveProvider(provider.name)}
+										disabled={updatingProviderName === provider.name}
+									>
+										{updatingProviderName === provider.name ? "Saving..." : "Save"}
+									</button>
+									<button
+										type="button"
+										className="rounded-full border border-white/20 px-3 py-1.5 text-xs"
+										onClick={() => void handleClearProvider(provider.name)}
+										disabled={updatingProviderName === provider.name}
+									>
+										Clear
+									</button>
 								</div>
 							</div>
-						))}
-					</div>
-					{notificationFeedback ? (
-						<p
-							className={`mt-2 text-xs ${
-								notificationFeedback.error ? "text-rose-300" : "text-emerald-300"
-							}`}
-						>
-							{notificationFeedback.text}
-						</p>
-					) : null}
-					<p className="mt-2 text-[11px] text-slate-400">{runtimeState.permissions.note}</p>
+						))
+					)}
 				</div>
-			</section>
-		);
+				{providerFeedback ? (
+					<p
+						className={`mt-2 text-xs ${
+							providerFeedback.error ? "text-rose-300" : "text-emerald-300"
+						}`}
+					>
+						{providerFeedback.text}
+					</p>
+				) : null}
+			</details>
+
+			<details className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+				<summary className="cursor-pointer text-sm font-semibold text-slate-100">
+					Voice ({voiceProvider === "web_speech" ? "Web Speech" : "ElevenLabs"} · {voicePolicy})
+				</summary>
+				<p className="mt-2 text-[11px] text-slate-400">
+					Set default text-to-speech behavior for chat playback.
+				</p>
+				<div className="mt-2 grid gap-2 sm:grid-cols-2">
+					<label className="grid gap-1 text-xs text-slate-300">
+						<span>Provider</span>
+						<select
+							className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+							value={voiceProvider}
+							onChange={(event) => setVoiceProvider(event.target.value as VoiceConfig["provider"])}
+						>
+							<option value="web_speech">Web Speech</option>
+							<option value="elevenlabs">ElevenLabs</option>
+						</select>
+					</label>
+					<label className="grid gap-1 text-xs text-slate-300">
+						<span>Default Policy</span>
+						<select
+							className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+							value={voicePolicy}
+							onChange={(event) =>
+								setVoicePolicy(
+									event.target.value as NonNullable<VoiceConfig["defaultPolicy"]>,
+								)
+							}
+						>
+							<option value="off">Off</option>
+							<option value="manual">Manual</option>
+							<option value="auto">Auto</option>
+						</select>
+					</label>
+				</div>
+				{voiceProvider === "web_speech" ? (
+					<div className="mt-2 grid gap-2 sm:grid-cols-2">
+						<Field label="Voice Name" value={voiceName} onChange={setVoiceName} />
+						<Field label="Language" value={voiceLang} onChange={setVoiceLang} />
+						<Field label="Rate" value={voiceRate} onChange={setVoiceRate} />
+						<Field label="Pitch" value={voicePitch} onChange={setVoicePitch} />
+						<Field label="Volume" value={voiceVolume} onChange={setVoiceVolume} />
+					</div>
+				) : null}
+				{voiceProvider === "elevenlabs" ? (
+					<div className="mt-2 grid gap-2 sm:grid-cols-2">
+						<Field label="Voice ID" value={elevenVoiceId} onChange={setElevenVoiceId} />
+						<Field label="Model ID" value={elevenModelId} onChange={setElevenModelId} />
+						<Field label="Stability" value={elevenStability} onChange={setElevenStability} />
+						<Field
+							label="Similarity Boost"
+							value={elevenSimilarityBoost}
+							onChange={setElevenSimilarityBoost}
+						/>
+						<Field label="Style" value={elevenStyle} onChange={setElevenStyle} />
+						<Field label="Speed" value={elevenSpeed} onChange={setElevenSpeed} />
+						<Field
+							label="Output Format"
+							value={elevenOutputFormat}
+							onChange={setElevenOutputFormat}
+						/>
+						<Field label="Streaming Latency" value={elevenLatency} onChange={setElevenLatency} />
+						<label className="flex items-center gap-2 rounded-lg border border-white/20 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
+							<input
+								type="checkbox"
+								checked={elevenSpeakerBoost === true}
+								onChange={(event) =>
+									setElevenSpeakerBoost(event.target.checked ? true : false)
+								}
+							/>
+							<span>Use speaker boost</span>
+						</label>
+					</div>
+				) : null}
+				<button
+					type="button"
+					className="mt-3 rounded-full border border-white/20 px-4 py-2 text-sm"
+					onClick={() => void handleSaveVoice()}
+					disabled={savingVoice}
+				>
+					{savingVoice ? "Saving..." : "Save Voice Settings"}
+				</button>
+				{voiceFeedback ? (
+					<p
+						className={`mt-2 text-xs ${
+							voiceFeedback.error ? "text-rose-300" : "text-emerald-300"
+						}`}
+					>
+						{voiceFeedback.text}
+					</p>
+				) : null}
+			</details>
+
+			<details className="rounded-xl border border-white/10 bg-slate-950/40 p-3" open>
+				<summary className="cursor-pointer text-sm font-semibold text-slate-100">
+					Permissions ({notificationPermission ? statusLabel(notificationPermission.status) : "Unknown"})
+				</summary>
+				<p className="mt-2 text-[11px] text-slate-400">
+					Use these shortcuts to jump directly to OS privacy settings.
+				</p>
+				<div className="mt-2 space-y-2">
+					{runtimeState.permissions.items.map((entry) => (
+						<div
+							key={entry.id}
+							className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs"
+						>
+							<div className="min-w-0">
+								<p>{entry.label}</p>
+								<p className="mt-0.5 font-mono text-[10px] text-slate-300">
+									{statusLabel(entry.status)}
+								</p>
+							</div>
+							<div className="flex items-center gap-1.5">
+								{entry.canOpenSettings ? (
+									<button
+										type="button"
+										className="rounded-full border border-white/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-100 transition hover:border-cyan-300/50"
+										onClick={() => void runtimeActions.openPermissionSettings(entry.id)}
+									>
+										Open Settings
+									</button>
+								) : null}
+								{entry.id === "notifications" ? (
+									<button
+										type="button"
+										className="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-100 transition hover:border-cyan-300/70"
+										onClick={() => void handleSendTestNotification()}
+										disabled={sendingNotification}
+									>
+										{sendingNotification ? "Testing..." : "Send Test"}
+									</button>
+								) : null}
+								{!entry.canOpenSettings && entry.id !== "notifications" ? (
+									<span className="text-[10px] uppercase tracking-[0.12em] text-slate-500">
+										No action
+									</span>
+								) : null}
+							</div>
+						</div>
+					))}
+				</div>
+				{notificationFeedback ? (
+					<p
+						className={`mt-2 text-xs ${
+							notificationFeedback.error ? "text-rose-300" : "text-emerald-300"
+						}`}
+					>
+						{notificationFeedback.text}
+					</p>
+				) : null}
+				<p className="mt-2 text-[11px] text-slate-400">{runtimeState.permissions.note}</p>
+			</details>
+		</section>
+	);
 }
 
 type EventsScreenProps = {
@@ -4774,7 +4944,7 @@ function OverlayView({ state, actions, canUseWebSpeechRecognition }: OverlayProp
 					>
 						{state.recording
 							? state.recognitionActive
-								? "Stop"
+								? "Stop & Review"
 								: canUseWebSpeechRecognition
 									? "Enable Mic"
 									: "Stop"

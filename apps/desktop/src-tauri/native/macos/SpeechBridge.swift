@@ -110,6 +110,13 @@ func runPermissionProbeMode() -> Int32 {
 }
 
 func runSendTestNotificationMode() -> Int32 {
+	return runSendNotification(
+		title: "Wingman Desktop",
+		body: "Notifications are enabled and working."
+	)
+}
+
+func runSendNotification(title: String, body: String) -> Int32 {
 	let center = UNUserNotificationCenter.current()
 	let authSemaphore = DispatchSemaphore(value: 0)
 	var granted = false
@@ -130,11 +137,11 @@ func runSendTestNotificationMode() -> Int32 {
 	}
 
 	let content = UNMutableNotificationContent()
-	content.title = "Wingman Desktop"
-	content.body = "Notifications are enabled and working."
+	content.title = title
+	content.body = body
 	content.sound = .default
 	let request = UNNotificationRequest(
-		identifier: "wingman-desktop-test-\(UUID().uuidString)",
+		identifier: "wingman-desktop-\(UUID().uuidString)",
 		content: content,
 		trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
 	)
@@ -150,6 +157,19 @@ func runSendTestNotificationMode() -> Int32 {
 		return 1
 	}
 	return 0
+}
+
+func runSendNotificationMode() -> Int32 {
+	let rawTitle = argumentValue("--title") ?? "Wingman Desktop"
+	let rawBody = argumentValue("--body") ?? ""
+	let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+	let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !body.isEmpty else {
+		FileHandle.standardError.write(Data("notification body cannot be empty\n".utf8))
+		return 1
+	}
+	let resolvedTitle = title.isEmpty ? "Wingman Desktop" : title
+	return runSendNotification(title: resolvedTitle, body: body)
 }
 
 final class SpeechBridge {
@@ -261,6 +281,10 @@ if CommandLine.arguments.contains("--probe-permissions") {
 
 if CommandLine.arguments.contains("--send-test-notification") {
 	exit(runSendTestNotificationMode())
+}
+
+if CommandLine.arguments.contains("--send-notification") {
+	exit(runSendNotificationMode())
 }
 
 let signalQueue = DispatchQueue(label: "wingman.speech.signals")

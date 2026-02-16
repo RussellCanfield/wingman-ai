@@ -9,6 +9,12 @@ import { createCommandExecuteTool } from "../tools/command_execute.js";
 import { createGitStatusTool } from "../tools/git_status.js";
 import { createInternetSearchTool } from "../tools/internet_search.js";
 import {
+	createNodeNotifyTool,
+	createNodeRunTool,
+	type NodeInvokeRequest,
+	type NodeInvokeResult,
+} from "../tools/node_invoke.js";
+import {
 	getSharedTerminalSessionManager,
 	type TerminalSessionManager,
 } from "../tools/terminal_session_manager.js";
@@ -51,12 +57,19 @@ export interface ToolOptions {
 	mcpConfigs?: MCPServersConfig[];
 	skillsDirectory?: string;
 	dynamicUiEnabled?: boolean;
+	nodeInvoker?: (request: NodeInvokeRequest) => Promise<NodeInvokeResult>;
+	nodeDefaultTargetClientId?: string;
 }
 
 export const UI_TOOL_NAMES: AvailableToolName[] = [
 	"ui_registry_list",
 	"ui_registry_get",
 	"ui_present",
+];
+
+export const NODE_TOOL_NAMES: AvailableToolName[] = [
+	"node_notify",
+	"node_run",
 ];
 
 /**
@@ -130,6 +143,18 @@ export function createTool(
 				blockedCommands,
 				allowScriptExecution,
 				commandTimeout: timeout,
+			});
+
+		case "node_notify":
+			return createNodeNotifyTool({
+				nodeInvoker: options.nodeInvoker,
+				defaultTargetClientId: options.nodeDefaultTargetClientId,
+			});
+
+		case "node_run":
+			return createNodeRunTool({
+				nodeInvoker: options.nodeInvoker,
+				defaultTargetClientId: options.nodeDefaultTargetClientId,
 			});
 
 		case "think":
@@ -217,6 +242,7 @@ export function getAvailableTools(): AvailableToolName[] {
 		"browser_control",
 		"command_execute",
 		"background_terminal",
+		...NODE_TOOL_NAMES,
 		"think",
 		"code_search",
 		"git_status",

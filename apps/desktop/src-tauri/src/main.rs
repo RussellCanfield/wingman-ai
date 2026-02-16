@@ -61,7 +61,8 @@ fn main() {
             commands::get_permission_snapshot,
             commands::open_permission_settings,
             commands::send_notification,
-            commands::send_test_notification
+            commands::send_test_notification,
+            commands::run_system_command
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Wingman desktop companion")

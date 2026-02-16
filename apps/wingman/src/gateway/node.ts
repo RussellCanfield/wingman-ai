@@ -29,11 +29,18 @@ export class NodeManager {
 	 * Register a new node
 	 */
 	registerNode(
-		ws: ServerWebSocket<{ nodeId: string }>,
+		ws: ServerWebSocket<{
+			nodeId: string;
+			clientId?: string;
+			clientType?: string;
+			authenticated?: boolean;
+			tailscaleUser?: string;
+		}>,
 		name: string,
 		capabilities?: string[],
 		sessionId?: string,
 		agentName?: string,
+		clientId?: string,
 	): Node | null {
 		// Check if we've reached max nodes
 		if (this.nodes.size >= this.maxNodes) {
@@ -44,6 +51,7 @@ export class NodeManager {
 		const node: Node = {
 			id,
 			name,
+			clientId,
 			capabilities,
 			groups: new Set(),
 			connectedAt: Date.now(),
@@ -53,7 +61,7 @@ export class NodeManager {
 		};
 
 		// Set the nodeId in the WebSocket data
-		ws.data = { nodeId: id };
+		ws.data = { ...ws.data, nodeId: id };
 
 		this.nodes.set(id, node);
 		return node;
@@ -93,6 +101,17 @@ export class NodeManager {
 	}
 
 	/**
+	 * Get all nodes for a stable client ID
+	 */
+	getNodesByClientId(clientId: string): Node[] {
+		const trimmed = clientId.trim();
+		if (!trimmed) return [];
+		return Array.from(this.nodes.values()).filter(
+			(node) => node.clientId === trimmed,
+		);
+	}
+
+	/**
 	 * Get node metadata (without WebSocket)
 	 */
 	getNodeMetadata(nodeId: string): NodeMetadata | undefined {
@@ -104,6 +123,7 @@ export class NodeManager {
 		return {
 			id: node.id,
 			name: node.name,
+			clientId: node.clientId,
 			capabilities: node.capabilities,
 			groups: node.groups,
 			connectedAt: node.connectedAt,
@@ -333,6 +353,7 @@ export class NodeManager {
 			nodes: Array.from(this.nodes.values()).map((n) => ({
 				id: n.id,
 				name: n.name,
+				clientId: n.clientId,
 				groupCount: n.groups.size,
 				connectedAt: n.connectedAt,
 				lastPing: n.lastPing,

@@ -13,8 +13,8 @@ import { createLogger, type Logger, type LogLevel } from "@/logger.js";
 import { ensureUvAvailableForFeature } from "@/utils/uv.js";
 import { DiscordGatewayAdapter } from "./adapters/discord.js";
 import { GatewayAuth } from "./auth.js";
-import { BrowserRelayServer } from "./browserRelayServer.js";
 import { BroadcastGroupManager } from "./broadcast.js";
+import { BrowserRelayServer } from "./browserRelayServer.js";
 import {
 	MDNSDiscoveryService,
 	TailscaleDiscoveryService,
@@ -24,6 +24,7 @@ import { getGatewayTokenFromEnv } from "./env.js";
 import { InternalHookRegistry } from "./hooks/registry.js";
 import { handleAgentsApi } from "./http/agents.js";
 import { handleFsApi } from "./http/fs.js";
+import { createNodeApprovalStore, handleNodesApi } from "./http/nodes.js";
 import { handleProvidersApi } from "./http/providers.js";
 import { createRoutineStore, handleRoutinesApi } from "./http/routines.js";
 import { handleSessionsApi } from "./http/sessions.js";
@@ -40,6 +41,7 @@ import type {
 	AgentCancelPayload,
 	AgentRequestPayload,
 	BroadcastPayload,
+	BroadcastGroup,
 	DirectPayload,
 	ErrorPayload,
 	GatewayAuthConfig,
@@ -79,24 +81,137 @@ type PendingAgentRequest = {
 	configDirOverride: string | null;
 };
 
+type PendingNodeRequest = {
+	id: string;
+	requester?: GatewaySocket;
+	targetNodeId: string;
+	createdAt: number;
+	resolve?: (result: { nodeId: string; payload: unknown }) => void;
+	reject?: (error: Error) => void;
+	timeoutHandle?: ReturnType<typeof setTimeout>;
+};
+
+type NodeToolInvocationRequest = {
+	tool: "system.notify" | "system.run";
+	args?: Record<string, unknown>;
+	timeoutMs?: number;
+	targetNodeId?: string;
+	targetClientId?: string;
+	capability?: string;
+};
+
 const API_CORS_HEADERS: Record<string, string> = {
-	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
 	"Access-Control-Allow-Headers":
 		"Content-Type, Authorization, X-Wingman-Token, X-Wingman-Password",
 	"Access-Control-Max-Age": "600",
 };
 
-function withApiCors(response: Response): Response {
-	const headers = new Headers(response.headers);
-	for (const [key, value] of Object.entries(API_CORS_HEADERS)) {
-		headers.set(key, value);
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
+const CLIENT_ID_PATTERN = /^[a-zA-Z0-9._:-]{1,128}$/;
+const CLIENT_TYPE_PATTERN = /^[a-zA-Z0-9._:-]{1,64}$/;
+const NODE_EXECUTION_CAPABILITIES = new Set(["system.notify", "system.run"]);
+const DEFAULT_NODE_REQUEST_TIMEOUT_MS = 30_000;
+const MIN_NODE_REQUEST_TIMEOUT_MS = 1_000;
+const MAX_NODE_REQUEST_TIMEOUT_MS = 120_000;
+const MAX_PENDING_NODE_REQUESTS = 2_000;
+
+function normalizeHostname(hostname: string): string {
+	const trimmed = hostname.trim().toLowerCase();
+	if (!trimmed) return "";
+	if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+		return trimmed.slice(1, -1);
 	}
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers,
-	});
+	return trimmed;
+}
+
+function defaultPortForProtocol(protocol: string): string {
+	return protocol === "https:" ? "443" : "80";
+}
+
+function normalizeClientIdentifier(
+	raw: string,
+	pattern: RegExp,
+): string | null {
+	const trimmed = raw.trim();
+	if (!trimmed) return null;
+	if (trimmed.length > 128) return null;
+	if (!pattern.test(trimmed)) return null;
+	return trimmed;
+}
+
+function includesNodeExecutionCapability(capabilities?: string[]): boolean {
+	if (!Array.isArray(capabilities)) return false;
+	for (const capability of capabilities) {
+		if (
+			typeof capability === "string" &&
+			NODE_EXECUTION_CAPABILITIES.has(capability.trim())
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+export function isLoopbackHostname(hostname: string): boolean {
+	return LOOPBACK_HOSTNAMES.has(normalizeHostname(hostname));
+}
+
+export function isGatewayOriginAllowed(params: {
+	origin: string;
+	requestUrl: string | URL;
+	gatewayHost: string;
+	gatewayPort: number;
+	controlUiEnabled: boolean;
+	controlUiPort: number;
+}): boolean {
+	let originUrl: URL;
+	let requestUrl: URL;
+	try {
+		originUrl = new URL(params.origin);
+		requestUrl =
+			typeof params.requestUrl === "string"
+				? new URL(params.requestUrl)
+				: params.requestUrl;
+	} catch {
+		return false;
+	}
+
+	if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") {
+		return false;
+	}
+
+	const originHost = normalizeHostname(originUrl.hostname);
+	const requestHost = normalizeHostname(requestUrl.hostname);
+	const configHost = normalizeHostname(params.gatewayHost);
+
+	// Keep development and local desktop flows working across loopback origins.
+	if (isLoopbackHostname(originHost) && isLoopbackHostname(requestHost)) {
+		return true;
+	}
+
+	if (!originHost || originHost !== requestHost) {
+		return false;
+	}
+
+	const originPort =
+		originUrl.port || defaultPortForProtocol(originUrl.protocol);
+	const allowedPorts = new Set<string>([String(params.gatewayPort)]);
+	if (params.controlUiEnabled) {
+		allowedPorts.add(String(params.controlUiPort));
+	}
+
+	// For wildcard binds (0.0.0.0/::), only trust same-host origins to avoid
+	// opening the API to arbitrary internet origins.
+	if (configHost === "0.0.0.0" || configHost === "::") {
+		return allowedPorts.has(originPort);
+	}
+
+	if (originHost !== configHost) {
+		return false;
+	}
+
+	return allowedPorts.has(originPort);
 }
 
 export function resolveExecutionWorkspaceOverride(
@@ -162,6 +277,7 @@ export class GatewayServer {
 	private browserRelayServer: BrowserRelayServer | null = null;
 	private webhookStore: ReturnType<typeof createWebhookStore>;
 	private routineStore: ReturnType<typeof createRoutineStore>;
+	private nodeApprovalStore: ReturnType<typeof createNodeApprovalStore>;
 	private internalHooks: InternalHookRegistry | null = null;
 	private discordAdapter: DiscordGatewayAdapter | null = null;
 	private sessionSubscriptions: Map<string, Set<GatewaySocket>> = new Map();
@@ -174,7 +290,9 @@ export class GatewayServer {
 	private activeSessionRequests: Map<string, string> = new Map();
 	private queuedSessionRequests: Map<string, PendingAgentRequest[]> = new Map();
 	private requestSessionKeys: Map<string, string> = new Map();
+	private pendingNodeRequests: Map<string, PendingNodeRequest> = new Map();
 	private terminalSessionManager: TerminalSessionManager;
+	private nodePairingRequired: boolean;
 
 	// HTTP bridge support
 	private bridgeQueues: Map<string, GatewayMessage[]> = new Map();
@@ -193,6 +311,9 @@ export class GatewayServer {
 		this.router = new GatewayRouter(this.wingmanConfig);
 		this.webhookStore = createWebhookStore(() => this.resolveConfigDirPath());
 		this.routineStore = createRoutineStore(() => this.resolveConfigDirPath());
+		this.nodeApprovalStore = createNodeApprovalStore(() =>
+			this.resolveConfigDirPath(),
+		);
 
 		const gatewayDefaults = this.wingmanConfig.gateway;
 		const envToken = getGatewayTokenFromEnv();
@@ -240,6 +361,7 @@ export class GatewayServer {
 		const controlUi = this.wingmanConfig.gateway?.controlUi;
 		this.controlUiEnabled = controlUi?.enabled ?? false;
 		this.controlUiPort = controlUi?.port || 18790;
+		this.nodePairingRequired = controlUi?.pairingRequired ?? true;
 		this.controlUiSamePort =
 			this.controlUiEnabled && this.controlUiPort === this.config.port;
 		this.uiDistDir = this.controlUiEnabled ? this.resolveControlUiDir() : null;
@@ -282,6 +404,15 @@ export class GatewayServer {
 			this.wingmanConfig.hooks,
 		);
 		await this.internalHooks.load();
+		if (
+			this.config.auth?.allowTailscale &&
+			!isLoopbackHostname(this.config.host)
+		) {
+			this.log(
+				"warn",
+				"Tailscale header-based auth bypass is disabled on non-loopback gateway hosts; use token/password auth instead.",
+			);
+		}
 
 		this.server = Bun.serve({
 			port: this.config.port,
@@ -302,20 +433,28 @@ export class GatewayServer {
 
 				// HTTP bridge - send message
 				if (url.pathname === "/bridge/send") {
+					const authFailure = this.requireHttpAuth(req);
+					if (authFailure) {
+						return authFailure;
+					}
 					return this.handleBridgeSend(req);
 				}
 
 				// HTTP bridge - long poll for messages
 				if (url.pathname === "/bridge/poll") {
+					const authFailure = this.requireHttpAuth(req);
+					if (authFailure) {
+						return authFailure;
+					}
 					return this.handleBridgePoll(req);
 				}
 
 				// WebSocket upgrade
 				if (url.pathname === "/ws") {
-					const tailscaleUser =
-						req.headers.get("tailscale-user-login") ||
-						req.headers.get("ts-user-login") ||
-						undefined;
+					if (!this.isRequestOriginAllowed(req, url)) {
+						return new Response("Forbidden origin", { status: 403 });
+					}
+					const tailscaleUser = this.resolveTrustedTailscaleUser(req);
 					const upgraded = server.upgrade(req, {
 						data: { nodeId: "", tailscaleUser },
 					});
@@ -623,6 +762,18 @@ export class GatewayServer {
 				case "direct":
 					this.handleDirect(ws, msg);
 					break;
+				case "req:node":
+					this.handleNodeRequest(ws, msg);
+					break;
+				case "event:node":
+					this.handleNodeResponse(ws, msg);
+					break;
+				case "res":
+					this.handleNodeResponse(ws, msg);
+					break;
+				case "error":
+					this.handleNodeResponse(ws, msg);
+					break;
 				case "ping":
 					this.handlePing(ws, msg);
 					break;
@@ -648,6 +799,7 @@ export class GatewayServer {
 			this.nodeManager.unregisterNode(nodeId);
 			this.log("info", `Node disconnected: ${nodeId}`);
 		}
+		this.cleanupPendingNodeRequestsForSocket(ws);
 		this.connectedClients.delete(ws);
 		this.clearSessionSubscriptions(ws);
 		this.cancelSocketAgentRequests(ws);
@@ -693,8 +845,28 @@ export class GatewayServer {
 			return;
 		}
 
-		ws.data.clientId = msg.client.instanceId;
-		ws.data.clientType = msg.client.clientType;
+		const clientId = normalizeClientIdentifier(
+			msg.client.instanceId,
+			CLIENT_ID_PATTERN,
+		);
+		const clientType = normalizeClientIdentifier(
+			msg.client.clientType,
+			CLIENT_TYPE_PATTERN,
+		);
+		if (!clientId || !clientType) {
+			this.sendMessage(ws, {
+				type: "res",
+				id: msg.id,
+				ok: false,
+				payload: "invalid client info",
+				timestamp: Date.now(),
+			});
+			ws.close();
+			return;
+		}
+
+		ws.data.clientId = clientId;
+		ws.data.clientType = clientType;
 		ws.data.authenticated = true;
 		this.connectedClients.add(ws);
 
@@ -925,7 +1097,7 @@ export class GatewayServer {
 		this.activeSessionRequests.set(sessionQueueKey, msg.id!);
 		const outputManager = new OutputManager("interactive");
 		let emittedAgentError = false;
-		let streamedCompletionResult: unknown = undefined;
+		let streamedCompletionResult: unknown;
 		const outputHandler = (event: unknown) => {
 			const payloadWithSession = this.attachSessionContext(
 				event,
@@ -936,9 +1108,9 @@ export class GatewayServer {
 				payloadWithSession &&
 				typeof payloadWithSession === "object" &&
 				!Array.isArray(payloadWithSession) &&
-					typeof (payloadWithSession as Record<string, unknown>).type === "string"
-						? ((payloadWithSession as Record<string, unknown>).type as string)
-						: "";
+				typeof (payloadWithSession as Record<string, unknown>).type === "string"
+					? ((payloadWithSession as Record<string, unknown>).type as string)
+					: "";
 			if (payloadType === "agent-complete") {
 				if (
 					payloadWithSession &&
@@ -971,20 +1143,26 @@ export class GatewayServer {
 
 		outputManager.on("output-event", outputHandler);
 
-		const workspace =
-			workspaceOverride || this.resolveAgentWorkspace(agentId);
+		const workspace = workspaceOverride || this.resolveAgentWorkspace(agentId);
 		const configDir = configDirOverride || this.configDir;
-			const invoker = new AgentInvoker({
-				workspace,
-				configDir,
-				outputManager,
-				logger: this.logger,
-				sessionManager,
-				terminalSessionManager: this.terminalSessionManager,
-				workdir,
-				defaultOutputDir,
-				mcpProxyConfig: this.wingmanConfig.gateway?.mcpProxy,
-			});
+		const invoker = new AgentInvoker({
+			workspace,
+			configDir,
+			outputManager,
+			logger: this.logger,
+			sessionManager,
+			terminalSessionManager: this.terminalSessionManager,
+			workdir,
+			defaultOutputDir,
+			mcpProxyConfig: this.wingmanConfig.gateway?.mcpProxy,
+			nodeInvoker: (request) => this.invokeNodeTool(ws, request),
+			nodeDefaultTargetClientId:
+				ws.data.clientType === "desktop" ? ws.data.clientId : undefined,
+			nodeConnectedIdsProvider: () =>
+				this.listConnectedNodeIdsForRequester(ws),
+			nodeConnectedTargetsProvider: () =>
+				this.listConnectedNodeTargetsForRequester(ws),
+		});
 		const abortController = new AbortController();
 		this.activeAgentRequests.set(msg.id!, {
 			socket: ws,
@@ -1217,11 +1395,33 @@ export class GatewayServer {
 	 */
 	private handleRegister(ws: GatewaySocket, msg: GatewayMessage): void {
 		const payload = msg.payload as RegisterPayload;
+		const hasSessionAuth = ws.data.authenticated === true;
+		const hasPayloadAuth = this.auth.validate(
+			{
+				token: payload.token,
+			},
+			ws.data.tailscaleUser,
+		);
 
 		// Validate authentication
-		if (!this.auth.validate({ token: payload.token }, ws.data.tailscaleUser)) {
+		if (!hasSessionAuth && !hasPayloadAuth) {
 			this.sendError(ws, "AUTH_FAILED", "Authentication failed");
 			ws.close();
+			return;
+		}
+		const clientId = ws.data.clientId?.trim();
+		const requiresNodeApproval =
+			this.nodePairingRequired &&
+			includesNodeExecutionCapability(payload.capabilities);
+		if (
+			requiresNodeApproval &&
+			(!clientId || !this.nodeApprovalStore.isEnabled(clientId))
+		) {
+			this.sendError(
+				ws,
+				"NODE_NOT_ENABLED",
+				"This client is not approved for node execution",
+			);
 			return;
 		}
 
@@ -1232,6 +1432,7 @@ export class GatewayServer {
 			payload.capabilities,
 			payload.sessionId,
 			payload.agentName,
+			clientId,
 		);
 
 		if (!node) {
@@ -1252,6 +1453,9 @@ export class GatewayServer {
 			},
 			timestamp: Date.now(),
 		});
+		if (clientId) {
+			this.nodeApprovalStore.markSeen(clientId, payload.name);
+		}
 
 		const sessionInfo = node.sessionId ? ` (session: ${node.sessionId})` : "";
 		this.log(
@@ -1331,6 +1535,7 @@ export class GatewayServer {
 			this.nodeManager.unregisterNode(nodeId);
 			this.log("info", `Node unregistered: ${nodeId}`);
 		}
+		this.cleanupPendingNodeRequestsForSocket(ws);
 	}
 
 	/**
@@ -1344,7 +1549,7 @@ export class GatewayServer {
 		}
 
 		const payload = msg.payload as JoinGroupPayload;
-		let group;
+		let group: BroadcastGroup | undefined;
 
 		if (payload.groupId) {
 			group = this.groupManager.getGroup(payload.groupId);
@@ -1466,6 +1671,136 @@ export class GatewayServer {
 	}
 
 	/**
+	 * Handle node tool invocation request
+	 */
+	private handleNodeRequest(ws: GatewaySocket, msg: GatewayMessage): void {
+		if (!ws.data.authenticated) {
+			this.sendError(ws, "AUTH_REQUIRED", "Client is not authenticated");
+			return;
+		}
+		if (!msg.id) {
+			this.sendError(ws, "INVALID_REQUEST", "Node request id is required");
+			return;
+		}
+		const targetNodeId =
+			typeof msg.targetNodeId === "string" ? msg.targetNodeId.trim() : "";
+		if (!targetNodeId) {
+			this.sendError(ws, "INVALID_REQUEST", "targetNodeId is required");
+			return;
+		}
+		const target = this.nodeManager.getNode(targetNodeId);
+		if (!target) {
+			this.sendError(ws, "NODE_NOT_FOUND", "Target node not found");
+			return;
+		}
+		if (!this.isNodeApprovedForExecution(target.clientId)) {
+			this.sendError(ws, "NODE_REVOKED", "Target node has been revoked");
+			return;
+		}
+		if (this.pendingNodeRequests.has(msg.id)) {
+			this.sendError(
+				ws,
+				"DUPLICATE_REQUEST_ID",
+				"Node request id is already in use",
+			);
+			return;
+		}
+		if (this.pendingNodeRequests.size >= MAX_PENDING_NODE_REQUESTS) {
+			this.sendError(
+				ws,
+				"NODE_REQUEST_OVERLOADED",
+				"Too many pending node requests",
+			);
+			return;
+		}
+		const timeoutMs = this.resolveNodeRequestTimeout(msg.payload);
+		const pendingRequest: PendingNodeRequest = {
+			id: msg.id,
+			requester: ws,
+			targetNodeId,
+			createdAt: Date.now(),
+		};
+		pendingRequest.timeoutHandle = setTimeout(() => {
+			if (!this.pendingNodeRequests.has(msg.id!)) {
+				return;
+			}
+			this.clearPendingNodeRequest(
+				msg.id!,
+				new Error(`Node request timed out after ${timeoutMs}ms`),
+			);
+			this.sendMessageWithRetry(ws, {
+				type: "error",
+				id: msg.id,
+				payload: {
+					code: "NODE_TIMEOUT",
+					message: `Node request timed out after ${timeoutMs}ms`,
+				},
+				timestamp: Date.now(),
+			});
+		}, timeoutMs);
+		this.pendingNodeRequests.set(msg.id, pendingRequest);
+
+		const forwarded: GatewayMessage = {
+			type: "req:node",
+			id: msg.id,
+			clientId: ws.data.clientId || ws.data.nodeId || "gateway",
+			targetNodeId,
+			payload: msg.payload,
+			timestamp: Date.now(),
+		};
+		const sent = this.nodeManager.sendToNode(targetNodeId, forwarded);
+		if (!sent) {
+			this.clearPendingNodeRequest(msg.id);
+			this.sendError(ws, "NODE_NOT_FOUND", "Target node not found");
+		}
+	}
+
+	/**
+	 * Route node stream/response messages back to the original requester
+	 */
+	private handleNodeResponse(ws: GatewaySocket, msg: GatewayMessage): void {
+		if (!msg.id) return;
+		const pending = this.pendingNodeRequests.get(msg.id);
+		if (!pending) return;
+		const sourceNodeId = ws.data.nodeId;
+		if (!sourceNodeId || sourceNodeId !== pending.targetNodeId) {
+			this.sendError(
+				ws,
+				"NODE_RESPONSE_REJECTED",
+				"Only the target node may respond to this request",
+			);
+			return;
+		}
+
+		const forwarded: GatewayMessage = {
+			...msg,
+			nodeId: sourceNodeId,
+			timestamp: Date.now(),
+		};
+		if (pending.requester) {
+			this.sendMessageWithRetry(pending.requester, forwarded);
+		}
+
+		if (msg.type === "res") {
+			if (msg.ok === false) {
+				pending.reject?.(new Error(this.extractNodeErrorMessage(msg)));
+			} else {
+				pending.resolve?.({
+					nodeId: sourceNodeId,
+					payload: msg.payload,
+				});
+			}
+			this.clearPendingNodeRequest(msg.id);
+			return;
+		}
+
+		if (msg.type === "error") {
+			pending.reject?.(new Error(this.extractNodeErrorMessage(msg)));
+			this.clearPendingNodeRequest(msg.id);
+		}
+	}
+
+	/**
 	 * Handle ping message
 	 */
 	private handlePing(ws: GatewaySocket, msg: GatewayMessage): void {
@@ -1489,6 +1824,265 @@ export class GatewayServer {
 		if (nodeId) {
 			this.nodeManager.updatePing(nodeId);
 		}
+	}
+
+	private cleanupPendingNodeRequestsForSocket(ws: GatewaySocket): void {
+		for (const [requestId, pending] of this.pendingNodeRequests) {
+			if (pending.requester === ws || pending.targetNodeId === ws.data.nodeId) {
+				this.clearPendingNodeRequest(
+					requestId,
+					new Error("Node request cancelled due to disconnect"),
+				);
+			}
+		}
+	}
+
+	private clearPendingNodeRequest(requestId: string, error?: Error): void {
+		const pending = this.pendingNodeRequests.get(requestId);
+		if (!pending) return;
+		this.pendingNodeRequests.delete(requestId);
+		if (pending.timeoutHandle) {
+			clearTimeout(pending.timeoutHandle);
+		}
+		if (error) {
+			pending.reject?.(error);
+		}
+	}
+
+	private extractNodeErrorMessage(msg: GatewayMessage): string {
+		const payload = msg.payload;
+		if (
+			payload &&
+			typeof payload === "object" &&
+			!Array.isArray(payload) &&
+			typeof (payload as Record<string, unknown>).message === "string"
+		) {
+			return String((payload as Record<string, unknown>).message);
+		}
+		if (typeof payload === "string" && payload.trim()) {
+			return payload;
+		}
+		return "Node invocation failed";
+	}
+
+	private isNodeApprovedForExecution(clientId?: string): boolean {
+		if (!this.nodePairingRequired) {
+			return true;
+		}
+		const trimmed = typeof clientId === "string" ? clientId.trim() : "";
+		if (!trimmed) {
+			return false;
+		}
+		return this.nodeApprovalStore.isEnabled(trimmed);
+	}
+
+	private listConnectedNodeIdsForRequester(requester: GatewaySocket): string[] {
+		return this.listConnectedNodeTargetsForRequester(requester).map(
+			(node) => node.nodeId,
+		);
+	}
+
+	private listConnectedNodeTargetsForRequester(
+		requester: GatewaySocket,
+	): Array<{
+		nodeId: string;
+		clientId?: string;
+		name?: string;
+		capabilities?: string[];
+	}> {
+		const requesterClientId =
+			requester.data.clientType === "desktop"
+				? requester.data.clientId?.trim() || ""
+				: "";
+		const nodes = this.nodeManager
+			.getAllNodes()
+			.filter((node) => {
+				if (!this.isNodeApprovedForExecution(node.clientId)) {
+					return false;
+				}
+				if (!includesNodeExecutionCapability(node.capabilities)) {
+					return false;
+				}
+				return true;
+			})
+			.sort((a, b) => b.connectedAt - a.connectedAt);
+		const preferred = requesterClientId
+			? nodes.filter((node) => node.clientId === requesterClientId)
+			: [];
+		const others = requesterClientId
+			? nodes.filter((node) => node.clientId !== requesterClientId)
+			: nodes;
+		return [...preferred, ...others].map((node) => ({
+			nodeId: node.id,
+			clientId: node.clientId,
+			name: node.name,
+			capabilities: Array.isArray(node.capabilities)
+				? node.capabilities.filter(
+						(capability): capability is string => typeof capability === "string",
+					)
+				: undefined,
+		}));
+	}
+
+	private resolveNodeRequestTimeout(payload: unknown): number {
+		let requestedTimeout: number | undefined;
+		if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+			const timeoutValue = (payload as Record<string, unknown>).timeoutMs;
+			if (typeof timeoutValue === "number" && Number.isFinite(timeoutValue)) {
+				requestedTimeout = Math.trunc(timeoutValue);
+			}
+		}
+		const timeout = requestedTimeout ?? DEFAULT_NODE_REQUEST_TIMEOUT_MS;
+		return Math.min(
+			Math.max(timeout, MIN_NODE_REQUEST_TIMEOUT_MS),
+			MAX_NODE_REQUEST_TIMEOUT_MS,
+		);
+	}
+
+	private resolveNodeTarget(
+		request: NodeToolInvocationRequest,
+		defaultTargetClientId?: string,
+	): { nodeId: string } {
+		const requiredCapability =
+			typeof request.capability === "string" ? request.capability.trim() : "";
+		const targetNodeId =
+			typeof request.targetNodeId === "string"
+				? request.targetNodeId.trim()
+				: "";
+		const targetClientId =
+			(typeof request.targetClientId === "string"
+				? request.targetClientId.trim()
+				: "") ||
+			defaultTargetClientId?.trim() ||
+			"";
+
+		const canUseNode = (
+			node: ReturnType<NodeManager["getAllNodes"]>[number],
+		) => {
+			if (!this.isNodeApprovedForExecution(node.clientId)) {
+				return false;
+			}
+			if (!requiredCapability) return true;
+			return (
+				Array.isArray(node.capabilities) &&
+				node.capabilities.includes(requiredCapability)
+			);
+		};
+
+		if (targetNodeId) {
+			const node = this.nodeManager.getNode(targetNodeId);
+			if (!node) {
+				throw new Error("Target node not found");
+			}
+			if (!canUseNode(node)) {
+				throw new Error(
+					requiredCapability
+						? `Target node does not support capability ${requiredCapability}`
+						: "Target node is not available",
+				);
+			}
+			return { nodeId: node.id };
+		}
+
+		let candidates = this.nodeManager
+			.getAllNodes()
+			.filter((node) => canUseNode(node));
+		if (targetClientId) {
+			candidates = candidates.filter(
+				(node) => node.clientId === targetClientId,
+			);
+			if (candidates.length === 0) {
+				throw new Error(`No available node found for client ${targetClientId}`);
+			}
+		}
+		if (candidates.length === 0) {
+			throw new Error(
+				requiredCapability
+					? `No available node supports capability ${requiredCapability}`
+					: "No available node found",
+			);
+		}
+		candidates.sort((a, b) => b.connectedAt - a.connectedAt);
+		const selected = candidates[0];
+		return {
+			nodeId: selected.id,
+		};
+	}
+
+	private async invokeNodeTool(
+		requester: GatewaySocket,
+		request: NodeToolInvocationRequest,
+	): Promise<{ nodeId: string; payload: unknown }> {
+		if (!requester.data.authenticated) {
+			throw new Error("Client is not authenticated");
+		}
+		const toolName = request.tool;
+		if (toolName !== "system.notify" && toolName !== "system.run") {
+			throw new Error(`Unsupported node tool: ${toolName}`);
+		}
+
+		const timeoutMsRaw =
+			typeof request.timeoutMs === "number"
+				? Math.trunc(request.timeoutMs)
+				: DEFAULT_NODE_REQUEST_TIMEOUT_MS;
+		const timeoutMs = Math.min(
+			Math.max(timeoutMsRaw, MIN_NODE_REQUEST_TIMEOUT_MS),
+			MAX_NODE_REQUEST_TIMEOUT_MS,
+		);
+		if (this.pendingNodeRequests.size >= MAX_PENDING_NODE_REQUESTS) {
+			throw new Error("Too many pending node requests");
+		}
+		const target = this.resolveNodeTarget(
+			request,
+			requester.data.clientType === "desktop"
+				? requester.data.clientId
+				: undefined,
+		);
+		let requestId = "";
+		do {
+			requestId = `node-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		} while (this.pendingNodeRequests.has(requestId));
+
+		return await new Promise<{ nodeId: string; payload: unknown }>(
+			(resolve, reject) => {
+				const pending: PendingNodeRequest = {
+					id: requestId,
+					targetNodeId: target.nodeId,
+					createdAt: Date.now(),
+					resolve,
+					reject,
+				};
+				pending.timeoutHandle = setTimeout(() => {
+					this.clearPendingNodeRequest(
+						requestId,
+						new Error(`Node invocation timed out after ${timeoutMs}ms`),
+					);
+				}, timeoutMs);
+				this.pendingNodeRequests.set(requestId, pending);
+
+				const forwarded: GatewayMessage = {
+					type: "req:node",
+					id: requestId,
+					clientId:
+						requester.data.clientId || requester.data.nodeId || "gateway",
+					targetNodeId: target.nodeId,
+					payload: {
+						tool: toolName,
+						args: request.args || {},
+						timeoutMs,
+					},
+					timestamp: Date.now(),
+				};
+
+				const sent = this.nodeManager.sendToNode(target.nodeId, forwarded);
+				if (!sent) {
+					this.clearPendingNodeRequest(
+						requestId,
+						new Error("Target node not found"),
+					);
+				}
+			},
+		);
 	}
 
 	/**
@@ -2060,6 +2654,112 @@ export class GatewayServer {
 		}
 	}
 
+	private isRequestOriginAllowed(req: Request, url: URL): boolean {
+		const origin = req.headers.get("origin");
+		if (!origin) {
+			return true;
+		}
+		return isGatewayOriginAllowed({
+			origin,
+			requestUrl: url,
+			gatewayHost: this.config.host,
+			gatewayPort: this.config.port,
+			controlUiEnabled: this.controlUiEnabled,
+			controlUiPort: this.controlUiPort,
+		});
+	}
+
+	private withApiCors(req: Request, url: URL, response: Response): Response {
+		const headers = new Headers(response.headers);
+		for (const [key, value] of Object.entries(API_CORS_HEADERS)) {
+			headers.set(key, value);
+		}
+
+		const existingVary = headers.get("Vary");
+		if (existingVary) {
+			if (!existingVary.toLowerCase().includes("origin")) {
+				headers.set("Vary", `${existingVary}, Origin`);
+			}
+		} else {
+			headers.set("Vary", "Origin");
+		}
+
+		const origin = req.headers.get("origin");
+		if (origin && this.isRequestOriginAllowed(req, url)) {
+			headers.set("Access-Control-Allow-Origin", origin);
+		}
+
+		return new Response(response.body, {
+			status: response.status,
+			statusText: response.statusText,
+			headers,
+		});
+	}
+
+	private resolveTrustedTailscaleUser(req: Request): string | undefined {
+		if (!this.config.auth?.allowTailscale) {
+			return undefined;
+		}
+		if (!isLoopbackHostname(this.config.host)) {
+			return undefined;
+		}
+		const raw =
+			req.headers.get("tailscale-user-login") ||
+			req.headers.get("ts-user-login") ||
+			"";
+		const normalized = raw.trim();
+		if (!normalized) {
+			return undefined;
+		}
+		if (normalized.length > 256) {
+			return undefined;
+		}
+		if (!/^[a-zA-Z0-9._:@+-]+$/.test(normalized)) {
+			return undefined;
+		}
+		return normalized;
+	}
+
+	private resolveHttpAuthPayload(req: Request): {
+		token?: string;
+		password?: string;
+	} {
+		const authorization = req.headers.get("authorization") || "";
+		let bearerToken: string | undefined;
+		if (authorization.toLowerCase().startsWith("bearer ")) {
+			const value = authorization.slice(7).trim();
+			bearerToken = value || undefined;
+		}
+
+		const headerToken = req.headers.get("x-wingman-token")?.trim();
+		const password = req.headers.get("x-wingman-password")?.trim();
+
+		return {
+			token: headerToken || bearerToken,
+			password: password || undefined,
+		};
+	}
+
+	private requireHttpAuth(req: Request): Response | null {
+		if (!this.auth.isAuthRequired()) {
+			return null;
+		}
+
+		const tailscaleUser = this.resolveTrustedTailscaleUser(req);
+		const authPayload = this.resolveHttpAuthPayload(req);
+		const allowed = this.auth.validate(authPayload, tailscaleUser);
+		if (allowed) {
+			return null;
+		}
+
+		return new Response("Unauthorized", {
+			status: 401,
+			headers: {
+				"WWW-Authenticate": 'Bearer realm="wingman-gateway"',
+			},
+		});
+	}
+
 	private async handleUiRequest(req: Request): Promise<Response> {
 		const url = new URL(req.url);
 
@@ -2075,12 +2775,31 @@ export class GatewayServer {
 		}
 
 		if (url.pathname.startsWith("/api/")) {
+			if (!this.isRequestOriginAllowed(req, url)) {
+				return this.withApiCors(
+					req,
+					url,
+					new Response("Forbidden origin", { status: 403 }),
+				);
+			}
+
 			if (req.method === "OPTIONS") {
-				return withApiCors(
+				return this.withApiCors(
+					req,
+					url,
 					new Response(null, {
 						status: 204,
 					}),
 				);
+			}
+
+			const publicApiRoute =
+				url.pathname === "/api/config" || url.pathname === "/api/health";
+			if (!publicApiRoute) {
+				const authFailure = this.requireHttpAuth(req);
+				if (authFailure) {
+					return this.withApiCors(req, url, authFailure);
+				}
 			}
 
 			if (url.pathname === "/api/config") {
@@ -2093,7 +2812,9 @@ export class GatewayServer {
 
 				const defaultAgentId = this.router.selectAgent();
 
-				return withApiCors(
+				return this.withApiCors(
+					req,
+					url,
 					new Response(
 						JSON.stringify(
 							{
@@ -2120,24 +2841,35 @@ export class GatewayServer {
 			const apiResponse =
 				(await handleWebhooksApi(ctx, this.webhookStore, req, url)) ||
 				(await handleRoutinesApi(ctx, this.routineStore, req, url)) ||
+				(await handleNodesApi(
+					ctx,
+					this.nodeManager,
+					this.nodeApprovalStore,
+					req,
+					url,
+				)) ||
 				(await handleAgentsApi(ctx, req, url)) ||
 				(await handleProvidersApi(ctx, req, url)) ||
 				(await handleVoiceApi(ctx, req, url)) ||
 				(await handleFsApi(ctx, req, url)) ||
 				(await handleSessionsApi(ctx, req, url));
 			if (apiResponse) {
-				return withApiCors(apiResponse);
+				return this.withApiCors(req, url, apiResponse);
 			}
 
 			if (url.pathname === "/api/health") {
-				return withApiCors(this.handleHealthCheck());
+				return this.withApiCors(req, url, this.handleHealthCheck());
 			}
 
 			if (url.pathname === "/api/stats") {
-				return withApiCors(this.handleStats());
+				return this.withApiCors(req, url, this.handleStats());
 			}
 
-			return withApiCors(new Response("Not Found", { status: 404 }));
+			return this.withApiCors(
+				req,
+				url,
+				new Response("Not Found", { status: 404 }),
+			);
 		}
 
 		if (req.method !== "GET") {
@@ -2228,6 +2960,16 @@ export class GatewayServer {
 			// Handle registration specially for HTTP bridge
 			if (validatedMessage.type === "register") {
 				const payload = validatedMessage.payload as RegisterPayload;
+				const maxBridgeNodes = this.config.maxNodes || 1000;
+				if (this.bridgeQueues.size >= maxBridgeNodes) {
+					return new Response(
+						JSON.stringify({ error: "Bridge capacity reached" }),
+						{
+							status: 429,
+							headers: { "Content-Type": "application/json" },
+						},
+					);
+				}
 				const nodeId = this.generateNodeId();
 
 				// Store node in bridge queues (without WebSocket)

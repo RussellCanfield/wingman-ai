@@ -1,8 +1,8 @@
 # PRD-004: Wingman Node Protocol Specification
 
-**Version:** 1.0
-**Status:** Planned
-**Last Updated:** 2026-02-01
+**Version:** 1.2
+**Status:** In Progress
+**Last Updated:** 2026-02-16
 
 ---
 
@@ -13,19 +13,38 @@ capabilities (screen, camera, system.run, etc). This spec defines the message
 schema, pairing flow, and invocation lifecycle for node clients. The first
 implementation target is the Wingman macOS app + node host service.
 
+Current implementation (gateway + desktop app):
+- Device-level node enable/revoke API (`/api/nodes`)
+- Node registration gating by approved client ID
+- `req:node` routing and response streaming via `event:node`/`res`/`error`
+- Desktop node handlers for `system.notify` and `system.run` via Tauri commands
+- Agent tool adapters for node invocation (`node_notify`, `node_run`)
+- Agent runtime middleware injects connected node IDs/metadata + default target client context for node tool targeting
+
 ---
 
 ## Transport
 
 - WebSocket connection to the gateway (same port as other clients)
 - Client must identify itself as `clientType: "node"`
-- Auth via gateway token (or pairing token after approval)
+- Auth via gateway token/password and node approval at the device layer (`/api/nodes`)
 
 ---
 
-## Pairing + Approval (Planned)
+## Pairing + Approval (Current + Planned)
 
-### Flow
+### Current implemented flow (desktop app / macOS)
+1. Desktop app connects to the gateway as a normal client.
+2. User enables `Enable this device as a node` in desktop settings.
+3. Desktop app calls `PUT /api/nodes/:clientId` to approve that device for node execution.
+4. Desktop app registers node capabilities and starts serving `req:node` requests.
+5. User can revoke by disabling the toggle or calling `DELETE /api/nodes/:clientId`.
+
+This is currently the effective pairing model in the product.
+
+### Planned full pairing flow
+
+Flow:
 1. Node connects with `clientType: node` and metadata
 2. Gateway checks `nodes.pairingRequired`
 3. If approval is required, gateway responds with `res` + `pairingRequired`

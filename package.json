@@ -9,13 +9,16 @@
 		"apps/wingman",
 		"apps/desktop",
 		"apps/docs-website",
-		"apps/website"
+		"apps/website",
+		"apps/cloudflare"
 	],
 	"scripts": {
 		"format": "biome format .",
 		"lint": "biome lint .",
 		"lint:fix": "biome lint --apply .",
-		"test": "vitest"
+		"test": "vitest",
+		"cloudflare:dev": "bun --cwd apps/cloudflare run dev",
+		"cloudflare:deploy": "bun --cwd apps/cloudflare run deploy"
 	},
 	"packageManager": "bun@1.1.42",
 	"dependencies": {

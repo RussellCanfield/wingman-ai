@@ -50,8 +50,8 @@ import { appendAssistantErrorFeedback } from "./utils/assistantError";
 import { mergeAssistantStreamText } from "./utils/assistantStream";
 import {
 	drainAssistantContentUpdates,
-	queueAssistantContentUpdate,
 	type QueuedAssistantUpdate,
+	queueAssistantContentUpdate,
 } from "./utils/assistantUpdateQueue";
 import {
 	FILE_INPUT_ACCEPT,
@@ -61,21 +61,21 @@ import {
 } from "./utils/fileUpload";
 import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
+import { shouldMarkRequestActive } from "./utils/requestLifecycle";
 import {
 	isLocallyTrackedRequest,
 	resolveTerminalRequestId,
 } from "./utils/requestTracking";
-import { shouldMarkRequestActive } from "./utils/requestLifecycle";
 import {
 	buildCancelGatewayMessage,
 	resolveStoppableRequestId,
 } from "./utils/stopPrompt";
+import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
 import { parseStreamEvents } from "./utils/streaming";
 import {
 	clearStreamMessageTargets,
 	resolveToolMessageTargetId,
 } from "./utils/streamMessageRouter";
-import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
 import { appendLocalPromptMessagesToThread } from "./utils/threadState";
 import {
 	resolveSpeechVoice,
@@ -84,6 +84,7 @@ import {
 } from "./utils/voice";
 import { shouldAutoSpeak } from "./utils/voiceAuto";
 import type { VoicePlaybackStatus } from "./utils/voicePlayback";
+import { readStoredBoolean, readStoredString } from "./utils/persistedStorage";
 
 const DEFAULT_VOICE_CONFIG: VoiceConfig = {
 	provider: "web_speech",
@@ -136,9 +137,13 @@ export const App: React.FC = () => {
 	const [config, setConfig] = useState<ControlUiConfig>(DEFAULT_CONFIG);
 	const [agentId, setAgentId] = useState<string>("main");
 	const [wsUrl, setWsUrl] = useState<string>("");
-	const [token, setToken] = useState<string>("");
-	const [password, setPassword] = useState<string>("");
-	const [autoConnect, setAutoConnect] = useState<boolean>(true);
+	const [token, setToken] = useState<string>(() => readStoredString(TOKEN_KEY));
+	const [password, setPassword] = useState<string>(() =>
+		readStoredString(PASSWORD_KEY),
+	);
+	const [autoConnect, setAutoConnect] = useState<boolean>(() =>
+		readStoredBoolean(AUTO_CONNECT_KEY, true),
+	);
 	const [deviceId, setDeviceId] = useState<string>("");
 	const [connected, setConnected] = useState<boolean>(false);
 	const [connecting, setConnecting] = useState<boolean>(false);
@@ -203,6 +208,8 @@ export const App: React.FC = () => {
 	const autoConnectAttemptsRef = useRef<number>(0);
 	const autoConnectTimerRef = useRef<number | null>(null);
 	const autoConnectFailureRef = useRef<boolean>(false);
+	const tokenRef = useRef<string>(token);
+	const passwordRef = useRef<string>(password);
 	const activeRequestIdRef = useRef<string | null>(null);
 	const pendingRequestIdsRef = useRef<Set<string>>(new Set());
 	const queuedAssistantUpdatesRef = useRef<Map<string, QueuedAssistantUpdate>>(
@@ -340,6 +347,30 @@ export const App: React.FC = () => {
 		syncRequestStreamingState();
 	}, [syncRequestStreamingState]);
 
+	useEffect(() => {
+		tokenRef.current = token;
+		passwordRef.current = password;
+	}, [password, token]);
+
+	const apiFetch = useCallback(
+		(input: string | URL | globalThis.Request, init: RequestInit = {}) => {
+			const headers = new Headers(init.headers || undefined);
+			const trimmedToken = tokenRef.current.trim();
+			const trimmedPassword = passwordRef.current.trim();
+			if (trimmedToken) {
+				headers.set("Authorization", `Bearer ${trimmedToken}`);
+			}
+			if (trimmedPassword) {
+				headers.set("X-Wingman-Password", trimmedPassword);
+			}
+			return fetch(input, {
+				...init,
+				headers,
+			});
+		},
+		[],
+	);
+
 	const formatDuration = (ms?: number) => {
 		if (!ms && ms !== 0) return "--";
 		const totalSeconds = Math.floor(ms / 1000);
@@ -354,8 +385,8 @@ export const App: React.FC = () => {
 	const refreshStats = useCallback(async () => {
 		try {
 			const [healthRes, statsRes] = await Promise.all([
-				fetch("/api/health"),
-				fetch("/api/stats"),
+				apiFetch("/api/health"),
+				apiFetch("/api/stats"),
 			]);
 			if (healthRes.ok) {
 				setHealth((await healthRes.json()) as GatewayHealth);
@@ -371,7 +402,7 @@ export const App: React.FC = () => {
 	const refreshProviders = useCallback(async () => {
 		setProvidersLoading(true);
 		try {
-			const res = await fetch("/api/providers");
+			const res = await apiFetch("/api/providers");
 			if (!res.ok) {
 				logEvent("Failed to load providers");
 				return;
@@ -390,7 +421,7 @@ export const App: React.FC = () => {
 	const fetchThreads = useCallback(async () => {
 		setLoadingThreads(true);
 		try {
-			const res = await fetch("/api/sessions?limit=100");
+			const res = await apiFetch("/api/sessions?limit=100");
 			if (!res.ok) {
 				logEvent("Failed to load sessions");
 				return;
@@ -446,7 +477,7 @@ export const App: React.FC = () => {
 				const params = new URLSearchParams({
 					agentId: thread.agentId,
 				});
-				const res = await fetch(
+				const res = await apiFetch(
 					`/api/sessions/${encodeURIComponent(thread.id)}/messages?${params.toString()}`,
 				);
 				if (!res.ok) {
@@ -708,7 +739,7 @@ export const App: React.FC = () => {
 				voiceAbortRef.current = controller;
 				setVoicePlayback({ status: "loading", messageId });
 				try {
-					const res = await fetch("/api/voice/speak", {
+					const res = await apiFetch("/api/voice/speak", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
@@ -1776,7 +1807,7 @@ export const App: React.FC = () => {
 				`thread-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 			const sessionId = `agent:${targetAgentId}:webui:thread:${shortId}`;
 			try {
-				const res = await fetch("/api/sessions", {
+				const res = await apiFetch("/api/sessions", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
@@ -1945,7 +1976,7 @@ export const App: React.FC = () => {
 		stopVoicePlayback();
 		try {
 			const params = new URLSearchParams({ agentId: activeThread.agentId });
-			const res = await fetch(
+			const res = await apiFetch(
 				`/api/sessions/${encodeURIComponent(activeThread.id)}/messages?${params.toString()}`,
 				{ method: "DELETE" },
 			);
@@ -1984,7 +2015,7 @@ export const App: React.FC = () => {
 			if (!target) return;
 			try {
 				const params = new URLSearchParams({ agentId: target.agentId });
-				await fetch(
+				await apiFetch(
 					`/api/sessions/${encodeURIComponent(threadId)}?${params.toString()}`,
 					{
 						method: "DELETE",
@@ -2027,7 +2058,7 @@ export const App: React.FC = () => {
 			}
 			try {
 				const params = new URLSearchParams({ agentId: target.agentId });
-				const res = await fetch(
+				const res = await apiFetch(
 					`/api/sessions/${encodeURIComponent(threadId)}?${params.toString()}`,
 					{
 						method: "PUT",
@@ -2067,7 +2098,7 @@ export const App: React.FC = () => {
 			if (!target) return false;
 			try {
 				const params = new URLSearchParams({ agentId: target.agentId });
-				const res = await fetch(
+				const res = await apiFetch(
 					`/api/sessions/${encodeURIComponent(threadId)}/workdir?${params.toString()}`,
 					{
 						method: "POST",
@@ -2128,15 +2159,6 @@ export const App: React.FC = () => {
 	);
 
 	useEffect(() => {
-		const storedToken = localStorage.getItem(TOKEN_KEY) || "";
-		const storedPassword = localStorage.getItem(PASSWORD_KEY) || "";
-		const storedAutoConnect = localStorage.getItem(AUTO_CONNECT_KEY);
-		setToken(storedToken);
-		setPassword(storedPassword);
-		setAutoConnect(
-			storedAutoConnect !== null ? storedAutoConnect === "true" : true,
-		);
-
 		let existingDevice = localStorage.getItem(DEVICE_KEY) || "";
 		if (!existingDevice) {
 			existingDevice = `device-${
@@ -2150,7 +2172,7 @@ export const App: React.FC = () => {
 
 	const refreshConfig = useCallback(async () => {
 		try {
-			const res = await fetch("/api/config");
+			const res = await apiFetch("/api/config");
 			if (!res.ok) return;
 			const data = (await res.json()) as ControlUiConfig;
 			setConfig({
@@ -2165,7 +2187,7 @@ export const App: React.FC = () => {
 	const updateVoiceConfig = useCallback(
 		async (voice: Partial<VoiceConfig>) => {
 			try {
-				const res = await fetch("/api/voice", {
+				const res = await apiFetch("/api/voice", {
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(voice),
@@ -2199,7 +2221,7 @@ export const App: React.FC = () => {
 	const refreshAgents = useCallback(async () => {
 		setAgentsLoading(true);
 		try {
-			const res = await fetch("/api/agents");
+			const res = await apiFetch("/api/agents");
 			if (!res.ok) {
 				logEvent("Failed to load agents");
 				return;
@@ -2218,7 +2240,7 @@ export const App: React.FC = () => {
 	const refreshWebhooks = useCallback(async () => {
 		setWebhooksLoading(true);
 		try {
-			const res = await fetch("/api/webhooks");
+			const res = await apiFetch("/api/webhooks");
 			if (!res.ok) {
 				logEvent("Failed to load webhooks");
 				return;
@@ -2235,7 +2257,7 @@ export const App: React.FC = () => {
 	const refreshRoutines = useCallback(async () => {
 		setRoutinesLoading(true);
 		try {
-			const res = await fetch("/api/routines");
+			const res = await apiFetch("/api/routines");
 			if (!res.ok) {
 				logEvent("Failed to load routines");
 				return;
@@ -2252,7 +2274,9 @@ export const App: React.FC = () => {
 	const loadAgentDetail = useCallback(
 		async (agentId: string): Promise<AgentDetail | null> => {
 			try {
-				const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}`);
+				const res = await apiFetch(
+					`/api/agents/${encodeURIComponent(agentId)}`,
+				);
 				if (!res.ok) {
 					logEvent(`Failed to load ${agentId} details`);
 					return null;
@@ -2443,7 +2467,7 @@ export const App: React.FC = () => {
 			subAgents?: AgentEditorSubAgentPayload[];
 		}) => {
 			try {
-				const res = await fetch("/api/agents", {
+				const res = await apiFetch("/api/agents", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(payload),
@@ -2481,13 +2505,16 @@ export const App: React.FC = () => {
 			},
 		) => {
 			try {
-				const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}`, {
-					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
+				const res = await apiFetch(
+					`/api/agents/${encodeURIComponent(agentId)}`,
+					{
+						method: "PUT",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify(payload),
 					},
-					body: JSON.stringify(payload),
-				});
+				);
 				if (!res.ok) {
 					const message = await res.text();
 					logEvent(`Failed to update agent: ${message || "unknown error"}`);
@@ -2508,7 +2535,7 @@ export const App: React.FC = () => {
 	const createRoutine = useCallback(
 		async (routine: Omit<Routine, "id" | "createdAt">) => {
 			try {
-				const res = await fetch("/api/routines", {
+				const res = await apiFetch("/api/routines", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(routine),
@@ -2532,7 +2559,7 @@ export const App: React.FC = () => {
 	const deleteRoutine = useCallback(
 		async (id: string) => {
 			try {
-				const res = await fetch(`/api/routines/${encodeURIComponent(id)}`, {
+				const res = await apiFetch(`/api/routines/${encodeURIComponent(id)}`, {
 					method: "DELETE",
 				});
 				if (!res.ok) {
@@ -2554,7 +2581,7 @@ export const App: React.FC = () => {
 	const createWebhook = useCallback(
 		async (payload: Omit<Webhook, "createdAt" | "lastTriggeredAt">) => {
 			try {
-				const res = await fetch("/api/webhooks", {
+				const res = await apiFetch("/api/webhooks", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(payload),
@@ -2581,7 +2608,7 @@ export const App: React.FC = () => {
 			payload: Partial<Omit<Webhook, "id" | "createdAt">>,
 		) => {
 			try {
-				const res = await fetch(
+				const res = await apiFetch(
 					`/api/webhooks/${encodeURIComponent(webhookId)}`,
 					{
 						method: "PUT",
@@ -2608,7 +2635,7 @@ export const App: React.FC = () => {
 	const deleteWebhook = useCallback(
 		async (webhookId: string) => {
 			try {
-				const res = await fetch(
+				const res = await apiFetch(
 					`/api/webhooks/${encodeURIComponent(webhookId)}`,
 					{
 						method: "DELETE",
@@ -2655,14 +2682,17 @@ export const App: React.FC = () => {
 							prompt: "Test webhook from Control UI.",
 						};
 			try {
-				const res = await fetch(`/webhooks/${encodeURIComponent(webhookId)}`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"x-wingman-secret": webhook.secret,
+				const res = await apiFetch(
+					`/webhooks/${encodeURIComponent(webhookId)}`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"x-wingman-secret": webhook.secret,
+						},
+						body: JSON.stringify(testPayload),
 					},
-					body: JSON.stringify(testPayload),
-				});
+				);
 				if (!res.ok) {
 					const message = await res.text();
 					return { ok: false, message: message || "Test failed" };
@@ -2678,7 +2708,7 @@ export const App: React.FC = () => {
 	const saveProviderToken = useCallback(
 		async (providerName: string, tokenValue: string) => {
 			try {
-				const res = await fetch(
+				const res = await apiFetch(
 					`/api/providers/${encodeURIComponent(providerName)}`,
 					{
 						method: "POST",
@@ -2706,7 +2736,7 @@ export const App: React.FC = () => {
 	const clearProviderToken = useCallback(
 		async (providerName: string) => {
 			try {
-				const res = await fetch(
+				const res = await apiFetch(
 					`/api/providers/${encodeURIComponent(providerName)}`,
 					{
 						method: "DELETE",

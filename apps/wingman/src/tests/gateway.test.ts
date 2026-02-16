@@ -654,13 +654,14 @@ describeIfBun("Gateway", () => {
 			10000,
 		);
 
-		expect(invokerConstructOptions.length).toBeGreaterThan(beforeCount);
-		const lastOptions = invokerConstructOptions.at(-1) || {};
-		expect(lastOptions.workspace).toBe(workspaceOverride);
-		expect(lastOptions.configDir).toBe(configDirOverride);
+			expect(invokerConstructOptions.length).toBeGreaterThan(beforeCount);
+			const lastOptions = invokerConstructOptions.at(-1) || {};
+			expect(lastOptions.workspace).toBe(workspaceOverride);
+			expect(lastOptions.configDir).toBe(configDirOverride);
+			expect(typeof lastOptions.nodeInvoker).toBe("function");
 
-		requester.close();
-	});
+			requester.close();
+		});
 
 	it("should cancel an in-flight agent request", async () => {
 		const requester = await connectClient("session-cancel-requester");

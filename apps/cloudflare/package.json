@@ -1,0 +1,21 @@
+{
+	"name": "@wingman-ai/cloudflare",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"types": "wrangler types --env-interface CloudflareBindings",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@cloudflare/sandbox": "^0.7.0"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.17",
+		"wrangler": "^4.22.0"
+	}
+}
