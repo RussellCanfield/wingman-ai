@@ -84,10 +84,12 @@ describeIfBun("Gateway node enablement", () => {
 				() => reject(new Error("Message timeout")),
 				timeoutMs,
 			);
-			const handler = (event: MessageEvent) => {
+			const handler: EventListener = (event) => {
+				const data = (event as { data?: unknown }).data;
+				if (typeof data !== "string") return;
 				let msg: any;
 				try {
-					msg = JSON.parse(event.data as string);
+					msg = JSON.parse(data);
 				} catch {
 					return;
 				}
