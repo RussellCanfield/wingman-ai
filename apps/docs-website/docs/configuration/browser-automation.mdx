@@ -35,6 +35,12 @@ Wingman supports two user-facing browser modes:
 - `browser.transport`: global default transport (`auto`, `playwright`, `relay`).
 - `browser.relay.*`: local secure relay settings for extension-based control.
 
+`wingman init` pre-populates a browser-ready baseline:
+
+- default profile mapping (`default` -> `.wingman/browser-profiles/default`)
+- bundled `wingman` extension mapping and files under `.wingman/browser-extensions/wingman`
+- `browser.defaultExtensions` includes `wingman`
+
 ## Minimal config example
 
 ```json

@@ -8,6 +8,10 @@ tools:
   - browser_control
   - command_execute
 model: openai:gpt-5-mini
+browserProfile: buffer
+browserTransport: auto
+browserExtensions:
+  - wingman
 mcpUseGlobal: true
 promptRefinement: true
 ---

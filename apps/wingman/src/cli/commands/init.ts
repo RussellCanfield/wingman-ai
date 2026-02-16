@@ -8,7 +8,7 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	cancel,
@@ -62,6 +62,11 @@ const DEFAULT_TOOLS = [
 	"think",
 ];
 const DEFAULT_FS_ROOT = ".";
+const DEFAULT_BROWSER_PROFILE_ID = "default";
+const DEFAULT_BROWSER_PROFILES_DIR = ".wingman/browser-profiles";
+const DEFAULT_BROWSER_EXTENSIONS_DIR = ".wingman/browser-extensions";
+const DEFAULT_BUNDLED_EXTENSION_ID = "wingman";
+const DEFAULT_BROWSER_TRANSPORT = "auto";
 const DEFAULT_MODELS: Record<string, string> = {
 	anthropic: "anthropic:claude-sonnet-4-5",
 	openai: "openai:gpt-4o",
@@ -501,7 +506,20 @@ async function handleConfigSetup(input: {
 
 	mkdirSync(configRoot, { recursive: true });
 	writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
+	const browserBootstrap = bootstrapBrowserDefaults(configRoot, nextConfig);
 	writeLine(outputManager, `Saved config to ${configPath}`);
+	if (browserBootstrap.profileDirectory) {
+		writeLine(
+			outputManager,
+			`Prepared default browser profile at ${browserBootstrap.profileDirectory}`,
+		);
+	}
+	if (browserBootstrap.extensionDirectory) {
+		writeLine(
+			outputManager,
+			`Installed bundled browser extension at ${browserBootstrap.extensionDirectory}`,
+		);
+	}
 }
 
 function mergeConfigFile(
@@ -567,6 +585,11 @@ function mergeConfigValues(
 		};
 	}
 
+	const browserMerge = applyRecommendedBrowserConfig(nextConfig);
+	if (browserMerge.changed) {
+		changed = true;
+	}
+
 	return { config: nextConfig, changed };
 }
 
@@ -580,7 +603,236 @@ function buildDefaultConfig(
 		...config.gateway,
 		fsRoots: [fsRoot],
 	};
-	return config as unknown as Record<string, unknown>;
+	const nextConfig = config as unknown as Record<string, unknown>;
+	applyRecommendedBrowserConfig(nextConfig);
+	return nextConfig;
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+	return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readStringRecord(value: unknown): Record<string, string> {
+	if (!isObjectRecord(value)) {
+		return {};
+	}
+
+	const record: Record<string, string> = {};
+	for (const [key, entry] of Object.entries(value)) {
+		if (typeof entry === "string" && entry.trim()) {
+			record[key] = entry.trim();
+		}
+	}
+	return record;
+}
+
+function readStringArray(value: unknown): string[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value
+		.filter((entry): entry is string => typeof entry === "string")
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+}
+
+function normalizePathForConfig(pathValue: string): string {
+	return pathValue.replaceAll("\\", "/");
+}
+
+function applyRecommendedBrowserConfig(config: Record<string, unknown>): {
+	config: Record<string, unknown>;
+	changed: boolean;
+} {
+	let changed = false;
+	const browserRaw = config.browser;
+	const browser = isObjectRecord(browserRaw)
+		? { ...browserRaw }
+		: ({} as Record<string, unknown>);
+	if (!isObjectRecord(browserRaw)) {
+		changed = true;
+	}
+
+	const profilesDir =
+		typeof browser.profilesDir === "string" && browser.profilesDir.trim()
+			? browser.profilesDir.trim()
+			: DEFAULT_BROWSER_PROFILES_DIR;
+	if (browser.profilesDir !== profilesDir) {
+		browser.profilesDir = profilesDir;
+		changed = true;
+	}
+
+	const defaultProfile =
+		typeof browser.defaultProfile === "string" && browser.defaultProfile.trim()
+			? browser.defaultProfile.trim()
+			: DEFAULT_BROWSER_PROFILE_ID;
+	if (browser.defaultProfile !== defaultProfile) {
+		browser.defaultProfile = defaultProfile;
+		changed = true;
+	}
+
+	const profiles = readStringRecord(browser.profiles);
+	const defaultProfilePath = normalizePathForConfig(
+		join(profilesDir, defaultProfile),
+	);
+	if (!profiles[defaultProfile]) {
+		profiles[defaultProfile] = defaultProfilePath;
+		changed = true;
+	}
+	if (
+		!isObjectRecord(browser.profiles) ||
+		Object.keys(profiles).length !== Object.keys(browser.profiles).length
+	) {
+		changed = true;
+	}
+	browser.profiles = profiles;
+
+	const extensionsDir =
+		typeof browser.extensionsDir === "string" && browser.extensionsDir.trim()
+			? browser.extensionsDir.trim()
+			: DEFAULT_BROWSER_EXTENSIONS_DIR;
+	if (browser.extensionsDir !== extensionsDir) {
+		browser.extensionsDir = extensionsDir;
+		changed = true;
+	}
+
+	const extensions = readStringRecord(browser.extensions);
+	const defaultExtensionPath = normalizePathForConfig(
+		join(extensionsDir, DEFAULT_BUNDLED_EXTENSION_ID),
+	);
+	if (!extensions[DEFAULT_BUNDLED_EXTENSION_ID]) {
+		extensions[DEFAULT_BUNDLED_EXTENSION_ID] = defaultExtensionPath;
+		changed = true;
+	}
+	if (
+		!isObjectRecord(browser.extensions) ||
+		Object.keys(extensions).length !== Object.keys(browser.extensions).length
+	) {
+		changed = true;
+	}
+	browser.extensions = extensions;
+
+	const defaultExtensions = new Set(readStringArray(browser.defaultExtensions));
+	if (!defaultExtensions.has(DEFAULT_BUNDLED_EXTENSION_ID)) {
+		defaultExtensions.add(DEFAULT_BUNDLED_EXTENSION_ID);
+		changed = true;
+	}
+	const nextDefaultExtensions = Array.from(defaultExtensions);
+	if (
+		!Array.isArray(browser.defaultExtensions) ||
+		nextDefaultExtensions.length !== browser.defaultExtensions.length
+	) {
+		changed = true;
+	}
+	browser.defaultExtensions = nextDefaultExtensions;
+
+	const transport = browser.transport;
+	if (
+		transport !== "auto" &&
+		transport !== "playwright" &&
+		transport !== "relay"
+	) {
+		browser.transport = DEFAULT_BROWSER_TRANSPORT;
+		changed = true;
+	}
+
+	config.browser = browser;
+	return { config, changed };
+}
+
+function resolveBundledBrowserExtensionPath(): string | null {
+	const candidates = [
+		new URL(
+			"../../../../extensions/wingman-browser-extension",
+			import.meta.url,
+		),
+		new URL("../../../extensions/wingman-browser-extension", import.meta.url),
+	];
+
+	for (const candidate of candidates) {
+		const resolved = fileURLToPath(candidate);
+		if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+			return resolved;
+		}
+	}
+
+	const cwdFallback = join(
+		process.cwd(),
+		"extensions",
+		"wingman-browser-extension",
+	);
+	if (existsSync(cwdFallback) && statSync(cwdFallback).isDirectory()) {
+		return cwdFallback;
+	}
+
+	return null;
+}
+
+function resolveWorkspacePath(
+	workspace: string,
+	configuredPath: string,
+): string {
+	return isAbsolute(configuredPath)
+		? configuredPath
+		: join(workspace, configuredPath);
+}
+
+function bootstrapBrowserDefaults(
+	configRoot: string,
+	config: Record<string, unknown>,
+): {
+	profileDirectory?: string;
+	extensionDirectory?: string;
+} {
+	if (!isObjectRecord(config.browser)) {
+		return {};
+	}
+
+	const browser = config.browser;
+	const workspace = dirname(configRoot);
+	let profileDirectory: string | undefined;
+	let extensionDirectory: string | undefined;
+
+	const defaultProfile =
+		typeof browser.defaultProfile === "string"
+			? browser.defaultProfile.trim()
+			: "";
+	if (defaultProfile) {
+		const profiles = readStringRecord(browser.profiles);
+		const profilesDir =
+			typeof browser.profilesDir === "string" && browser.profilesDir.trim()
+				? browser.profilesDir.trim()
+				: DEFAULT_BROWSER_PROFILES_DIR;
+		const profilePath =
+			profiles[defaultProfile] ||
+			normalizePathForConfig(join(profilesDir, defaultProfile));
+		const absoluteProfilePath = resolveWorkspacePath(workspace, profilePath);
+		if (!existsSync(absoluteProfilePath)) {
+			profileDirectory = absoluteProfilePath;
+		}
+		mkdirSync(absoluteProfilePath, { recursive: true });
+	}
+
+	const extensions = readStringRecord(browser.extensions);
+	const bundledExtensionPath = extensions[DEFAULT_BUNDLED_EXTENSION_ID];
+	if (bundledExtensionPath) {
+		const absoluteExtensionPath = resolveWorkspacePath(
+			workspace,
+			bundledExtensionPath,
+		);
+		const bundledExtensionSource = resolveBundledBrowserExtensionPath();
+		const manifestPath = join(absoluteExtensionPath, "manifest.json");
+		if (bundledExtensionSource && !existsSync(manifestPath)) {
+			copyDirectory(bundledExtensionSource, absoluteExtensionPath);
+			extensionDirectory = absoluteExtensionPath;
+		}
+	}
+
+	return {
+		profileDirectory,
+		extensionDirectory,
+	};
 }
 
 async function handleAgentSetup(input: {

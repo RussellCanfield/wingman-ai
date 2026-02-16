@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.11
-**Last Updated:** 2026-02-15
+**Version:** 1.2.12
+**Last Updated:** 2026-02-16
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -63,6 +63,7 @@ Modern AI assistants face several challenges:
 - `browser_control`: Native Chrome/Chromium automation via CDP and Playwright persistent-context (first-class runtime tool, not MCP)
   - Supports optional persistent named profiles configured in `wingman.config.json` and selected per agent via `browserProfile`
   - Supports optional extension mappings (`browser.extensions`) and agent-level extension selection (`browserExtensions`)
+  - `wingman init` scaffolds a browser-ready baseline (`browser.defaultProfile`, default profile mapping, bundled `wingman` extension mapping/files, and `browser.defaultExtensions`)
   - CLI includes `wingman browser profile init <profile-id>` and `wingman browser profile open [profile-id] --url <url>` for profile provisioning and interactive login bootstrap
   - CLI includes `wingman browser extension install --default` to install Wingman's bundled first-party extension
 - `think`: Reasoning without side effects

@@ -42,6 +42,28 @@ describe("CLI init", () => {
 		const config = JSON.parse(readFileSync(configPath, "utf-8"));
 		expect(config.defaultAgent).toBe("wingman");
 		expect(config.gateway.fsRoots).toContain(".");
+		expect(config.browser?.defaultProfile).toBe("default");
+		expect(config.browser?.profiles?.default).toBe(
+			".wingman/browser-profiles/default",
+		);
+		expect(config.browser?.extensions?.wingman).toBe(
+			".wingman/browser-extensions/wingman",
+		);
+		expect(config.browser?.defaultExtensions).toContain("wingman");
+		expect(
+			existsSync(join(workspace, ".wingman", "browser-profiles", "default")),
+		).toBe(true);
+		expect(
+			existsSync(
+				join(
+					workspace,
+					".wingman",
+					"browser-extensions",
+					"wingman",
+					"manifest.json",
+				),
+			),
+		).toBe(true);
 
 		const agentPath = join(
 			workspace,
@@ -226,6 +248,67 @@ describe("CLI init", () => {
 		expect(updated.defaultAgent).toBe("wingman");
 		expect(updated.gateway.fsRoots).toEqual(
 			expect.arrayContaining(["./existing", "."]),
+		);
+		expect(updated.browser?.defaultProfile).toBe("default");
+		expect(updated.browser?.profiles?.default).toBe(
+			".wingman/browser-profiles/default",
+		);
+		expect(updated.browser?.extensions?.wingman).toBe(
+			".wingman/browser-extensions/wingman",
+		);
+		expect(updated.browser?.defaultExtensions).toContain("wingman");
+	});
+
+	it("merges config without overriding existing browser profile defaults", async () => {
+		const configDir = join(workspace, ".wingman");
+		const configPath = join(configDir, "wingman.config.json");
+		mkdirSync(configDir, { recursive: true });
+		writeFileSync(
+			configPath,
+			JSON.stringify(
+				{
+					defaultAgent: "wingman",
+					browser: {
+						defaultProfile: "trading",
+						profiles: {
+							trading: ".wingman/browser-profiles/trading",
+						},
+						extensions: {
+							relay: ".wingman/browser-extensions/relay",
+						},
+						defaultExtensions: ["relay"],
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		await executeInitCommand(
+			{
+				subcommand: "",
+				args: [],
+				verbosity: "silent",
+				outputMode: "json",
+				options: { merge: true, only: "config" },
+				agent: "wingman",
+			},
+			{ workspace },
+		);
+
+		const updated = JSON.parse(readFileSync(configPath, "utf-8"));
+		expect(updated.browser?.defaultProfile).toBe("trading");
+		expect(updated.browser?.profiles?.trading).toBe(
+			".wingman/browser-profiles/trading",
+		);
+		expect(updated.browser?.defaultExtensions).toEqual(
+			expect.arrayContaining(["relay", "wingman"]),
+		);
+		expect(updated.browser?.extensions?.relay).toBe(
+			".wingman/browser-extensions/relay",
+		);
+		expect(updated.browser?.extensions?.wingman).toBe(
+			".wingman/browser-extensions/wingman",
 		);
 	});
 

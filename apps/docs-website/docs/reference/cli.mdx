@@ -53,6 +53,14 @@ wingman init --mode sync --only agents --agents main,coding
 wingman init --mode sync --only agents --force
 ```
 
+Default browser baseline written by `wingman init` (when config is created or merged):
+
+- `browser.defaultProfile: "default"`
+- `browser.profiles.default: ".wingman/browser-profiles/default"`
+- `browser.extensions.wingman: ".wingman/browser-extensions/wingman"`
+- `browser.defaultExtensions: ["wingman"]`
+- Auto-installs the bundled extension files into `.wingman/browser-extensions/wingman`
+
 ## wingman provider
 
 ```bash
