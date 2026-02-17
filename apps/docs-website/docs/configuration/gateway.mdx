@@ -104,6 +104,9 @@ Desktop app flow:
 - App registers as a node and can service `req:node` invocations (`system.notify`, `system.run`)
 - Agents can invoke these capabilities via `node_notify` and `node_run` tools
 
+Note:
+- Changing `Node Name` while node mode is already enabled updates the active node name on the next registration event (toggle node mode or reconnect).
+
 
 ## Cloudflare deployment
 

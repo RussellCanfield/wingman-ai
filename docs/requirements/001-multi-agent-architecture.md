@@ -565,15 +565,33 @@ Dynamically extend agent capabilities through markdown files
 ---
 name: skill-name
 description: What the skill does
+metadata:
+  wingman:
+    requires:
+      bins: [gog]
+    install:
+      - id: brew
+        kind: brew
+        formula: steipete/tap/gogcli
 ---
 
 # Skill Instructions
 [Detailed instructions for using the skill]
 ```
 
+Metadata namespaces:
+- Supported: `metadata.wingman` and `metadata.openclaw`
+- Unsupported namespaces are ignored by runtime activation checks
+
+Dependency activation:
+- Runtime skill loading is read-only and never executes install commands
+- Skills with `requires.bins` are only activated when all required binaries are present on PATH
+- Dependency install recipes are only executable via `wingman skill install`
+
 ### Loading Strategy
 - Skills loaded from filesystem paths: `["/skills/"]`
 - Registry-backed install sources supported: GitHub and ClawHub
+- GitHub sources are configured as an ordered list in `skills.repositories` (legacy fallback: `skills.repositoryOwner` + `skills.repositoryName`)
 - Later sources override earlier ones
 - Applied to all subagents
 

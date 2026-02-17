@@ -136,9 +136,8 @@ export class WingmanConfigLoader {
 				outputMode: "auto",
 			},
 			skills: {
-				provider: "github",
-				repositoryOwner: "anthropics",
-				repositoryName: "skills",
+				provider: "hybrid",
+				repositories: [{ owner: "RussellCanfield", name: "wingman-ai" }],
 				clawhubBaseUrl: "https://clawhub.ai",
 				skillsDirectory: "skills",
 				security: {

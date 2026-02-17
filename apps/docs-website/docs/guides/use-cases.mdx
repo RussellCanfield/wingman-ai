@@ -1,0 +1,120 @@
+# Use Case Ideas
+
+If you're asking "what should I use Wingman for?", start with one of these practical patterns.
+
+## 1) Multi-agent engineering squad
+
+Use Wingman as an orchestrator that delegates planning, implementation, and review to specialists.
+
+Best for:
+- Shipping features faster with clear role separation
+- Keeping tool scope and context tight per sub-agent
+- Enforcing a repeatable build-test-review flow
+
+Start with:
+- [Multi-Agent Workflows](/guides/multi-agent-workflows)
+- [Agents & Sub-Agents](/configuration/agents)
+
+## 2) Discord support or community copilot
+
+Route Discord mentions or DM threads to specific agents so your team can triage issues without leaving chat.
+
+Best for:
+- Community support queues
+- Internal helpdesk bots
+- Escalation to specialized agents by channel
+
+Start with:
+- [Discord Adapter](/configuration/discord-adapter)
+- [Gateway Configuration](/configuration/gateway)
+
+## 3) Daily automation and reporting
+
+Create routines for recurring prompts like standups, PR summaries, incident rollups, or backlog cleanup.
+
+Best for:
+- Daily/weekly summaries
+- Repetitive operations tasks
+- Scheduled executive updates
+
+Start with:
+- [Automation & Routines](/guides/automation)
+- [HTTP API](/reference/http-api)
+
+## 4) Event-driven incident response
+
+Push webhook events from CI, monitoring, or ticketing into Wingman and let agents classify, summarize, and route action items.
+
+Best for:
+- Build and deploy alerts
+- Incident triage
+- On-call assist workflows
+
+Start with:
+- [Automation & Routines](/guides/automation)
+- [Sessions & State](/guides/sessions-and-state)
+
+## 5) Voice-enabled command center
+
+Use voice output for hands-free status updates while running long operations or monitoring sessions.
+
+Best for:
+- Desk-side ops workflows
+- Accessibility-first interaction
+- Read-aloud summaries from active sessions
+
+Start with:
+- [Voice Configuration](/configuration/voice)
+- [Gateway Configuration](/configuration/gateway)
+
+## 6) Cross-device collaboration hub
+
+Run Wingman Gateway as a shared coordination point so multiple machines and channels can work in one session model.
+
+Best for:
+- Remote team coordination
+- Persistent sessions across devices
+- Unified context during complex projects
+
+Start with:
+- [Distributed Collaboration](/guides/distributed-collaboration)
+- [Gateway Configuration](/configuration/gateway)
+
+## 7) Browser-assisted research and QA
+
+Pair agents with browser automation tools to gather data, validate flows, and produce concise findings.
+
+Best for:
+- Competitive research
+- UI smoke checks
+- Repro steps and verification notes
+
+Start with:
+- [Browser Automation](/configuration/browser-automation)
+- [Browser Relay](/configuration/browser-relay)
+- [Browser Control Reference](/reference/browser-control)
+
+## 8) Custom workflow platform
+
+Compose skills, hooks, MCP tools, and specialized agents into a workflow that matches your internal process.
+
+Best for:
+- Domain-specific task pipelines
+- Tool-augmented agent behavior
+- Team-standardized execution patterns
+
+Start with:
+- [Skills](/configuration/skills)
+- [Hooks](/configuration/hooks)
+- [MCP Configuration](/configuration/mcp)
+
+## Picking your first use case
+
+Use this quick filter:
+
+- Need immediate value today: start with **Daily automation and reporting**
+- Need team collaboration: start with **Discord support** or **Cross-device collaboration hub**
+- Need higher engineering throughput: start with **Multi-agent engineering squad**
+- Need richer integrations: start with **Custom workflow platform**
+
+Then run [Quickstart](/getting-started/quickstart), launch one use case, and iterate from real usage.

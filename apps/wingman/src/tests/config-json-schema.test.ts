@@ -24,4 +24,16 @@ describe("wingman config json schema", () => {
 
 		expect(scannerArgsDefault).toContain("mcp-scan>=0.4,<0.5");
 	});
+
+	it("exposes hybrid defaults for skill sources", () => {
+		const schema = buildWingmanConfigJsonSchema() as Record<string, any>;
+		const repositoriesDefault =
+			schema.properties.skills.properties.repositories.default;
+		const providerDefault = schema.properties.skills.properties.provider.default;
+
+		expect(providerDefault).toBe("hybrid");
+		expect(repositoriesDefault).toEqual([
+			{ owner: "RussellCanfield", name: "wingman-ai" },
+		]);
+	});
 });

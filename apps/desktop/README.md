@@ -55,7 +55,11 @@ bun run --cwd apps/desktop tauri:build
 Current desktop node flow:
 - Connect the desktop app to your gateway.
 - In Gateway settings, toggle `Enable this device as a node`.
+- Optionally set `Node Name` in Gateway quick controls to label this device.
 - The app is approved through `/api/nodes/:clientId` and registers node capabilities.
+
+Note:
+- Changing `Node Name` updates local desktop preferences immediately, but the gateway-visible node name updates on the next node registration event (toggle node mode off/on, or reconnect while node mode is enabled).
 
 Current node capabilities in desktop app:
 - `system.notify` (used by `node_notify`)

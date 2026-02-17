@@ -81,8 +81,13 @@ Add this to your config file for editor validation/autocomplete:
     "outputMode": "auto"
   },
   "skills": {
-    "repositoryOwner": "anthropics",
-    "repositoryName": "skills",
+    "provider": "hybrid",
+    "repositories": [
+      { "owner": "RussellCanfield", "name": "wingman-ai" },
+      { "owner": "your-org", "name": "your-skills-repo" }
+    ],
+    "repositoryOwner": "legacy-owner",
+    "repositoryName": "legacy-repo",
     "skillsDirectory": "skills"
   },
   "browser": {
@@ -206,7 +211,7 @@ Minimal example:
 - **search**: provider and max results for the `internet_search` tool
 - **voice**: global voice settings; can be overridden per-agent
 - **cli**: CLI theme and output mode (`auto | interactive | json`)
-- **skills**: GitHub repo + local directory for skills
+- **skills**: skill sources (`hybrid`, `clawhub`, or `github`), ordered GitHub repos, optional legacy GitHub repo fallback, and local install directory
 - **browser**: named persistent profile + extension settings for `browser_control`
 - **gateway**: host, port, auth, control UI, adapters
 - **agents**: optional list/bindings used by the gateway for routing

@@ -2,7 +2,7 @@
 
 **Version:** 0.6
 **Status:** In Progress
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-17
 
 ---
 
@@ -140,6 +140,7 @@ Current implementation status in this repository:
 - Standalone app scaffold exists at `apps/desktop`
 - Frontend gateway workspace exists with session + agent + rich chat flows
 - Desktop app supports node mode enable/revoke for the connected device
+- Desktop app supports a custom user-defined node name for node mode registration
 - Desktop node handlers currently service `system.notify` and `system.run`
 - Provider + voice settings are configurable in desktop runtime UI
 - Chat supports manual voice playback and per-session auto-speak toggle

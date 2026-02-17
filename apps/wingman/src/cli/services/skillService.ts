@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -11,6 +12,12 @@ import type { SkillRepository } from "./skillRepository.js";
 import type { OutputManager } from "../core/outputManager.js";
 import { getLogFilePath, type Logger } from "../../logger.js";
 import { scanSkillDirectory } from "./skillSecurityScanner.js";
+import { findMissingBins } from "@/skills/bin-requirements.js";
+import {
+	parseSkillFrontmatter,
+	type ParsedSkillFrontmatter,
+	type SkillInstallRecipe,
+} from "@/skills/metadata.js";
 
 export class SkillService {
 	private readonly workspace: string;
@@ -193,11 +200,16 @@ export class SkillService {
 			// Create skill directory and copy validated content.
 			await fs.mkdir(skillPath, { recursive: true });
 			await fs.cp(stagedSkillPath, skillPath, { recursive: true, force: true });
+			const dependencyStatus =
+				await this.handlePostInstallDependencyActivation(skillPath);
 
 			if (this.outputManager.getMode() === "interactive") {
 				console.log(
 					`\n✓ Successfully installed skill ${skillName} to ${skillPath}`,
 				);
+				if (dependencyStatus) {
+					console.log(`\n${dependencyStatus}`);
+				}
 			} else {
 				this.outputManager.emitEvent({
 					type: "skill-install-complete",
@@ -205,6 +217,14 @@ export class SkillService {
 					path: skillPath,
 					timestamp: new Date().toISOString(),
 				} as any);
+				if (dependencyStatus) {
+					this.outputManager.emitEvent({
+						type: "log",
+						level: "info",
+						message: dependencyStatus,
+						timestamp: new Date().toISOString(),
+					} as any);
+				}
 			}
 		} catch (error) {
 			const errorMsg =
@@ -420,6 +440,125 @@ export class SkillService {
 		}
 	}
 
+	private async loadSkillFrontmatter(
+		skillPath: string,
+	): Promise<ParsedSkillFrontmatter> {
+		const skillMdPath = path.join(skillPath, "SKILL.md");
+		const content = await fs.readFile(skillMdPath, "utf-8");
+		return parseSkillFrontmatter(content);
+	}
+
+	private resolveMissingRequiredBins(skill: ParsedSkillFrontmatter): string[] {
+		const requiredBins = skill.runtimeMetadata?.requires.bins || [];
+		return findMissingBins(requiredBins);
+	}
+
+	private selectInstallRecipe(
+		skill: ParsedSkillFrontmatter,
+		missingBins: string[],
+	): SkillInstallRecipe | null {
+		const installRecipes = skill.runtimeMetadata?.install || [];
+		if (installRecipes.length === 0) return null;
+
+		const missing = new Set(missingBins);
+		const withMatchingBins = installRecipes.find((recipe) =>
+			recipe.bins.some((bin) => missing.has(bin)),
+		);
+		return withMatchingBins || installRecipes[0] || null;
+	}
+
+	private async promptForDependencyInstall(
+		skillName: string,
+		missingBins: string[],
+		recipe: SkillInstallRecipe,
+	): Promise<boolean> {
+		const commandPreview = this.getInstallCommandPreview(recipe);
+		if (!commandPreview) return false;
+
+		console.log(
+			`Skill '${skillName}' is installed but inactive. Missing required binaries: ${missingBins.join(", ")}`,
+		);
+		console.log(`Install option (${recipe.kind}): ${commandPreview}`);
+
+		const rl = readline.createInterface({
+			input: process.stdin,
+			output: process.stdout,
+		});
+		try {
+			const answer = await rl.question("Run install command now? (y/N): ");
+			const normalized = answer.trim().toLowerCase();
+			return normalized === "y" || normalized === "yes";
+		} finally {
+			rl.close();
+		}
+	}
+
+	private getInstallCommandPreview(recipe: SkillInstallRecipe): string | null {
+		if (recipe.kind === "brew" && recipe.formula) {
+			return `brew install ${recipe.formula}`;
+		}
+		return null;
+	}
+
+	private async runInstallRecipe(recipe: SkillInstallRecipe): Promise<void> {
+		if (recipe.kind !== "brew" || !recipe.formula) {
+			throw new Error(
+				`Unsupported install recipe kind '${recipe.kind}'. Currently supported: brew`,
+			);
+		}
+
+		await new Promise<void>((resolve, reject) => {
+			const child = spawn("brew", ["install", recipe.formula as string], {
+				cwd: this.workspace,
+				stdio: "inherit",
+			});
+			child.on("error", (error) => reject(error));
+			child.on("exit", (code) => {
+				if (code === 0) {
+					resolve();
+					return;
+				}
+				reject(new Error(`Install command exited with code ${code}`));
+			});
+		});
+	}
+
+	private async handlePostInstallDependencyActivation(
+		skillPath: string,
+	): Promise<string | null> {
+		const skill = await this.loadSkillFrontmatter(skillPath);
+		if (!skill.runtimeMetadata) {
+			return null;
+		}
+
+		const missingBins = this.resolveMissingRequiredBins(skill);
+		if (missingBins.length === 0) {
+			return `Skill '${skill.name}' is active.`;
+		}
+
+		const installRecipe = this.selectInstallRecipe(skill, missingBins);
+		const outputMode = this.outputManager.getMode();
+		if (!installRecipe || outputMode !== "interactive") {
+			return `Skill '${skill.name}' remains inactive until required binaries are available: ${missingBins.join(", ")}`;
+		}
+
+		const confirmed = await this.promptForDependencyInstall(
+			skill.name,
+			missingBins,
+			installRecipe,
+		);
+		if (!confirmed) {
+			return `Skill '${skill.name}' remains inactive until required binaries are available: ${missingBins.join(", ")}`;
+		}
+
+		await this.runInstallRecipe(installRecipe);
+		const remainingMissingBins = this.resolveMissingRequiredBins(skill);
+		if (remainingMissingBins.length === 0) {
+			return `Skill '${skill.name}' is now active.`;
+		}
+		return `Skill '${skill.name}' is still inactive. Missing binaries: ${remainingMissingBins.join(", ")}`;
+	}
+
 	/**
 	 * Validate SKILL.md file
 	 */
@@ -467,41 +606,7 @@ export class SkillService {
 		name: string;
 		description: string;
 	} {
-		const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---/;
-		const match = content.match(frontmatterRegex);
-
-		if (!match) {
-			throw new Error(
-				"Invalid SKILL.md format: missing YAML frontmatter",
-			);
-		}
-
-		const frontmatter = match[1];
-		let name = "";
-		let description = "";
-
-		const lines = frontmatter.split("\n");
-		for (const line of lines) {
-			const colonIndex = line.indexOf(":");
-			if (colonIndex === -1) continue;
-
-			const key = line.substring(0, colonIndex).trim();
-			const value = line.substring(colonIndex + 1).trim();
-
-			if (key === "name") {
-				name = value;
-			} else if (key === "description") {
-				description = value;
-			}
-		}
-
-		if (!name) {
-			throw new Error("missing required field 'name'");
-		}
-		if (!description) {
-			throw new Error("missing required field 'description'");
-		}
-
-		return { name, description };
+		const parsed = parseSkillFrontmatter(content);
+		return { name: parsed.name, description: parsed.description };
 	}
 }

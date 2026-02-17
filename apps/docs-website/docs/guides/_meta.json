@@ -1,8 +1,17 @@
 [
-  { "type": "file", "name": "quick-tips", "label": "Quick Tips (Critical)" },
-  { "type": "file", "name": "multi-agent-workflows", "label": "Multi-Agent Workflows" },
-  { "type": "file", "name": "dynamic-ui", "label": "Dynamic UI (SGUI)" },
-  { "type": "file", "name": "sessions-and-state", "label": "Sessions & State" },
-  { "type": "file", "name": "automation", "label": "Automation & Routines" },
-  { "type": "file", "name": "distributed-collaboration", "label": "Distributed Collaboration" }
+	{ "type": "file", "name": "quick-tips", "label": "Quick Tips (Critical)" },
+	{ "type": "file", "name": "use-cases", "label": "Use Case Ideas" },
+	{
+		"type": "file",
+		"name": "multi-agent-workflows",
+		"label": "Multi-Agent Workflows"
+	},
+	{ "type": "file", "name": "dynamic-ui", "label": "Dynamic UI (SGUI)" },
+	{ "type": "file", "name": "sessions-and-state", "label": "Sessions & State" },
+	{ "type": "file", "name": "automation", "label": "Automation & Routines" },
+	{
+		"type": "file",
+		"name": "distributed-collaboration",
+		"label": "Distributed Collaboration"
+	}
 ]

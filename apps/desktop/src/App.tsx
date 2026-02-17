@@ -101,6 +101,10 @@ import {
 	loadDesktopPreferences,
 	saveDesktopPreferences,
 } from "./lib/desktopPrefs.js";
+import {
+	loadNodeNamePreference,
+	saveNodeNamePreference,
+} from "./nodeNamePrefs.js";
 import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./lib/voice.js";
 import { shouldAutoSpeak } from "./lib/voiceAuto.js";
 import {
@@ -175,6 +179,7 @@ type RuntimeState = {
 	autoConnectOnLaunch: boolean;
 	notifyOnAgentFinish: boolean;
 	enableNodeMode: boolean;
+	nodeName: string;
 };
 
 type SpeechRecognitionLike = {
@@ -482,6 +487,7 @@ function useRuntimeController(isOverlayView: boolean) {
 			autoConnectOnLaunch: desktopPrefs.autoConnectOnLaunch,
 			notifyOnAgentFinish: desktopPrefs.notifyOnAgentFinish,
 			enableNodeMode: desktopPrefs.enableNodeMode,
+			nodeName: loadNodeNamePreference(),
 		};
 	});
 
@@ -771,6 +777,13 @@ function useRuntimeController(isOverlayView: boolean) {
 		});
 	}, []);
 
+	const updateNodeName = useCallback((nodeName: string) => {
+		saveNodeNamePreference(nodeName);
+		setState((prev) => {
+			return { ...prev, nodeName };
+		});
+	}, []);
+
 	const updateTranscript = useCallback(
 		async (transcript: string) => {
 			setState((prev) => ({ ...prev, transcript }));
@@ -986,6 +999,7 @@ function useRuntimeController(isOverlayView: boolean) {
 			updateAutoConnectOnLaunch,
 			updateNotifyOnAgentFinish,
 			updateEnableNodeMode,
+			updateNodeName,
 			updateTranscript,
 			clearTranscript,
 			hideOverlay,
@@ -1004,6 +1018,7 @@ function useRuntimeController(isOverlayView: boolean) {
 function useGatewayWorkspace(
 	settings: GatewaySettings,
 	enableNodeMode: boolean,
+	nodeName: string,
 	setGlobalStatus: (message: string, isError?: boolean) => void,
 ) {
 	const [workspace, setWorkspace] = useState<WorkspaceState>({
@@ -1504,6 +1519,7 @@ function useGatewayWorkspace(
 	const setNodeExecutionEnabled = useCallback(
 		async (enabled: boolean): Promise<boolean> => {
 			const clientId = `desktop-${deviceIdRef.current}`;
+			const resolvedNodeName = nodeName.trim() || "Wingman Desktop";
 			setWorkspace((prev) => ({
 				...prev,
 				nodeModeState: enabled ? "enabling" : "disabled",
@@ -1515,11 +1531,11 @@ function useGatewayWorkspace(
 				const record = await setNodeEnabled(settings, {
 					clientId,
 					enabled,
-					name: "Wingman Desktop",
+					name: resolvedNodeName,
 				});
 				if (enabled) {
 					socketRef.current?.enableNode({
-						name: record.name || "Wingman Desktop",
+						name: record.name || resolvedNodeName,
 						capabilities: ["system.notify", "system.run"],
 					});
 				} else {
@@ -1545,7 +1561,7 @@ function useGatewayWorkspace(
 				return false;
 			}
 		},
-		[logEvent, setGlobalStatus, settings],
+		[logEvent, nodeName, setGlobalStatus, settings],
 	);
 
 	const connectGateway = useCallback(async () => {
@@ -2449,6 +2465,7 @@ export function App({ overlayMode }: AppProps) {
 	const gateway = useGatewayWorkspace(
 		runtime.state.settings,
 		runtime.state.enableNodeMode,
+		runtime.state.nodeName,
 		runtime.setStatus,
 	);
 	const handledQuickSendNonceRef = useRef(0);
@@ -2953,7 +2970,7 @@ function GatewayScreen({
 				<p className="mt-1 text-[11px] text-slate-400">
 					Common runtime behavior controls for this device.
 				</p>
-				<div className="mt-3 grid gap-2 lg:grid-cols-3">
+				<div className="mt-3 grid gap-2 lg:grid-cols-4">
 					<label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
 						<span>Auto-connect on launch</span>
 						<input
@@ -2984,6 +3001,15 @@ function GatewayScreen({
 								runtimeActions.updateEnableNodeMode(next);
 								void workspaceActions.setNodeExecutionEnabled(next);
 							}}
+						/>
+					</label>
+					<label className="grid gap-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-slate-300 lg:col-span-2">
+						<span>Node Name</span>
+						<input
+							className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+							value={runtimeState.nodeName}
+							onChange={(event) => runtimeActions.updateNodeName(event.target.value)}
+							placeholder="Wingman Desktop"
 						/>
 					</label>
 				</div>
@@ -4820,7 +4846,9 @@ function MessageCard({
 									/>
 								) : null}
 								{isAudio && attachment.dataUrl ? (
-									<audio className="mt-2 w-full" controls src={attachment.dataUrl} />
+									<audio className="mt-2 w-full" controls src={attachment.dataUrl}>
+										<track kind="captions" />
+									</audio>
 								) : null}
 									{isFile && !isPdfAttachment(attachment) && attachment.textContent ? (
 										<p className="mt-2 whitespace-pre-wrap rounded-md border border-white/10 bg-slate-950/60 p-2 text-[11px] text-slate-300">

@@ -37,6 +37,7 @@ export async function executeSkillCommand(
 		// Create repository and service
 		const repository = new SkillRepository({
 			provider: config.skills?.provider,
+			repositories: config.skills?.repositories,
 			repositoryOwner: config.skills?.repositoryOwner,
 			repositoryName: config.skills?.repositoryName,
 			githubToken: config.skills?.githubToken,
@@ -143,9 +144,12 @@ Configuration:
   Skills can be configured in .wingman/wingman.config.json:
   {
     "skills": {
-      "provider": "github",
-      "repositoryOwner": "anthropics",
-      "repositoryName": "skills",
+      "provider": "hybrid",
+      "repositories": [
+        { "owner": "your-org", "name": "your-skills-repo" }
+      ],
+      "repositoryOwner": "legacy-owner",
+      "repositoryName": "legacy-repo",
       "githubToken": "optional-token",
       "clawhubBaseUrl": "https://clawhub.ai",
       "skillsDirectory": "skills",

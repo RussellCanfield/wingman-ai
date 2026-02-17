@@ -29,6 +29,11 @@ import {
 } from "@/agent/tools/terminal_session_manager.js";
 import type { NodeInvokeRequest, NodeInvokeResult } from "@/agent/tools/node_invoke.js";
 import { getBundledSkillsPath } from "@/agent/uiRegistry.js";
+import { resolveSkillActivation } from "@/skills/activation.js";
+import {
+	createSkillOverlayDirectory,
+	removeSkillOverlayDirectory,
+} from "@/skills/overlay.js";
 import type { WingmanAgent } from "@/types/agents.js";
 import type { MCPServersConfig } from "@/types/mcp.js";
 import { AgentLoader } from "../../agent/config/agentLoader.js";
@@ -718,6 +723,7 @@ export class AgentInvoker {
 		let activeToolName: string | null = null;
 		let lastToolName: string | null = null;
 		let rootLangGraphRunId: string | undefined;
+		const skillOverlayDirectories: string[] = [];
 		const isCancelled = () => options?.signal?.aborted === true;
 		try {
 			const hookSessionId = sessionId || uuidv4();
@@ -884,11 +890,11 @@ export class AgentInvoker {
 
 			// Create a standalone DeepAgent for this specific agent
 			const bundledSkillsPath = getBundledSkillsPath();
-			const skillsSources = [];
-			if (existsSync(bundledSkillsPath)) {
-				skillsSources.push("/skills-bundled/");
-			}
-			skillsSources.push(skillsVirtualPath);
+			const workspaceSkillsPath = join(
+				this.workspace,
+				normalizedSkillsDirectory,
+			);
+			const skillsSources: string[] = [];
 			const backendOverrides: Record<string, FilesystemBackend> = {
 				"/memories/": new FilesystemBackend({
 					rootDir: join(this.workspace, this.configDir, "memories"),
@@ -909,21 +915,69 @@ export class AgentInvoker {
 					virtualMode: true,
 				});
 			}
-			const workspaceSkillsPath = join(
-				this.workspace,
-				normalizedSkillsDirectory,
-			);
 			if (existsSync(workspaceSkillsPath)) {
+				const workspaceActivation = await resolveSkillActivation(
+					workspaceSkillsPath,
+				);
+				if (workspaceActivation.inactiveSkills.length > 0) {
+					const summary = workspaceActivation.inactiveSkills
+						.map(
+							(entry) =>
+								`${entry.name} (missing: ${entry.missingBins.join(", ")})`,
+						)
+						.join("; ");
+					this.logger.info(`Inactive workspace skills: ${summary}`);
+				}
+				let workspaceOverlayRoot = workspaceSkillsPath;
+				try {
+					const workspaceOverlay = await createSkillOverlayDirectory(
+						workspaceSkillsPath,
+						workspaceActivation.activeSkillNames,
+					);
+					workspaceOverlayRoot = workspaceOverlay;
+					skillOverlayDirectories.push(workspaceOverlay);
+				} catch (error) {
+					this.logger.debug(
+						"Failed to build workspace skill overlay; falling back to unfiltered skills directory",
+						error,
+					);
+				}
 				backendOverrides[skillsVirtualPath] = new FilesystemBackend({
-					rootDir: workspaceSkillsPath,
+					rootDir: workspaceOverlayRoot,
 					virtualMode: true,
 				});
+				skillsSources.push(skillsVirtualPath);
 			}
 			if (existsSync(bundledSkillsPath)) {
+				const bundledActivation = await resolveSkillActivation(bundledSkillsPath);
+				if (bundledActivation.inactiveSkills.length > 0) {
+					const summary = bundledActivation.inactiveSkills
+						.map(
+							(entry) =>
+								`${entry.name} (missing: ${entry.missingBins.join(", ")})`,
+						)
+						.join("; ");
+					this.logger.info(`Inactive bundled skills: ${summary}`);
+				}
+				let bundledOverlayRoot = bundledSkillsPath;
+				try {
+					const bundledOverlay = await createSkillOverlayDirectory(
+						bundledSkillsPath,
+						bundledActivation.activeSkillNames,
+					);
+					bundledOverlayRoot = bundledOverlay;
+					skillOverlayDirectories.push(bundledOverlay);
+				} catch (error) {
+					this.logger.debug(
+						"Failed to build bundled skill overlay; falling back to unfiltered skills directory",
+						error,
+					);
+				}
 				backendOverrides["/skills-bundled/"] = new FilesystemBackend({
-					rootDir: bundledSkillsPath,
+					rootDir: bundledOverlayRoot,
 					virtualMode: true,
 				});
+				skillsSources.push("/skills-bundled/");
 			}
 			if (outputMount.virtualPath && outputMount.absolutePath) {
 				backendOverrides[outputMount.virtualPath] = new FilesystemBackend({
@@ -1109,6 +1163,16 @@ export class AgentInvoker {
 			this.outputManager.emitAgentError(errorWithToolContext);
 			throw error;
 		} finally {
+			for (const overlayDirectory of skillOverlayDirectories) {
+				try {
+					await removeSkillOverlayDirectory(overlayDirectory);
+				} catch (error) {
+					this.logger.debug(
+						`Failed to cleanup skill overlay directory ${overlayDirectory}`,
+						error,
+					);
+				}
+			}
 			// Always cleanup MCP client
 			if (this.mcpManager) {
 				this.logger.debug("Cleaning up MCP client");

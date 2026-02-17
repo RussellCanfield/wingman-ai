@@ -1,10 +1,12 @@
 import type {
 	GitHubContentItem,
+	SkillGitHubRepository,
 	SkillInfo,
 	SkillMetadata,
 	SkillRepositoryOptions,
 } from "../types/skill.js";
 import { createLogger } from "@/logger.js";
+import { parseSkillFrontmatter } from "@/skills/metadata.js";
 
 const logger = createLogger();
 
@@ -59,16 +61,34 @@ type ClawHubVersionFilesResponse = {
  */
 export class SkillRepository {
 	private readonly githubBaseUrl = "https://api.github.com";
-	private readonly owner: string;
-	private readonly repo: string;
+	private readonly repositories: SkillGitHubRepository[];
 	private readonly token?: string;
-	private readonly provider: "github" | "clawhub";
+	private readonly provider: "github" | "clawhub" | "hybrid";
 	private readonly clawhubBaseUrl: string;
 
 	constructor(options: SkillRepositoryOptions = {}) {
-		this.provider = options.provider || "github";
-		this.owner = options.repositoryOwner || "anthropics";
-		this.repo = options.repositoryName || "skills";
+		this.provider = options.provider || "hybrid";
+		const normalizedRepositories = (options.repositories || [])
+			.map((repository) => ({
+				owner: repository.owner.trim(),
+				name: repository.name.trim(),
+			}))
+			.filter((repository) => repository.owner && repository.name);
+		const legacyOwner = options.repositoryOwner?.trim();
+		const legacyName = options.repositoryName?.trim();
+
+		if (normalizedRepositories.length > 0) {
+			this.repositories = normalizedRepositories;
+		} else if (legacyOwner && legacyName) {
+			this.repositories = [
+				{
+					owner: legacyOwner,
+					name: legacyName,
+				},
+			];
+		} else {
+			this.repositories = [];
+		}
 		this.token =
 			options.githubToken || process.env.GITHUB_TOKEN || undefined;
 		this.clawhubBaseUrl = (
@@ -127,7 +147,10 @@ export class SkillRepository {
 			if (this.provider === "clawhub") {
 				return await this.listSkillsFromClawhub();
 			}
-			return await this.listSkillsFromGitHub();
+			if (this.provider === "github") {
+				return await this.listSkillsFromGitHub();
+			}
+			return await this.listSkillsFromHybrid();
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(`Failed to list skills: ${error.message}`);
@@ -167,27 +190,15 @@ export class SkillRepository {
 	 * Get skill metadata by fetching and parsing SKILL.md
 	 */
 	async getSkillMetadata(skillName: string): Promise<SkillMetadata> {
-		if (this.provider === "clawhub") {
-			return await this.getClawhubSkillMetadata(skillName);
-		}
-
 		try {
-			const skillMdPath = `/repos/${this.owner}/${this.repo}/contents/skills/${skillName}/SKILL.md`;
-			const skillMd = await this.fetchGitHub<GitHubContentItem>(skillMdPath);
-
-			if (skillMd.type !== "file" || !skillMd.content) {
-				throw new Error("SKILL.md not found or invalid");
+			if (this.provider === "clawhub") {
+				return await this.getClawhubSkillMetadata(skillName);
 			}
-
-			// Decode base64 content
-			const content = Buffer.from(skillMd.content, "base64").toString(
-				"utf-8",
-			);
-
-			// Parse YAML frontmatter
-			const metadata = this.parseSkillMetadata(content);
-
-			return metadata;
+			if (this.provider === "github") {
+				const repository = await this.resolveGitHubRepositoryForSkill(skillName);
+				return await this.getGitHubSkillMetadata(skillName, repository);
+			}
+			return await this.getHybridSkillMetadata(skillName);
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(
@@ -196,6 +207,53 @@ export class SkillRepository {
 			}
 			throw error;
 		}
+	}
+
+	private async getGitHubSkillMetadata(
+		skillName: string,
+		repository: SkillGitHubRepository,
+	): Promise<SkillMetadata> {
+		const skillMdPath = `/repos/${repository.owner}/${repository.name}/contents/skills/${skillName}/SKILL.md`;
+		const skillMd = await this.fetchGitHub<GitHubContentItem>(skillMdPath);
+		if (skillMd.type !== "file" || !skillMd.content) {
+			throw new Error(
+				`SKILL.md not found or invalid in ${repository.owner}/${repository.name}`,
+			);
+		}
+
+		// Decode base64 content
+		const content = Buffer.from(skillMd.content, "base64").toString(
+			"utf-8",
+		);
+		return this.parseSkillMetadata(content);
+	}
+
+	private async resolveGitHubRepositoryForSkill(
+		skillName: string,
+	): Promise<SkillGitHubRepository> {
+		const repositories = this.getGitHubRepositories();
+		for (let index = repositories.length - 1; index >= 0; index -= 1) {
+			const repository = repositories[index];
+			try {
+				await this.fetchGitHub<GitHubContentItem>(
+					`/repos/${repository.owner}/${repository.name}/contents/skills/${skillName}/SKILL.md`,
+				);
+				return repository;
+			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Resource not found")
+				) {
+					continue;
+				}
+				throw error;
+			}
+		}
+		throw new Error(
+			`Skill '${skillName}' not found in configured GitHub repositories: ${repositories
+				.map((repository) => `${repository.owner}/${repository.name}`)
+				.join(", ")}`,
+		);
 	}
 
 	private async getClawhubSkillMetadata(
@@ -242,74 +300,56 @@ export class SkillRepository {
 		}
 	}
 
+	private async getHybridSkillMetadata(
+		skillName: string,
+	): Promise<SkillMetadata> {
+		let githubError: unknown;
+		try {
+			const repository = await this.resolveGitHubRepositoryForSkill(skillName);
+			return await this.getGitHubSkillMetadata(skillName, repository);
+		} catch (error) {
+			githubError = error;
+			logger.debug(
+				`Falling back to ClawHub metadata lookup for '${skillName}' after GitHub error: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+		}
+
+		try {
+			return await this.getClawhubSkillMetadata(skillName);
+		} catch (clawhubError) {
+			throw new Error(
+				`GitHub error: ${
+					githubError instanceof Error
+						? githubError.message
+						: String(githubError)
+				}; ClawHub error: ${
+					clawhubError instanceof Error
+						? clawhubError.message
+						: String(clawhubError)
+				}`,
+			);
+		}
+	}
+
 	/**
 	 * Parse SKILL.md content to extract YAML frontmatter
 	 */
 	private parseSkillMetadata(content: string): SkillMetadata {
-		const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---/;
-		const match = content.match(frontmatterRegex);
-
-		if (!match) {
-			throw new Error(
-				"Invalid SKILL.md format: missing YAML frontmatter",
-			);
-		}
-
-		const frontmatter = match[1];
-		const metadata: SkillMetadata = {
-			name: "",
-			description: "",
+		const parsed = parseSkillFrontmatter(content);
+		return {
+			name: parsed.name,
+			description: parsed.description,
+			...(parsed.license ? { license: parsed.license } : {}),
+			...(parsed.compatibility
+				? { compatibility: parsed.compatibility }
+				: {}),
+			...(parsed.allowedTools.length > 0
+				? { allowedTools: parsed.allowedTools }
+				: {}),
+			...(parsed.metadata ? { metadata: parsed.metadata } : {}),
 		};
-
-		// Simple YAML parser for key-value pairs
-		const lines = frontmatter.split("\n");
-		for (const line of lines) {
-			const colonIndex = line.indexOf(":");
-			if (colonIndex === -1) continue;
-
-			const key = line.substring(0, colonIndex).trim();
-			const value = line.substring(colonIndex + 1).trim();
-
-			switch (key) {
-				case "name":
-					metadata.name = value;
-					break;
-				case "description":
-					metadata.description = value;
-					break;
-				case "license":
-					metadata.license = value;
-					break;
-				case "compatibility":
-					metadata.compatibility = value;
-					break;
-				case "allowed-tools":
-					metadata.allowedTools = value;
-					break;
-			}
-		}
-
-		// Validate required fields
-		if (!metadata.name) {
-			throw new Error(
-				"Invalid SKILL.md: missing required field 'name'",
-			);
-		}
-		if (!metadata.description) {
-			throw new Error(
-				"Invalid SKILL.md: missing required field 'description'",
-			);
-		}
-
-		// Validate name format
-		const nameRegex = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-		if (!nameRegex.test(metadata.name)) {
-			throw new Error(
-				`Invalid skill name '${metadata.name}': must be lowercase alphanumeric with hyphens only`,
-			);
-		}
-
-		return metadata;
 	}
 
 	/**
@@ -318,17 +358,22 @@ export class SkillRepository {
 	async downloadSkill(
 		skillName: string,
 	): Promise<Map<string, string | Buffer>> {
-		if (this.provider === "clawhub") {
-			return await this.downloadSkillFromClawhub(skillName);
-		}
 		try {
-			const files = new Map<string, string | Buffer>();
-			await this.downloadDirectory(
-				`skills/${skillName}`,
-				files,
-				skillName,
-			);
-			return files;
+			if (this.provider === "clawhub") {
+				return await this.downloadSkillFromClawhub(skillName);
+			}
+			if (this.provider === "github") {
+				const repository = await this.resolveGitHubRepositoryForSkill(skillName);
+				const files = new Map<string, string | Buffer>();
+				await this.downloadDirectory(
+					`skills/${skillName}`,
+					files,
+					skillName,
+					repository,
+				);
+				return files;
+			}
+			return await this.downloadHybridSkill(skillName);
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(
@@ -394,6 +439,46 @@ export class SkillRepository {
 		}
 	}
 
+	private async downloadHybridSkill(
+		skillName: string,
+	): Promise<Map<string, string | Buffer>> {
+		let githubError: unknown;
+		try {
+			const repository = await this.resolveGitHubRepositoryForSkill(skillName);
+			const files = new Map<string, string | Buffer>();
+			await this.downloadDirectory(
+				`skills/${skillName}`,
+				files,
+				skillName,
+				repository,
+			);
+			return files;
+		} catch (error) {
+			githubError = error;
+			logger.debug(
+				`Falling back to ClawHub download for '${skillName}' after GitHub error: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+		}
+
+		try {
+			return await this.downloadSkillFromClawhub(skillName);
+		} catch (clawhubError) {
+			throw new Error(
+				`GitHub error: ${
+					githubError instanceof Error
+						? githubError.message
+						: String(githubError)
+				}; ClawHub error: ${
+					clawhubError instanceof Error
+						? clawhubError.message
+						: String(clawhubError)
+				}`,
+			);
+		}
+	}
+
 	/**
 	 * Recursively download all files in a directory
 	 */
@@ -401,9 +486,10 @@ export class SkillRepository {
 		path: string,
 		files: Map<string, string | Buffer>,
 		skillName: string,
+		repository: SkillGitHubRepository,
 	): Promise<void> {
 		const contents = await this.fetchGitHub<GitHubContentItem[]>(
-			`/repos/${this.owner}/${this.repo}/contents/${path}`,
+			`/repos/${repository.owner}/${repository.name}/contents/${path}`,
 		);
 
 		for (const item of contents) {
@@ -436,7 +522,7 @@ export class SkillRepository {
 				}
 			} else if (item.type === "dir") {
 				// Recursively download subdirectories
-				await this.downloadDirectory(item.path, files, skillName);
+				await this.downloadDirectory(item.path, files, skillName, repository);
 			}
 		}
 	}
@@ -477,18 +563,81 @@ export class SkillRepository {
 		return allSkills;
 	}
 
+	private async listSkillsFromHybrid(): Promise<SkillInfo[]> {
+		let clawhubSkills: SkillInfo[] = [];
+		let githubSkills: SkillInfo[] = [];
+		let clawhubError: unknown;
+		let githubError: unknown;
+
+		try {
+			clawhubSkills = await this.listSkillsFromClawhub();
+		} catch (error) {
+			clawhubError = error;
+			logger.warn(
+				`Failed to list ClawHub skills in hybrid mode: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+		}
+
+		try {
+			githubSkills = await this.listSkillsFromGitHub();
+		} catch (error) {
+			githubError = error;
+			logger.warn(
+				`Failed to list GitHub skills in hybrid mode: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+		}
+
+		if (clawhubSkills.length === 0 && githubSkills.length === 0) {
+			throw new Error(
+				`No skill sources available. ClawHub error: ${
+					clawhubError instanceof Error
+						? clawhubError.message
+						: "none"
+				}; GitHub error: ${
+					githubError instanceof Error ? githubError.message : "none"
+				}`,
+			);
+		}
+
+		const mergedSkills = new Map<string, SkillInfo>();
+		for (const skill of clawhubSkills) {
+			mergedSkills.set(skill.name, skill);
+		}
+		// GitHub entries override ClawHub entries on name conflicts.
+		for (const skill of githubSkills) {
+			if (mergedSkills.has(skill.name)) {
+				mergedSkills.delete(skill.name);
+			}
+			mergedSkills.set(skill.name, skill);
+		}
+		return [...mergedSkills.values()];
+	}
+
 	private async listSkillsFromGitHub(): Promise<SkillInfo[]> {
-		const contents = await this.fetchGitHub<GitHubContentItem[]>(
-			`/repos/${this.owner}/${this.repo}/contents/skills`,
-		);
+		const mergedSkills = new Map<string, SkillInfo>();
+		for (const repository of this.getGitHubRepositories()) {
+			const contents = await this.fetchGitHub<GitHubContentItem[]>(
+				`/repos/${repository.owner}/${repository.name}/contents/skills`,
+			);
 
-		const skills: SkillInfo[] = [];
-
-		for (const item of contents) {
-			if (item.type === "dir") {
+			for (const item of contents) {
+				if (item.type !== "dir") {
+					continue;
+				}
 				try {
-					const metadata = await this.getSkillMetadata(item.name);
-					skills.push({
+					const metadata = await this.getGitHubSkillMetadata(
+						item.name,
+						repository,
+					);
+					// Later repositories override earlier repositories on conflicts.
+					if (mergedSkills.has(item.name)) {
+						mergedSkills.delete(item.name);
+					}
+					mergedSkills.set(item.name, {
 						name: item.name,
 						description: metadata.description || "No description",
 						path: item.path,
@@ -497,13 +646,21 @@ export class SkillRepository {
 				} catch (error) {
 					// Skip skills that can't be read
 					logger.warn(
-						`Could not read skill ${item.name}`,
+						`Could not read skill ${item.name} from ${repository.owner}/${repository.name}`,
 						error instanceof Error ? error.message : String(error),
 					);
 				}
 			}
 		}
+		return [...mergedSkills.values()];
+	}
 
-		return skills;
+	private getGitHubRepositories(): SkillGitHubRepository[] {
+		if (this.repositories.length > 0) {
+			return this.repositories;
+		}
+		throw new Error(
+			"No GitHub skill repositories configured. Set skills.repositories or the legacy skills.repositoryOwner + skills.repositoryName fields.",
+		);
 	}
 }

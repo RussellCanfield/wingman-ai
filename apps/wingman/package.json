@@ -2,7 +2,7 @@
 	"name": "@wingman-ai/gateway",
 	"displayName": "Wingman Agent",
 	"description": "Wingman-AI agentic coding assistant that works with Anthropic, OpenAI, Google, xAI and LMStudio.",
-	"version": "0.4.1",
+	"version": "0.4.2",
 	"main": "index.js",
 	"bin": {
 		"wingman": "./bin/wingman"
@@ -40,9 +40,9 @@
 		"webui:dev": "vite --config webui/vite.config.ts --host",
 		"webui:build": "vite build --config webui/vite.config.ts",
 		"webui:preview": "vite preview --config webui/vite.config.ts",
-		"docs:dev": "bun --cwd ../docs-website run dev",
-		"docs:build": "bun --cwd ../docs-website run build",
-		"docs:preview": "bun --cwd ../docs-website run preview",
+		"docs:dev": "bun run --cwd ../docs-website dev",
+		"docs:build": "bun run --cwd ../docs-website build",
+		"docs:preview": "bun run --cwd ../docs-website preview",
 		"gateway:example": "bun ./examples/gateway-example.ts",
 		"gateway:start": "./bin/wingman gateway start",
 		"gateway:stop": "./bin/wingman gateway stop",

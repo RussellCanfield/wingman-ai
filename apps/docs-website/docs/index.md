@@ -13,6 +13,9 @@ hero:
       text: Configure Providers
       link: /configuration/providers
     - theme: alt
+      text: Use Case Ideas
+      link: /guides/use-cases
+    - theme: alt
       text: Discord Adapter
       link: /configuration/discord-adapter
     - theme: alt
@@ -42,6 +45,8 @@ Wingman is a two-part agent ecosystem:
 - **Wingman Gateway** for multi-agent collaboration, sessions, adapters, and the Control Core web UI.
 
 This documentation dives deep into configuration, providers, and real-world use cases so you can ship a production-grade Wingman setup.
+
+Not sure where to begin? Start with [Use Case Ideas](/guides/use-cases).
 
 ## What you can build
 

@@ -9,8 +9,8 @@ export interface SkillMetadata {
 	description: string;
 	license?: string;
 	compatibility?: string;
-	metadata?: Record<string, string>;
-	allowedTools?: string;
+	metadata?: Record<string, unknown>;
+	allowedTools?: string[];
 }
 
 /**
@@ -63,11 +63,17 @@ export interface SkillCommandArgs {
  * Options for skill repository operations
  */
 export interface SkillRepositoryOptions {
-	provider?: "github" | "clawhub";
+	provider?: "github" | "clawhub" | "hybrid";
 	repositoryOwner?: string;
 	repositoryName?: string;
+	repositories?: SkillGitHubRepository[];
 	githubToken?: string;
 	clawhubBaseUrl?: string;
+}
+
+export interface SkillGitHubRepository {
+	owner: string;
+	name: string;
 }
 
 export interface SkillSecurityOptions {

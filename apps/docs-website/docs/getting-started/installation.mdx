@@ -55,6 +55,9 @@ the Control Core web UI.
 3. Use an agent with `node_notify` or `node_run` to invoke this device.
 4. Revoke at any time by turning the toggle off or deleting `/api/nodes/:clientId`.
 
+Note:
+- If `Node Name` is changed while node mode is already enabled, the new name applies on the next node registration cycle (toggle node mode off/on, or reconnect while enabled).
+
 ## Legacy macOS Menu Bar App
 
 The legacy native menu bar app still exists in this repository while the

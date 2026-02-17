@@ -21,20 +21,42 @@ export const SearchConfigSchema = z.object({
 
 export type SearchConfig = z.infer<typeof SearchConfigSchema>;
 
+export const GitHubSkillRepositorySchema = z.object({
+	owner: z
+		.string()
+		.min(1)
+		.describe("GitHub repository owner for a skills source"),
+	name: z
+		.string()
+		.min(1)
+		.describe("GitHub repository name for a skills source"),
+});
+
 // Zod schema for skills configuration
 export const SkillsConfigSchema = z.object({
 	provider: z
-		.enum(["github", "clawhub"])
-		.default("github")
+		.enum(["github", "clawhub", "hybrid"])
+		.default("hybrid")
 		.describe("Skill source provider"),
+	repositories: z
+		.array(GitHubSkillRepositorySchema)
+		.optional()
+		.default([{ owner: "RussellCanfield", name: "wingman-ai" }])
+		.describe(
+			"Ordered GitHub skill sources. Later repositories override earlier repositories on name conflicts.",
+		),
 	repositoryOwner: z
 		.string()
-		.default("anthropics")
-		.describe("GitHub repository owner for skills"),
+		.optional()
+		.describe(
+			"Legacy GitHub repository owner fallback when repositories is empty (requires repositoryName)",
+		),
 	repositoryName: z
 		.string()
-		.default("skills")
-		.describe("GitHub repository name for skills"),
+		.optional()
+		.describe(
+			"Legacy GitHub repository name fallback when repositories is empty (requires repositoryOwner)",
+		),
 	githubToken: z
 		.string()
 		.optional()
@@ -578,9 +600,8 @@ export const WingmanConfigSchema = z.object({
 		})
 		.default({ theme: "default", outputMode: "auto" }),
 	skills: SkillsConfigSchema.optional().default({
-		provider: "github",
-		repositoryOwner: "anthropics",
-		repositoryName: "skills",
+		provider: "hybrid",
+		repositories: [{ owner: "RussellCanfield", name: "wingman-ai" }],
 		clawhubBaseUrl: "https://clawhub.ai",
 		skillsDirectory: "skills",
 		security: {

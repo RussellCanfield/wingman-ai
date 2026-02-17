@@ -16,9 +16,13 @@ wingman skill remove pdf
 ```json
 {
   "skills": {
-    "provider": "github",
-    "repositoryOwner": "anthropics",
-    "repositoryName": "skills",
+    "provider": "hybrid",
+    "repositories": [
+      { "owner": "RussellCanfield", "name": "wingman-ai" },
+      { "owner": "your-org", "name": "your-skills-repo" }
+    ],
+    "repositoryOwner": "legacy-owner",
+    "repositoryName": "legacy-repo",
     "githubToken": "optional-token",
     "clawhubBaseUrl": "https://clawhub.ai",
     "skillsDirectory": "skills",
@@ -33,9 +37,11 @@ wingman skill remove pdf
 ```
 
 Provider notes:
-- `provider: "github"` uses `repositoryOwner` and `repositoryName`.
+- `provider: "hybrid"` (default) combines ClawHub + GitHub. GitHub entries override same-name skills from ClawHub.
+- `provider: "github"` requires `repositories` (preferred) or the legacy `repositoryOwner` + `repositoryName` fallback.
 - `provider: "clawhub"` uses `clawhubBaseUrl`.
 - `GITHUB_TOKEN` is still supported for GitHub API rate limits.
+- When multiple GitHub repos define the same skill name, later entries in `repositories` win.
 
 Security scan notes:
 - Skill installs are staged, validated, scanned, and only then copied into the active skills directory.
@@ -43,6 +49,17 @@ Security scan notes:
 - Wingman checks for `uv` only when `skills.security.scanOnInstall` is enabled and the scanner command is `uv`/`uvx`.
 - Set `"scanOnInstall": false` to disable scanning for `wingman skill install`.
 - If `uv` is missing while scan is enabled, install fails with an error (no interactive prompt).
+
+## Skill metadata activation
+
+Wingman supports dependency metadata under exactly two keys:
+
+- `metadata.wingman`
+- `metadata.openclaw`
+
+If a skill declares `requires.bins`, Wingman activates that skill only when the binaries are present on PATH.
+
+Install recipes (`metadata.<namespace>.install`) are **not** executed on agent load. They are only offered during `wingman skill install`.
 
 ## Where skills live
 

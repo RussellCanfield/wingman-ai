@@ -658,9 +658,13 @@
     },
     "skills": {
       "default": {
-        "provider": "github",
-        "repositoryOwner": "anthropics",
-        "repositoryName": "skills",
+        "provider": "hybrid",
+        "repositories": [
+          {
+            "owner": "RussellCanfield",
+            "name": "wingman-ai"
+          }
+        ],
         "clawhubBaseUrl": "https://clawhub.ai",
         "skillsDirectory": "skills",
         "security": {
@@ -687,22 +691,51 @@
       "type": "object",
       "properties": {
         "provider": {
-          "default": "github",
+          "default": "hybrid",
           "description": "Skill source provider",
           "type": "string",
           "enum": [
             "github",
-            "clawhub"
+            "clawhub",
+            "hybrid"
           ]
         },
+        "repositories": {
+          "default": [
+            {
+              "owner": "RussellCanfield",
+              "name": "wingman-ai"
+            }
+          ],
+          "description": "Ordered GitHub skill sources. Later repositories override earlier repositories on name conflicts.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "owner": {
+                "type": "string",
+                "minLength": 1,
+                "description": "GitHub repository owner for a skills source"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "GitHub repository name for a skills source"
+              }
+            },
+            "required": [
+              "owner",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        },
         "repositoryOwner": {
-          "default": "anthropics",
-          "description": "GitHub repository owner for skills",
+          "description": "Legacy GitHub repository owner fallback when repositories is empty (requires repositoryName)",
           "type": "string"
         },
         "repositoryName": {
-          "default": "skills",
-          "description": "GitHub repository name for skills",
+          "description": "Legacy GitHub repository name fallback when repositories is empty (requires repositoryOwner)",
           "type": "string"
         },
         "githubToken": {
@@ -796,8 +829,7 @@
       },
       "required": [
         "provider",
-        "repositoryOwner",
-        "repositoryName",
+        "repositories",
         "clawhubBaseUrl",
         "skillsDirectory",
         "security"

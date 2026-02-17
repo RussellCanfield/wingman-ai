@@ -92,7 +92,7 @@ Capabilities include:
 The node must report a permissions map (granted/denied/prompt/restricted) for
 each relevant TCC capability.
 
-Current implementation status (2026-02-16):
+Current implementation status (2026-02-17):
 - Desktop runtime handlers exist for `system.notify` and `system.run` node requests.
 - Desktop app node pairing currently uses explicit device enablement (`Enable this device as a node`) after gateway connection.
 - Full permission-map reporting and policy-rich approval UX remain in progress.
@@ -101,9 +101,14 @@ Current implementation status (2026-02-16):
 
 Current implementation flow:
 1. User connects the desktop app to a gateway.
-2. User enables `Enable this device as a node` in desktop settings.
-3. Desktop app calls `PUT /api/nodes/:clientId` with `enabled: true` and registers node capabilities over WebSocket.
-4. Gateway can now route `req:node` calls to this desktop node.
+2. User optionally sets a custom node name in desktop Gateway quick controls.
+3. User enables `Enable this device as a node` in desktop settings.
+4. Desktop app calls `PUT /api/nodes/:clientId` with `enabled: true` (and the configured node name) and registers node capabilities over WebSocket.
+5. Gateway can now route `req:node` calls to this desktop node.
+
+Note (current behavior):
+- Updating the node name field while node mode is already enabled does not immediately update the active registration.
+- The new name takes effect on the next registration cycle (toggle node mode or reconnect).
 
 Revocation:
 - User disables `Enable this device as a node`, or

@@ -2,7 +2,7 @@
 
 **Version:** 1.2
 **Status:** In Progress
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-17
 
 ---
 
@@ -35,10 +35,14 @@ Current implementation (gateway + desktop app):
 
 ### Current implemented flow (desktop app / macOS)
 1. Desktop app connects to the gateway as a normal client.
-2. User enables `Enable this device as a node` in desktop settings.
-3. Desktop app calls `PUT /api/nodes/:clientId` to approve that device for node execution.
-4. Desktop app registers node capabilities and starts serving `req:node` requests.
-5. User can revoke by disabling the toggle or calling `DELETE /api/nodes/:clientId`.
+2. User may set a custom node name in desktop Gateway settings.
+3. User enables `Enable this device as a node` in desktop settings.
+4. Desktop app calls `PUT /api/nodes/:clientId` to approve that device for node execution (including the configured node name when provided).
+5. Desktop app registers node capabilities and starts serving `req:node` requests.
+6. User can revoke by disabling the toggle or calling `DELETE /api/nodes/:clientId`.
+
+Note (current behavior):
+- Changing the node name while already enabled updates local desktop state immediately, but the gateway-visible node name is refreshed only on the next node registration (re-enable or reconnect).
 
 This is currently the effective pairing model in the product.
 

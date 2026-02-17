@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-	loadDesktopPreferences,
-	normalizeDesktopPreferences,
-	saveDesktopPreferences,
-} from "./lib/desktopPrefs.js";
+	loadNodeNamePreference,
+	saveNodeNamePreference,
+} from "./nodeNamePrefs.js";
 
 class MemoryStorage implements Storage {
 	private values = new Map<string, string>();
@@ -34,23 +33,15 @@ class MemoryStorage implements Storage {
 	}
 }
 
-describe("desktopPrefs", () => {
-	it("defaults node mode to disabled", () => {
-		const defaults = normalizeDesktopPreferences(undefined);
-		expect(defaults.enableNodeMode).toBe(false);
+describe("nodeNamePrefs", () => {
+	it("defaults to empty string", () => {
+		const storage = new MemoryStorage();
+		expect(loadNodeNamePreference(storage)).toBe("");
 	});
 
-	it("persists node mode preference", () => {
+	it("persists node name", () => {
 		const storage = new MemoryStorage();
-		saveDesktopPreferences(
-			{
-				autoConnectOnLaunch: true,
-				notifyOnAgentFinish: true,
-				enableNodeMode: true,
-			},
-			storage,
-		);
-		const loaded = loadDesktopPreferences(storage);
-		expect(loaded.enableNodeMode).toBe(true);
+		saveNodeNamePreference("Office Node", storage);
+		expect(loadNodeNamePreference(storage)).toBe("Office Node");
 	});
 });
