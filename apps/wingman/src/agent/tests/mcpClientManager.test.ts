@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "../../logger.js";
 import type { MCPServersConfig } from "../../types/mcp.js";
 import { MCPClientManager } from "../config/mcpClientManager.js";
@@ -22,6 +22,11 @@ const getClientConfig = (
 			defaultToolTimeout?: number;
 		}
 	>;
+	outputHandling: {
+		image: "artifact";
+		audio: "artifact";
+		resource: "artifact";
+	};
 } =>
 	(
 		manager as unknown as {
@@ -35,6 +40,11 @@ const getClientConfig = (
 						defaultToolTimeout?: number;
 					}
 				>;
+				outputHandling: {
+					image: "artifact";
+					audio: "artifact";
+					resource: "artifact";
+				};
 			};
 		}
 	).buildClientConfig();
@@ -189,5 +199,127 @@ describe("MCPClientManager runtime env", () => {
 		expect(server.env.GUARDRAILS_API_URL).toBe(
 			"https://explorer.invariantlabs.ai",
 		);
+	});
+
+	it("keeps MCP multimodal output handling in artifact mode", () => {
+		const configs: MCPServersConfig[] = [
+			{
+				servers: [
+					{
+						name: "fal-ai",
+						transport: "stdio",
+						command: "bun",
+						args: ["run", "src/tools/mcp-fal-ai.ts"],
+					},
+				],
+			},
+		];
+		const manager = new MCPClientManager(configs, testLogger);
+		const clientConfig = getClientConfig(manager);
+
+		expect(clientConfig.outputHandling).toEqual({
+			image: "artifact",
+			audio: "artifact",
+			resource: "artifact",
+		});
+	});
+
+	it("lists resources from MCP client", async () => {
+		const listResources = vi.fn().mockResolvedValue({
+			fal: [
+				{
+					uri: "fal://jobs/123",
+					name: "Job 123",
+					description: "Generated asset",
+					mimeType: "application/json",
+				},
+			],
+		});
+		const manager = new MCPClientManager([], testLogger);
+		(manager as unknown as { client: { listResources: typeof listResources } })
+			.client = { listResources };
+
+		const result = await manager.listResources(["fal"]);
+		expect(listResources).toHaveBeenCalledWith("fal");
+		expect(result).toEqual({
+			fal: [
+				{
+					uri: "fal://jobs/123",
+					name: "Job 123",
+					description: "Generated asset",
+					mimeType: "application/json",
+				},
+			],
+		});
+	});
+
+	it("lists resource templates from MCP client", async () => {
+		const listResourceTemplates = vi.fn().mockResolvedValue({
+			fal: [
+				{
+					uriTemplate: "fal://jobs/{jobId}",
+					name: "Fal Job",
+					description: "Job by ID",
+					mimeType: "application/json",
+				},
+			],
+		});
+		const manager = new MCPClientManager([], testLogger);
+		(
+			manager as unknown as {
+				client: { listResourceTemplates: typeof listResourceTemplates };
+			}
+		).client = { listResourceTemplates };
+
+		const result = await manager.listResourceTemplates(["fal"]);
+		expect(listResourceTemplates).toHaveBeenCalledWith("fal");
+		expect(result).toEqual({
+			fal: [
+				{
+					uriTemplate: "fal://jobs/{jobId}",
+					name: "Fal Job",
+					description: "Job by ID",
+					mimeType: "application/json",
+				},
+			],
+		});
+	});
+
+	it("reads resources from MCP client", async () => {
+		const readResource = vi.fn().mockResolvedValue([
+			{
+				uri: "fal://jobs/123",
+				mimeType: "application/json",
+				text: '{"status":"completed"}',
+			},
+		]);
+		const manager = new MCPClientManager([], testLogger);
+		(manager as unknown as { client: { readResource: typeof readResource } })
+			.client = { readResource };
+
+		const result = await manager.readResource("fal", "fal://jobs/123");
+		expect(readResource).toHaveBeenCalledWith("fal", "fal://jobs/123");
+		expect(result).toEqual([
+			{
+				uri: "fal://jobs/123",
+				mimeType: "application/json",
+				text: '{"status":"completed"}',
+			},
+		]);
+	});
+
+	it("calls close on cleanup", async () => {
+		const close = vi.fn().mockResolvedValue(undefined);
+		const manager = new MCPClientManager([], testLogger);
+		(manager as unknown as { client: { close: typeof close } | null }).client = {
+			close,
+		};
+
+		await manager.cleanup();
+
+		expect(close).toHaveBeenCalledTimes(1);
+		expect(
+			(manager as unknown as { client: { close: typeof close } | null }).client,
+		).toBeNull();
 	});
 });

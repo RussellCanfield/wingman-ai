@@ -57,6 +57,15 @@ Wingman supports Model Context Protocol (MCP) servers via `stdio` or `sse` trans
 
 Keep MCP servers scoped to the minimum data and permissions required for each agent.
 
+## Resource discovery tools
+
+When an agent has MCP configured, Wingman also injects two MCP resource helper tools:
+
+- `mcp_list_resources`: list resources for all configured MCP servers (optionally include templates)
+- `mcp_read_resource`: read a specific resource URI from a specific MCP server
+
+These tools are additive and do not change the behavior of existing MCP tool calls (including FAL and finance servers).
+
 ## Finnhub finance MCP server
 
 Use the bundled finance MCP server to power market-data agents (like `stock-trader`) with quotes, candles, fundamentals, news, and option chains.

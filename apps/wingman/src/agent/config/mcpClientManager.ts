@@ -38,6 +38,27 @@ type MCPClientConfig = {
 	};
 };
 
+export type MCPResourceDescriptor = {
+	uri: string;
+	name: string;
+	description?: string;
+	mimeType?: string;
+};
+
+export type MCPResourceTemplateDescriptor = {
+	uriTemplate: string;
+	name: string;
+	description?: string;
+	mimeType?: string;
+};
+
+export type MCPResourceContentDescriptor = {
+	uri: string;
+	mimeType?: string;
+	text?: string;
+	blob?: string;
+};
+
 export type MCPProxyConfig = {
 	enabled?: boolean;
 	command?: string;
@@ -247,6 +268,105 @@ export class MCPClientManager {
 		}
 	}
 
+	/**
+	 * List MCP resources exposed by configured servers.
+	 */
+	async listResources(
+		serverNames?: string[],
+	): Promise<Record<string, MCPResourceDescriptor[]>> {
+		if (!this.client) {
+			this.logger.debug(
+				"No MCP client initialized, returning empty resources map",
+			);
+			return {};
+		}
+
+		const targets = normalizeServerNames(serverNames);
+
+		try {
+			const resources =
+				targets.length > 0
+					? await this.client.listResources(...targets)
+					: await this.client.listResources();
+			return Object.fromEntries(
+				Object.entries(resources).map(([serverName, serverResources]) => [
+					serverName,
+					serverResources.map((resource) => normalizeResource(resource)),
+				]),
+			);
+		} catch (error) {
+			this.logger.error(
+				`Failed to list MCP resources: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			return {};
+		}
+	}
+
+	/**
+	 * List MCP resource templates exposed by configured servers.
+	 */
+	async listResourceTemplates(
+		serverNames?: string[],
+	): Promise<Record<string, MCPResourceTemplateDescriptor[]>> {
+		if (!this.client) {
+			this.logger.debug(
+				"No MCP client initialized, returning empty resource template map",
+			);
+			return {};
+		}
+
+		const targets = normalizeServerNames(serverNames);
+
+		try {
+			const templates =
+				targets.length > 0
+					? await this.client.listResourceTemplates(...targets)
+					: await this.client.listResourceTemplates();
+			return Object.fromEntries(
+				Object.entries(templates).map(([serverName, serverTemplates]) => [
+					serverName,
+					serverTemplates.map((template) => normalizeResourceTemplate(template)),
+				]),
+			);
+		} catch (error) {
+			this.logger.error(
+				`Failed to list MCP resource templates: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			return {};
+		}
+	}
+
+	/**
+	 * Read a specific MCP resource from a server.
+	 */
+	async readResource(
+		serverName: string,
+		uri: string,
+	): Promise<MCPResourceContentDescriptor[]> {
+		if (!this.client) {
+			this.logger.debug(
+				"No MCP client initialized, returning empty resource content",
+			);
+			return [];
+		}
+
+		const normalizedServer = serverName.trim();
+		const normalizedUri = uri.trim();
+		if (!normalizedServer || !normalizedUri) {
+			return [];
+		}
+
+		try {
+			const content = await this.client.readResource(normalizedServer, normalizedUri);
+			return content.map((block) => normalizeResourceContent(block, normalizedUri));
+		} catch (error) {
+			this.logger.error(
+				`Failed to read MCP resource ${normalizedUri} from ${normalizedServer}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			return [];
+		}
+	}
+
 	private sanitizeToolNames(tools: StructuredTool[]): StructuredTool[] {
 		const used = new Map<string, number>();
 		const sanitize = (name: string) => {
@@ -312,14 +432,14 @@ export class MCPClientManager {
 
 		try {
 			this.logger.debug("Cleaning up MCP client");
-			// Note: MultiServerMCPClient is stateless by default
-			// but we should still clean up references
-			this.client = null;
+			await this.client.close();
 			this.logger.debug("MCP client cleanup complete");
 		} catch (error) {
 			this.logger.warn(
 				`Error during MCP cleanup: ${error instanceof Error ? error.message : String(error)}`,
 			);
+		} finally {
+			this.client = null;
 		}
 	}
 
@@ -345,4 +465,62 @@ function getDefaultToolTimeout(
 	if (typeof candidate !== "number") return undefined;
 	if (!Number.isFinite(candidate) || candidate <= 0) return undefined;
 	return Math.floor(candidate);
+}
+
+function normalizeServerNames(serverNames?: string[]): string[] {
+	if (!serverNames) return [];
+	const seen = new Set<string>();
+	const normalized: string[] = [];
+	for (const name of serverNames) {
+		const trimmed = name.trim();
+		if (!trimmed || seen.has(trimmed)) continue;
+		seen.add(trimmed);
+		normalized.push(trimmed);
+	}
+	return normalized;
+}
+
+function normalizeResource(value: {
+	uri: string;
+	name: string;
+	description?: string;
+	mimeType?: string;
+}): MCPResourceDescriptor {
+	return {
+		uri: value.uri,
+		name: value.name || value.uri,
+		...(value.description ? { description: value.description } : {}),
+		...(value.mimeType ? { mimeType: value.mimeType } : {}),
+	};
+}
+
+function normalizeResourceTemplate(value: {
+	uriTemplate: string;
+	name: string;
+	description?: string;
+	mimeType?: string;
+}): MCPResourceTemplateDescriptor {
+	return {
+		uriTemplate: value.uriTemplate,
+		name: value.name || value.uriTemplate,
+		...(value.description ? { description: value.description } : {}),
+		...(value.mimeType ? { mimeType: value.mimeType } : {}),
+	};
+}
+
+function normalizeResourceContent(
+	value: {
+		uri: string;
+		mimeType?: string;
+		text?: string;
+		blob?: string;
+	},
+	defaultUri: string,
+): MCPResourceContentDescriptor {
+	return {
+		uri: value.uri || defaultUri,
+		...(value.mimeType ? { mimeType: value.mimeType } : {}),
+		...(typeof value.text === "string" ? { text: value.text } : {}),
+		...(typeof value.blob === "string" ? { blob: value.blob } : {}),
+	};
 }

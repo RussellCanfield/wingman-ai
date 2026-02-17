@@ -23,6 +23,7 @@ import {
 import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
 import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
+import { createMCPResourceTools } from "@/agent/tools/mcp_resources.js";
 import {
 	getSharedTerminalSessionManager,
 	type TerminalSessionManager,
@@ -793,11 +794,13 @@ export class AgentInvoker {
 
 				// Get MCP tools and add to agent tools
 				const mcpTools = await this.mcpManager.getTools();
-				if (mcpTools.length > 0) {
+				const mcpResourceTools = createMCPResourceTools(this.mcpManager);
+				const allMcpTools = [...mcpTools, ...mcpResourceTools];
+				if (allMcpTools.length > 0) {
 					const existing = new Set(
 						(targetAgent.tools || []).map((tool) => tool.name),
 					);
-					const unique = mcpTools.filter((tool) => !existing.has(tool.name));
+					const unique = allMcpTools.filter((tool) => !existing.has(tool.name));
 					targetAgent.tools = [...(targetAgent.tools || []), ...unique] as any;
 					this.logger.info(`Added ${unique.length} MCP tools to agent`);
 				}
