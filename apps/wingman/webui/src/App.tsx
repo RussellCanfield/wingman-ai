@@ -61,6 +61,7 @@ import {
 } from "./utils/fileUpload";
 import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
+import { getWorkspaceShellClass } from "./utils/layoutShell";
 import { shouldMarkRequestActive } from "./utils/requestLifecycle";
 import {
 	isLocallyTrackedRequest,
@@ -2767,13 +2768,7 @@ export const App: React.FC = () => {
 				<div className="gridlines" />
 			</div>
 			<div className="noise z-[1]" />
-			<main
-				className={`relative z-10 mx-auto max-w-screen-2xl px-6 ${
-					isChatRoute
-						? "pb-12 pt-8 lg:h-dvh lg:overflow-hidden lg:py-6"
-						: "pb-16 pt-8"
-				}`}
-			>
+			<main className={getWorkspaceShellClass(isChatRoute)}>
 				<div
 					className={`grid gap-6 lg:grid-cols-[280px_1fr] ${
 						isChatRoute ? "lg:h-full lg:min-h-0" : ""

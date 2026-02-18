@@ -8,7 +8,14 @@ import {
 	type ChangeEvent,
 	type ClipboardEvent,
 } from "react";
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+	NavLink,
+	Navigate,
+	Route,
+	Routes,
+	useLocation,
+	useNavigate,
+} from "react-router-dom";
 import {
 	checkGatewayConnection,
 	clearProviderToken,
@@ -27,6 +34,7 @@ import {
 	setNodeEnabled,
 	saveProviderToken,
 	speakVoice,
+	submitSmsInboundMessage,
 	updateAgent,
 	updateVoiceConfig,
 } from "./lib/gatewayApi.js";
@@ -102,15 +110,41 @@ import {
 	saveDesktopPreferences,
 } from "./lib/desktopPrefs.js";
 import {
+	formatSmsAllowlist,
+	normalizeSmsAllowlistEntry,
+	parseSmsAllowlistInput,
+	resolveSmsBridgeTestHandle,
+} from "./lib/smsBridgePreferences.js";
+import {
 	loadNodeNamePreference,
 	saveNodeNamePreference,
 } from "./nodeNamePrefs.js";
-import { resolveSpeechVoice, resolveVoiceConfig, sanitizeForSpeech } from "./lib/voice.js";
+import {
+	resolveSpeechVoice,
+	resolveVoiceConfig,
+	sanitizeForSpeech,
+} from "./lib/voice.js";
 import { shouldAutoSpeak } from "./lib/voiceAuto.js";
 import {
 	getVoicePlaybackLabel,
 	type VoicePlaybackStatus,
 } from "./lib/voicePlayback.js";
+import {
+	appendAgentEventText,
+	buildSmsTargetForHandle,
+	extractAgentTerminalText,
+	getMacosMessagesLatestRowId,
+	pollMacosMessages,
+	sendMacosMessage,
+	splitSmsBridgeReply,
+} from "./lib/macosSmsBridge.js";
+import {
+	consumeSmsBridgeLoopback,
+	isSmsBridgeSelfEcho,
+	rememberSmsBridgeOutbound,
+	normalizeSmsBridgeComparableText,
+	type SmsBridgeLoopbackRecord,
+} from "./lib/smsBridgeLoopback.js";
 import { SguiRenderer } from "./sgui/SguiRenderer.js";
 import {
 	buildSubAgentCandidates,
@@ -180,6 +214,22 @@ type RuntimeState = {
 	notifyOnAgentFinish: boolean;
 	enableNodeMode: boolean;
 	nodeName: string;
+	smsBridgeEnabled: boolean;
+	smsBridgeAllowlist: string[];
+};
+
+type SmsBridgeHealth = {
+	mode: "disabled" | "idle" | "running" | "error";
+	lastPollAt: number | null;
+	lastInboundAt: number | null;
+	lastOutboundAt: number | null;
+	lastError: string | null;
+	processedInboundCount: number;
+	skippedInboundCount: number;
+	commandReplyCount: number;
+	agentReplyCount: number;
+	pendingReplyCount: number;
+	logLines: string[];
 };
 
 type SpeechRecognitionLike = {
@@ -267,6 +317,14 @@ const DEFAULT_THREAD_NAME = "New Session";
 const DEFAULT_AGENT_PROMPT = "You are a helpful Wingman desktop agent.";
 const NATIVE_SYNC_INTERVAL_MS = 1200;
 const COMPOSER_MAX_LINES = 6;
+const SMS_BRIDGE_CURSOR_STORAGE_KEY = "wingman.desktop.smsBridge.cursor.v1";
+const SMS_BRIDGE_POLL_INTERVAL_MS = 4000;
+const SMS_BRIDGE_POLL_LIMIT = 20;
+const SMS_BRIDGE_LOG_LIMIT = 24;
+const SMS_BRIDGE_AVAILABLE = false;
+const SMS_BRIDGE_LOOPBACK_TTL_MS = 2 * 60 * 1000;
+const SMS_BRIDGE_SKIP_BACKLOG_ON_START = true;
+const SMS_BRIDGE_AGENT_REPLY_TIMEOUT_MS = 90 * 1000;
 
 function createEmptyAgentDraft(): CreateAgentDraft {
 	return {
@@ -278,6 +336,22 @@ function createEmptyAgentDraft(): CreateAgentDraft {
 		toolsCsv: "",
 		promptTraining: false,
 		selectedSubAgentIds: [],
+	};
+}
+
+function createDefaultSmsBridgeHealth(): SmsBridgeHealth {
+	return {
+		mode: "disabled",
+		lastPollAt: null,
+		lastInboundAt: null,
+		lastOutboundAt: null,
+		lastError: null,
+		processedInboundCount: 0,
+		skippedInboundCount: 0,
+		commandReplyCount: 0,
+		agentReplyCount: 0,
+		pendingReplyCount: 0,
+		logLines: [],
 	};
 }
 
@@ -316,37 +390,61 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtor | undefined {
 	return candidate.SpeechRecognition || candidate.webkitSpeechRecognition;
 }
 
-function mergeNativeState(prev: RuntimeState, next: NativeState | undefined): RuntimeState {
+function mergeNativeState(
+	prev: RuntimeState,
+	next: NativeState | undefined,
+): RuntimeState {
 	if (!next) return prev;
 
 	let changed = false;
 	const merged: RuntimeState = { ...prev };
 
-	if (typeof next.connected === "boolean" && next.connected !== prev.connected) {
+	if (
+		typeof next.connected === "boolean" &&
+		next.connected !== prev.connected
+	) {
 		merged.connected = next.connected;
 		changed = true;
 	}
-	if (typeof next.recording === "boolean" && next.recording !== prev.recording) {
+	if (
+		typeof next.recording === "boolean" &&
+		next.recording !== prev.recording
+	) {
 		merged.recording = next.recording;
 		changed = true;
 	}
-	if (typeof next.overlayVisible === "boolean" && next.overlayVisible !== prev.overlayVisible) {
+	if (
+		typeof next.overlayVisible === "boolean" &&
+		next.overlayVisible !== prev.overlayVisible
+	) {
 		merged.overlayVisible = next.overlayVisible;
 		changed = true;
 	}
-	if (typeof next.transcript === "string" && next.transcript !== prev.transcript) {
+	if (
+		typeof next.transcript === "string" &&
+		next.transcript !== prev.transcript
+	) {
 		merged.transcript = next.transcript;
 		changed = true;
 	}
-	if (typeof next.speechStatus === "string" && next.speechStatus !== prev.recognitionMessage) {
+	if (
+		typeof next.speechStatus === "string" &&
+		next.speechStatus !== prev.recognitionMessage
+	) {
 		merged.recognitionMessage = next.speechStatus;
 		changed = true;
 	}
-	if (typeof next.recordHotkey === "string" && next.recordHotkey !== prev.recordHotkey) {
+	if (
+		typeof next.recordHotkey === "string" &&
+		next.recordHotkey !== prev.recordHotkey
+	) {
 		merged.recordHotkey = next.recordHotkey;
 		changed = true;
 	}
-	if (typeof next.overlayHotkey === "string" && next.overlayHotkey !== prev.overlayHotkey) {
+	if (
+		typeof next.overlayHotkey === "string" &&
+		next.overlayHotkey !== prev.overlayHotkey
+	) {
 		merged.overlayHotkey = next.overlayHotkey;
 		changed = true;
 	}
@@ -357,12 +455,18 @@ function mergeNativeState(prev: RuntimeState, next: NativeState | undefined): Ru
 		merged.quickSendOnRecordHotkey = next.quickSendOnRecordHotkey;
 		changed = true;
 	}
-	if (typeof next.quickSendNonce === "number" && next.quickSendNonce !== prev.quickSendNonce) {
+	if (
+		typeof next.quickSendNonce === "number" &&
+		next.quickSendNonce !== prev.quickSendNonce
+	) {
 		merged.quickSendNonce = next.quickSendNonce;
 		changed = true;
 	}
 	if (next.gateway) {
-		const settings = mergeGatewaySettingsFromNative(prev.settings, next.gateway);
+		const settings = mergeGatewaySettingsFromNative(
+			prev.settings,
+			next.gateway,
+		);
 		if (JSON.stringify(settings) !== JSON.stringify(prev.settings)) {
 			merged.settings = settings;
 			merged.settingsSavedAt = Date.now();
@@ -380,7 +484,10 @@ function mapSessionName(prompt: string, fallback: string): string {
 	return normalized.slice(0, 36);
 }
 
-function mergeToolEvents(existing: ToolEvent[] | undefined, next: ToolEvent[]): ToolEvent[] {
+function mergeToolEvents(
+	existing: ToolEvent[] | undefined,
+	next: ToolEvent[],
+): ToolEvent[] {
 	type SortableToolEvent = ToolEvent & {
 		startedAt?: number;
 		completedAt?: number;
@@ -405,7 +512,9 @@ function mergeToolEvents(existing: ToolEvent[] | undefined, next: ToolEvent[]): 
 	});
 }
 
-function deriveUiBlocks(toolEvents: ToolEvent[] | undefined): ChatMessage["uiBlocks"] {
+function deriveUiBlocks(
+	toolEvents: ToolEvent[] | undefined,
+): ChatMessage["uiBlocks"] {
 	if (!toolEvents || toolEvents.length === 0) return undefined;
 	const blocks: NonNullable<ChatMessage["uiBlocks"]> = [];
 	for (const toolEvent of toolEvents) {
@@ -488,6 +597,10 @@ function useRuntimeController(isOverlayView: boolean) {
 			notifyOnAgentFinish: desktopPrefs.notifyOnAgentFinish,
 			enableNodeMode: desktopPrefs.enableNodeMode,
 			nodeName: loadNodeNamePreference(),
+			smsBridgeEnabled: SMS_BRIDGE_AVAILABLE
+				? desktopPrefs.smsBridgeEnabled
+				: false,
+			smsBridgeAllowlist: desktopPrefs.smsBridgeAllowlist,
 		};
 	});
 
@@ -597,7 +710,8 @@ function useRuntimeController(isOverlayView: boolean) {
 
 	const startRecognition = useCallback(async () => {
 		const current = stateRef.current;
-		if (!isOverlayView || !current.recording || current.recognitionActive) return;
+		if (!isOverlayView || !current.recording || current.recognitionActive)
+			return;
 
 		if (!canUseWebSpeechRecognition(current)) {
 			setRecognitionMessage("Using native speech adapter.");
@@ -609,7 +723,9 @@ function useRuntimeController(isOverlayView: boolean) {
 		if (!recognition) {
 			if (!speechUnavailableNotifiedRef.current) {
 				speechUnavailableNotifiedRef.current = true;
-				setRecognitionMessage("SpeechRecognition API unavailable in this webview.");
+				setRecognitionMessage(
+					"SpeechRecognition API unavailable in this webview.",
+				);
 				setStatus("Speech recognition is unavailable in this runtime.", true);
 			}
 			return;
@@ -623,7 +739,9 @@ function useRuntimeController(isOverlayView: boolean) {
 				recognitionMessage: "Recognizer started.",
 			}));
 		} catch {
-			setRecognitionMessage("Recognizer start blocked. Click Start in overlay to grant access.");
+			setRecognitionMessage(
+				"Recognizer start blocked. Click Start in overlay to grant access.",
+			);
 		}
 	}, [ensureRecognizer, isOverlayView, setRecognitionMessage, setStatus]);
 
@@ -636,11 +754,13 @@ function useRuntimeController(isOverlayView: boolean) {
 	const refreshNativeContext = useCallback(async () => {
 		if (!stateRef.current.nativeRuntime) return;
 
-		const [profilePayload, permissionsPayload, nativeState] = await Promise.all([
-			invokeTauri<Partial<PlatformProfile>>("get_platform_profile"),
-			invokeTauri<Partial<PermissionSnapshot>>("get_permission_snapshot"),
-			invokeTauri<NativeState>("get_state"),
-		]);
+		const [profilePayload, permissionsPayload, nativeState] = await Promise.all(
+			[
+				invokeTauri<Partial<PlatformProfile>>("get_platform_profile"),
+				invokeTauri<Partial<PermissionSnapshot>>("get_permission_snapshot"),
+				invokeTauri<NativeState>("get_state"),
+			],
+		);
 
 		const profile = normalizePlatformProfile(profilePayload);
 		const permissions = normalizePermissionSnapshot(permissionsPayload);
@@ -666,116 +786,173 @@ function useRuntimeController(isOverlayView: boolean) {
 		});
 	}, []);
 
-	const toggleRecording = useCallback(async (): Promise<ToggleRecordingResult> => {
-		const currentState = stateRef.current;
-		const wasRecording = currentState.recording;
-		const transcriptBeforeToggle = currentState.transcript;
+	const toggleRecording =
+		useCallback(async (): Promise<ToggleRecordingResult> => {
+			const currentState = stateRef.current;
+			const wasRecording = currentState.recording;
+			const transcriptBeforeToggle = currentState.transcript;
 
-		if (stateRef.current.nativeRuntime) {
-			const next = await invokeTauri<NativeState>("toggle_recording_with_window");
-			applyNativeState(next);
-			setStatus(stateRef.current.recording ? "Listening..." : "Recording stopped.");
-			if (!stateRef.current.recording) {
+			if (stateRef.current.nativeRuntime) {
+				const next = await invokeTauri<NativeState>(
+					"toggle_recording_with_window",
+				);
+				applyNativeState(next);
+				setStatus(
+					stateRef.current.recording ? "Listening..." : "Recording stopped.",
+				);
+				if (!stateRef.current.recording) {
+					syncRecognitionLifecycle();
+				}
+				return {
+					wasRecording,
+					isRecording:
+						typeof next?.recording === "boolean"
+							? next.recording
+							: !wasRecording,
+					transcriptBeforeToggle,
+				};
+			}
+
+			const nextRecording = !stateRef.current.recording;
+			setState((prev) => ({
+				...prev,
+				recording: nextRecording,
+				overlayVisible: nextRecording,
+				transcript: nextRecording ? "" : prev.transcript,
+				statusMessage: nextRecording ? "Listening..." : "Recording stopped.",
+				statusIsError: false,
+			}));
+
+			if (nextRecording) {
+				await startRecognition();
+			} else {
 				syncRecognitionLifecycle();
 			}
 			return {
 				wasRecording,
-				isRecording: typeof next?.recording === "boolean" ? next.recording : !wasRecording,
+				isRecording: nextRecording,
 				transcriptBeforeToggle,
 			};
-		}
-
-		const nextRecording = !stateRef.current.recording;
-		setState((prev) => ({
-			...prev,
-			recording: nextRecording,
-			overlayVisible: nextRecording,
-			transcript: nextRecording ? "" : prev.transcript,
-			statusMessage: nextRecording ? "Listening..." : "Recording stopped.",
-			statusIsError: false,
-		}));
-
-		if (nextRecording) {
-			await startRecognition();
-		} else {
-			syncRecognitionLifecycle();
-		}
-		return {
-			wasRecording,
-			isRecording: nextRecording,
-			transcriptBeforeToggle,
-		};
-	}, [applyNativeState, setStatus, startRecognition, syncRecognitionLifecycle]);
+		}, [
+			applyNativeState,
+			setStatus,
+			startRecognition,
+			syncRecognitionLifecycle,
+		]);
 
 	const toggleOverlay = useCallback(async () => {
 		if (stateRef.current.nativeRuntime) {
 			const next = await invokeTauri<NativeState>("toggle_overlay");
 			applyNativeState(next);
-			setStatus(stateRef.current.overlayVisible ? "Overlay shown." : "Overlay hidden.");
+			setStatus(
+				stateRef.current.overlayVisible ? "Overlay shown." : "Overlay hidden.",
+			);
 			return;
 		}
 
 		setState((prev) => ({
 			...prev,
 			overlayVisible: !prev.overlayVisible,
-			statusMessage: !prev.overlayVisible ? "Overlay shown." : "Overlay hidden.",
+			statusMessage: !prev.overlayVisible
+				? "Overlay shown."
+				: "Overlay hidden.",
 			statusIsError: false,
 		}));
 	}, [applyNativeState, setStatus]);
 
-	const updateSetting = useCallback((key: keyof GatewaySettings, value: string) => {
-		setState((prev) => {
-			const settings = normalizeGatewaySettings({ ...prev.settings, [key]: value });
-			persistSettings(settings);
-			return { ...prev, settings, settingsSavedAt: Date.now() };
-		});
-
-		if (key === "url" && stateRef.current.nativeRuntime) {
-			const url = normalizeGatewaySettings({
-				...stateRef.current.settings,
-				[key]: value,
-			}).url;
-			void invokeTauri("set_gateway_url", { url }).catch(() => {
-				// no-op
+	const updateSetting = useCallback(
+		(key: keyof GatewaySettings, value: string) => {
+			setState((prev) => {
+				const settings = normalizeGatewaySettings({
+					...prev.settings,
+					[key]: value,
+				});
+				persistSettings(settings);
+				return { ...prev, settings, settingsSavedAt: Date.now() };
 			});
-		}
-	}, []);
 
-	const updateAutoConnectOnLaunch = useCallback((enabled: boolean) => {
-		setState((prev) => {
-			const next = { ...prev, autoConnectOnLaunch: enabled };
-			saveDesktopPreferences({
-				autoConnectOnLaunch: next.autoConnectOnLaunch,
-				notifyOnAgentFinish: next.notifyOnAgentFinish,
-				enableNodeMode: next.enableNodeMode,
-			});
-			return next;
-		});
-	}, []);
+			if (key === "url" && stateRef.current.nativeRuntime) {
+				const url = normalizeGatewaySettings({
+					...stateRef.current.settings,
+					[key]: value,
+				}).url;
+				void invokeTauri("set_gateway_url", { url }).catch(() => {
+					// no-op
+				});
+			}
+		},
+		[],
+	);
 
-	const updateNotifyOnAgentFinish = useCallback((enabled: boolean) => {
-		setState((prev) => {
-			const next = { ...prev, notifyOnAgentFinish: enabled };
-			saveDesktopPreferences({
-				autoConnectOnLaunch: next.autoConnectOnLaunch,
-				notifyOnAgentFinish: next.notifyOnAgentFinish,
-				enableNodeMode: next.enableNodeMode,
-			});
-			return next;
+	const persistRuntimeDesktopPrefs = useCallback((next: RuntimeState) => {
+		saveDesktopPreferences({
+			autoConnectOnLaunch: next.autoConnectOnLaunch,
+			notifyOnAgentFinish: next.notifyOnAgentFinish,
+			enableNodeMode: next.enableNodeMode,
+			smsBridgeEnabled: next.smsBridgeEnabled,
+			smsBridgeAllowlist: next.smsBridgeAllowlist,
 		});
 	}, []);
 
-	const updateEnableNodeMode = useCallback((enabled: boolean) => {
-		setState((prev) => {
-			const next = { ...prev, enableNodeMode: enabled };
-			saveDesktopPreferences({
-				autoConnectOnLaunch: next.autoConnectOnLaunch,
-				notifyOnAgentFinish: next.notifyOnAgentFinish,
-				enableNodeMode: next.enableNodeMode,
+	const updateAutoConnectOnLaunch = useCallback(
+		(enabled: boolean) => {
+			setState((prev) => {
+				const next = { ...prev, autoConnectOnLaunch: enabled };
+				persistRuntimeDesktopPrefs(next);
+				return next;
 			});
-			return next;
-		});
-	}, []);
+		},
+		[persistRuntimeDesktopPrefs],
+	);
+
+	const updateNotifyOnAgentFinish = useCallback(
+		(enabled: boolean) => {
+			setState((prev) => {
+				const next = { ...prev, notifyOnAgentFinish: enabled };
+				persistRuntimeDesktopPrefs(next);
+				return next;
+			});
+		},
+		[persistRuntimeDesktopPrefs],
+	);
+
+	const updateEnableNodeMode = useCallback(
+		(enabled: boolean) => {
+			setState((prev) => {
+				const next = { ...prev, enableNodeMode: enabled };
+				persistRuntimeDesktopPrefs(next);
+				return next;
+			});
+		},
+		[persistRuntimeDesktopPrefs],
+	);
+
+	const updateSmsBridgeEnabled = useCallback(
+		(enabled: boolean) => {
+			setState((prev) => {
+				const next = {
+					...prev,
+					smsBridgeEnabled: SMS_BRIDGE_AVAILABLE ? enabled : false,
+				};
+				persistRuntimeDesktopPrefs(next);
+				return next;
+			});
+		},
+		[persistRuntimeDesktopPrefs],
+	);
+
+	const updateSmsBridgeAllowlist = useCallback(
+		(rawInput: string) => {
+			const parsed = parseSmsAllowlistInput(rawInput);
+			setState((prev) => {
+				const next = { ...prev, smsBridgeAllowlist: parsed };
+				persistRuntimeDesktopPrefs(next);
+				return next;
+			});
+			return parsed;
+		},
+		[persistRuntimeDesktopPrefs],
+	);
 
 	const updateNodeName = useCallback((nodeName: string) => {
 		saveNodeNamePreference(nodeName);
@@ -788,7 +965,9 @@ function useRuntimeController(isOverlayView: boolean) {
 		async (transcript: string) => {
 			setState((prev) => ({ ...prev, transcript }));
 			if (stateRef.current.nativeRuntime) {
-				const next = await invokeTauri<NativeState>("set_transcript", { transcript });
+				const next = await invokeTauri<NativeState>("set_transcript", {
+					transcript,
+				});
 				applyNativeState(next);
 			}
 		},
@@ -871,7 +1050,10 @@ function useRuntimeController(isOverlayView: boolean) {
 
 	const queueQuickSend = useCallback(async () => {
 		if (!stateRef.current.nativeRuntime) {
-			setStatus("Quick-send queue is only available in the native runtime.", true);
+			setStatus(
+				"Quick-send queue is only available in the native runtime.",
+				true,
+			);
 			return false;
 		}
 		try {
@@ -907,7 +1089,10 @@ function useRuntimeController(isOverlayView: boolean) {
 	const sendNotification = useCallback(
 		async (payload: { title?: string; body: string }) => {
 			if (!stateRef.current.nativeRuntime) {
-				setStatus("Desktop notifications require the native Tauri runtime.", true);
+				setStatus(
+					"Desktop notifications require the native Tauri runtime.",
+					true,
+				);
 				return false;
 			}
 			try {
@@ -973,7 +1158,12 @@ function useRuntimeController(isOverlayView: boolean) {
 			window.clearTimeout(startup);
 			window.clearInterval(timer);
 		};
-	}, [refreshNativeContext, setStatus, state.nativeRuntime, syncRecognitionLifecycle]);
+	}, [
+		refreshNativeContext,
+		setStatus,
+		state.nativeRuntime,
+		syncRecognitionLifecycle,
+	]);
 
 	useEffect(() => {
 		if (!isOverlayView) return;
@@ -999,6 +1189,8 @@ function useRuntimeController(isOverlayView: boolean) {
 			updateAutoConnectOnLaunch,
 			updateNotifyOnAgentFinish,
 			updateEnableNodeMode,
+			updateSmsBridgeEnabled,
+			updateSmsBridgeAllowlist,
 			updateNodeName,
 			updateTranscript,
 			clearTranscript,
@@ -1041,7 +1233,7 @@ function useGatewayWorkspace(
 		activeThreadId: "",
 		selectedAgentId: settings.agentId || "main",
 		prompt: "",
-			attachments: [],
+		attachments: [],
 		attachmentError: "",
 		isStreaming: false,
 		queuedPromptCount: 0,
@@ -1056,7 +1248,10 @@ function useGatewayWorkspace(
 	});
 
 	const activeThread = useMemo(
-		() => workspace.threads.find((thread) => thread.id === workspace.activeThreadId),
+		() =>
+			workspace.threads.find(
+				(thread) => thread.id === workspace.activeThreadId,
+			),
 		[workspace.activeThreadId, workspace.threads],
 	);
 
@@ -1140,49 +1335,58 @@ function useGatewayWorkspace(
 		agentDetailsRef.current = workspace.agentDetailsById;
 	}, [workspace.agentDetailsById]);
 
-	const refreshSessionsData = useCallback(async (options?: { silent?: boolean }) => {
-		return runWithInFlightGuard(sessionsRefreshInFlightRef, async () => {
-			const startedAt = performance.now();
-			const silent = options?.silent === true;
-			if (!silent) {
-				setWorkspace((prev) => ({ ...prev, sessionsLoading: true }));
-			}
-			try {
-				const sessions = await fetchSessions(settings, { limit: 200 });
-				setWorkspace((prev) => {
-					const mapped = sessions.map((session) => mapSessionToThread(session));
-					const next = mapped.map((thread) => {
-						const existing = prev.threads.find((item) => item.id === thread.id);
-						if (!existing?.messagesLoaded) return thread;
+	const refreshSessionsData = useCallback(
+		async (options?: { silent?: boolean }) => {
+			return runWithInFlightGuard(sessionsRefreshInFlightRef, async () => {
+				const startedAt = performance.now();
+				const silent = options?.silent === true;
+				if (!silent) {
+					setWorkspace((prev) => ({ ...prev, sessionsLoading: true }));
+				}
+				try {
+					const sessions = await fetchSessions(settings, { limit: 200 });
+					setWorkspace((prev) => {
+						const mapped = sessions.map((session) =>
+							mapSessionToThread(session),
+						);
+						const next = mapped.map((thread) => {
+							const existing = prev.threads.find(
+								(item) => item.id === thread.id,
+							);
+							if (!existing?.messagesLoaded) return thread;
+							return {
+								...thread,
+								messages: existing.messages,
+								messagesLoaded: true,
+							};
+						});
+						const activeThreadId = next.find(
+							(item) => item.id === prev.activeThreadId,
+						)
+							? prev.activeThreadId
+							: next[0]?.id || "";
 						return {
-							...thread,
-							messages: existing.messages,
-							messagesLoaded: true,
+							...prev,
+							threads: next,
+							activeThreadId,
 						};
 					});
-					const activeThreadId = next.find((item) => item.id === prev.activeThreadId)
-						? prev.activeThreadId
-						: next[0]?.id || "";
-					return {
-						...prev,
-						threads: next,
-						activeThreadId,
-					};
-				});
-			} catch (error) {
-				logEvent(`Failed to load sessions: ${String(error)}`);
-			} finally {
-				if (!silent) {
-					setWorkspace((prev) => ({ ...prev, sessionsLoading: false }));
-					const slowEvent = formatSlowLoadEvent(
-						"sessions",
-						performance.now() - startedAt,
-					);
-					if (slowEvent) logEvent(slowEvent);
+				} catch (error) {
+					logEvent(`Failed to load sessions: ${String(error)}`);
+				} finally {
+					if (!silent) {
+						setWorkspace((prev) => ({ ...prev, sessionsLoading: false }));
+						const slowEvent = formatSlowLoadEvent(
+							"sessions",
+							performance.now() - startedAt,
+						);
+						if (slowEvent) logEvent(slowEvent);
+					}
 				}
-			}
-		});
-	}, [logEvent, settings]);
+			});
+		},
+		[logEvent, settings],
+	);
 
 	const refreshAgentsData = useCallback(async () => {
 		return runWithInFlightGuard(agentsRefreshInFlightRef, async () => {
@@ -1201,8 +1405,8 @@ function useGatewayWorkspace(
 						agents.agents[0]?.id ||
 						"main";
 					const editTargetAgentId =
-						agents.agents.find((agent) => agent.id === prev.editTargetAgentId)?.id ||
-						selectedAgentId;
+						agents.agents.find((agent) => agent.id === prev.editTargetAgentId)
+							?.id || selectedAgentId;
 					return {
 						...prev,
 						agentCatalog: agents.agents,
@@ -1358,11 +1562,16 @@ function useGatewayWorkspace(
 				ensureSessionSubscribed(threadId);
 				setWorkspace((prev) => ({
 					...prev,
-					threads: ensureSessionAssistantMessage(prev.threads, requestId, data, {
-						defaultThreadName: DEFAULT_THREAD_NAME,
-						fallbackAgentId: "main",
-						messageId,
-					}).threads,
+					threads: ensureSessionAssistantMessage(
+						prev.threads,
+						requestId,
+						data,
+						{
+							defaultThreadName: DEFAULT_THREAD_NAME,
+							fallbackAgentId: "main",
+							messageId,
+						},
+					).threads,
 				}));
 			}
 			if (!threadId) return;
@@ -1404,11 +1613,10 @@ function useGatewayWorkspace(
 							fallbackMessageId: messageId,
 							streamMessageId,
 							isDelta: looksLikeStandaloneDelta ? false : textEvent.isDelta,
-							eventKey:
-								!textEvent.isDelta
-									? `${streamMessageId || "noid"}:${Date.now()}:${eventIndex}`
-									: looksLikeStandaloneDelta
-										? `standalone:${Date.now()}:${eventIndex}`
+							eventKey: !textEvent.isDelta
+								? `${streamMessageId || "noid"}:${Date.now()}:${eventIndex}`
+								: looksLikeStandaloneDelta
+									? `standalone:${Date.now()}:${eventIndex}`
 									: undefined,
 						});
 						nextThread = updateAssistantMessage(
@@ -1426,7 +1634,10 @@ function useGatewayWorkspace(
 					}
 
 					if (parsedToolEvents.length > 0) {
-						const toolEventsByMessageId = new Map<string, ParsedToolStreamEvent[]>();
+						const toolEventsByMessageId = new Map<
+							string,
+							ParsedToolStreamEvent[]
+						>();
 						for (const toolEvent of parsedToolEvents) {
 							const targetMessageId = resolveToolMessageTargetId({
 								state: requestStreamMessageRef.current,
@@ -1460,10 +1671,17 @@ function useGatewayWorkspace(
 					}
 
 					if (thinkingEvent) {
-						nextThread = updateAssistantMessage(nextThread, messageId, (message) => ({
-							...message,
-							thinkingEvents: [...(message.thinkingEvents || []), thinkingEvent],
-						}));
+						nextThread = updateAssistantMessage(
+							nextThread,
+							messageId,
+							(message) => ({
+								...message,
+								thinkingEvents: [
+									...(message.thinkingEvents || []),
+									thinkingEvent,
+								],
+							}),
+						);
 					}
 
 					return nextThread;
@@ -1480,26 +1698,29 @@ function useGatewayWorkspace(
 
 			if (data.type === "agent-complete") {
 				setWorkspace((prev) => {
-					const sourceThread = prev.threads.find((thread) => thread.id === threadId);
+					const sourceThread = prev.threads.find(
+						(thread) => thread.id === threadId,
+					);
 					const previewMessage =
-						sourceThread?.messages.find((message) => message.id === messageId)?.content ||
+						sourceThread?.messages.find((message) => message.id === messageId)
+							?.content ||
 						sourceThread?.messages
 							.filter((message) => message.role === "assistant")
 							.at(-1)?.content ||
 						"";
 					const nextNonce = completionNonceRef.current + 1;
 					completionNonceRef.current = nextNonce;
-						return {
-							...prev,
-							lastCompletion: {
-								nonce: nextNonce,
-								threadId: threadId || "",
-								messageId,
-								threadName: sourceThread?.name || "Current chat",
-								agentId: sourceThread?.agentId || "agent",
-								preview: previewMessage,
-							},
-						};
+					return {
+						...prev,
+						lastCompletion: {
+							nonce: nextNonce,
+							threadId: threadId || "",
+							messageId,
+							threadName: sourceThread?.name || "Current chat",
+							agentId: sourceThread?.agentId || "agent",
+							preview: previewMessage,
+						},
+					};
 				});
 				finalizePendingRequest(requestId);
 				requestThreadRef.current.delete(requestId);
@@ -1726,7 +1947,9 @@ function useGatewayWorkspace(
 	const testConnection = useCallback(async () => {
 		setWorkspace((prev) => ({ ...prev, checkingConnection: true }));
 		const check = await checkGatewayConnection(settings);
-		const detail = check.ok ? "Gateway test succeeded" : check.error || check.status;
+		const detail = check.ok
+			? "Gateway test succeeded"
+			: check.error || check.status;
 		const summary = check.ok
 			? detail
 			: summarizeGatewayConnectionFailure(detail);
@@ -1800,7 +2023,10 @@ function useGatewayWorkspace(
 				setGlobalStatus("Saved voice configuration.");
 				return true;
 			} catch (error) {
-				setGlobalStatus(`Failed to save voice configuration: ${String(error)}`, true);
+				setGlobalStatus(
+					`Failed to save voice configuration: ${String(error)}`,
+					true,
+				);
 				return false;
 			}
 		},
@@ -1852,11 +2078,11 @@ function useGatewayWorkspace(
 					threads: prev.threads.map((item) =>
 						item.id === thread.id
 							? {
-								...item,
-								messages,
-								messagesLoaded: true,
-								messageCount: messages.length,
-							}
+									...item,
+									messages,
+									messagesLoaded: true,
+									messageCount: messages.length,
+								}
 							: item,
 					),
 				}));
@@ -1906,7 +2132,9 @@ function useGatewayWorkspace(
 			setWorkspace((prev) => {
 				const next = prev.threads.filter((item) => item.id !== thread.id);
 				const activeThreadId =
-					prev.activeThreadId === thread.id ? next[0]?.id || "" : prev.activeThreadId;
+					prev.activeThreadId === thread.id
+						? next[0]?.id || ""
+						: prev.activeThreadId;
 				return {
 					...prev,
 					threads: next,
@@ -1975,21 +2203,24 @@ function useGatewayWorkspace(
 		[logEvent, setGlobalStatus, settings],
 	);
 
-		const sendPrompt = useCallback(
-			async (
-				promptOverride?: string,
-				options?: { includeComposerAttachments?: boolean },
-			): Promise<boolean> => {
-			const includeComposerAttachments = options?.includeComposerAttachments !== false;
-			const outgoingAttachments = includeComposerAttachments ? workspace.attachments : [];
+	const sendPrompt = useCallback(
+		async (
+			promptOverride?: string,
+			options?: { includeComposerAttachments?: boolean },
+		): Promise<boolean> => {
+			const includeComposerAttachments =
+				options?.includeComposerAttachments !== false;
+			const outgoingAttachments = includeComposerAttachments
+				? workspace.attachments
+				: [];
 			const userText = (promptOverride ?? workspace.prompt).trim();
 			if (!userText && outgoingAttachments.length === 0) return false;
-				if (workspace.connectionStatus !== "connected") {
-					setGlobalStatus("Connect to gateway first.", true);
-					return false;
-				}
+			if (workspace.connectionStatus !== "connected") {
+				setGlobalStatus("Connect to gateway first.", true);
+				return false;
+			}
 
-				let target: SessionThread | undefined = activeThread;
+			let target: SessionThread | undefined = activeThread;
 			if (!target) {
 				const created = await createNewChat();
 				if (!created) return false;
@@ -1999,90 +2230,99 @@ function useGatewayWorkspace(
 			const now = Date.now();
 			const assistantId = `assistant-${now}-${Math.random().toString(36).slice(2, 8)}`;
 			const previewText =
-				userText.trim() || buildAttachmentPreviewText(outgoingAttachments) || DEFAULT_THREAD_NAME;
+				userText.trim() ||
+				buildAttachmentPreviewText(outgoingAttachments) ||
+				DEFAULT_THREAD_NAME;
 
-				setWorkspace((prev) => ({
-					...prev,
-					prompt: promptOverride === undefined ? "" : prev.prompt,
-					attachmentError: "",
-					threads: prev.threads.map((thread) =>
+			setWorkspace((prev) => ({
+				...prev,
+				prompt: promptOverride === undefined ? "" : prev.prompt,
+				attachmentError: "",
+				threads: prev.threads.map((thread) =>
 					thread.id === target!.id
 						? {
-							...thread,
-							name:
-								thread.name === DEFAULT_THREAD_NAME
-									? mapSessionName(previewText, thread.name)
-									: thread.name,
-							messagesLoaded: true,
-							messages: [
-								...thread.messages,
-								{
-									id: `user-${now}`,
-									role: "user",
-									content: userText,
-									attachments:
-										outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
-									createdAt: now,
-								},
-								{
-									id: assistantId,
-									role: "assistant",
-									content: "",
-									createdAt: now,
-								},
-							],
-							updatedAt: now,
-							lastMessagePreview: previewText.slice(0, 200),
-							messageCount: (thread.messageCount ?? thread.messages.length) + 1,
-						}
+								...thread,
+								name:
+									thread.name === DEFAULT_THREAD_NAME
+										? mapSessionName(previewText, thread.name)
+										: thread.name,
+								messagesLoaded: true,
+								messages: [
+									...thread.messages,
+									{
+										id: `user-${now}`,
+										role: "user",
+										content: userText,
+										attachments:
+											outgoingAttachments.length > 0
+												? outgoingAttachments
+												: undefined,
+										createdAt: now,
+									},
+									{
+										id: assistantId,
+										role: "assistant",
+										content: "",
+										createdAt: now,
+									},
+								],
+								updatedAt: now,
+								lastMessagePreview: previewText.slice(0, 200),
+								messageCount:
+									(thread.messageCount ?? thread.messages.length) + 1,
+							}
 						: thread,
 				),
 			}));
 
 			try {
-					const payload: AgentRequestPayload = {
-						agentId: target.agentId,
-						content: userText,
-						attachments:
-							outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
-						sessionKey: target.id,
-						queueIfBusy: true,
-						routing: {
-							channel: "desktop",
-							peer: { kind: "channel", id: deviceIdRef.current },
-						},
-					};
-					const gatewayRequestId = socketRef.current?.sendAgentRequest(payload);
+				const payload: AgentRequestPayload = {
+					agentId: target.agentId,
+					content: userText,
+					attachments:
+						outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
+					sessionKey: target.id,
+					queueIfBusy: true,
+					routing: {
+						channel: "desktop",
+						peer: { kind: "channel", id: deviceIdRef.current },
+					},
+				};
+				const gatewayRequestId = socketRef.current?.sendAgentRequest(payload);
 				if (!gatewayRequestId) {
 					throw new Error("Gateway socket is unavailable");
-					}
-					requestThreadRef.current.set(gatewayRequestId, target.id);
-					requestMessageRef.current.set(gatewayRequestId, assistantId);
-					registerPendingRequest(gatewayRequestId);
-					if (pendingRequestIdsRef.current.size > 1) {
-						setGlobalStatus(
-							`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`,
-						);
-					}
-					if (includeComposerAttachments) {
-						setWorkspace((prev) => ({ ...prev, attachments: [], attachmentError: "" }));
-					}
-					return true;
-				} catch (error) {
-					setGlobalStatus(`Failed to send prompt: ${String(error)}`, true);
-					return false;
 				}
-			},
-			[
-				activeThread,
-				createNewChat,
-				registerPendingRequest,
-				setGlobalStatus,
-				workspace.attachments,
-				workspace.connectionStatus,
-				workspace.prompt,
-			],
-		);
+				requestThreadRef.current.set(gatewayRequestId, target.id);
+				requestMessageRef.current.set(gatewayRequestId, assistantId);
+				registerPendingRequest(gatewayRequestId);
+				if (pendingRequestIdsRef.current.size > 1) {
+					setGlobalStatus(
+						`Queued prompt (${pendingRequestIdsRef.current.size - 1} waiting).`,
+					);
+				}
+				if (includeComposerAttachments) {
+					setWorkspace((prev) => ({
+						...prev,
+						attachments: [],
+						attachmentError: "",
+					}));
+				}
+				return true;
+			} catch (error) {
+				setGlobalStatus(`Failed to send prompt: ${String(error)}`, true);
+				return false;
+			}
+		},
+		[
+			activeThread,
+			createNewChat,
+			registerPendingRequest,
+			setGlobalStatus,
+			workspace.attachments,
+			workspace.connectionStatus,
+			workspace.prompt,
+		],
+	);
 
 	const updatePrompt = useCallback((value: string) => {
 		setWorkspace((prev) => ({ ...prev, prompt: value }));
@@ -2131,7 +2371,8 @@ function useGatewayWorkspace(
 							size: file.size,
 						});
 					} catch {
-						errorMessage = errorMessage || "Unable to read one or more attachments.";
+						errorMessage =
+							errorMessage || "Unable to read one or more attachments.";
 					}
 					continue;
 				}
@@ -2147,10 +2388,8 @@ function useGatewayWorkspace(
 				}
 
 				try {
-					const { textContent, truncated, usedPdfFallback } = await readUploadFileText(
-						file,
-						MAX_FILE_TEXT_CHARS,
-					);
+					const { textContent, truncated, usedPdfFallback } =
+						await readUploadFileText(file, MAX_FILE_TEXT_CHARS);
 					if (!textContent.trim()) {
 						errorMessage = errorMessage || "Unable to read file contents.";
 						continue;
@@ -2228,10 +2467,13 @@ function useGatewayWorkspace(
 		[sendPrompt],
 	);
 
-	const updateSelectedAgent = useCallback((value: string) => {
-		setWorkspace((prev) => ({ ...prev, selectedAgentId: value }));
-		void loadAgentDetailData(value);
-	}, [loadAgentDetailData]);
+	const updateSelectedAgent = useCallback(
+		(value: string) => {
+			setWorkspace((prev) => ({ ...prev, selectedAgentId: value }));
+			void loadAgentDetailData(value);
+		},
+		[loadAgentDetailData],
+	);
 
 	const updateCreateAgentDraft = useCallback(
 		<K extends keyof CreateAgentDraft>(key: K, value: CreateAgentDraft[K]) => {
@@ -2254,7 +2496,10 @@ function useGatewayWorkspace(
 					};
 				}
 				const fallbackId =
-					prev.editTargetAgentId || prev.selectedAgentId || prev.agentCatalog[0]?.id || "";
+					prev.editTargetAgentId ||
+					prev.selectedAgentId ||
+					prev.agentCatalog[0]?.id ||
+					"";
 				return {
 					...prev,
 					agentFormMode: "edit",
@@ -2268,7 +2513,10 @@ function useGatewayWorkspace(
 					workspace.agentCatalog[0]?.id ||
 					"";
 				if (targetId) {
-					void loadAgentDetailData(targetId, { hydrateDraft: true, setAgentDetail: true });
+					void loadAgentDetailData(targetId, {
+						hydrateDraft: true,
+						setAgentDetail: true,
+					});
 				}
 			}
 		},
@@ -2283,7 +2531,10 @@ function useGatewayWorkspace(
 	const setEditTargetAgentId = useCallback(
 		(agentId: string) => {
 			setWorkspace((prev) => ({ ...prev, editTargetAgentId: agentId }));
-			void loadAgentDetailData(agentId, { hydrateDraft: true, setAgentDetail: true });
+			void loadAgentDetailData(agentId, {
+				hydrateDraft: true,
+				setAgentDetail: true,
+			});
 		},
 		[loadAgentDetailData],
 	);
@@ -2307,7 +2558,8 @@ function useGatewayWorkspace(
 	const submitAgentForm = useCallback(async () => {
 		const draft = workspace.createAgentDraft;
 		const mode = workspace.agentFormMode;
-		const targetAgentId = mode === "edit" ? workspace.editTargetAgentId : draft.id.trim();
+		const targetAgentId =
+			mode === "edit" ? workspace.editTargetAgentId : draft.id.trim();
 		if (!targetAgentId) {
 			setGlobalStatus("Agent id is required.", true);
 			return;
@@ -2319,14 +2571,20 @@ function useGatewayWorkspace(
 			const selectedSubAgentIds = draft.selectedSubAgentIds.filter(
 				(id) => id && id !== targetAgentId,
 			);
-			const missingIds = selectedSubAgentIds.filter((id) => !agentDetailsRef.current[id]);
+			const missingIds = selectedSubAgentIds.filter(
+				(id) => !agentDetailsRef.current[id],
+			);
 			if (missingIds.length > 0) {
 				const fetched = await Promise.all(
-					missingIds.map((id) => loadAgentDetailData(id, { setAgentDetail: false })),
+					missingIds.map((id) =>
+						loadAgentDetailData(id, { setAgentDetail: false }),
+					),
 				);
 				const unresolved = missingIds.filter((id, index) => !fetched[index]);
 				if (unresolved.length > 0) {
-					throw new Error(`Unable to load selected sub-agent details: ${unresolved.join(", ")}`);
+					throw new Error(
+						`Unable to load selected sub-agent details: ${unresolved.join(", ")}`,
+					);
 				}
 			}
 
@@ -2361,7 +2619,10 @@ function useGatewayWorkspace(
 
 			await refreshAgentsData();
 			if (mode === "edit") {
-				await loadAgentDetailData(targetAgentId, { hydrateDraft: true, setAgentDetail: true });
+				await loadAgentDetailData(targetAgentId, {
+					hydrateDraft: true,
+					setAgentDetail: true,
+				});
 				setWorkspace((prev) => ({ ...prev, creatingAgent: false }));
 			} else {
 				setWorkspace((prev) => ({
@@ -2471,7 +2732,9 @@ export function App({ overlayMode }: AppProps) {
 	const handledQuickSendNonceRef = useRef(0);
 	const handledCompletionNonceRef = useRef(0);
 	const autoConnectAttemptedRef = useRef(false);
-	const [voiceSessions, setVoiceSessions] = useState<Record<string, boolean>>({});
+	const [voiceSessions, setVoiceSessions] = useState<Record<string, boolean>>(
+		{},
+	);
 	const [voicePlayback, setVoicePlayback] = useState<{
 		status: VoicePlaybackStatus;
 		messageId?: string;
@@ -2481,6 +2744,59 @@ export function App({ overlayMode }: AppProps) {
 	const voiceAbortRef = useRef<AbortController | null>(null);
 	const voiceRequestIdRef = useRef<string | null>(null);
 	const spokenMessagesRef = useRef<Map<string, Set<string>>>(new Map());
+	const smsBridgeSocketRef = useRef<GatewaySocketClient | null>(null);
+	const smsBridgeCursorRef = useRef<number | null>(null);
+	const smsBridgeCursorReadyRef = useRef(false);
+	const smsBridgePollingRef = useRef(false);
+	const smsBridgePendingRequestsRef = useRef<
+		Map<
+			string,
+			{
+				handle: string;
+				replyText: string;
+				inboundComparableText: string;
+				createdAt: number;
+			}
+		>
+	>(new Map());
+	const smsBridgeRecentOutboundRef = useRef<SmsBridgeLoopbackRecord[]>([]);
+	const [smsBridgeHealth, setSmsBridgeHealth] = useState<SmsBridgeHealth>(
+		createDefaultSmsBridgeHealth,
+	);
+
+	const smsBridgeAllowlistSet = useMemo(() => {
+		return new Set(
+			runtime.state.smsBridgeAllowlist
+				.map((entry) => normalizeSmsAllowlistEntry(entry))
+				.filter(Boolean),
+		);
+	}, [runtime.state.smsBridgeAllowlist]);
+
+	const pushSmsBridgeLog = useCallback((message: string) => {
+		const line = `${new Date().toLocaleTimeString()} ${message}`;
+		setSmsBridgeHealth((prev) => ({
+			...prev,
+			logLines: [line, ...prev.logLines].slice(0, SMS_BRIDGE_LOG_LIMIT),
+		}));
+	}, []);
+
+	const setSmsBridgeMode = useCallback(
+		(mode: SmsBridgeHealth["mode"], lastError?: string | null) => {
+			setSmsBridgeHealth((prev) => ({
+				...prev,
+				mode,
+				lastError: lastError === undefined ? prev.lastError : lastError || null,
+			}));
+		},
+		[],
+	);
+
+	const setSmsBridgePendingCount = useCallback((count: number) => {
+		setSmsBridgeHealth((prev) => ({
+			...prev,
+			pendingReplyCount: Math.max(0, count),
+		}));
+	}, []);
 
 	const isVoiceAutoEnabled = useCallback(
 		(threadId: string): boolean => {
@@ -2522,7 +2838,8 @@ export function App({ overlayMode }: AppProps) {
 			const resolved = resolveVoiceConfig(
 				gateway.workspace.voiceConfig,
 				agentId
-					? gateway.workspace.agentCatalog.find((item) => item.id === agentId)?.voice
+					? gateway.workspace.agentCatalog.find((item) => item.id === agentId)
+							?.voice
 					: undefined,
 			);
 
@@ -2535,7 +2852,10 @@ export function App({ overlayMode }: AppProps) {
 
 			if (resolved.provider === "web_speech") {
 				if (!("speechSynthesis" in window)) {
-					runtime.setStatus("Speech synthesis is not available in this runtime.", true);
+					runtime.setStatus(
+						"Speech synthesis is not available in this runtime.",
+						true,
+					);
 					if (!isStale()) {
 						setVoicePlayback({ status: "idle" });
 					}
@@ -2654,7 +2974,7 @@ export function App({ overlayMode }: AppProps) {
 			setVoiceSessions((prev) => {
 				const current =
 					prev[threadId] ??
-					((gateway.workspace.voiceConfig?.defaultPolicy || "off") === "auto");
+					(gateway.workspace.voiceConfig?.defaultPolicy || "off") === "auto";
 				return { ...prev, [threadId]: !current };
 			});
 		},
@@ -2669,7 +2989,12 @@ export function App({ overlayMode }: AppProps) {
 		if (!next) {
 			stopVoicePlayback();
 		}
-	}, [gateway.activeThread, isVoiceAutoEnabled, stopVoicePlayback, toggleVoiceAuto]);
+	}, [
+		gateway.activeThread,
+		isVoiceAutoEnabled,
+		stopVoicePlayback,
+		toggleVoiceAuto,
+	]);
 
 	const handleSpeakVoice = useCallback(
 		(messageId: string, text: string, agentId?: string) => {
@@ -2681,6 +3006,526 @@ export function App({ overlayMode }: AppProps) {
 	const handleStopVoice = useCallback(() => {
 		stopVoicePlayback();
 	}, [stopVoicePlayback]);
+
+	const flushSmsBridgeReply = useCallback(
+		async (params: {
+			handle: string;
+			text: string;
+			replyType: "command" | "agent";
+		}) => {
+			const chunks = splitSmsBridgeReply(params.text);
+			if (chunks.length === 0) return;
+			let loopbackRecords = smsBridgeRecentOutboundRef.current;
+			for (const chunk of chunks) {
+				await sendMacosMessage({ handle: params.handle, text: chunk });
+				loopbackRecords = rememberSmsBridgeOutbound(
+					loopbackRecords,
+					{
+						handle: params.handle,
+						text: chunk,
+					},
+					{
+						ttlMs: SMS_BRIDGE_LOOPBACK_TTL_MS,
+					},
+				);
+			}
+			smsBridgeRecentOutboundRef.current = loopbackRecords;
+			setSmsBridgeHealth((prev) => ({
+				...prev,
+				lastOutboundAt: Date.now(),
+				lastError: null,
+				commandReplyCount:
+					params.replyType === "command"
+						? prev.commandReplyCount + 1
+						: prev.commandReplyCount,
+				agentReplyCount:
+					params.replyType === "agent"
+						? prev.agentReplyCount + 1
+						: prev.agentReplyCount,
+			}));
+			pushSmsBridgeLog(
+				`Sent ${params.replyType} reply to ${params.handle} (${chunks.length} SMS segment${chunks.length === 1 ? "" : "s"}).`,
+			);
+		},
+		[pushSmsBridgeLog],
+	);
+
+	const handleSmsBridgeAgentEvent = useCallback(
+		(requestId: string, payload: unknown) => {
+			const pending = smsBridgePendingRequestsRef.current.get(requestId);
+			if (!pending) return;
+			if (isSessionUserMessagePayload(payload as SessionMirrorEventPayload)) {
+				return;
+			}
+
+			pending.replyText = appendAgentEventText(pending.replyText, payload);
+			const eventType =
+				typeof payload === "object" &&
+				payload !== null &&
+				typeof (payload as { type?: unknown }).type === "string"
+					? ((payload as { type: string }).type as string)
+					: "";
+			if (eventType === "agent-error") {
+				smsBridgePendingRequestsRef.current.delete(requestId);
+				setSmsBridgePendingCount(smsBridgePendingRequestsRef.current.size);
+				setSmsBridgeMode("error", "Agent stream returned an error event.");
+				pushSmsBridgeLog(`Agent stream failed for ${pending.handle}.`);
+				void flushSmsBridgeReply({
+					handle: pending.handle,
+					text: "Sorry, Wingman hit an error while processing that request.",
+					replyType: "command",
+				}).catch(() => {
+					// no-op
+				});
+				return;
+			}
+			if (eventType !== "agent-complete") return;
+
+			smsBridgePendingRequestsRef.current.delete(requestId);
+			setSmsBridgePendingCount(smsBridgePendingRequestsRef.current.size);
+			const response =
+				pending.replyText.trim() ||
+				extractAgentTerminalText(payload) ||
+				"Done.";
+			if (
+				isSmsBridgeSelfEcho({
+					inboundText: pending.inboundComparableText,
+					outboundText: response,
+				})
+			) {
+				pushSmsBridgeLog(
+					`Skipped self-echo agent reply for ${pending.handle}.`,
+				);
+				return;
+			}
+			void flushSmsBridgeReply({
+				handle: pending.handle,
+				text: response,
+				replyType: "agent",
+			}).catch((error: unknown) => {
+				const message = `Failed to send agent SMS reply: ${String(error)}`;
+				setSmsBridgeMode("error", message);
+				pushSmsBridgeLog(message);
+			});
+		},
+		[
+			flushSmsBridgeReply,
+			pushSmsBridgeLog,
+			setSmsBridgeMode,
+			setSmsBridgePendingCount,
+		],
+	);
+
+	const ensureSmsBridgeCursor = useCallback(async (): Promise<boolean> => {
+		if (smsBridgeCursorReadyRef.current) {
+			return typeof smsBridgeCursorRef.current === "number";
+		}
+
+		let storedCursor = 0;
+		if (SMS_BRIDGE_SKIP_BACKLOG_ON_START) {
+			const latest = await getMacosMessagesLatestRowId();
+			if (latest === null) {
+				setSmsBridgeMode(
+					"error",
+					"Could not read latest Messages cursor. Check Full Disk Access permissions.",
+				);
+				return false;
+			}
+			storedCursor = latest;
+			localStorage.setItem(SMS_BRIDGE_CURSOR_STORAGE_KEY, String(storedCursor));
+			pushSmsBridgeLog(
+				`Aligned SMS bridge cursor to latest row ${storedCursor.toLocaleString()} on startup.`,
+			);
+		} else {
+			const rawCursor = localStorage.getItem(SMS_BRIDGE_CURSOR_STORAGE_KEY);
+			if (rawCursor) {
+				const parsed = Number.parseInt(rawCursor, 10);
+				if (Number.isFinite(parsed) && parsed > 0) {
+					storedCursor = parsed;
+				}
+			}
+
+			if (storedCursor <= 0) {
+				const latest = await getMacosMessagesLatestRowId();
+				if (latest === null) {
+					setSmsBridgeMode(
+						"error",
+						"Could not read latest Messages cursor. Check Full Disk Access permissions.",
+					);
+					return false;
+				}
+				storedCursor = latest;
+				localStorage.setItem(
+					SMS_BRIDGE_CURSOR_STORAGE_KEY,
+					String(storedCursor),
+				);
+				pushSmsBridgeLog(
+					`Initialized SMS bridge cursor to row ${storedCursor.toLocaleString()}.`,
+				);
+			}
+		}
+
+		smsBridgeCursorRef.current = storedCursor;
+		smsBridgeCursorReadyRef.current = true;
+		return true;
+	}, [pushSmsBridgeLog, setSmsBridgeMode]);
+
+	const pollSmsBridge = useCallback(async () => {
+		if (smsBridgePollingRef.current) return;
+		if (!smsBridgeSocketRef.current?.isConnected()) return;
+		if (!runtime.state.smsBridgeEnabled) return;
+		smsBridgePollingRef.current = true;
+		try {
+			const now = Date.now();
+			for (const [requestId, pending] of smsBridgePendingRequestsRef.current) {
+				if (now - pending.createdAt < SMS_BRIDGE_AGENT_REPLY_TIMEOUT_MS)
+					continue;
+				smsBridgePendingRequestsRef.current.delete(requestId);
+				setSmsBridgePendingCount(smsBridgePendingRequestsRef.current.size);
+				pushSmsBridgeLog(
+					`Timed out pending SMS agent reply for ${pending.handle}.`,
+				);
+				await flushSmsBridgeReply({
+					handle: pending.handle,
+					text: "Sorry, Wingman timed out while preparing a reply. Please try again.",
+					replyType: "command",
+				});
+			}
+
+			setSmsBridgeHealth((prev) => ({
+				...prev,
+				lastPollAt: Date.now(),
+				mode: "running",
+			}));
+			const ready = await ensureSmsBridgeCursor();
+			if (!ready) return;
+			const afterRowId = smsBridgeCursorRef.current || 0;
+			const inboundMessages = await pollMacosMessages({
+				afterRowId,
+				limit: SMS_BRIDGE_POLL_LIMIT,
+			});
+			if (inboundMessages.length === 0) return;
+
+			let nextCursor = afterRowId;
+			for (const inbound of inboundMessages) {
+				if (inbound.rowId <= nextCursor) continue;
+				const normalizedHandle = normalizeSmsAllowlistEntry(inbound.handle);
+				if (
+					smsBridgeAllowlistSet.size > 0 &&
+					(!normalizedHandle || !smsBridgeAllowlistSet.has(normalizedHandle))
+				) {
+					setSmsBridgeHealth((prev) => ({
+						...prev,
+						skippedInboundCount: prev.skippedInboundCount + 1,
+					}));
+					pushSmsBridgeLog(
+						`Skipped inbound SMS from ${inbound.handle} (not in allowlist).`,
+					);
+					nextCursor = inbound.rowId;
+					smsBridgeCursorRef.current = nextCursor;
+					localStorage.setItem(
+						SMS_BRIDGE_CURSOR_STORAGE_KEY,
+						String(nextCursor),
+					);
+					continue;
+				}
+				const target = buildSmsTargetForHandle(inbound.handle);
+				if (!target) {
+					nextCursor = inbound.rowId;
+					continue;
+				}
+				const loopback = consumeSmsBridgeLoopback(
+					smsBridgeRecentOutboundRef.current,
+					{
+						handle: inbound.handle,
+						text: inbound.text,
+					},
+					{
+						ttlMs: SMS_BRIDGE_LOOPBACK_TTL_MS,
+					},
+				);
+				smsBridgeRecentOutboundRef.current = loopback.records;
+				if (loopback.matched) {
+					setSmsBridgeHealth((prev) => ({
+						...prev,
+						skippedInboundCount: prev.skippedInboundCount + 1,
+					}));
+					pushSmsBridgeLog(
+						`Suppressed loopback SMS echo from ${inbound.handle}.`,
+					);
+					nextCursor = inbound.rowId;
+					smsBridgeCursorRef.current = nextCursor;
+					localStorage.setItem(
+						SMS_BRIDGE_CURSOR_STORAGE_KEY,
+						String(nextCursor),
+					);
+					continue;
+				}
+				setSmsBridgeHealth((prev) => ({
+					...prev,
+					processedInboundCount: prev.processedInboundCount + 1,
+					lastInboundAt: Date.now(),
+					lastError: null,
+				}));
+
+				const resolution = await submitSmsInboundMessage(
+					runtime.state.settings,
+					{
+						target,
+						text: inbound.text,
+						agentId: gateway.workspace.selectedAgentId || undefined,
+						queueIfBusy: true,
+					},
+				);
+				pushSmsBridgeLog(
+					`Inbound SMS from ${inbound.handle} classified as ${resolution.kind}.`,
+				);
+				if (resolution.kind === "command" || resolution.kind === "stopped") {
+					if (
+						isSmsBridgeSelfEcho({
+							inboundText: inbound.text,
+							outboundText: resolution.responseText,
+						})
+					) {
+						pushSmsBridgeLog(
+							`Skipped self-echo command reply for ${inbound.handle}.`,
+						);
+						nextCursor = inbound.rowId;
+						smsBridgeCursorRef.current = nextCursor;
+						localStorage.setItem(
+							SMS_BRIDGE_CURSOR_STORAGE_KEY,
+							String(nextCursor),
+						);
+						continue;
+					}
+					await flushSmsBridgeReply({
+						handle: inbound.handle,
+						text: resolution.responseText,
+						replyType: "command",
+					});
+				} else {
+					try {
+						const requestId = smsBridgeSocketRef.current?.sendAgentRequest(
+							resolution.request,
+						);
+						if (requestId) {
+							smsBridgePendingRequestsRef.current.set(requestId, {
+								handle: inbound.handle,
+								replyText: "",
+								inboundComparableText: normalizeSmsBridgeComparableText(
+									inbound.text,
+								),
+								createdAt: Date.now(),
+							});
+							setSmsBridgePendingCount(
+								smsBridgePendingRequestsRef.current.size,
+							);
+							pushSmsBridgeLog(
+								`Forwarded SMS to agent request ${requestId} for ${inbound.handle}.`,
+							);
+						}
+					} catch {
+						await flushSmsBridgeReply({
+							handle: inbound.handle,
+							text: "Sorry, Wingman is currently offline. Please try again in a moment.",
+							replyType: "command",
+						});
+					}
+				}
+
+				nextCursor = inbound.rowId;
+				smsBridgeCursorRef.current = nextCursor;
+				localStorage.setItem(SMS_BRIDGE_CURSOR_STORAGE_KEY, String(nextCursor));
+			}
+		} catch (error) {
+			const message = `SMS bridge polling failed: ${String(error)}`;
+			setSmsBridgeMode("error", message);
+			pushSmsBridgeLog(message);
+		} finally {
+			smsBridgePollingRef.current = false;
+		}
+	}, [
+		ensureSmsBridgeCursor,
+		flushSmsBridgeReply,
+		gateway.workspace.selectedAgentId,
+		pushSmsBridgeLog,
+		runtime.state.settings,
+		runtime.state.smsBridgeEnabled,
+		setSmsBridgeMode,
+		setSmsBridgePendingCount,
+		smsBridgeAllowlistSet,
+	]);
+
+	useEffect(() => {
+		if (!runtime.state.smsBridgeEnabled) {
+			setSmsBridgeMode("disabled", null);
+			setSmsBridgePendingCount(0);
+			return;
+		}
+		setSmsBridgeMode("idle");
+	}, [
+		runtime.state.smsBridgeEnabled,
+		setSmsBridgeMode,
+		setSmsBridgePendingCount,
+	]);
+
+	useEffect(() => {
+		if (overlayMode) return;
+		if (!runtime.state.nativeRuntime) return;
+		if (runtime.state.platform.os !== "macos") return;
+		if (!runtime.state.smsBridgeEnabled) return;
+		if (gateway.workspace.connectionStatus !== "connected") return;
+
+		const socket = new GatewaySocketClient({
+			onAgentEvent: (requestId, payload) => {
+				handleSmsBridgeAgentEvent(requestId, payload);
+			},
+			onConnectionChanged: (connected) => {
+				setSmsBridgeMode(connected ? "running" : "idle");
+			},
+		});
+		smsBridgeSocketRef.current = socket;
+		socket.connect(
+			runtime.state.settings,
+			`sms-bridge-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+		);
+		pushSmsBridgeLog("Started macOS Messages bridge socket.");
+
+		return () => {
+			smsBridgePollingRef.current = false;
+			smsBridgePendingRequestsRef.current.clear();
+			smsBridgeRecentOutboundRef.current = [];
+			setSmsBridgePendingCount(0);
+			socket.disconnect();
+			if (smsBridgeSocketRef.current === socket) {
+				smsBridgeSocketRef.current = null;
+			}
+			if (runtime.state.smsBridgeEnabled) {
+				setSmsBridgeMode("idle");
+			}
+			pushSmsBridgeLog("Stopped macOS Messages bridge socket.");
+		};
+	}, [
+		gateway.workspace.connectionStatus,
+		handleSmsBridgeAgentEvent,
+		overlayMode,
+		runtime.state.nativeRuntime,
+		runtime.state.platform.os,
+		runtime.state.smsBridgeEnabled,
+		runtime.state.settings,
+		pushSmsBridgeLog,
+		setSmsBridgeMode,
+		setSmsBridgePendingCount,
+	]);
+
+	useEffect(() => {
+		if (overlayMode) return;
+		if (!runtime.state.nativeRuntime) return;
+		if (runtime.state.platform.os !== "macos") return;
+		if (!runtime.state.smsBridgeEnabled) return;
+		if (gateway.workspace.connectionStatus !== "connected") return;
+
+		void pollSmsBridge();
+		const timer = window.setInterval(() => {
+			void pollSmsBridge();
+		}, SMS_BRIDGE_POLL_INTERVAL_MS);
+		return () => window.clearInterval(timer);
+	}, [
+		gateway.workspace.connectionStatus,
+		overlayMode,
+		pollSmsBridge,
+		runtime.state.nativeRuntime,
+		runtime.state.platform.os,
+		runtime.state.smsBridgeEnabled,
+	]);
+
+	const runSmsBridgeSelfTest = useCallback(async () => {
+		if (!runtime.state.nativeRuntime || runtime.state.platform.os !== "macos") {
+			return {
+				ok: false,
+				message: "SMS bridge test is only available in native macOS runtime.",
+			};
+		}
+		if (gateway.workspace.connectionStatus !== "connected") {
+			return {
+				ok: false,
+				message: "Connect to gateway before running SMS bridge test.",
+			};
+		}
+		if (!runtime.state.smsBridgeEnabled) {
+			return {
+				ok: false,
+				message: "Enable SMS bridge before running bridge test.",
+			};
+		}
+
+		const handle = resolveSmsBridgeTestHandle(runtime.state.smsBridgeAllowlist);
+		if (!handle) {
+			return {
+				ok: false,
+				message:
+					"Add at least one contact to the SMS bridge allowlist before test.",
+			};
+		}
+
+		try {
+			setSmsBridgeMode("running", null);
+			pushSmsBridgeLog(`Running SMS bridge test for ${handle}.`);
+			const latest = await getMacosMessagesLatestRowId();
+			if (latest === null) {
+				throw new Error(
+					"Could not read Messages database cursor. Check Full Disk Access.",
+				);
+			}
+			setSmsBridgeHealth((prev) => ({
+				...prev,
+				lastPollAt: Date.now(),
+				lastError: null,
+			}));
+			const target = buildSmsTargetForHandle(handle);
+			if (!target) {
+				throw new Error("Invalid allowlist test handle.");
+			}
+
+			const resolution = await submitSmsInboundMessage(runtime.state.settings, {
+				target,
+				text: "STATUS",
+				agentId: gateway.workspace.selectedAgentId || undefined,
+				queueIfBusy: true,
+			});
+			const roundTripText =
+				resolution.kind === "agent"
+					? "STATUS test unexpectedly routed to agent path."
+					: resolution.responseText;
+			await flushSmsBridgeReply({
+				handle,
+				text: `[Wingman SMS Bridge Test]\n${roundTripText}`,
+				replyType: "command",
+			});
+			setSmsBridgeMode("running", null);
+			pushSmsBridgeLog(`Bridge test completed for ${handle}.`);
+			return {
+				ok: true,
+				message: `Sent bridge test SMS to ${handle}.`,
+			};
+		} catch (error) {
+			const message = `Bridge test failed: ${String(error)}`;
+			setSmsBridgeMode("error", message);
+			pushSmsBridgeLog(message);
+			return { ok: false, message };
+		}
+	}, [
+		flushSmsBridgeReply,
+		gateway.workspace.connectionStatus,
+		gateway.workspace.selectedAgentId,
+		pushSmsBridgeLog,
+		runtime.state.nativeRuntime,
+		runtime.state.platform.os,
+		runtime.state.settings,
+		runtime.state.smsBridgeAllowlist,
+		runtime.state.smsBridgeEnabled,
+		setSmsBridgeMode,
+	]);
 
 	useEffect(() => {
 		if (overlayMode) return;
@@ -2776,14 +3621,18 @@ export function App({ overlayMode }: AppProps) {
 	}, [gateway.workspace.activeThreadId, overlayMode, stopVoicePlayback]);
 
 	useEffect(() => {
-		const activeIds = new Set(gateway.workspace.threads.map((thread) => thread.id));
+		const activeIds = new Set(
+			gateway.workspace.threads.map((thread) => thread.id),
+		);
 		for (const threadId of spokenMessagesRef.current.keys()) {
 			if (!activeIds.has(threadId)) {
 				spokenMessagesRef.current.delete(threadId);
 			}
 		}
 		setVoiceSessions((prev) => {
-			const nextEntries = Object.entries(prev).filter(([threadId]) => activeIds.has(threadId));
+			const nextEntries = Object.entries(prev).filter(([threadId]) =>
+				activeIds.has(threadId),
+			);
 			if (nextEntries.length === Object.keys(prev).length) return prev;
 			return Object.fromEntries(nextEntries);
 		});
@@ -2798,8 +3647,12 @@ export function App({ overlayMode }: AppProps) {
 		);
 		if (!targetThread) return;
 		const targetMessage =
-			targetThread.messages.find((message) => message.id === completion.messageId) ||
-			[...targetThread.messages].reverse().find((message) => message.role === "assistant");
+			targetThread.messages.find(
+				(message) => message.id === completion.messageId,
+			) ||
+			[...targetThread.messages]
+				.reverse()
+				.find((message) => message.role === "assistant");
 		if (!targetMessage || targetMessage.role !== "assistant") return;
 
 		let spoken = spokenMessagesRef.current.get(targetThread.id);
@@ -2851,8 +3704,12 @@ export function App({ overlayMode }: AppProps) {
 			workspace={gateway.workspace}
 			activeThread={gateway.activeThread}
 			workspaceActions={gateway.actions}
+			smsBridgeHealth={smsBridgeHealth}
+			onRunSmsBridgeTest={runSmsBridgeSelfTest}
 			voiceAutoEnabled={
-				gateway.activeThread ? isVoiceAutoEnabled(gateway.activeThread.id) : false
+				gateway.activeThread
+					? isVoiceAutoEnabled(gateway.activeThread.id)
+					: false
 			}
 			voicePlayback={voicePlayback}
 			onToggleVoiceAuto={handleToggleVoiceAuto}
@@ -2868,6 +3725,8 @@ type MainViewProps = {
 	workspace: WorkspaceState;
 	activeThread?: SessionThread;
 	workspaceActions: ReturnType<typeof useGatewayWorkspace>["actions"];
+	smsBridgeHealth: SmsBridgeHealth;
+	onRunSmsBridgeTest: () => Promise<{ ok: boolean; message: string }>;
 	voiceAutoEnabled: boolean;
 	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
 	onToggleVoiceAuto: () => void;
@@ -2953,7 +3812,9 @@ function GatewayScreen({
 							: workspaceActions.connectGateway())
 					}
 				>
-					{workspace.connectionStatus === "connected" ? "Disconnect" : "Connect"}
+					{workspace.connectionStatus === "connected"
+						? "Disconnect"
+						: "Connect"}
 				</button>
 				<button
 					type="button"
@@ -3008,15 +3869,22 @@ function GatewayScreen({
 						<input
 							className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
 							value={runtimeState.nodeName}
-							onChange={(event) => runtimeActions.updateNodeName(event.target.value)}
+							onChange={(event) =>
+								runtimeActions.updateNodeName(event.target.value)
+							}
 							placeholder="Wingman Desktop"
 						/>
 					</label>
 				</div>
 			</div>
 
-			<details className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3" open>
-				<summary className="cursor-pointer text-sm font-semibold">Connection Settings</summary>
+			<details
+				className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3"
+				open
+			>
+				<summary className="cursor-pointer text-sm font-semibold">
+					Connection Settings
+				</summary>
 				<div className="mt-3 grid gap-2 sm:grid-cols-2">
 					<Field
 						label="Gateway URL"
@@ -3036,7 +3904,9 @@ function GatewayScreen({
 					<Field
 						label="Password"
 						value={runtimeState.settings.password}
-						onChange={(value) => runtimeActions.updateSetting("password", value)}
+						onChange={(value) =>
+							runtimeActions.updateSetting("password", value)
+						}
 					/>
 				</div>
 				<p className="mt-2 text-[11px] text-slate-400">
@@ -3047,7 +3917,10 @@ function GatewayScreen({
 					.
 				</p>
 				<p className="mt-3 text-xs text-slate-300">
-					HTTP base: <span className="font-mono text-slate-100">{resolvedUi || "(invalid)"}</span>
+					HTTP base:{" "}
+					<span className="font-mono text-slate-100">
+						{resolvedUi || "(invalid)"}
+					</span>
 				</p>
 			</details>
 		</section>
@@ -3177,7 +4050,13 @@ function ChatScreen({
 	useEffect(() => {
 		const wasStreaming = previousStreamingRef.current;
 		previousStreamingRef.current = workspace.isStreaming;
-		if (!shouldRefocusComposer({ wasStreaming, isStreaming: workspace.isStreaming })) return;
+		if (
+			!shouldRefocusComposer({
+				wasStreaming,
+				isStreaming: workspace.isStreaming,
+			})
+		)
+			return;
 		const frame = window.requestAnimationFrame(() => {
 			const textarea = composerTextareaRef.current;
 			if (!textarea || textarea.disabled) return;
@@ -3200,7 +4079,9 @@ function ChatScreen({
 							<select
 								className="h-10 w-full appearance-none rounded-xl border border-white/20 bg-slate-950/55 px-3 pr-9 text-sm text-slate-100 outline-none ring-cyan-300/40 transition focus:ring"
 								value={workspace.selectedAgentId}
-								onChange={(event) => workspaceActions.updateSelectedAgent(event.target.value)}
+								onChange={(event) =>
+									workspaceActions.updateSelectedAgent(event.target.value)
+								}
 							>
 								{workspace.agentCatalog.map((agent) => (
 									<option key={agent.id} value={agent.id}>
@@ -3236,7 +4117,9 @@ function ChatScreen({
 			<div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 backdrop-blur">
 				<div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
 					<div>
-						<h2 className="text-xl font-semibold">{activeThread?.name || "No session selected"}</h2>
+						<h2 className="text-xl font-semibold">
+							{activeThread?.name || "No session selected"}
+						</h2>
 						<p className="mt-1 text-xs text-slate-300">
 							{activeThread
 								? `${activeThread.agentId} · ${activeThread.id}`
@@ -3247,7 +4130,10 @@ function ChatScreen({
 						<button
 							type="button"
 							className="rounded-full border border-white/20 px-3 py-1 text-xs"
-							onClick={() => activeThread && workspaceActions.renameThreadByPrompt(activeThread)}
+							onClick={() =>
+								activeThread &&
+								workspaceActions.renameThreadByPrompt(activeThread)
+							}
 							disabled={!activeThread}
 						>
 							Rename
@@ -3255,7 +4141,10 @@ function ChatScreen({
 						<button
 							type="button"
 							className="rounded-full border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs text-amber-100"
-							onClick={() => activeThread && void workspaceActions.clearThreadMessages(activeThread)}
+							onClick={() =>
+								activeThread &&
+								void workspaceActions.clearThreadMessages(activeThread)
+							}
 							disabled={!activeThread || workspace.isStreaming}
 						>
 							Clear Chat
@@ -3263,7 +4152,9 @@ function ChatScreen({
 						<button
 							type="button"
 							className="rounded-full border border-rose-400/40 bg-rose-500/15 px-3 py-1 text-xs text-rose-200"
-							onClick={() => activeThread && workspaceActions.removeThread(activeThread)}
+							onClick={() =>
+								activeThread && workspaceActions.removeThread(activeThread)
+							}
 							disabled={!activeThread}
 						>
 							Delete
@@ -3321,171 +4212,181 @@ function ChatScreen({
 					) : null}
 				</div>
 
-					<div className="mt-4">
-						{workspace.attachments.length > 0 ? (
-							<div className="mb-2 flex flex-wrap gap-2">
-								{workspace.attachments.map((attachment) => {
-									const isFile = isFileAttachment(attachment);
-									const isAudio = isAudioAttachment(attachment);
-									return (
-										<div
-											key={attachment.id}
-											className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
+				<div className="mt-4">
+					{workspace.attachments.length > 0 ? (
+						<div className="mb-2 flex flex-wrap gap-2">
+							{workspace.attachments.map((attachment) => {
+								const isFile = isFileAttachment(attachment);
+								const isAudio = isAudioAttachment(attachment);
+								return (
+									<div
+										key={attachment.id}
+										className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
+									>
+										{!isFile && !isAudio && attachment.dataUrl ? (
+											<img
+												src={attachment.dataUrl}
+												alt={attachment.name || "Attachment"}
+												className="h-10 w-10 object-cover"
+											/>
+										) : (
+											<div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-800/80 text-[10px] font-semibold text-sky-200">
+												{isAudio ? "AUDIO" : "FILE"}
+											</div>
+										)}
+										<span className="max-w-[180px] truncate text-slate-300">
+											{attachment.name ||
+												(isAudio ? "Audio" : isFile ? "File" : "Image")}
+										</span>
+										<button
+											type="button"
+											className="text-slate-400 transition hover:text-rose-400"
+											onClick={() =>
+												workspaceActions.removeAttachment(attachment.id)
+											}
 										>
-											{!isFile && !isAudio && attachment.dataUrl ? (
-												<img
-													src={attachment.dataUrl}
-													alt={attachment.name || "Attachment"}
-													className="h-10 w-10 object-cover"
-												/>
-											) : (
-												<div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-800/80 text-[10px] font-semibold text-sky-200">
-													{isAudio ? "AUDIO" : "FILE"}
-												</div>
-											)}
-											<span className="max-w-[180px] truncate text-slate-300">
-												{attachment.name ||
-													(isAudio ? "Audio" : isFile ? "File" : "Image")}
-											</span>
-											<button
-												type="button"
-												className="text-slate-400 transition hover:text-rose-400"
-												onClick={() => workspaceActions.removeAttachment(attachment.id)}
-											>
-												×
-											</button>
-										</div>
-									);
-								})}
-								<button
-									type="button"
-									className="text-xs text-slate-400 underline decoration-slate-300 underline-offset-4"
-									onClick={workspaceActions.clearAttachments}
-								>
-									Clear all
-								</button>
-							</div>
-						) : null}
-						{workspace.attachmentError ? (
-							<p className="mb-2 text-xs text-rose-300">{workspace.attachmentError}</p>
-						) : null}
-						<label htmlFor="prompt-textarea" className="sr-only">
-							Message
-						</label>
-						<div className="rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)]">
-							<div className="flex items-center justify-between gap-2 px-1 pb-2">
-								<div className="flex items-center gap-2">
-									<button
-										type="button"
-										className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-										onClick={handlePickFiles}
-										aria-label="Add files"
-									>
-										<AttachmentIcon />
-										<span className="hidden sm:inline">Files</span>
-									</button>
-									<button
-										type="button"
-										aria-pressed={runtimeState.recording}
-										aria-label={runtimeState.recording ? "Stop recording" : "Record audio"}
-										className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
-											runtimeState.recording
-												? "border-rose-400/60 bg-rose-500/20 text-rose-100"
-												: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
-										}`}
-										onClick={() => void handleTalkButtonClick()}
-										disabled={workspace.isStreaming}
-									>
-										<MicIcon />
-										{runtimeState.recording ? (
-											<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
-										) : null}
-									</button>
-									<button
-										type="button"
-										aria-pressed={voiceAutoEnabled}
-										aria-label={
-											voiceAutoEnabled
-												? "Disable auto voice playback"
-												: "Enable auto voice playback"
-										}
-										className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs transition ${
-											voiceAutoEnabled
-												? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-												: "border-white/10 bg-slate-900/70 text-slate-200 hover:border-sky-400/50 hover:text-sky-100"
-										}`}
-										onClick={onToggleVoiceAuto}
-									>
-										<SpeakerIcon />
-										<span className="hidden md:inline">
-											{voiceAutoEnabled ? "Voice Auto" : "Voice Off"}
-										</span>
-									</button>
-								</div>
-								<div className="flex items-center gap-2 px-1">
-									{workspace.isStreaming ? (
-										<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
-											<span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
-											Live
-										</span>
-									) : null}
-									<span className="text-[11px] text-slate-400">{composerStatusHint}</span>
-								</div>
-							</div>
-							<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
-								<textarea
-									ref={composerTextareaRef}
-									id="prompt-textarea"
-									className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
-									rows={1}
-									value={workspace.prompt}
-									onChange={(event) => workspaceActions.updatePrompt(event.target.value)}
-									onPaste={handlePaste}
-									onKeyDown={(event) => {
-										if (event.key === "Enter" && !event.shiftKey) {
-											event.preventDefault();
-											void workspaceActions.sendPrompt();
-										}
-									}}
-									placeholder="Ask Wingman to do something..."
-									style={{ overflowY: "hidden" }}
-								/>
-								<button
-									className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white transition hover:from-cyan-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
-									onClick={() => void workspaceActions.sendPrompt()}
-									type="button"
-									aria-label="Send prompt"
-									title="Send prompt"
-									disabled={!canSendPrompt}
-								>
-									<SendIcon />
-								</button>
-							</div>
-							{voicePlayback.status !== "idle" ? (
-								<div className="mt-2 flex justify-end">
-									<button
-										type="button"
-										className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
-										onClick={onStopVoice}
-									>
-										Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
-									</button>
-								</div>
-							) : null}
-							<input
-								ref={fileInputRef}
-								type="file"
-								accept={FILE_INPUT_ACCEPT}
-								className="hidden"
-								multiple
-								onChange={handleFileChange}
-							/>
+											×
+										</button>
+									</div>
+								);
+							})}
+							<button
+								type="button"
+								className="text-xs text-slate-400 underline decoration-slate-300 underline-offset-4"
+								onClick={workspaceActions.clearAttachments}
+							>
+								Clear all
+							</button>
 						</div>
+					) : null}
+					{workspace.attachmentError ? (
+						<p className="mb-2 text-xs text-rose-300">
+							{workspace.attachmentError}
+						</p>
+					) : null}
+					<label htmlFor="prompt-textarea" className="sr-only">
+						Message
+					</label>
+					<div className="rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)]">
+						<div className="flex items-center justify-between gap-2 px-1 pb-2">
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+									onClick={handlePickFiles}
+									aria-label="Add files"
+								>
+									<AttachmentIcon />
+									<span className="hidden sm:inline">Files</span>
+								</button>
+								<button
+									type="button"
+									aria-pressed={runtimeState.recording}
+									aria-label={
+										runtimeState.recording ? "Stop recording" : "Record audio"
+									}
+									className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+										runtimeState.recording
+											? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+											: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
+									}`}
+									onClick={() => void handleTalkButtonClick()}
+									disabled={workspace.isStreaming}
+								>
+									<MicIcon />
+									{runtimeState.recording ? (
+										<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
+									) : null}
+								</button>
+								<button
+									type="button"
+									aria-pressed={voiceAutoEnabled}
+									aria-label={
+										voiceAutoEnabled
+											? "Disable auto voice playback"
+											: "Enable auto voice playback"
+									}
+									className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs transition ${
+										voiceAutoEnabled
+											? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+											: "border-white/10 bg-slate-900/70 text-slate-200 hover:border-sky-400/50 hover:text-sky-100"
+									}`}
+									onClick={onToggleVoiceAuto}
+								>
+									<SpeakerIcon />
+									<span className="hidden md:inline">
+										{voiceAutoEnabled ? "Voice Auto" : "Voice Off"}
+									</span>
+								</button>
+							</div>
+							<div className="flex items-center gap-2 px-1">
+								{workspace.isStreaming ? (
+									<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
+										<span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
+										Live
+									</span>
+								) : null}
+								<span className="text-[11px] text-slate-400">
+									{composerStatusHint}
+								</span>
+							</div>
+						</div>
+						<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
+							<textarea
+								ref={composerTextareaRef}
+								id="prompt-textarea"
+								className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
+								rows={1}
+								value={workspace.prompt}
+								onChange={(event) =>
+									workspaceActions.updatePrompt(event.target.value)
+								}
+								onPaste={handlePaste}
+								onKeyDown={(event) => {
+									if (event.key === "Enter" && !event.shiftKey) {
+										event.preventDefault();
+										void workspaceActions.sendPrompt();
+									}
+								}}
+								placeholder="Ask Wingman to do something..."
+								style={{ overflowY: "hidden" }}
+							/>
+							<button
+								className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white transition hover:from-cyan-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
+								onClick={() => void workspaceActions.sendPrompt()}
+								type="button"
+								aria-label="Send prompt"
+								title="Send prompt"
+								disabled={!canSendPrompt}
+							>
+								<SendIcon />
+							</button>
+						</div>
+						{voicePlayback.status !== "idle" ? (
+							<div className="mt-2 flex justify-end">
+								<button
+									type="button"
+									className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
+									onClick={onStopVoice}
+								>
+									Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
+								</button>
+							</div>
+						) : null}
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept={FILE_INPUT_ACCEPT}
+							className="hidden"
+							multiple
+							onChange={handleFileChange}
+						/>
 					</div>
 				</div>
-			</section>
-		);
-	}
+			</div>
+		</section>
+	);
+}
 
 type ChatThreadsRailProps = {
 	workspace: WorkspaceState;
@@ -3504,7 +4405,9 @@ function ChatThreadsRail({
 				<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
 					Conversations
 				</p>
-				<span className="text-[11px] text-slate-400">{workspace.threads.length}</span>
+				<span className="text-[11px] text-slate-400">
+					{workspace.threads.length}
+				</span>
 			</div>
 			<div className="mt-2 flex gap-2">
 				<button
@@ -3696,7 +4599,10 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 	const formAgentId = isEditMode
 		? workspace.editTargetAgentId
 		: workspace.createAgentDraft.id.trim();
-	const subAgentCandidates = buildSubAgentCandidates(workspace.agentCatalog, formAgentId);
+	const subAgentCandidates = buildSubAgentCandidates(
+		workspace.agentCatalog,
+		formAgentId,
+	);
 
 	return (
 		<section>
@@ -3744,7 +4650,9 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 							<select
 								className="h-10 w-full appearance-none rounded-xl border border-white/20 bg-slate-950/55 px-3 pr-9 text-sm text-slate-100 outline-none ring-cyan-300/40 transition focus:ring"
 								value={workspace.editTargetAgentId}
-								onChange={(event) => workspaceActions.setEditTargetAgentId(event.target.value)}
+								onChange={(event) =>
+									workspaceActions.setEditTargetAgentId(event.target.value)
+								}
 							>
 								{workspace.agentCatalog.map((agent) => (
 									<option key={agent.id} value={agent.id}>
@@ -3772,28 +4680,38 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 						<Field
 							label="Agent ID"
 							value={workspace.createAgentDraft.id}
-							onChange={(value) => workspaceActions.updateCreateAgentDraft("id", value)}
+							onChange={(value) =>
+								workspaceActions.updateCreateAgentDraft("id", value)
+							}
 						/>
 					)}
 					<Field
 						label="Display Name"
 						value={workspace.createAgentDraft.displayName}
-						onChange={(value) => workspaceActions.updateCreateAgentDraft("displayName", value)}
+						onChange={(value) =>
+							workspaceActions.updateCreateAgentDraft("displayName", value)
+						}
 					/>
 					<Field
 						label="Description"
 						value={workspace.createAgentDraft.description}
-						onChange={(value) => workspaceActions.updateCreateAgentDraft("description", value)}
+						onChange={(value) =>
+							workspaceActions.updateCreateAgentDraft("description", value)
+						}
 					/>
 					<Field
 						label="Model"
 						value={workspace.createAgentDraft.model}
-						onChange={(value) => workspaceActions.updateCreateAgentDraft("model", value)}
+						onChange={(value) =>
+							workspaceActions.updateCreateAgentDraft("model", value)
+						}
 					/>
 					<Field
 						label="Tools (comma-separated)"
 						value={workspace.createAgentDraft.toolsCsv}
-						onChange={(value) => workspaceActions.updateCreateAgentDraft("toolsCsv", value)}
+						onChange={(value) =>
+							workspaceActions.updateCreateAgentDraft("toolsCsv", value)
+						}
 					/>
 					<label className="flex items-center gap-2 rounded-lg border border-white/20 bg-slate-950/50 px-3 py-2 text-xs text-slate-200">
 						<input
@@ -3810,8 +4728,8 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 						<span>Enable promptTraining</span>
 					</label>
 					<p className="-mt-1 text-[11px] text-slate-400">
-						When enabled, this agent can learn from prompt-training feedback so it can improve
-						its performance over time.
+						When enabled, this agent can learn from prompt-training feedback so
+						it can improve its performance over time.
 					</p>
 					<label className="grid gap-1 text-xs text-slate-300">
 						<span>Prompt</span>
@@ -3819,7 +4737,10 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 							className="min-h-24 rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
 							value={workspace.createAgentDraft.prompt}
 							onChange={(event) =>
-								workspaceActions.updateCreateAgentDraft("prompt", event.target.value)
+								workspaceActions.updateCreateAgentDraft(
+									"prompt",
+									event.target.value,
+								)
 							}
 						/>
 					</label>
@@ -3831,28 +4752,40 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 							</span>
 						</div>
 						<p className="mt-1 text-[11px] text-slate-400">
-							Existing agents only. Current edited agent is automatically excluded.
+							Existing agents only. Current edited agent is automatically
+							excluded.
 						</p>
 						<div className="mt-2 max-h-36 space-y-1 overflow-auto pr-1">
 							{subAgentCandidates.length === 0 ? (
-								<p className="text-[11px] text-slate-400">No available agents to link.</p>
+								<p className="text-[11px] text-slate-400">
+									No available agents to link.
+								</p>
 							) : (
 								subAgentCandidates.map((agent) => {
-									const checked = workspace.createAgentDraft.selectedSubAgentIds.includes(agent.id);
+									const checked =
+										workspace.createAgentDraft.selectedSubAgentIds.includes(
+											agent.id,
+										);
 									return (
 										<label
 											key={agent.id}
 											className="flex cursor-pointer items-center justify-between rounded-md border border-white/10 bg-slate-900/70 px-2 py-1.5 text-xs text-slate-200"
 										>
 											<div className="mr-2 min-w-0">
-												<p className="truncate font-semibold">{agent.displayName}</p>
-												<p className="truncate font-mono text-[10px] text-slate-400">{agent.id}</p>
+												<p className="truncate font-semibold">
+													{agent.displayName}
+												</p>
+												<p className="truncate font-mono text-[10px] text-slate-400">
+													{agent.id}
+												</p>
 											</div>
 											<input
 												type="checkbox"
 												className="h-4 w-4 rounded border-white/20 bg-slate-900"
 												checked={checked}
-												onChange={() => workspaceActions.toggleCreateAgentSubAgent(agent.id)}
+												onChange={() =>
+													workspaceActions.toggleCreateAgentSubAgent(agent.id)
+												}
 											/>
 										</label>
 									);
@@ -3874,10 +4807,10 @@ function AgentsScreen({ workspace, workspaceActions }: AgentsScreenProps) {
 						: isEditMode
 							? "Save Agent Changes"
 							: "Create Agent"}
-					</button>
-				</div>
-			</section>
-		);
+				</button>
+			</div>
+		</section>
+	);
 }
 
 type RuntimeScreenProps = {
@@ -3885,6 +4818,8 @@ type RuntimeScreenProps = {
 	runtimeActions: RuntimeActions;
 	workspace: WorkspaceState;
 	workspaceActions: WorkspaceActions;
+	smsBridgeHealth: SmsBridgeHealth;
+	onRunSmsBridgeTest: () => Promise<{ ok: boolean; message: string }>;
 };
 
 function RuntimeScreen({
@@ -3892,9 +4827,13 @@ function RuntimeScreen({
 	runtimeActions,
 	workspace,
 	workspaceActions,
+	smsBridgeHealth,
+	onRunSmsBridgeTest,
 }: RuntimeScreenProps) {
 	const [recordHotkey, setRecordHotkey] = useState(runtimeState.recordHotkey);
-	const [overlayHotkey, setOverlayHotkey] = useState(runtimeState.overlayHotkey);
+	const [overlayHotkey, setOverlayHotkey] = useState(
+		runtimeState.overlayHotkey,
+	);
 	const [quickSendOnRecordHotkey, setQuickSendOnRecordHotkey] = useState(
 		runtimeState.quickSendOnRecordHotkey,
 	);
@@ -3908,14 +4847,20 @@ function RuntimeScreen({
 		text: string;
 		error: boolean;
 	} | null>(null);
-	const [providerDrafts, setProviderDrafts] = useState<Record<string, string>>({});
+	const [providerDrafts, setProviderDrafts] = useState<Record<string, string>>(
+		{},
+	);
 	const [providerFeedback, setProviderFeedback] = useState<{
 		text: string;
 		error: boolean;
 	} | null>(null);
-	const [updatingProviderName, setUpdatingProviderName] = useState<string | null>(null);
-	const [voiceProvider, setVoiceProvider] = useState<VoiceConfig["provider"]>("web_speech");
-	const [voicePolicy, setVoicePolicy] = useState<NonNullable<VoiceConfig["defaultPolicy"]>>("off");
+	const [updatingProviderName, setUpdatingProviderName] = useState<
+		string | null
+	>(null);
+	const [voiceProvider, setVoiceProvider] =
+		useState<VoiceConfig["provider"]>("web_speech");
+	const [voicePolicy, setVoicePolicy] =
+		useState<NonNullable<VoiceConfig["defaultPolicy"]>>("off");
 	const [voiceName, setVoiceName] = useState("");
 	const [voiceLang, setVoiceLang] = useState("");
 	const [voiceRate, setVoiceRate] = useState("");
@@ -3929,9 +4874,23 @@ function RuntimeScreen({
 	const [elevenSpeed, setElevenSpeed] = useState("");
 	const [elevenOutputFormat, setElevenOutputFormat] = useState("");
 	const [elevenLatency, setElevenLatency] = useState("");
-	const [elevenSpeakerBoost, setElevenSpeakerBoost] = useState<boolean | null>(null);
+	const [elevenSpeakerBoost, setElevenSpeakerBoost] = useState<boolean | null>(
+		null,
+	);
 	const [savingVoice, setSavingVoice] = useState(false);
 	const [voiceFeedback, setVoiceFeedback] = useState<{
+		text: string;
+		error: boolean;
+	} | null>(null);
+	const [smsAllowlistDraft, setSmsAllowlistDraft] = useState(() =>
+		formatSmsAllowlist(runtimeState.smsBridgeAllowlist),
+	);
+	const [smsAllowlistFeedback, setSmsAllowlistFeedback] = useState<{
+		text: string;
+		error: boolean;
+	} | null>(null);
+	const [runningSmsBridgeTest, setRunningSmsBridgeTest] = useState(false);
+	const [smsBridgeTestFeedback, setSmsBridgeTestFeedback] = useState<{
 		text: string;
 		error: boolean;
 	} | null>(null);
@@ -3949,6 +4908,10 @@ function RuntimeScreen({
 	}, [runtimeState.quickSendOnRecordHotkey]);
 
 	useEffect(() => {
+		setSmsAllowlistDraft(formatSmsAllowlist(runtimeState.smsBridgeAllowlist));
+	}, [runtimeState.smsBridgeAllowlist]);
+
+	useEffect(() => {
 		const voice = workspace.voiceConfig;
 		if (!voice) return;
 		setVoiceProvider(voice.provider || "web_speech");
@@ -3962,12 +4925,16 @@ function RuntimeScreen({
 			voice.webSpeech?.pitch !== undefined ? String(voice.webSpeech.pitch) : "",
 		);
 		setVoiceVolume(
-			voice.webSpeech?.volume !== undefined ? String(voice.webSpeech.volume) : "",
+			voice.webSpeech?.volume !== undefined
+				? String(voice.webSpeech.volume)
+				: "",
 		);
 		setElevenVoiceId(voice.elevenlabs?.voiceId || "");
 		setElevenModelId(voice.elevenlabs?.modelId || "");
 		setElevenStability(
-			voice.elevenlabs?.stability !== undefined ? String(voice.elevenlabs.stability) : "",
+			voice.elevenlabs?.stability !== undefined
+				? String(voice.elevenlabs.stability)
+				: "",
 		);
 		setElevenSimilarityBoost(
 			voice.elevenlabs?.similarityBoost !== undefined
@@ -3975,10 +4942,14 @@ function RuntimeScreen({
 				: "",
 		);
 		setElevenStyle(
-			voice.elevenlabs?.style !== undefined ? String(voice.elevenlabs.style) : "",
+			voice.elevenlabs?.style !== undefined
+				? String(voice.elevenlabs.style)
+				: "",
 		);
 		setElevenSpeed(
-			voice.elevenlabs?.speed !== undefined ? String(voice.elevenlabs.speed) : "",
+			voice.elevenlabs?.speed !== undefined
+				? String(voice.elevenlabs.speed)
+				: "",
 		);
 		setElevenOutputFormat(voice.elevenlabs?.outputFormat || "");
 		setElevenLatency(
@@ -4001,7 +4972,10 @@ function RuntimeScreen({
 		setHotkeySaveFeedback(
 			ok
 				? { text: "Hotkeys saved.", error: false }
-				: { text: "Failed to save hotkeys. Verify format and try again.", error: true },
+				: {
+						text: "Failed to save hotkeys. Verify format and try again.",
+						error: true,
+					},
 		);
 	}, [overlayHotkey, quickSendOnRecordHotkey, recordHotkey, runtimeActions]);
 
@@ -4019,9 +4993,32 @@ function RuntimeScreen({
 				: {
 						text: "Notification test failed. Check OS notification permissions and retry.",
 						error: true,
-				},
+					},
 		);
 	}, [runtimeActions]);
+
+	const handleSaveSmsAllowlist = useCallback(() => {
+		const parsed = runtimeActions.updateSmsBridgeAllowlist(smsAllowlistDraft);
+		setSmsAllowlistDraft(formatSmsAllowlist(parsed));
+		setSmsAllowlistFeedback({
+			text:
+				parsed.length > 0
+					? `Saved ${parsed.length} allowed contact${parsed.length === 1 ? "" : "s"}.`
+					: "Allowlist cleared. All contacts are allowed.",
+			error: false,
+		});
+	}, [runtimeActions, smsAllowlistDraft]);
+
+	const handleRunSmsBridgeTest = useCallback(async () => {
+		setRunningSmsBridgeTest(true);
+		setSmsBridgeTestFeedback(null);
+		const result = await onRunSmsBridgeTest();
+		setRunningSmsBridgeTest(false);
+		setSmsBridgeTestFeedback({
+			text: result.message,
+			error: !result.ok,
+		});
+	}, [onRunSmsBridgeTest]);
 
 	const parseNumber = useCallback((value: string): number | undefined => {
 		const trimmed = value.trim();
@@ -4035,7 +5032,10 @@ function RuntimeScreen({
 			setUpdatingProviderName(providerName);
 			setProviderFeedback(null);
 			const token = providerDrafts[providerName] || "";
-			const ok = await workspaceActions.saveProviderCredential(providerName, token);
+			const ok = await workspaceActions.saveProviderCredential(
+				providerName,
+				token,
+			);
 			setUpdatingProviderName(null);
 			setProviderFeedback(
 				ok
@@ -4117,7 +5117,8 @@ function RuntimeScreen({
 	]);
 
 	const providerList = useMemo(
-		() => [...workspace.providers].sort((a, b) => a.label.localeCompare(b.label)),
+		() =>
+			[...workspace.providers].sort((a, b) => a.label.localeCompare(b.label)),
 		[workspace.providers],
 	);
 	const configuredProviderCount = providerList.filter(
@@ -4132,34 +5133,63 @@ function RuntimeScreen({
 			<div>
 				<h2 className="text-lg font-semibold">Runtime</h2>
 				<p className="mt-1 text-xs text-slate-300">
-					Native profile: {runtimeState.platform.os}. Manage local runtime behavior and OS integration.
+					Native profile: {runtimeState.platform.os}. Manage local runtime
+					behavior and OS integration.
 				</p>
 			</div>
 
 			<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
 				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
-					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Connection</p>
-					<p className={runtimeState.connected ? "text-sm text-emerald-200" : "text-sm text-rose-200"}>
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+						Connection
+					</p>
+					<p
+						className={
+							runtimeState.connected
+								? "text-sm text-emerald-200"
+								: "text-sm text-rose-200"
+						}
+					>
 						{runtimeState.connected ? "Connected" : "Disconnected"}
 					</p>
 				</div>
 				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
-					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Recording</p>
-					<p className={runtimeState.recording ? "text-sm text-cyan-200" : "text-sm text-slate-200"}>
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+						Recording
+					</p>
+					<p
+						className={
+							runtimeState.recording
+								? "text-sm text-cyan-200"
+								: "text-sm text-slate-200"
+						}
+					>
 						{runtimeState.recording ? "Active" : "Idle"}
 					</p>
 				</div>
 				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
-					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Overlay</p>
-					<p className={runtimeState.overlayVisible ? "text-sm text-cyan-200" : "text-sm text-slate-200"}>
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+						Overlay
+					</p>
+					<p
+						className={
+							runtimeState.overlayVisible
+								? "text-sm text-cyan-200"
+								: "text-sm text-slate-200"
+						}
+					>
 						{runtimeState.overlayVisible ? "Visible" : "Hidden"}
 					</p>
 				</div>
 				<div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
-					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Finish Notification</p>
+					<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+						Finish Notification
+					</p>
 					<p
 						className={
-							runtimeState.notifyOnAgentFinish ? "text-sm text-emerald-200" : "text-sm text-slate-200"
+							runtimeState.notifyOnAgentFinish
+								? "text-sm text-emerald-200"
+								: "text-sm text-slate-200"
 						}
 					>
 						{runtimeState.notifyOnAgentFinish ? "Enabled" : "Disabled"}
@@ -4167,14 +5197,196 @@ function RuntimeScreen({
 				</div>
 			</div>
 
+			{SMS_BRIDGE_AVAILABLE ? (
+				<details
+					className="rounded-xl border border-white/10 bg-slate-950/40 p-3"
+					open
+				>
+					<summary className="cursor-pointer text-sm font-semibold text-slate-100">
+						SMS Bridge (macOS Messages)
+					</summary>
+					<p className="mt-2 text-[11px] text-slate-400">
+						Route inbound macOS Messages through Wingman and send replies back as
+						SMS/iMessage.
+					</p>
+					<label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+						<span>Enable SMS bridge</span>
+						<input
+							type="checkbox"
+							checked={runtimeState.smsBridgeEnabled}
+							onChange={(event) => {
+								runtimeActions.updateSmsBridgeEnabled(event.target.checked);
+								setSmsAllowlistFeedback(null);
+							}}
+						/>
+					</label>
+					<label className="mt-3 grid gap-1 text-xs text-slate-300">
+						<span>Allowlist (optional, one phone/email per line)</span>
+						<textarea
+							className="min-h-[96px] rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 font-mono text-xs text-slate-100 outline-none ring-cyan-300/40 focus:ring"
+							value={smsAllowlistDraft}
+							onChange={(event) => {
+								setSmsAllowlistDraft(event.target.value);
+								setSmsAllowlistFeedback(null);
+							}}
+							placeholder={"+15555550000\nfriend@example.com"}
+						/>
+					</label>
+					<div className="mt-2 flex flex-wrap gap-2">
+						<button
+							type="button"
+							className="rounded-full border border-white/20 px-3 py-1.5 text-xs"
+							onClick={handleSaveSmsAllowlist}
+						>
+							Save Allowlist
+						</button>
+						<button
+							type="button"
+							className="rounded-full border border-white/20 px-3 py-1.5 text-xs"
+							onClick={() => {
+								setSmsAllowlistDraft("");
+								const parsed = runtimeActions.updateSmsBridgeAllowlist("");
+								setSmsAllowlistFeedback({
+									text:
+										parsed.length > 0
+											? "Allowlist reset."
+											: "Allowlist cleared. All contacts are allowed.",
+									error: false,
+								});
+							}}
+						>
+							Clear
+						</button>
+						<button
+							type="button"
+							className="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100"
+							onClick={() => void handleRunSmsBridgeTest()}
+							disabled={runningSmsBridgeTest}
+						>
+							{runningSmsBridgeTest ? "Testing..." : "Run Bridge Test"}
+						</button>
+					</div>
+					{smsAllowlistFeedback ? (
+						<p
+							className={`mt-2 text-xs ${
+								smsAllowlistFeedback.error
+									? "text-rose-300"
+									: "text-emerald-300"
+							}`}
+						>
+							{smsAllowlistFeedback.text}
+						</p>
+					) : null}
+					{smsBridgeTestFeedback ? (
+						<p
+							className={`mt-2 text-xs ${
+								smsBridgeTestFeedback.error
+									? "text-rose-300"
+									: "text-emerald-300"
+							}`}
+						>
+							{smsBridgeTestFeedback.text}
+						</p>
+					) : null}
+					<div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+						<div className="rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 text-xs text-slate-300">
+							<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+								Bridge Mode
+							</p>
+							<p className="mt-1 text-sm text-slate-100">
+								{smsBridgeHealth.mode}
+							</p>
+						</div>
+						<div className="rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 text-xs text-slate-300">
+							<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+								Pending Replies
+							</p>
+							<p className="mt-1 text-sm text-slate-100">
+								{smsBridgeHealth.pendingReplyCount}
+							</p>
+						</div>
+						<div className="rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 text-xs text-slate-300">
+							<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+								Inbound / Skipped
+							</p>
+							<p className="mt-1 text-sm text-slate-100">
+								{smsBridgeHealth.processedInboundCount} /{" "}
+								{smsBridgeHealth.skippedInboundCount}
+							</p>
+						</div>
+						<div className="rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 text-xs text-slate-300">
+							<p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+								Command / Agent Replies
+							</p>
+							<p className="mt-1 text-sm text-slate-100">
+								{smsBridgeHealth.commandReplyCount} /{" "}
+								{smsBridgeHealth.agentReplyCount}
+							</p>
+						</div>
+					</div>
+					<div className="mt-2 grid gap-1 text-[11px] text-slate-400 sm:grid-cols-2">
+						<p>
+							Last poll:{" "}
+							<span className="font-mono text-slate-300">
+								{smsBridgeHealth.lastPollAt
+									? new Date(smsBridgeHealth.lastPollAt).toLocaleTimeString()
+									: "n/a"}
+							</span>
+						</p>
+						<p>
+							Last inbound:{" "}
+							<span className="font-mono text-slate-300">
+								{smsBridgeHealth.lastInboundAt
+									? new Date(smsBridgeHealth.lastInboundAt).toLocaleTimeString()
+									: "n/a"}
+							</span>
+						</p>
+						<p>
+							Last outbound:{" "}
+							<span className="font-mono text-slate-300">
+								{smsBridgeHealth.lastOutboundAt
+									? new Date(smsBridgeHealth.lastOutboundAt).toLocaleTimeString()
+									: "n/a"}
+							</span>
+						</p>
+						<p>
+							Last error:{" "}
+							<span className="font-mono text-slate-300">
+								{smsBridgeHealth.lastError || "none"}
+							</span>
+						</p>
+					</div>
+					<div className="mt-2 max-h-36 space-y-1 overflow-auto rounded-lg border border-white/10 bg-slate-900/55 p-2 text-[11px] text-slate-300">
+						{smsBridgeHealth.logLines.length > 0 ? (
+							smsBridgeHealth.logLines.map((line, index) => (
+								<div key={`${line}-${index}`} className="font-mono">
+									{line}
+								</div>
+							))
+						) : (
+							<div className="text-slate-400">No bridge events yet.</div>
+						)}
+					</div>
+					<p className="mt-2 text-[11px] text-slate-400">
+						Requires Full Disk Access (Messages database) and Automation
+						permission for Messages.
+					</p>
+				</details>
+			) : null}
+
 			<div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-				<p className="text-sm font-semibold text-slate-100">Current Transcript</p>
+				<p className="text-sm font-semibold text-slate-100">
+					Current Transcript
+				</p>
 				<p className="mt-2 rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 font-mono text-xs text-slate-100">
 					{runtimeState.transcript || "(empty)"}
 				</p>
 			</div>
 
-			<details className="rounded-xl border border-white/10 bg-slate-950/40 p-3" open>
+			<details
+				className="rounded-xl border border-white/10 bg-slate-950/40 p-3"
+				open
+			>
 				<summary className="cursor-pointer text-sm font-semibold text-slate-100">
 					Hotkeys
 				</summary>
@@ -4208,7 +5420,9 @@ function RuntimeScreen({
 							setHotkeySaveFeedback(null);
 						}}
 					/>
-					<span>Quick-send transcript when stop is triggered by the record hotkey</span>
+					<span>
+						Quick-send transcript when stop is triggered by the record hotkey
+					</span>
 				</label>
 				<button
 					type="button"
@@ -4229,15 +5443,25 @@ function RuntimeScreen({
 				) : null}
 				<p className="mt-1 text-[11px] text-slate-400">
 					Active shortcuts:{" "}
-					<span className="font-mono text-slate-300">{runtimeState.recordHotkey}</span> (record),{" "}
-					<span className="font-mono text-slate-300">{runtimeState.overlayHotkey}</span> (overlay)
+					<span className="font-mono text-slate-300">
+						{runtimeState.recordHotkey}
+					</span>{" "}
+					(record),{" "}
+					<span className="font-mono text-slate-300">
+						{runtimeState.overlayHotkey}
+					</span>{" "}
+					(overlay)
 				</p>
 				<p className="mt-2 text-[11px] text-slate-400">
 					Use Tauri accelerator syntax (example:{" "}
-					<span className="font-mono text-slate-300">CommandOrControl+Shift+R</span>).
+					<span className="font-mono text-slate-300">
+						CommandOrControl+Shift+R
+					</span>
+					).
 				</p>
 				<p className="mt-1 text-[11px] text-slate-400">
-					Overlay visibility is controlled by recording start/stop and the overlay hotkey.
+					Overlay visibility is controlled by recording start/stop and the
+					overlay hotkey.
 				</p>
 			</details>
 
@@ -4266,7 +5490,9 @@ function RuntimeScreen({
 				{workspace.credentialsPath ? (
 					<p className="mt-1 break-all text-[11px] text-slate-400">
 						Credentials path:{" "}
-						<span className="font-mono text-slate-300">{workspace.credentialsPath}</span>
+						<span className="font-mono text-slate-300">
+							{workspace.credentialsPath}
+						</span>
 					</p>
 				) : null}
 				<div className="mt-2 space-y-2">
@@ -4319,7 +5545,9 @@ function RuntimeScreen({
 										onClick={() => void handleSaveProvider(provider.name)}
 										disabled={updatingProviderName === provider.name}
 									>
-										{updatingProviderName === provider.name ? "Saving..." : "Save"}
+										{updatingProviderName === provider.name
+											? "Saving..."
+											: "Save"}
 									</button>
 									<button
 										type="button"
@@ -4347,7 +5575,8 @@ function RuntimeScreen({
 
 			<details className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
 				<summary className="cursor-pointer text-sm font-semibold text-slate-100">
-					Voice ({voiceProvider === "web_speech" ? "Web Speech" : "ElevenLabs"} · {voicePolicy})
+					Voice ({voiceProvider === "web_speech" ? "Web Speech" : "ElevenLabs"}{" "}
+					· {voicePolicy})
 				</summary>
 				<p className="mt-2 text-[11px] text-slate-400">
 					Set default text-to-speech behavior for chat playback.
@@ -4358,7 +5587,9 @@ function RuntimeScreen({
 						<select
 							className="rounded-lg border border-white/20 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
 							value={voiceProvider}
-							onChange={(event) => setVoiceProvider(event.target.value as VoiceConfig["provider"])}
+							onChange={(event) =>
+								setVoiceProvider(event.target.value as VoiceConfig["provider"])
+							}
 						>
 							<option value="web_speech">Web Speech</option>
 							<option value="elevenlabs">ElevenLabs</option>
@@ -4371,7 +5602,9 @@ function RuntimeScreen({
 							value={voicePolicy}
 							onChange={(event) =>
 								setVoicePolicy(
-									event.target.value as NonNullable<VoiceConfig["defaultPolicy"]>,
+									event.target.value as NonNullable<
+										VoiceConfig["defaultPolicy"]
+									>,
 								)
 							}
 						>
@@ -4383,31 +5616,63 @@ function RuntimeScreen({
 				</div>
 				{voiceProvider === "web_speech" ? (
 					<div className="mt-2 grid gap-2 sm:grid-cols-2">
-						<Field label="Voice Name" value={voiceName} onChange={setVoiceName} />
+						<Field
+							label="Voice Name"
+							value={voiceName}
+							onChange={setVoiceName}
+						/>
 						<Field label="Language" value={voiceLang} onChange={setVoiceLang} />
 						<Field label="Rate" value={voiceRate} onChange={setVoiceRate} />
 						<Field label="Pitch" value={voicePitch} onChange={setVoicePitch} />
-						<Field label="Volume" value={voiceVolume} onChange={setVoiceVolume} />
+						<Field
+							label="Volume"
+							value={voiceVolume}
+							onChange={setVoiceVolume}
+						/>
 					</div>
 				) : null}
 				{voiceProvider === "elevenlabs" ? (
 					<div className="mt-2 grid gap-2 sm:grid-cols-2">
-						<Field label="Voice ID" value={elevenVoiceId} onChange={setElevenVoiceId} />
-						<Field label="Model ID" value={elevenModelId} onChange={setElevenModelId} />
-						<Field label="Stability" value={elevenStability} onChange={setElevenStability} />
+						<Field
+							label="Voice ID"
+							value={elevenVoiceId}
+							onChange={setElevenVoiceId}
+						/>
+						<Field
+							label="Model ID"
+							value={elevenModelId}
+							onChange={setElevenModelId}
+						/>
+						<Field
+							label="Stability"
+							value={elevenStability}
+							onChange={setElevenStability}
+						/>
 						<Field
 							label="Similarity Boost"
 							value={elevenSimilarityBoost}
 							onChange={setElevenSimilarityBoost}
 						/>
-						<Field label="Style" value={elevenStyle} onChange={setElevenStyle} />
-						<Field label="Speed" value={elevenSpeed} onChange={setElevenSpeed} />
+						<Field
+							label="Style"
+							value={elevenStyle}
+							onChange={setElevenStyle}
+						/>
+						<Field
+							label="Speed"
+							value={elevenSpeed}
+							onChange={setElevenSpeed}
+						/>
 						<Field
 							label="Output Format"
 							value={elevenOutputFormat}
 							onChange={setElevenOutputFormat}
 						/>
-						<Field label="Streaming Latency" value={elevenLatency} onChange={setElevenLatency} />
+						<Field
+							label="Streaming Latency"
+							value={elevenLatency}
+							onChange={setElevenLatency}
+						/>
 						<label className="flex items-center gap-2 rounded-lg border border-white/20 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
 							<input
 								type="checkbox"
@@ -4439,9 +5704,16 @@ function RuntimeScreen({
 				) : null}
 			</details>
 
-			<details className="rounded-xl border border-white/10 bg-slate-950/40 p-3" open>
+			<details
+				className="rounded-xl border border-white/10 bg-slate-950/40 p-3"
+				open
+			>
 				<summary className="cursor-pointer text-sm font-semibold text-slate-100">
-					Permissions ({notificationPermission ? statusLabel(notificationPermission.status) : "Unknown"})
+					Permissions (
+					{notificationPermission
+						? statusLabel(notificationPermission.status)
+						: "Unknown"}
+					)
 				</summary>
 				<p className="mt-2 text-[11px] text-slate-400">
 					Use these shortcuts to jump directly to OS privacy settings.
@@ -4463,7 +5735,9 @@ function RuntimeScreen({
 									<button
 										type="button"
 										className="rounded-full border border-white/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-100 transition hover:border-cyan-300/50"
-										onClick={() => void runtimeActions.openPermissionSettings(entry.id)}
+										onClick={() =>
+											void runtimeActions.openPermissionSettings(entry.id)
+										}
 									>
 										Open Settings
 									</button>
@@ -4496,7 +5770,9 @@ function RuntimeScreen({
 						{notificationFeedback.text}
 					</p>
 				) : null}
-				<p className="mt-2 text-[11px] text-slate-400">{runtimeState.permissions.note}</p>
+				<p className="mt-2 text-[11px] text-slate-400">
+					{runtimeState.permissions.note}
+				</p>
 			</details>
 		</section>
 	);
@@ -4513,7 +5789,10 @@ function EventsScreen({ workspace }: EventsScreenProps) {
 			<div className="mt-3 max-h-80 space-y-2 overflow-auto text-xs">
 				{workspace.eventLog.length ? (
 					workspace.eventLog.map((entry, index) => (
-						<div key={`${entry}-${index}`} className="rounded-lg border border-white/10 bg-slate-950/50 px-2 py-1 text-slate-300">
+						<div
+							key={`${entry}-${index}`}
+							className="rounded-lg border border-white/10 bg-slate-950/50 px-2 py-1 text-slate-300"
+						>
 							{entry}
 						</div>
 					))
@@ -4531,22 +5810,35 @@ function MainView({
 	workspace,
 	activeThread,
 	workspaceActions,
+	smsBridgeHealth,
+	onRunSmsBridgeTest,
 	voiceAutoEnabled,
 	voicePlayback,
 	onToggleVoiceAuto,
 	onSpeakVoice,
 	onStopVoice,
 }: MainViewProps) {
-	const resolvedUi = useMemo(() => resolveGatewayUiUrl(runtimeState.settings), [runtimeState.settings]);
+	const resolvedUi = useMemo(
+		() => resolveGatewayUiUrl(runtimeState.settings),
+		[runtimeState.settings],
+	);
 	const location = useLocation();
 	const navigate = useNavigate();
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const lastFailureRedirectRef = useRef<string | null>(null);
 	const navItems: MainNavItem[] = [
-		{ path: "/gateway", label: "Gateway", description: "Connection + settings" },
+		{
+			path: "/gateway",
+			label: "Gateway",
+			description: "Connection + settings",
+		},
 		{ path: "/chat", label: "Chat", description: "Sessions and messages" },
 		{ path: "/agents", label: "Agents", description: "Create and inspect" },
-			{ path: "/runtime", label: "Runtime", description: "Overlay + hotkeys settings" },
+		{
+			path: "/runtime",
+			label: "Runtime",
+			description: "Overlay + hotkeys settings",
+		},
 		{ path: "/events", label: "Events", description: "Activity feed" },
 	];
 
@@ -4567,7 +5859,10 @@ function MainView({
 
 	useEffect(() => {
 		if (
-			!shouldRouteToGatewayOnFailure(workspace.connectionStatus, workspace.connectionMessage)
+			!shouldRouteToGatewayOnFailure(
+				workspace.connectionStatus,
+				workspace.connectionMessage,
+			)
 		) {
 			return;
 		}
@@ -4604,7 +5899,8 @@ function MainView({
 						</p>
 						<h1 className="text-3xl font-semibold">Gateway Workspace</h1>
 						<p className="mt-2 text-sm text-slate-300">
-							Focused desktop experience for sessions, agent chats, and local voice capture.
+							Focused desktop experience for sessions, agent chats, and local
+							voice capture.
 						</p>
 						{workspaceLoadingTasks.length > 0 ? (
 							<div className="mt-3 flex flex-wrap items-center gap-2">
@@ -4643,7 +5939,9 @@ function MainView({
 					<aside className="hidden lg:block">
 						<section className="sticky top-6 rounded-2xl border border-white/10 bg-slate-900/70 p-4 backdrop-blur">
 							<h2 className="text-lg font-semibold">Sections</h2>
-							<p className="mt-1 text-xs text-slate-300">Two-column desktop layout.</p>
+							<p className="mt-1 text-xs text-slate-300">
+								Two-column desktop layout.
+							</p>
 							<MainSidebarNav items={navItems} />
 							{showThreadRail ? (
 								<ChatThreadsRail
@@ -4687,7 +5985,12 @@ function MainView({
 							/>
 							<Route
 								path="/agents"
-								element={<AgentsScreen workspace={workspace} workspaceActions={workspaceActions} />}
+								element={
+									<AgentsScreen
+										workspace={workspace}
+										workspaceActions={workspaceActions}
+									/>
+								}
 							/>
 							<Route
 								path="/runtime"
@@ -4697,10 +6000,15 @@ function MainView({
 										runtimeActions={runtimeActions}
 										workspace={workspace}
 										workspaceActions={workspaceActions}
+										smsBridgeHealth={smsBridgeHealth}
+										onRunSmsBridgeTest={onRunSmsBridgeTest}
 									/>
 								}
 							/>
-							<Route path="/events" element={<EventsScreen workspace={workspace} />} />
+							<Route
+								path="/events"
+								element={<EventsScreen workspace={workspace} />}
+							/>
 							<Route path="*" element={<Navigate to="/chat" replace />} />
 						</Routes>
 					</main>
@@ -4725,8 +6033,13 @@ function MainView({
 									Close
 								</button>
 							</div>
-							<p className="text-xs text-slate-300">Navigation for smaller screens.</p>
-							<MainSidebarNav items={navItems} onNavigate={() => setMobileMenuOpen(false)} />
+							<p className="text-xs text-slate-300">
+								Navigation for smaller screens.
+							</p>
+							<MainSidebarNav
+								items={navItems}
+								onNavigate={() => setMobileMenuOpen(false)}
+							/>
 							{showThreadRail ? (
 								<ChatThreadsRail
 									workspace={workspace}
@@ -4775,7 +6088,9 @@ function MessageCard({
 	return (
 		<div
 			className={`rounded-2xl border p-3 ${
-				isUser ? "border-cyan-400/35 bg-cyan-500/10" : "border-white/10 bg-slate-950/60"
+				isUser
+					? "border-cyan-400/35 bg-cyan-500/10"
+					: "border-white/10 bg-slate-950/60"
 			}`}
 		>
 			<div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
@@ -4837,7 +6152,9 @@ function MessageCard({
 												? "File attachment"
 												: "Image attachment")}
 								</p>
-								{meta ? <p className="mt-0.5 text-[11px] text-slate-400">{meta}</p> : null}
+								{meta ? (
+									<p className="mt-0.5 text-[11px] text-slate-400">{meta}</p>
+								) : null}
 								{!isFile && !isAudio && attachment.dataUrl ? (
 									<img
 										src={attachment.dataUrl}
@@ -4846,15 +6163,21 @@ function MessageCard({
 									/>
 								) : null}
 								{isAudio && attachment.dataUrl ? (
-									<audio className="mt-2 w-full" controls src={attachment.dataUrl}>
+									<audio
+										className="mt-2 w-full"
+										controls
+										src={attachment.dataUrl}
+									>
 										<track kind="captions" />
 									</audio>
 								) : null}
-									{isFile && !isPdfAttachment(attachment) && attachment.textContent ? (
-										<p className="mt-2 whitespace-pre-wrap rounded-md border border-white/10 bg-slate-950/60 p-2 text-[11px] text-slate-300">
-											{clipFilePreview(attachment.textContent)}
-										</p>
-									) : null}
+								{isFile &&
+								!isPdfAttachment(attachment) &&
+								attachment.textContent ? (
+									<p className="mt-2 whitespace-pre-wrap rounded-md border border-white/10 bg-slate-950/60 p-2 text-[11px] text-slate-300">
+										{clipFilePreview(attachment.textContent)}
+									</p>
+								) : null}
 							</div>
 						);
 					})}
@@ -4869,7 +6192,9 @@ function MessageCard({
 
 			{message.thinkingEvents?.length ? (
 				<div className="mt-3 rounded-lg border border-white/10 bg-slate-900/70 px-2 py-2 text-xs text-slate-300">
-					<p className="mb-1 uppercase tracking-[0.15em] text-slate-400">Thinking</p>
+					<p className="mb-1 uppercase tracking-[0.15em] text-slate-400">
+						Thinking
+					</p>
 					{message.thinkingEvents.map((event) => (
 						<p key={event.id} className="whitespace-pre-wrap">
 							{event.content}
@@ -4897,16 +6222,19 @@ type OverlayProps = {
 	canUseWebSpeechRecognition: boolean;
 };
 
-function OverlayView({ state, actions, canUseWebSpeechRecognition }: OverlayProps) {
+function OverlayView({
+	state,
+	actions,
+	canUseWebSpeechRecognition,
+}: OverlayProps) {
 	const hasTranscript = state.transcript.trim().length > 0;
-	const overlayStatusMessage =
-		state.statusIsError
-			? state.statusMessage
-			: state.recording
-				? "Listening for voice input."
-				: hasTranscript
-					? "Review and edit transcript, then send to chat."
-					: "Press Start to begin.";
+	const overlayStatusMessage = state.statusIsError
+		? state.statusMessage
+		: state.recording
+			? "Listening for voice input."
+			: hasTranscript
+				? "Review and edit transcript, then send to chat."
+				: "Press Start to begin.";
 
 	if (!state.overlayVisible) {
 		return (
@@ -4914,13 +6242,24 @@ function OverlayView({ state, actions, canUseWebSpeechRecognition }: OverlayProp
 				<div className="absolute inset-0 bg-black/55" />
 				<div className="relative z-10 w-full max-w-2xl rounded-3xl border border-white/20 bg-slate-900/85 p-6 backdrop-blur">
 					<div className="mb-3 flex items-center justify-between">
-						<span className="rounded-full border border-white/25 px-3 py-1 text-xs">Wingman AI</span>
-						<span className="rounded-full border border-white/25 px-3 py-1 text-xs">Idle</span>
+						<span className="rounded-full border border-white/25 px-3 py-1 text-xs">
+							Wingman AI
+						</span>
+						<span className="rounded-full border border-white/25 px-3 py-1 text-xs">
+							Idle
+						</span>
 					</div>
 					<h2 className="text-3xl font-semibold">Overlay Ready</h2>
-					<p className="mt-2 text-sm text-slate-300">Use tray action <span className="font-mono">Start Recording</span> to show active capture.</p>
+					<p className="mt-2 text-sm text-slate-300">
+						Use tray action <span className="font-mono">Start Recording</span>{" "}
+						to show active capture.
+					</p>
 					<div className="mt-4">
-						<button className="rounded-full border border-white/25 px-4 py-2 text-sm" onClick={() => void actions.hideOverlay()} type="button">
+						<button
+							className="rounded-full border border-white/25 px-4 py-2 text-sm"
+							onClick={() => void actions.hideOverlay()}
+							type="button"
+						>
 							Close
 						</button>
 					</div>
@@ -4934,15 +6273,23 @@ function OverlayView({ state, actions, canUseWebSpeechRecognition }: OverlayProp
 			<div className="absolute inset-0 bg-black/55" />
 			<div className="relative z-10 w-full max-w-4xl rounded-3xl border border-white/20 bg-slate-900/85 p-6 backdrop-blur">
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-					<span className="rounded-full border border-white/25 px-3 py-1 text-xs">Wingman AI</span>
-					<span className={`rounded-full border px-3 py-1 text-xs ${state.recording ? "border-emerald-400/50 text-emerald-300" : "border-white/25 text-slate-200"}`}>
+					<span className="rounded-full border border-white/25 px-3 py-1 text-xs">
+						Wingman AI
+					</span>
+					<span
+						className={`rounded-full border px-3 py-1 text-xs ${state.recording ? "border-emerald-400/50 text-emerald-300" : "border-white/25 text-slate-200"}`}
+					>
 						{state.recording ? "Listening" : "Idle"}
 					</span>
 				</div>
 
-				<h2 className="text-3xl font-semibold">{state.recording ? "Listening..." : "Review transcript"}</h2>
+				<h2 className="text-3xl font-semibold">
+					{state.recording ? "Listening..." : "Review transcript"}
+				</h2>
 				<p className="mt-2 text-sm text-slate-300">{overlayStatusMessage}</p>
-				<p className="mt-1 text-sm text-slate-300">Recognizer: {state.recognitionMessage}</p>
+				<p className="mt-1 text-sm text-slate-300">
+					Recognizer: {state.recognitionMessage}
+				</p>
 				{state.recording && !state.recognitionActive ? (
 					<p className="mt-1 text-xs text-slate-300">
 						{canUseWebSpeechRecognition
@@ -4955,14 +6302,20 @@ function OverlayView({ state, actions, canUseWebSpeechRecognition }: OverlayProp
 					className="mt-4 min-h-56 w-full resize-y rounded-2xl border border-white/20 bg-slate-950/60 p-4 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:ring"
 					placeholder="Transcript will appear here..."
 					value={state.transcript}
-					onChange={(event) => void actions.updateTranscript(event.target.value)}
+					onChange={(event) =>
+						void actions.updateTranscript(event.target.value)
+					}
 				/>
 
 				<div className="mt-4 flex flex-wrap gap-2">
 					<button
 						className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
 						onClick={() => {
-							if (state.recording && !state.recognitionActive && canUseWebSpeechRecognition) {
+							if (
+								state.recording &&
+								!state.recognitionActive &&
+								canUseWebSpeechRecognition
+							) {
 								void actions.startRecognition();
 								return;
 							}
@@ -5011,8 +6364,8 @@ function OverlayView({ state, actions, canUseWebSpeechRecognition }: OverlayProp
 					</button>
 				</div>
 				<p className="mt-3 text-[11px] text-slate-400">
-					Send To Chat targets the active session in the main desktop window.
-					If no session is active, a new one is created for the selected agent.
+					Send To Chat targets the active session in the main desktop window. If
+					no session is active, a new one is created for the selected agent.
 				</p>
 			</div>
 			{shouldShowTranscriptionFire(state.recording) ? (
@@ -5051,31 +6404,35 @@ type ConnectionBadgeProps = {
 	runtimeDetail?: string;
 };
 
-function ConnectionBadge({ status, detail, runtimeDetail }: ConnectionBadgeProps) {
+function ConnectionBadge({
+	status,
+	detail,
+	runtimeDetail,
+}: ConnectionBadgeProps) {
 	const palette =
 		status === "connected"
 			? {
-				border: "border-emerald-400/35",
-				bg: "bg-emerald-500/12",
-				text: "text-emerald-200",
-				dot: "bg-emerald-300",
-				label: "Connected",
-			}
+					border: "border-emerald-400/35",
+					bg: "bg-emerald-500/12",
+					text: "text-emerald-200",
+					dot: "bg-emerald-300",
+					label: "Connected",
+				}
 			: status === "connecting"
 				? {
-					border: "border-amber-400/35",
-					bg: "bg-amber-500/12",
-					text: "text-amber-200",
-					dot: "bg-amber-300",
-					label: "Connecting",
-				}
+						border: "border-amber-400/35",
+						bg: "bg-amber-500/12",
+						text: "text-amber-200",
+						dot: "bg-amber-300",
+						label: "Connecting",
+					}
 				: {
-					border: "border-rose-300/45",
-					bg: "bg-rose-400/12",
-					text: "text-rose-200",
-					dot: "bg-rose-300",
-					label: "Disconnected",
-				};
+						border: "border-rose-300/45",
+						bg: "bg-rose-400/12",
+						text: "text-rose-200",
+						dot: "bg-rose-300",
+						label: "Disconnected",
+					};
 	return (
 		<div
 			className={`min-w-44 rounded-2xl border px-3 py-2 ${palette.border} ${palette.bg} ${palette.text}`}

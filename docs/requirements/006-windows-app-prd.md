@@ -143,6 +143,7 @@ Current implementation status in this repository:
 - Desktop app supports a custom user-defined node name for node mode registration
 - Desktop node handlers currently service `system.notify` and `system.run`
 - Provider + voice settings are configurable in desktop runtime UI
+- macOS runtime now includes an optional native Messages SMS bridge (allowlist + health telemetry) using gateway `/api/sms/messages`
 - Chat supports manual voice playback and per-session auto-speak toggle
 - Rust tray/state scaffolding exists
 - OS adapter layer exists with macOS-first implementation

@@ -131,6 +131,30 @@ describe("gateway HTTP security", () => {
 		);
 	});
 
+	it("allows tauri loopback origin preflight for desktop clients", async () => {
+		const server = createGateway({
+			host: "127.0.0.1",
+			port: 18789,
+			auth: { mode: "token", token: "test-token" },
+			requireAuth: true,
+		});
+		const internals = getGatewayInternals(server);
+
+		const allowed = await internals.handleUiRequest(
+			new Request("http://127.0.0.1:18789/api/providers", {
+				method: "OPTIONS",
+				headers: {
+					Origin: "tauri://localhost",
+					"Access-Control-Request-Method": "GET",
+				},
+			}),
+		);
+		expect(allowed.status).toBe(204);
+		expect(allowed.headers.get("access-control-allow-origin")).toBe(
+			"tauri://localhost",
+		);
+	});
+
 	it("does not trust tailscale identity headers on non-loopback hosts", () => {
 		const server = createGateway({
 			host: "0.0.0.0",

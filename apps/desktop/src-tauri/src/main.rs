@@ -3,6 +3,7 @@
 mod app_logic;
 mod commands;
 mod hotkeys;
+mod messages_bridge;
 mod overlay;
 mod platform;
 mod speech;
@@ -62,7 +63,10 @@ fn main() {
             commands::open_permission_settings,
             commands::send_notification,
             commands::send_test_notification,
-            commands::run_system_command
+            commands::run_system_command,
+            messages_bridge::get_macos_messages_latest_row_id,
+            messages_bridge::poll_macos_messages,
+            messages_bridge::send_macos_message
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Wingman desktop companion")

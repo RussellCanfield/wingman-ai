@@ -1,8 +1,8 @@
 # PRD-003: Wingman macOS App
 
-**Version:** 1.2
+**Version:** 1.4
 **Status:** In Progress
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-18
 
 ---
 
@@ -51,6 +51,12 @@ provides macOS capabilities on-demand.
 - Full-screen overlay appears on the active display while recording
 - Overlay shows a live transcript in a quick-input editor so the user can edit before sending
 - Voice input requires Microphone + Speech Recognition permissions
+
+### SMS Bridge (Future State)
+- SMS bridge is currently disabled in desktop runtime while reliability hardening is in progress
+- Runtime SMS controls and health telemetry are hidden from the current desktop UI
+- Planned implementation remains a native macOS Messages bridge (`~/Library/Messages/chat.db` + outbound send bridge)
+- Requires Full Disk Access (Messages DB) and Automation permission for Messages when re-enabled
 
 ### Permissions Ownership (TCC)
 The app owns TCC prompts and tracks permission status for:

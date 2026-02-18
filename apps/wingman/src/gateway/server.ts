@@ -28,6 +28,7 @@ import { createNodeApprovalStore, handleNodesApi } from "./http/nodes.js";
 import { handleProvidersApi } from "./http/providers.js";
 import { createRoutineStore, handleRoutinesApi } from "./http/routines.js";
 import { handleSessionsApi } from "./http/sessions.js";
+import { createSmsPolicyStateStore, handleSmsApi } from "./http/sms.js";
 import type { GatewayHttpContext } from "./http/types.js";
 import { handleVoiceApi } from "./http/voice.js";
 import {
@@ -40,8 +41,8 @@ import { GatewayRouter } from "./router.js";
 import type {
 	AgentCancelPayload,
 	AgentRequestPayload,
-	BroadcastPayload,
 	BroadcastGroup,
+	BroadcastPayload,
 	DirectPayload,
 	ErrorPayload,
 	GatewayAuthConfig,
@@ -177,7 +178,10 @@ export function isGatewayOriginAllowed(params: {
 		return false;
 	}
 
-	if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") {
+	const isHttpOriginProtocol =
+		originUrl.protocol === "http:" || originUrl.protocol === "https:";
+	const isTauriOriginProtocol = originUrl.protocol === "tauri:";
+	if (!isHttpOriginProtocol && !isTauriOriginProtocol) {
 		return false;
 	}
 
@@ -188,6 +192,11 @@ export function isGatewayOriginAllowed(params: {
 	// Keep development and local desktop flows working across loopback origins.
 	if (isLoopbackHostname(originHost) && isLoopbackHostname(requestHost)) {
 		return true;
+	}
+
+	// Tauri origins are only trusted for loopback-hosted gateways.
+	if (!isHttpOriginProtocol) {
+		return false;
 	}
 
 	if (!originHost || originHost !== requestHost) {
@@ -278,6 +287,7 @@ export class GatewayServer {
 	private webhookStore: ReturnType<typeof createWebhookStore>;
 	private routineStore: ReturnType<typeof createRoutineStore>;
 	private nodeApprovalStore: ReturnType<typeof createNodeApprovalStore>;
+	private smsPolicyStore: ReturnType<typeof createSmsPolicyStateStore>;
 	private internalHooks: InternalHookRegistry | null = null;
 	private discordAdapter: DiscordGatewayAdapter | null = null;
 	private sessionSubscriptions: Map<string, Set<GatewaySocket>> = new Map();
@@ -312,6 +322,9 @@ export class GatewayServer {
 		this.webhookStore = createWebhookStore(() => this.resolveConfigDirPath());
 		this.routineStore = createRoutineStore(() => this.resolveConfigDirPath());
 		this.nodeApprovalStore = createNodeApprovalStore(() =>
+			this.resolveConfigDirPath(),
+		);
+		this.smsPolicyStore = createSmsPolicyStateStore(() =>
 			this.resolveConfigDirPath(),
 		);
 
@@ -1158,8 +1171,7 @@ export class GatewayServer {
 			nodeInvoker: (request) => this.invokeNodeTool(ws, request),
 			nodeDefaultTargetClientId:
 				ws.data.clientType === "desktop" ? ws.data.clientId : undefined,
-			nodeConnectedIdsProvider: () =>
-				this.listConnectedNodeIdsForRequester(ws),
+			nodeConnectedIdsProvider: () => this.listConnectedNodeIdsForRequester(ws),
 			nodeConnectedTargetsProvider: () =>
 				this.listConnectedNodeTargetsForRequester(ws),
 		});
@@ -1918,7 +1930,8 @@ export class GatewayServer {
 			name: node.name,
 			capabilities: Array.isArray(node.capabilities)
 				? node.capabilities.filter(
-						(capability): capability is string => typeof capability === "string",
+						(capability): capability is string =>
+							typeof capability === "string",
 					)
 				: undefined,
 		}));
@@ -2841,6 +2854,7 @@ export class GatewayServer {
 			const apiResponse =
 				(await handleWebhooksApi(ctx, this.webhookStore, req, url)) ||
 				(await handleRoutinesApi(ctx, this.routineStore, req, url)) ||
+				(await handleSmsApi(ctx, this.smsPolicyStore, req, url)) ||
 				(await handleNodesApi(
 					ctx,
 					this.nodeManager,
