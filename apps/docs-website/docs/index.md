@@ -32,7 +32,7 @@ features:
   - title: Desktop Companion app
     details: Use the native desktop companion for tray controls, overlay capture, and chat workflows connected to your gateway sessions.
   - title: Extensible tools + skills
-    details: Add MCP servers, install community skills, and wire hooks for pre/post tool automation.
+    details: Add MCP servers, install community skills, wire hooks, and require human approval for selected tools.
   - title: Voice + channel adapters
     details: Speak responses with Web Speech or ElevenLabs and route agents through Discord and other channels.
 ---
@@ -54,6 +54,7 @@ Not sure where to begin? Start with [Use Case Ideas](/guides/use-cases).
 - A **Discord bot** that routes mentions to specific agents and session threads.
 - A **voice-enabled command center** using Web Speech or ElevenLabs.
 - A **shared gateway** for cross-device collaboration and session persistence.
+- A **review-gated automation flow** where high-impact tools require human approval before execution.
 - A **native desktop companion** for tray controls, overlay capture, and quick chat access.
 
 ## Where to start

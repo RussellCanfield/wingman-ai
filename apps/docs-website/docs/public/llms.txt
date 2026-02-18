@@ -16,7 +16,7 @@ Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestratio
 - Dynamic UI (SGUI) renders registered components via `ui_*` tools.
 
 ## Configuration
-- https://docs.getwingmanai.com/configuration/wingman-config : Global config fields for logging, gateway, agents, search, voice, skills, MCP.
+- https://docs.getwingmanai.com/configuration/wingman-config : Global config fields for logging, gateway, agents, search, voice, skills, MCP, retry middleware, and human-in-the-loop tool approvals.
 - https://docs.getwingmanai.com/configuration/providers : Supported providers, auth env vars, model naming format, provider status.
 - https://docs.getwingmanai.com/configuration/agents : Agent discovery vs routing, bundled agents, agent.json/agent.md examples, sub-agents, tools, MCP/voice overrides.
 - https://docs.getwingmanai.com/configuration/gateway : Gateway settings, auth modes, CLI commands, fsRoots, stateDir, dynamic UI toggle.
@@ -39,7 +39,7 @@ Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestratio
 
 ## Reference
 - https://docs.getwingmanai.com/reference/cli : CLI commands and options for agent/init/provider/skill/gateway.
-- https://docs.getwingmanai.com/reference/tools : Tool catalog (core + UI) and allowlist example.
+- https://docs.getwingmanai.com/reference/tools : Tool catalog (core + UI), human-in-the-loop tool review support, and allowlist example.
 - https://docs.getwingmanai.com/reference/http-api : Gateway HTTP endpoints for health, agents, sessions, providers, fs, voice, routines, webhooks.
 
 ## Source

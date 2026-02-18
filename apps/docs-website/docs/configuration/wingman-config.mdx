@@ -262,4 +262,44 @@ Use `humanInTheLoop.interruptOn` to configure tool-specific approval:
   - `description`: optional custom approval prompt
   - `argsSchema`: optional argument schema for edit flows
 
+HITL is active only when:
+
+- `humanInTheLoop.enabled` is `true`, and
+- `interruptOn` contains at least one tool entry.
+
+If `interruptOn` is empty, no runtime interruptions are applied.
+
+Example:
+
+```json
+{
+  "humanInTheLoop": {
+    "enabled": true,
+    "interruptOn": {
+      "command_execute": {
+        "allowedDecisions": ["approve", "edit", "reject"],
+        "description": "Review shell commands before running them.",
+        "argsSchema": {
+          "command": {
+            "type": "string",
+            "description": "Updated command to execute"
+          }
+        }
+      },
+      "background_terminal": {
+        "allowedDecisions": ["approve", "reject"],
+        "description": "Require approval before starting terminal sessions."
+      },
+      "internet_search": false
+    }
+  }
+}
+```
+
+Practical pattern:
+
+- Gate high-impact tools (`command_execute`, `background_terminal`, `node_run`).
+- Keep low-risk read tools unblocked unless your environment requires review.
+- Use `description` to explain why approval is required for each tool.
+
 For agent-specific configuration, see the Agents guide.
