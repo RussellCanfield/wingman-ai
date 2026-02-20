@@ -1,0 +1,13 @@
+{
+	"tasks": [
+		{
+			"id": "smoke-echo",
+			"description": "Deterministic smoke validation for benchmark runner wiring.",
+			"prompt": "ping",
+			"validator": {
+				"type": "assistant_contains",
+				"includes": ["SMOKE_OK smoke-echo"]
+			}
+		}
+	]
+}

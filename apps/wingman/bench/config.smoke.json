@@ -1,0 +1,30 @@
+{
+	"version": 1,
+	"taskFile": "tasks/smoke.json",
+	"resultsDir": "results",
+	"run": {
+		"defaultTimeoutMs": 10000,
+		"continueOnFailure": false
+	},
+	"adapter": {
+		"type": "command",
+		"command": {
+			"command": "sh",
+			"args": ["-lc", "printf 'SMOKE_OK %s\n' \"$WINGMAN_BENCH_TASK_ID\""]
+		}
+	},
+	"scoring": {
+		"weights": {
+			"passRate": 0.8,
+			"reliability": 0.2,
+			"duration": 0,
+			"cost": 0
+		}
+	},
+	"qualityGate": {
+		"enabled": false
+	},
+	"metadata": {
+		"suite": "smoke"
+	}
+}

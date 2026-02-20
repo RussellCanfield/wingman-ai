@@ -1,0 +1,7 @@
+{
+	"dataset": "terminal-bench@2.0",
+	"agent": "oracle",
+	"nConcurrent": 1,
+	"nAttempts": 1,
+	"timeoutMs": 3600000
+}

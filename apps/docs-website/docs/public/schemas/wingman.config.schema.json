@@ -1249,6 +1249,114 @@
                 "responseChunkSize"
               ],
               "additionalProperties": false
+            },
+            "teams": {
+              "default": {
+                "enabled": false,
+                "appType": "MultiTenant",
+                "endpointPath": "/api/adapters/teams/messages",
+                "mentionOnly": true,
+                "allowBots": false,
+                "allowedTeamIds": [],
+                "allowedChannelIds": [],
+                "channelSessions": {},
+                "sessionCommand": "!session",
+                "responseChunkSize": 3500
+              },
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "appId": {
+                  "type": "string"
+                },
+                "appPassword": {
+                  "type": "string"
+                },
+                "appType": {
+                  "default": "MultiTenant",
+                  "type": "string",
+                  "enum": [
+                    "MultiTenant",
+                    "SingleTenant",
+                    "UserAssignedMsi",
+                    "UserAssignedMSI"
+                  ]
+                },
+                "tenantId": {
+                  "type": "string"
+                },
+                "endpointPath": {
+                  "default": "/api/adapters/teams/messages",
+                  "type": "string"
+                },
+                "mentionOnly": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "allowBots": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "allowedTeamIds": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "allowedChannelIds": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "channelSessions": {
+                  "default": {},
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "sessionCommand": {
+                  "default": "!session",
+                  "type": "string"
+                },
+                "gatewayUrl": {
+                  "type": "string"
+                },
+                "gatewayToken": {
+                  "type": "string"
+                },
+                "gatewayPassword": {
+                  "type": "string"
+                },
+                "responseChunkSize": {
+                  "default": 3500,
+                  "type": "number",
+                  "minimum": 500,
+                  "maximum": 5000
+                }
+              },
+              "required": [
+                "enabled",
+                "appType",
+                "endpointPath",
+                "mentionOnly",
+                "allowBots",
+                "allowedTeamIds",
+                "allowedChannelIds",
+                "channelSessions",
+                "sessionCommand",
+                "responseChunkSize"
+              ],
+              "additionalProperties": false
             }
           },
           "additionalProperties": false

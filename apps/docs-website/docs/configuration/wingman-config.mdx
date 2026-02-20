@@ -178,7 +178,7 @@ Why you would use `agents.list`:
 
 Why you would use `agents.bindings`:
 
-- Route inbound messages (Discord, web UI, webhooks) to a specific agent by channel/peer metadata.
+- Route inbound messages (Discord, Teams, web UI, webhooks) to a specific agent by channel/peer metadata.
 
 Minimal example:
 
@@ -216,6 +216,10 @@ Minimal example:
 - **gateway**: host, port, auth, control UI, adapters
 - **agents**: optional list/bindings used by the gateway for routing
 - **mcp**: global MCP server definitions
+
+For adapter-specific fields and setup:
+- [Discord Adapter](/configuration/discord-adapter)
+- [Microsoft Teams Adapter](/configuration/teams-adapter)
 
 ## Browser settings
 

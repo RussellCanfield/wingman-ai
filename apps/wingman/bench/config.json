@@ -1,0 +1,42 @@
+{
+	"version": 1,
+	"taskFile": "tasks/coding-agent.json",
+	"resultsDir": "results",
+	"run": {
+		"defaultTimeoutMs": 300000,
+		"continueOnFailure": true
+	},
+	"adapter": {
+		"type": "wingman-cli",
+		"agent": "coding",
+		"cliPath": "./bin/wingman",
+		"extraArgs": []
+	},
+	"scoring": {
+		"weights": {
+			"passRate": 0.7,
+			"reliability": 0.15,
+			"duration": 0.1,
+			"cost": 0.05
+		},
+		"budgets": {
+			"targetAvgDurationMs": 120000,
+			"targetCostPerTaskUsd": 0.3
+		},
+		"pricing": {
+			"inputPer1kTokensUsd": 0,
+			"outputPer1kTokensUsd": 0
+		}
+	},
+	"qualityGate": {
+		"enabled": false,
+		"baselineFile": "baselines/latest-summary.json",
+		"minPassRateDelta": -0.03,
+		"maxCostIncreaseRatio": 0.15,
+		"maxAvgDurationIncreaseRatio": 0.2
+	},
+	"metadata": {
+		"suite": "coding-agent",
+		"owner": "wingman"
+	}
+}

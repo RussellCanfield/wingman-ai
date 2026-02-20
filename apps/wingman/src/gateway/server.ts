@@ -12,6 +12,7 @@ import { SessionManager } from "@/cli/core/sessionManager.js";
 import { createLogger, type Logger, type LogLevel } from "@/logger.js";
 import { ensureUvAvailableForFeature } from "@/utils/uv.js";
 import { DiscordGatewayAdapter } from "./adapters/discord.js";
+import { TeamsGatewayAdapter } from "./adapters/teams.js";
 import { GatewayAuth } from "./auth.js";
 import { BroadcastGroupManager } from "./broadcast.js";
 import { BrowserRelayServer } from "./browserRelayServer.js";
@@ -290,6 +291,7 @@ export class GatewayServer {
 	private smsPolicyStore: ReturnType<typeof createSmsPolicyStateStore>;
 	private internalHooks: InternalHookRegistry | null = null;
 	private discordAdapter: DiscordGatewayAdapter | null = null;
+	private teamsAdapter: TeamsGatewayAdapter | null = null;
 	private sessionSubscriptions: Map<string, Set<GatewaySocket>> = new Map();
 	private socketSubscriptions: Map<GatewaySocket, Set<string>> = new Map();
 	private connectedClients: Set<GatewaySocket> = new Set();
@@ -481,6 +483,13 @@ export class GatewayServer {
 					return undefined;
 				}
 
+				if (this.teamsAdapter) {
+					const teamsResponse = await this.teamsAdapter.handleHttpRequest(req, url);
+					if (teamsResponse) {
+						return teamsResponse;
+					}
+				}
+
 				// Always serve API routes from the gateway port, even when the
 				// control UI is hosted on a separate port.
 				if (url.pathname.startsWith("/api/")) {
@@ -606,20 +615,17 @@ export class GatewayServer {
 	}
 
 	private async startAdapters(): Promise<void> {
+		const resolvedHost =
+			this.config.host === "0.0.0.0" || this.config.host === "::"
+				? "127.0.0.1"
+				: this.config.host;
+
 		const discordConfig = this.wingmanConfig.gateway?.adapters?.discord;
 		if (discordConfig?.enabled) {
-			const resolvedHost =
-				this.config.host === "0.0.0.0" || this.config.host === "::"
-					? "127.0.0.1"
-					: this.config.host;
-			const url =
-				discordConfig.gatewayUrl ||
-				`ws://${resolvedHost}:${this.config.port}/ws`;
+			const url = discordConfig.gatewayUrl || `ws://${resolvedHost}:${this.config.port}/ws`;
 			const token =
 				discordConfig.gatewayToken ||
-				(this.config.auth?.mode === "token"
-					? this.config.authToken
-					: undefined);
+				(this.config.auth?.mode === "token" ? this.config.authToken : undefined);
 			const password =
 				discordConfig.gatewayPassword ||
 				(this.config.auth?.mode === "password"
@@ -653,12 +659,63 @@ export class GatewayServer {
 				this.discordAdapter = null;
 			}
 		}
+
+		const teamsConfig = this.wingmanConfig.gateway?.adapters?.teams;
+		if (teamsConfig?.enabled) {
+			const url = teamsConfig.gatewayUrl || `ws://${resolvedHost}:${this.config.port}/ws`;
+			const token =
+				teamsConfig.gatewayToken ||
+				(this.config.auth?.mode === "token" ? this.config.authToken : undefined);
+			const password =
+				teamsConfig.gatewayPassword ||
+				(this.config.auth?.mode === "password"
+					? this.config.auth?.password
+					: undefined);
+
+			this.teamsAdapter = new TeamsGatewayAdapter(
+				{
+					enabled: teamsConfig.enabled,
+					appId: teamsConfig.appId,
+					appPassword: teamsConfig.appPassword,
+					appType: teamsConfig.appType || "MultiTenant",
+					tenantId: teamsConfig.tenantId,
+					endpointPath: teamsConfig.endpointPath || "/api/adapters/teams/messages",
+					mentionOnly: teamsConfig.mentionOnly ?? true,
+					allowBots: teamsConfig.allowBots ?? false,
+					allowedTeamIds: teamsConfig.allowedTeamIds ?? [],
+					allowedChannelIds: teamsConfig.allowedChannelIds ?? [],
+					channelSessions: teamsConfig.channelSessions ?? {},
+					sessionCommand: teamsConfig.sessionCommand || "!session",
+					gatewayUrl: teamsConfig.gatewayUrl,
+					gatewayToken: teamsConfig.gatewayToken,
+					gatewayPassword: teamsConfig.gatewayPassword,
+					responseChunkSize: teamsConfig.responseChunkSize || 3500,
+				},
+				{ url, token, password },
+				this.logger,
+			);
+
+			try {
+				await this.teamsAdapter.start();
+				this.log(
+					"info",
+					`Teams adapter started on ${this.config.host}:${this.config.port}${this.teamsAdapter.endpointPath}`,
+				);
+			} catch (error) {
+				this.log("error", "Failed to start Teams adapter", error);
+				this.teamsAdapter = null;
+			}
+		}
 	}
 
 	private async stopAdapters(): Promise<void> {
 		if (this.discordAdapter) {
 			await this.discordAdapter.stop();
 			this.discordAdapter = null;
+		}
+		if (this.teamsAdapter) {
+			await this.teamsAdapter.stop();
+			this.teamsAdapter = null;
 		}
 	}
 

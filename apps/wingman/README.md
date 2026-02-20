@@ -222,6 +222,20 @@ cd apps/wingman
 bun run test
 ```
 
+### Terminal Bench
+
+```bash
+cd apps/wingman
+bun run bench:terminal:smoke
+bun run bench:terminal:quick
+bun run bench:terminal
+bun run bench:terminal:official
+bun run bench:terminal:official:wingman
+bun run bench:terminal:baseline
+```
+
+See `apps/wingman/docs/terminal-bench.md` for config, scoring, and artifacts.
+
 ### Config and Logs
 
 - Config: `apps/wingman/.wingman/wingman.config.json`

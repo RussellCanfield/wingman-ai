@@ -1,0 +1,69 @@
+# Microsoft Teams Adapter
+
+The Teams adapter lets Wingman receive Microsoft Teams bot messages and route them through the gateway, similar to the Discord adapter.
+
+## Configuration
+
+Add this to `wingman.config.json`:
+
+```json
+{
+  "gateway": {
+    "adapters": {
+      "teams": {
+        "enabled": true,
+        "appId": "YOUR_MICROSOFT_APP_ID",
+        "appPassword": "YOUR_MICROSOFT_APP_PASSWORD",
+        "appType": "MultiTenant",
+        "tenantId": "optional-for-single-tenant",
+        "endpointPath": "/api/adapters/teams/messages",
+        "mentionOnly": true,
+        "allowBots": false,
+        "allowedTeamIds": ["team-id-1"],
+        "allowedChannelIds": ["19:channel-id@thread.tacv2"],
+        "channelSessions": {
+          "19:channel-id@thread.tacv2": "agent:wingman:teams-main"
+        },
+        "sessionCommand": "!session",
+        "gatewayUrl": "ws://127.0.0.1:18789/ws",
+        "gatewayToken": "optional-token",
+        "gatewayPassword": "optional-password",
+        "responseChunkSize": 3500
+      }
+    }
+  }
+}
+```
+
+## Key behaviors
+
+- `mentionOnly`: in team channels, only respond when the bot is mentioned.
+- `allowedTeamIds` / `allowedChannelIds`: restrict where messages are accepted.
+- `channelSessions`: pin a channel to a specific Wingman session key.
+- `sessionCommand`: override routing with `!session <sessionKey> <message>`.
+- `endpointPath`: Teams messaging endpoint path served by the gateway process.
+
+## Session mapping order
+
+1. `!session <sessionKey> <message>` override (single message).
+2. `channelSessions` mapping for the channel/conversation.
+3. Gateway-derived key from routing metadata.
+
+## Session keys
+
+Use `agent:<id>:` prefixes to auto-select an agent:
+
+```text
+agent:wingman:teams-main
+```
+
+## Setup checklist (low friction)
+
+1. Create an Azure Bot app registration (App ID + client secret).
+2. In Teams app manifest, configure the bot and include your messaging endpoint:
+   `https://<your-public-host>/api/adapters/teams/messages` (or your custom `endpointPath`).
+3. For local development, run the gateway and expose it with a tunnel (for example, dev tunnels or ngrok) using HTTPS.
+4. Put `appId` and `appPassword` into `gateway.adapters.teams`.
+5. Restart the gateway.
+
+Once running, mention the bot in a Teams channel (or chat directly) to start a session.

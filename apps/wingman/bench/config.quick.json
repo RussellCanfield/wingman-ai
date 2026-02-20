@@ -1,0 +1,22 @@
+{
+	"version": 1,
+	"taskFile": "tasks/quick-one.json",
+	"resultsDir": "results",
+	"run": {
+		"defaultTimeoutMs": 120000,
+		"continueOnFailure": false
+	},
+	"adapter": {
+		"type": "wingman-cli",
+		"agent": "coding",
+		"cliPath": "./bin/wingman"
+	},
+	"scoring": {
+		"weights": {
+			"passRate": 0.8,
+			"reliability": 0.2,
+			"duration": 0,
+			"cost": 0
+		}
+	}
+}

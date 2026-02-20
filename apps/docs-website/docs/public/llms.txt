@@ -1,7 +1,7 @@
 # Wingman Documentation
-Wingman AI is a multi-agent system with a local CLI control plane, a gateway for orchestration and persistent sessions, and a desktop companion + Control Core UI for multi-client access. This documentation covers setup, configuration, agents and sub-agents, Model Context Protocol (MCP) servers, skills, hooks, voice (TTS), Discord integration, webhooks, routines, and the gateway HTTP API.
+Wingman AI is a multi-agent system with a local CLI control plane, a gateway for orchestration and persistent sessions, and a desktop companion + Control Core UI for multi-client access. This documentation covers setup, configuration, agents and sub-agents, Model Context Protocol (MCP) servers, skills, hooks, voice (TTS), Discord and Microsoft Teams integrations, webhooks, routines, and the gateway HTTP API.
 
-Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestration, gateway, desktop companion, Control Core UI, persistent sessions, CLI, agents, sub-agents, Model Context Protocol, MCP, skills, hooks, Discord adapter, voice TTS, Web Speech, ElevenLabs, webhooks, routines, dynamic UI, SGUI, provider auth, OpenAI, Anthropic, OpenRouter, xAI, Copilot, Ollama, LM Studio
+Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestration, gateway, desktop companion, Control Core UI, persistent sessions, CLI, agents, sub-agents, Model Context Protocol, MCP, skills, hooks, Discord adapter, Teams adapter, voice TTS, Web Speech, ElevenLabs, webhooks, routines, dynamic UI, SGUI, provider auth, OpenAI, Anthropic, OpenRouter, xAI, Copilot, Ollama, LM Studio
 
 ## Start Here
 - https://docs.getwingmanai.com/ : Product overview, architecture context, and navigation for all docs.
@@ -24,6 +24,7 @@ Keywords: Wingman AI, multi-agent system, AI agent framework, agent orchestratio
 - https://docs.getwingmanai.com/configuration/hooks : Tool hooks (pre/post/stop) and gateway hook delivery config.
 - https://docs.getwingmanai.com/configuration/skills : Skill commands, GitHub repo config, install location and layout.
 - https://docs.getwingmanai.com/configuration/discord-adapter : Discord adapter config, channel sessions, session command, setup checklist.
+- https://docs.getwingmanai.com/configuration/teams-adapter : Microsoft Teams adapter config, endpoint setup, channel sessions, and low-friction setup checklist.
 - https://docs.getwingmanai.com/configuration/voice : Web Speech vs ElevenLabs TTS, policies, per-agent overrides, API behavior.
 - https://docs.getwingmanai.com/configuration/search : internet_search config, DuckDuckGo/Perplexity providers, rate-limit env vars.
 - https://docs.getwingmanai.com/configuration/browser-automation : Browser mode chooser (Playwright vs Relay), shared config model, quick decision guide.

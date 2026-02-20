@@ -1,8 +1,8 @@
 # Wingman Architecture Overview
 
-**Version:** 1.2
+**Version:** 1.3
 **Status:** Active
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-18
 
 ---
 
@@ -126,7 +126,7 @@ The Gateway is the central runtime for agents, sessions, routing, and channels.
 | **Agent Runtime** | Host agent instances and subagents | [PRD-002](002-gateway-prd.md) |
 | **Routing Bindings** | Deterministic agent selection per message | [PRD-002](002-gateway-prd.md) |
 | **Session Store** | Durable session storage (SQLite) | [PRD-002](002-gateway-prd.md) |
-| **Channels + Control UI** | Inbound/outbound message adapters and web chat | [PRD-002](002-gateway-prd.md) |
+| **Channels + Control UI** | Inbound/outbound message adapters (Discord, Teams) and web chat | [PRD-002](002-gateway-prd.md) |
 | **Broadcast Rooms** | Explicit parallel responses when requested | [PRD-002](002-gateway-prd.md) |
 | **Webhook Ingress (Planned)** | External systems trigger agent runs | [PRD-002](002-gateway-prd.md) |
 
@@ -430,7 +430,7 @@ Developer's Machine
 ### Phase 5: Consumer Ecosystem
 - Reference mobile app
 - Reference web UI
-- Slack/Teams adapters
+- Slack adapter
 
 ### Phase 6: Advanced Collaboration
 - Multi-gateway routing

@@ -404,9 +404,49 @@ const DiscordAdapterSchema = z
 		responseChunkSize: 1900,
 	});
 
+const TeamsAdapterSchema = z
+	.object({
+		enabled: z.boolean().default(false),
+		appId: z.string().optional(),
+		appPassword: z.string().optional(),
+		appType: z
+			.enum([
+				"MultiTenant",
+				"SingleTenant",
+				"UserAssignedMsi",
+				"UserAssignedMSI",
+			])
+			.default("MultiTenant"),
+		tenantId: z.string().optional(),
+		endpointPath: z.string().default("/api/adapters/teams/messages"),
+		mentionOnly: z.boolean().default(true),
+		allowBots: z.boolean().default(false),
+		allowedTeamIds: z.array(z.string()).default([]),
+		allowedChannelIds: z.array(z.string()).default([]),
+		channelSessions: z.record(z.string(), z.string()).default({}),
+		sessionCommand: z.string().default("!session"),
+		gatewayUrl: z.string().optional(),
+		gatewayToken: z.string().optional(),
+		gatewayPassword: z.string().optional(),
+		responseChunkSize: z.number().min(500).max(5000).default(3500),
+	})
+	.default({
+		enabled: false,
+		appType: "MultiTenant",
+		endpointPath: "/api/adapters/teams/messages",
+		mentionOnly: true,
+		allowBots: false,
+		allowedTeamIds: [],
+		allowedChannelIds: [],
+		channelSessions: {},
+		sessionCommand: "!session",
+		responseChunkSize: 3500,
+	});
+
 const GatewayAdaptersSchema = z
 	.object({
 		discord: DiscordAdapterSchema.optional(),
+		teams: TeamsAdapterSchema.optional(),
 	})
 	.default({});
 

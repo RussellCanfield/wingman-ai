@@ -7,6 +7,7 @@
   { "type": "file", "name": "agents", "label": "Agents & Sub-Agents" },
   { "type": "file", "name": "gateway", "label": "Gateway Settings" },
   { "type": "file", "name": "discord-adapter", "label": "Discord Adapter" },
+  { "type": "file", "name": "teams-adapter", "label": "Microsoft Teams Adapter" },
   { "type": "file", "name": "voice", "label": "Voice Configuration" },
   { "type": "file", "name": "mcp", "label": "MCP Servers" },
   { "type": "file", "name": "hooks", "label": "Hooks" },

@@ -73,6 +73,28 @@ export interface WingmanConfig {
 				gatewayPassword?: string;
 				responseChunkSize?: number;
 			};
+				teams?: {
+					enabled?: boolean;
+					appId?: string;
+					appPassword?: string;
+					appType?:
+						| "MultiTenant"
+						| "SingleTenant"
+						| "UserAssignedMsi"
+						| "UserAssignedMSI";
+				tenantId?: string;
+				endpointPath?: string;
+				mentionOnly?: boolean;
+				allowBots?: boolean;
+				allowedTeamIds?: string[];
+				allowedChannelIds?: string[];
+				channelSessions?: Record<string, string>;
+				sessionCommand?: string;
+				gatewayUrl?: string;
+				gatewayToken?: string;
+				gatewayPassword?: string;
+				responseChunkSize?: number;
+			};
 		};
 	};
 	agents?: {

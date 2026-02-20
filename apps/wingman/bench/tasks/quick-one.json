@@ -1,0 +1,14 @@
+{
+	"tasks": [
+		{
+			"id": "assistant-contract",
+			"description": "Agent should return the contract marker text.",
+			"prompt": "Reply with exactly this line and nothing else: TERMINAL_BENCH_CONTRACT_OK",
+			"workingDirectory": "sandbox",
+			"validator": {
+				"type": "assistant_contains",
+				"includes": ["TERMINAL_BENCH_CONTRACT_OK"]
+			}
+		}
+	]
+}

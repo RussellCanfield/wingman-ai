@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.8
+**Version:** 1.9
 **Status:** In Development
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-18
 
 ---
 
@@ -161,7 +161,7 @@ Routing happens before agent execution. Replies always return to the originating
 
 The gateway derives a session key from agentId plus channel identity. Sessions are durable and stored per agent.
 Sessions can be named on creation and renamed later via the Control UI or API.
-Channel adapters may override the derived key for specific sources (e.g., Discord channel-to-session mappings).
+Channel adapters may override the derived key for specific sources (e.g., Discord/Teams channel-to-session mappings).
 The Control UI surfaces each session key in the session snapshot panel for easy copy/paste.
 
 ### Per-Session Request Queueing
@@ -241,10 +241,12 @@ Routines allow users to run an agent prompt on a CRON schedule. Each run creates
 | DM (default main) | `agent:main:main` |
 | Discord channel | `agent:main:discord:account:bot123:channel:123456` |
 | Discord thread | `agent:main:discord:account:bot123:channel:123456:thread:789` |
+| Teams channel | `agent:main:teams:account:bot123:channel:19%3Aabc%40thread.tacv2` |
+| Teams thread reply | `agent:main:teams:account:bot123:channel:19%3Aabc%40thread.tacv2:thread:173947689` |
 | WhatsApp group | `agent:support:whatsapp:group:1203...@g.us` |
 
 Notes:
-- If a channel supports multiple accounts, include `account:<accountId>` in the session key to avoid collisions (Discord keys already include the bot account).
+- If a channel supports multiple accounts, include `account:<accountId>` in the session key to avoid collisions (Discord and Teams keys should include the bot account).
 - DMs can collapse to the agent main session. For true isolation per person, use one agent per person.
 
 ### Webhooks (MVP)
@@ -329,6 +331,7 @@ See the Node Protocol Spec for message schemas and pairing UX: `docs/requirement
 - Basic health and stats endpoints (gateway + Control UI API proxy)
 - Webhook registry + invocation endpoint (create/manage via Control UI)
 - Discord channel adapter (gateway-hosted)
+- Microsoft Teams channel adapter (gateway-hosted, Bot Framework endpoint)
 
 ### Planned / Later
 - Broadcast rooms for explicit swarm workflows
@@ -337,7 +340,7 @@ See the Node Protocol Spec for message schemas and pairing UX: `docs/requirement
 - Tailscale discovery
 - HTTP bridge transport
 - SSH tunnel helper
-- Additional channel adapters (Slack, Teams, etc.)
+- Additional channel adapters (Slack, etc.)
 - Rate limiting and message validation
 
 ---
@@ -1029,6 +1032,22 @@ Attachment handling notes:
         },
         "sessionCommand": "!session",
         "responseChunkSize": 1900
+      },
+      "teams": {
+        "enabled": true,
+        "appId": "microsoft-app-id",
+        "appPassword": "microsoft-app-password",
+        "appType": "MultiTenant",
+        "endpointPath": "/api/adapters/teams/messages",
+        "mentionOnly": true,
+        "allowBots": false,
+        "allowedTeamIds": ["19:team-id@thread.tacv2"],
+        "allowedChannelIds": ["19:channel-id@thread.tacv2"],
+        "channelSessions": {
+          "19:channel-id@thread.tacv2": "agent:main:teams-main"
+        },
+        "sessionCommand": "!session",
+        "responseChunkSize": 3500
       }
     }
   }
@@ -1050,6 +1069,15 @@ Discord adapter notes:
 - `channelSessions` can map a Discord channel ID to a fixed session ID. If set, it overrides the derived session key unless a `!session` command is used.
 - If the mapped session ID (or `!session` override) starts with `agent:<id>:`, the adapter will set `agentId` to that `<id>` so the gateway routes to the intended agent without requiring a separate binding.
 - The gateway logs startup warnings for common Discord config issues (missing token, blank sessionCommand, and channelSessions entries with whitespace or missing `agent:` prefixes).
+- Optional overrides: `gatewayUrl`, `gatewayToken`, `gatewayPassword`.
+
+Teams adapter notes:
+- The adapter runs inside the gateway process and exposes a Bot Framework endpoint (`endpointPath`) on the gateway HTTP server.
+- By default it only responds in channels when the bot is mentioned (direct chat always routes).
+- Use `!session <sessionKey> <message>` to target an existing session; omit to let the gateway derive a session key from Teams routing metadata.
+- `channelSessions` can map a Teams channel ID (or conversation ID) to a fixed session ID.
+- If the mapped session ID (or `!session` override) starts with `agent:<id>:`, the adapter will set `agentId` to that `<id>` for deterministic routing.
+- The gateway logs startup warnings for common Teams config issues (missing app credentials, blank `endpointPath`/`sessionCommand`, and malformed `channelSessions` entries).
 - Optional overrides: `gatewayUrl`, `gatewayToken`, `gatewayPassword`.
 
 Dynamic UI notes:
@@ -1176,9 +1204,9 @@ function useGatewayStream(roomId: string) {
 }
 ```
 
-### Slack/Teams Adapter
+### Slack Adapter (Future)
 
-Enterprise adapters transform gateway messages to platform format:
+Adapters transform gateway messages to platform format. Teams is implemented as a gateway-hosted Bot Framework adapter; Slack remains future scope:
 
 ```typescript
 // Slack adapter pseudocode

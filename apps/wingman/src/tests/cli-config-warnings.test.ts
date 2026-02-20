@@ -39,6 +39,47 @@ describe("Config warnings", () => {
 		expect(warnings.some((msg) => msg.includes("allowedGuilds"))).toBe(true);
 	});
 
+	it("returns warnings for common Teams config issues", () => {
+		const base = validateConfig({}).data!;
+		const config = validateConfig({
+			...base,
+			gateway: {
+				...base.gateway,
+				adapters: {
+					...base.gateway.adapters,
+					teams: {
+						enabled: true,
+						appId: "",
+						appPassword: " ",
+						appType: "MultiTenant",
+						endpointPath: " ",
+						mentionOnly: true,
+						allowBots: false,
+						allowedTeamIds: [" "],
+						allowedChannelIds: ["", " 19:abc "],
+						channelSessions: {
+							" 19:channel ": " session-plain ",
+						},
+						sessionCommand: " ",
+						responseChunkSize: 3500,
+					},
+				},
+			},
+		}).data!;
+
+		const warnings = collectConfigWarnings(config).map((warning) => warning.message);
+
+		expect(warnings.some((msg) => msg.includes("appId/appPassword"))).toBe(
+			true,
+		);
+		expect(warnings.some((msg) => msg.includes("sessionCommand"))).toBe(true);
+		expect(warnings.some((msg) => msg.includes("endpointPath"))).toBe(true);
+		expect(warnings.some((msg) => msg.includes("channelSessions"))).toBe(true);
+		expect(warnings.some((msg) => msg.includes("agent prefix"))).toBe(true);
+		expect(warnings.some((msg) => msg.includes("allowedChannelIds"))).toBe(true);
+		expect(warnings.some((msg) => msg.includes("allowedTeamIds"))).toBe(true);
+	});
+
 	it("returns no warnings when Discord adapter is disabled", () => {
 		const base = validateConfig({}).data!;
 		expect(collectConfigWarnings(base)).toEqual([]);

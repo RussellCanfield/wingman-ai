@@ -1,0 +1,17 @@
+{
+	"dataset": "terminal-bench@2.0",
+	"registryUrl": "https://raw.githubusercontent.com/laude-institute/harbor/main/registry.json?source=wingman",
+	"agentImportPath": "bench.harbor_agents.wingman_bridge:WingmanBridgeAgent",
+	"agentKwargs": {
+		"wingman_agent": "coding",
+		"bridge_runtime": "bun",
+		"bridge_script_path": "scripts/wingman-harbor-bridge.ts",
+		"bridge_log_level": "silent",
+		"config_dir": ".wingman",
+		"min_blocking_command_timeout_sec": "120",
+		"max_command_timeout_sec": "600"
+	},
+	"nConcurrent": 1,
+	"nAttempts": 1,
+	"timeoutMs": 3600000
+}

@@ -28,7 +28,10 @@ import {
 	getSharedTerminalSessionManager,
 	type TerminalSessionManager,
 } from "@/agent/tools/terminal_session_manager.js";
-import type { NodeInvokeRequest, NodeInvokeResult } from "@/agent/tools/node_invoke.js";
+import type {
+	NodeInvokeRequest,
+	NodeInvokeResult,
+} from "@/agent/tools/node_invoke.js";
 import { getBundledSkillsPath } from "@/agent/uiRegistry.js";
 import { resolveSkillActivation } from "@/skills/activation.js";
 import {
@@ -58,11 +61,13 @@ export interface AgentInvokerOptions {
 	nodeDefaultTargetClientId?: string;
 	nodeConnectedIdsProvider?: () => string[] | Promise<string[]>;
 	nodeConnectedTargetsProvider?: () =>
-		ConnectedNodeTarget[] | Promise<ConnectedNodeTarget[]>;
+		| ConnectedNodeTarget[]
+		| Promise<ConnectedNodeTarget[]>;
 }
 
 export interface InvokeAgentOptions {
 	signal?: AbortSignal;
+	modelOverride?: string;
 }
 
 export type ImageAttachment = {
@@ -739,19 +744,26 @@ export class AgentInvoker {
 				this.workspace,
 				this.wingmanConfig,
 				executionWorkspace,
-					{
-						terminalOwnerId: `${agentName}:${hookSessionId}`,
-						terminalSessionManager: this.terminalSessionManager,
-						nodeInvoker: this.nodeInvoker,
-						nodeDefaultTargetClientId: this.nodeDefaultTargetClientId,
-					},
-				);
+				{
+					terminalOwnerId: `${agentName}:${hookSessionId}`,
+					terminalSessionManager: this.terminalSessionManager,
+					nodeInvoker: this.nodeInvoker,
+					nodeDefaultTargetClientId: this.nodeDefaultTargetClientId,
+				},
+			);
 
 			// Find the agent
 			const targetAgent = await loader.loadAgent(agentName);
 
 			if (!targetAgent) {
 				throw new Error(`Agent "${agentName}" not found`);
+			}
+			if (
+				options?.modelOverride &&
+				typeof options.modelOverride === "string" &&
+				options.modelOverride.trim().length > 0
+			) {
+				targetAgent.model = options.modelOverride.trim() as any;
 			}
 
 			this.logger.info(`Invoking agent: ${agentName}`);
@@ -786,10 +798,10 @@ export class AgentInvoker {
 
 			if (mcpConfigs.length > 0) {
 				this.logger.debug("Initializing MCP client for agent invocation");
-					this.mcpManager = new MCPClientManager(mcpConfigs, this.logger, {
-						executionWorkspace,
-						proxyConfig: this.mcpProxyConfig,
-					});
+				this.mcpManager = new MCPClientManager(mcpConfigs, this.logger, {
+					executionWorkspace,
+					proxyConfig: this.mcpProxyConfig,
+				});
 				await this.mcpManager.initialize();
 
 				// Get MCP tools and add to agent tools
@@ -919,9 +931,8 @@ export class AgentInvoker {
 				});
 			}
 			if (existsSync(workspaceSkillsPath)) {
-				const workspaceActivation = await resolveSkillActivation(
-					workspaceSkillsPath,
-				);
+				const workspaceActivation =
+					await resolveSkillActivation(workspaceSkillsPath);
 				if (workspaceActivation.inactiveSkills.length > 0) {
 					const summary = workspaceActivation.inactiveSkills
 						.map(
@@ -952,7 +963,8 @@ export class AgentInvoker {
 				skillsSources.push(skillsVirtualPath);
 			}
 			if (existsSync(bundledSkillsPath)) {
-				const bundledActivation = await resolveSkillActivation(bundledSkillsPath);
+				const bundledActivation =
+					await resolveSkillActivation(bundledSkillsPath);
 				if (bundledActivation.inactiveSkills.length > 0) {
 					const summary = bundledActivation.inactiveSkills
 						.map(

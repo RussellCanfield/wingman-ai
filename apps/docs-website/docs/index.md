@@ -19,6 +19,9 @@ hero:
       text: Discord Adapter
       link: /configuration/discord-adapter
     - theme: alt
+      text: Teams Adapter
+      link: /configuration/teams-adapter
+    - theme: alt
       text: Quick Tips
       link: /guides/quick-tips
   image:
@@ -34,7 +37,7 @@ features:
   - title: Extensible tools + skills
     details: Add MCP servers, install community skills, wire hooks, and require human approval for selected tools.
   - title: Voice + channel adapters
-    details: Speak responses with Web Speech or ElevenLabs and route agents through Discord and other channels.
+    details: Speak responses with Web Speech or ElevenLabs and route agents through Discord, Microsoft Teams, and other channels.
 ---
 
 # Welcome to Wingman
@@ -52,6 +55,7 @@ Not sure where to begin? Start with [Use Case Ideas](/guides/use-cases).
 
 - A **multi-agent coding squad** that delegates tasks across specialized sub-agents.
 - A **Discord bot** that routes mentions to specific agents and session threads.
+- A **Microsoft Teams bot** that routes channel mentions and chats to agent sessions.
 - A **voice-enabled command center** using Web Speech or ElevenLabs.
 - A **shared gateway** for cross-device collaboration and session persistence.
 - A **review-gated automation flow** where high-impact tools require human approval before execution.

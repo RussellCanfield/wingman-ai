@@ -1,0 +1,31 @@
+{
+	"tasks": [
+		{
+			"id": "assistant-contract",
+			"description": "Agent should return the contract marker text.",
+			"prompt": "Reply with exactly this line and nothing else: TERMINAL_BENCH_CONTRACT_OK",
+			"workingDirectory": "sandbox",
+			"validator": {
+				"type": "assistant_contains",
+				"includes": ["TERMINAL_BENCH_CONTRACT_OK"]
+			}
+		},
+		{
+			"id": "filesystem-write",
+			"description": "Agent should create a benchmark sentinel file.",
+			"prompt": "Create a file named BENCHMARK_SENTINEL.txt with the single line TERMINAL_BENCH_FILE_OK.",
+			"workingDirectory": "sandbox",
+			"setup": [
+				{
+					"command": "rm",
+					"args": ["-f", "BENCHMARK_SENTINEL.txt"]
+				}
+			],
+			"validator": {
+				"type": "file_contains",
+				"path": "BENCHMARK_SENTINEL.txt",
+				"includes": ["TERMINAL_BENCH_FILE_OK"]
+			}
+		}
+	]
+}

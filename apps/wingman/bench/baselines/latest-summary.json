@@ -1,0 +1,71 @@
+{
+  "runId": "2026-02-18T16-02-24-988Z",
+  "startedAt": "2026-02-18T16:02:24.988Z",
+  "endedAt": "2026-02-18T16:02:24.995Z",
+  "configPath": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/config.smoke.json",
+  "taskFilePath": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/tasks/smoke.json",
+  "resultsDir": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/results/2026-02-18T16-02-24-988Z",
+  "metrics": {
+    "totalTasks": 1,
+    "passedTasks": 1,
+    "failedTasks": 0,
+    "passRate": 1,
+    "timeoutRate": 0,
+    "totalDurationMs": 7,
+    "avgDurationMs": 7,
+    "p95DurationMs": 7,
+    "totalInputTokens": 0,
+    "totalOutputTokens": 0,
+    "totalTokens": 0,
+    "totalCostUsd": 0,
+    "avgCostPerTaskUsd": 0,
+    "costPerPassUsd": 0,
+    "overallScore": 100
+  },
+  "qualityGate": {
+    "enabled": false,
+    "passed": true,
+    "messages": []
+  },
+  "tasks": [
+    {
+      "taskId": "smoke-echo",
+      "description": "Deterministic smoke validation for benchmark runner wiring.",
+      "workingDirectory": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/tasks",
+      "prompt": "ping",
+      "status": "passed",
+      "startedAt": "2026-02-18T16:02:24.988Z",
+      "endedAt": "2026-02-18T16:02:24.995Z",
+      "durationMs": 7,
+      "setup": {
+        "runCount": 0
+      },
+      "adapter": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7,
+        "stdout": "SMOKE_OK smoke-echo\n",
+        "stderr": "",
+        "assistantText": "SMOKE_OK smoke-echo",
+        "tokens": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        }
+      },
+      "validator": {
+        "passed": true,
+        "details": "Assistant response contains all required strings."
+      },
+      "artifacts": {
+        "stdoutFile": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/results/2026-02-18T16-02-24-988Z/smoke-echo.stdout.log",
+        "stderrFile": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/results/2026-02-18T16-02-24-988Z/smoke-echo.stderr.log",
+        "assistantFile": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/results/2026-02-18T16-02-24-988Z/smoke-echo.assistant.txt",
+        "recordFile": "/Users/russellcanfield/Projects/wingman-ai/apps/wingman/bench/results/2026-02-18T16-02-24-988Z/smoke-echo.result.json"
+      }
+    }
+  ],
+  "metadata": {
+    "suite": "smoke"
+  }
+}
