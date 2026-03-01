@@ -6,18 +6,26 @@ import { ModelFactory } from "../config/modelFactory";
 import { NativeXAIImageModel } from "../config/xaiImageModel";
 
 const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const originalXaiApiKey = process.env.XAI_API_KEY;
 
 beforeEach(() => {
 	process.env.ANTHROPIC_API_KEY = "test-anthropic-api-key";
+	process.env.XAI_API_KEY = "test-xai-api-key";
 });
 
 afterEach(() => {
 	if (originalAnthropicApiKey === undefined) {
 		delete process.env.ANTHROPIC_API_KEY;
+	} else {
+		process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+	}
+
+	if (originalXaiApiKey === undefined) {
+		delete process.env.XAI_API_KEY;
 		return;
 	}
 
-	process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+	process.env.XAI_API_KEY = originalXaiApiKey;
 });
 
 describe("ModelFactory", () => {
@@ -126,23 +134,23 @@ describe("ModelFactory", () => {
 			expect(model).toBeInstanceOf(ChatOpenAI);
 		});
 
-			it("should allow model names with additional colons", () => {
-				const model = ModelFactory.createModel("ollama:phi4:14b-q8_0");
+		it("should allow model names with additional colons", () => {
+			const model = ModelFactory.createModel("ollama:phi4:14b-q8_0");
 
-				expect(model).toBeInstanceOf(ChatOpenAI);
-			});
+			expect(model).toBeInstanceOf(ChatOpenAI);
+		});
 
-			it("should create native xAI image model for grok-imagine-image", () => {
-				const model = ModelFactory.createModel("xai:grok-imagine-image");
+		it("should create native xAI image model for grok-imagine-image", () => {
+			const model = ModelFactory.createModel("xai:grok-imagine-image");
 
-				expect(model).toBeInstanceOf(NativeXAIImageModel);
-			});
+			expect(model).toBeInstanceOf(NativeXAIImageModel);
+		});
 
-			it("should keep text xAI models on ChatXAI", () => {
-				const model = ModelFactory.createModel("xai:grok-beta");
+		it("should keep text xAI models on ChatXAI", () => {
+			const model = ModelFactory.createModel("xai:grok-beta");
 
-				expect(model).toBeInstanceOf(ChatXAI);
-			});
+			expect(model).toBeInstanceOf(ChatXAI);
+		});
 
 		it("should throw error for invalid format (missing colon)", () => {
 			expect(() => {
