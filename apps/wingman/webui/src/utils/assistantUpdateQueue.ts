@@ -3,6 +3,7 @@ export type QueuedAssistantUpdate = {
 	requestId: string;
 	messageId: string;
 	content: string;
+	inlineThinkBlocks?: string[];
 };
 
 function buildAssistantUpdateKey(update: QueuedAssistantUpdate): string {

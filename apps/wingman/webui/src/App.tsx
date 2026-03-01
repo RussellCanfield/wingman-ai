@@ -47,7 +47,11 @@ import {
 } from "./utils/agentAttribution";
 import { buildRoutineAgents } from "./utils/agentOptions";
 import { appendAssistantErrorFeedback } from "./utils/assistantError";
-import { mergeAssistantStreamText } from "./utils/assistantStream";
+import {
+	extractThinkBlocksForDisplay,
+	mergeAssistantStreamText,
+	stripThinkTokensForDisplay,
+} from "./utils/assistantStream";
 import {
 	drainAssistantContentUpdates,
 	type QueuedAssistantUpdate,
@@ -898,10 +902,24 @@ export const App: React.FC = () => {
 						nextThread = upsertAssistantMessage(
 							nextThread,
 							update.messageId,
-							(message) =>
-								message.content === update.content
-									? message
-									: { ...message, content: update.content },
+							(message) => {
+								const blockCount =
+									update.inlineThinkBlocks?.length ?? 0;
+								const prevBlockCount =
+									message.inlineThinkBlocks?.length ?? 0;
+								const blocksSame =
+									blockCount === prevBlockCount &&
+									(blockCount === 0 ||
+										message.inlineThinkBlocks?.[blockCount - 1] ===
+											update.inlineThinkBlocks?.[blockCount - 1]);
+								if (message.content === update.content && blocksSame)
+									return message;
+								return {
+									...message,
+									content: update.content,
+									inlineThinkBlocks: update.inlineThinkBlocks,
+								};
+							},
 							update.requestId,
 						);
 					}
@@ -950,16 +968,18 @@ export const App: React.FC = () => {
 				sanitizeAssistantDisplayText(existingRaw, {
 					preserveTrailingWhitespace: true,
 				}) ?? "";
-			const cleaned =
+			const cleaned = stripThinkTokensForDisplay(
 				sanitizeAssistantDisplayText(mergedRaw, {
 					preserveTrailingWhitespace: true,
-				}) ?? previousCleaned;
+				}) ?? previousCleaned,
+			);
 
 			queueAssistantContentUpdate(queuedAssistantUpdatesRef.current, {
 				threadId,
 				requestId,
 				messageId,
 				content: cleaned,
+				inlineThinkBlocks: extractThinkBlocksForDisplay(mergedRaw),
 			});
 			scheduleQueuedAssistantUpdateFlush();
 		},
@@ -1188,7 +1208,7 @@ export const App: React.FC = () => {
 			const resolvedFallback = options?.fallback || uiFallback || "";
 			const bufferedRaw = buffersRef.current.get(messageId) || "";
 			const bufferedText = sanitizeAssistantDisplayText(bufferedRaw) || "";
-			const finalText = bufferedText || resolvedFallback || "";
+			const finalText = stripThinkTokensForDisplay(bufferedText || resolvedFallback || "");
 			const spoken =
 				spokenMessagesRef.current.get(threadId) || new Set<string>();
 			if (
@@ -1220,7 +1240,10 @@ export const App: React.FC = () => {
 								nextMessage = {
 									...nextMessage,
 									content: bufferedText,
+									inlineThinkBlocks: undefined,
 								};
+							} else if (nextMessage.inlineThinkBlocks !== undefined) {
+								nextMessage = { ...nextMessage, inlineThinkBlocks: undefined };
 							}
 							const canRenderFallbackText =
 								options?.forceText ||

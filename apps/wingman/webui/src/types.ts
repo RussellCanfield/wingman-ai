@@ -134,6 +134,7 @@ export type ChatMessage = {
 	attachments?: ChatAttachment[];
 	toolEvents?: ToolEvent[];
 	thinkingEvents?: ThinkingEvent[];
+	inlineThinkBlocks?: string[];
 	uiBlocks?: UiBlock[];
 	uiTextFallback?: string;
 	createdAt: number;

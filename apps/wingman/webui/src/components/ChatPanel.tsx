@@ -548,7 +548,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			const normalizedText = normalizeMessageLineBreaks(
 				msg.content || (!dynamicUiEnabled ? msg.uiTextFallback || "" : ""),
 			);
-			const displayText = normalizedText;
+			const { thinkBlocks: parsedThinkBlocks, cleanText } =
+				msg.role === "assistant"
+					? parseThinkingContent(normalizedText)
+					: { thinkBlocks: [], cleanText: normalizedText };
+			const thinkBlocks = msg.inlineThinkBlocks ?? parsedThinkBlocks;
+			const displayText = cleanText;
 			const previewWorkingDirectory =
 				activeThread?.workdir || defaultOutputDir || null;
 			const assistantAudioPreviews =
@@ -600,9 +605,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												playbackStatus === "pending" ||
 												playbackStatus === "loading";
 											const isPlaying = playbackStatus === "playing";
-											const playbackText = normalizeMessageLineBreaks(
-												msg.content || msg.uiTextFallback || "",
-											);
+											const playbackText = parseThinkingContent(
+					normalizeMessageLineBreaks(
+						msg.content || msg.uiTextFallback || "",
+					),
+				).cleanText;
 											return (
 												<button
 													type="button"
@@ -643,6 +650,33 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										})()
 										: null}
 								</div>
+							</div>
+						) : null}
+						{thinkBlocks.length > 0 ? (
+							<div className="mb-2">
+								<details className="rounded-xl border border-slate-600/40 bg-slate-800/40 px-3 py-2 text-sm">
+									<summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+										<span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+											Thinking
+										</span>
+										<span className="text-xs text-slate-400">
+											{thinkBlocks.length === 1
+												? "1 block"
+												: `${thinkBlocks.length} blocks`}
+										</span>
+									</summary>
+									<div className="mt-2 space-y-2">
+										{thinkBlocks.map((block, i) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: stable list
+											<div
+												key={i}
+												className="whitespace-pre-wrap text-xs text-slate-400"
+											>
+												{block}
+											</div>
+										))}
+									</div>
+								</details>
 							</div>
 						) : null}
 						{msg.role === "assistant" &&
@@ -1196,6 +1230,21 @@ export function shouldRefocusComposer({
 	isStreaming: boolean;
 }): boolean {
 	return wasStreaming && !isStreaming;
+}
+
+function parseThinkingContent(text: string): {
+	thinkBlocks: string[];
+	cleanText: string;
+} {
+	if (!text) return { thinkBlocks: [], cleanText: text };
+	const thinkBlocks: string[] = [];
+	const cleanText = text
+		.replace(/<think>([\s\S]*?)<\/think>/gi, (_, content) => {
+			thinkBlocks.push(content.trim());
+			return "";
+		})
+		.trim();
+	return { thinkBlocks, cleanText };
 }
 
 function normalizeMessageLineBreaks(value: string): string {
