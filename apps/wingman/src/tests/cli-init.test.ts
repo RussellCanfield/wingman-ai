@@ -153,77 +153,84 @@ describe("CLI init", () => {
 		const gameDevPrompt = readFileSync(gameDevAgentPath, "utf-8");
 		expect(gameDevPrompt).toContain("name: game-dev");
 		expect(gameDevPrompt).toContain("subAgents:");
-		expect(gameDevPrompt).toContain("name: art-generation");
-		expect(gameDevPrompt).toContain("promptFile: ./art-generation.md");
-		expect(gameDevPrompt).toContain("name: asset-refinement");
-		expect(gameDevPrompt).toContain("promptFile: ./asset-refinement.md");
-		expect(gameDevPrompt).toContain("name: planning-idea");
-		expect(gameDevPrompt).toContain("promptFile: ./planning-idea.md");
-		expect(gameDevPrompt).toContain("name: ui-specialist");
-		expect(gameDevPrompt).toContain("promptFile: ./ui-specialist.md");
+		expect(gameDevPrompt).toContain("name: art-director");
+		expect(gameDevPrompt).toContain("promptFile: ./art-director.md");
+		expect(gameDevPrompt).toContain("name: scene-engineer");
+		expect(gameDevPrompt).toContain("promptFile: ./scene-engineer.md");
+		expect(gameDevPrompt).toContain("name: game-designer");
+		expect(gameDevPrompt).toContain("promptFile: ./game-designer.md");
 		expect(gameDevPrompt).toContain("write_todos");
 		expect(gameDevPrompt).toContain("read_todos");
-		expect(gameDevPrompt).toContain("UV-aware texture planning");
+		expect(gameDevPrompt).toContain("Delegation routing");
 		expect(gameDevPrompt).toContain("MeshStandardMaterial");
-		expect(gameDevPrompt).toContain("uv`/`uv2");
+		expect(gameDevPrompt).toContain("three-mesh-bvh");
 
-		const gameDevArtGenerationPath = join(
+		const gameDevArtDirectorPath = join(
 			workspace,
 			".wingman",
 			"agents",
 			"game-dev",
-			"art-generation.md",
+			"art-director.md",
 		);
-		const gameDevAssetRefinementPath = join(
+		const gameDevSceneEngineerPath = join(
 			workspace,
 			".wingman",
 			"agents",
 			"game-dev",
-			"asset-refinement.md",
+			"scene-engineer.md",
 		);
-		const gameDevPlanningIdeaPath = join(
+		const gameDevDesignerPath = join(
 			workspace,
 			".wingman",
 			"agents",
 			"game-dev",
-			"planning-idea.md",
+			"game-designer.md",
 		);
-		const gameDevUiSpecialistPath = join(
-			workspace,
-			".wingman",
-			"agents",
-			"game-dev",
-			"ui-specialist.md",
-		);
-		expect(existsSync(gameDevArtGenerationPath)).toBe(true);
-		expect(existsSync(gameDevAssetRefinementPath)).toBe(true);
-		expect(existsSync(gameDevPlanningIdeaPath)).toBe(true);
-		expect(existsSync(gameDevUiSpecialistPath)).toBe(true);
-		const gameDevArtGenerationPrompt = readFileSync(
-			gameDevArtGenerationPath,
+		expect(existsSync(gameDevArtDirectorPath)).toBe(true);
+		expect(existsSync(gameDevSceneEngineerPath)).toBe(true);
+		expect(existsSync(gameDevDesignerPath)).toBe(true);
+		const gameDevArtDirectorPrompt = readFileSync(
+			gameDevArtDirectorPath,
 			"utf-8",
 		);
-		expect(gameDevArtGenerationPrompt).toContain("UV set(s) or UDIM tiles");
-		expect(gameDevArtGenerationPrompt).toContain("texel density targets");
-		expect(gameDevArtGenerationPrompt).toContain(
-			"Texture-to-geometry mapping notes",
+		expect(gameDevArtDirectorPrompt).toContain("You are `art-director`");
+		expect(gameDevArtDirectorPrompt).toContain(
+			"Texture-to-geometry mapping: mesh, material slot, UV set",
 		);
-		expect(gameDevArtGenerationPrompt).toContain("material slot");
-		expect(gameDevArtGenerationPrompt).toContain("need `uv`, and `aoMap`");
-		expect(gameDevArtGenerationPrompt).toContain("flipY = false");
-		expect(gameDevArtGenerationPrompt).toContain("RepeatWrapping");
+		expect(gameDevArtDirectorPrompt).toContain("flipY = false");
+		expect(gameDevArtDirectorPrompt).toContain("RepeatWrapping");
+		const gameDevSceneEngineerPrompt = readFileSync(
+			gameDevSceneEngineerPath,
+			"utf-8",
+		);
+		expect(gameDevSceneEngineerPrompt).toContain("You are `scene-engineer`");
+		expect(gameDevSceneEngineerPrompt).toContain(
+			"Rapier is the default physics engine",
+		);
+		expect(gameDevSceneEngineerPrompt).toContain(
+			"Prefer `postprocessing` over Three.js built-in `EffectComposer`",
+		);
+		const gameDevDesignerPrompt = readFileSync(gameDevDesignerPath, "utf-8");
+		expect(gameDevDesignerPrompt).toContain("You are `game-designer`");
+		expect(gameDevDesignerPrompt).toContain(
+			"Always present 2-3 mechanic variants with tradeoffs",
+		);
+		expect(gameDevDesignerPrompt).toContain("UI Conventions");
 
-		const imageGeneratorAgentPath = join(
+		const mainAgentTemplatePath = join(
 			workspace,
 			".wingman",
 			"agents",
-			"image-generator",
+			"main",
 			"agent.md",
 		);
-		expect(existsSync(imageGeneratorAgentPath)).toBe(true);
-		const imageGeneratorPrompt = readFileSync(imageGeneratorAgentPath, "utf-8");
-		expect(imageGeneratorPrompt).toContain("name: image-generator");
-		expect(imageGeneratorPrompt).toContain("model: xai:grok-imagine-image");
+		expect(existsSync(mainAgentTemplatePath)).toBe(true);
+		const mainAgentTemplatePrompt = readFileSync(
+			mainAgentTemplatePath,
+			"utf-8",
+		);
+		expect(mainAgentTemplatePrompt).toContain("name: main");
+		expect(mainAgentTemplatePrompt).toContain("Primary Wingman agent");
 	});
 
 	it("merges existing config when --merge is set", async () => {
