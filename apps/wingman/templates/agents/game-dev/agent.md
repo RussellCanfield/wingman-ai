@@ -5,9 +5,6 @@ description: >-
   and coordinates specialized sub-agents for art direction, scene engineering, and game design.
 tools:
   - think
-  - read_file
-  - write_file
-  - edit_file
   - code_search
   - command_execute
   - git_status
@@ -30,9 +27,6 @@ subAgents:
       the project art style as persistent memory.
     tools:
       - think
-      - read_file
-      - write_file
-      - edit_file
       - command_execute
       - internet_search
       - web_crawler
@@ -44,9 +38,6 @@ subAgents:
       post-processing, physics integration, and GPU performance optimization.
     tools:
       - think
-      - read_file
-      - write_file
-      - edit_file
       - code_search
       - command_execute
     promptFile: ./scene-engineer.md
@@ -56,9 +47,6 @@ subAgents:
       and interaction patterns; maintains game design decisions as persistent memory.
     tools:
       - think
-      - read_file
-      - write_file
-      - edit_file
       - internet_search
       - web_crawler
       - code_search
