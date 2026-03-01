@@ -2,7 +2,7 @@
 
 **Version:** 1.3
 **Status:** Active
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-02-27
 
 ---
 
@@ -34,7 +34,7 @@ Each agent has its own workspace, agent directory, auth profiles, and session st
 Rooms enable parallel agent responses, but broadcasts are opt-in. The default path is a single agent per inbound message.
 
 ### 5. Protocol-First Design
-The gateway forwards raw agent streams (matching CLI streaming format). UI layers interpret these streams for display. This enables any client (mobile, web, terminal) to consume the same protocol.
+The gateway forwards raw agent streams (matching CLI streaming format). UI layers interpret these streams for display, including text/tool updates and assistant media attachments (image/audio/file blocks). This enables any client (mobile, web, terminal) to consume the same protocol.
 Tool events may include UI render hints so clients can display static generative UI prompts when user input is required.
 
 ### 6. Flexible Provider Support
@@ -110,9 +110,8 @@ provider credentials and set a default model. It also supports a sync-focused mo
 for re-copying bundled templates without config/provider onboarding:
 `wingman init --mode sync --only agents`.
 
-Bundled templates include specialist options such as `coding-v2` and `game-dev`.
-The `game-dev` template includes sub-agents for art generation, asset refinement,
-planning, and UI, with explicit UV/geometry-aware texture guidance in its art flow.
+Bundled templates include specialist options such as `coding-v2`, `game-dev`, and `image-generator`.
+The `image-generator` template uses `xai:grok-imagine-image` for native prompt-to-image output in chat. The `game-dev` template includes sub-agents for art generation, asset refinement, planning, and UI, with explicit UV/geometry-aware texture guidance in its art flow.
 
 When run interactively, the init wizard lets users pick a default agent and choose
 which bundled agents to copy.

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { GatewaySocketClient } from "./gatewaySocket.js";
 import { normalizeGatewaySettings } from "./gatewayConfig.js";
 
@@ -71,5 +71,33 @@ describe("GatewaySocketClient", () => {
 		};
 		expect(outbound.type).toBe("req:agent");
 		expect(outbound.id).toBe(requestId);
+	});
+
+	test("surfaces parsed gateway errors with request context", () => {
+		const onError = vi.fn();
+		const client = new GatewaySocketClient({ onError });
+		const settings = normalizeGatewaySettings({
+			url: "ws://127.0.0.1:18789/ws",
+		});
+
+		client.connect(settings, "device-1");
+		const socket = FakeWebSocket.instances[0];
+		expect(socket).toBeDefined();
+		socket.open();
+
+		socket.onmessage?.({
+			data: JSON.stringify({
+				type: "error",
+				payload: {
+					message: "Agent invocation failed",
+					requestId: "req-123",
+				},
+			}),
+		} as MessageEvent);
+
+		expect(onError).toHaveBeenCalledWith(
+			"Agent invocation failed",
+			expect.objectContaining({ requestId: "req-123" }),
+		);
 	});
 });

@@ -83,6 +83,7 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		label: "xAI",
 		type: "api-key",
 		envVars: ["XAI_API_KEY"],
+		baseURL: "https://api.x.ai/v1",
 		category: "model",
 	},
 	lmstudio: {

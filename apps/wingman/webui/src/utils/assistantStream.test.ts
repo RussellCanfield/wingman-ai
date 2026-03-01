@@ -16,14 +16,28 @@ describe("mergeAssistantStreamText", () => {
 		);
 	});
 
-	it("appends overlapping chunks exactly as received", () => {
+	it("promotes full replacement chunks when incoming starts with existing", () => {
+		const output = mergeAssistantStreamText("Done -", "Done - I generated a");
+		expect(output).toBe("Done - I generated a");
+	});
+
+	it("appends overlapping chunks when incoming is not a full replacement", () => {
 		let output = mergeAssistantStreamText("", "Done -");
 		output = mergeAssistantStreamText(output, " - I");
 		output = mergeAssistantStreamText(output, " I generated a");
 		expect(output).toBe("Done - - I I generated a");
 	});
 
-	it("appends overlapping markdown list chunks exactly as received", () => {
+	it("promotes repeated markdown list snapshots without duplication", () => {
+		let output = mergeAssistantStreamText("", "- Item one\n- Item two");
+		output = mergeAssistantStreamText(
+			output,
+			"- Item one\n- Item two\n- Item three",
+		);
+		expect(output).toBe("- Item one\n- Item two\n- Item three");
+	});
+
+	it("appends partial markdown chunks when incoming is not a snapshot", () => {
 		let output = mergeAssistantStreamText("", "- Item one\n- Item two");
 		output = mergeAssistantStreamText(output, " - Item two\n- Item three");
 		expect(output).toBe("- Item one\n- Item two - Item two\n- Item three");

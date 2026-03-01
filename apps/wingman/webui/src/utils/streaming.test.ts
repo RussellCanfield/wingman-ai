@@ -2,6 +2,68 @@ import { describe, expect, it } from "vitest";
 import { parseStreamEvents } from "./streaming";
 
 describe("parseStreamEvents", () => {
+	it("captures output_image blocks as attachment events", () => {
+		const chunk = {
+			event: "on_chat_model_stream",
+			run_id: "run-image-1",
+			data: {
+				chunk: {
+					content: [
+						{
+							type: "output_image",
+							image_url: "https://cdn.example.com/generated.png",
+						},
+					],
+				},
+			},
+			metadata: { langgraph_node: "image-generator" },
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.attachmentEvents).toHaveLength(1);
+		expect(result.attachmentEvents[0]).toMatchObject({
+			kind: "image",
+			dataUrl: "https://cdn.example.com/generated.png",
+			messageId: "run-image-1",
+			node: "image-generator",
+			isDelta: true,
+		});
+	});
+
+	it("captures structured image blocks from streamed AI messages", () => {
+		const chunk = [
+			"stream-images",
+			"messages",
+			[
+				{
+					type: "ai",
+					content: [
+						{ type: "text", text: "Image ready." },
+						{
+							type: "image",
+							source_type: "base64",
+							mime_type: "image/png",
+							data: "abc123",
+						},
+					],
+				},
+				{ langgraph_node: "image-generator" },
+			],
+		];
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]?.text).toBe("Image ready.");
+		expect(result.attachmentEvents).toHaveLength(1);
+		expect(result.attachmentEvents[0]).toMatchObject({
+			kind: "image",
+			dataUrl: "data:image/png;base64,abc123",
+			node: "image-generator",
+		});
+	});
+
 	it("captures chat model stream text with node metadata", () => {
 		const chunk = {
 			event: "on_chat_model_stream",
@@ -96,6 +158,359 @@ describe("parseStreamEvents", () => {
 
 		expect(result.textEvents).toHaveLength(0);
 		expect(result.toolEvents).toHaveLength(0);
+	});
+
+	it("extracts on_chain_end image attachments without replaying text", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-image-1",
+			metadata: { langgraph_node: "image-generator" },
+			data: {
+				output: {
+					messages: [
+						{ type: "human", content: "Generate a dragon." },
+						{
+							type: "ai",
+							id: "ai-image-1",
+							content: [
+								{ type: "text", text: "Generated image." },
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/dragon.png",
+								},
+							],
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+		expect(result.attachmentEvents).toHaveLength(1);
+		expect(result.attachmentEvents[0]).toMatchObject({
+			kind: "image",
+			dataUrl: "https://cdn.example.com/dragon.png",
+			messageId: "ai-image-1",
+			node: "image-generator",
+			isDelta: false,
+		});
+	});
+
+	it("does not re-emit historical image attachments from prior AI messages", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-image-2",
+			data: {
+				output: {
+					messages: [
+						{
+							type: "ai",
+							id: "ai-old-image",
+							content: [
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/old.png",
+								},
+							],
+						},
+						{
+							type: "ai",
+							id: "ai-latest-text",
+							content: [{ type: "text", text: "Done." }],
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.attachmentEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+	});
+
+	it("does not emit prior image attachments from chain input history", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-image-3",
+			data: {
+				output: {},
+				input: {
+					messages: [
+						{ type: "human", content: "new prompt" },
+						{
+							type: "ai",
+							id: "ai-old-image-input",
+							content: [
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/old-input.png",
+								},
+							],
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.attachmentEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+	});
+
+	it("does not re-emit image attachments that appear in both chain input and output", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-image-4",
+			data: {
+				input: {
+					messages: [
+						{
+							type: "ai",
+							id: "ai-old-image",
+							content: [
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/old-shared.png",
+								},
+							],
+						},
+					],
+				},
+				output: {
+					messages: [
+						{
+							type: "ai",
+							id: "ai-old-image",
+							content: [
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/old-shared.png",
+								},
+							],
+						},
+						{ type: "human", content: "next prompt" },
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.attachmentEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+	});
+
+	it("emits only new image attachments when output contains both prior and new images", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-image-5",
+			data: {
+				input: {
+					messages: [
+						{
+							type: "ai",
+							id: "ai-old-image-2",
+							content: [
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/old-only.png",
+								},
+							],
+						},
+					],
+				},
+				output: {
+					messages: [
+						{
+							type: "ai",
+							id: "ai-new-image-2",
+							content: [
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/old-only.png",
+								},
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/new-only.png",
+								},
+							],
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+		expect(result.attachmentEvents).toHaveLength(1);
+		expect(result.attachmentEvents[0]).toMatchObject({
+			kind: "image",
+			dataUrl: "https://cdn.example.com/new-only.png",
+			messageId: "ai-new-image-2",
+			isDelta: false,
+		});
+	});
+
+	it("does not emit stale image when snapshot ends with a new user turn", () => {
+		const chunk = {
+			event: "on_chain_stream",
+			run_id: "chain-image-6",
+			data: {
+				output: {
+					messages: [
+						{ type: "human", content: "first prompt" },
+						{
+							type: "ai",
+							id: "ai-first-image",
+							content: [
+								{
+									type: "output_image",
+									image_url: "https://cdn.example.com/first.png",
+								},
+							],
+						},
+						{ type: "human", content: "second prompt" },
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.attachmentEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+	});
+
+	it("extracts model failure text from after_model chain-end input messages", () => {
+		const chunk = {
+			event: "on_chain_end",
+			name: "todoListMiddleware.after_model",
+			run_id: "chain-run-err-1",
+			metadata: { langgraph_node: "model" },
+			data: {
+				output: {},
+				input: {
+					messages: [
+						{
+							type: "constructor",
+							id: ["langchain_core", "messages", "HumanMessage"],
+							kwargs: { content: "Generate an image" },
+						},
+						{
+							type: "constructor",
+							id: ["langchain_core", "messages", "AIMessage"],
+							kwargs: {
+								id: "ai-error-1",
+								content:
+									"Model call failed after 3 attempts with Error: xAI image generation failed: Prompt too long",
+							},
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.toolEvents).toHaveLength(0);
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]).toMatchObject({
+			text: "Model call failed after 3 attempts with Error: xAI image generation failed: Prompt too long",
+			messageId: "ai-error-1",
+			node: "model",
+			isDelta: true,
+		});
+	});
+
+	it("extracts model failure text from Command.update.messages wrappers", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-run-err-2",
+			name: "ChannelWrite<branch:to:todoListMiddleware.after_model>",
+			data: {
+				output: [
+					{
+						lg_name: "Command",
+						update: {
+							messages: [
+								{
+									lc: 1,
+									type: "constructor",
+									id: ["langchain_core", "messages", "AIMessage"],
+									kwargs: {
+										id: "ai-error-2",
+										content:
+											"Model call failed after 3 attempts with Error: xAI image generation failed: Prompt len is larger than the maximum allowed length which is 8000",
+									},
+								},
+							],
+						},
+					},
+				],
+				input: {},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(1);
+		expect(result.textEvents[0]).toMatchObject({
+			text: "Model call failed after 3 attempts with Error: xAI image generation failed: Prompt len is larger than the maximum allowed length which is 8000",
+			messageId: "ai-error-2",
+			isDelta: true,
+		});
+	});
+
+	it("ignores model failure snapshots on on_chain_start events", () => {
+		const chunk = {
+			event: "on_chain_start",
+			run_id: "chain-run-start-1",
+			data: {
+				input: {
+					messages: [
+						{
+							type: "constructor",
+							id: ["langchain_core", "messages", "AIMessage"],
+							kwargs: {
+								id: "ai-error-start-1",
+								content:
+									"Model call failed after 3 attempts with Error: xAI image generation failed: Prompt len is larger than the maximum allowed length which is 8000",
+							},
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+		expect(result.textEvents).toHaveLength(0);
+	});
+
+	it("does not throw when chain event payload omits input/messages", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-empty-1",
+			name: "ChannelWrite<...>",
+			data: {
+				output: {},
+				input: undefined,
+			},
+		};
+
+		expect(() => parseStreamEvents(chunk)).not.toThrow();
+		const result = parseStreamEvents(chunk);
+		expect(result.textEvents).toHaveLength(0);
 	});
 
 	it("ignores chat-model stream chunks that are not AI messages", () => {

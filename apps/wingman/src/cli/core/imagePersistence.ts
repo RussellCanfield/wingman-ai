@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export interface PersistableAttachment {
@@ -30,11 +30,7 @@ export function persistAssistantImagesToDisk(input: {
 }): void {
 	if (!input.messages.length) return;
 
-	const mediaRoot = join(
-		dirname(input.dbPath),
-		"media",
-		sanitizePathSegment(input.sessionId),
-	);
+	const mediaRoot = getSessionMediaDirectory(input.dbPath, input.sessionId);
 
 	for (const message of input.messages) {
 		if (message.role !== "assistant") continue;
@@ -80,6 +76,21 @@ export function persistAssistantImagesToDisk(input: {
 			}
 		}
 	}
+}
+
+export function getSessionMediaDirectory(
+	dbPath: string,
+	sessionId: string,
+): string {
+	return join(dirname(dbPath), "media", sanitizePathSegment(sessionId));
+}
+
+export function removeSessionMediaDirectory(
+	dbPath: string,
+	sessionId: string,
+): void {
+	const mediaDir = getSessionMediaDirectory(dbPath, sessionId);
+	rmSync(mediaDir, { recursive: true, force: true });
 }
 
 export function parseBase64DataUrl(dataUrl: string): ParsedDataUrl | null {

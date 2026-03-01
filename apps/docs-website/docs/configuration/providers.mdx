@@ -14,6 +14,7 @@ Examples:
 - `openrouter:openai/gpt-4o`
 - `copilot:gpt-4o`
 - `xai:grok-beta`
+- `xai:grok-imagine-image`
 
 ## Configure a provider
 
@@ -37,10 +38,12 @@ Or supply env vars (see table below). The CLI reads env vars first, then `~/.win
 | codex | model | subscription token | `CODEX_ACCESS_TOKEN`, `CHATGPT_ACCESS_TOKEN` | Uses ChatGPT Codex backend (`https://chatgpt.com/backend-api/codex`) and reads `CODEX_HOME/auth.json` or `~/.codex/auth.json` when available. |
 | openrouter | model | API key | `OPENROUTER_API_KEY` | Uses OpenRouter routing (`https://openrouter.ai/api/v1`). |
 | copilot | model | API key | `GITHUB_COPILOT_TOKEN`, `COPILOT_TOKEN`, `COPILOT_API_KEY` | Token-based access. |
-| xai | model | API key | `XAI_API_KEY` | Grok models. |
+| xai | model | API key | `XAI_API_KEY` | Grok text + image models (for example `grok-imagine-image`). |
 | lmstudio | model | optional | `LMSTUDIO_API_KEY`, `LM_STUDIO_API_KEY` | Defaults to `http://localhost:1234/v1`. |
 | ollama | model | optional | `OLLAMA_API_KEY` | Defaults to `http://localhost:11434/v1`. |
 | elevenlabs | voice | API key | `ELEVENLABS_API_KEY`, `XI_API_KEY` | Used for text-to-speech. |
+
+For `xai:grok-imagine-image`, Wingman uses xAI's native images endpoint (`/v1/images/generations`) so image output works even when chat-model adapters do not support that model.
 
 ## Model overrides per agent
 

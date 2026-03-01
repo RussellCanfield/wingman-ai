@@ -43,6 +43,7 @@ Bundled templates currently include:
 - `coding` (direct-execution coding specialist with tool-backed completion guard)
 - `coding-v2` (multi-subagent coding orchestrator with planner/implementor/reviewer split)
 - `game-dev` (game feature orchestrator with specialist sub-agents, including UV/geometry-aware texture generation guidance)
+- `image-generator` (native prompt-to-image specialist using `xai:grok-imagine-image`)
 - `researcher` (source-first web research)
 - `stock-trader` (market data research workflows)
 
@@ -65,6 +66,7 @@ MCP dependency levels used below:
 | `coding` | Direct single-agent coding execution | No | Optional | Template sets `mcpUseGlobal: true` but does not require MCP-specific tools. |
 | `coding-v2` | Coding orchestrator with one generic coding worker | Yes (1) | Optional | Template sets `mcpUseGlobal: true`; no hard MCP dependency. |
 | `game-dev` | Game feature orchestrator (code + assets + UI) | Yes (4) | Recommended | Template prefers FAL MCP media tools for generation flows. |
+| `image-generator` | Prompt-to-image generation in chat | No | None | Uses `model: xai:grok-imagine-image`; generated image blocks stream as assistant attachments in Control UI/Desktop. |
 | `researcher` | Web/documentation research | No | None | Uses built-in `internet_search`/`web_crawler`/`browser_control`; no MCP fields in the template. |
 | `stock-trader` | Options-oriented trading research workflows | Yes (8) | Required | Template expects finance MCP tools (`finnhub.*` and `options.analyze`) for data-backed output. |
 | `wingman` (generated starter) | Workspace default assistant created by `init` | No | None by default | Generated as `agent.json` starter when missing; add `mcpUseGlobal` or per-agent `mcp` only if needed. |

@@ -11,6 +11,7 @@ import type {
 	VoiceProvider,
 } from "../types";
 import { agentSyncNotice } from "../utils/agentSyncNotice";
+import { buildAgentTopologyGraph } from "../utils/agentTopology";
 import { buildSubAgentTemplateOptions } from "../utils/subAgentTemplates";
 
 type AgentFormSubAgentPayload = {
@@ -123,7 +124,10 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		"editor",
 	);
 
-	const graphData = useMemo(() => buildGraph(agents), [agents]);
+	const graphData = useMemo(
+		() => buildAgentTopologyGraph(agents, selectedAgentId),
+		[agents, selectedAgentId],
+	);
 	const selectedAgent = useMemo(() => {
 		if (!selectedAgentId) return null;
 		return graphData.lookup[selectedAgentId] || null;
@@ -1243,8 +1247,15 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 									) : null}
 								</div>
 							) : (
-								<div className="text-xs text-slate-400">
-									Select an agent node to see details.
+								<div className="rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-4 py-3">
+									<p className="text-sm font-semibold text-cyan-100">
+										Click a topology node to edit that agent.
+									</p>
+									<p className="mt-1 text-xs text-cyan-200/90">
+										After selecting a node, use{" "}
+										<span className="font-semibold text-cyan-100">Edit</span> to
+										load it in the form.
+									</p>
 								</div>
 							)}
 						</div>
@@ -1255,6 +1266,9 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							nodes={graphData.nodes}
 							edges={graphData.edges}
 							fitView
+							fitViewOptions={{ padding: 0.2 }}
+							nodesDraggable={false}
+							nodesConnectable={false}
 							onNodeClick={(_, node) => setSelectedAgentId(node.id)}
 						>
 							<Background />
@@ -1267,71 +1281,3 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		</section>
 	);
 };
-
-function buildGraph(agents: AgentSummary[]) {
-	const nodes: Array<{
-		id: string;
-		data: { label: string };
-		position: { x: number; y: number };
-	}> = [];
-	const edges: Array<{ id: string; source: string; target: string }> = [];
-	const lookup: Record<
-		string,
-		{
-			id: string;
-			displayName: string;
-			description?: string;
-			tools: string[];
-			model?: string;
-			reasoningEffort?: ReasoningEffort;
-			parentId?: string;
-		}
-	> = {};
-
-	const gapX = 220;
-	const gapY = 160;
-	agents.forEach((agent, index) => {
-		const id = `agent-${agent.id}`;
-		nodes.push({
-			id,
-			data: { label: agent.displayName },
-			position: { x: (index % 3) * gapX, y: Math.floor(index / 3) * gapY },
-		});
-		lookup[id] = {
-			id: agent.id,
-			displayName: agent.displayName,
-			description: agent.description,
-			tools: agent.tools,
-			model: agent.model,
-			reasoningEffort: agent.reasoningEffort,
-		};
-
-		agent.subAgents?.forEach((subAgent, subIndex) => {
-			const subId = `${id}-sub-${subAgent.id}`;
-			nodes.push({
-				id: subId,
-				data: { label: subAgent.displayName },
-				position: {
-					x: (index % 3) * gapX + 180,
-					y: Math.floor(index / 3) * gapY + (subIndex + 1) * 80,
-				},
-			});
-			lookup[subId] = {
-				id: subAgent.id,
-				displayName: subAgent.displayName,
-				description: subAgent.description,
-				tools: subAgent.tools,
-				model: subAgent.model,
-				reasoningEffort: subAgent.reasoningEffort,
-				parentId: agent.id,
-			};
-			edges.push({
-				id: `${id}->${subId}`,
-				source: id,
-				target: subId,
-			});
-		});
-	});
-
-	return { nodes, edges, lookup };
-}

@@ -9,6 +9,10 @@ import {
 	createCodexFetch,
 	resolveCodexAuthFromFile,
 } from "@/providers/codex.js";
+import {
+	NativeXAIImageModel,
+	isNativeXAIImageModel,
+} from "./xaiImageModel.js";
 import { createCopilotFetch } from "@/providers/copilot.js";
 import { resolveProviderToken } from "@/providers/credentials.js";
 import {
@@ -285,6 +289,24 @@ export class ModelFactory {
 		options: ModelCreationOptions,
 	): BaseLanguageModel {
 		const token = resolveProviderToken("xai").token;
+		const provider = getProviderSpec("xai");
+
+		if (isNativeXAIImageModel(model)) {
+			if (options.reasoningEffort) {
+				ModelFactory.warnUnsupportedReasoningEffort(
+					"xai",
+					model,
+					options.reasoningEffort,
+					options.ownerLabel,
+				);
+			}
+			return new NativeXAIImageModel({
+				model,
+				apiKey: token,
+				baseURL: provider?.baseURL,
+			});
+		}
+
 		const params: { model: string; temperature: number; apiKey?: string } = {
 			model,
 			temperature: 1,

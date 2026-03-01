@@ -1,7 +1,10 @@
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { createDeepAgent } from "deepagents";
 import { v4 as uuidv4 } from "uuid";
-import { persistAssistantImagesToDisk } from "./imagePersistence.js";
+import {
+	persistAssistantImagesToDisk,
+	removeSessionMediaDirectory,
+} from "./imagePersistence.js";
 
 type DatabaseLike = {
 	prepare: (sql: string) => {
@@ -401,6 +404,8 @@ export class SessionManager {
 			"DELETE FROM session_pending_messages WHERE session_id = ?",
 		);
 		pendingStmt.run(sessionId);
+
+		removeSessionMediaDirectory(this.dbPath, sessionId);
 	}
 
 	/**
@@ -432,6 +437,8 @@ export class SessionManager {
 	      WHERE id = ?
 	    `);
 		sessionStmt.run(Date.now(), sessionId);
+
+		removeSessionMediaDirectory(this.dbPath, sessionId);
 	}
 
 	persistPendingMessage(input: {

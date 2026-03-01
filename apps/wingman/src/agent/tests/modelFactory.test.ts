@@ -1,7 +1,9 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
+import { ChatXAI } from "@langchain/xai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ModelFactory } from "../config/modelFactory";
+import { NativeXAIImageModel } from "../config/xaiImageModel";
 
 const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -124,11 +126,23 @@ describe("ModelFactory", () => {
 			expect(model).toBeInstanceOf(ChatOpenAI);
 		});
 
-		it("should allow model names with additional colons", () => {
-			const model = ModelFactory.createModel("ollama:phi4:14b-q8_0");
+			it("should allow model names with additional colons", () => {
+				const model = ModelFactory.createModel("ollama:phi4:14b-q8_0");
 
-			expect(model).toBeInstanceOf(ChatOpenAI);
-		});
+				expect(model).toBeInstanceOf(ChatOpenAI);
+			});
+
+			it("should create native xAI image model for grok-imagine-image", () => {
+				const model = ModelFactory.createModel("xai:grok-imagine-image");
+
+				expect(model).toBeInstanceOf(NativeXAIImageModel);
+			});
+
+			it("should keep text xAI models on ChatXAI", () => {
+				const model = ModelFactory.createModel("xai:grok-beta");
+
+				expect(model).toBeInstanceOf(ChatXAI);
+			});
 
 		it("should throw error for invalid format (missing colon)", () => {
 			expect(() => {

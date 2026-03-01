@@ -2,17 +2,26 @@ import { describe, expect, it } from "vitest";
 import { isAssistantTextStreamChunk } from "./streamChunkKind";
 
 describe("isAssistantTextStreamChunk", () => {
-	it("returns true for on_chat_model_stream events", () => {
+	it("returns true for supported assistant text lifecycle events", () => {
 		expect(
 			isAssistantTextStreamChunk({
 				event: "on_chat_model_stream",
+			}),
+		).toBe(true);
+		expect(
+			isAssistantTextStreamChunk({
+				event: "on_chain_stream",
+			}),
+		).toBe(true);
+		expect(
+			isAssistantTextStreamChunk({
+				event: "on_chain_end",
 			}),
 		).toBe(true);
 	});
 
 	it("returns false for non-text lifecycle and tool events", () => {
 		expect(isAssistantTextStreamChunk({ event: "on_chain_start" })).toBe(false);
-		expect(isAssistantTextStreamChunk({ event: "on_chain_end" })).toBe(false);
 		expect(isAssistantTextStreamChunk({ event: "on_tool_start" })).toBe(false);
 		expect(isAssistantTextStreamChunk({ event: "on_tool_end" })).toBe(false);
 	});

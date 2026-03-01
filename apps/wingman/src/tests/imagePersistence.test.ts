@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+	getSessionMediaDirectory,
 	parseBase64DataUrl,
 	type PersistableMessage,
 	persistAssistantImagesToDisk,
+	removeSessionMediaDirectory,
 	resolveImageExtension,
 } from "../cli/core/imagePersistence.js";
 
@@ -129,6 +131,30 @@ describe("imagePersistence", () => {
 
 		expect(firstPath).toBeTruthy();
 		expect(secondPath).toBe(firstPath);
+	});
+
+	it("removes persisted session media directory", () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "wingman-image-store-"));
+		tempDirs.push(tempDir);
+		const dbPath = join(tempDir, "wingman.db");
+		const sessionId = "session-cleanup";
+		const messages: PersistableMessage[] = [
+			{
+				role: "assistant" as const,
+				attachments: [{ kind: "image" as const, dataUrl: PNG_DATA_URL }],
+			},
+		];
+
+		persistAssistantImagesToDisk({
+			dbPath,
+			sessionId,
+			messages,
+		});
+		const mediaDir = getSessionMediaDirectory(dbPath, sessionId);
+		expect(existsSync(mediaDir)).toBe(true);
+
+		removeSessionMediaDirectory(dbPath, sessionId);
+		expect(existsSync(mediaDir)).toBe(false);
 	});
 
 	it("parses base64 data URLs and resolves extensions", () => {

@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
-**Version:** 1.2.12
-**Last Updated:** 2026-02-16
+**Version:** 1.2.13
+**Last Updated:** 2026-02-27
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -194,6 +194,8 @@ Modern AI assistants face several challenges:
 **Tools**:
 - MCP tools for domain data (e.g., Finnhub quotes/news/options); candle tools enforce conservative lookback caps (intraday default 180 days, daily default 365 days). Candle sourcing defaults to Yahoo Finance chart data (non‑premium Finnhub) and can fall back to Finnhub when configured.
 - Built-in MCP multimodal tooling includes FAL AI generation tools (`generate_image_or_texture`, `generate_image_edit`, `generate_audio_or_music`, `generate_video_from_image`) plus `fal_generation_status` for queue polling, cancellation, and optional review decisions.
+- Native provider multimodal output is also supported when a model returns structured media blocks (for example `xai:grok-imagine-image`), and these attachments are surfaced directly in chat clients without requiring MCP.
+- `xai:grok-imagine-image` is executed through xAI's native images endpoint (`/v1/images/generations`) rather than the LangChain chat adapter path, then normalized back into assistant image blocks for shared UI rendering.
 - Agents with MCP enabled also receive MCP resource helper tools (`mcp_list_resources`, `mcp_read_resource`) so they can discover and read server resources without custom per-server wiring.
 - MCP server entries may define `defaultToolTimeout` (milliseconds) to extend per-tool call deadlines for long-running providers (for example, FAL audio/sfx jobs).
 - `think` for structured reasoning
@@ -670,6 +672,7 @@ Dependency activation:
 - Support for GPT models (OpenAI)
 - Tool calling capability
 - Streaming support
+- Structured multimodal stream handling (assistant image/audio/file blocks)
 
 ### Runtime Requirements
 - Node.js >= 18
@@ -691,7 +694,7 @@ Wingman currently supports multiple model providers via API keys and stored toke
 | OpenAI | gpt-4o, gpt-4-turbo | `OPENAI_API_KEY` (or stored) | Cloud API |
 | OpenAI Codex | codex-mini-latest, gpt-5-codex | `CODEX_ACCESS_TOKEN`, `CHATGPT_ACCESS_TOKEN`, or Codex auth file | Subscription |
 | OpenRouter | any OpenRouter model | `OPENROUTER_API_KEY` (or stored) | Cloud API |
-| xAI | grok-beta | `XAI_API_KEY` (or stored) | Cloud API |
+| xAI | grok-beta, grok-imagine-image | `XAI_API_KEY` (or stored) | Cloud API |
 | GitHub Copilot | gpt-4o, gpt-4-turbo | `GITHUB_COPILOT_TOKEN` or `wingman provider login` | Subscription |
 | LM Studio | any loaded model | Optional: `LMSTUDIO_API_KEY` | Local Server |
 | Ollama | any pulled model | Optional: `OLLAMA_API_KEY` | Local Server |
@@ -704,6 +707,7 @@ Examples:
 - `codex:codex-mini-latest`
 - `openrouter:openai/gpt-4o`
 - `xai:grok-beta`
+- `xai:grok-imagine-image`
 - `copilot:gpt-4o`
 - `lmstudio:llama-3.1-8b`
 - `ollama:llama3.2`

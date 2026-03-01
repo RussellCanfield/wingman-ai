@@ -255,6 +255,17 @@ type ParsedToolStreamEvent = ToolEvent & {
 	parentRunIds?: string[];
 };
 
+type ParsedStreamAttachmentEvent = {
+	kind: "image" | "audio" | "file";
+	dataUrl: string;
+	textContent?: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+	messageId?: string;
+	isDelta?: boolean;
+};
+
 type WorkspaceState = {
 	connectionStatus: ConnectionStatus;
 	connectionMessage: string;
@@ -570,6 +581,66 @@ function mergeAssistantStreamText(
 	}
 	if (!existing.trim()) return incoming;
 	return `${existing}\n${incoming}`;
+}
+
+function normalizeStreamAttachment(
+	raw: ParsedStreamAttachmentEvent,
+): ChatAttachment | null {
+	const kind =
+		typeof raw.kind === "string" &&
+		(raw.kind === "image" || raw.kind === "audio" || raw.kind === "file")
+			? raw.kind
+			: null;
+	const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl.trim() : "";
+	if (!kind || !dataUrl) return null;
+
+	const textContent =
+		kind === "file" && typeof raw.textContent === "string"
+			? raw.textContent
+			: undefined;
+	const name = typeof raw.name === "string" ? raw.name : undefined;
+	const mimeType = typeof raw.mimeType === "string" ? raw.mimeType : undefined;
+	const size =
+		typeof raw.size === "number" && Number.isFinite(raw.size)
+			? raw.size
+			: undefined;
+
+	return {
+		id: createAttachmentId(),
+		kind,
+		dataUrl,
+		textContent,
+		name,
+		mimeType,
+		size,
+	};
+}
+
+function attachmentSignature(attachment: ChatAttachment): string {
+	return [
+		attachment.kind,
+		attachment.dataUrl,
+		attachment.textContent || "",
+		attachment.name || "",
+		attachment.mimeType || "",
+		typeof attachment.size === "number" ? String(attachment.size) : "",
+	].join("|");
+}
+
+function mergeStreamAttachments(
+	existing: ChatAttachment[] | undefined,
+	incoming: ChatAttachment[],
+): ChatAttachment[] | undefined {
+	if (incoming.length === 0) return existing;
+	const merged = [...(existing || [])];
+	const seen = new Set(merged.map((attachment) => attachmentSignature(attachment)));
+	for (const attachment of incoming) {
+		const signature = attachmentSignature(attachment);
+		if (seen.has(signature)) continue;
+		seen.add(signature);
+		merged.push(attachment);
+	}
+	return merged.length > 0 ? merged : undefined;
 }
 
 function useRuntimeController(isOverlayView: boolean) {
@@ -1331,6 +1402,71 @@ function useGatewayWorkspace(
 		syncRequestStreamingState();
 	}, [syncRequestStreamingState]);
 
+	const resolveTrackedGatewayRequestId = useCallback(
+		(requestId: string | null | undefined): string | null => {
+			const normalizedRequestId =
+				typeof requestId === "string" ? requestId.trim() : "";
+			if (
+				normalizedRequestId &&
+				pendingRequestIdsRef.current.has(normalizedRequestId)
+			) {
+				return normalizedRequestId;
+			}
+			const activeRequestId = activeGatewayRequestIdRef.current;
+			if (activeRequestId && pendingRequestIdsRef.current.has(activeRequestId)) {
+				return activeRequestId;
+			}
+			if (pendingRequestIdsRef.current.size === 1) {
+				const onlyPending = pendingRequestIdsRef.current.values().next().value;
+				if (typeof onlyPending === "string" && onlyPending.trim()) {
+					return onlyPending;
+				}
+			}
+			return null;
+		},
+		[],
+	);
+
+	const applyGatewayRequestFailure = useCallback(
+		(input: { requestId?: string | null; errorText?: string }): boolean => {
+			const resolvedRequestId = resolveTrackedGatewayRequestId(input.requestId);
+			if (!resolvedRequestId) return false;
+			const errorText =
+				typeof input.errorText === "string" && input.errorText.trim()
+					? input.errorText.trim()
+					: "Agent error";
+			const threadId = requestThreadRef.current.get(resolvedRequestId);
+			const messageId =
+				requestMessageRef.current.get(resolvedRequestId) || resolvedRequestId;
+			if (threadId) {
+				setWorkspace((prev) => ({
+					...prev,
+					threads: prev.threads.map((thread) => {
+						if (thread.id !== threadId) return thread;
+						return updateAssistantMessage(thread, messageId, (message) => {
+							const existing = message.content.trim();
+							if (!existing) {
+								return { ...message, content: errorText };
+							}
+							if (existing.includes(errorText)) {
+								return message;
+							}
+							return {
+								...message,
+								content: `${message.content.trimEnd()}\n\n${errorText}`,
+							};
+						});
+					}),
+				}));
+			}
+			finalizePendingRequest(resolvedRequestId);
+			requestThreadRef.current.delete(resolvedRequestId);
+			requestMessageRef.current.delete(resolvedRequestId);
+			return true;
+		},
+		[finalizePendingRequest, resolveTrackedGatewayRequestId],
+	);
+
 	useEffect(() => {
 		agentDetailsRef.current = workspace.agentDetailsById;
 	}, [workspace.agentDetailsById]);
@@ -1584,6 +1720,8 @@ function useGatewayWorkspace(
 
 			const parsed = parseStreamEvents(payload);
 			const parsedToolEvents = parsed.toolEvents as ParsedToolStreamEvent[];
+			const parsedAttachmentEvents =
+				parsed.attachmentEvents as ParsedStreamAttachmentEvent[];
 			const thinkingEvent: ThinkingEvent | null =
 				typeof data.type === "string" && data.type.includes("thinking")
 					? {
@@ -1599,6 +1737,41 @@ function useGatewayWorkspace(
 				threads: prev.threads.map((thread) => {
 					if (thread.id !== threadId) return thread;
 					let nextThread = thread;
+
+					if (parsedAttachmentEvents.length > 0) {
+						const attachmentEventsByMessageId = new Map<
+							string,
+							ChatAttachment[]
+						>();
+						for (const attachmentEvent of parsedAttachmentEvents) {
+							const nextAttachment = normalizeStreamAttachment(attachmentEvent);
+							if (!nextAttachment) continue;
+							const targetMessageId = resolveTextMessageTargetId({
+								state: requestStreamMessageRef.current,
+								requestId,
+								fallbackMessageId: messageId,
+								streamMessageId: attachmentEvent.messageId,
+								isDelta: attachmentEvent.isDelta,
+							});
+							const bucket = attachmentEventsByMessageId.get(targetMessageId) || [];
+							bucket.push(nextAttachment);
+							attachmentEventsByMessageId.set(targetMessageId, bucket);
+						}
+
+						for (const [attachmentMessageId, attachmentList] of attachmentEventsByMessageId) {
+							nextThread = updateAssistantMessage(
+								nextThread,
+								attachmentMessageId,
+								(message) => ({
+									...message,
+									attachments: mergeStreamAttachments(
+										message.attachments,
+										attachmentList,
+									),
+								}),
+							);
+						}
+					}
 
 					for (const [eventIndex, textEvent] of parsed.textEvents.entries()) {
 						const streamMessageId = textEvent.messageId;
@@ -1689,10 +1862,15 @@ function useGatewayWorkspace(
 			}));
 
 			if (data.type === "agent-error") {
-				finalizePendingRequest(requestId);
-				logEvent(`Agent error: ${data.error || "unknown error"}`);
-				requestThreadRef.current.delete(requestId);
-				requestMessageRef.current.delete(requestId);
+				const errorText =
+					typeof data.error === "string" && data.error.trim()
+						? data.error.trim()
+						: "unknown error";
+				applyGatewayRequestFailure({
+					requestId,
+					errorText,
+				});
+				logEvent(`Agent error: ${errorText}`);
 				return;
 			}
 
@@ -1729,6 +1907,7 @@ function useGatewayWorkspace(
 			}
 		},
 		[
+			applyGatewayRequestFailure,
 			finalizePendingRequest,
 			logEvent,
 			markRequestActive,
@@ -1877,8 +2056,12 @@ function useGatewayWorkspace(
 				}
 			},
 			onAgentEvent: applyAgentEvent,
-			onError: (message) => {
-				logEvent(message);
+			onError: (message, context) => {
+				const consumed = applyGatewayRequestFailure({
+					requestId: context?.requestId,
+					errorText: message,
+				});
+				logEvent(consumed ? `Gateway error: ${message}` : message);
 			},
 		});
 		const socketSettings =
@@ -1916,6 +2099,7 @@ function useGatewayWorkspace(
 		socketRef.current.connect(socketSettings, deviceIdRef.current);
 	}, [
 		applyAgentEvent,
+		applyGatewayRequestFailure,
 		enableNodeMode,
 		logEvent,
 		refreshAgentsData,

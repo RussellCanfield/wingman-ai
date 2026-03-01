@@ -27,6 +27,35 @@ vi.mock("@/cli/core/agentInvoker.js", () => ({
 			if (content === "throw-no-event") {
 				throw new Error("Synthetic invocation failure");
 			}
+			if (content === "stream-model-failure-no-error") {
+				this.outputManager?.emitAgentStream?.({
+					event: "on_chain_end",
+					run_id: "model-failure-run-1",
+					name: "ChannelWrite<branch:to:todoListMiddleware.after_model>",
+					data: {
+						output: [
+							{
+								lg_name: "Command",
+								update: {
+									messages: [
+										{
+											type: "constructor",
+											id: ["langchain_core", "messages", "AIMessage"],
+											kwargs: {
+												id: "model-failure-msg-1",
+												content:
+													"Model call failed after 3 attempts with Error: xAI image generation failed: Prompt len is larger than the maximum allowed length which is 8000",
+											},
+										},
+									],
+								},
+							},
+						],
+						input: {},
+					},
+				});
+				return { streaming: true };
+			}
 			const signal = options?.signal;
 			await new Promise<void>((resolve) => {
 				const timer = setTimeout(resolve, 75);
@@ -582,6 +611,61 @@ describeIfBun("Gateway", () => {
 		expect(completeMsg.payload?.sessionId).toBe(sessionId);
 		expect(completeMsg.payload?.agentId).toBe("main");
 		expect(completeMsg.payload?.result).toEqual({ streaming: true });
+
+		requester.close();
+	});
+
+	it("does not auto-convert streamed model failure text into agent-error", async () => {
+		const requester = await connectClient("session-streamed-failure-requester");
+		const requestId = "req-streamed-failure-no-error";
+		const sessionId = "session-streamed-failure-no-error";
+
+		requester.send(
+			JSON.stringify({
+				type: "req:agent",
+				id: requestId,
+				payload: {
+					agentId: "main",
+					sessionKey: sessionId,
+					content: "stream-model-failure-no-error",
+				},
+				timestamp: Date.now(),
+			}),
+		);
+
+		const streamMsg = await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-stream" &&
+				msg.payload?.chunk?.event === "on_chain_end",
+			10000,
+		);
+		expect(
+			JSON.stringify(streamMsg.payload?.chunk?.data || {}),
+		).toContain("Model call failed after 3 attempts");
+
+		const completeMsg = await waitForMessage(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-complete",
+			10000,
+		);
+		expect(completeMsg.payload?.sessionId).toBe(sessionId);
+		expect(completeMsg.payload?.agentId).toBe("main");
+
+		const terminalErrorEvents = await collectMessages(
+			requester,
+			(msg) =>
+				msg.type === "event:agent" &&
+				msg.id === requestId &&
+				msg.payload?.type === "agent-error",
+			400,
+		);
+		expect(terminalErrorEvents).toHaveLength(0);
 
 		requester.close();
 	});

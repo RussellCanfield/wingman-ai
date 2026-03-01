@@ -10,8 +10,65 @@ import { invokeTauri, isTauriRuntime } from "./tauriBridge.js";
 export type GatewaySocketEventHandlers = {
 	onConnectionChanged?: (connected: boolean, message: string) => void;
 	onAgentEvent?: (requestId: string, payload: unknown) => void;
-	onError?: (message: string) => void;
+	onError?: (
+		message: string,
+		context?: { requestId?: string; payload?: unknown },
+	) => void;
 };
+
+function normalizeNonEmptyString(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	return value as Record<string, unknown>;
+}
+
+function extractGatewayErrorMessage(payload: unknown): string {
+	const direct = normalizeNonEmptyString(payload);
+	if (direct) return direct;
+	const record = asRecord(payload);
+	if (!record) return "Gateway returned an error";
+	const details = asRecord(record.details);
+	const candidates = [
+		record.message,
+		record.error,
+		details?.message,
+		details?.error,
+	];
+	for (const candidate of candidates) {
+		const text = normalizeNonEmptyString(candidate);
+		if (text) return text;
+	}
+	return "Gateway returned an error";
+}
+
+function extractGatewayErrorRequestId(
+	messageId: unknown,
+	payload: unknown,
+): string | undefined {
+	const payloadRecord = asRecord(payload);
+	const details = payloadRecord ? asRecord(payloadRecord.details) : null;
+	const candidates = [
+		messageId,
+		payloadRecord?.requestId,
+		payloadRecord?.request_id,
+		payloadRecord?.id,
+		details?.requestId,
+		details?.request_id,
+		details?.id,
+	];
+	for (const candidate of candidates) {
+		const requestId = normalizeNonEmptyString(candidate);
+		if (requestId) return requestId;
+	}
+	return undefined;
+}
 
 export class GatewaySocketClient {
 	private socket: WebSocket | null = null;
@@ -98,11 +155,10 @@ export class GatewaySocketClient {
 			}
 
 			if (msg.type === "error") {
-				this.handlers.onError?.(
-					typeof msg.payload === "object" && msg.payload !== null
-						? JSON.stringify(msg.payload)
-						: String(msg.payload || "Gateway returned an error"),
-				);
+				this.handlers.onError?.(extractGatewayErrorMessage(msg.payload), {
+					requestId: extractGatewayErrorRequestId(msg.id, msg.payload),
+					payload: msg.payload,
+				});
 			}
 		};
 

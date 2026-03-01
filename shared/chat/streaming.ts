@@ -23,8 +23,21 @@ export type ParsedTextEvent = {
 	isDelta?: boolean;
 };
 
+export type ParsedAttachmentEvent = {
+	kind: "image" | "audio" | "file";
+	dataUrl: string;
+	textContent?: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+	messageId?: string;
+	node?: string;
+	isDelta?: boolean;
+};
+
 export type ParsedStreamEvent = {
 	textEvents: ParsedTextEvent[];
+	attachmentEvents: ParsedAttachmentEvent[];
 	toolEvents: Array<{
 		id: string;
 		name: string;
@@ -57,8 +70,11 @@ type NormalizedToolCall = {
 
 export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 	const textEvents: ParsedTextEvent[] = [];
+	const attachmentEvents: ParsedAttachmentEvent[] = [];
 	const toolEvents: ParsedStreamEvent["toolEvents"] = [];
-	if (!chunk || typeof chunk !== "object") return { textEvents, toolEvents };
+	if (!chunk || typeof chunk !== "object") {
+		return { textEvents, attachmentEvents, toolEvents };
+	}
 
 	const unwrappedChunk = unwrapAgentStreamChunk(chunk);
 	if (unwrappedChunk) {
@@ -69,7 +85,7 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		const eventParsed = parseStreamEventChunk(chunk);
 		if (eventParsed) return eventParsed;
 		// Ignore unsupported LangGraph lifecycle events.
-		return { textEvents, toolEvents };
+		return { textEvents, attachmentEvents, toolEvents };
 	}
 
 	const messageEntries = normalizeMessagesFromChunk(chunk);
@@ -88,6 +104,15 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				const messageId = getMessageId(msg, entry);
 				const node = extractNodeLabel(msg, entry.meta);
 				const isDelta = isMessageDelta(msg, normalizedType);
+				const parsedAttachments = extractAttachmentsFromMessage(msg);
+				for (const attachment of parsedAttachments) {
+					attachmentEvents.push({
+						...attachment,
+						messageId,
+						node,
+						isDelta,
+					});
+				}
 				const toolCalls = extractToolCalls(msg, messageId);
 				for (const toolCall of toolCalls) {
 					const {
@@ -150,8 +175,12 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				}
 			}
 		}
-		if (textEvents.length > 0 || toolEvents.length > 0) {
-			return { textEvents, toolEvents };
+		if (
+			textEvents.length > 0 ||
+			attachmentEvents.length > 0 ||
+			toolEvents.length > 0
+		) {
+			return { textEvents, attachmentEvents, toolEvents };
 		}
 	}
 
@@ -159,6 +188,11 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		const text = sanitizeDisplayText(chunk.content);
 		if (text) {
 			textEvents.push({ text });
+		}
+	} else {
+		const parsedAttachments = extractAttachmentsFromMessage({ content: chunk.content });
+		for (const attachment of parsedAttachments) {
+			attachmentEvents.push(attachment);
 		}
 	}
 
@@ -187,7 +221,7 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		}
 	}
 
-	return { textEvents, toolEvents };
+	return { textEvents, attachmentEvents, toolEvents };
 }
 
 function unwrapAgentStreamChunk(chunk: any): any | undefined {
@@ -211,18 +245,32 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 	if (chunk.event === "on_chat_model_stream") {
 		const messageChunk = chunk.data?.chunk ?? chunk.data?.message;
 		if (!isAIChatModelChunk(messageChunk)) return null;
+		const messageId =
+			typeof chunk.run_id === "string" ? chunk.run_id : undefined;
+		const node = extractEventNode(chunk);
+		const parsedAttachments = extractAttachmentsFromMessage(messageChunk).map(
+			(attachment) => ({
+				...attachment,
+				messageId,
+				node,
+				isDelta: true,
+			}),
+		);
 		const text = sanitizeDeltaDisplayText(extractTextContent(messageChunk));
-		if (text === undefined) return null;
+		if (text === undefined && parsedAttachments.length === 0) return null;
 		return {
-			textEvents: [
-				{
-					text,
-					messageId:
-						typeof chunk.run_id === "string" ? chunk.run_id : undefined,
-					node: extractEventNode(chunk),
-					isDelta: true,
-				},
-			],
+			textEvents:
+				text === undefined
+					? []
+					: [
+							{
+								text,
+								messageId,
+								node,
+								isDelta: true,
+							},
+						],
+			attachmentEvents: parsedAttachments,
 			toolEvents: [],
 		};
 	}
@@ -247,6 +295,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 					isDelta: true,
 				},
 			],
+			attachmentEvents: [],
 			toolEvents: [],
 		};
 	}
@@ -266,6 +315,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		} = splitUiPayload(normalizeToolArgs(chunk.data?.input));
 		return {
 			textEvents: [],
+			attachmentEvents: [],
 			toolEvents: [
 				{
 					id: toolId,
@@ -302,6 +352,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		} = splitUiPayload(chunk.data?.output);
 		return {
 			textEvents: [],
+			attachmentEvents: [],
 			toolEvents: [
 				{
 					id: toolId,
@@ -340,6 +391,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		} = splitUiPayload(chunk.data?.output ?? errorPayload);
 		return {
 			textEvents: [],
+			attachmentEvents: [],
 			toolEvents: [
 				{
 					id: toolId,
@@ -359,7 +411,348 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		};
 	}
 
+	const chainAttachmentEvent = parseChainAttachmentEvent(chunk);
+	if (chainAttachmentEvent) {
+		return chainAttachmentEvent;
+	}
+
+	const chainFailureEvent = parseChainFailureEvent(chunk);
+	if (chainFailureEvent) {
+		return chainFailureEvent;
+	}
+
 	return null;
+}
+
+function parseChainAttachmentEvent(chunk: any): ParsedStreamEvent | null {
+	const eventName =
+		typeof chunk?.event === "string" ? chunk.event.toLowerCase() : "";
+	if (eventName !== "on_chain_stream" && eventName !== "on_chain_end") {
+		return null;
+	}
+	const inputAttachmentSignatures = collectAiAttachmentSignatures(
+		chunk?.data?.input,
+		chunk?.data?.inputs,
+	);
+
+	// Only inspect emitted chain outputs for attachments. Inputs/states often
+	// include historical thread messages and would replay prior images.
+	const searchCandidates = [
+		chunk?.data?.chunk,
+		chunk?.data?.output,
+	];
+	for (const candidate of searchCandidates) {
+		const match = findLatestAiMessageWithAttachments(candidate, {
+			excludeAttachmentSignatures: inputAttachmentSignatures,
+		});
+		if (!match) continue;
+		const messageId = match.messageId || normalizeRunIdentifier(chunk?.run_id);
+		const node = match.node || extractEventNode(chunk);
+		return {
+			textEvents: [],
+			attachmentEvents: match.attachments.map((attachment) => ({
+				...attachment,
+				messageId,
+				node,
+				isDelta: eventName === "on_chain_stream",
+			})),
+			toolEvents: [],
+		};
+	}
+
+	return null;
+}
+
+function findLatestAiMessageWithAttachments(
+	value: unknown,
+	options?: {
+		excludeAttachmentSignatures?: Set<string>;
+	},
+):
+	| {
+			attachments: Array<{
+				kind: "image" | "audio" | "file";
+				dataUrl: string;
+				textContent?: string;
+				name?: string;
+				mimeType?: string;
+				size?: number;
+			}>;
+			messageId?: string;
+			node?: string;
+	  }
+	| null {
+	const orderedMessages: Array<{
+		message: Record<string, unknown>;
+		meta?: any;
+		isAI: boolean;
+		isHuman: boolean;
+	}> = [];
+
+	const visit = (candidate: unknown, meta?: any): void => {
+		if (!candidate || typeof candidate !== "object") return;
+		if (Array.isArray(candidate)) {
+			for (const item of candidate) {
+				visit(item, meta);
+			}
+			return;
+		}
+
+		const record = candidate as Record<string, unknown>;
+		const messageType = getMessageType(record);
+		const normalizedType = messageType ? messageType.toLowerCase() : "";
+		const role = getMessageRole(record);
+		const normalizedRole =
+			typeof role === "string" ? role.trim().toLowerCase() : "";
+		const isAIMessage =
+			isAIMessageType(normalizedType) || normalizedRole === "assistant";
+		const isHumanMessage =
+			isHumanMessageType(normalizedType) ||
+			normalizedRole === "user" ||
+			normalizedRole === "human";
+		if (isAIMessage || isHumanMessage) {
+			orderedMessages.push({
+				message: record,
+				meta,
+				isAI: isAIMessage,
+				isHuman: isHumanMessage,
+			});
+		}
+
+		for (const [key, nested] of Object.entries(record)) {
+			if (!nested || typeof nested !== "object") continue;
+			const nextMeta = key === "metadata" ? nested : meta;
+			visit(nested, nextMeta);
+		}
+	};
+
+	visit(value);
+	if (orderedMessages.length === 0) return null;
+
+	let latestHumanIndex = -1;
+	for (const [index, entry] of orderedMessages.entries()) {
+		if (entry.isHuman) {
+			latestHumanIndex = index;
+		}
+	}
+
+	if (latestHumanIndex >= 0) {
+		for (let index = orderedMessages.length - 1; index >= 0; index -= 1) {
+			if (index <= latestHumanIndex) {
+				// Only use AI messages that occur after the most recent user/human
+				// message in the same snapshot to avoid replaying stale attachments.
+				break;
+			}
+			const entry = orderedMessages[index];
+			if (!entry?.isAI) continue;
+			const attachments = filterAttachmentSignatures(
+				extractAttachmentsFromMessage(entry.message),
+				options?.excludeAttachmentSignatures,
+			);
+			if (attachments.length === 0) continue;
+			return {
+				attachments,
+				messageId: getMessageId(entry.message, {
+					message: entry.message,
+					meta: entry.meta,
+				}),
+				node: extractNodeLabel(entry.message, entry.meta),
+			};
+		}
+	}
+
+	// If there is no trailing user/human message in this snapshot, fall back to
+	// the latest AI message only. Do not backtrack to older AI snapshots.
+	if (latestHumanIndex < 0) {
+		let latestAiEntry:
+			| {
+					message: Record<string, unknown>;
+					meta?: any;
+					isAI: boolean;
+					isHuman: boolean;
+			  }
+			| null = null;
+		for (let index = orderedMessages.length - 1; index >= 0; index -= 1) {
+			const entry = orderedMessages[index];
+			if (!entry?.isAI) continue;
+			latestAiEntry = entry;
+			break;
+		}
+		if (!latestAiEntry) return null;
+		const attachments = filterAttachmentSignatures(
+			extractAttachmentsFromMessage(latestAiEntry.message),
+			options?.excludeAttachmentSignatures,
+		);
+		if (attachments.length === 0) return null;
+		return {
+			attachments,
+			messageId: getMessageId(latestAiEntry.message, {
+				message: latestAiEntry.message,
+				meta: latestAiEntry.meta,
+			}),
+			node: extractNodeLabel(latestAiEntry.message, latestAiEntry.meta),
+		};
+	}
+
+	return null;
+}
+
+function filterAttachmentSignatures(
+	attachments: Array<{
+		kind: "image" | "audio" | "file";
+		dataUrl: string;
+		textContent?: string;
+		name?: string;
+		mimeType?: string;
+		size?: number;
+	}>,
+	excludedSignatures?: Set<string>,
+): Array<{
+	kind: "image" | "audio" | "file";
+	dataUrl: string;
+	textContent?: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+}> {
+	if (!excludedSignatures || excludedSignatures.size === 0) {
+		return attachments;
+	}
+	return attachments.filter(
+		(attachment) => !excludedSignatures.has(buildAttachmentSignature(attachment)),
+	);
+}
+
+function collectAiAttachmentSignatures(...values: unknown[]): Set<string> {
+	const signatures = new Set<string>();
+
+	const visit = (candidate: unknown): void => {
+		if (!candidate || typeof candidate !== "object") return;
+		if (Array.isArray(candidate)) {
+			for (const item of candidate) {
+				visit(item);
+			}
+			return;
+		}
+
+		const record = candidate as Record<string, unknown>;
+		const messageType = getMessageType(record);
+		const normalizedType = messageType ? messageType.toLowerCase() : "";
+		const role = getMessageRole(record);
+		const isAIMessage =
+			isAIMessageType(normalizedType) || role === "assistant";
+		if (isAIMessage) {
+			for (const attachment of extractAttachmentsFromMessage(record)) {
+				signatures.add(buildAttachmentSignature(attachment));
+			}
+		}
+
+		for (const nested of Object.values(record)) {
+			if (!nested || typeof nested !== "object") continue;
+			visit(nested);
+		}
+	};
+
+	for (const value of values) {
+		visit(value);
+	}
+	return signatures;
+}
+
+function buildAttachmentSignature(attachment: {
+	kind: "image" | "audio" | "file";
+	dataUrl: string;
+	textContent?: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+}): string {
+	return [
+		attachment.kind,
+		attachment.dataUrl,
+		attachment.textContent || "",
+		attachment.name || "",
+		attachment.mimeType || "",
+		typeof attachment.size === "number" ? String(attachment.size) : "",
+	].join("|");
+}
+
+function parseChainFailureEvent(chunk: any): ParsedStreamEvent | null {
+	const eventName =
+		typeof chunk?.event === "string" ? chunk.event.toLowerCase() : "";
+	if (eventName !== "on_chain_stream" && eventName !== "on_chain_end") {
+		return null;
+	}
+
+	const searchCandidates = [
+		chunk?.data?.chunk,
+		chunk?.data?.output,
+		chunk?.data?.input,
+		chunk?.data?.inputs,
+		chunk?.data?.state,
+		chunk?.data,
+	];
+	for (const candidate of searchCandidates) {
+		const match = findLatestFailureAiMessage(candidate);
+		if (!match) continue;
+		return {
+			textEvents: [
+				{
+					text: match.text,
+					messageId: match.messageId || normalizeRunIdentifier(chunk?.run_id),
+					node: match.node || extractEventNode(chunk),
+					// Use delta semantics to dedupe repeated chain lifecycle echoes.
+					isDelta: true,
+				},
+			],
+			attachmentEvents: [],
+			toolEvents: [],
+		};
+	}
+
+	return null;
+}
+
+function findLatestFailureAiMessage(
+	value: unknown,
+): { text: string; messageId?: string; node?: string } | null {
+	let latest: { text: string; messageId?: string; node?: string } | null = null;
+
+	const visit = (candidate: unknown, meta?: any): void => {
+		if (!candidate || typeof candidate !== "object") return;
+		if (Array.isArray(candidate)) {
+			for (const item of candidate) {
+				visit(item, meta);
+			}
+			return;
+		}
+
+		const record = candidate as Record<string, unknown>;
+		const messageType = getMessageType(record);
+		const normalizedType = messageType ? messageType.toLowerCase() : "";
+		const role = getMessageRole(record);
+		const isAIMessage =
+			isAIMessageType(normalizedType) || role === "assistant";
+		if (isAIMessage) {
+			const text = sanitizeDisplayText(extractTextContent(record));
+			if (text && looksLikeModelFailureText(text)) {
+				latest = {
+					text,
+					messageId: getMessageId(record, { message: record, meta }),
+					node: extractNodeLabel(record, meta),
+				};
+			}
+		}
+
+		for (const [key, nested] of Object.entries(record)) {
+			if (!nested || typeof nested !== "object") continue;
+			const nextMeta = key === "metadata" ? nested : meta;
+			visit(nested, nextMeta);
+		}
+	};
+
+	visit(value);
+	return latest;
 }
 
 function isAIChatModelChunk(message: any): boolean {
@@ -415,6 +808,10 @@ function isAIChatModelChunk(message: any): boolean {
 }
 
 function normalizeMessagesFromChunk(chunk: any): MessageEntry[] {
+	if (!chunk || typeof chunk !== "object") {
+		return [];
+	}
+
 	if (Array.isArray(chunk) && chunk.length >= 3 && chunk[1] === "messages") {
 		return normalizeMessagesPayload(chunk[2], String(chunk[0] ?? "messages"));
 	}
@@ -472,7 +869,9 @@ function getMessageType(msg: any): string | undefined {
 	if (!msg) return undefined;
 	if (typeof msg._getType === "function") return msg._getType();
 	if (typeof msg.getType === "function") return msg.getType();
-	if (typeof msg.type === "string") return msg.type;
+	if (typeof msg.type === "string" && msg.type.toLowerCase() !== "constructor") {
+		return msg.type;
+	}
 
 	if (Array.isArray(msg.id) && msg.id.length > 0) {
 		return String(msg.id[msg.id.length - 1]);
@@ -488,6 +887,14 @@ function getMessageType(msg: any): string | undefined {
 	}
 
 	return undefined;
+}
+
+function looksLikeModelFailureText(text: string): boolean {
+	const normalized = text.toLowerCase();
+	return (
+		normalized.includes("model call failed") ||
+		(normalized.includes("failed after") && normalized.includes("error:"))
+	);
 }
 
 function getMessageRole(msg: any): string | undefined {
@@ -506,6 +913,17 @@ function isAIMessageType(normalizedType: string): boolean {
 		normalizedType === "assistant" ||
 		normalizedType === "aimessage" ||
 		normalizedType === "aimessagechunk"
+	);
+}
+
+function isHumanMessageType(normalizedType: string): boolean {
+	return (
+		normalizedType === "human" ||
+		normalizedType === "user" ||
+		normalizedType === "humanmessage" ||
+		normalizedType === "usermessage" ||
+		normalizedType === "humanmessagechunk" ||
+		normalizedType === "usermessagechunk"
 	);
 }
 
@@ -801,6 +1219,389 @@ function extractTextContent(message: any): string | undefined {
 		return blocks.length > 0 ? blocks.join("") : undefined;
 	}
 	return undefined;
+}
+
+function extractAttachmentsFromMessage(message: any): Array<{
+	kind: "image" | "audio" | "file";
+	dataUrl: string;
+	textContent?: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+}> {
+	if (!message || typeof message !== "object") return [];
+	const content =
+		message.content ??
+		message?.kwargs?.content ??
+		message?.additional_kwargs?.content;
+	const blocks = extractAttachmentBlocks(content);
+	if (blocks.length === 0) return [];
+
+	const attachments: Array<{
+		kind: "image" | "audio" | "file";
+		dataUrl: string;
+		textContent?: string;
+		name?: string;
+		mimeType?: string;
+		size?: number;
+	}> = [];
+	for (const block of blocks) {
+		const parsed = extractAttachmentFromBlock(block);
+		if (parsed) {
+			attachments.push(parsed);
+		}
+	}
+	return attachments;
+}
+
+function extractAttachmentBlocks(value: unknown): Array<Record<string, unknown>> {
+	if (Array.isArray(value)) {
+		return value
+			.filter(
+				(entry): entry is Record<string, unknown> =>
+					Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
+			)
+			.map((entry) => entry as Record<string, unknown>);
+	}
+	if (typeof value === "string") {
+		const parsed = tryParseJson(value);
+		return parsed !== null ? extractAttachmentBlocks(parsed) : [];
+	}
+	if (!value || typeof value !== "object") {
+		return [];
+	}
+	const record = value as Record<string, unknown>;
+	if (Array.isArray(record.content)) {
+		return extractAttachmentBlocks(record.content);
+	}
+	if (typeof record.content === "string") {
+		return extractAttachmentBlocks(record.content);
+	}
+	return [];
+}
+
+function extractAttachmentFromBlock(block: Record<string, unknown>): {
+	kind: "image" | "audio" | "file";
+	dataUrl: string;
+	textContent?: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+} | null {
+	const imageUrl = extractImageUrl(block);
+	if (imageUrl) {
+		return {
+			kind: "image",
+			dataUrl: imageUrl,
+			name: extractString(block.name),
+			mimeType: extractString(block.mimeType, block.mime_type),
+			size: extractNumber(block.size),
+		};
+	}
+
+	const audioUrl = extractAudioUrl(block);
+	if (audioUrl) {
+		return {
+			kind: "audio",
+			dataUrl: audioUrl,
+			name: extractString(block.name),
+			mimeType: extractString(block.mimeType, block.mime_type),
+			size: extractNumber(block.size),
+		};
+	}
+
+	const file = extractFileAttachment(block);
+	if (file) {
+		return file;
+	}
+
+	return null;
+}
+
+function extractImageUrl(block: Record<string, unknown>): string | null {
+	if (block.type === "image_url") {
+		const imageUrl = block.image_url;
+		if (typeof imageUrl === "string") return imageUrl;
+		if (
+			imageUrl &&
+			typeof imageUrl === "object" &&
+			typeof (imageUrl as Record<string, unknown>).url === "string"
+		) {
+			return (imageUrl as Record<string, unknown>).url as string;
+		}
+	}
+	if (block.type === "input_image" || block.type === "output_image") {
+		const imageUrl = block.image_url;
+		if (typeof imageUrl === "string") return imageUrl;
+		if (
+			imageUrl &&
+			typeof imageUrl === "object" &&
+			typeof (imageUrl as Record<string, unknown>).url === "string"
+		) {
+			return (imageUrl as Record<string, unknown>).url as string;
+		}
+		if (typeof block.url === "string") return block.url;
+	}
+	if (block.type === "image") {
+		const source =
+			block.source && typeof block.source === "object"
+				? (block.source as Record<string, unknown>)
+				: undefined;
+		const sourceMediaType = extractString(source?.media_type, source?.mediaType);
+		const sourceData = extractString(source?.data);
+		if (sourceMediaType && sourceData) {
+			return `data:${sourceMediaType};base64,${sourceData}`;
+		}
+
+		const sourceType = extractString(block.source_type, block.sourceType);
+		const mimeType =
+			extractString(
+				block.mime_type,
+				block.mimeType,
+				block.media_type,
+				block.mediaType,
+			) || "image/png";
+		if (sourceType === "base64" && typeof block.data === "string") {
+			return `data:${mimeType};base64,${block.data}`;
+		}
+		if (sourceType === "url" && typeof block.url === "string") {
+			return block.url;
+		}
+		if (typeof block.data === "string") {
+			return `data:${mimeType};base64,${block.data}`;
+		}
+	}
+	if (block.type === "resource_link") {
+		const mimeType = extractString(block.mimeType)?.toLowerCase() || "";
+		const uri = extractString(block.uri);
+		if (uri && (!mimeType || mimeType.startsWith("image/"))) {
+			return uri;
+		}
+	}
+	if (block.type === "resource" && block.resource) {
+		const resource =
+			typeof block.resource === "object"
+				? (block.resource as Record<string, unknown>)
+				: undefined;
+		if (!resource) return null;
+		const mimeType = extractString(resource.mimeType)?.toLowerCase() || "";
+		if (!mimeType || !mimeType.startsWith("image/")) return null;
+		const blob = extractString(resource.blob);
+		if (blob) {
+			return `data:${mimeType};base64,${blob}`;
+		}
+		const uri = extractString(resource.uri);
+		if (uri) return uri;
+	}
+	return null;
+}
+
+function extractAudioUrl(block: Record<string, unknown>): string | null {
+	if (block.type === "audio_url") {
+		const audioUrl = block.audio_url;
+		if (typeof audioUrl === "string") return audioUrl;
+		if (
+			audioUrl &&
+			typeof audioUrl === "object" &&
+			typeof (audioUrl as Record<string, unknown>).url === "string"
+		) {
+			return (audioUrl as Record<string, unknown>).url as string;
+		}
+	}
+	if (block.type === "input_audio") {
+		const input =
+			block.input_audio && typeof block.input_audio === "object"
+				? (block.input_audio as Record<string, unknown>)
+				: block.audio && typeof block.audio === "object"
+					? (block.audio as Record<string, unknown>)
+					: undefined;
+		const data = extractString(input?.data);
+		const format = extractString(input?.format);
+		if (data) {
+			const mimeType = format ? resolveAudioMimeType(format) : "audio/wav";
+			return `data:${mimeType};base64,${data}`;
+		}
+	}
+	if (block.type === "audio") {
+		const source =
+			block.source && typeof block.source === "object"
+				? (block.source as Record<string, unknown>)
+				: undefined;
+		const sourceMediaType = extractString(source?.media_type, source?.mediaType);
+		const sourceData = extractString(source?.data);
+		if (sourceMediaType && sourceData) {
+			return `data:${sourceMediaType};base64,${sourceData}`;
+		}
+
+		const sourceType = extractString(block.source_type, block.sourceType);
+		if (sourceType === "base64" && typeof block.data === "string") {
+			const rawFormat = extractString(
+				block.mime_type,
+				block.media_type,
+				block.mediaType,
+				block.format,
+			);
+			const mimeType =
+				rawFormat && rawFormat.includes("/")
+					? rawFormat
+					: rawFormat
+						? resolveAudioMimeType(rawFormat)
+						: "audio/wav";
+			return `data:${mimeType};base64,${block.data}`;
+		}
+		if (sourceType === "url" && typeof block.url === "string") {
+			return block.url;
+		}
+	}
+	return null;
+}
+
+function extractFileAttachment(block: Record<string, unknown>): {
+	kind: "file";
+	dataUrl: string;
+	textContent?: string;
+	name?: string;
+	mimeType?: string;
+	size?: number;
+} | null {
+	if (block.type === "file") {
+		const sourceType = extractString(block.source_type, block.sourceType);
+		const metadata =
+			block.metadata && typeof block.metadata === "object"
+				? (block.metadata as Record<string, unknown>)
+				: {};
+		const name = extractString(
+			block.name,
+			block.filename,
+			metadata.filename,
+			metadata.name,
+			metadata.title,
+		);
+		const declaredMime = extractString(
+			block.mime_type,
+			block.mimeType,
+			block.media_type,
+			block.mediaType,
+		);
+		if (sourceType === "base64" && typeof block.data === "string") {
+			const mimeType = declaredMime || "application/octet-stream";
+			return {
+				kind: "file",
+				dataUrl: `data:${mimeType};base64,${block.data}`,
+				name,
+				mimeType,
+				size: extractNumber(block.size),
+				textContent: extractString(block.text, block.textContent),
+			};
+		}
+		if (sourceType === "url" && typeof block.url === "string") {
+			const mimeType = declaredMime || parseDataUrlMime(block.url);
+			return {
+				kind: "file",
+				dataUrl: block.url,
+				name,
+				mimeType,
+				size: extractNumber(block.size),
+				textContent: extractString(block.text, block.textContent),
+			};
+		}
+	}
+
+	if (block.type === "input_file") {
+		const dataUrl = extractString(block.file_data, block.file_url);
+		if (!dataUrl) return null;
+		return {
+			kind: "file",
+			dataUrl,
+			name: extractString(block.filename),
+			mimeType: parseDataUrlMime(dataUrl),
+			size: extractNumber(block.size),
+			textContent: extractString(block.text, block.textContent),
+		};
+	}
+
+	if (block.type === "document" && block.source && typeof block.source === "object") {
+		const source = block.source as Record<string, unknown>;
+		const sourceType = extractString(source.type);
+		const name = extractString(block.title);
+		if (sourceType === "base64" && typeof source.data === "string") {
+			const mimeType = extractString(source.media_type) || "application/pdf";
+			return {
+				kind: "file",
+				dataUrl: `data:${mimeType};base64,${source.data}`,
+				name,
+				mimeType,
+				size: extractNumber(block.size),
+				textContent: extractString(block.text, block.textContent),
+			};
+		}
+		if (sourceType === "url" && typeof source.url === "string") {
+			return {
+				kind: "file",
+				dataUrl: source.url,
+				name,
+				mimeType: parseDataUrlMime(source.url),
+				size: extractNumber(block.size),
+				textContent: extractString(block.text, block.textContent),
+			};
+		}
+	}
+
+	return null;
+}
+
+function resolveAudioMimeType(format: string): string {
+	const normalized = format.toLowerCase();
+	switch (normalized) {
+		case "mp3":
+		case "mpeg":
+			return "audio/mpeg";
+		case "wav":
+			return "audio/wav";
+		case "m4a":
+		case "mp4":
+			return "audio/mp4";
+		case "ogg":
+			return "audio/ogg";
+		case "webm":
+			return "audio/webm";
+		default:
+			return `audio/${normalized}`;
+	}
+}
+
+function parseDataUrlMime(dataUrl?: string): string | undefined {
+	if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+		return undefined;
+	}
+	const match = dataUrl.match(/^data:([^;,]+)[;,]/i);
+	return match?.[1];
+}
+
+function extractString(...values: unknown[]): string | undefined {
+	for (const value of values) {
+		if (typeof value === "string" && value.trim().length > 0) {
+			return value.trim();
+		}
+	}
+	return undefined;
+}
+
+function extractNumber(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function tryParseJson(value: string): unknown | null {
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+	if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) {
+		return null;
+	}
+	try {
+		return JSON.parse(trimmed);
+	} catch {
+		return null;
+	}
 }
 
 const INTERNAL_TOOL_ENVELOPE_MARKERS: RegExp[] = [

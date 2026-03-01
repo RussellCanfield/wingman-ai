@@ -59,6 +59,10 @@ import {
 	isSupportedTextUploadFile,
 	readUploadFileText,
 } from "./utils/fileUpload";
+import {
+	extractGatewayErrorMessage,
+	resolveTrackedGatewayErrorRequestId,
+} from "./utils/gatewayError";
 import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
 import { getWorkspaceShellClass } from "./utils/layoutShell";
@@ -75,6 +79,7 @@ import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
 import { parseStreamEvents } from "./utils/streaming";
 import {
 	clearStreamMessageTargets,
+	resolveTextMessageTargetId,
 	resolveToolMessageTargetId,
 } from "./utils/streamMessageRouter";
 import { appendLocalPromptMessagesToThread } from "./utils/threadState";
@@ -1120,6 +1125,29 @@ export const App: React.FC = () => {
 		[],
 	);
 
+	const updateAttachmentEvents = useCallback(
+		(requestId: string, messageId: string, events: ChatAttachment[]) => {
+			const threadId = requestThreadRef.current.get(requestId);
+			if (!threadId || events.length === 0) return;
+
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+					return upsertAssistantMessage(
+						thread,
+						messageId,
+						(msg) => ({
+							...msg,
+							attachments: mergeStreamAttachments(msg.attachments, events),
+						}),
+						requestId,
+					);
+				}),
+			);
+		},
+		[],
+	);
+
 	const cleanupRequestState = useCallback(
 		(requestId: string) => {
 			for (const [key, update] of queuedAssistantUpdatesRef.current) {
@@ -1419,7 +1447,9 @@ export const App: React.FC = () => {
 				return;
 			}
 			if (payload.type === "agent-stream") {
-				const { textEvents, toolEvents } = parseStreamEvents(payload.chunk);
+				const { textEvents, attachmentEvents, toolEvents } = parseStreamEvents(
+					payload.chunk,
+				);
 				const shouldHandleDeltaTextStream = isAssistantTextStreamChunk(
 					payload.chunk,
 				);
@@ -1476,6 +1506,30 @@ export const App: React.FC = () => {
 						resolveRequestMessageId(requestId),
 						thinkingUpdates,
 					);
+				}
+				if (attachmentEvents.length > 0) {
+					const attachmentEventsByMessageId = new Map<
+						string,
+						ChatAttachment[]
+					>();
+					for (const event of attachmentEvents) {
+						const parsedAttachment = normalizeStreamAttachment(event);
+						if (!parsedAttachment) continue;
+						const targetMessageId = resolveTextMessageTargetId({
+							state: requestStreamMessageRef.current,
+							requestId,
+							fallbackMessageId: requestId,
+							streamMessageId: event.messageId,
+							isDelta: event.isDelta,
+						});
+						const bucket =
+							attachmentEventsByMessageId.get(targetMessageId) || [];
+						bucket.push(parsedAttachment);
+						attachmentEventsByMessageId.set(targetMessageId, bucket);
+					}
+					for (const [messageId, parsedAttachments] of attachmentEventsByMessageId) {
+						updateAttachmentEvents(requestId, messageId, parsedAttachments);
+					}
 				}
 
 				if (toolEvents.length > 0) {
@@ -1608,6 +1662,7 @@ export const App: React.FC = () => {
 			logEvent,
 			markPendingRequestActive,
 			queueAssistantUpdate,
+			updateAttachmentEvents,
 			resolveRequestMessageId,
 			subagentMap,
 			updateThinkingEvents,
@@ -1741,10 +1796,26 @@ export const App: React.FC = () => {
 				return;
 			}
 
-			if (msg.type === "error") {
-				logEvent(`Gateway error: ${msg.payload?.message || "unknown"}`);
-			}
-		};
+				if (msg.type === "error") {
+					const errorText =
+						extractGatewayErrorMessage(msg.payload) || "unknown";
+					logEvent(`Gateway error: ${errorText}`);
+					const requestId = resolveTrackedGatewayErrorRequestId({
+						messageId: msg.id,
+						payload: msg.payload,
+						pendingRequestIds: pendingRequestIdsRef.current,
+						activeRequestId: activeRequestIdRef.current,
+					});
+					if (requestId) {
+						flushQueuedAssistantUpdates();
+						finalizeAssistant(requestId, {
+							fallback: errorText,
+							forceText: true,
+							appendFallbackToExisting: true,
+						});
+					}
+				}
+			};
 
 		ws.onerror = () => {
 			void gatewayStream.stop();
@@ -3307,4 +3378,69 @@ function isAudioAttachment(attachment: ChatAttachment): boolean {
 function isFileAttachment(attachment: ChatAttachment): boolean {
 	if (attachment.kind === "file") return true;
 	return typeof attachment.textContent === "string";
+}
+
+function normalizeStreamAttachment(raw: {
+	kind?: unknown;
+	dataUrl?: unknown;
+	textContent?: unknown;
+	name?: unknown;
+	mimeType?: unknown;
+	size?: unknown;
+}): ChatAttachment | null {
+	const kind =
+		typeof raw.kind === "string" &&
+		(raw.kind === "image" || raw.kind === "audio" || raw.kind === "file")
+			? raw.kind
+			: null;
+	const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl.trim() : "";
+	if (!kind || !dataUrl) return null;
+
+	const textContent =
+		kind === "file" && typeof raw.textContent === "string"
+			? raw.textContent
+			: undefined;
+	const name = typeof raw.name === "string" ? raw.name : undefined;
+	const mimeType = typeof raw.mimeType === "string" ? raw.mimeType : undefined;
+	const size =
+		typeof raw.size === "number" && Number.isFinite(raw.size)
+			? raw.size
+			: undefined;
+
+	return {
+		id: createAttachmentId(),
+		kind,
+		dataUrl,
+		textContent,
+		name,
+		mimeType,
+		size,
+	};
+}
+
+function attachmentSignature(attachment: ChatAttachment): string {
+	return [
+		attachment.kind,
+		attachment.dataUrl,
+		attachment.textContent || "",
+		attachment.name || "",
+		attachment.mimeType || "",
+		typeof attachment.size === "number" ? String(attachment.size) : "",
+	].join("|");
+}
+
+function mergeStreamAttachments(
+	existing: ChatAttachment[] | undefined,
+	incoming: ChatAttachment[],
+): ChatAttachment[] | undefined {
+	if (incoming.length === 0) return existing;
+	const merged = [...(existing || [])];
+	const seen = new Set(merged.map((attachment) => attachmentSignature(attachment)));
+	for (const attachment of incoming) {
+		const signature = attachmentSignature(attachment);
+		if (seen.has(signature)) continue;
+		seen.add(signature);
+		merged.push(attachment);
+	}
+	return merged.length > 0 ? merged : undefined;
 }

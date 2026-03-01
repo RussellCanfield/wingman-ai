@@ -4,9 +4,9 @@
 
 The Wingman Gateway is the central runtime for agents, sessions, routing, and channels. It accepts inbound messages from channels and clients (CLI, Control UI), routes deterministically to a single agent via bindings, loads durable session state, runs the agent, and streams the response back to the originating channel. Broadcast rooms are an explicit opt-in for swarm scenarios.
 
-**Version:** 1.9
+**Version:** 1.9.1
 **Status:** In Development
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-02-27
 
 ---
 
@@ -53,6 +53,7 @@ See [Architecture Overview](000-architecture-overview.md) for the full system co
 
 **Requirements:**
 - Control UI with chat, streaming output, media attachments (image/audio + voice capture), and file uploads (.txt/.md/.csv/.json/.yaml/.yml/.xml/.log plus common code files and PDF)
+- Streamed assistant media outputs (image/audio/file blocks) render in chat when models emit structured content blocks
 - Token-based authentication
 - Tailscale-friendly access patterns
 
@@ -614,7 +615,7 @@ interface UiLayoutSpec {
 **Protocol Design Principles:**
 
 1. **Raw Stream Forwarding**: Gateway forwards agent stream chunks as-is, matching CLI streaming format
-2. **UI Interprets**: Each UI (mobile, web, CLI) parses chunks for its presentation
+2. **UI Interprets**: Each UI (mobile, web, CLI) parses chunks for text, tool, and attachment events for its presentation
 3. **Envelope Only**: Gateway adds routing metadata (clientId, roomId) but doesn't modify payload
 4. **Stateful Sessions**: Gateway persists session state but does not buffer stream events
 
@@ -680,14 +681,28 @@ Tool result returns user input to the agent:
   }
 }
 
-// 2. Streaming tokens
+// 2. Streaming text delta
 {
   "type": "event:agent",
   "clientId": "gateway",
   "payload": {
     "type": "agent-stream",
-    "chunk": { "event": "on_chat_model_stream", "data": {"chunk": "The"} },
+    "chunk": { "event": "on_chat_model_stream", "data": {"chunk": {"content":[{"type":"text","text":"The"}]}} },
     "timestamp": 1706000000100
+  }
+}
+
+// 2b. Streaming image output block
+{
+  "type": "event:agent",
+  "clientId": "gateway",
+  "payload": {
+    "type": "agent-stream",
+    "chunk": {
+      "event": "on_chat_model_stream",
+      "data": {"chunk": {"content":[{"type":"output_image","image_url":"data:image/png;base64,BBB..."}]}}
+    },
+    "timestamp": 1706000000200
   }
 }
 
@@ -1143,10 +1158,11 @@ The CLI already handles agent streams via `OutputManager` and `StreamParser`. Wh
 // Pseudocode
 gateway.on('message', (msg) => {
   if (msg.payload.type === 'agent-stream') {
-    // Parse chunk for text/tool events
+    // Parse chunk for text/tool/attachment events
     const parsed = streamParser.parse(msg.payload.chunk);
     if (parsed.text) outputManager.emitText(parsed.text);
     if (parsed.toolCall) outputManager.emitToolCall(parsed.toolCall);
+    if (parsed.attachment) outputManager.emitAttachment(parsed.attachment);
   }
 });
 ```
@@ -1162,8 +1178,9 @@ func handleGatewayMessage(_ msg: GatewayMessage) {
     case "agent-start":
         showTypingIndicator(agent: msg.payload.agent)
     case "agent-stream":
-        let text = parseTextFromChunk(msg.payload.chunk)
-        appendToChat(text)
+        let parsed = parseChunk(msg.payload.chunk)
+        if let text = parsed.text { appendToChat(text) }
+        if let attachment = parsed.attachment { appendAttachment(attachment) }
     case "agent-complete":
         hideTypingIndicator()
     case "tool-start":
@@ -1188,7 +1205,7 @@ function useGatewayStream(roomId: string) {
         setActiveAgents(prev => ({...prev, [msg.nodeId]: msg.payload}));
       }
       if (msg.payload.type === 'agent-stream') {
-        // Accumulate text into agent's current message
+        // Accumulate text and attachments into agent's current message
       }
       if (msg.payload.type === 'agent-complete') {
         setMessages(prev => [...prev, msg.payload.result]);

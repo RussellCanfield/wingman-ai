@@ -212,6 +212,18 @@ describe("CLI init", () => {
 		expect(gameDevArtGenerationPrompt).toContain("need `uv`, and `aoMap`");
 		expect(gameDevArtGenerationPrompt).toContain("flipY = false");
 		expect(gameDevArtGenerationPrompt).toContain("RepeatWrapping");
+
+		const imageGeneratorAgentPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"image-generator",
+			"agent.md",
+		);
+		expect(existsSync(imageGeneratorAgentPath)).toBe(true);
+		const imageGeneratorPrompt = readFileSync(imageGeneratorAgentPath, "utf-8");
+		expect(imageGeneratorPrompt).toContain("name: image-generator");
+		expect(imageGeneratorPrompt).toContain("model: xai:grok-imagine-image");
 	});
 
 	it("merges existing config when --merge is set", async () => {

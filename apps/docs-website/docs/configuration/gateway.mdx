@@ -144,11 +144,12 @@ wingman gateway join ws://host:port/ws --name="node-1"
 - When set, the session `workdir` becomes the agent's active execution root (tool CWD + file backend root) for subsequent turns in that session.
 - Keep this list tight to reduce risk.
 
-## Control UI uploads
+## Control UI media and uploads
 
-The Control UI chat supports file uploads in addition to existing media capture:
+The Control UI chat supports file uploads in addition to existing media capture, and it renders streamed assistant media attachments when models return structured image/audio/file blocks:
 
-- Media (existing): image uploads, pasted screenshots, and audio/voice attachments
+- Media in: image uploads, pasted screenshots, and audio/voice attachments
+- Media out: streamed assistant image/audio/file attachments from model output blocks
 - Text/code files: `.txt`, `.md`, `.csv`, `.json`, `.yaml`, `.yml`, `.xml`, `.log`, `.ts`, `.js`, `.py`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, `.sql`, `.html`, `.css`
 - PDF: `.pdf` uploads use provider-native PDF handling when supported, with text-extraction fallback
 
