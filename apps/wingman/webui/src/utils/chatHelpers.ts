@@ -30,6 +30,7 @@ const isAssistantPlaceholder = (message: ChatMessage): boolean => {
 		(!message.attachments || message.attachments.length === 0) &&
 		(!message.toolEvents || message.toolEvents.length === 0) &&
 		(!message.thinkingEvents || message.thinkingEvents.length === 0) &&
+		(!message.activityTimeline || message.activityTimeline.length === 0) &&
 		(!message.uiBlocks || message.uiBlocks.length === 0)
 	);
 };

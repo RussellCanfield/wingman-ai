@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	drainAssistantContentUpdates,
-	queueAssistantContentUpdate,
 	type QueuedAssistantUpdate,
+	queueAssistantContentUpdate,
 } from "./assistantUpdateQueue";
 
 const update = (
@@ -38,6 +38,33 @@ describe("queueAssistantContentUpdate", () => {
 		const drained = drainAssistantContentUpdates(queue);
 		expect(drained).toHaveLength(1);
 		expect(drained[0]?.content).toBe("second");
+	});
+
+	it("keeps separate timeline text block updates distinct", () => {
+		const queue = new Map<string, QueuedAssistantUpdate>();
+		queueAssistantContentUpdate(
+			queue,
+			update({
+				timelineTextBlockId: "text-a",
+				timelineTextOrder: 1,
+				timelineTextDelta: "Before",
+			}),
+		);
+		queueAssistantContentUpdate(
+			queue,
+			update({
+				timelineTextBlockId: "text-b",
+				timelineTextOrder: 3,
+				timelineTextDelta: "After",
+			}),
+		);
+
+		const drained = drainAssistantContentUpdates(queue);
+		expect(drained).toHaveLength(2);
+		expect(drained.map((item) => item.timelineTextBlockId)).toEqual([
+			"text-a",
+			"text-b",
+		]);
 	});
 });
 

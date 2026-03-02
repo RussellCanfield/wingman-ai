@@ -127,6 +127,24 @@ export type ChatAttachment = {
 	size?: number;
 };
 
+export type AssistantTimelineTextBlock = {
+	id: string;
+	kind: "text";
+	order: number;
+	text: string;
+};
+
+export type AssistantTimelineToolBlock = {
+	id: string;
+	kind: "tool";
+	order: number;
+	toolEventId: string;
+};
+
+export type AssistantTimelineBlock =
+	| AssistantTimelineTextBlock
+	| AssistantTimelineToolBlock;
+
 export type ChatMessage = {
 	id: string;
 	role: "user" | "assistant";
@@ -135,6 +153,7 @@ export type ChatMessage = {
 	toolEvents?: ToolEvent[];
 	thinkingEvents?: ThinkingEvent[];
 	inlineThinkBlocks?: string[];
+	activityTimeline?: AssistantTimelineBlock[];
 	uiBlocks?: UiBlock[];
 	uiTextFallback?: string;
 	createdAt: number;
@@ -159,6 +178,7 @@ export type ToolEvent = {
 	timestamp?: number;
 	startedAt?: number;
 	completedAt?: number;
+	streamOrder?: number;
 };
 
 export type UiBlock = {

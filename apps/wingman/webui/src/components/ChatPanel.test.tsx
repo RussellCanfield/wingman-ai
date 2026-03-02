@@ -532,6 +532,65 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).not.toContain("animate-pulse rounded-full bg-sky-400");
 	});
 
+	it("renders assistant timeline blocks in stream order with tools interleaved", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-ordered",
+							role: "assistant",
+							content: "Before tool\\nAfter tool",
+							createdAt: 1,
+							toolEvents: [
+								{
+									id: "tool-ordered-1",
+									name: "edit_file",
+									status: "completed",
+									timestamp: 2,
+								},
+							],
+							activityTimeline: [
+								{
+									id: "timeline-text-1",
+									kind: "text",
+									order: 1,
+									text: "Before tool",
+								},
+								{
+									id: "timeline-tool-1",
+									kind: "tool",
+									order: 2,
+									toolEventId: "tool-ordered-1",
+								},
+								{
+									id: "timeline-text-2",
+									kind: "text",
+									order: 3,
+									text: "After tool",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const beforeIndex = html.indexOf("Before tool");
+		const toolIndex = html.indexOf("edit_file");
+		const afterIndex = html.indexOf("After tool");
+		expect(beforeIndex).toBeGreaterThan(-1);
+		expect(toolIndex).toBeGreaterThan(-1);
+		expect(afterIndex).toBeGreaterThan(-1);
+		expect(beforeIndex).toBeLessThan(toolIndex);
+		expect(toolIndex).toBeLessThan(afterIndex);
+		expect(html.match(/edit_file/g)?.length ?? 0).toBe(1);
+	});
+
 	it("does not render the Wingman role label in assistant messages", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {

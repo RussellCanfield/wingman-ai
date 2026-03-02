@@ -97,13 +97,17 @@ import {
 	resolveStoppableRequestId,
 } from "./utils/stopPrompt";
 import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
-import { resolveActiveStreamMessageId } from "./utils/streamRetry";
 import { parseStreamEvents } from "./utils/streaming";
 import {
 	clearStreamMessageTargets,
 	resolveTextMessageTargetId,
 	resolveToolMessageTargetId,
 } from "./utils/streamMessageRouter";
+import { resolveActiveStreamMessageId } from "./utils/streamRetry";
+import {
+	upsertTimelineTextBlock,
+	upsertTimelineToolBlock,
+} from "./utils/streamTimeline";
 import { appendLocalPromptMessagesToThread } from "./utils/threadState";
 import {
 	resolveSpeechVoice,
@@ -221,6 +225,10 @@ export const App: React.FC = () => {
 	const requestStreamMessageRef = useRef<Map<string, Map<string, string>>>(
 		new Map(),
 	);
+	const requestStreamOrderRef = useRef<Map<string, number>>(new Map());
+	const timelineActiveTextBlockRef = useRef<Map<string, string>>(new Map());
+	const timelineActiveTextOrderRef = useRef<Map<string, number>>(new Map());
+	const timelineLastKindRef = useRef<Map<string, "text" | "tool">>(new Map());
 	const thinkingBuffersRef = useRef<Map<string, Map<string, string>>>(
 		new Map(),
 	);
@@ -901,6 +909,13 @@ export const App: React.FC = () => {
 		[getRequestMessageIds],
 	);
 
+	const nextStreamOrder = useCallback((requestId: string): number => {
+		const current = requestStreamOrderRef.current.get(requestId) || 0;
+		const next = current + 1;
+		requestStreamOrderRef.current.set(requestId, next);
+		return next;
+	}, []);
+
 	const applyQueuedAssistantUpdates = useCallback(
 		(queuedUpdates: QueuedAssistantUpdate[]) => {
 			if (queuedUpdates.length === 0) return;
@@ -923,6 +938,7 @@ export const App: React.FC = () => {
 							nextThread,
 							update.messageId,
 							(message) => {
+								let nextMessage = message;
 								const blockCount = update.inlineThinkBlocks?.length ?? 0;
 								const prevBlockCount = message.inlineThinkBlocks?.length ?? 0;
 								const blocksSame =
@@ -930,13 +946,34 @@ export const App: React.FC = () => {
 									(blockCount === 0 ||
 										message.inlineThinkBlocks?.[blockCount - 1] ===
 											update.inlineThinkBlocks?.[blockCount - 1]);
-								if (message.content === update.content && blocksSame)
-									return message;
-								return {
-									...message,
-									content: update.content,
-									inlineThinkBlocks: update.inlineThinkBlocks,
-								};
+								if (message.content !== update.content || !blocksSame) {
+									nextMessage = {
+										...nextMessage,
+										content: update.content,
+										inlineThinkBlocks: update.inlineThinkBlocks,
+									};
+								}
+
+								if (
+									update.timelineTextBlockId &&
+									update.timelineTextDelta &&
+									typeof update.timelineTextOrder === "number"
+								) {
+									const nextTimeline = upsertTimelineTextBlock(
+										nextMessage.activityTimeline,
+										{
+											blockId: update.timelineTextBlockId,
+											order: update.timelineTextOrder,
+											textDelta: update.timelineTextDelta,
+										},
+									);
+									nextMessage = {
+										...nextMessage,
+										activityTimeline: nextTimeline,
+									};
+								}
+
+								return nextMessage;
 							},
 							update.requestId,
 						);
@@ -982,6 +1019,9 @@ export const App: React.FC = () => {
 			const existingRaw = buffersRef.current.get(messageId) ?? "";
 			const mergedRaw = mergeAssistantStreamText(existingRaw, text);
 			buffersRef.current.set(messageId, mergedRaw);
+			const rawDelta = mergedRaw.startsWith(existingRaw)
+				? mergedRaw.slice(existingRaw.length)
+				: text;
 			const previousCleaned =
 				sanitizeAssistantDisplayText(existingRaw, {
 					preserveTrailingWhitespace: true,
@@ -991,6 +1031,30 @@ export const App: React.FC = () => {
 					preserveTrailingWhitespace: true,
 				}) ?? previousCleaned,
 			);
+			const timelineTextDelta = stripThinkTokensForDisplay(
+				sanitizeAssistantDisplayText(rawDelta, {
+					preserveTrailingWhitespace: true,
+				}) ?? "",
+			);
+
+			let timelineTextBlockId: string | undefined;
+			let timelineTextOrder: number | undefined;
+			if (timelineTextDelta.length > 0) {
+				timelineTextBlockId = timelineActiveTextBlockRef.current.get(messageId);
+				const previousKind = timelineLastKindRef.current.get(messageId);
+				if (!timelineTextBlockId || previousKind !== "text") {
+					timelineTextOrder = nextStreamOrder(requestId);
+					timelineTextBlockId = `tl-text-${messageId}-${timelineTextOrder}`;
+					timelineActiveTextBlockRef.current.set(
+						messageId,
+						timelineTextBlockId,
+					);
+					timelineActiveTextOrderRef.current.set(messageId, timelineTextOrder);
+				} else {
+					timelineTextOrder = timelineActiveTextOrderRef.current.get(messageId);
+				}
+				timelineLastKindRef.current.set(messageId, "text");
+			}
 
 			queueAssistantContentUpdate(queuedAssistantUpdatesRef.current, {
 				threadId,
@@ -998,15 +1062,21 @@ export const App: React.FC = () => {
 				messageId,
 				content: cleaned,
 				inlineThinkBlocks: extractThinkBlocksForDisplay(mergedRaw),
+				timelineTextBlockId,
+				timelineTextOrder,
+				timelineTextDelta,
 			});
 			scheduleQueuedAssistantUpdateFlush();
 		},
-		[scheduleQueuedAssistantUpdateFlush],
+		[nextStreamOrder, scheduleQueuedAssistantUpdateFlush],
 	);
 
 	const abandonBufferedAssistantText = useCallback((requestId: string) => {
 		buffersRef.current.delete(requestId);
 		uiFallbackRef.current.delete(requestId);
+		timelineActiveTextBlockRef.current.delete(requestId);
+		timelineActiveTextOrderRef.current.delete(requestId);
+		timelineLastKindRef.current.delete(requestId);
 		for (const [key, update] of queuedAssistantUpdatesRef.current) {
 			if (update.requestId !== requestId || update.messageId !== requestId) {
 				continue;
@@ -1024,7 +1094,8 @@ export const App: React.FC = () => {
 					(message) => {
 						if (
 							message.content.length === 0 &&
-							(message.inlineThinkBlocks?.length || 0) === 0
+							(message.inlineThinkBlocks?.length || 0) === 0 &&
+							(message.activityTimeline?.length || 0) === 0
 						) {
 							return message;
 						}
@@ -1032,6 +1103,7 @@ export const App: React.FC = () => {
 							...message,
 							content: "",
 							inlineThinkBlocks: undefined,
+							activityTimeline: undefined,
 						};
 					},
 					requestId,
@@ -1064,6 +1136,9 @@ export const App: React.FC = () => {
 						(msg) => {
 							const existing = msg.toolEvents ? [...msg.toolEvents] : [];
 							const uiBlocks = msg.uiBlocks ? [...msg.uiBlocks] : [];
+							let activityTimeline = msg.activityTimeline
+								? [...msg.activityTimeline]
+								: [];
 							let clearContent = false;
 							for (const event of events) {
 								if (event.uiOnly && dynamicUiEnabled) {
@@ -1077,31 +1152,43 @@ export const App: React.FC = () => {
 									(item) => item.id === event.id,
 								);
 								if (index >= 0) {
+									const previous = existing[index];
 									const resolvedName =
 										event.name && event.name !== "tool"
 											? event.name
-											: existing[index].name;
+											: previous.name;
+									const resolvedStreamOrder =
+										previous.streamOrder ?? event.streamOrder;
 									existing[index] = {
-										...existing[index],
+										...previous,
 										...event,
 										name: resolvedName,
-										node: event.node || existing[index].node,
-										actor: event.actor || existing[index].actor,
-										runId: event.runId || existing[index].runId,
-										parentRunIds:
-											event.parentRunIds || existing[index].parentRunIds,
+										node: event.node || previous.node,
+										actor: event.actor || previous.actor,
+										runId: event.runId || previous.runId,
+										parentRunIds: event.parentRunIds || previous.parentRunIds,
 										delegatedByTaskId:
-											event.delegatedByTaskId ||
-											existing[index].delegatedByTaskId,
+											event.delegatedByTaskId || previous.delegatedByTaskId,
 										delegatedSubagentType:
 											event.delegatedSubagentType ||
-											existing[index].delegatedSubagentType,
-										startedAt: existing[index].startedAt || event.timestamp,
+											previous.delegatedSubagentType,
+										startedAt: previous.startedAt || event.timestamp,
 										completedAt:
 											event.status === "completed" || event.status === "error"
 												? event.timestamp
-												: existing[index].completedAt,
+												: previous.completedAt,
+										streamOrder: resolvedStreamOrder,
 									};
+									const timelineOrder =
+										resolvedStreamOrder ||
+										previous.startedAt ||
+										event.timestamp ||
+										Date.now();
+									activityTimeline = upsertTimelineToolBlock(activityTimeline, {
+										blockId: `tl-tool-${event.id}`,
+										order: timelineOrder,
+										toolEventId: event.id,
+									});
 								} else {
 									existing.push({
 										id: event.id,
@@ -1124,6 +1211,12 @@ export const App: React.FC = () => {
 											event.status === "completed" || event.status === "error"
 												? event.timestamp
 												: undefined,
+										streamOrder: event.streamOrder,
+									});
+									activityTimeline = upsertTimelineToolBlock(activityTimeline, {
+										blockId: `tl-tool-${event.id}`,
+										order: event.streamOrder || event.timestamp || Date.now(),
+										toolEventId: event.id,
 									});
 								}
 								if (event.ui && dynamicUiEnabled) {
@@ -1144,10 +1237,15 @@ export const App: React.FC = () => {
 									}
 								}
 							}
+							timelineActiveTextBlockRef.current.delete(messageId);
+							timelineActiveTextOrderRef.current.delete(messageId);
+							timelineLastKindRef.current.set(messageId, "tool");
 							return {
 								...msg,
 								content: clearContent ? "" : msg.content,
 								toolEvents: existing,
+								activityTimeline:
+									activityTimeline.length > 0 ? activityTimeline : undefined,
 								uiBlocks: dynamicUiEnabled ? uiBlocks : msg.uiBlocks,
 								uiTextFallback:
 									uiFallbackRef.current.get(messageId) ?? msg.uiTextFallback,
@@ -1232,12 +1330,16 @@ export const App: React.FC = () => {
 				buffersRef.current.delete(messageId);
 				uiOnlyRequestsRef.current.delete(messageId);
 				uiFallbackRef.current.delete(messageId);
+				timelineActiveTextBlockRef.current.delete(messageId);
+				timelineActiveTextOrderRef.current.delete(messageId);
+				timelineLastKindRef.current.delete(messageId);
 			}
 			thinkingBuffersRef.current.delete(requestId);
 			requestThreadRef.current.delete(requestId);
 			requestAgentRef.current.delete(requestId);
 			activeTextStreamMessageRef.current.delete(requestId);
 			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
+			requestStreamOrderRef.current.delete(requestId);
 			taskDelegationRef.current.delete(requestId);
 		},
 		[getRequestMessageIds],
@@ -1697,9 +1799,13 @@ export const App: React.FC = () => {
 							delegatedSubagentType,
 						};
 					});
+					const orderedToolEvents = enrichedToolEvents.map((event) => ({
+						...event,
+						streamOrder: nextStreamOrder(requestId),
+					}));
 					taskDelegationRef.current.set(requestId, taskMap);
 					const toolEventsByMessageId = new Map<string, ToolEvent[]>();
-					for (const event of enrichedToolEvents) {
+					for (const event of orderedToolEvents) {
 						const targetMessageId = resolveToolMessageTargetId({
 							state: requestStreamMessageRef.current,
 							requestId,
@@ -1762,6 +1868,7 @@ export const App: React.FC = () => {
 			flushQueuedAssistantUpdates,
 			logEvent,
 			markPendingRequestActive,
+			nextStreamOrder,
 			queueAssistantUpdate,
 			updateAttachmentEvents,
 			resolveRequestMessageId,

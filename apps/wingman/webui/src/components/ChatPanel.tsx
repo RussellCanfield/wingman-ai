@@ -35,6 +35,7 @@ import {
 	type VoicePlaybackStatus,
 } from "../utils/voicePlayback";
 import { ThinkingPanel } from "./ThinkingPanel";
+import { ToolEventPanel } from "./ToolEventPanel";
 
 const COMPOSER_MAX_LINES = 4;
 const RETURN_SYMBOL_LINE_BREAK_PATTERN =
@@ -556,9 +557,26 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					: hasLegacyEvents
 						? legacyThinkingEvents
 						: [];
-			const hasNestedActivity =
+			const timelineBlocks =
+				msg.role === "assistant" && msg.activityTimeline?.length
+					? [...msg.activityTimeline].sort((a, b) => a.order - b.order)
+					: [];
+			const timelineToolEventIds = new Set<string>();
+			for (const block of timelineBlocks) {
+				if (block.kind === "tool") {
+					timelineToolEventIds.add(block.toolEventId);
+				}
+			}
+			const panelToolEvents =
+				timelineBlocks.length > 0
+					? toolEvents.filter((event) => !timelineToolEventIds.has(event.id))
+					: toolEvents;
+			const hasAnyActivity =
 				msg.role === "assistant" &&
 				(toolEvents.length > 0 || thinkingEvents.length > 0);
+			const hasPanelActivity =
+				msg.role === "assistant" &&
+				(panelToolEvents.length > 0 || thinkingEvents.length > 0);
 			const isActiveMessage =
 				msg.role === "assistant" && isStreaming && msg.id === lastAssistantId;
 			const uiBlocks = dynamicUiEnabled ? msg.uiBlocks : undefined;
@@ -699,94 +717,147 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								</details>
 							</div>
 						) : null}
-						{msg.role === "assistant" &&
-						isActiveMessage &&
-						!hasNestedActivity &&
-						!displayText &&
-						(!uiBlocks || uiBlocks.length === 0) ? (
-							<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
-								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
-							</div>
-						) : (
-							<ReactMarkdown
-								remarkPlugins={[remarkGfm]}
-								rehypePlugins={[
-									[rehypeHighlight, { detect: true, ignoreMissing: true }],
-								]}
-								className={`markdown-content text-sm leading-relaxed ${
-									isUserMessage ? "mt-2" : showMetaRow ? "mt-1" : "mt-0"
-								}`}
-								components={{
-									a: ({ node, ...props }) => {
-										const href =
-											typeof props.href === "string" ? props.href : "";
-										if (!isUserMessage && isLikelyAudioUrl(href)) {
-											return (
-												<span className="my-2 block w-full min-w-0 max-w-[420px]">
-													<audio
-														controls
-														preload="metadata"
-														src={href}
-														className="block w-full min-w-0 max-w-full"
-													/>
-													<a
-														href={href}
-														className="mt-1 inline-block text-xs text-sky-300 underline decoration-sky-400/40 underline-offset-4"
-														target="_blank"
-														rel="noreferrer"
-													>
-														Open audio in new tab
-													</a>
-												</span>
-											);
-										}
+						{(() => {
+							const markdownComponents = {
+								a: ({ node, ...props }) => {
+									const href = typeof props.href === "string" ? props.href : "";
+									if (!isUserMessage && isLikelyAudioUrl(href)) {
 										return (
-											<a
-												{...props}
-												className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
-												target="_blank"
-												rel="noreferrer"
-											/>
+											<span className="my-2 block w-full min-w-0 max-w-[420px]">
+												<audio
+													controls
+													preload="metadata"
+													src={href}
+													className="block w-full min-w-0 max-w-full"
+												/>
+												<a
+													href={href}
+													className="mt-1 inline-block text-xs text-sky-300 underline decoration-sky-400/40 underline-offset-4"
+													target="_blank"
+													rel="noreferrer"
+												>
+													Open audio in new tab
+												</a>
+											</span>
 										);
-									},
-									code: ({ node, className, children, ...props }) => {
-										const isBlock =
-											Boolean(className?.includes("language-")) ||
-											(node?.position
-												? node.position.start.line !== node.position.end.line
-												: false);
-										return isBlock ? (
-											<MarkdownCodeBlock className={className}>
-												{children}
-											</MarkdownCodeBlock>
-										) : (
-											<code
-												{...props}
-												className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
-											>
-												{children}
-											</code>
-										);
-									},
-									ul: ({ node, ...props }) => (
-										<ul {...props} className="ml-5 list-disc space-y-1 mb-1" />
-									),
-									ol: ({ node, ...props }) => (
-										<ol {...props} className="ml-5 list-decimal space-y-1" />
-									),
-									blockquote: ({ node, ...props }) => (
-										<blockquote
+									}
+									return (
+										<a
 											{...props}
-											className="border-l-2 border-sky-400/60 pl-3 text-slate-300"
+											className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
+											target="_blank"
+											rel="noreferrer"
 										/>
-									),
-								}}
-							>
-								{displayText}
-							</ReactMarkdown>
-						)}
+									);
+								},
+								code: ({ node, className, children, ...props }) => {
+									const isBlock =
+										Boolean(className?.includes("language-")) ||
+										(node?.position
+											? node.position.start.line !== node.position.end.line
+											: false);
+									return isBlock ? (
+										<MarkdownCodeBlock className={className}>
+											{children}
+										</MarkdownCodeBlock>
+									) : (
+										<code
+											{...props}
+											className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
+										>
+											{children}
+										</code>
+									);
+								},
+								ul: ({ node, ...props }) => (
+									<ul {...props} className="ml-5 list-disc space-y-1 mb-1" />
+								),
+								ol: ({ node, ...props }) => (
+									<ol {...props} className="ml-5 list-decimal space-y-1" />
+								),
+								blockquote: ({ node, ...props }) => (
+									<blockquote
+										{...props}
+										className="border-l-2 border-sky-400/60 pl-3 text-slate-300"
+									/>
+								),
+							};
+
+							if (
+								msg.role === "assistant" &&
+								isActiveMessage &&
+								!hasAnyActivity &&
+								!displayText &&
+								(!uiBlocks || uiBlocks.length === 0)
+							) {
+								return (
+									<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+										<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+										<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
+										<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
+									</div>
+								);
+							}
+
+							if (timelineBlocks.length > 0) {
+								return (
+									<div className="mt-2 space-y-3">
+										{timelineBlocks.map((block) => {
+											if (block.kind === "text") {
+												const normalizedBlockText = normalizeMessageLineBreaks(
+													block.text || "",
+												);
+												const blockDisplayText =
+													parseThinkingContent(normalizedBlockText).cleanText;
+												if (!blockDisplayText.trim()) return null;
+												return (
+													<ReactMarkdown
+														key={block.id}
+														remarkPlugins={[remarkGfm]}
+														rehypePlugins={[
+															[
+																rehypeHighlight,
+																{ detect: true, ignoreMissing: true },
+															],
+														]}
+														className="markdown-content text-sm leading-relaxed"
+														components={markdownComponents}
+													>
+														{blockDisplayText}
+													</ReactMarkdown>
+												);
+											}
+											const event = toolEvents.find(
+												(item) => item.id === block.toolEventId,
+											);
+											if (!event) return null;
+											return (
+												<ToolEventPanel
+													key={block.id}
+													variant="inline"
+													toolEvents={[event]}
+												/>
+											);
+										})}
+									</div>
+								);
+							}
+
+							return (
+								<ReactMarkdown
+									remarkPlugins={[remarkGfm]}
+									rehypePlugins={[
+										[rehypeHighlight, { detect: true, ignoreMissing: true }],
+									]}
+									className={`markdown-content text-sm leading-relaxed ${
+										isUserMessage ? "mt-2" : showMetaRow ? "mt-1" : "mt-0"
+									}`}
+									components={markdownComponents}
+								>
+									{displayText}
+								</ReactMarkdown>
+							);
+						})()}
 						{assistantAudioPreviews.length > 0 ? (
 							<div className="mt-3 space-y-2">
 								{assistantAudioPreviews.map((preview) => (
@@ -911,11 +982,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								})}
 							</div>
 						) : null}
-						{hasNestedActivity ? (
+						{hasPanelActivity ? (
 							<div className="mt-3">
 								<ThinkingPanel
 									thinkingEvents={thinkingEvents}
-									toolEvents={toolEvents}
+									toolEvents={panelToolEvents}
 									isStreaming={isActiveMessage}
 								/>
 							</div>

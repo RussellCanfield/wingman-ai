@@ -4,10 +4,14 @@ export type QueuedAssistantUpdate = {
 	messageId: string;
 	content: string;
 	inlineThinkBlocks?: string[];
+	timelineTextBlockId?: string;
+	timelineTextOrder?: number;
+	timelineTextDelta?: string;
 };
 
 function buildAssistantUpdateKey(update: QueuedAssistantUpdate): string {
-	return `${update.threadId}::${update.requestId}::${update.messageId}`;
+	const timelineKey = update.timelineTextBlockId || "content";
+	return `${update.threadId}::${update.requestId}::${update.messageId}::${timelineKey}`;
 }
 
 export function queueAssistantContentUpdate(
