@@ -20,6 +20,20 @@ const SUPPORTED_TEXT_FILE_EXTENSIONS = new Set([
 	"css",
 ]);
 
+const SUPPORTED_IMAGE_FILE_EXTENSIONS = new Set([
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"webp",
+	"bmp",
+	"tif",
+	"tiff",
+	"heic",
+	"heif",
+	"avif",
+]);
+
 export const FILE_INPUT_ACCEPT = [
 	"image/*",
 	"audio/*",
@@ -45,10 +59,32 @@ export const FILE_INPUT_ACCEPT = [
 	".pdf",
 ].join(",");
 
+export async function isLikelyImageUploadFile(
+	file: Pick<File, "name" | "type" | "slice">,
+): Promise<boolean> {
+	if (!file) return false;
+	const mime = (file.type || "").trim().toLowerCase();
+	if (mime.startsWith("image/")) return true;
+	if (SUPPORTED_IMAGE_FILE_EXTENSIONS.has(getFileExtension(file.name))) {
+		return true;
+	}
+
+	try {
+		const header = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+		return hasImageFileSignature(header);
+	} catch {
+		return false;
+	}
+}
+
 export async function readUploadFileText(
 	file: File,
 	maxChars: number,
-): Promise<{ textContent: string; truncated: boolean; usedPdfFallback: boolean }> {
+): Promise<{
+	textContent: string;
+	truncated: boolean;
+	usedPdfFallback: boolean;
+}> {
 	const isPdf = isPdfUploadFile(file);
 	let raw = "";
 	let usedPdfFallback = false;
@@ -68,10 +104,13 @@ export async function readUploadFileText(
 	return { textContent: text, truncated, usedPdfFallback };
 }
 
-export function isSupportedTextUploadFile(file: Pick<File, "name" | "type">): boolean {
+export function isSupportedTextUploadFile(
+	file: Pick<File, "name" | "type">,
+): boolean {
 	if (!file) return false;
 	if (isPdfUploadFile(file)) return false;
-	if (file.type?.startsWith("image/") || file.type?.startsWith("audio/")) return false;
+	if (file.type?.startsWith("image/") || file.type?.startsWith("audio/"))
+		return false;
 	if (file.type?.startsWith("text/")) return true;
 	if (
 		file.type === "application/json" ||
@@ -101,6 +140,97 @@ function getFileExtension(name: string): string {
 	const dot = clean.lastIndexOf(".");
 	if (dot <= 0 || dot === clean.length - 1) return "";
 	return clean.slice(dot + 1);
+}
+
+function hasImageFileSignature(bytes: Uint8Array): boolean {
+	if (bytes.length >= 8) {
+		// PNG
+		if (
+			bytes[0] === 0x89 &&
+			bytes[1] === 0x50 &&
+			bytes[2] === 0x4e &&
+			bytes[3] === 0x47 &&
+			bytes[4] === 0x0d &&
+			bytes[5] === 0x0a &&
+			bytes[6] === 0x1a &&
+			bytes[7] === 0x0a
+		) {
+			return true;
+		}
+		// JPEG
+		if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+			return true;
+		}
+		// GIF
+		if (
+			bytes[0] === 0x47 &&
+			bytes[1] === 0x49 &&
+			bytes[2] === 0x46 &&
+			bytes[3] === 0x38
+		) {
+			return true;
+		}
+		// BMP
+		if (bytes[0] === 0x42 && bytes[1] === 0x4d) {
+			return true;
+		}
+		// TIFF (little / big endian)
+		if (
+			(bytes[0] === 0x49 &&
+				bytes[1] === 0x49 &&
+				bytes[2] === 0x2a &&
+				bytes[3] === 0x00) ||
+			(bytes[0] === 0x4d &&
+				bytes[1] === 0x4d &&
+				bytes[2] === 0x00 &&
+				bytes[3] === 0x2a)
+		) {
+			return true;
+		}
+		// WEBP: RIFF....WEBP
+		if (
+			bytes[0] === 0x52 &&
+			bytes[1] === 0x49 &&
+			bytes[2] === 0x46 &&
+			bytes[3] === 0x46 &&
+			bytes[8] === 0x57 &&
+			bytes[9] === 0x45 &&
+			bytes[10] === 0x42 &&
+			bytes[11] === 0x50
+		) {
+			return true;
+		}
+	}
+
+	// HEIC/HEIF/AVIF (ISO BMFF): ....ftyp<brand>
+	if (bytes.length >= 12) {
+		if (
+			bytes[4] === 0x66 &&
+			bytes[5] === 0x74 &&
+			bytes[6] === 0x79 &&
+			bytes[7] === 0x70
+		) {
+			const brand = String.fromCharCode(
+				bytes[8],
+				bytes[9],
+				bytes[10],
+				bytes[11],
+			).toLowerCase();
+			if (
+				brand === "heic" ||
+				brand === "heix" ||
+				brand === "hevc" ||
+				brand === "hevx" ||
+				brand === "mif1" ||
+				brand === "msf1" ||
+				brand === "avif"
+			) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 function normalizeFileText(value: string): string {
@@ -315,9 +445,9 @@ async function tryInflate(data: Uint8Array): Promise<Uint8Array | null> {
 	}
 	for (const format of ["deflate", "deflate-raw"] as const) {
 		try {
-			const stream = new Blob([data]).stream().pipeThrough(
-				new DecompressionStream(format),
-			);
+			const stream = new Blob([data])
+				.stream()
+				.pipeThrough(new DecompressionStream(format));
 			const result = await new Response(stream).arrayBuffer();
 			return new Uint8Array(result);
 		} catch {
@@ -348,13 +478,20 @@ function findPdfStreams(source: string): Array<{
 	dataStart: number;
 	dataEnd: number;
 }> {
-	const streams: Array<{ dictionary: string; dataStart: number; dataEnd: number }> = [];
+	const streams: Array<{
+		dictionary: string;
+		dataStart: number;
+		dataEnd: number;
+	}> = [];
 	let cursor = 0;
 	while (cursor < source.length) {
 		const streamToken = source.indexOf("stream", cursor);
 		if (streamToken === -1) break;
 
-		const dataStart = skipPdfStreamNewline(source, streamToken + "stream".length);
+		const dataStart = skipPdfStreamNewline(
+			source,
+			streamToken + "stream".length,
+		);
 		const endToken = source.indexOf("endstream", dataStart);
 		if (endToken === -1) break;
 
@@ -407,7 +544,12 @@ function decodeAscii85(input: Uint8Array): Uint8Array | null {
 		if (group.length === 5) {
 			let value = 0;
 			for (const n of group) value = value * 85 + n;
-			out.push((value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff);
+			out.push(
+				(value >>> 24) & 0xff,
+				(value >>> 16) & 0xff,
+				(value >>> 8) & 0xff,
+				value & 0xff,
+			);
 			group = [];
 		}
 	}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	FILE_INPUT_ACCEPT,
+	isLikelyImageUploadFile,
 	isPdfUploadFile,
 	isSupportedTextUploadFile,
 	readUploadFileText,
@@ -61,12 +62,30 @@ describe("fileUpload utils", () => {
 		).toBe(false);
 	});
 
+	it("detects likely image uploads even when mime is missing", async () => {
+		const png = new File(
+			[new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+			"",
+			{
+				type: "",
+			},
+		);
+		await expect(isLikelyImageUploadFile(png)).resolves.toBe(true);
+
+		const random = new File([new Uint8Array([0x00, 0x01, 0x02, 0x03])], "", {
+			type: "",
+		});
+		await expect(isLikelyImageUploadFile(random)).resolves.toBe(false);
+	});
+
 	it("reads and truncates text files", async () => {
 		const file = new File(["1234567890"], "notes.txt", { type: "text/plain" });
 		const result = await readUploadFileText(file, 5);
 		expect(result.truncated).toBe(true);
 		expect(result.usedPdfFallback).toBe(false);
-		expect(result.textContent).toContain("[File content truncated for prompt size limits.]");
+		expect(result.textContent).toContain(
+			"[File content truncated for prompt size limits.]",
+		);
 	});
 
 	it("extracts literal text blocks from basic pdf content", async () => {
@@ -80,7 +99,8 @@ describe("fileUpload utils", () => {
 	});
 
 	it("extracts text from quote operators", async () => {
-		const pdfSource = "%PDF-1.4\n1 0 obj\n(Quote Hello) '\n(Spacing Hello) \"\nendobj\n%%EOF";
+		const pdfSource =
+			"%PDF-1.4\n1 0 obj\n(Quote Hello) '\n(Spacing Hello) \"\nendobj\n%%EOF";
 		const file = new File([pdfSource], "quotes.pdf", {
 			type: "application/pdf",
 		});
@@ -100,7 +120,9 @@ describe("fileUpload utils", () => {
 			"%PDF-1.4\n1 0 obj\n<< /Length 999 /Filter /FlateDecode >>\nstream\n",
 		);
 		const suffix = new TextEncoder().encode("\nendstream\nendobj\n%%EOF");
-		const bytes = new Uint8Array(prefix.length + compressed.length + suffix.length);
+		const bytes = new Uint8Array(
+			prefix.length + compressed.length + suffix.length,
+		);
 		bytes.set(prefix, 0);
 		bytes.set(compressed, prefix.length);
 		bytes.set(suffix, prefix.length + compressed.length);
@@ -140,14 +162,16 @@ endobj
 		});
 		const result = await readUploadFileText(file, 1000);
 		expect(result.usedPdfFallback).toBe(true);
-		expect(result.textContent).toContain("No extractable text was found in this PDF");
+		expect(result.textContent).toContain(
+			"No extractable text was found in this PDF",
+		);
 	});
 });
 
 async function compressDeflate(data: Uint8Array): Promise<Uint8Array> {
-	const stream = new Blob([data]).stream().pipeThrough(
-		new CompressionStream("deflate"),
-	);
+	const stream = new Blob([data])
+		.stream()
+		.pipeThrough(new CompressionStream("deflate"));
 	const result = await new Response(stream).arrayBuffer();
 	return new Uint8Array(result);
 }

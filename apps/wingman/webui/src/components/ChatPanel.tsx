@@ -23,7 +23,11 @@ import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { SguiRenderer } from "../sgui/SguiRenderer";
 import type { ChatAttachment, Thread } from "../types";
-import { extractImageFiles } from "../utils/attachments";
+import {
+	extractClipboardFiles,
+	hasImageClipboardType,
+	readImageFilesFromNavigatorClipboard,
+} from "../utils/attachments";
 import { getAudioAvailability } from "../utils/media";
 import { shouldAutoScroll } from "../utils/scroll";
 import {
@@ -442,12 +446,25 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	};
 
 	const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-		const items = event.clipboardData?.items;
-		const imageFiles = extractImageFiles(items);
-		if (imageFiles.length === 0) return;
-		event.preventDefault();
-		onAddAttachments(imageFiles);
-		const text = event.clipboardData?.getData("text/plain");
+		const clipboardData = event.clipboardData;
+		const pastedFiles = extractClipboardFiles(
+			clipboardData?.items,
+			clipboardData?.files,
+		);
+		const text = clipboardData?.getData("text/plain");
+		if (pastedFiles.length > 0) {
+			event.preventDefault();
+			onAddAttachments(pastedFiles);
+		} else if (hasImageClipboardType(clipboardData?.types)) {
+			event.preventDefault();
+			void readImageFilesFromNavigatorClipboard().then((clipboardImages) => {
+				if (clipboardImages.length > 0) {
+					onAddAttachments(clipboardImages);
+				}
+			});
+		} else {
+			return;
+		}
 		if (text) {
 			onPromptChange(`${prompt}${text}`);
 		}
@@ -576,15 +593,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					className={`flex ${isUserMessage ? "justify-end" : "justify-start"} ${messageSpacingClass}`}
 				>
 					<div
-						className={`min-w-0 text-sm leading-relaxed ${isUserMessage
-							? "w-fit max-w-[90%] rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-slate-100 shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%]"
-							: "w-full max-w-full px-1 py-1 text-slate-100"
-							}`}
+						className={`min-w-0 text-sm leading-relaxed ${
+							isUserMessage
+								? "w-fit max-w-[90%] rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-slate-100 shadow-[0_10px_18px_rgba(18,14,12,0.08)] sm:max-w-[78%]"
+								: "w-full max-w-full px-1 py-1 text-slate-100"
+						}`}
 					>
 						{showMetaRow ? (
 							<div
-								className={`flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400 ${isUserMessage ? "justify-between" : "mb-1 justify-end"
-									}`}
+								className={`flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400 ${
+									isUserMessage ? "justify-between" : "mb-1 justify-end"
+								}`}
 							>
 								{isUserMessage ? <span>You</span> : null}
 								<div className="flex items-center gap-2">
@@ -595,59 +614,60 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									) : null}
 									{showVoiceButton
 										? (() => {
-											const playbackStatus =
-												resolvedVoiceMessageId === msg.id
-													? voicePlayback.status
-													: "idle";
-											const playbackLabel =
-												getVoicePlaybackLabel(playbackStatus);
-											const isBusy =
-												playbackStatus === "pending" ||
-												playbackStatus === "loading";
-											const isPlaying = playbackStatus === "playing";
-											const playbackText = parseThinkingContent(
-					normalizeMessageLineBreaks(
-						msg.content || msg.uiTextFallback || "",
-					),
-				).cleanText;
-											return (
-												<button
-													type="button"
-													title={playbackLabel}
-													aria-label={
-														isPlaying || isBusy
-															? "Stop voice playback"
-															: "Play assistant response"
-													}
-													onClick={() =>
-														resolvedVoiceMessageId === msg.id &&
+												const playbackStatus =
+													resolvedVoiceMessageId === msg.id
+														? voicePlayback.status
+														: "idle";
+												const playbackLabel =
+													getVoicePlaybackLabel(playbackStatus);
+												const isBusy =
+													playbackStatus === "pending" ||
+													playbackStatus === "loading";
+												const isPlaying = playbackStatus === "playing";
+												const playbackText = parseThinkingContent(
+													normalizeMessageLineBreaks(
+														msg.content || msg.uiTextFallback || "",
+													),
+												).cleanText;
+												return (
+													<button
+														type="button"
+														title={playbackLabel}
+														aria-label={
+															isPlaying || isBusy
+																? "Stop voice playback"
+																: "Play assistant response"
+														}
+														onClick={() =>
+															resolvedVoiceMessageId === msg.id &&
 															voicePlayback.status !== "idle"
-															? onStopVoice()
-															: (() => {
-																lastVoiceMessageIdRef.current = msg.id;
-																onSpeakVoice(msg.id, playbackText);
-															})()
-													}
-													className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition hover:border-sky-400/60 hover:text-sky-100 ${isBusy
-														? "border-sky-400/50 bg-sky-500/12 text-sky-100"
-														: isPlaying
-															? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
-															: "border-white/10 text-slate-300"
+																? onStopVoice()
+																: (() => {
+																		lastVoiceMessageIdRef.current = msg.id;
+																		onSpeakVoice(msg.id, playbackText);
+																	})()
+														}
+														className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition hover:border-sky-400/60 hover:text-sky-100 ${
+															isBusy
+																? "border-sky-400/50 bg-sky-500/12 text-sky-100"
+																: isPlaying
+																	? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
+																	: "border-white/10 text-slate-300"
 														}`}
-												>
-													{isBusy ? (
-														<FiLoader
-															className={`h-3.5 w-3.5 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
-														/>
-													) : playbackStatus === "playing" ? (
-														<FiStopCircle className="h-3.5 w-3.5 animate-pulse" />
-													) : (
-														<FiVolume2 className="h-3.5 w-3.5" />
-													)}
-													<span className="sr-only">{playbackLabel}</span>
-												</button>
-											);
-										})()
+													>
+														{isBusy ? (
+															<FiLoader
+																className={`h-3.5 w-3.5 ${playbackStatus === "pending" ? "animate-pulse" : "animate-spin"}`}
+															/>
+														) : playbackStatus === "playing" ? (
+															<FiStopCircle className="h-3.5 w-3.5 animate-pulse" />
+														) : (
+															<FiVolume2 className="h-3.5 w-3.5" />
+														)}
+														<span className="sr-only">{playbackLabel}</span>
+													</button>
+												);
+											})()
 										: null}
 								</div>
 							</div>
@@ -680,10 +700,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							</div>
 						) : null}
 						{msg.role === "assistant" &&
-							isActiveMessage &&
-							!hasNestedActivity &&
-							!displayText &&
-							(!uiBlocks || uiBlocks.length === 0) ? (
+						isActiveMessage &&
+						!hasNestedActivity &&
+						!displayText &&
+						(!uiBlocks || uiBlocks.length === 0) ? (
 							<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
 								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
 								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
@@ -695,8 +715,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								rehypePlugins={[
 									[rehypeHighlight, { detect: true, ignoreMissing: true }],
 								]}
-								className={`markdown-content text-sm leading-relaxed ${isUserMessage ? "mt-2" : showMetaRow ? "mt-1" : "mt-0"
-									}`}
+								className={`markdown-content text-sm leading-relaxed ${
+									isUserMessage ? "mt-2" : showMetaRow ? "mt-1" : "mt-0"
+								}`}
 								components={{
 									a: ({ node, ...props }) => {
 										const href =
@@ -1082,10 +1103,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								type="button"
 								aria-pressed={recording}
 								aria-label={recording ? "Stop recording" : "Record audio"}
-								className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${recording
-									? "border-rose-400/60 bg-rose-500/20 text-rose-100"
-									: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
-									}`}
+								className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+									recording
+										? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+										: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
+								}`}
 								style={audioGlow ? { boxShadow: audioGlow } : undefined}
 								onClick={recording ? stopRecording : startRecording}
 								disabled={isStreaming}
@@ -1120,10 +1142,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							style={{ overflowY: "hidden" }}
 						/>
 						<button
-							className={`my-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${canStop
-								? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
-								: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
-								}`}
+							className={`my-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
+								canStop
+									? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
+									: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
+							}`}
 							onClick={canStop ? onStopPrompt : onSendPrompt}
 							type="button"
 							aria-label={canStop ? "Stop response" : "Send prompt"}
@@ -1149,52 +1172,52 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			</>
 			{previewAttachment
 				? (() => {
-					const previewModal = (
-						// biome-ignore lint/a11y/useSemanticElements: modal overlay backdrop requires grid layout for centering
-						<div
-							role="button"
-							tabIndex={0}
-							className="fixed inset-0 z-[120] grid place-items-center bg-black/70 p-6"
-							onClick={() => setPreviewAttachment(null)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									setPreviewAttachment(null);
-								}
-							}}
-						>
+						const previewModal = (
+							// biome-ignore lint/a11y/useSemanticElements: modal overlay backdrop requires grid layout for centering
 							<div
-								role="dialog"
-								aria-modal="true"
-								className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-slate-950 shadow-2xl"
-								onClick={(event) => event.stopPropagation()}
-								onKeyDown={(event) => event.stopPropagation()}
+								role="button"
+								tabIndex={0}
+								className="fixed inset-0 z-[120] grid place-items-center bg-black/70 p-6"
+								onClick={() => setPreviewAttachment(null)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										setPreviewAttachment(null);
+									}
+								}}
 							>
-								<img
-									src={previewAttachment.dataUrl}
-									alt={previewAttachment.name || "Attachment preview"}
-									className="max-h-[85vh] max-w-[90vw] object-contain"
-								/>
-								<div className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-2 text-xs text-slate-400">
-									<span className="truncate">
-										{previewAttachment.name || "Image preview"}
-									</span>
-									<button
-										type="button"
-										className="text-slate-400 transition hover:text-slate-300"
-										onClick={() => setPreviewAttachment(null)}
-									>
-										Close
-									</button>
+								<div
+									role="dialog"
+									aria-modal="true"
+									className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-slate-950 shadow-2xl"
+									onClick={(event) => event.stopPropagation()}
+									onKeyDown={(event) => event.stopPropagation()}
+								>
+									<img
+										src={previewAttachment.dataUrl}
+										alt={previewAttachment.name || "Attachment preview"}
+										className="max-h-[85vh] max-w-[90vw] object-contain"
+									/>
+									<div className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-2 text-xs text-slate-400">
+										<span className="truncate">
+											{previewAttachment.name || "Image preview"}
+										</span>
+										<button
+											type="button"
+											className="text-slate-400 transition hover:text-slate-300"
+											onClick={() => setPreviewAttachment(null)}
+										>
+											Close
+										</button>
+									</div>
 								</div>
 							</div>
-						</div>
-					);
+						);
 
-					if (typeof document !== "undefined") {
-						return createPortal(previewModal, document.body);
-					}
-					return previewModal;
-				})()
+						if (typeof document !== "undefined") {
+							return createPortal(previewModal, document.body);
+						}
+						return previewModal;
+					})()
 				: null}
 		</section>
 	);
@@ -1502,7 +1525,10 @@ function isRelativeFilesystemPath(value: string): boolean {
 	return true;
 }
 
-function joinWorkingDirectoryPath(basePath: string, relativePath: string): string {
+function joinWorkingDirectoryPath(
+	basePath: string,
+	relativePath: string,
+): string {
 	const base = basePath.trim();
 	const relative = relativePath
 		.trim()

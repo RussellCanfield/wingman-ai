@@ -73,6 +73,7 @@ import {
 } from "./utils/chatHelpers";
 import {
 	FILE_INPUT_ACCEPT,
+	isLikelyImageUploadFile,
 	isPdfUploadFile,
 	isSupportedTextUploadFile,
 	readUploadFileText,
@@ -140,6 +141,7 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_FILE_TEXT_CHARS = 40_000;
 const MAX_ATTACHMENTS = 6;
+const createAttachmentId = (): string => randomUuid();
 
 type AgentEditorSubAgentPayload = {
 	id: string;
@@ -544,7 +546,7 @@ export const App: React.FC = () => {
 			let warningMessage = "";
 
 			for (const file of selected) {
-				const isImage = file.type.startsWith("image/");
+				const isImage = await isLikelyImageUploadFile(file);
 				const isAudio = file.type.startsWith("audio/");
 				const isPdf = isPdfUploadFile(file);
 				const isTextFile = isSupportedTextUploadFile(file);
