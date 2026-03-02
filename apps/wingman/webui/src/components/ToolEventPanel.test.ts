@@ -99,6 +99,9 @@ describe("ToolEventPanel helpers", () => {
 		expect(html).toContain("whitespace-pre-wrap");
 		expect(html).toContain("overflow-x-hidden");
 		expect(html).toContain("[overflow-wrap:anywhere]");
+		expect(html).toContain(
+			"inline-block max-w-full truncate align-bottom sm:max-w-[420px]",
+		);
 	});
 
 	it("hides completed badge text and uses chevron detail affordance", () => {

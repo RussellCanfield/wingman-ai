@@ -703,12 +703,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											typeof props.href === "string" ? props.href : "";
 										if (!isUserMessage && isLikelyAudioUrl(href)) {
 											return (
-												<span className="my-2 block max-w-[420px]">
+												<span className="my-2 block w-full min-w-0 max-w-[420px]">
 													<audio
 														controls
 														preload="metadata"
 														src={href}
-														className="w-full min-w-[220px]"
+														className="block w-full min-w-0 max-w-full"
 													/>
 													<a
 														href={href}
@@ -771,13 +771,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								{assistantAudioPreviews.map((preview) => (
 									<div
 										key={preview.src}
-										className="max-w-[420px] rounded-xl border border-white/10 bg-slate-950/40 p-3"
+										className="w-full min-w-0 max-w-[420px] rounded-xl border border-white/10 bg-slate-950/40 p-3"
 									>
 										<audio
 											controls
 											preload="metadata"
 											src={preview.src}
-											className="w-full min-w-[220px]"
+											className="block w-full min-w-0 max-w-full"
 										/>
 										{preview.label ? (
 											<div className="mt-1 truncate text-[11px] text-slate-400">
@@ -819,7 +819,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 														<audio
 															controls
 															src={attachment.dataUrl}
-															className="w-full min-w-[200px] max-w-[360px] sm:min-w-[240px]"
+															className="block w-full min-w-0 max-w-[360px]"
 														/>
 													) : (
 														<div className="flex items-center gap-3 rounded-xl border border-dashed border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">

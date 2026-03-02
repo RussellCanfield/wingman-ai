@@ -224,6 +224,8 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("<audio");
 		expect(html).toContain(`src="${audioUrl}"`);
 		expect(html).toContain(">Open audio in new tab<");
+		expect(html).toContain("min-w-0 max-w-full");
+		expect(html).not.toContain("min-w-[220px]");
 	});
 
 	it("keeps user markdown audio links as normal anchors", () => {
@@ -277,6 +279,42 @@ describe("ChatPanel prompt composer", () => {
 			`src="/api/fs/file?path=${encodeURIComponent(path)}"`,
 		);
 		expect(html).toContain("test-sfx.wav");
+		expect(html).toContain("min-w-0 max-w-full");
+		expect(html).not.toContain("min-w-[220px]");
+	});
+
+	it("uses fluid sizing for audio attachments to prevent mobile overflow", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-audio-attachment",
+							role: "assistant",
+							content: "Attached audio",
+							createdAt: 1,
+							attachments: [
+								{
+									id: "audio-1",
+									kind: "audio",
+									dataUrl: "data:audio/wav;base64,abc123",
+									name: "impact.wav",
+									mimeType: "audio/wav",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("block w-full min-w-0 max-w-[360px]");
+		expect(html).not.toContain("min-w-[200px]");
+		expect(html).not.toContain("sm:min-w-[240px]");
 	});
 
 	it("resolves assistant inline audio paths against thread workdir", () => {

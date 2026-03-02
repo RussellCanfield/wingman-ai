@@ -66,7 +66,7 @@ export const ToolEventPanel: React.FC<ToolEventPanelProps> = ({
 							{invokedAgents.map((agent) => (
 								<span
 									key={agent.label}
-									className="rounded-full border border-sky-400/35 bg-sky-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200"
+									className="inline-block max-w-full truncate align-bottom rounded-full border border-sky-400/35 bg-sky-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200"
 								>
 									{agent.label}
 									{agent.running > 0 ? " active" : ` ${agent.total}`}
@@ -130,17 +130,17 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 								{event.name}
 							</div>
 							{taskTarget ? (
-								<span className="rounded-full border border-violet-400/35 bg-violet-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200">
+								<span className="inline-block max-w-full truncate align-bottom rounded-full border border-violet-400/35 bg-violet-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200">
 									{taskTarget}
 								</span>
 							) : null}
 							{delegatedLabel ? (
-								<span className="rounded-full border border-violet-400/35 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-100">
+								<span className="inline-block max-w-full truncate align-bottom rounded-full border border-violet-400/35 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-100">
 									via {delegatedLabel}
 								</span>
 							) : null}
 							{actorLabel ? (
-								<span className="rounded-full border border-sky-400/40 bg-sky-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200">
+								<span className="inline-block max-w-full truncate align-bottom rounded-full border border-sky-400/40 bg-sky-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200">
 									{actorLabel}
 								</span>
 							) : null}
@@ -152,11 +152,11 @@ const ToolEventCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 						</div>
 						<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
 							{argsSummary ? (
-								<span className="max-w-[420px] truncate">
+								<span className="inline-block max-w-full truncate align-bottom sm:max-w-[420px]">
 									<span className="text-slate-500">args:</span> {argsSummary}
 								</span>
 							) : outputSummary ? (
-								<span className="max-w-[420px] truncate">
+								<span className="inline-block max-w-full truncate align-bottom sm:max-w-[420px]">
 									<span className="text-slate-500">output:</span>{" "}
 									{outputSummary}
 								</span>
@@ -347,7 +347,7 @@ const EditFileDiffPreview: React.FC<{ preview: EditFileDiffPreviewModel }> = ({
 			<span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 				Diff preview
 			</span>
-			<span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
+			<span className="inline-block max-w-full truncate align-bottom rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
 				{preview.filePath}
 			</span>
 			{preview.replaceAll ? (

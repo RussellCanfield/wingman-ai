@@ -58,6 +58,20 @@ import {
 	queueAssistantContentUpdate,
 } from "./utils/assistantUpdateQueue";
 import {
+	buildAgentFallback,
+	buildAttachmentPreviewText,
+	extractTaskSubagentType,
+	mapSessionToThread,
+	mergeStreamAttachments,
+	mergeStreamText,
+	normalizeIncomingAttachment,
+	normalizeName,
+	normalizeSessionMessage,
+	normalizeStreamAttachment,
+	readFileAsDataUrl,
+	upsertAssistantMessage,
+} from "./utils/chatHelpers";
+import {
 	FILE_INPUT_ACCEPT,
 	isPdfUploadFile,
 	isSupportedTextUploadFile,
@@ -70,6 +84,8 @@ import {
 import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
 import { getWorkspaceShellClass } from "./utils/layoutShell";
+import { readStoredBoolean, readStoredString } from "./utils/persistedStorage";
+import { randomUuid } from "./utils/randomUuid";
 import { shouldMarkRequestActive } from "./utils/requestLifecycle";
 import {
 	isLocallyTrackedRequest,
@@ -94,7 +110,6 @@ import {
 } from "./utils/voice";
 import { shouldAutoSpeak } from "./utils/voiceAuto";
 import type { VoicePlaybackStatus } from "./utils/voicePlayback";
-import { readStoredBoolean, readStoredString } from "./utils/persistedStorage";
 
 const DEFAULT_VOICE_CONFIG: VoiceConfig = {
 	provider: "web_speech",
@@ -278,7 +293,7 @@ export const App: React.FC = () => {
 	useEffect(() => {
 		setAttachments([]);
 		setAttachmentError("");
-	}, [activeThreadId]);
+	}, []);
 
 	const logEvent = useCallback((message: string) => {
 		setEventLog((prev) => {
@@ -407,7 +422,7 @@ export const App: React.FC = () => {
 		} catch {
 			logEvent("Failed to refresh gateway stats");
 		}
-	}, [logEvent]);
+	}, [logEvent, apiFetch]);
 
 	const refreshProviders = useCallback(async () => {
 		setProvidersLoading(true);
@@ -426,7 +441,7 @@ export const App: React.FC = () => {
 		} finally {
 			setProvidersLoading(false);
 		}
-	}, [logEvent]);
+	}, [logEvent, apiFetch]);
 
 	const fetchThreads = useCallback(async () => {
 		setLoadingThreads(true);
@@ -472,7 +487,7 @@ export const App: React.FC = () => {
 		} finally {
 			setLoadingThreads(false);
 		}
-	}, [logEvent]);
+	}, [logEvent, apiFetch]);
 
 	const loadThreadMessages = useCallback(
 		async (
@@ -514,7 +529,7 @@ export const App: React.FC = () => {
 				setLoadingThreadId(null);
 			}
 		},
-		[logEvent],
+		[logEvent, apiFetch],
 	);
 
 	const addAttachments = useCallback(
@@ -812,7 +827,7 @@ export const App: React.FC = () => {
 				setVoicePlayback({ status: "idle" });
 			}
 		},
-		[agentVoiceMap, config.voice, logEvent, stopVoicePlayback],
+		[agentVoiceMap, config.voice, logEvent, stopVoicePlayback, apiFetch],
 	);
 	const speakVoiceRef = useRef(speakVoice);
 	useEffect(() => {
@@ -850,7 +865,7 @@ export const App: React.FC = () => {
 
 	useEffect(() => {
 		stopVoicePlayback();
-	}, [activeThreadId, stopVoicePlayback]);
+	}, [stopVoicePlayback]);
 
 	const getRequestMessageIds = useCallback((requestId: string): string[] => {
 		const ids = new Set<string>([requestId]);
@@ -903,10 +918,8 @@ export const App: React.FC = () => {
 							nextThread,
 							update.messageId,
 							(message) => {
-								const blockCount =
-									update.inlineThinkBlocks?.length ?? 0;
-								const prevBlockCount =
-									message.inlineThinkBlocks?.length ?? 0;
+								const blockCount = update.inlineThinkBlocks?.length ?? 0;
+								const prevBlockCount = message.inlineThinkBlocks?.length ?? 0;
 								const blocksSame =
 									blockCount === prevBlockCount &&
 									(blockCount === 0 ||
@@ -1208,7 +1221,9 @@ export const App: React.FC = () => {
 			const resolvedFallback = options?.fallback || uiFallback || "";
 			const bufferedRaw = buffersRef.current.get(messageId) || "";
 			const bufferedText = sanitizeAssistantDisplayText(bufferedRaw) || "";
-			const finalText = stripThinkTokensForDisplay(bufferedText || resolvedFallback || "");
+			const finalText = stripThinkTokensForDisplay(
+				bufferedText || resolvedFallback || "",
+			);
 			const spoken =
 				spokenMessagesRef.current.get(threadId) || new Set<string>();
 			if (
@@ -1319,7 +1334,10 @@ export const App: React.FC = () => {
 	});
 
 	const handleAgentEvent = useCallback(
-		(requestId: string, payload: any) => {
+		(
+			requestId: string,
+			payload: Record<string, unknown> | null | undefined,
+		) => {
 			if (!payload) return;
 			const trackedRequest = isLocallyTrackedRequest({
 				requestId,
@@ -1348,7 +1366,7 @@ export const App: React.FC = () => {
 					? payload.attachments
 					: [];
 				const mappedAttachments = rawAttachments
-					.map((attachment: any) => normalizeIncomingAttachment(attachment))
+					.map((attachment) => normalizeIncomingAttachment(attachment))
 					.filter(Boolean) as ChatAttachment[];
 				const userMessage: ChatMessage = {
 					id: `user-${requestId || now}`,
@@ -1550,7 +1568,10 @@ export const App: React.FC = () => {
 						bucket.push(parsedAttachment);
 						attachmentEventsByMessageId.set(targetMessageId, bucket);
 					}
-					for (const [messageId, parsedAttachments] of attachmentEventsByMessageId) {
+					for (const [
+						messageId,
+						parsedAttachments,
+					] of attachmentEventsByMessageId) {
 						updateAttachmentEvents(requestId, messageId, parsedAttachments);
 					}
 				}
@@ -1819,26 +1840,25 @@ export const App: React.FC = () => {
 				return;
 			}
 
-				if (msg.type === "error") {
-					const errorText =
-						extractGatewayErrorMessage(msg.payload) || "unknown";
-					logEvent(`Gateway error: ${errorText}`);
-					const requestId = resolveTrackedGatewayErrorRequestId({
-						messageId: msg.id,
-						payload: msg.payload,
-						pendingRequestIds: pendingRequestIdsRef.current,
-						activeRequestId: activeRequestIdRef.current,
+			if (msg.type === "error") {
+				const errorText = extractGatewayErrorMessage(msg.payload) || "unknown";
+				logEvent(`Gateway error: ${errorText}`);
+				const requestId = resolveTrackedGatewayErrorRequestId({
+					messageId: msg.id,
+					payload: msg.payload,
+					pendingRequestIds: pendingRequestIdsRef.current,
+					activeRequestId: activeRequestIdRef.current,
+				});
+				if (requestId) {
+					flushQueuedAssistantUpdates();
+					finalizeAssistant(requestId, {
+						fallback: errorText,
+						forceText: true,
+						appendFallbackToExisting: true,
 					});
-					if (requestId) {
-						flushQueuedAssistantUpdates();
-						finalizeAssistant(requestId, {
-							fallback: errorText,
-							forceText: true,
-							appendFallbackToExisting: true,
-						});
-					}
 				}
-			};
+			}
+		};
 
 		ws.onerror = () => {
 			void gatewayStream.stop();
@@ -1897,9 +1917,7 @@ export const App: React.FC = () => {
 
 	const createThread = useCallback(
 		async (targetAgentId: string, name?: string): Promise<Thread | null> => {
-			const shortId =
-				window.crypto?.randomUUID?.() ||
-				`thread-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			const shortId = randomUuid();
 			const sessionId = `agent:${targetAgentId}:webui:thread:${shortId}`;
 			try {
 				const res = await apiFetch("/api/sessions", {
@@ -1934,7 +1952,7 @@ export const App: React.FC = () => {
 				return null;
 			}
 		},
-		[logEvent],
+		[logEvent, apiFetch],
 	);
 
 	const sendPrompt = useCallback(async () => {
@@ -1977,7 +1995,7 @@ export const App: React.FC = () => {
 			prev.map((thread) =>
 				appendLocalPromptMessagesToThread({
 					thread,
-					targetThreadId: targetThread!.id,
+					targetThreadId: targetThread?.id,
 					userMessage,
 					assistantMessage,
 					attachmentPreview,
@@ -2098,7 +2116,7 @@ export const App: React.FC = () => {
 					: thread,
 			),
 		);
-	}, [activeThread, uiStreaming, logEvent, stopVoicePlayback]);
+	}, [activeThread, uiStreaming, logEvent, stopVoicePlayback, apiFetch]);
 
 	const deleteThread = useCallback(
 		async (threadId: string) => {
@@ -2140,6 +2158,7 @@ export const App: React.FC = () => {
 			logEvent,
 			stopVoicePlayback,
 			threads,
+			apiFetch,
 		],
 	);
 
@@ -2184,7 +2203,7 @@ export const App: React.FC = () => {
 				logEvent("Failed to rename session");
 			}
 		},
-		[logEvent, threads],
+		[logEvent, threads, apiFetch],
 	);
 
 	const setThreadWorkdir = useCallback(
@@ -2219,7 +2238,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, threads],
+		[logEvent, threads, apiFetch],
 	);
 
 	const resetDevice = useCallback(() => {
@@ -2256,10 +2275,7 @@ export const App: React.FC = () => {
 	useEffect(() => {
 		let existingDevice = localStorage.getItem(DEVICE_KEY) || "";
 		if (!existingDevice) {
-			existingDevice = `device-${
-				window.crypto?.randomUUID?.().slice(0, 8) ||
-				Math.random().toString(36).slice(2, 10)
-			}`;
+			existingDevice = `device-${randomUuid().slice(0, 8)}`;
 			localStorage.setItem(DEVICE_KEY, existingDevice);
 		}
 		setDeviceId(existingDevice);
@@ -2277,7 +2293,7 @@ export const App: React.FC = () => {
 		} catch {
 			logEvent("Failed to load gateway config");
 		}
-	}, [logEvent]);
+	}, [logEvent, apiFetch]);
 
 	const updateVoiceConfig = useCallback(
 		async (voice: Partial<VoiceConfig>) => {
@@ -2306,7 +2322,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent],
+		[logEvent, apiFetch],
 	);
 
 	useEffect(() => {
@@ -2330,7 +2346,7 @@ export const App: React.FC = () => {
 		} finally {
 			setAgentsLoading(false);
 		}
-	}, [logEvent]);
+	}, [logEvent, apiFetch]);
 
 	const refreshWebhooks = useCallback(async () => {
 		setWebhooksLoading(true);
@@ -2347,7 +2363,7 @@ export const App: React.FC = () => {
 		} finally {
 			setWebhooksLoading(false);
 		}
-	}, [logEvent]);
+	}, [logEvent, apiFetch]);
 
 	const refreshRoutines = useCallback(async () => {
 		setRoutinesLoading(true);
@@ -2364,7 +2380,7 @@ export const App: React.FC = () => {
 		} finally {
 			setRoutinesLoading(false);
 		}
-	}, [logEvent]);
+	}, [logEvent, apiFetch]);
 
 	const loadAgentDetail = useCallback(
 		async (agentId: string): Promise<AgentDetail | null> => {
@@ -2382,7 +2398,7 @@ export const App: React.FC = () => {
 				return null;
 			}
 		},
-		[logEvent],
+		[logEvent, apiFetch],
 	);
 
 	useEffect(() => {
@@ -2498,7 +2514,7 @@ export const App: React.FC = () => {
 	// Auto-close mobile drawer on route change
 	useEffect(() => {
 		setMobileMenuOpen(false);
-	}, [location.pathname]);
+	}, []);
 
 	// Lock body scroll when drawer open
 	useEffect(() => {
@@ -2581,7 +2597,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshAgents, refreshConfig],
+		[logEvent, refreshAgents, refreshConfig, apiFetch],
 	);
 
 	const updateAgent = useCallback(
@@ -2624,7 +2640,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshAgents, refreshConfig],
+		[logEvent, refreshAgents, refreshConfig, apiFetch],
 	);
 
 	const createRoutine = useCallback(
@@ -2648,7 +2664,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshRoutines],
+		[logEvent, refreshRoutines, apiFetch],
 	);
 
 	const deleteRoutine = useCallback(
@@ -2670,7 +2686,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshRoutines],
+		[logEvent, refreshRoutines, apiFetch],
 	);
 
 	const createWebhook = useCallback(
@@ -2694,7 +2710,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshWebhooks],
+		[logEvent, refreshWebhooks, apiFetch],
 	);
 
 	const updateWebhook = useCallback(
@@ -2724,7 +2740,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshWebhooks],
+		[logEvent, refreshWebhooks, apiFetch],
 	);
 
 	const deleteWebhook = useCallback(
@@ -2749,7 +2765,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshWebhooks],
+		[logEvent, refreshWebhooks, apiFetch],
 	);
 
 	const testWebhook = useCallback(
@@ -2797,7 +2813,7 @@ export const App: React.FC = () => {
 				return { ok: false, message: "Test failed" };
 			}
 		},
-		[webhooks],
+		[webhooks, apiFetch],
 	);
 
 	const saveProviderToken = useCallback(
@@ -2825,7 +2841,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshProviders],
+		[logEvent, refreshProviders, apiFetch],
 	);
 
 	const clearProviderToken = useCallback(
@@ -2849,7 +2865,7 @@ export const App: React.FC = () => {
 				return false;
 			}
 		},
-		[logEvent, refreshProviders],
+		[logEvent, refreshProviders, apiFetch],
 	);
 
 	return (
@@ -2905,7 +2921,8 @@ export const App: React.FC = () => {
 					{mobileMenuOpen && (
 						<>
 							{/* Backdrop */}
-							<div
+							<button
+								type="button"
 								className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm transition-opacity duration-300 lg:hidden"
 								onClick={() => setMobileMenuOpen(false)}
 								aria-label="Close menu"
@@ -3130,340 +3147,3 @@ export const App: React.FC = () => {
 		</div>
 	);
 };
-
-function normalizeName(value: string): string {
-	return value.trim().toLowerCase();
-}
-
-function extractTaskSubagentType(value: unknown): string | undefined {
-	if (!value || typeof value !== "object") return undefined;
-	const record = value as Record<string, unknown>;
-	const direct =
-		record.subagent_type ??
-		record.subagentType ??
-		record.subagent ??
-		record.subAgent;
-	if (typeof direct === "string" && direct.trim()) {
-		return direct.trim();
-	}
-	return undefined;
-}
-
-function isAssistantPlaceholder(message: ChatMessage): boolean {
-	return (
-		message.role === "assistant" &&
-		!message.content.trim() &&
-		!message.uiTextFallback &&
-		(!message.attachments || message.attachments.length === 0) &&
-		(!message.toolEvents || message.toolEvents.length === 0) &&
-		(!message.thinkingEvents || message.thinkingEvents.length === 0) &&
-		(!message.uiBlocks || message.uiBlocks.length === 0)
-	);
-}
-
-function upsertAssistantMessage(
-	thread: Thread,
-	messageId: string,
-	update: (message: ChatMessage) => ChatMessage,
-	placeholderId?: string,
-): Thread {
-	let found = false;
-	const nextMessages = thread.messages.map((message) => {
-		if (message.id !== messageId) return message;
-		found = true;
-		return update(message);
-	});
-
-	if (!found) {
-		const seeded = update({
-			id: messageId,
-			role: "assistant",
-			content: "",
-			createdAt: Date.now(),
-		});
-
-		if (placeholderId && placeholderId !== messageId) {
-			const placeholderIndex = nextMessages.findIndex(
-				(message) =>
-					message.id === placeholderId && isAssistantPlaceholder(message),
-			);
-			if (placeholderIndex >= 0) {
-				nextMessages[placeholderIndex] = seeded;
-			} else {
-				nextMessages.push(seeded);
-			}
-		} else {
-			nextMessages.push(seeded);
-		}
-	}
-
-	return {
-		...thread,
-		messages: nextMessages,
-		messageCount: Math.max(thread.messageCount ?? 0, nextMessages.length),
-		updatedAt: Date.now(),
-		messagesLoaded: true,
-	};
-}
-
-function mergeStreamText(existing: string, next: string): string {
-	if (!next) return existing;
-	if (next.startsWith(existing)) return next;
-	return existing + next;
-}
-
-function mapSessionToThread(session: {
-	id: string;
-	name: string;
-	agentId: string;
-	createdAt: number;
-	updatedAt?: number;
-	messageCount?: number;
-	lastMessagePreview?: string;
-	workdir?: string | null;
-}): Thread {
-	return {
-		id: session.id,
-		name: session.name || DEFAULT_THREAD_NAME,
-		agentId: session.agentId,
-		messages: [],
-		toolEvents: [],
-		thinkingEvents: [],
-		createdAt: session.createdAt || Date.now(),
-		updatedAt: session.updatedAt,
-		messageCount: session.messageCount ?? 0,
-		lastMessagePreview: session.lastMessagePreview,
-		messagesLoaded: false,
-		workdir: session.workdir ?? null,
-	};
-}
-
-function createAttachmentId(): string {
-	if (
-		typeof window !== "undefined" &&
-		typeof window.crypto?.randomUUID === "function"
-	) {
-		return window.crypto.randomUUID();
-	}
-	return `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function normalizeSessionMessage(message: ChatMessage): ChatMessage {
-	const rawAttachments = Array.isArray((message as any)?.attachments)
-		? ((message as any).attachments as any[])
-		: [];
-	const attachments = rawAttachments
-		.map((attachment) => normalizeIncomingAttachment(attachment))
-		.filter(Boolean) as ChatAttachment[];
-
-	if (message.role !== "assistant") {
-		return {
-			...message,
-			attachments: attachments.length > 0 ? attachments : undefined,
-		};
-	}
-
-	return {
-		...message,
-		content: sanitizeAssistantDisplayText(message.content) ?? "",
-		attachments: attachments.length > 0 ? attachments : undefined,
-	};
-}
-
-function normalizeIncomingAttachment(raw: any): ChatAttachment | null {
-	if (!raw || typeof raw !== "object") return null;
-
-	const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl : "";
-	const textContent =
-		typeof raw.textContent === "string" ? raw.textContent : undefined;
-	const mimeType = typeof raw.mimeType === "string" ? raw.mimeType : undefined;
-	const name = typeof raw.name === "string" ? raw.name : undefined;
-	const size = typeof raw.size === "number" ? raw.size : undefined;
-
-	const isAudio =
-		raw.kind === "audio" ||
-		mimeType?.startsWith("audio/") ||
-		dataUrl.startsWith("data:audio/");
-	const isFile =
-		raw.kind === "file" ||
-		(typeof textContent === "string" &&
-			!isAudio &&
-			!dataUrl.startsWith("data:image/"));
-
-	if (isFile) {
-		return {
-			id:
-				typeof raw.id === "string" && raw.id.trim().length > 0
-					? raw.id
-					: createAttachmentId(),
-			kind: "file",
-			dataUrl,
-			textContent: textContent || "",
-			mimeType,
-			name,
-			size,
-		};
-	}
-
-	if (!dataUrl) return null;
-
-	return {
-		id:
-			typeof raw.id === "string" && raw.id.trim().length > 0
-				? raw.id
-				: createAttachmentId(),
-		kind: isAudio ? "audio" : "image",
-		dataUrl,
-		mimeType,
-		name,
-		size,
-	};
-}
-
-function buildAgentFallback(
-	result: unknown,
-	requestId: string,
-	uiOnlyRequests: Set<string>,
-): string | undefined {
-	if (!result) return undefined;
-	if (uiOnlyRequests.has(requestId)) return undefined;
-	if (typeof result === "object" && result !== null) {
-		const record = result as Record<string, unknown>;
-		if (
-			typeof record.fallbackText === "string" &&
-			record.fallbackText.trim().length > 0
-		) {
-			return sanitizeAssistantDisplayText(record.fallbackText);
-		}
-		const keys = Object.keys(result as Record<string, unknown>);
-		if (keys.length === 1 && keys[0] === "streaming") {
-			return undefined;
-		}
-	}
-	try {
-		return sanitizeAssistantDisplayText(JSON.stringify(result, null, 2));
-	} catch {
-		return sanitizeAssistantDisplayText(String(result));
-	}
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result || ""));
-		reader.onerror = () =>
-			reject(reader.error || new Error("Failed to read file"));
-		reader.readAsDataURL(file);
-	});
-}
-
-function buildAttachmentPreviewText(attachments: ChatAttachment[]): string {
-	if (!attachments || attachments.length === 0) return "";
-	let hasFile = false;
-	let hasAudio = false;
-	let hasImage = false;
-	for (const attachment of attachments) {
-		if (isFileAttachment(attachment)) {
-			hasFile = true;
-			continue;
-		}
-		if (isAudioAttachment(attachment)) {
-			hasAudio = true;
-		} else {
-			hasImage = true;
-		}
-	}
-	const count = attachments.length;
-	if (hasFile && (hasAudio || hasImage)) {
-		return count > 1
-			? "File and media attachments"
-			: "File and media attachment";
-	}
-	if (hasFile) {
-		return count > 1 ? "File attachments" : "File attachment";
-	}
-	if (hasAudio && hasImage) {
-		return count > 1 ? "Media attachments" : "Media attachment";
-	}
-	if (hasAudio) {
-		return count > 1 ? "Audio attachments" : "Audio attachment";
-	}
-	return count > 1 ? "Image attachments" : "Image attachment";
-}
-
-function isAudioAttachment(attachment: ChatAttachment): boolean {
-	if (attachment.kind === "audio") return true;
-	if (attachment.mimeType?.startsWith("audio/")) return true;
-	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
-	return false;
-}
-
-function isFileAttachment(attachment: ChatAttachment): boolean {
-	if (attachment.kind === "file") return true;
-	return typeof attachment.textContent === "string";
-}
-
-function normalizeStreamAttachment(raw: {
-	kind?: unknown;
-	dataUrl?: unknown;
-	textContent?: unknown;
-	name?: unknown;
-	mimeType?: unknown;
-	size?: unknown;
-}): ChatAttachment | null {
-	const kind =
-		typeof raw.kind === "string" &&
-		(raw.kind === "image" || raw.kind === "audio" || raw.kind === "file")
-			? raw.kind
-			: null;
-	const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl.trim() : "";
-	if (!kind || !dataUrl) return null;
-
-	const textContent =
-		kind === "file" && typeof raw.textContent === "string"
-			? raw.textContent
-			: undefined;
-	const name = typeof raw.name === "string" ? raw.name : undefined;
-	const mimeType = typeof raw.mimeType === "string" ? raw.mimeType : undefined;
-	const size =
-		typeof raw.size === "number" && Number.isFinite(raw.size)
-			? raw.size
-			: undefined;
-
-	return {
-		id: createAttachmentId(),
-		kind,
-		dataUrl,
-		textContent,
-		name,
-		mimeType,
-		size,
-	};
-}
-
-function attachmentSignature(attachment: ChatAttachment): string {
-	return [
-		attachment.kind,
-		attachment.dataUrl,
-		attachment.textContent || "",
-		attachment.name || "",
-		attachment.mimeType || "",
-		typeof attachment.size === "number" ? String(attachment.size) : "",
-	].join("|");
-}
-
-function mergeStreamAttachments(
-	existing: ChatAttachment[] | undefined,
-	incoming: ChatAttachment[],
-): ChatAttachment[] | undefined {
-	if (incoming.length === 0) return existing;
-	const merged = [...(existing || [])];
-	const seen = new Set(merged.map((attachment) => attachmentSignature(attachment)));
-	for (const attachment of incoming) {
-		const signature = attachmentSignature(attachment);
-		if (seen.has(signature)) continue;
-		seen.add(signature);
-		merged.push(attachment);
-	}
-	return merged.length > 0 ? merged : undefined;
-}
