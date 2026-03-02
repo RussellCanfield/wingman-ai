@@ -1,4 +1,5 @@
 import { ChatAnthropic } from "@langchain/anthropic";
+import { ChatOllama } from "@langchain/ollama";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatXAI } from "@langchain/xai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -131,13 +132,14 @@ describe("ModelFactory", () => {
 		it("should create an Ollama model", () => {
 			const model = ModelFactory.createModel("ollama:llama3.2");
 
-			expect(model).toBeInstanceOf(ChatOpenAI);
+			expect(model).toBeInstanceOf(ChatOllama);
+			expect((model as ChatOllama).baseUrl).toBe("http://localhost:11434");
 		});
 
 		it("should allow model names with additional colons", () => {
 			const model = ModelFactory.createModel("ollama:phi4:14b-q8_0");
 
-			expect(model).toBeInstanceOf(ChatOpenAI);
+			expect(model).toBeInstanceOf(ChatOllama);
 		});
 
 		it("should create native xAI image model for grok-imagine-image", () => {

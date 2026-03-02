@@ -472,6 +472,60 @@ describe("parseStreamEvents", () => {
 		});
 	});
 
+	it("ignores stale model failure text when a later assistant message exists", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-run-err-stale-1",
+			name: "todoListMiddleware.after_model",
+			data: {
+				input: {
+					messages: [
+						{ type: "human", content: "Generate an image" },
+						{
+							type: "ai",
+							id: "ai-error-stale-1",
+							content:
+								"Model call failed after 3 attempts with Error: xAI image generation failed: Prompt too long",
+						},
+						{
+							type: "ai",
+							id: "ai-success-stale-1",
+							content: "Image created successfully",
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+		expect(result.textEvents).toHaveLength(0);
+	});
+
+	it("ignores model failure text when snapshot has a newer user turn", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-run-err-stale-2",
+			name: "todoListMiddleware.after_model",
+			data: {
+				input: {
+					messages: [
+						{ type: "human", content: "First prompt" },
+						{
+							type: "ai",
+							id: "ai-error-stale-2",
+							content:
+								"Model call failed after 3 attempts with Error: xAI image generation failed: Prompt too long",
+						},
+						{ type: "human", content: "Second prompt" },
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+		expect(result.textEvents).toHaveLength(0);
+	});
+
 	it("ignores model failure snapshots on on_chain_start events", () => {
 		const chunk = {
 			event: "on_chain_start",

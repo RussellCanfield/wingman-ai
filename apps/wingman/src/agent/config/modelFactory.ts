@@ -3,6 +3,7 @@ import type {
 	BaseLanguageModel,
 	BaseLanguageModelCallOptions,
 } from "@langchain/core/language_models/base";
+import { ChatOllama } from "@langchain/ollama";
 import { ChatOpenAI, type ChatOpenAIFields } from "@langchain/openai";
 import { ChatXAI } from "@langchain/xai";
 import {
@@ -357,21 +358,29 @@ export class ModelFactory {
 	): BaseLanguageModel {
 		const tokenResult = resolveProviderToken("ollama");
 		const provider = getProviderSpec("ollama");
-
-		// Use fallback API key if no token configured (local servers often don't require auth)
-		const apiKey = tokenResult.token ?? "ollama";
-		const params: ChatOpenAIFields = {
+		const params: ConstructorParameters<typeof ChatOllama>[0] = {
 			model,
 			temperature: 1,
-			apiKey: apiKey,
-			configuration: {
-				baseURL: provider?.baseURL,
-			},
+			baseUrl: provider?.baseURL,
+			...(tokenResult.token
+				? {
+						headers: {
+							Authorization: `Bearer ${tokenResult.token}`,
+						},
+					}
+				: {}),
 		};
 
-		ModelFactory.applyOpenAIReasoningEffort(params, "ollama", model, options);
+		if (options.reasoningEffort) {
+			ModelFactory.warnUnsupportedReasoningEffort(
+				"ollama",
+				model,
+				options.reasoningEffort,
+				options.ownerLabel,
+			);
+		}
 
-		return new ChatOpenAI(params);
+		return new ChatOllama(params);
 	}
 
 	private static applyOpenAIReasoningEffort(

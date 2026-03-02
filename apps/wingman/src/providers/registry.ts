@@ -100,7 +100,7 @@ const PROVIDERS: Record<ProviderName, ProviderSpec> = {
 		label: "Ollama",
 		type: "api-key",
 		envVars: ["OLLAMA_API_KEY"],
-		baseURL: "http://localhost:11434/v1",
+		baseURL: "http://localhost:11434",
 		requiresAuth: false,
 		category: "model",
 	},

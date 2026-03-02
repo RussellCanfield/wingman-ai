@@ -96,6 +96,7 @@ import {
 	resolveStoppableRequestId,
 } from "./utils/stopPrompt";
 import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
+import { resolveActiveStreamMessageId } from "./utils/streamRetry";
 import { parseStreamEvents } from "./utils/streaming";
 import {
 	clearStreamMessageTargets,
@@ -214,6 +215,7 @@ export const App: React.FC = () => {
 	>(new Set());
 	const connectRequestIdRef = useRef<string | null>(null);
 	const buffersRef = useRef<Map<string, string>>(new Map());
+	const activeTextStreamMessageRef = useRef<Map<string, string>>(new Map());
 	const requestStreamMessageRef = useRef<Map<string, Map<string, string>>>(
 		new Map(),
 	);
@@ -364,6 +366,7 @@ export const App: React.FC = () => {
 	const resetPendingRequests = useCallback(() => {
 		pendingRequestIdsRef.current.clear();
 		activeRequestIdRef.current = null;
+		activeTextStreamMessageRef.current.clear();
 		queuedAssistantUpdatesRef.current.clear();
 		if (assistantFlushFrameRef.current !== null) {
 			window.cancelAnimationFrame(assistantFlushFrameRef.current);
@@ -999,6 +1002,42 @@ export const App: React.FC = () => {
 		[scheduleQueuedAssistantUpdateFlush],
 	);
 
+	const abandonBufferedAssistantText = useCallback((requestId: string) => {
+		buffersRef.current.delete(requestId);
+		uiFallbackRef.current.delete(requestId);
+		for (const [key, update] of queuedAssistantUpdatesRef.current) {
+			if (update.requestId !== requestId || update.messageId !== requestId) {
+				continue;
+			}
+			queuedAssistantUpdatesRef.current.delete(key);
+		}
+		const threadId = requestThreadRef.current.get(requestId);
+		if (!threadId) return;
+		setThreads((prev) =>
+			prev.map((thread) => {
+				if (thread.id !== threadId) return thread;
+				return upsertAssistantMessage(
+					thread,
+					requestId,
+					(message) => {
+						if (
+							message.content.length === 0 &&
+							(message.inlineThinkBlocks?.length || 0) === 0
+						) {
+							return message;
+						}
+						return {
+							...message,
+							content: "",
+							inlineThinkBlocks: undefined,
+						};
+					},
+					requestId,
+				);
+			}),
+		);
+	}, []);
+
 	useEffect(() => {
 		return () => {
 			if (assistantFlushFrameRef.current !== null) {
@@ -1195,6 +1234,7 @@ export const App: React.FC = () => {
 			thinkingBuffersRef.current.delete(requestId);
 			requestThreadRef.current.delete(requestId);
 			requestAgentRef.current.delete(requestId);
+			activeTextStreamMessageRef.current.delete(requestId);
 			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
 			taskDelegationRef.current.delete(requestId);
 		},
@@ -1533,6 +1573,20 @@ export const App: React.FC = () => {
 							updatedAt: Date.now(),
 						});
 					} else {
+						const streamMessageTransition = resolveActiveStreamMessageId({
+							currentActiveMessageId:
+								activeTextStreamMessageRef.current.get(requestId),
+							incomingMessageId: event.messageId,
+						});
+						if (streamMessageTransition.shouldResetBufferedText) {
+							abandonBufferedAssistantText(requestId);
+						}
+						if (streamMessageTransition.nextActiveMessageId) {
+							activeTextStreamMessageRef.current.set(
+								requestId,
+								streamMessageTransition.nextActiveMessageId,
+							);
+						}
 						queueAssistantUpdate({
 							requestId,
 							messageId: requestId,
@@ -1701,6 +1755,7 @@ export const App: React.FC = () => {
 		},
 		[
 			agentId,
+			abandonBufferedAssistantText,
 			finalizeAssistant,
 			flushQueuedAssistantUpdates,
 			logEvent,

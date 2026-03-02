@@ -190,7 +190,9 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 			textEvents.push({ text });
 		}
 	} else {
-		const parsedAttachments = extractAttachmentsFromMessage({ content: chunk.content });
+		const parsedAttachments = extractAttachmentsFromMessage({
+			content: chunk.content,
+		});
 		for (const attachment of parsedAttachments) {
 			attachmentEvents.push(attachment);
 		}
@@ -437,10 +439,7 @@ function parseChainAttachmentEvent(chunk: any): ParsedStreamEvent | null {
 
 	// Only inspect emitted chain outputs for attachments. Inputs/states often
 	// include historical thread messages and would replay prior images.
-	const searchCandidates = [
-		chunk?.data?.chunk,
-		chunk?.data?.output,
-	];
+	const searchCandidates = [chunk?.data?.chunk, chunk?.data?.output];
 	for (const candidate of searchCandidates) {
 		const match = findLatestAiMessageWithAttachments(candidate, {
 			excludeAttachmentSignatures: inputAttachmentSignatures,
@@ -468,20 +467,18 @@ function findLatestAiMessageWithAttachments(
 	options?: {
 		excludeAttachmentSignatures?: Set<string>;
 	},
-):
-	| {
-			attachments: Array<{
-				kind: "image" | "audio" | "file";
-				dataUrl: string;
-				textContent?: string;
-				name?: string;
-				mimeType?: string;
-				size?: number;
-			}>;
-			messageId?: string;
-			node?: string;
-	  }
-	| null {
+): {
+	attachments: Array<{
+		kind: "image" | "audio" | "file";
+		dataUrl: string;
+		textContent?: string;
+		name?: string;
+		mimeType?: string;
+		size?: number;
+	}>;
+	messageId?: string;
+	node?: string;
+} | null {
 	const orderedMessages: Array<{
 		message: Record<string, unknown>;
 		meta?: any;
@@ -564,14 +561,12 @@ function findLatestAiMessageWithAttachments(
 	// If there is no trailing user/human message in this snapshot, fall back to
 	// the latest AI message only. Do not backtrack to older AI snapshots.
 	if (latestHumanIndex < 0) {
-		let latestAiEntry:
-			| {
-					message: Record<string, unknown>;
-					meta?: any;
-					isAI: boolean;
-					isHuman: boolean;
-			  }
-			| null = null;
+		let latestAiEntry: {
+			message: Record<string, unknown>;
+			meta?: any;
+			isAI: boolean;
+			isHuman: boolean;
+		} | null = null;
 		for (let index = orderedMessages.length - 1; index >= 0; index -= 1) {
 			const entry = orderedMessages[index];
 			if (!entry?.isAI) continue;
@@ -619,7 +614,8 @@ function filterAttachmentSignatures(
 		return attachments;
 	}
 	return attachments.filter(
-		(attachment) => !excludedSignatures.has(buildAttachmentSignature(attachment)),
+		(attachment) =>
+			!excludedSignatures.has(buildAttachmentSignature(attachment)),
 	);
 }
 
@@ -639,8 +635,7 @@ function collectAiAttachmentSignatures(...values: unknown[]): Set<string> {
 		const messageType = getMessageType(record);
 		const normalizedType = messageType ? messageType.toLowerCase() : "";
 		const role = getMessageRole(record);
-		const isAIMessage =
-			isAIMessageType(normalizedType) || role === "assistant";
+		const isAIMessage = isAIMessageType(normalizedType) || role === "assistant";
 		if (isAIMessage) {
 			for (const attachment of extractAttachmentsFromMessage(record)) {
 				signatures.add(buildAttachmentSignature(attachment));
@@ -684,14 +679,15 @@ function parseChainFailureEvent(chunk: any): ParsedStreamEvent | null {
 		return null;
 	}
 
-	const searchCandidates = [
-		chunk?.data?.chunk,
-		chunk?.data?.output,
-		chunk?.data?.input,
-		chunk?.data?.inputs,
-		chunk?.data?.state,
-		chunk?.data,
-	];
+	const searchCandidates = [chunk?.data?.chunk, chunk?.data?.output];
+	if (shouldInspectFailureFallbackPayloads(chunk)) {
+		searchCandidates.push(
+			chunk?.data?.input,
+			chunk?.data?.inputs,
+			chunk?.data?.state,
+			chunk?.data,
+		);
+	}
 	for (const candidate of searchCandidates) {
 		const match = findLatestFailureAiMessage(candidate);
 		if (!match) continue;
@@ -713,10 +709,28 @@ function parseChainFailureEvent(chunk: any): ParsedStreamEvent | null {
 	return null;
 }
 
+function shouldInspectFailureFallbackPayloads(chunk: any): boolean {
+	const eventName =
+		typeof chunk?.event === "string" ? chunk.event.toLowerCase() : "";
+	if (eventName !== "on_chain_end") {
+		return false;
+	}
+	const chainName =
+		typeof chunk?.name === "string" ? chunk.name.toLowerCase() : "";
+	return chainName.includes("after_model");
+}
+
 function findLatestFailureAiMessage(
 	value: unknown,
 ): { text: string; messageId?: string; node?: string } | null {
-	let latest: { text: string; messageId?: string; node?: string } | null = null;
+	type MessageRecord = {
+		isAI: boolean;
+		isHuman: boolean;
+		text?: string;
+		messageId?: string;
+		node?: string;
+	};
+	const orderedMessages: MessageRecord[] = [];
 
 	const visit = (candidate: unknown, meta?: any): void => {
 		if (!candidate || typeof candidate !== "object") return;
@@ -731,17 +745,22 @@ function findLatestFailureAiMessage(
 		const messageType = getMessageType(record);
 		const normalizedType = messageType ? messageType.toLowerCase() : "";
 		const role = getMessageRole(record);
-		const isAIMessage =
-			isAIMessageType(normalizedType) || role === "assistant";
+		const isAIMessage = isAIMessageType(normalizedType) || role === "assistant";
+		const isHumanMessage =
+			isHumanMessageType(normalizedType) || role === "user" || role === "human";
 		if (isAIMessage) {
-			const text = sanitizeDisplayText(extractTextContent(record));
-			if (text && looksLikeModelFailureText(text)) {
-				latest = {
-					text,
-					messageId: getMessageId(record, { message: record, meta }),
-					node: extractNodeLabel(record, meta),
-				};
-			}
+			orderedMessages.push({
+				isAI: true,
+				isHuman: false,
+				text: sanitizeDisplayText(extractTextContent(record)),
+				messageId: getMessageId(record, { message: record, meta }),
+				node: extractNodeLabel(record, meta),
+			});
+		} else if (isHumanMessage) {
+			orderedMessages.push({
+				isAI: false,
+				isHuman: true,
+			});
 		}
 
 		for (const [key, nested] of Object.entries(record)) {
@@ -752,7 +771,46 @@ function findLatestFailureAiMessage(
 	};
 
 	visit(value);
-	return latest;
+	if (orderedMessages.length === 0) {
+		return null;
+	}
+
+	let latestHumanIndex = -1;
+	for (const [index, entry] of orderedMessages.entries()) {
+		if (entry.isHuman) {
+			latestHumanIndex = index;
+		}
+	}
+
+	let latestAssistantTextEntry: MessageRecord | null = null;
+	for (let index = orderedMessages.length - 1; index >= 0; index -= 1) {
+		if (latestHumanIndex >= 0 && index <= latestHumanIndex) {
+			break;
+		}
+		const entry = orderedMessages[index];
+		if (!entry?.isAI) continue;
+		latestAssistantTextEntry = entry;
+		break;
+	}
+	if (!latestAssistantTextEntry && latestHumanIndex < 0) {
+		for (let index = orderedMessages.length - 1; index >= 0; index -= 1) {
+			const entry = orderedMessages[index];
+			if (!entry?.isAI) continue;
+			latestAssistantTextEntry = entry;
+			break;
+		}
+	}
+	if (!latestAssistantTextEntry?.text) {
+		return null;
+	}
+	if (!looksLikeModelFailureText(latestAssistantTextEntry.text)) {
+		return null;
+	}
+	return {
+		text: latestAssistantTextEntry.text,
+		messageId: latestAssistantTextEntry.messageId,
+		node: latestAssistantTextEntry.node,
+	};
 }
 
 function isAIChatModelChunk(message: any): boolean {
@@ -869,7 +927,10 @@ function getMessageType(msg: any): string | undefined {
 	if (!msg) return undefined;
 	if (typeof msg._getType === "function") return msg._getType();
 	if (typeof msg.getType === "function") return msg.getType();
-	if (typeof msg.type === "string" && msg.type.toLowerCase() !== "constructor") {
+	if (
+		typeof msg.type === "string" &&
+		msg.type.toLowerCase() !== "constructor"
+	) {
 		return msg.type;
 	}
 
@@ -1254,7 +1315,9 @@ function extractAttachmentsFromMessage(message: any): Array<{
 	return attachments;
 }
 
-function extractAttachmentBlocks(value: unknown): Array<Record<string, unknown>> {
+function extractAttachmentBlocks(
+	value: unknown,
+): Array<Record<string, unknown>> {
 	if (Array.isArray(value)) {
 		return value
 			.filter(
@@ -1347,7 +1410,10 @@ function extractImageUrl(block: Record<string, unknown>): string | null {
 			block.source && typeof block.source === "object"
 				? (block.source as Record<string, unknown>)
 				: undefined;
-		const sourceMediaType = extractString(source?.media_type, source?.mediaType);
+		const sourceMediaType = extractString(
+			source?.media_type,
+			source?.mediaType,
+		);
 		const sourceData = extractString(source?.data);
 		if (sourceMediaType && sourceData) {
 			return `data:${sourceMediaType};base64,${sourceData}`;
@@ -1427,7 +1493,10 @@ function extractAudioUrl(block: Record<string, unknown>): string | null {
 			block.source && typeof block.source === "object"
 				? (block.source as Record<string, unknown>)
 				: undefined;
-		const sourceMediaType = extractString(source?.media_type, source?.mediaType);
+		const sourceMediaType = extractString(
+			source?.media_type,
+			source?.mediaType,
+		);
 		const sourceData = extractString(source?.data);
 		if (sourceMediaType && sourceData) {
 			return `data:${sourceMediaType};base64,${sourceData}`;
@@ -1520,7 +1589,11 @@ function extractFileAttachment(block: Record<string, unknown>): {
 		};
 	}
 
-	if (block.type === "document" && block.source && typeof block.source === "object") {
+	if (
+		block.type === "document" &&
+		block.source &&
+		typeof block.source === "object"
+	) {
 		const source = block.source as Record<string, unknown>;
 		const sourceType = extractString(source.type);
 		const name = extractString(block.title);
@@ -1588,7 +1661,9 @@ function extractString(...values: unknown[]): string | undefined {
 }
 
 function extractNumber(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+	return typeof value === "number" && Number.isFinite(value)
+		? value
+		: undefined;
 }
 
 function tryParseJson(value: string): unknown | null {
@@ -1640,7 +1715,9 @@ function sanitizeDisplayText(text: string | undefined): string | undefined {
 	return cleanedText;
 }
 
-function sanitizeDeltaDisplayText(text: string | undefined): string | undefined {
+function sanitizeDeltaDisplayText(
+	text: string | undefined,
+): string | undefined {
 	if (typeof text !== "string") return undefined;
 	const normalized = normalizeDeltaWhitespace(text);
 	if (normalized.length === 0) return undefined;
