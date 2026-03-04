@@ -2,14 +2,15 @@ import { createDeepAgent } from "deepagents";
 import { describe, expect, it } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { MemorySaver } from "@langchain/langgraph-checkpoint";
+import { MemorySaver } from "@langchain/langgraph";
 import {
 	configureDeepAgentSummarizationMiddleware,
 	recompileDeepAgentWithMiddlewareOverrides,
 } from "../../cli/core/agentInvoker.js";
 
 const ciValue = (process.env.CI ?? "").toLowerCase();
-const isCiEnvironment = ciValue !== "" && ciValue !== "0" && ciValue !== "false";
+const isCiEnvironment =
+	ciValue !== "" && ciValue !== "0" && ciValue !== "false";
 const RUN_SUMMARIZATION_E2E =
 	process.env.WINGMAN_SUMMARIZATION_E2E === "1" && !isCiEnvironment;
 
