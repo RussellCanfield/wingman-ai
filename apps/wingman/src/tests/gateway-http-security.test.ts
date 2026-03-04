@@ -96,6 +96,33 @@ describe("gateway HTTP security", () => {
 		expect(authenticated.status).toBe(200);
 	});
 
+	it("returns summarization settings from /api/config without auth", async () => {
+		const server = createGateway({
+			host: "127.0.0.1",
+			port: 18789,
+			auth: { mode: "token", token: "test-token" },
+			requireAuth: true,
+		});
+		const internals = getGatewayInternals(server);
+
+		const response = await internals.handleUiRequest(
+			new Request("http://127.0.0.1:18789/api/config"),
+		);
+		expect(response.status).toBe(200);
+		const payload = (await response.json()) as {
+			summarization?: {
+				enabled?: boolean;
+				maxTokensBeforeSummary?: number;
+				messagesToKeep?: number;
+			};
+		};
+		expect(payload.summarization).toMatchObject({
+			enabled: true,
+			maxTokensBeforeSummary: 12000,
+			messagesToKeep: 8,
+		});
+	});
+
 	it("rejects disallowed origins and allows loopback development preflight", async () => {
 		const server = createGateway({
 			host: "127.0.0.1",

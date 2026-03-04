@@ -11,10 +11,7 @@ import type {
 	ToolCallBlock,
 } from "../types.js";
 import { parseStreamChunk } from "../core/streamParser.js";
-import {
-	createTextBlock,
-	createToolCallBlock,
-} from "./blockHelpers.js";
+import { createTextBlock, createToolCallBlock } from "./blockHelpers.js";
 
 export interface AppProps {
 	outputManager: OutputManager;
@@ -100,29 +97,21 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 
 										if (messageId) {
 											const existingIndex = prev.findIndex(
-												(block) => block.type === "text" && block.id === messageId,
+												(block) =>
+													block.type === "text" && block.id === messageId,
 											);
 											if (existingIndex >= 0) {
 												return updateBlockAtIndex(existingIndex, text);
 											}
-											return [
-												...prev,
-												createTextBlock(text, true, messageId),
-											];
+											return [...prev, createTextBlock(text, true, messageId)];
 										} else {
 											const lastBlock = prev[prev.length - 1];
 											if (lastBlock?.type === "text") {
-												return updateBlockAtIndex(
-													prev.length - 1,
-													text,
-												);
+												return updateBlockAtIndex(prev.length - 1, text);
 											}
 										}
 										// Create new text block
-										return [
-											...prev,
-											createTextBlock(text, true, messageId),
-										];
+										return [...prev, createTextBlock(text, true, messageId)];
 									});
 								}
 								break;
@@ -130,8 +119,9 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 							case "tool":
 								if (parsed.toolCall) {
 									const toolCall = parsed.toolCall;
-									const alreadyProcessed =
-										processedToolCallIdsRef.current.has(toolCall.id);
+									const alreadyProcessed = processedToolCallIdsRef.current.has(
+										toolCall.id,
+									);
 
 									// Track tool calls once, but keep args up to date for partial streams
 									let toolBlock: ContentBlock | null = null;
@@ -247,6 +237,10 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 					}
 					break;
 
+				case "context-summarized":
+					// Context summarization is a metadata event for web/desktop UIs.
+					break;
+
 				case "agent-complete":
 					setIsStreaming(false);
 					setIsComplete(true);
@@ -259,7 +253,10 @@ export const App: React.FC<AppProps> = ({ outputManager }) => {
 								...lastBlock.data,
 								isStreaming: false,
 							};
-							return [...prev.slice(0, -1), { ...lastBlock, data: updatedData }];
+							return [
+								...prev.slice(0, -1),
+								{ ...lastBlock, data: updatedData },
+							];
 						}
 						return prev;
 					});

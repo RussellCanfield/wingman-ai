@@ -35,9 +35,20 @@ export type ParsedAttachmentEvent = {
 	isDelta?: boolean;
 };
 
+export type ParsedUsageEvent = {
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
+	estimatedContextTokens?: number;
+	messageId?: string;
+	node?: string;
+	timestamp: number;
+};
+
 export type ParsedStreamEvent = {
 	textEvents: ParsedTextEvent[];
 	attachmentEvents: ParsedAttachmentEvent[];
+	usageEvents: ParsedUsageEvent[];
 	toolEvents: Array<{
 		id: string;
 		name: string;
@@ -71,21 +82,35 @@ type NormalizedToolCall = {
 export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 	const textEvents: ParsedTextEvent[] = [];
 	const attachmentEvents: ParsedAttachmentEvent[] = [];
+	const usageEvents: ParsedUsageEvent[] = [];
 	const toolEvents: ParsedStreamEvent["toolEvents"] = [];
+	const estimatedContextTokens = extractEstimatedContextTokens(chunk);
 	if (!chunk || typeof chunk !== "object") {
-		return { textEvents, attachmentEvents, toolEvents };
+		return withEstimatedContextTokens(
+			{ textEvents, attachmentEvents, usageEvents, toolEvents },
+			estimatedContextTokens,
+		);
 	}
 
 	const unwrappedChunk = unwrapAgentStreamChunk(chunk);
 	if (unwrappedChunk) {
-		return parseStreamEvents(unwrappedChunk);
+		const nestedParsed = parseStreamEvents(unwrappedChunk);
+		return withEstimatedContextTokens(
+			nestedParsed,
+			estimatedContextTokens ?? extractEstimatedContextTokens(unwrappedChunk),
+		);
 	}
 
 	if (typeof chunk.event === "string") {
 		const eventParsed = parseStreamEventChunk(chunk);
-		if (eventParsed) return eventParsed;
+		if (eventParsed) {
+			return withEstimatedContextTokens(eventParsed, estimatedContextTokens);
+		}
 		// Ignore unsupported LangGraph lifecycle events.
-		return { textEvents, attachmentEvents, toolEvents };
+		return withEstimatedContextTokens(
+			{ textEvents, attachmentEvents, usageEvents, toolEvents },
+			estimatedContextTokens,
+		);
 	}
 
 	const messageEntries = normalizeMessagesFromChunk(chunk);
@@ -104,6 +129,15 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 				const messageId = getMessageId(msg, entry);
 				const node = extractNodeLabel(msg, entry.meta);
 				const isDelta = isMessageDelta(msg, normalizedType);
+				const usage = extractTokenUsage(msg);
+				if (usage) {
+					usageEvents.push({
+						...usage,
+						messageId,
+						node,
+						timestamp: Date.now(),
+					});
+				}
 				const parsedAttachments = extractAttachmentsFromMessage(msg);
 				for (const attachment of parsedAttachments) {
 					attachmentEvents.push({
@@ -178,9 +212,10 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		if (
 			textEvents.length > 0 ||
 			attachmentEvents.length > 0 ||
+			usageEvents.length > 0 ||
 			toolEvents.length > 0
 		) {
-			return { textEvents, attachmentEvents, toolEvents };
+			return { textEvents, attachmentEvents, usageEvents, toolEvents };
 		}
 	}
 
@@ -223,7 +258,22 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		}
 	}
 
-	return { textEvents, attachmentEvents, toolEvents };
+	const directUsage = extractTokenUsage(chunk);
+	if (directUsage) {
+		usageEvents.push({
+			...directUsage,
+			messageId:
+				normalizeRunIdentifier(chunk?.run_id) ||
+				normalizeRunIdentifier(chunk?.id),
+			node: extractEventNode(chunk),
+			timestamp: Date.now(),
+		});
+	}
+
+	return withEstimatedContextTokens(
+		{ textEvents, attachmentEvents, usageEvents, toolEvents },
+		estimatedContextTokens,
+	);
 }
 
 function unwrapAgentStreamChunk(chunk: any): any | undefined {
@@ -243,6 +293,7 @@ function unwrapAgentStreamChunk(chunk: any): any | undefined {
 function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 	if (!chunk || typeof chunk !== "object") return null;
 	if (typeof chunk.event !== "string") return null;
+	const usageEvents = extractUsageEventsFromEventChunk(chunk);
 
 	if (chunk.event === "on_chat_model_stream") {
 		const messageChunk = chunk.data?.chunk ?? chunk.data?.message;
@@ -259,7 +310,13 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 			}),
 		);
 		const text = sanitizeDeltaDisplayText(extractTextContent(messageChunk));
-		if (text === undefined && parsedAttachments.length === 0) return null;
+		if (
+			text === undefined &&
+			parsedAttachments.length === 0 &&
+			usageEvents.length === 0
+		) {
+			return null;
+		}
 		return {
 			textEvents:
 				text === undefined
@@ -273,6 +330,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 							},
 						],
 			attachmentEvents: parsedAttachments,
+			usageEvents,
 			toolEvents: [],
 		};
 	}
@@ -286,18 +344,32 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 			text = llmChunk.text;
 		}
 		text = sanitizeDeltaDisplayText(text);
-		if (text === undefined) return null;
+		if (text === undefined && usageEvents.length === 0) return null;
 		return {
-			textEvents: [
-				{
-					text,
-					messageId:
-						typeof chunk.run_id === "string" ? chunk.run_id : undefined,
-					node: extractEventNode(chunk),
-					isDelta: true,
-				},
-			],
+			textEvents:
+				text === undefined
+					? []
+					: [
+							{
+								text,
+								messageId:
+									typeof chunk.run_id === "string" ? chunk.run_id : undefined,
+								node: extractEventNode(chunk),
+								isDelta: true,
+							},
+						],
 			attachmentEvents: [],
+			usageEvents,
+			toolEvents: [],
+		};
+	}
+
+	if (chunk.event === "on_chat_model_end" || chunk.event === "on_llm_end") {
+		if (usageEvents.length === 0) return null;
+		return {
+			textEvents: [],
+			attachmentEvents: [],
+			usageEvents,
 			toolEvents: [],
 		};
 	}
@@ -318,6 +390,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		return {
 			textEvents: [],
 			attachmentEvents: [],
+			usageEvents,
 			toolEvents: [
 				{
 					id: toolId,
@@ -355,6 +428,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		return {
 			textEvents: [],
 			attachmentEvents: [],
+			usageEvents,
 			toolEvents: [
 				{
 					id: toolId,
@@ -394,6 +468,7 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 		return {
 			textEvents: [],
 			attachmentEvents: [],
+			usageEvents,
 			toolEvents: [
 				{
 					id: toolId,
@@ -414,16 +489,239 @@ function parseStreamEventChunk(chunk: any): ParsedStreamEvent | null {
 	}
 
 	const chainAttachmentEvent = parseChainAttachmentEvent(chunk);
-	if (chainAttachmentEvent) {
-		return chainAttachmentEvent;
-	}
-
 	const chainFailureEvent = parseChainFailureEvent(chunk);
-	if (chainFailureEvent) {
-		return chainFailureEvent;
+	const chainUsageEvent = parseChainUsageEvent(chunk);
+	if (chainAttachmentEvent || chainFailureEvent || chainUsageEvent) {
+		return {
+			textEvents: chainFailureEvent?.textEvents || [],
+			attachmentEvents: chainAttachmentEvent?.attachmentEvents || [],
+			usageEvents: [
+				...(chainAttachmentEvent?.usageEvents || []),
+				...(chainFailureEvent?.usageEvents || []),
+				...(chainUsageEvent?.usageEvents || []),
+			],
+			toolEvents: [
+				...(chainAttachmentEvent?.toolEvents || []),
+				...(chainFailureEvent?.toolEvents || []),
+				...(chainUsageEvent?.toolEvents || []),
+			],
+		};
 	}
 
 	return null;
+}
+
+function extractUsageEventsFromEventChunk(chunk: any): ParsedUsageEvent[] {
+	const eventName = typeof chunk?.event === "string" ? chunk.event : "";
+	if (
+		eventName !== "on_chat_model_stream" &&
+		eventName !== "on_chat_model_end" &&
+		eventName !== "on_llm_stream" &&
+		eventName !== "on_llm_end"
+	) {
+		return [];
+	}
+	const usage = extractTokenUsage(chunk);
+	if (!usage) return [];
+	return [
+		{
+			...usage,
+			messageId:
+				normalizeRunIdentifier(chunk?.run_id) ||
+				normalizeRunIdentifier(chunk?.id),
+			node: extractEventNode(chunk),
+			timestamp: Date.now(),
+		},
+	];
+}
+
+function extractTokenUsage(
+	payload: unknown,
+): { inputTokens: number; outputTokens: number; totalTokens: number } | null {
+	const accumulator = {
+		inputTokens: 0,
+		outputTokens: 0,
+		totalTokens: 0,
+	};
+	const visited = new WeakSet<object>();
+	collectTokenUsageFromPayload(accumulator, payload, visited, 0);
+	if (accumulator.totalTokens === 0) {
+		accumulator.totalTokens =
+			accumulator.inputTokens + accumulator.outputTokens;
+	}
+	if (
+		accumulator.inputTokens <= 0 &&
+		accumulator.outputTokens <= 0 &&
+		accumulator.totalTokens <= 0
+	) {
+		return null;
+	}
+	return accumulator;
+}
+
+function collectTokenUsageFromPayload(
+	target: { inputTokens: number; outputTokens: number; totalTokens: number },
+	payload: unknown,
+	visited: WeakSet<object>,
+	depth: number,
+): void {
+	if (depth > 8 || !payload || typeof payload !== "object") return;
+	if (visited.has(payload as object)) return;
+	visited.add(payload as object);
+
+	const record = payload as Record<string, unknown>;
+	const directInput =
+		getFiniteNumber(record.input_tokens) ||
+		getFiniteNumber(record.inputTokens) ||
+		getFiniteNumber(record.prompt_tokens) ||
+		getFiniteNumber(record.promptTokens);
+	const directOutput =
+		getFiniteNumber(record.output_tokens) ||
+		getFiniteNumber(record.outputTokens) ||
+		getFiniteNumber(record.completion_tokens) ||
+		getFiniteNumber(record.completionTokens);
+	const directTotal =
+		getFiniteNumber(record.total_tokens) || getFiniteNumber(record.totalTokens);
+
+	if (directInput > 0) {
+		target.inputTokens = Math.max(target.inputTokens, directInput);
+	}
+	if (directOutput > 0) {
+		target.outputTokens = Math.max(target.outputTokens, directOutput);
+	}
+	if (directTotal > 0) {
+		target.totalTokens = Math.max(target.totalTokens, directTotal);
+	}
+
+	const nestedCandidates = [
+		record.usage,
+		record.usage_metadata,
+		record.usageMetadata,
+		record.tokenUsage,
+		record.response_metadata,
+		record.responseMetadata,
+		record.additional_kwargs,
+		record.additionalKwargs,
+		record.metadata,
+		record.data,
+		record.output,
+		record.message,
+		record.chunk,
+	];
+	for (const nested of nestedCandidates) {
+		collectTokenUsageFromPayload(target, nested, visited, depth + 1);
+	}
+}
+
+function withEstimatedContextTokens(
+	parsed: ParsedStreamEvent,
+	estimatedContextTokens: number | undefined,
+): ParsedStreamEvent {
+	if (
+		typeof estimatedContextTokens !== "number" ||
+		!Number.isFinite(estimatedContextTokens) ||
+		estimatedContextTokens <= 0
+	) {
+		return parsed;
+	}
+
+	const normalizedEstimate = Math.round(estimatedContextTokens);
+	if (parsed.usageEvents.length === 0) {
+		return {
+			...parsed,
+			usageEvents: [
+				{
+					inputTokens: 0,
+					outputTokens: 0,
+					totalTokens: 0,
+					estimatedContextTokens: normalizedEstimate,
+					timestamp: Date.now(),
+				},
+			],
+		};
+	}
+
+	return {
+		...parsed,
+		usageEvents: parsed.usageEvents.map((event) => ({
+			...event,
+			estimatedContextTokens:
+				typeof event.estimatedContextTokens === "number" &&
+				event.estimatedContextTokens > normalizedEstimate
+					? event.estimatedContextTokens
+					: normalizedEstimate,
+		})),
+	};
+}
+
+function extractEstimatedContextTokens(payload: unknown): number | undefined {
+	const visited = new WeakSet<object>();
+	return collectEstimatedContextTokens(payload, visited, 0);
+}
+
+function collectEstimatedContextTokens(
+	payload: unknown,
+	visited: WeakSet<object>,
+	depth: number,
+): number | undefined {
+	if (depth > 8 || !payload || typeof payload !== "object") return undefined;
+	if (visited.has(payload as object)) return undefined;
+	visited.add(payload as object);
+
+	if (Array.isArray(payload)) {
+		let best: number | undefined;
+		for (const item of payload) {
+			const nested = collectEstimatedContextTokens(item, visited, depth + 1);
+			if (typeof nested === "number" && (best === undefined || nested > best)) {
+				best = nested;
+			}
+		}
+		return best;
+	}
+
+	const record = payload as Record<string, unknown>;
+	const directCandidates = [
+		record.estimatedContextTokens,
+		record.estimated_context_tokens,
+		record.contextTokensApprox,
+		record.context_tokens_approx,
+	];
+	let bestDirect = 0;
+	for (const candidate of directCandidates) {
+		const value = getFiniteNumber(candidate);
+		if (value > bestDirect) {
+			bestDirect = value;
+		}
+	}
+
+	const nestedCandidates = [
+		record.chunk,
+		record.data,
+		record.output,
+		record.message,
+		record.metadata,
+		record.additional_kwargs,
+		record.additionalKwargs,
+		record.tokenUsage,
+	];
+	let bestNested = 0;
+	for (const nestedCandidate of nestedCandidates) {
+		const nested = collectEstimatedContextTokens(
+			nestedCandidate,
+			visited,
+			depth + 1,
+		);
+		if (typeof nested === "number" && nested > bestNested) {
+			bestNested = nested;
+		}
+	}
+
+	const best = Math.max(bestDirect, bestNested);
+	return best > 0 ? best : undefined;
+}
+
+function getFiniteNumber(value: unknown): number {
+	return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function parseChainAttachmentEvent(chunk: any): ParsedStreamEvent | null {
@@ -455,6 +753,61 @@ function parseChainAttachmentEvent(chunk: any): ParsedStreamEvent | null {
 				node,
 				isDelta: eventName === "on_chain_stream",
 			})),
+			usageEvents: [],
+			toolEvents: [],
+		};
+	}
+
+	return null;
+}
+
+function parseChainUsageEvent(chunk: any): ParsedStreamEvent | null {
+	const eventName =
+		typeof chunk?.event === "string" ? chunk.event.toLowerCase() : "";
+	if (eventName !== "on_chain_stream" && eventName !== "on_chain_end") {
+		return null;
+	}
+
+	const searchCandidates = [chunk?.data?.chunk, chunk?.data?.output];
+	for (const candidate of searchCandidates) {
+		const match = findLatestAiMessageWithUsage(candidate);
+		if (!match) continue;
+		return {
+			textEvents: [],
+			attachmentEvents: [],
+			usageEvents: [
+				{
+					inputTokens: match.inputTokens,
+					outputTokens: match.outputTokens,
+					totalTokens: match.totalTokens,
+					messageId:
+						match.messageId ||
+						normalizeRunIdentifier(chunk?.run_id) ||
+						normalizeRunIdentifier(chunk?.id),
+					node: match.node || extractEventNode(chunk),
+					timestamp: Date.now(),
+				},
+			],
+			toolEvents: [],
+		};
+	}
+
+	for (const candidate of searchCandidates) {
+		const usage = extractTokenUsage(candidate);
+		if (!usage) continue;
+		return {
+			textEvents: [],
+			attachmentEvents: [],
+			usageEvents: [
+				{
+					...usage,
+					messageId:
+						normalizeRunIdentifier(chunk?.run_id) ||
+						normalizeRunIdentifier(chunk?.id),
+					node: extractEventNode(chunk),
+					timestamp: Date.now(),
+				},
+			],
 			toolEvents: [],
 		};
 	}
@@ -702,6 +1055,7 @@ function parseChainFailureEvent(chunk: any): ParsedStreamEvent | null {
 				},
 			],
 			attachmentEvents: [],
+			usageEvents: [],
 			toolEvents: [],
 		};
 	}
@@ -718,6 +1072,109 @@ function shouldInspectFailureFallbackPayloads(chunk: any): boolean {
 	const chainName =
 		typeof chunk?.name === "string" ? chunk.name.toLowerCase() : "";
 	return chainName.includes("after_model");
+}
+
+function findLatestAiMessageWithUsage(value: unknown): {
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
+	messageId?: string;
+	node?: string;
+} | null {
+	type MessageRecord = {
+		isAI: boolean;
+		isHuman: boolean;
+		usage?: {
+			inputTokens: number;
+			outputTokens: number;
+			totalTokens: number;
+		};
+		messageId?: string;
+		node?: string;
+	};
+
+	const orderedMessages: MessageRecord[] = [];
+
+	const visit = (candidate: unknown, meta?: any): void => {
+		if (!candidate || typeof candidate !== "object") return;
+		if (Array.isArray(candidate)) {
+			for (const item of candidate) {
+				visit(item, meta);
+			}
+			return;
+		}
+
+		const record = candidate as Record<string, unknown>;
+		const messageType = getMessageType(record);
+		const normalizedType = messageType ? messageType.toLowerCase() : "";
+		const role = getMessageRole(record);
+		const isAIMessage = isAIMessageType(normalizedType) || role === "assistant";
+		const isHumanMessage =
+			isHumanMessageType(normalizedType) || role === "user" || role === "human";
+
+		if (isAIMessage) {
+			orderedMessages.push({
+				isAI: true,
+				isHuman: false,
+				usage: extractTokenUsage(record) || undefined,
+				messageId: getMessageId(record, { message: record, meta }),
+				node: extractNodeLabel(record, meta),
+			});
+		} else if (isHumanMessage) {
+			orderedMessages.push({
+				isAI: false,
+				isHuman: true,
+			});
+		}
+
+		for (const [key, nested] of Object.entries(record)) {
+			if (!nested || typeof nested !== "object") continue;
+			const nextMeta = key === "metadata" ? nested : meta;
+			visit(nested, nextMeta);
+		}
+	};
+
+	visit(value);
+	if (orderedMessages.length === 0) {
+		return null;
+	}
+
+	let latestHumanIndex = -1;
+	for (const [index, entry] of orderedMessages.entries()) {
+		if (entry.isHuman) {
+			latestHumanIndex = index;
+		}
+	}
+
+	let latestUsageEntry: MessageRecord | null = null;
+	for (let index = orderedMessages.length - 1; index >= 0; index -= 1) {
+		if (latestHumanIndex >= 0 && index <= latestHumanIndex) {
+			break;
+		}
+		const entry = orderedMessages[index];
+		if (!entry?.isAI || !entry.usage) continue;
+		latestUsageEntry = entry;
+		break;
+	}
+	if (!latestUsageEntry && latestHumanIndex < 0) {
+		for (let index = orderedMessages.length - 1; index >= 0; index -= 1) {
+			const entry = orderedMessages[index];
+			if (!entry?.isAI || !entry.usage) continue;
+			latestUsageEntry = entry;
+			break;
+		}
+	}
+	if (!latestUsageEntry?.usage) {
+		return null;
+	}
+
+	return {
+		inputTokens: latestUsageEntry.usage.inputTokens,
+		outputTokens: latestUsageEntry.usage.outputTokens,
+		totalTokens: latestUsageEntry.usage.totalTokens,
+		messageId: latestUsageEntry.messageId,
+		node: latestUsageEntry.node,
+	};
 }
 
 function findLatestFailureAiMessage(

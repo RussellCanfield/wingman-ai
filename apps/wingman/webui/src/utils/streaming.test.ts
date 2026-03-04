@@ -140,6 +140,118 @@ describe("parseStreamEvents", () => {
 		});
 	});
 
+	it("extracts token usage from on_chat_model_end usage metadata", () => {
+		const chunk = {
+			event: "on_chat_model_end",
+			run_id: "run-usage-1",
+			metadata: { langgraph_node: "main" },
+			data: {
+				output: {
+					usage_metadata: {
+						input_tokens: 8420,
+						output_tokens: 512,
+						total_tokens: 8932,
+					},
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.toolEvents).toHaveLength(0);
+		expect(result.usageEvents).toHaveLength(1);
+		expect(result.usageEvents[0]).toMatchObject({
+			inputTokens: 8420,
+			outputTokens: 512,
+			totalTokens: 8932,
+			messageId: "run-usage-1",
+			node: "main",
+		});
+	});
+
+	it("extracts token usage from on_llm_end usage payloads", () => {
+		const chunk = {
+			event: "on_llm_end",
+			run_id: "run-usage-2",
+			data: {
+				output: {
+					usage: {
+						prompt_tokens: 6400,
+						completion_tokens: 400,
+						total_tokens: 6800,
+					},
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.usageEvents).toHaveLength(1);
+		expect(result.usageEvents[0]).toMatchObject({
+			inputTokens: 6400,
+			outputTokens: 400,
+			totalTokens: 6800,
+			messageId: "run-usage-2",
+		});
+	});
+
+	it("extracts token usage from explicit tokenUsage payloads", () => {
+		const chunk = {
+			tokenUsage: {
+				inputTokens: 9300,
+				outputTokens: 712,
+				totalTokens: 10012,
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.usageEvents).toHaveLength(1);
+		expect(result.usageEvents[0]).toMatchObject({
+			inputTokens: 9300,
+			outputTokens: 712,
+			totalTokens: 10012,
+		});
+	});
+
+	it("attaches estimated context tokens to extracted usage events", () => {
+		const chunk = {
+			tokenUsage: {
+				inputTokens: 9300,
+				outputTokens: 712,
+				totalTokens: 10012,
+			},
+			estimatedContextTokens: 8889,
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.usageEvents).toHaveLength(1);
+		expect(result.usageEvents[0]).toMatchObject({
+			inputTokens: 9300,
+			outputTokens: 712,
+			totalTokens: 10012,
+			estimatedContextTokens: 8889,
+		});
+	});
+
+	it("creates a synthetic usage event when only estimated context tokens are present", () => {
+		const chunk = {
+			estimatedContextTokens: 7777,
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.usageEvents).toHaveLength(1);
+		expect(result.usageEvents[0]).toMatchObject({
+			inputTokens: 0,
+			outputTokens: 0,
+			totalTokens: 0,
+			estimatedContextTokens: 7777,
+		});
+	});
+
 	it("ignores on_chain_end text payloads", () => {
 		const chunk = {
 			event: "on_chain_end",
@@ -158,6 +270,46 @@ describe("parseStreamEvents", () => {
 
 		expect(result.textEvents).toHaveLength(0);
 		expect(result.toolEvents).toHaveLength(0);
+	});
+
+	it("extracts token usage from on_chain_end output messages", () => {
+		const chunk = {
+			event: "on_chain_end",
+			run_id: "chain-usage-1",
+			metadata: { langgraph_node: "orchestrator" },
+			data: {
+				output: {
+					messages: [
+						{
+							type: "human",
+							content: [{ type: "text", text: "Prompt" }],
+						},
+						{
+							id: "assistant-final",
+							type: "ai",
+							content: [{ type: "text", text: "Final response" }],
+							usage_metadata: {
+								input_tokens: 8842,
+								output_tokens: 611,
+								total_tokens: 9453,
+							},
+						},
+					],
+				},
+			},
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.textEvents).toHaveLength(0);
+		expect(result.usageEvents).toHaveLength(1);
+		expect(result.usageEvents[0]).toMatchObject({
+			inputTokens: 8842,
+			outputTokens: 611,
+			totalTokens: 9453,
+			messageId: "assistant-final",
+			node: "orchestrator",
+		});
 	});
 
 	it("extracts on_chain_end image attachments without replaying text", () => {

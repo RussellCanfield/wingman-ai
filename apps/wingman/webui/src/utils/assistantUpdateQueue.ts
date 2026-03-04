@@ -1,3 +1,5 @@
+import { mergeAssistantStreamText } from "./assistantStream";
+
 export type QueuedAssistantUpdate = {
 	threadId: string;
 	requestId: string;
@@ -19,7 +21,27 @@ export function queueAssistantContentUpdate(
 	update: QueuedAssistantUpdate,
 ): void {
 	const key = buildAssistantUpdateKey(update);
-	queue.set(key, update);
+	const existing = queue.get(key);
+	if (!existing) {
+		queue.set(key, update);
+		return;
+	}
+
+	const shouldMergeTimelineDelta =
+		Boolean(existing.timelineTextBlockId) &&
+		existing.timelineTextBlockId === update.timelineTextBlockId;
+	const timelineTextDelta = shouldMergeTimelineDelta
+		? mergeAssistantStreamText(
+				existing.timelineTextDelta ?? "",
+				update.timelineTextDelta ?? "",
+			)
+		: update.timelineTextDelta;
+
+	queue.set(key, {
+		...existing,
+		...update,
+		timelineTextDelta,
+	});
 }
 
 export function drainAssistantContentUpdates(

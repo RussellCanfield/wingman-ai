@@ -35,11 +35,12 @@ export interface WingmanConfig {
 		enabled?: boolean;
 		interruptOn?: Record<
 			string,
-			boolean | {
-				allowedDecisions: Array<"approve" | "edit" | "reject">;
-				description?: string;
-				argsSchema?: Record<string, any>;
-			}
+			| boolean
+			| {
+					allowedDecisions: Array<"approve" | "edit" | "reject">;
+					description?: string;
+					argsSchema?: Record<string, any>;
+			  }
 		>;
 	};
 	gateway?: {
@@ -73,15 +74,15 @@ export interface WingmanConfig {
 				gatewayPassword?: string;
 				responseChunkSize?: number;
 			};
-				teams?: {
-					enabled?: boolean;
-					appId?: string;
-					appPassword?: string;
-					appType?:
-						| "MultiTenant"
-						| "SingleTenant"
-						| "UserAssignedMsi"
-						| "UserAssignedMSI";
+			teams?: {
+				enabled?: boolean;
+				appId?: string;
+				appPassword?: string;
+				appType?:
+					| "MultiTenant"
+					| "SingleTenant"
+					| "UserAssignedMsi"
+					| "UserAssignedMSI";
 				tenantId?: string;
 				endpointPath?: string;
 				mentionOnly?: boolean;
@@ -142,6 +143,25 @@ export interface AgentStartEvent {
 export interface AgentStreamEvent {
 	type: "agent-stream";
 	chunk: any; // Raw chunk from deepagents/LangGraph for client-side interpretation
+	tokenUsage?: {
+		inputTokens: number;
+		outputTokens: number;
+		totalTokens: number;
+	};
+	estimatedContextTokens?: number;
+	timestamp: string;
+}
+
+export interface AgentContextSummarizingEvent {
+	type: "context-summarizing";
+	timestamp: string;
+}
+
+export interface AgentContextSummarizedEvent {
+	type: "context-summarized";
+	inputTokens: number;
+	peakInputTokens: number;
+	thresholdTokens: number;
 	timestamp: string;
 }
 
@@ -196,6 +216,8 @@ export type OutputEvent =
 	| LogEvent
 	| AgentStartEvent
 	| AgentStreamEvent
+	| AgentContextSummarizingEvent
+	| AgentContextSummarizedEvent
 	| AgentCompleteEvent
 	| AgentErrorEvent
 	| SkillBrowseEvent

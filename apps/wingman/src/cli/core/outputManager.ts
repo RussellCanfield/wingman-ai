@@ -73,10 +73,51 @@ export class OutputManager extends EventEmitter {
 	 * Emit agent stream chunk
 	 * Forwards raw chunks from deepagents/LangGraph for client-side interpretation
 	 */
-	emitAgentStream(chunk: any): void {
+	emitAgentStream(
+		chunk: any,
+		tokenUsage?: {
+			inputTokens: number;
+			outputTokens: number;
+			totalTokens: number;
+		},
+		estimatedContextTokens?: number,
+	): void {
 		this.emitEvent({
 			type: "agent-stream",
 			chunk,
+			...(tokenUsage ? { tokenUsage } : {}),
+			...(typeof estimatedContextTokens === "number" &&
+			Number.isFinite(estimatedContextTokens) &&
+			estimatedContextTokens > 0
+				? { estimatedContextTokens: Math.round(estimatedContextTokens) }
+				: {}),
+			timestamp: new Date().toISOString(),
+		});
+	}
+
+	/**
+	 * Emit explicit context summarization start signal
+	 */
+	emitContextSummarizing(): void {
+		this.emitEvent({
+			type: "context-summarizing",
+			timestamp: new Date().toISOString(),
+		});
+	}
+
+	/**
+	 * Emit explicit context summarization signal
+	 */
+	emitContextSummarized(payload: {
+		inputTokens: number;
+		peakInputTokens: number;
+		thresholdTokens: number;
+	}): void {
+		this.emitEvent({
+			type: "context-summarized",
+			inputTokens: payload.inputTokens,
+			peakInputTokens: payload.peakInputTokens,
+			thresholdTokens: payload.thresholdTokens,
 			timestamp: new Date().toISOString(),
 		});
 	}

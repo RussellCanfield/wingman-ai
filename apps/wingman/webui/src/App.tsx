@@ -34,6 +34,7 @@ import type {
 	ProviderStatusResponse,
 	ReasoningEffort,
 	Routine,
+	SummarizationConfig,
 	ThinkingEvent,
 	Thread,
 	ToolEvent,
@@ -57,6 +58,7 @@ import {
 	type QueuedAssistantUpdate,
 	queueAssistantContentUpdate,
 } from "./utils/assistantUpdateQueue";
+import { mergeUniqueAttachments } from "./utils/attachmentDedupe";
 import {
 	buildAgentFallback,
 	buildAttachmentPreviewText,
@@ -124,12 +126,19 @@ const DEFAULT_VOICE_CONFIG: VoiceConfig = {
 	elevenlabs: {},
 };
 
+const DEFAULT_SUMMARIZATION_CONFIG: SummarizationConfig = {
+	enabled: true,
+	maxTokensBeforeSummary: 12000,
+	messagesToKeep: 8,
+};
+
 const DEFAULT_CONFIG: ControlUiConfig = {
 	gatewayHost: "127.0.0.1",
 	gatewayPort: 18789,
 	requireAuth: false,
 	outputRoot: "",
 	dynamicUiEnabled: true,
+	summarization: DEFAULT_SUMMARIZATION_CONFIG,
 	voice: DEFAULT_VOICE_CONFIG,
 	agents: [],
 };
@@ -186,6 +195,8 @@ export const App: React.FC = () => {
 	const [health, setHealth] = useState<GatewayHealth>({});
 	const [stats, setStats] = useState<GatewayStats>({});
 	const [isStreaming, setIsStreaming] = useState<boolean>(false);
+	const [isContextSummarizing, setIsContextSummarizing] =
+		useState<boolean>(false);
 	const [queuedPromptCount, setQueuedPromptCount] = useState<number>(0);
 	const [threads, setThreads] = useState<Thread[]>([]);
 	const [activeThreadId, setActiveThreadId] = useState<string>("");
@@ -234,6 +245,9 @@ export const App: React.FC = () => {
 	);
 	const requestThreadRef = useRef<Map<string, string>>(new Map());
 	const requestAgentRef = useRef<Map<string, string>>(new Map());
+	const requestContextPeakRef = useRef<Map<string, number>>(new Map());
+	const requestSummarizingRef = useRef<Set<string>>(new Set());
+	const requestSummarizedRef = useRef<Set<string>>(new Set());
 	const uiOnlyRequestsRef = useRef<Set<string>>(new Set());
 	const uiFallbackRef = useRef<Map<string, string>>(new Map());
 	const subscribedSessionsRef = useRef<Set<string>>(new Set());
@@ -335,8 +349,21 @@ export const App: React.FC = () => {
 	const syncRequestStreamingState = useCallback(() => {
 		const pendingSize = pendingRequestIdsRef.current.size;
 		const hasActiveRequest = Boolean(activeRequestIdRef.current);
+		const activeRequestId = activeRequestIdRef.current;
+		let hasSummarizationInFlight = false;
+		if (activeRequestId && requestSummarizingRef.current.has(activeRequestId)) {
+			hasSummarizationInFlight = true;
+		} else {
+			for (const requestId of pendingRequestIdsRef.current) {
+				if (requestSummarizingRef.current.has(requestId)) {
+					hasSummarizationInFlight = true;
+					break;
+				}
+			}
+		}
 		setIsStreaming(pendingSize > 0 || hasActiveRequest);
 		setQueuedPromptCount(Math.max(pendingSize - (hasActiveRequest ? 1 : 0), 0));
+		setIsContextSummarizing(hasSummarizationInFlight);
 	}, []);
 
 	const registerPendingRequest = useCallback(
@@ -377,6 +404,9 @@ export const App: React.FC = () => {
 		pendingRequestIdsRef.current.clear();
 		activeRequestIdRef.current = null;
 		activeTextStreamMessageRef.current.clear();
+		requestContextPeakRef.current.clear();
+		requestSummarizingRef.current.clear();
+		requestSummarizedRef.current.clear();
 		queuedAssistantUpdatesRef.current.clear();
 		if (assistantFlushFrameRef.current !== null) {
 			window.cancelAnimationFrame(assistantFlushFrameRef.current);
@@ -628,7 +658,7 @@ export const App: React.FC = () => {
 			}
 
 			setAttachments((prev) => {
-				const combined = [...prev, ...next];
+				const combined = mergeUniqueAttachments(prev, next);
 				if (combined.length > MAX_ATTACHMENTS) {
 					setAttachmentError(
 						`Limit is ${MAX_ATTACHMENTS} attachments per message.`,
@@ -1320,6 +1350,199 @@ export const App: React.FC = () => {
 		[],
 	);
 
+	const markRequestContextSummarizing = useCallback(
+		(requestId: string) => {
+			requestSummarizingRef.current.add(requestId);
+			syncRequestStreamingState();
+		},
+		[syncRequestStreamingState],
+	);
+
+	const clearRequestContextSummarizing = useCallback(
+		(requestId: string) => {
+			if (requestSummarizingRef.current.delete(requestId)) {
+				syncRequestStreamingState();
+			}
+		},
+		[syncRequestStreamingState],
+	);
+
+	const markRequestContextSummarized = useCallback(
+		(requestId: string, timestamp: number) => {
+			clearRequestContextSummarizing(requestId);
+			requestSummarizedRef.current.add(requestId);
+			const threadId = requestThreadRef.current.get(requestId);
+			if (!threadId) return;
+			const messageId = resolveRequestMessageId(requestId);
+
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+					return upsertAssistantMessage(
+						thread,
+						messageId,
+						(msg) => {
+							if (!msg.contextUsage) return msg;
+							return {
+								...msg,
+								contextUsage: {
+									...msg.contextUsage,
+									summarized: true,
+									updatedAt: Math.max(msg.contextUsage.updatedAt, timestamp),
+								},
+							};
+						},
+						requestId,
+					);
+				}),
+			);
+		},
+		[clearRequestContextSummarizing, resolveRequestMessageId],
+	);
+
+	const updateUsageEvents = useCallback(
+		(
+			requestId: string,
+			events: Array<{
+				inputTokens: number;
+				outputTokens: number;
+				totalTokens: number;
+				estimatedContextTokens?: number;
+				messageId?: string;
+				node?: string;
+				timestamp: number;
+			}>,
+		) => {
+			const threadId = requestThreadRef.current.get(requestId);
+			if (!threadId || events.length === 0) return;
+			const fallbackMessageId = resolveRequestMessageId(requestId);
+
+			const usageByMessageId = new Map<
+				string,
+				{
+					inputTokens: number;
+					estimatedContextTokens?: number;
+					outputTokens: number;
+					totalTokens: number;
+					timestamp: number;
+				}
+			>();
+			for (const event of events) {
+				const targetMessageId = fallbackMessageId;
+				usageByMessageId.set(targetMessageId, {
+					inputTokens: event.inputTokens,
+					estimatedContextTokens: event.estimatedContextTokens,
+					outputTokens: event.outputTokens,
+					totalTokens: event.totalTokens,
+					timestamp: event.timestamp,
+				});
+			}
+			if (usageByMessageId.size === 0) return;
+
+			const summarizationEnabled = config.summarization?.enabled !== false;
+			const thresholdTokens = summarizationEnabled
+				? config.summarization?.maxTokensBeforeSummary
+				: undefined;
+			const thresholdValue =
+				typeof thresholdTokens === "number" && thresholdTokens > 0
+					? thresholdTokens
+					: null;
+			const hasSummarizationSignal =
+				requestSummarizedRef.current.has(requestId);
+
+			setThreads((prev) =>
+				prev.map((thread) => {
+					if (thread.id !== threadId) return thread;
+
+					let nextThread = thread;
+					for (const [messageId, event] of usageByMessageId.entries()) {
+						nextThread = upsertAssistantMessage(
+							nextThread,
+							messageId,
+							(msg) => {
+								const previous = msg.contextUsage;
+								const resolvedInputFromTotal =
+									event.totalTokens > 0
+										? Math.max(
+												0,
+												event.totalTokens -
+													Math.max(
+														previous?.outputTokens || 0,
+														event.outputTokens,
+													),
+											)
+										: 0;
+								const nextInput =
+									event.inputTokens > 0
+										? event.inputTokens
+										: previous?.inputTokens ||
+											(resolvedInputFromTotal > 0 ? resolvedInputFromTotal : 0);
+								const nextEstimatedInput =
+									typeof event.estimatedContextTokens === "number" &&
+									Number.isFinite(event.estimatedContextTokens) &&
+									event.estimatedContextTokens > 0
+										? Math.max(
+												previous?.estimatedInputTokens || 0,
+												event.estimatedContextTokens,
+											)
+										: previous?.estimatedInputTokens || 0;
+								const nextDisplayInput =
+									nextEstimatedInput > 0 ? nextEstimatedInput : nextInput;
+								const nextOutput =
+									event.outputTokens > 0
+										? Math.max(previous?.outputTokens || 0, event.outputTokens)
+										: previous?.outputTokens || 0;
+								const nextTotal =
+									event.totalTokens > 0
+										? event.totalTokens
+										: nextInput + nextOutput;
+
+								const previousPeak =
+									requestContextPeakRef.current.get(requestId) ||
+									previous?.estimatedInputTokens ||
+									previous?.inputTokens ||
+									0;
+								const nextPeak = Math.max(previousPeak, nextDisplayInput);
+								requestContextPeakRef.current.set(requestId, nextPeak);
+								const shouldMarkSummarized =
+									thresholdValue !== null &&
+									nextPeak >= thresholdValue * 0.9 &&
+									nextDisplayInput > 0 &&
+									nextDisplayInput <= thresholdValue * 0.65 &&
+									nextDisplayInput <= nextPeak * 0.75;
+
+								return {
+									...msg,
+									contextUsage: {
+										inputTokens: nextInput,
+										estimatedInputTokens:
+											nextEstimatedInput > 0 ? nextEstimatedInput : undefined,
+										outputTokens: nextOutput,
+										totalTokens: nextTotal,
+										thresholdTokens: thresholdValue ?? undefined,
+										percentOfThreshold:
+											thresholdValue !== null && nextDisplayInput > 0
+												? Math.round((nextDisplayInput / thresholdValue) * 100)
+												: undefined,
+										summarized:
+											previous?.summarized ||
+											hasSummarizationSignal ||
+											shouldMarkSummarized,
+										updatedAt: event.timestamp,
+									},
+								};
+							},
+							requestId,
+						);
+					}
+
+					return nextThread;
+				}),
+			);
+		},
+		[config.summarization, resolveRequestMessageId],
+	);
+
 	const cleanupRequestState = useCallback(
 		(requestId: string) => {
 			for (const [key, update] of queuedAssistantUpdatesRef.current) {
@@ -1337,6 +1560,9 @@ export const App: React.FC = () => {
 			thinkingBuffersRef.current.delete(requestId);
 			requestThreadRef.current.delete(requestId);
 			requestAgentRef.current.delete(requestId);
+			requestContextPeakRef.current.delete(requestId);
+			requestSummarizingRef.current.delete(requestId);
+			requestSummarizedRef.current.delete(requestId);
 			activeTextStreamMessageRef.current.delete(requestId);
 			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
 			requestStreamOrderRef.current.delete(requestId);
@@ -1627,16 +1853,64 @@ export const App: React.FC = () => {
 					});
 				});
 			}
+			if (payload.type === "context-summarizing") {
+				markRequestContextSummarizing(requestId);
+				return;
+			}
+			if (payload.type === "context-summarized") {
+				const rawTimestamp =
+					typeof payload.timestamp === "number"
+						? payload.timestamp
+						: typeof payload.timestamp === "string"
+							? Date.parse(payload.timestamp)
+							: NaN;
+				const eventTimestamp = Number.isFinite(rawTimestamp)
+					? rawTimestamp
+					: Date.now();
+				markRequestContextSummarized(requestId, eventTimestamp);
+				return;
+			}
 			if (payload.type === "agent-start") {
 				logEvent(`Agent started: ${payload.agent || "unknown"}`);
 				return;
 			}
 			if (payload.type === "agent-stream") {
-				const { textEvents, attachmentEvents, toolEvents } = parseStreamEvents(
-					payload.chunk,
-				);
+				const rawStreamChunk =
+					payload.chunk && typeof payload.chunk === "object"
+						? (payload.chunk as Record<string, unknown>)
+						: null;
+				const payloadEstimatedContextTokens =
+					typeof payload.estimatedContextTokens === "number" &&
+					Number.isFinite(payload.estimatedContextTokens) &&
+					payload.estimatedContextTokens > 0
+						? payload.estimatedContextTokens
+						: undefined;
+				const payloadTokenUsage =
+					payload.tokenUsage &&
+					typeof payload.tokenUsage === "object" &&
+					!Array.isArray(payload.tokenUsage)
+						? (payload.tokenUsage as Record<string, unknown>)
+						: null;
+				const streamChunkForParsing =
+					rawStreamChunk &&
+					(payloadTokenUsage || payloadEstimatedContextTokens !== undefined)
+						? {
+								...rawStreamChunk,
+								...(payloadTokenUsage ? { tokenUsage: payloadTokenUsage } : {}),
+								...(payloadEstimatedContextTokens !== undefined
+									? { estimatedContextTokens: payloadEstimatedContextTokens }
+									: {}),
+							}
+						: rawStreamChunk ||
+							(payloadTokenUsage
+								? { tokenUsage: payloadTokenUsage }
+								: payloadEstimatedContextTokens !== undefined
+									? { estimatedContextTokens: payloadEstimatedContextTokens }
+									: payload.chunk);
+				const { textEvents, attachmentEvents, usageEvents, toolEvents } =
+					parseStreamEvents(streamChunkForParsing);
 				const shouldHandleDeltaTextStream = isAssistantTextStreamChunk(
-					payload.chunk,
+					streamChunkForParsing,
 				);
 				const agentForRequest = requestAgentRef.current.get(requestId);
 				const subagents = agentForRequest
@@ -1732,6 +2006,10 @@ export const App: React.FC = () => {
 					] of attachmentEventsByMessageId) {
 						updateAttachmentEvents(requestId, messageId, parsedAttachments);
 					}
+				}
+
+				if (usageEvents.length > 0) {
+					updateUsageEvents(requestId, usageEvents);
 				}
 
 				if (toolEvents.length > 0) {
@@ -1830,6 +2108,12 @@ export const App: React.FC = () => {
 					pendingRequestIds: pendingRequestIdsRef.current,
 					activeRequestId: activeRequestIdRef.current,
 				});
+				const { usageEvents: completionUsageEvents } = parseStreamEvents(
+					payload.result,
+				);
+				if (completionUsageEvents.length > 0) {
+					updateUsageEvents(terminalRequestId, completionUsageEvents);
+				}
 				logEvent("Agent complete");
 				const fallback = buildAgentFallback(
 					payload.result,
@@ -1867,6 +2151,8 @@ export const App: React.FC = () => {
 			finalizeAssistant,
 			flushQueuedAssistantUpdates,
 			logEvent,
+			markRequestContextSummarizing,
+			markRequestContextSummarized,
 			markPendingRequestActive,
 			nextStreamOrder,
 			queueAssistantUpdate,
@@ -1875,6 +2161,7 @@ export const App: React.FC = () => {
 			subagentMap,
 			updateThinkingEvents,
 			updateToolEvents,
+			updateUsageEvents,
 		],
 	);
 
@@ -2452,6 +2739,10 @@ export const App: React.FC = () => {
 			const data = (await res.json()) as ControlUiConfig;
 			setConfig({
 				...data,
+				summarization: {
+					...DEFAULT_SUMMARIZATION_CONFIG,
+					...(data.summarization || {}),
+				},
 				voice: data.voice || DEFAULT_VOICE_CONFIG,
 			});
 		} catch {
@@ -2492,6 +2783,11 @@ export const App: React.FC = () => {
 	useEffect(() => {
 		refreshConfig();
 	}, [refreshConfig]);
+
+	useEffect(() => {
+		if (!connected) return;
+		void refreshConfig();
+	}, [connected, refreshConfig]);
 
 	const refreshAgents = useCallback(async () => {
 		setAgentsLoading(true);
@@ -3197,6 +3493,7 @@ export const App: React.FC = () => {
 										fileAccept={FILE_INPUT_ACCEPT}
 										attachmentError={attachmentError}
 										isStreaming={uiStreaming}
+										isContextSummarizing={isContextSummarizing}
 										queuedPromptCount={queuedPromptCount}
 										connected={connected}
 										loadingThread={loadingThreadId === activeThread?.id}
@@ -3204,6 +3501,7 @@ export const App: React.FC = () => {
 										voiceAutoEnabled={activeVoiceAutoEnabled}
 										voicePlayback={voicePlayback}
 										dynamicUiEnabled={dynamicUiEnabled}
+										summarizationConfig={config.summarization}
 										onToggleVoiceAuto={handleToggleVoiceAuto}
 										onSpeakVoice={handleSpeakVoice}
 										onStopVoice={handleStopVoice}

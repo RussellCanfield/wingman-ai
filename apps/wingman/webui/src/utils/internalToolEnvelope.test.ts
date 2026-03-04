@@ -89,4 +89,12 @@ describe("sanitizeAssistantDisplayText", () => {
 
 		expect(result).toBe("- Item one\n- Item two\n\n");
 	});
+
+	it("preserves newline-only streaming deltas when requested", () => {
+		const result = sanitizeAssistantDisplayText("\n", {
+			preserveTrailingWhitespace: true,
+		});
+
+		expect(result).toBe("\n");
+	});
 });

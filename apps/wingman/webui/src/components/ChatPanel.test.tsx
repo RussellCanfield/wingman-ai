@@ -71,6 +71,7 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain('aria-label="Add files"');
 		expect(html).toContain('aria-label="Record audio"');
 		expect(html).not.toContain(">Prompt<");
+		expect(html).not.toContain("Enter to send, Shift+Enter for newline");
 		expect(html).not.toContain("quick prompt below");
 		expect(html).not.toContain("Summarize the latest updates in this thread.");
 		expect(html).not.toContain("Draft a plan of attack for the next task.");
@@ -89,15 +90,11 @@ describe("ChatPanel prompt composer", () => {
 			"rounded-2xl border border-white/10 bg-slate-950/70 p-2",
 		);
 		expect(html).toContain('aria-label="Stop response"');
-		expect(html).toContain('data-testid="streaming-indicator"');
-		expect(html).toContain("pointer-events-none mt-3 flex justify-center pb-1");
-		expect(html).toContain(
-			"flex h-6 items-center justify-center gap-1.5 rounded-full",
-		);
+		expect(html).not.toContain('data-testid="streaming-indicator"');
 		expect(html).not.toContain('aria-label="Send prompt"');
 	});
 
-	it("keeps streaming indicator visible while stream is active", () => {
+	it("does not render floating streaming indicator while stream is active", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
 				...baseProps,
@@ -105,7 +102,7 @@ describe("ChatPanel prompt composer", () => {
 			}),
 		);
 
-		expect(html).toContain('data-testid="streaming-indicator"');
+		expect(html).not.toContain('data-testid="streaming-indicator"');
 	});
 
 	it("keeps send action available while streaming when draft text exists", () => {
@@ -122,6 +119,21 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("Streaming response... Enter to queue follow-up");
 	});
 
+	it("shows summarization status while context compression is running", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				isStreaming: true,
+				isContextSummarizing: true,
+			}),
+		);
+
+		expect(html).toContain("Summarizing conversation...");
+		expect(html).not.toContain(
+			"Streaming response... Enter to queue follow-up",
+		);
+	});
+
 	it("keeps voice toggle visible while streaming", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
@@ -132,29 +144,64 @@ describe("ChatPanel prompt composer", () => {
 		);
 
 		expect(html).toContain(">Voice: Auto<");
-		expect(html).toContain('data-testid="streaming-indicator"');
 	});
 
-	it("hides bottom streaming status when not streaming", () => {
+	it("shows in-message streaming dots while the active assistant stream is running", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				isStreaming: true,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-streaming",
+							role: "assistant",
+							content: "Partial response text",
+							createdAt: 1,
+							toolEvents: [
+								{
+									id: "tool-streaming-1",
+									name: "edit_file",
+									status: "running",
+									timestamp: 1,
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain('data-testid="message-streaming-indicator"');
+		expect(html).toContain("Partial response text");
+		expect(html).toContain("edit_file");
+	});
+
+	it("hides in-message streaming dots when stream is idle", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
 				...baseProps,
 				isStreaming: false,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-idle",
+							role: "assistant",
+							content: "Finished response",
+							createdAt: 1,
+						},
+					],
+				},
 			}),
 		);
 
-		expect(html).not.toContain('data-testid="streaming-indicator"');
-	});
-
-	it("shows no streaming glow when not streaming", () => {
-		const html = renderToStaticMarkup(
-			React.createElement(ChatPanel, {
-				...baseProps,
-				isStreaming: false,
-			}),
-		);
-
-		expect(html).not.toContain('data-testid="streaming-indicator"');
+		expect(html).not.toContain('data-testid="message-streaming-indicator"');
 	});
 
 	it("renders image preview modal above side panels", () => {
@@ -591,6 +638,64 @@ describe("ChatPanel prompt composer", () => {
 		expect(html.match(/edit_file/g)?.length ?? 0).toBe(1);
 	});
 
+	it("renders unsorted assistant timeline blocks in order", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-unsorted",
+							role: "assistant",
+							content: "Before tool\\nAfter tool",
+							createdAt: 1,
+							toolEvents: [
+								{
+									id: "tool-unsorted-1",
+									name: "edit_file",
+									status: "completed",
+									timestamp: 2,
+								},
+							],
+							activityTimeline: [
+								{
+									id: "timeline-text-2",
+									kind: "text",
+									order: 3,
+									text: "After tool",
+								},
+								{
+									id: "timeline-tool-1",
+									kind: "tool",
+									order: 2,
+									toolEventId: "tool-unsorted-1",
+								},
+								{
+									id: "timeline-text-1",
+									kind: "text",
+									order: 1,
+									text: "Before tool",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const beforeIndex = html.indexOf("Before tool");
+		const toolIndex = html.indexOf("edit_file");
+		const afterIndex = html.indexOf("After tool");
+		expect(beforeIndex).toBeGreaterThan(-1);
+		expect(toolIndex).toBeGreaterThan(-1);
+		expect(afterIndex).toBeGreaterThan(-1);
+		expect(beforeIndex).toBeLessThan(toolIndex);
+		expect(toolIndex).toBeLessThan(afterIndex);
+	});
+
 	it("does not render the Wingman role label in assistant messages", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
@@ -759,6 +864,206 @@ describe("ChatPanel prompt composer", () => {
 		const timestampCount = (html.match(/class="whitespace-nowrap"/g) || [])
 			.length;
 		expect(timestampCount).toBe(1);
+	});
+
+	it("renders conversation-level context progress near the composer hint", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				summarizationConfig: {
+					enabled: true,
+					maxTokensBeforeSummary: 12000,
+					messagesToKeep: 8,
+				},
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-context-1",
+							role: "assistant",
+							content: "Working...",
+							createdAt: 1,
+							contextUsage: {
+								inputTokens: 8420,
+								outputTokens: 512,
+								totalTokens: 8932,
+								thresholdTokens: 12000,
+								percentOfThreshold: 70,
+								summarized: true,
+								updatedAt: 2,
+							},
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain('data-testid="conversation-context-meter"');
+		expect(html).toContain('aria-label="Conversation context usage"');
+		expect(html).toContain("Context 8,420 / 12,000 (70%)");
+		expect(html).toContain("Output 512");
+		expect(html).toContain("Context summarized");
+	});
+
+	it("shows summarization disabled state in context meter", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				summarizationConfig: {
+					enabled: false,
+					maxTokensBeforeSummary: 12000,
+					messagesToKeep: 8,
+				},
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-context-off",
+							role: "assistant",
+							content: "Working...",
+							createdAt: 1,
+							contextUsage: {
+								inputTokens: 8420,
+								outputTokens: 0,
+								totalTokens: 8420,
+								updatedAt: 2,
+							},
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("Context 8,420");
+		expect(html).toContain("Summarization off");
+		expect(html).not.toContain("/ 12,000");
+	});
+
+	it("falls back to total tokens when input tokens are missing", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				summarizationConfig: {
+					enabled: true,
+					maxTokensBeforeSummary: 12000,
+					messagesToKeep: 8,
+				},
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-context-total-fallback",
+							role: "assistant",
+							content: "Working...",
+							createdAt: 1,
+							contextUsage: {
+								inputTokens: 0,
+								outputTokens: 611,
+								totalTokens: 9453,
+								updatedAt: 2,
+							},
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("Context 9,453 / 12,000 (79%)");
+		expect(html).toContain("Output 611");
+	});
+
+	it("prefers estimated context tokens for the meter and shows provider prompt tokens as secondary info", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				summarizationConfig: {
+					enabled: true,
+					maxTokensBeforeSummary: 12000,
+					messagesToKeep: 8,
+				},
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-context-estimated",
+							role: "assistant",
+							content: "Working...",
+							createdAt: 1,
+							contextUsage: {
+								inputTokens: 17374,
+								estimatedInputTokens: 8889,
+								outputTokens: 149,
+								totalTokens: 17523,
+								updatedAt: 2,
+							},
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("Context 8,889 / 12,000 (74%)");
+		expect(html).toContain("Provider prompt 17,374");
+		expect(html).toContain("Output 149");
+	});
+
+	it("shows a single conversation context meter using the latest assistant usage", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				summarizationConfig: {
+					enabled: true,
+					maxTokensBeforeSummary: 12000,
+					messagesToKeep: 8,
+				},
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-context-old",
+							role: "assistant",
+							content: "Older response",
+							createdAt: 1,
+							contextUsage: {
+								inputTokens: 4000,
+								outputTokens: 300,
+								totalTokens: 4300,
+								updatedAt: 2,
+							},
+						},
+						{
+							id: "assistant-context-latest",
+							role: "assistant",
+							content: "Latest response",
+							createdAt: 3,
+							contextUsage: {
+								inputTokens: 9000,
+								outputTokens: 500,
+								totalTokens: 9500,
+								updatedAt: 4,
+							},
+						},
+					],
+				},
+			}),
+		);
+
+		const meterCount = (
+			html.match(/data-testid="conversation-context-meter"/g) || []
+		).length;
+		expect(meterCount).toBe(1);
+		expect(html).toContain("Context 9,000 / 12,000 (75%)");
+		expect(html).not.toContain("Context 4,000 / 12,000 (33%)");
 	});
 });
 

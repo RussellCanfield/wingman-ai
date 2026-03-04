@@ -22,7 +22,12 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { SguiRenderer } from "../sgui/SguiRenderer";
-import type { ChatAttachment, Thread } from "../types";
+import type {
+	AssistantTimelineBlock,
+	ChatAttachment,
+	SummarizationConfig,
+	Thread,
+} from "../types";
 import {
 	extractClipboardFiles,
 	hasImageClipboardType,
@@ -48,6 +53,9 @@ type MarkdownCodeBlockProps = {
 	className?: string;
 	children: React.ReactNode;
 };
+type MarkdownRendererComponents = NonNullable<
+	React.ComponentProps<typeof ReactMarkdown>["components"]
+>;
 
 const MarkdownCodeBlock: React.FC<MarkdownCodeBlockProps> = ({
 	className,
@@ -97,6 +105,81 @@ const MarkdownCodeBlock: React.FC<MarkdownCodeBlockProps> = ({
 	);
 };
 
+function createMarkdownComponents(options: {
+	renderAudioLinks: boolean;
+}): MarkdownRendererComponents {
+	const { renderAudioLinks } = options;
+	return {
+		a: ({ node: _node, ...props }) => {
+			const href = typeof props.href === "string" ? props.href : "";
+			if (renderAudioLinks && isLikelyAudioUrl(href)) {
+				return (
+					<span className="my-2 block w-full min-w-0 max-w-[420px]">
+						<audio
+							controls
+							preload="metadata"
+							src={href}
+							className="block w-full min-w-0 max-w-full"
+						/>
+						<a
+							href={href}
+							className="mt-1 inline-block text-xs text-sky-300 underline decoration-sky-400/40 underline-offset-4"
+							target="_blank"
+							rel="noreferrer"
+						>
+							Open audio in new tab
+						</a>
+					</span>
+				);
+			}
+			return (
+				<a
+					{...props}
+					className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
+					target="_blank"
+					rel="noreferrer"
+				/>
+			);
+		},
+		code: ({ node: _node, className, children, ...props }) => {
+			const isBlock =
+				Boolean(className?.includes("language-")) ||
+				(_node?.position
+					? _node.position.start.line !== _node.position.end.line
+					: false);
+			return isBlock ? (
+				<MarkdownCodeBlock className={className}>{children}</MarkdownCodeBlock>
+			) : (
+				<code
+					{...props}
+					className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
+				>
+					{children}
+				</code>
+			);
+		},
+		ul: ({ node: _node, ...props }) => (
+			<ul {...props} className="ml-5 list-disc space-y-1 mb-1" />
+		),
+		ol: ({ node: _node, ...props }) => (
+			<ol {...props} className="ml-5 list-decimal space-y-1" />
+		),
+		blockquote: ({ node: _node, ...props }) => (
+			<blockquote
+				{...props}
+				className="border-l-2 border-sky-400/60 pl-3 text-slate-300"
+			/>
+		),
+	};
+}
+
+const USER_MARKDOWN_COMPONENTS = createMarkdownComponents({
+	renderAudioLinks: false,
+});
+const ASSISTANT_MARKDOWN_COMPONENTS = createMarkdownComponents({
+	renderAudioLinks: true,
+});
+
 type ChatPanelProps = {
 	activeThread?: Thread;
 	defaultOutputDir?: string | null;
@@ -106,12 +189,14 @@ type ChatPanelProps = {
 	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
+	isContextSummarizing?: boolean;
 	queuedPromptCount: number;
 	connected: boolean;
 	loading: boolean;
 	voiceAutoEnabled: boolean;
 	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
 	dynamicUiEnabled: boolean;
+	summarizationConfig?: SummarizationConfig;
 	onToggleVoiceAuto: () => void;
 	onSpeakVoice: (messageId: string, text: string) => void;
 	onStopVoice: () => void;
@@ -134,12 +219,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	fileAccept,
 	attachmentError,
 	isStreaming,
+	isContextSummarizing = false,
 	queuedPromptCount,
 	connected,
 	loading,
 	voiceAutoEnabled,
 	voicePlayback,
 	dynamicUiEnabled,
+	summarizationConfig,
 	onToggleVoiceAuto,
 	onSpeakVoice,
 	onStopVoice,
@@ -173,6 +260,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const [recordingDuration, setRecordingDuration] = useState(0);
 	const [recordingError, setRecordingError] = useState("");
 	const [inputLevel, setInputLevel] = useState(0);
+	const [contextMeterPopoverOpen, setContextMeterPopoverOpen] = useState(false);
 	const lastVoiceMessageIdRef = useRef<string | null>(null);
 	const messageCount = activeThread?.messages.length ?? 0;
 	const lastMessage =
@@ -190,7 +278,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const hasDraft = Boolean(prompt.trim() || attachments.length > 0);
 	const canSend = connected && !recording && hasDraft;
 	const canStop = isStreaming && !recording && !hasDraft;
-	const showStreamingGlow = isStreaming;
 
 	useEffect(() => {
 		autoScrollRef.current = true;
@@ -500,6 +587,75 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const resolvedVoiceMessageId =
 		voicePlayback.messageId || lastVoiceMessageIdRef.current;
 	const canToggleVoice = Boolean(activeThread);
+	const conversationContextMeter = useMemo(() => {
+		if (!activeThread) return null;
+		for (let index = activeThread.messages.length - 1; index >= 0; index -= 1) {
+			const message = activeThread.messages[index];
+			if (message.role !== "assistant" || !message.contextUsage) {
+				continue;
+			}
+			const usage = message.contextUsage;
+			const displayTokens = resolveDisplayContextTokens(usage);
+			if (displayTokens <= 0) continue;
+			const summarizationEnabled = summarizationConfig?.enabled !== false;
+			const thresholdTokens =
+				typeof summarizationConfig?.maxTokensBeforeSummary === "number"
+					? summarizationConfig.maxTokensBeforeSummary
+					: usage.thresholdTokens;
+			const thresholdValue =
+				typeof thresholdTokens === "number" && thresholdTokens > 0
+					? thresholdTokens
+					: null;
+			const contextPercent =
+				thresholdValue !== null
+					? Math.round((displayTokens / thresholdValue) * 100)
+					: undefined;
+			const clampedPercent =
+				typeof contextPercent === "number"
+					? Math.max(0, Math.min(100, contextPercent))
+					: 0;
+			return {
+				displayTokens,
+				estimatedInputTokens: usage.estimatedInputTokens,
+				providerInputTokens:
+					usage.inputTokens > 0 ? usage.inputTokens : undefined,
+				outputTokens: usage.outputTokens,
+				thresholdValue,
+				contextPercent,
+				clampedPercent,
+				summarizationEnabled,
+				summarized: Boolean(usage.summarized),
+			};
+		}
+		return null;
+	}, [activeThread, summarizationConfig]);
+	const contextMeterRing = useMemo(() => {
+		if (!conversationContextMeter) return null;
+		const percent = conversationContextMeter.clampedPercent;
+		const canTrackThreshold =
+			conversationContextMeter.summarizationEnabled &&
+			conversationContextMeter.thresholdValue !== null;
+		const ringColor = !canTrackThreshold
+			? "rgba(148, 163, 184, 0.8)"
+			: percent >= 100
+				? "rgba(251, 113, 133, 0.92)"
+				: percent >= 85
+					? "rgba(251, 191, 36, 0.92)"
+					: "rgba(56, 189, 248, 0.92)";
+		const trackColor = "rgba(71, 85, 105, 0.35)";
+		return {
+			background: `conic-gradient(${ringColor} ${percent}%, ${trackColor} ${percent}% 100%)`,
+		};
+	}, [conversationContextMeter]);
+	useEffect(() => {
+		setContextMeterPopoverOpen(false);
+	}, [activeThread?.id]);
+
+	useEffect(() => {
+		if (!conversationContextMeter) {
+			setContextMeterPopoverOpen(false);
+		}
+	}, [conversationContextMeter]);
 	const transcriptContent = useMemo(() => {
 		const isEmptyThread = !activeThread || activeThread.messages.length === 0;
 		if (loading && isEmptyThread) {
@@ -558,8 +714,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						? legacyThinkingEvents
 						: [];
 			const timelineBlocks =
-				msg.role === "assistant" && msg.activityTimeline?.length
-					? [...msg.activityTimeline].sort((a, b) => a.order - b.order)
+				msg.role === "assistant"
+					? ensureTimelineBlocksOrdered(msg.activityTimeline)
 					: [];
 			const timelineToolEventIds = new Set<string>();
 			for (const block of timelineBlocks) {
@@ -567,6 +723,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					timelineToolEventIds.add(block.toolEventId);
 				}
 			}
+			const timelineToolEventsById =
+				timelineBlocks.length > 0
+					? new Map(toolEvents.map((event) => [event.id, event]))
+					: null;
 			const panelToolEvents =
 				timelineBlocks.length > 0
 					? toolEvents.filter((event) => !timelineToolEventIds.has(event.id))
@@ -604,6 +764,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				hasSpeakableAssistantInTurn = true;
 			}
 			const showMetaRow = isUserMessage || showTimestamp || showVoiceButton;
+			const markdownComponents = isUserMessage
+				? USER_MARKDOWN_COMPONENTS
+				: ASSISTANT_MARKDOWN_COMPONENTS;
 
 			return (
 				<div
@@ -718,87 +881,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							</div>
 						) : null}
 						{(() => {
-							const markdownComponents = {
-								a: ({ node, ...props }) => {
-									const href = typeof props.href === "string" ? props.href : "";
-									if (!isUserMessage && isLikelyAudioUrl(href)) {
-										return (
-											<span className="my-2 block w-full min-w-0 max-w-[420px]">
-												<audio
-													controls
-													preload="metadata"
-													src={href}
-													className="block w-full min-w-0 max-w-full"
-												/>
-												<a
-													href={href}
-													className="mt-1 inline-block text-xs text-sky-300 underline decoration-sky-400/40 underline-offset-4"
-													target="_blank"
-													rel="noreferrer"
-												>
-													Open audio in new tab
-												</a>
-											</span>
-										);
-									}
-									return (
-										<a
-											{...props}
-											className="text-sky-300 underline decoration-sky-400/40 underline-offset-4"
-											target="_blank"
-											rel="noreferrer"
-										/>
-									);
-								},
-								code: ({ node, className, children, ...props }) => {
-									const isBlock =
-										Boolean(className?.includes("language-")) ||
-										(node?.position
-											? node.position.start.line !== node.position.end.line
-											: false);
-									return isBlock ? (
-										<MarkdownCodeBlock className={className}>
-											{children}
-										</MarkdownCodeBlock>
-									) : (
-										<code
-											{...props}
-											className="rounded bg-white/10 px-1 py-0.5 text-[0.85em]"
-										>
-											{children}
-										</code>
-									);
-								},
-								ul: ({ node, ...props }) => (
-									<ul {...props} className="ml-5 list-disc space-y-1 mb-1" />
-								),
-								ol: ({ node, ...props }) => (
-									<ol {...props} className="ml-5 list-decimal space-y-1" />
-								),
-								blockquote: ({ node, ...props }) => (
-									<blockquote
-										{...props}
-										className="border-l-2 border-sky-400/60 pl-3 text-slate-300"
-									/>
-								),
-							};
-
-							if (
-								msg.role === "assistant" &&
-								isActiveMessage &&
-								!hasAnyActivity &&
-								!displayText &&
-								(!uiBlocks || uiBlocks.length === 0)
-							) {
-								return (
-									<div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-										<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-										<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
-										<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
-									</div>
-								);
-							}
-
 							if (timelineBlocks.length > 0) {
 								return (
 									<div className="mt-2 space-y-3">
@@ -827,8 +909,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 													</ReactMarkdown>
 												);
 											}
-											const event = toolEvents.find(
-												(item) => item.id === block.toolEventId,
+											const event = timelineToolEventsById?.get(
+												block.toolEventId,
 											);
 											if (!event) return null;
 											return (
@@ -858,6 +940,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								</ReactMarkdown>
 							);
 						})()}
+						{msg.role === "assistant" && isActiveMessage ? (
+							<div
+								data-testid="message-streaming-indicator"
+								className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400"
+							>
+								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
+								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
+							</div>
+						) : null}
 						{assistantAudioPreviews.length > 0 ? (
 							<div className="mt-3 space-y-2">
 								{assistantAudioPreviews.map((preview) => (
@@ -1045,24 +1137,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				onScroll={handleScroll}
 				className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80"
 			>
-				<div className="min-h-full p-3 sm:p-4">
-					{transcriptContent}
-					{showStreamingGlow ? (
-						<div
-							aria-hidden="true"
-							className="pointer-events-none mt-3 flex justify-center pb-1"
-						>
-							<div
-								data-testid="streaming-indicator"
-								className="flex h-6 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-slate-950/80 px-2.5 shadow-[0_0_18px_rgba(56,189,248,0.2)] backdrop-blur-sm"
-							>
-								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
-								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:160ms]" />
-								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:320ms]" />
-							</div>
-						</div>
-					) : null}
-				</div>
+				<div className="min-h-full p-3 sm:p-4">{transcriptContent}</div>
 			</div>
 
 			<>
@@ -1189,15 +1264,92 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 								) : null}
 							</button>
 						</div>
-						<span className="px-1 text-[11px] text-slate-400">
-							{recording
-								? `Recording ${formatDuration(recordingDuration)}`
-								: isStreaming
-									? queuedPromptCount > 0
-										? `Streaming response... ${queuedPromptCount} queued`
-										: "Streaming response... Enter to queue follow-up"
-									: "Enter to send, Shift+Enter for newline"}
-						</span>
+						<div className="flex items-center gap-2 px-1">
+							{recording || isStreaming ? (
+								<span className="text-[11px] text-slate-400">
+									{recording
+										? `Recording ${formatDuration(recordingDuration)}`
+										: isContextSummarizing
+											? "Summarizing conversation..."
+											: queuedPromptCount > 0
+												? `Streaming response... ${queuedPromptCount} queued`
+												: "Streaming response... Enter to queue follow-up"}
+								</span>
+							) : null}
+							{conversationContextMeter ? (
+								<div className="group relative">
+									<button
+										type="button"
+										aria-label="Conversation context usage"
+										aria-expanded={contextMeterPopoverOpen}
+										aria-controls="conversation-context-popover"
+										onClick={() => setContextMeterPopoverOpen((open) => !open)}
+										className="inline-flex items-center rounded-full border border-white/10 bg-slate-900/70 p-1 text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100"
+									>
+										<span
+											data-testid="conversation-context-meter"
+											className="relative inline-flex h-7 w-7 items-center justify-center rounded-full p-[2px]"
+											style={contextMeterRing || undefined}
+										>
+											<span
+												aria-hidden="true"
+												className="inline-flex h-full w-full items-center justify-center rounded-full bg-slate-900/95"
+											/>
+										</span>
+									</button>
+									<div
+										id="conversation-context-popover"
+										className={`pointer-events-none absolute bottom-full right-0 z-20 mb-2 min-w-[220px] rounded-xl border border-white/15 bg-slate-950/95 p-3 text-[11px] text-slate-300 shadow-xl backdrop-blur transition ${
+											contextMeterPopoverOpen
+												? "translate-y-0 opacity-100"
+												: "translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"
+										}`}
+									>
+										<div className="uppercase tracking-[0.14em] text-slate-400">
+											Context window
+										</div>
+										<div className="mt-2 text-slate-200">
+											{conversationContextMeter.summarizationEnabled &&
+											conversationContextMeter.thresholdValue !== null
+												? `Context ${formatTokenCount(conversationContextMeter.displayTokens)} / ${formatTokenCount(conversationContextMeter.thresholdValue)} (${conversationContextMeter.contextPercent}%)`
+												: `Context ${formatTokenCount(conversationContextMeter.displayTokens)}`}
+										</div>
+										{typeof conversationContextMeter.estimatedInputTokens ===
+											"number" &&
+										conversationContextMeter.estimatedInputTokens > 0 &&
+										typeof conversationContextMeter.providerInputTokens ===
+											"number" &&
+										conversationContextMeter.providerInputTokens >
+											conversationContextMeter.estimatedInputTokens ? (
+											<div className="mt-1 text-slate-300">
+												Provider prompt{" "}
+												{formatTokenCount(
+													conversationContextMeter.providerInputTokens,
+												)}
+											</div>
+										) : null}
+										{conversationContextMeter.outputTokens > 0 ? (
+											<div className="mt-1 text-slate-300">
+												Output{" "}
+												{formatTokenCount(
+													conversationContextMeter.outputTokens,
+												)}
+											</div>
+										) : null}
+										{!conversationContextMeter.summarizationEnabled ? (
+											<div className="mt-1 text-slate-300">
+												Summarization off
+											</div>
+										) : null}
+										{conversationContextMeter.summarized ? (
+											<div className="mt-1 text-emerald-200">
+												Context summarized
+											</div>
+										) : null}
+									</div>
+								</div>
+							) : null}
+						</div>
 					</div>
 					<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 pl-2 pr-1.5">
 						<textarea
@@ -1326,6 +1478,18 @@ export function shouldRefocusComposer({
 	return wasStreaming && !isStreaming;
 }
 
+function ensureTimelineBlocksOrdered(
+	blocks?: AssistantTimelineBlock[],
+): AssistantTimelineBlock[] {
+	if (!blocks || blocks.length === 0) return [];
+	for (let index = 1; index < blocks.length; index += 1) {
+		if (blocks[index - 1].order > blocks[index].order) {
+			return [...blocks].sort((a, b) => a.order - b.order);
+		}
+	}
+	return blocks;
+}
+
 function parseThinkingContent(text: string): {
 	thinkBlocks: string[];
 	cleanText: string;
@@ -1399,6 +1563,30 @@ function formatTime(timestamp?: number): string {
 	} catch {
 		return "--";
 	}
+}
+
+function formatTokenCount(value: number): string {
+	return new Intl.NumberFormat("en-US").format(
+		Math.max(0, Math.round(value || 0)),
+	);
+}
+
+function resolveDisplayContextTokens(contextUsage: {
+	inputTokens: number;
+	estimatedInputTokens?: number;
+	outputTokens: number;
+	totalTokens: number;
+}): number {
+	if (
+		typeof contextUsage.estimatedInputTokens === "number" &&
+		contextUsage.estimatedInputTokens > 0
+	) {
+		return contextUsage.estimatedInputTokens;
+	}
+	if (contextUsage.inputTokens > 0) return contextUsage.inputTokens;
+	if (contextUsage.totalTokens > 0) return contextUsage.totalTokens;
+	if (contextUsage.outputTokens > 0) return contextUsage.outputTokens;
+	return 0;
 }
 
 function formatDuration(durationMs: number): string {

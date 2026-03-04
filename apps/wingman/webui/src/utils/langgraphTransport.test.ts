@@ -268,4 +268,71 @@ describe("createGatewayLangGraphTransport", () => {
 		const done = await stream.next();
 		expect(done.done).toBe(true);
 	});
+
+	it("ignores context-summarized payloads and continues forwarding stream chunks", async () => {
+		const socket = new FakeGatewaySocket();
+		const transport = createGatewayLangGraphTransport({
+			socket,
+			agentId: "coding",
+			requestIdFactory: () => "req-context-event",
+		});
+		const stream = await transport.stream({
+			input: { content: "continue streaming" },
+			config: { configurable: { thread_id: "session-context" } },
+			signal: new AbortController().signal,
+		});
+
+		socket.emit({
+			type: "event:agent",
+			id: "req-context-event",
+			payload: { type: "agent-start" },
+		});
+		socket.emit({
+			type: "event:agent",
+			id: "req-context-event",
+			payload: {
+				type: "context-summarized",
+				inputTokens: 5200,
+				peakInputTokens: 11000,
+				thresholdTokens: 12000,
+			},
+		});
+		socket.emit({
+			type: "event:agent",
+			id: "req-context-event",
+			payload: {
+				type: "agent-stream",
+				chunk: {
+					event: "on_chat_model_stream",
+					run_id: "llm-run-context",
+					data: { chunk: { content: "Still going" } },
+				},
+			},
+		});
+		socket.emit({
+			type: "event:agent",
+			id: "req-context-event",
+			payload: { type: "agent-complete" },
+		});
+
+		const first = await stream.next();
+		expect(first.value).toEqual({
+			event: "metadata",
+			data: { run_id: "req-context-event", thread_id: "session-context" },
+		});
+
+		const second = await stream.next();
+		expect(second.value).toEqual({
+			id: "llm-run-context",
+			event: "events",
+			data: {
+				event: "on_chat_model_stream",
+				run_id: "llm-run-context",
+				data: { chunk: { content: "Still going" } },
+			},
+		});
+
+		const done = await stream.next();
+		expect(done.done).toBe(true);
+	});
 });

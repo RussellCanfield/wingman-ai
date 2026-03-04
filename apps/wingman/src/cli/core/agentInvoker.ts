@@ -24,14 +24,14 @@ import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
 import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
 import { createMCPResourceTools } from "@/agent/tools/mcp_resources.js";
-import {
-	getSharedTerminalSessionManager,
-	type TerminalSessionManager,
-} from "@/agent/tools/terminal_session_manager.js";
 import type {
 	NodeInvokeRequest,
 	NodeInvokeResult,
 } from "@/agent/tools/node_invoke.js";
+import {
+	getSharedTerminalSessionManager,
+	type TerminalSessionManager,
+} from "@/agent/tools/terminal_session_manager.js";
 import { getBundledSkillsPath } from "@/agent/uiRegistry.js";
 import { resolveSkillActivation } from "@/skills/activation.js";
 import {
@@ -161,6 +161,12 @@ export type HumanInTheLoopSettings = {
 				argsSchema?: Record<string, any>;
 		  }
 	>;
+};
+
+export type TokenUsageSnapshot = {
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
 };
 
 const DEFAULT_DEEPAGENT_MODEL = "claude-sonnet-4-5-20250929";
@@ -328,6 +334,20 @@ export const configureDeepAgentSummarizationMiddleware = (
 	});
 };
 
+export const recompileDeepAgentWithMiddlewareOverrides = <T>(agent: T): T => {
+	if (agent && typeof agent === "object") {
+		const maybeWithConfig = (
+			agent as {
+				withConfig?: (config: Record<string, unknown>) => T;
+			}
+		).withConfig;
+		if (typeof maybeWithConfig === "function") {
+			return maybeWithConfig.call(agent, {});
+		}
+	}
+	return agent;
+};
+
 type ToolEventContext = {
 	event: "on_tool_start" | "on_tool_end" | "on_tool_error";
 	toolName: string;
@@ -355,6 +375,137 @@ export const detectToolEventContext = (
 		event: eventChunk.event,
 		toolName,
 	};
+};
+
+export const chunkHasBuiltInSummarizationSignal = (chunk: unknown): boolean => {
+	if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) {
+		return false;
+	}
+	const eventChunk = chunk as Record<string, unknown>;
+	if (
+		eventChunk.event !== "on_chain_end" ||
+		eventChunk.name !== "SummarizationMiddleware.before_model"
+	) {
+		return false;
+	}
+	const data =
+		eventChunk.data &&
+		typeof eventChunk.data === "object" &&
+		!Array.isArray(eventChunk.data)
+			? (eventChunk.data as Record<string, unknown>)
+			: null;
+	const output =
+		data?.output &&
+		typeof data.output === "object" &&
+		!Array.isArray(data.output)
+			? (data.output as Record<string, unknown>)
+			: null;
+	const outputMessages = Array.isArray(output?.messages) ? output.messages : [];
+	return outputMessages.some((message) => {
+		if (!message || typeof message !== "object" || Array.isArray(message)) {
+			return false;
+		}
+		const messageRecord = message as Record<string, unknown>;
+		const additionalKwargs =
+			messageRecord.additional_kwargs &&
+			typeof messageRecord.additional_kwargs === "object" &&
+			!Array.isArray(messageRecord.additional_kwargs)
+				? (messageRecord.additional_kwargs as Record<string, unknown>)
+				: null;
+		return additionalKwargs?.lc_source === "summarization";
+	});
+};
+
+const SUMMARIZATION_MIDDLEWARE_NODE = "summarizationmiddleware.before_model";
+
+const normalizeNodeMarker = (value: unknown): string | null => {
+	if (typeof value !== "string") return null;
+	const normalized = value.trim().toLowerCase();
+	return normalized.length > 0 ? normalized : null;
+};
+
+const extractSummarizationNodeCandidate = (value: unknown): string | null => {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	const record = value as Record<string, unknown>;
+	const directCandidates = [
+		record.langgraph_node,
+		record.langgraphNode,
+		record.node,
+		record.node_id,
+		record.nodeId,
+	];
+	for (const candidate of directCandidates) {
+		const normalized = normalizeNodeMarker(candidate);
+		if (normalized) {
+			return normalized;
+		}
+	}
+	const tagCandidates = [record.tags, record.ls_tags];
+	for (const tags of tagCandidates) {
+		if (!Array.isArray(tags)) continue;
+		for (const tag of tags) {
+			if (typeof tag !== "string") continue;
+			const normalizedTag = tag.trim().toLowerCase();
+			if (!normalizedTag) continue;
+			if (normalizedTag === `langgraph_node:${SUMMARIZATION_MIDDLEWARE_NODE}`) {
+				return SUMMARIZATION_MIDDLEWARE_NODE;
+			}
+			if (normalizedTag === `langgraph_node=${SUMMARIZATION_MIDDLEWARE_NODE}`) {
+				return SUMMARIZATION_MIDDLEWARE_NODE;
+			}
+		}
+	}
+	return null;
+};
+
+export const chunkBelongsToSummarizationMiddleware = (
+	chunk: unknown,
+): boolean => {
+	if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) {
+		return false;
+	}
+	const eventChunk = chunk as Record<string, unknown>;
+	const nameNode = normalizeNodeMarker(eventChunk.name);
+	if (nameNode === SUMMARIZATION_MIDDLEWARE_NODE) {
+		return true;
+	}
+	const metadataCandidates = [
+		eventChunk.metadata,
+		(eventChunk.data as Record<string, unknown> | undefined)?.metadata,
+		(eventChunk.data as Record<string, unknown> | undefined)?.chunk,
+		(eventChunk.data as Record<string, unknown> | undefined)?.message,
+	];
+	for (const candidate of metadataCandidates) {
+		const node = extractSummarizationNodeCandidate(candidate);
+		if (node === SUMMARIZATION_MIDDLEWARE_NODE) {
+			return true;
+		}
+	}
+	return false;
+};
+
+const SUMMARIZATION_ACTIVE_EVENTS = new Set([
+	"on_chat_model_start",
+	"on_chat_model_stream",
+	"on_chat_model_end",
+	"on_llm_start",
+	"on_llm_stream",
+	"on_llm_end",
+]);
+
+export const chunkSignalsActiveSummarization = (chunk: unknown): boolean => {
+	if (!chunkBelongsToSummarizationMiddleware(chunk)) {
+		return false;
+	}
+	if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) {
+		return false;
+	}
+	const eventName = (chunk as Record<string, unknown>).event;
+	return (
+		typeof eventName === "string" && SUMMARIZATION_ACTIVE_EVENTS.has(eventName)
+	);
 };
 
 export const chunkHasAssistantText = (chunk: unknown): boolean => {
@@ -506,6 +657,374 @@ export const detectStreamErrorMessage = (
 	}
 
 	return eventName;
+};
+
+const getFiniteTokenNumber = (value: unknown): number => {
+	return typeof value === "number" && Number.isFinite(value) ? value : 0;
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: null;
+};
+
+const collectTokenUsageSnapshot = (
+	target: TokenUsageSnapshot,
+	payload: unknown,
+	visited: WeakSet<object>,
+	depth: number,
+): void => {
+	if (depth > 8 || !payload || typeof payload !== "object") return;
+	if (visited.has(payload as object)) return;
+	visited.add(payload as object);
+
+	const record = payload as Record<string, unknown>;
+	const directInput =
+		getFiniteTokenNumber(record.input_tokens) ||
+		getFiniteTokenNumber(record.inputTokens) ||
+		getFiniteTokenNumber(record.prompt_tokens) ||
+		getFiniteTokenNumber(record.promptTokens);
+	const directOutput =
+		getFiniteTokenNumber(record.output_tokens) ||
+		getFiniteTokenNumber(record.outputTokens) ||
+		getFiniteTokenNumber(record.completion_tokens) ||
+		getFiniteTokenNumber(record.completionTokens);
+	const directTotal =
+		getFiniteTokenNumber(record.total_tokens) ||
+		getFiniteTokenNumber(record.totalTokens);
+
+	if (directInput > 0) {
+		target.inputTokens = Math.max(target.inputTokens, directInput);
+	}
+	if (directOutput > 0) {
+		target.outputTokens = Math.max(target.outputTokens, directOutput);
+	}
+	if (directTotal > 0) {
+		target.totalTokens = Math.max(target.totalTokens, directTotal);
+	}
+
+	const nestedCandidates = [
+		record.usage,
+		record.usage_metadata,
+		record.usageMetadata,
+		record.tokenUsage,
+		record.response_metadata,
+		record.responseMetadata,
+		record.additional_kwargs,
+		record.additionalKwargs,
+		record.metadata,
+		record.data,
+		record.output,
+		record.message,
+		record.chunk,
+	];
+	for (const nested of nestedCandidates) {
+		collectTokenUsageSnapshot(target, nested, visited, depth + 1);
+	}
+};
+
+export const extractTokenUsageSnapshot = (
+	payload: unknown,
+): TokenUsageSnapshot | null => {
+	const snapshot: TokenUsageSnapshot = {
+		inputTokens: 0,
+		outputTokens: 0,
+		totalTokens: 0,
+	};
+	const visited = new WeakSet<object>();
+	collectTokenUsageSnapshot(snapshot, payload, visited, 0);
+	if (snapshot.totalTokens === 0) {
+		snapshot.totalTokens = snapshot.inputTokens + snapshot.outputTokens;
+	}
+	if (
+		snapshot.inputTokens <= 0 &&
+		snapshot.outputTokens <= 0 &&
+		snapshot.totalTokens <= 0
+	) {
+		return null;
+	}
+	return snapshot;
+};
+
+const getMessageClassName = (message: Record<string, unknown>): string => {
+	const id = message.id;
+	if (Array.isArray(id) && id.length > 0) {
+		const tail = id[id.length - 1];
+		if (typeof tail === "string") {
+			return tail.trim().toLowerCase();
+		}
+	}
+	const type = typeof message.type === "string" ? message.type : "";
+	return type.trim().toLowerCase();
+};
+
+const getMessageRole = (message: Record<string, unknown>): string => {
+	const kwargs = asRecord(message.kwargs);
+	const additionalKwargs = asRecord(message.additional_kwargs);
+	const additionalKwargsCamel = asRecord(message.additionalKwargs);
+	const candidates = [
+		message.role,
+		kwargs?.role,
+		additionalKwargs?.role,
+		additionalKwargsCamel?.role,
+	];
+	for (const candidate of candidates) {
+		if (typeof candidate === "string" && candidate.trim()) {
+			return candidate.trim().toLowerCase();
+		}
+	}
+	return "";
+};
+
+const isMessageLikeRecord = (
+	value: unknown,
+): value is Record<string, unknown> => {
+	const record = asRecord(value);
+	if (!record) return false;
+	const role = getMessageRole(record);
+	if (
+		role === "user" ||
+		role === "human" ||
+		role === "assistant" ||
+		role === "ai" ||
+		role === "system" ||
+		role === "tool"
+	) {
+		return true;
+	}
+	const className = getMessageClassName(record);
+	if (
+		className.includes("humanmessage") ||
+		className.includes("aimessage") ||
+		className.includes("toolmessage") ||
+		className.includes("systemmessage")
+	) {
+		return true;
+	}
+	return (
+		className === "human" ||
+		className === "user" ||
+		className === "assistant" ||
+		className === "ai" ||
+		className === "system" ||
+		className === "tool"
+	);
+};
+
+const extractTextFromContent = (content: unknown): string => {
+	if (typeof content === "string") {
+		return content;
+	}
+	if (!Array.isArray(content)) {
+		return "";
+	}
+	return content
+		.map((item) => {
+			if (typeof item === "string") return item;
+			const record = asRecord(item);
+			if (!record) return "";
+			if (record.type === "text" && typeof record.text === "string") {
+				return record.text;
+			}
+			return typeof record.text === "string" ? record.text : "";
+		})
+		.join("");
+};
+
+const extractMessageContent = (message: Record<string, unknown>): string => {
+	const kwargs = asRecord(message.kwargs);
+	const additionalKwargs = asRecord(message.additional_kwargs);
+	const additionalKwargsCamel = asRecord(message.additionalKwargs);
+	const candidates = [
+		message.content,
+		kwargs?.content,
+		additionalKwargs?.content,
+		additionalKwargsCamel?.content,
+	];
+	for (const candidate of candidates) {
+		const extracted = extractTextFromContent(candidate);
+		if (extracted.length > 0) {
+			return extracted;
+		}
+	}
+	return "";
+};
+
+const extractToolCalls = (message: Record<string, unknown>): unknown[] => {
+	const kwargs = asRecord(message.kwargs);
+	const candidates = [
+		message.tool_calls,
+		message.toolCalls,
+		kwargs?.tool_calls,
+		kwargs?.toolCalls,
+	];
+	for (const candidate of candidates) {
+		if (Array.isArray(candidate) && candidate.length > 0) {
+			return candidate;
+		}
+	}
+	return [];
+};
+
+const extractToolCallId = (message: Record<string, unknown>): string => {
+	const kwargs = asRecord(message.kwargs);
+	const candidates = [
+		message.tool_call_id,
+		message.toolCallId,
+		kwargs?.tool_call_id,
+		kwargs?.toolCallId,
+	];
+	for (const candidate of candidates) {
+		if (typeof candidate === "string" && candidate.trim()) {
+			return candidate.trim();
+		}
+	}
+	return "";
+};
+
+const isAiMessageRecord = (message: Record<string, unknown>): boolean => {
+	const role = getMessageRole(message);
+	if (role === "assistant" || role === "ai") {
+		return true;
+	}
+	const className = getMessageClassName(message);
+	return (
+		className === "ai" ||
+		className === "assistant" ||
+		className.includes("aimessage")
+	);
+};
+
+const isToolMessageRecord = (message: Record<string, unknown>): boolean => {
+	const role = getMessageRole(message);
+	if (role === "tool") {
+		return true;
+	}
+	const className = getMessageClassName(message);
+	return className === "tool" || className.includes("toolmessage");
+};
+
+const estimateTokensForMessageArray = (
+	messages: Record<string, unknown>[],
+): number => {
+	if (messages.length === 0) return 0;
+	let totalChars = 0;
+	for (const message of messages) {
+		let textContent = extractMessageContent(message);
+		if (isAiMessageRecord(message)) {
+			const toolCalls = extractToolCalls(message);
+			if (toolCalls.length > 0) {
+				textContent += JSON.stringify(toolCalls);
+			}
+		}
+		if (isToolMessageRecord(message)) {
+			textContent += extractToolCallId(message);
+		}
+		totalChars += textContent.length;
+	}
+	return Math.ceil(totalChars / 4);
+};
+
+const collectMessageArraysFromPayload = (
+	target: Record<string, unknown>[][],
+	payload: unknown,
+	visited: WeakSet<object>,
+	depth: number,
+): void => {
+	if (depth > 7 || !payload || typeof payload !== "object") return;
+	if (visited.has(payload as object)) return;
+	visited.add(payload as object);
+
+	if (Array.isArray(payload)) {
+		const messageRecords = payload.filter(isMessageLikeRecord);
+		if (messageRecords.length > 0) {
+			target.push(messageRecords);
+		}
+		for (const item of payload) {
+			collectMessageArraysFromPayload(target, item, visited, depth + 1);
+		}
+		return;
+	}
+
+	const record = payload as Record<string, unknown>;
+	const directMessages = record.messages;
+	if (Array.isArray(directMessages)) {
+		const messageRecords = directMessages.filter(isMessageLikeRecord);
+		if (messageRecords.length > 0) {
+			target.push(messageRecords);
+		}
+	}
+	for (const nested of Object.values(record)) {
+		if (!nested || typeof nested !== "object") continue;
+		collectMessageArraysFromPayload(target, nested, visited, depth + 1);
+	}
+};
+
+export const estimateContextTokensFromChunk = (
+	chunk: unknown,
+): number | null => {
+	const candidates: Record<string, unknown>[][] = [];
+	collectMessageArraysFromPayload(candidates, chunk, new WeakSet<object>(), 0);
+	if (candidates.length === 0) {
+		return null;
+	}
+	let estimate = 0;
+	for (const candidate of candidates) {
+		const tokens = estimateTokensForMessageArray(candidate);
+		if (tokens > estimate) {
+			estimate = tokens;
+		}
+	}
+	return estimate > 0 ? estimate : null;
+};
+
+export const detectContextSummarizationTransition = ({
+	thresholdTokens,
+	peakInputTokens,
+	currentInputTokens,
+}: {
+	thresholdTokens: number;
+	peakInputTokens: number;
+	currentInputTokens: number;
+}): boolean => {
+	if (
+		!Number.isFinite(thresholdTokens) ||
+		!Number.isFinite(peakInputTokens) ||
+		!Number.isFinite(currentInputTokens)
+	) {
+		return false;
+	}
+	if (thresholdTokens <= 0 || peakInputTokens <= 0 || currentInputTokens <= 0) {
+		return false;
+	}
+	if (peakInputTokens < thresholdTokens * 0.9) {
+		return false;
+	}
+	if (currentInputTokens > thresholdTokens * 0.65) {
+		return false;
+	}
+	if (currentInputTokens > peakInputTokens * 0.75) {
+		return false;
+	}
+	return true;
+};
+
+export const mergeTokenUsageSnapshots = (
+	current: TokenUsageSnapshot | null,
+	next: TokenUsageSnapshot | null,
+): TokenUsageSnapshot | null => {
+	if (!next) return current;
+	if (!current) return next;
+	const merged: TokenUsageSnapshot = {
+		inputTokens: Math.max(current.inputTokens, next.inputTokens),
+		outputTokens: Math.max(current.outputTokens, next.outputTokens),
+		totalTokens: Math.max(current.totalTokens, next.totalTokens),
+	};
+	if (merged.totalTokens === 0) {
+		merged.totalTokens = merged.inputTokens + merged.outputTokens;
+	}
+	return merged;
 };
 
 const extractStreamEventRecord = (
@@ -1001,7 +1520,7 @@ export class AgentInvoker {
 				});
 			}
 
-			const standaloneAgent = createDeepAgent({
+			let standaloneAgent = createDeepAgent({
 				systemPrompt: targetAgent.systemPrompt,
 				tools: targetAgent.tools as any,
 				model: targetAgent.model as any,
@@ -1025,6 +1544,8 @@ export class AgentInvoker {
 				summarizationSettings,
 				targetAgent.model as any,
 			);
+			standaloneAgent =
+				recompileDeepAgentWithMiddlewareOverrides(standaloneAgent);
 
 			this.logger.debug("Agent created, sending message");
 
@@ -1037,6 +1558,10 @@ export class AgentInvoker {
 			// Use streaming if session manager is available, otherwise fall back to invoke
 			if (this.sessionManager && sessionId) {
 				this.logger.debug(`Using streaming with session: ${sessionId}`);
+				let streamTokenUsage: TokenUsageSnapshot | null = null;
+				let streamEstimatedContextTokens = 0;
+				let contextSummarizationStarted = false;
+				let contextSummarizationEmitted = false;
 
 				// Stream the agent response
 				const stream = await (standaloneAgent as any).streamEvents(
@@ -1079,8 +1604,55 @@ export class AgentInvoker {
 						}
 						return { cancelled: true };
 					}
-					// Forward raw chunks to OutputManager for client-side interpretation
-					this.outputManager.emitAgentStream(chunk);
+					const chunkTokenUsage = extractTokenUsageSnapshot(chunk);
+					streamTokenUsage = mergeTokenUsageSnapshots(
+						streamTokenUsage,
+						chunkTokenUsage,
+					);
+					const isSummarizationChunk =
+						chunkBelongsToSummarizationMiddleware(chunk);
+					const isActiveSummarizationChunk =
+						chunkSignalsActiveSummarization(chunk);
+					if (isActiveSummarizationChunk && !contextSummarizationStarted) {
+						contextSummarizationStarted = true;
+						this.outputManager.emitContextSummarizing();
+					}
+					if (!isSummarizationChunk) {
+						const chunkEstimatedContextTokens =
+							estimateContextTokensFromChunk(chunk);
+						if (
+							typeof chunkEstimatedContextTokens === "number" &&
+							Number.isFinite(chunkEstimatedContextTokens) &&
+							chunkEstimatedContextTokens > streamEstimatedContextTokens
+						) {
+							streamEstimatedContextTokens = chunkEstimatedContextTokens;
+						}
+						// Forward raw chunks to OutputManager for client-side interpretation
+						this.outputManager.emitAgentStream(
+							chunk,
+							chunkTokenUsage || undefined,
+							streamEstimatedContextTokens > 0
+								? streamEstimatedContextTokens
+								: undefined,
+						);
+					}
+					if (
+						!contextSummarizationEmitted &&
+						summarizationSettings &&
+						chunkHasBuiltInSummarizationSignal(chunk)
+					) {
+						if (!contextSummarizationStarted) {
+							contextSummarizationStarted = true;
+							this.outputManager.emitContextSummarizing();
+						}
+						contextSummarizationEmitted = true;
+						const observedInputTokens = chunkTokenUsage?.inputTokens || 0;
+						this.outputManager.emitContextSummarized({
+							inputTokens: observedInputTokens,
+							peakInputTokens: observedInputTokens,
+							thresholdTokens: summarizationSettings.maxTokensBeforeSummary,
+						});
+					}
 					if (isRootLangGraphTerminalEvent(chunk, rootLangGraphRunId)) {
 						this.logger.debug(
 							"Detected root LangGraph on_chain_end event; finalizing stream without waiting for iterator shutdown",
@@ -1096,7 +1668,12 @@ export class AgentInvoker {
 				}
 
 				this.logger.info("Agent streaming completed successfully");
-				const completionPayload = { streaming: true };
+				const completionPayload = streamTokenUsage
+					? {
+							streaming: true,
+							tokenUsage: streamTokenUsage,
+						}
+					: { streaming: true };
 				emitCompletionAndContinuePostProcessing({
 					outputManager: this.outputManager,
 					result: completionPayload,

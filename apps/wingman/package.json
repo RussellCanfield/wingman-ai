@@ -25,6 +25,7 @@
 		"test": "vitest",
 		"test:unit": "vitest run src/tests --exclude '**/*integration*'",
 		"test:integration": "vitest run src/tests/integration",
+		"test:integration:summarization-e2e": "WINGMAN_SUMMARIZATION_E2E=1 vitest run src/tests/integration/summarization-e2e.integration.test.ts",
 		"test:coverage": "vitest run --coverage",
 		"test:watch": "vitest watch",
 		"test:watch:unit": "vitest watch src/tests --exclude '**/*integration*'",

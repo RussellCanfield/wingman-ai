@@ -40,6 +40,35 @@ describe("queueAssistantContentUpdate", () => {
 		expect(drained[0]?.content).toBe("second");
 	});
 
+	it("coalesces timeline deltas when multiple chunks target the same text block", () => {
+		const queue = new Map<string, QueuedAssistantUpdate>();
+		queueAssistantContentUpdate(
+			queue,
+			update({
+				content: "Hi",
+				timelineTextBlockId: "text-a",
+				timelineTextOrder: 1,
+				timelineTextDelta: "Hi -- ",
+			}),
+		);
+		queueAssistantContentUpdate(
+			queue,
+			update({
+				content: "Hi -- what would you like to do next?",
+				timelineTextBlockId: "text-a",
+				timelineTextOrder: 1,
+				timelineTextDelta: "what would you like to do next?",
+			}),
+		);
+
+		const drained = drainAssistantContentUpdates(queue);
+		expect(drained).toHaveLength(1);
+		expect(drained[0]?.content).toBe("Hi -- what would you like to do next?");
+		expect(drained[0]?.timelineTextDelta).toBe(
+			"Hi -- what would you like to do next?",
+		);
+	});
+
 	it("keeps separate timeline text block updates distinct", () => {
 		const queue = new Map<string, QueuedAssistantUpdate>();
 		queueAssistantContentUpdate(

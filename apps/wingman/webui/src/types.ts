@@ -34,6 +34,12 @@ export type VoiceConfig = {
 	elevenlabs?: ElevenLabsOptions;
 };
 
+export type SummarizationConfig = {
+	enabled: boolean;
+	maxTokensBeforeSummary: number;
+	messagesToKeep: number;
+};
+
 export type AgentVoiceConfig = {
 	provider?: VoiceProvider;
 	webSpeech?: WebSpeechOptions;
@@ -103,6 +109,7 @@ export type ControlUiConfig = {
 	defaultAgentId?: string;
 	outputRoot?: string;
 	dynamicUiEnabled?: boolean;
+	summarization?: SummarizationConfig;
 	voice?: VoiceConfig;
 	agents: ControlUiAgent[];
 };
@@ -145,6 +152,17 @@ export type AssistantTimelineBlock =
 	| AssistantTimelineTextBlock
 	| AssistantTimelineToolBlock;
 
+export type ContextWindowUsage = {
+	inputTokens: number;
+	estimatedInputTokens?: number;
+	outputTokens: number;
+	totalTokens: number;
+	thresholdTokens?: number;
+	percentOfThreshold?: number;
+	summarized?: boolean;
+	updatedAt: number;
+};
+
 export type ChatMessage = {
 	id: string;
 	role: "user" | "assistant";
@@ -156,6 +174,7 @@ export type ChatMessage = {
 	activityTimeline?: AssistantTimelineBlock[];
 	uiBlocks?: UiBlock[];
 	uiTextFallback?: string;
+	contextUsage?: ContextWindowUsage;
 	createdAt: number;
 };
 

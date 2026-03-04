@@ -20,7 +20,17 @@ export function sanitizeAssistantDisplayText(
 		text,
 		options?.preserveTrailingWhitespace,
 	);
-	if (!cleanedText.trim()) return undefined;
+	if (!cleanedText.trim()) {
+		// Streaming deltas can be newline-only chunks; preserve them when asked so
+		// timeline/text assembly keeps intended line breaks.
+		if (
+			options?.preserveTrailingWhitespace === true &&
+			/[\n\t]/.test(cleanedText)
+		) {
+			return cleanedText;
+		}
+		return undefined;
+	}
 	const trimmedStart = cleanedText.trimStart();
 	if (
 		/^[{[]/.test(trimmedStart) &&

@@ -1,12 +1,18 @@
+import { createDeepAgent } from "deepagents";
 import { describe, expect, it, vi } from "vitest";
 import { validateConfig } from "../cli/config/schema.js";
 import {
+	chunkBelongsToSummarizationMiddleware,
 	chunkHasAssistantText,
+	chunkHasBuiltInSummarizationSignal,
+	chunkSignalsActiveSummarization,
 	configureDeepAgentSummarizationMiddleware,
+	detectContextSummarizationTransition,
 	detectStreamErrorMessage,
 	detectToolEventContext,
 	emitCompletionAndContinuePostProcessing,
 	isRootLangGraphTerminalEvent,
+	recompileDeepAgentWithMiddlewareOverrides,
 	resolveHumanInTheLoopSettings,
 	resolveModelRetryMiddlewareSettings,
 	resolveSummarizationMiddlewareSettings,
@@ -94,6 +100,175 @@ describe("configureDeepAgentSummarizationMiddleware", () => {
 		expect(
 			agent.options.middleware.map((m: { name: string }) => m.name),
 		).toEqual(["todoListMiddleware", "patchToolCallsMiddleware"]);
+	});
+
+	it("requires recompilation for runtime middleware overrides to take effect", () => {
+		const deepAgent = createDeepAgent({
+			model: "claude-sonnet-4-5-20250929",
+			tools: [],
+			systemPrompt: "test",
+		}) as any;
+
+		configureDeepAgentSummarizationMiddleware(
+			deepAgent,
+			{ maxTokensBeforeSummary: 9000, messagesToKeep: 5 },
+			"claude-sonnet-4-5-20250929",
+		);
+
+		expect(Object.keys(deepAgent.graph?.nodes || {})).not.toContain(
+			"SummarizationMiddleware.before_model",
+		);
+
+		const rebuilt = recompileDeepAgentWithMiddlewareOverrides(deepAgent);
+		expect(Object.keys((rebuilt as any).graph?.nodes || {})).toContain(
+			"SummarizationMiddleware.before_model",
+		);
+	});
+});
+
+describe("detectContextSummarizationTransition", () => {
+	it("detects a large context drop after crossing the summarization threshold", () => {
+		expect(
+			detectContextSummarizationTransition({
+				thresholdTokens: 12000,
+				peakInputTokens: 11000,
+				currentInputTokens: 5200,
+			}),
+		).toBe(true);
+	});
+
+	it("does not detect summarization before context was near threshold", () => {
+		expect(
+			detectContextSummarizationTransition({
+				thresholdTokens: 12000,
+				peakInputTokens: 8200,
+				currentInputTokens: 4200,
+			}),
+		).toBe(false);
+	});
+
+	it("does not detect summarization when context has not dropped enough", () => {
+		expect(
+			detectContextSummarizationTransition({
+				thresholdTokens: 12000,
+				peakInputTokens: 11200,
+				currentInputTokens: 9400,
+			}),
+		).toBe(false);
+	});
+});
+
+describe("chunkHasBuiltInSummarizationSignal", () => {
+	it("detects native summarization middleware output events", () => {
+		expect(
+			chunkHasBuiltInSummarizationSignal({
+				event: "on_chain_end",
+				name: "SummarizationMiddleware.before_model",
+				data: {
+					output: {
+						messages: [
+							{
+								content: "summary",
+								additional_kwargs: { lc_source: "summarization" },
+							},
+						],
+					},
+				},
+			}),
+		).toBe(true);
+	});
+
+	it("ignores summarization middleware end events without summary message payload", () => {
+		expect(
+			chunkHasBuiltInSummarizationSignal({
+				event: "on_chain_end",
+				name: "SummarizationMiddleware.before_model",
+				data: {
+					output: {
+						messages: [{ content: "unchanged" }],
+					},
+				},
+			}),
+		).toBe(false);
+	});
+
+	it("ignores non-summarization middleware events", () => {
+		expect(
+			chunkHasBuiltInSummarizationSignal({
+				event: "on_chain_end",
+				name: "model_request",
+				data: {
+					output: {
+						messages: [
+							{
+								content: "summary",
+								additional_kwargs: { lc_source: "summarization" },
+							},
+						],
+					},
+				},
+			}),
+		).toBe(false);
+	});
+});
+
+describe("chunkBelongsToSummarizationMiddleware", () => {
+	it("detects summarization chunks by explicit run name", () => {
+		expect(
+			chunkBelongsToSummarizationMiddleware({
+				event: "on_chat_model_stream",
+				name: "SummarizationMiddleware.before_model",
+			}),
+		).toBe(true);
+	});
+
+	it("detects summarization chunks by langgraph node metadata", () => {
+		expect(
+			chunkBelongsToSummarizationMiddleware({
+				event: "on_chat_model_stream",
+				metadata: { langgraph_node: "SummarizationMiddleware.before_model" },
+			}),
+		).toBe(true);
+	});
+
+	it("ignores non-summarization chunks", () => {
+		expect(
+			chunkBelongsToSummarizationMiddleware({
+				event: "on_chat_model_stream",
+				name: "chat_model",
+				metadata: { langgraph_node: "main" },
+			}),
+		).toBe(false);
+	});
+});
+
+describe("chunkSignalsActiveSummarization", () => {
+	it("ignores non-model summarization lifecycle events", () => {
+		expect(
+			chunkSignalsActiveSummarization({
+				event: "on_chain_start",
+				name: "SummarizationMiddleware.before_model",
+			}),
+		).toBe(false);
+	});
+
+	it("detects summarization model stream events", () => {
+		expect(
+			chunkSignalsActiveSummarization({
+				event: "on_chat_model_start",
+				name: "SummarizationMiddleware.before_model",
+			}),
+		).toBe(true);
+	});
+
+	it("ignores model events outside summarization middleware", () => {
+		expect(
+			chunkSignalsActiveSummarization({
+				event: "on_chat_model_start",
+				name: "chat_model",
+				metadata: { langgraph_node: "main" },
+			}),
+		).toBe(false);
 	});
 });
 

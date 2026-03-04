@@ -484,7 +484,10 @@ export class GatewayServer {
 				}
 
 				if (this.teamsAdapter) {
-					const teamsResponse = await this.teamsAdapter.handleHttpRequest(req, url);
+					const teamsResponse = await this.teamsAdapter.handleHttpRequest(
+						req,
+						url,
+					);
 					if (teamsResponse) {
 						return teamsResponse;
 					}
@@ -622,10 +625,14 @@ export class GatewayServer {
 
 		const discordConfig = this.wingmanConfig.gateway?.adapters?.discord;
 		if (discordConfig?.enabled) {
-			const url = discordConfig.gatewayUrl || `ws://${resolvedHost}:${this.config.port}/ws`;
+			const url =
+				discordConfig.gatewayUrl ||
+				`ws://${resolvedHost}:${this.config.port}/ws`;
 			const token =
 				discordConfig.gatewayToken ||
-				(this.config.auth?.mode === "token" ? this.config.authToken : undefined);
+				(this.config.auth?.mode === "token"
+					? this.config.authToken
+					: undefined);
 			const password =
 				discordConfig.gatewayPassword ||
 				(this.config.auth?.mode === "password"
@@ -662,10 +669,13 @@ export class GatewayServer {
 
 		const teamsConfig = this.wingmanConfig.gateway?.adapters?.teams;
 		if (teamsConfig?.enabled) {
-			const url = teamsConfig.gatewayUrl || `ws://${resolvedHost}:${this.config.port}/ws`;
+			const url =
+				teamsConfig.gatewayUrl || `ws://${resolvedHost}:${this.config.port}/ws`;
 			const token =
 				teamsConfig.gatewayToken ||
-				(this.config.auth?.mode === "token" ? this.config.authToken : undefined);
+				(this.config.auth?.mode === "token"
+					? this.config.authToken
+					: undefined);
 			const password =
 				teamsConfig.gatewayPassword ||
 				(this.config.auth?.mode === "password"
@@ -679,7 +689,8 @@ export class GatewayServer {
 					appPassword: teamsConfig.appPassword,
 					appType: teamsConfig.appType || "MultiTenant",
 					tenantId: teamsConfig.tenantId,
-					endpointPath: teamsConfig.endpointPath || "/api/adapters/teams/messages",
+					endpointPath:
+						teamsConfig.endpointPath || "/api/adapters/teams/messages",
 					mentionOnly: teamsConfig.mentionOnly ?? true,
 					allowBots: teamsConfig.allowBots ?? false,
 					allowedTeamIds: teamsConfig.allowedTeamIds ?? [],
@@ -2895,6 +2906,7 @@ export class GatewayServer {
 								outputRoot: this.resolveOutputRoot(),
 								dynamicUiEnabled:
 									this.wingmanConfig.gateway?.dynamicUiEnabled !== false,
+								summarization: this.wingmanConfig.summarization,
 								voice: this.wingmanConfig.voice,
 								agents,
 							},

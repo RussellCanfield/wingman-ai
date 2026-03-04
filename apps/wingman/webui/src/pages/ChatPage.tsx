@@ -2,7 +2,12 @@ import type React from "react";
 import { useMemo, useState } from "react";
 import { ChatPanel } from "../components/ChatPanel";
 import { WorkdirModal } from "../components/WorkdirModal";
-import type { AgentSummary, ChatAttachment, Thread } from "../types";
+import type {
+	AgentSummary,
+	ChatAttachment,
+	SummarizationConfig,
+	Thread,
+} from "../types";
 import type { VoicePlaybackStatus } from "../utils/voicePlayback";
 
 type ChatPageProps = {
@@ -14,6 +19,7 @@ type ChatPageProps = {
 	fileAccept: string;
 	attachmentError?: string;
 	isStreaming: boolean;
+	isContextSummarizing: boolean;
 	queuedPromptCount: number;
 	connected: boolean;
 	loadingThread: boolean;
@@ -21,6 +27,7 @@ type ChatPageProps = {
 	voiceAutoEnabled: boolean;
 	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
 	dynamicUiEnabled: boolean;
+	summarizationConfig?: SummarizationConfig;
 	onToggleVoiceAuto: () => void;
 	onSpeakVoice: (messageId: string, text: string) => void;
 	onStopVoice: () => void;
@@ -45,6 +52,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	fileAccept,
 	attachmentError,
 	isStreaming,
+	isContextSummarizing,
 	queuedPromptCount,
 	connected,
 	loadingThread,
@@ -52,6 +60,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	voiceAutoEnabled,
 	voicePlayback,
 	dynamicUiEnabled,
+	summarizationConfig,
 	onToggleVoiceAuto,
 	onSpeakVoice,
 	onStopVoice,
@@ -109,12 +118,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 					fileAccept={fileAccept}
 					attachmentError={attachmentError}
 					isStreaming={isStreaming}
+					isContextSummarizing={isContextSummarizing}
 					queuedPromptCount={queuedPromptCount}
 					connected={connected}
 					loading={loadingThread}
 					voiceAutoEnabled={voiceAutoEnabled}
 					voicePlayback={voicePlayback}
 					dynamicUiEnabled={dynamicUiEnabled}
+					summarizationConfig={summarizationConfig}
 					onToggleVoiceAuto={onToggleVoiceAuto}
 					onSpeakVoice={onSpeakVoice}
 					onStopVoice={onStopVoice}
