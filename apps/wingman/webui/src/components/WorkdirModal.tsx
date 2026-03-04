@@ -185,13 +185,20 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 
 	if (!open) return null;
 
+	const sectionCardClass =
+		"rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/75 to-slate-950/75 p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.1)]";
+	const sectionLabelClass =
+		"text-[11px] uppercase tracking-[0.2em] text-slate-400";
+
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-			<div className="glass-edge w-full max-w-2xl space-y-4 rounded-3xl p-6">
-				<div className="flex items-center justify-between">
-					<div>
-						<h3 className="text-lg font-semibold">Working Folder</h3>
-						<p className="text-xs text-slate-400">
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+			<div className="glass-edge w-full max-w-3xl overflow-hidden rounded-3xl border border-sky-500/25 bg-gradient-to-b from-[#071327]/95 via-[#050f22]/95 to-[#030819]/95 p-0 shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
+				<div className="flex items-start justify-between border-b border-slate-700/70 bg-slate-950/35 px-5 py-4 sm:px-6">
+					<div className="space-y-1">
+						<h3 className="text-xl font-semibold text-slate-100">
+							Working Folder
+						</h3>
+						<p className="text-sm text-slate-400">
 							Choose where the agent should write outputs for this session.
 						</p>
 					</div>
@@ -205,129 +212,153 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 					</button>
 				</div>
 
-				{error ? (
-					<div className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-3 py-2 text-xs text-rose-200">
-						{error}
-					</div>
-				) : null}
-
-				<div className="space-y-3">
-					<div className="flex flex-wrap items-center gap-3">
-						<div className="flex-1">
-							<label
-								className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
-								htmlFor="workdir-root-select"
-							>
-								Root
-							</label>
-							<select
-								id="workdir-root-select"
-								className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm"
-								onChange={handleSelectRoot}
-								value={
-									hasRoots
-										? roots.find(
-												(root) =>
-													currentPath === root ||
-													currentPath.startsWith(`${root}/`) ||
-													currentPath.startsWith(`${root}\\`),
-											) || roots[0]
-										: ""
-								}
-								disabled={!hasRoots}
-							>
-								{roots.map((root) => (
-									<option key={root} value={root}>
-										{root}
-									</option>
-								))}
-							</select>
+				<div className="space-y-4 px-5 py-5 sm:px-6">
+					{error ? (
+						<div className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-3 py-2 text-xs text-rose-200">
+							{error}
 						</div>
-						<div className="text-xs text-slate-400">
-							Default output root:{" "}
-							<span className="font-mono">{defaultHint}</span>
-						</div>
-					</div>
+					) : null}
 
-					<div className="flex flex-wrap items-center gap-2">
-						<input
-							className="flex-1 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
-							value={pathInput}
-							onChange={(event) => setPathInput(event.target.value)}
-							placeholder="Select or paste a folder path"
-						/>
-						<button
-							className="button-secondary px-3 py-2 text-xs"
-							onClick={handleGo}
-							type="button"
-						>
-							Go
-						</button>
-						{parentPath ? (
+					<section className={sectionCardClass}>
+						<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+							<div>
+								<label
+									className={sectionLabelClass}
+									htmlFor="workdir-root-select"
+								>
+									Root
+								</label>
+								<select
+									id="workdir-root-select"
+									className="mt-2 w-full rounded-xl border border-slate-600/70 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-sky-400/60"
+									onChange={handleSelectRoot}
+									value={
+										hasRoots
+											? roots.find(
+													(root) =>
+														currentPath === root ||
+														currentPath.startsWith(`${root}/`) ||
+														currentPath.startsWith(`${root}\\`),
+												) || roots[0]
+											: ""
+									}
+									disabled={!hasRoots}
+								>
+									{roots.map((root) => (
+										<option key={root} value={root}>
+											{root}
+										</option>
+									))}
+								</select>
+							</div>
+							<div className="rounded-xl border border-slate-700/70 bg-slate-950/70 px-3 py-2">
+								<p className={sectionLabelClass}>Default Output Root</p>
+								<p className="mt-1 break-all font-mono text-xs text-slate-200">
+									{defaultHint}
+								</p>
+							</div>
+						</div>
+					</section>
+
+					<section className={sectionCardClass}>
+						<p className={sectionLabelClass}>Browse Path</p>
+						<div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+							<input
+								className="min-w-0 flex-1 rounded-xl border border-slate-600/70 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-400/60"
+								value={pathInput}
+								onChange={(event) => setPathInput(event.target.value)}
+								placeholder="Select or paste a folder path"
+							/>
 							<button
-								className="button-ghost px-3 py-2 text-xs"
-								onClick={() => void loadList(parentPath)}
+								className="button-secondary px-4 py-2 text-xs sm:px-3"
+								onClick={handleGo}
 								type="button"
 							>
-								Up
+								Go
 							</button>
-						) : null}
-					</div>
-
-					<div className="flex flex-wrap items-center gap-2">
-						<input
-							className="flex-1 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
-							value={newFolderName}
-							onChange={(event) => setNewFolderName(event.target.value)}
-							placeholder="New folder name"
-						/>
-						<button
-							className="button-secondary px-3 py-2 text-xs"
-							onClick={handleCreateFolder}
-							type="button"
-							disabled={
-								creating || !currentPath.trim() || !newFolderName.trim()
-							}
-						>
-							{creating ? "Creating..." : "Create Folder"}
-						</button>
-					</div>
-
-					<div className="max-h-56 space-y-2 overflow-auto rounded-2xl border border-white/10 bg-slate-900/60 p-3">
-						{loading ? (
-							<div className="text-xs text-slate-400">Loading folders...</div>
-						) : entries.length === 0 ? (
-							<div className="text-xs text-slate-400">No subfolders found.</div>
-						) : (
-							entries.map((entry) => (
+							{parentPath ? (
 								<button
-									key={entry.path}
+									className="button-ghost px-4 py-2 text-xs sm:px-3"
+									onClick={() => void loadList(parentPath)}
 									type="button"
-									className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-										entry.path === currentPath
-											? "border-sky-500/50 bg-sky-500/15 text-sky-300"
-											: "border-white/10 bg-slate-950/50 text-slate-300 hover:border-sky-400/50"
-									}`}
-									onClick={() => void loadList(entry.path)}
 								>
-									<span>{entry.name}</span>
-									<span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
-										Open
-									</span>
+									Up
 								</button>
-							))
-						)}
-					</div>
+							) : null}
+						</div>
+					</section>
+
+					<section className={sectionCardClass}>
+						<p className={sectionLabelClass}>Create New Folder</p>
+						<div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+							<input
+								className="min-w-0 flex-1 rounded-xl border border-slate-600/70 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-400/60"
+								value={newFolderName}
+								onChange={(event) => setNewFolderName(event.target.value)}
+								placeholder="New folder name"
+							/>
+							<button
+								className="button-secondary px-4 py-2 text-xs sm:px-3"
+								onClick={handleCreateFolder}
+								type="button"
+								disabled={
+									creating || !currentPath.trim() || !newFolderName.trim()
+								}
+							>
+								{creating ? "Creating..." : "Create Folder"}
+							</button>
+						</div>
+					</section>
+
+					<section className={sectionCardClass}>
+						<div className="mb-3 flex items-center justify-between">
+							<p className={sectionLabelClass}>Subfolders</p>
+							<span className="rounded-full border border-slate-600/70 bg-slate-950/75 px-2.5 py-1 text-[11px] font-mono text-slate-300">
+								{entries.length}
+							</span>
+						</div>
+						<div className="max-h-64 space-y-2 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/70 p-2.5">
+							{loading ? (
+								<div className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
+									Loading folders...
+								</div>
+							) : entries.length === 0 ? (
+								<div className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
+									No subfolders found.
+								</div>
+							) : (
+								entries.map((entry) => (
+									<button
+										key={entry.path}
+										type="button"
+										className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+											entry.path === currentPath
+												? "border-sky-500/55 bg-sky-500/15 text-sky-200"
+												: "border-slate-700/70 bg-slate-950/55 text-slate-300 hover:border-sky-400/50"
+										}`}
+										onClick={() => void loadList(entry.path)}
+									>
+										<span>{entry.name}</span>
+										<span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
+											Open
+										</span>
+									</button>
+								))
+							)}
+						</div>
+					</section>
 				</div>
 
-				<div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-					<div className="text-xs text-slate-400">
-						Current selection:{" "}
-						<span className="font-mono">{currentPath || "--"}</span>
+				<div className="flex flex-col gap-3 border-t border-slate-700/70 bg-slate-950/35 px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+					<div className="min-w-0 rounded-xl border border-slate-700/70 bg-slate-950/60 px-3 py-2">
+						<p className={sectionLabelClass}>Current Selection</p>
+						<p className="mt-1 break-all font-mono text-xs text-slate-200">
+							{currentPath || "--"}
+						</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						<button
-							className="button-secondary"
+							className="button-secondary px-4 py-2"
 							onClick={handleClear}
 							type="button"
 							disabled={saving}
@@ -335,7 +366,7 @@ export const WorkdirModal: React.FC<WorkdirModalProps> = ({
 							Clear
 						</button>
 						<button
-							className="button-primary"
+							className="button-primary px-4 py-2"
 							onClick={handleSave}
 							type="button"
 							disabled={saving || !currentPath}
