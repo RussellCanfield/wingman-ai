@@ -58,14 +58,16 @@ describe("ChatPanel prompt composer", () => {
 
 		expect(html).toContain('id="prompt-textarea"');
 		expect(html).toContain(
-			"rounded-2xl border border-white/10 bg-slate-950/70 p-2",
-		);
-		expect(html).toContain("flex items-center justify-between gap-2 px-1 pb-2");
-		expect(html).toContain(
-			"flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 pl-2 pr-1.5",
+			"border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] rounded-2xl",
 		);
 		expect(html).toContain(
-			"my-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition",
+			"rounded-xl border border-white/10 bg-slate-900/55 px-2",
+		);
+		expect(html).toContain(
+			"mt-2 flex items-center justify-between gap-2 px-1",
+		);
+		expect(html).toContain(
+			"flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition",
 		);
 		expect(html).toContain('aria-label="Send prompt"');
 		expect(html).toContain('aria-label="Add files"');
@@ -87,7 +89,7 @@ describe("ChatPanel prompt composer", () => {
 		);
 
 		expect(html).toContain(
-			"rounded-2xl border border-white/10 bg-slate-950/70 p-2",
+			"border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] rounded-2xl",
 		);
 		expect(html).toContain('aria-label="Stop response"');
 		expect(html).not.toContain('data-testid="streaming-indicator"');
@@ -116,7 +118,7 @@ describe("ChatPanel prompt composer", () => {
 
 		expect(html).toContain('aria-label="Send prompt"');
 		expect(html).not.toContain('aria-label="Stop response"');
-		expect(html).toContain("Streaming response... Enter to queue follow-up");
+		expect(html).not.toContain("Streaming response...");
 	});
 
 	it("shows summarization status while context compression is running", () => {
@@ -131,6 +133,58 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("Summarizing conversation...");
 		expect(html).not.toContain(
 			"Streaming response... Enter to queue follow-up",
+		);
+	});
+
+	it("renders the latest todo progress panel as a collapsed drawer above the composer", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-1",
+							role: "assistant",
+							content: "",
+							createdAt: 1,
+							toolEvents: [
+								{
+									id: "todo-1",
+									name: "write_todos",
+									status: "completed",
+									args: {
+										todos: [
+											{
+												content: "Inspect the todo payload",
+												status: "completed",
+											},
+											{
+												content: "Render task progress",
+												status: "in_progress",
+											},
+										],
+									},
+									timestamp: 1,
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain('data-testid="todo-progress-panel"');
+		expect(html).toContain("Task progress");
+		expect(html).toContain(">1/2<");
+		expect(html).toContain('aria-expanded="false"');
+		expect(html).toContain(">Show<");
+		expect(html).toContain("mx-3 rounded-t-2xl rounded-b-none border-b-0 sm:mx-4");
+		expect(html).toContain("-mt-px rounded-b-2xl rounded-t-xl");
+		expect(html.indexOf('data-testid="todo-progress-panel"')).toBeLessThan(
+			html.indexOf('aria-label="Add files"'),
 		);
 	});
 
@@ -866,7 +920,7 @@ describe("ChatPanel prompt composer", () => {
 		expect(timestampCount).toBe(1);
 	});
 
-	it("renders conversation-level context progress near the composer hint", () => {
+	it("renders conversation-level context progress below the composer input", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
 				...baseProps,
@@ -905,6 +959,9 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("Context 8,420 / 12,000 (70%)");
 		expect(html).toContain("Output 512");
 		expect(html).toContain("Context summarized");
+		expect(html.indexOf('id="prompt-textarea"')).toBeLessThan(
+			html.indexOf('data-testid="conversation-context-meter"'),
+		);
 	});
 
 	it("shows summarization disabled state in context meter", () => {

@@ -21,6 +21,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
+import { extractLatestTodoSnapshotFromMessages } from "../../../../../shared/chat/todos";
 import { SguiRenderer } from "../sgui/SguiRenderer";
 import type {
 	AssistantTimelineBlock,
@@ -40,6 +41,7 @@ import {
 	type VoicePlaybackStatus,
 } from "../utils/voicePlayback";
 import { ThinkingPanel } from "./ThinkingPanel";
+import { TodoProgressPanel } from "./TodoProgressPanel";
 import { ToolEventPanel } from "./ToolEventPanel";
 
 const COMPOSER_MAX_LINES = 4;
@@ -647,6 +649,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			background: `conic-gradient(${ringColor} ${percent}%, ${trackColor} ${percent}% 100%)`,
 		};
 	}, [conversationContextMeter]);
+	const todoSnapshot = useMemo(
+		() =>
+			extractLatestTodoSnapshotFromMessages(
+				activeThread?.messages,
+				activeThread?.toolEvents,
+			),
+		[activeThread],
+	);
+	const composerActivityLabel = recording
+		? `Recording ${formatDuration(recordingDuration)}`
+		: isStreaming
+			? isContextSummarizing
+				? "Summarizing conversation..."
+				: queuedPromptCount > 0
+					? `${queuedPromptCount} queued`
+					: null
+			: null;
 	useEffect(() => {
 		setContextMeterPopoverOpen(false);
 	}, [activeThread?.id]);
@@ -1233,164 +1252,175 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				<label htmlFor="prompt-textarea" className="sr-only">
 					Message
 				</label>
-				<div className="mt-2 rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)]">
-					<div className="flex items-center justify-between gap-2 px-1 pb-2">
-						<div className="flex items-center gap-2">
-							<button
-								type="button"
-								className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-								onClick={handlePickFiles}
-								aria-label="Add files"
-							>
-								<FiPaperclip className="h-4 w-4" />
-								<span className="hidden sm:inline">Files</span>
-							</button>
-							<button
-								type="button"
-								aria-pressed={recording}
-								aria-label={recording ? "Stop recording" : "Record audio"}
-								className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
-									recording
-										? "border-rose-400/60 bg-rose-500/20 text-rose-100"
-										: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
-								}`}
-								style={audioGlow ? { boxShadow: audioGlow } : undefined}
-								onClick={recording ? stopRecording : startRecording}
-								disabled={isStreaming}
-							>
-								{recording ? <FiStopCircle size={16} /> : <FiMic size={16} />}
-								{recording ? (
-									<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
-								) : null}
-							</button>
+				<div className="mt-2">
+					{todoSnapshot ? (
+						<TodoProgressPanel
+							key={`${activeThread?.id ?? "thread"}:${todoSnapshot.sourceEventId ?? "todos"}`}
+							snapshot={todoSnapshot}
+							attached
+						/>
+					) : null}
+					<div
+						className={`border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] ${
+							todoSnapshot
+								? "-mt-px rounded-b-2xl rounded-t-xl"
+								: "rounded-2xl"
+						}`}
+					>
+						{composerActivityLabel ? (
+							<div className="px-2 pb-2 text-[11px] text-slate-400">
+								{composerActivityLabel}
+							</div>
+						) : null}
+						<div className="rounded-xl border border-white/10 bg-slate-900/55 px-2">
+							<textarea
+								ref={composerTextareaRef}
+								id="prompt-textarea"
+								className="min-h-[44px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
+								rows={1}
+								value={prompt}
+								onChange={(event) => onPromptChange(event.target.value)}
+								onKeyDown={handleKeyDown}
+								onPaste={handlePaste}
+								placeholder="Ask Wingman to do something..."
+								style={{ overflowY: "hidden" }}
+							/>
 						</div>
-						<div className="flex items-center gap-2 px-1">
-							{recording || isStreaming ? (
-								<span className="text-[11px] text-slate-400">
-									{recording
-										? `Recording ${formatDuration(recordingDuration)}`
-										: isContextSummarizing
-											? "Summarizing conversation..."
-											: queuedPromptCount > 0
-												? `Streaming response... ${queuedPromptCount} queued`
-												: "Streaming response... Enter to queue follow-up"}
-								</span>
-							) : null}
-							{conversationContextMeter ? (
-								<div className="group relative">
-									<button
-										type="button"
-										aria-label="Conversation context usage"
-										aria-expanded={contextMeterPopoverOpen}
-										aria-controls="conversation-context-popover"
-										onClick={() => setContextMeterPopoverOpen((open) => !open)}
-										className="inline-flex items-center rounded-full border border-white/10 bg-slate-900/70 p-1 text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100"
-									>
-										<span
-											data-testid="conversation-context-meter"
-											className="relative inline-flex h-7 w-7 items-center justify-center rounded-full p-[2px]"
-											style={contextMeterRing || undefined}
+						<div className="mt-2 flex items-center justify-between gap-2 px-1">
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+									onClick={handlePickFiles}
+									aria-label="Add files"
+								>
+									<FiPaperclip className="h-4 w-4" />
+									<span className="hidden sm:inline">Files</span>
+								</button>
+								<button
+									type="button"
+									aria-pressed={recording}
+									aria-label={recording ? "Stop recording" : "Record audio"}
+									className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+										recording
+											? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+											: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
+									}`}
+									style={audioGlow ? { boxShadow: audioGlow } : undefined}
+									onClick={recording ? stopRecording : startRecording}
+									disabled={isStreaming}
+								>
+									{recording ? <FiStopCircle size={16} /> : <FiMic size={16} />}
+									{recording ? (
+										<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
+									) : null}
+								</button>
+							</div>
+							<div className="flex items-center gap-2">
+								{conversationContextMeter ? (
+									<div className="group relative">
+										<button
+											type="button"
+											aria-label="Conversation context usage"
+											aria-expanded={contextMeterPopoverOpen}
+											aria-controls="conversation-context-popover"
+											onClick={() =>
+												setContextMeterPopoverOpen((open) => !open)
+											}
+											className="inline-flex items-center rounded-full border border-white/10 bg-slate-900/70 p-1 text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100"
 										>
 											<span
-												aria-hidden="true"
-												className="inline-flex h-full w-full items-center justify-center rounded-full bg-slate-900/95"
-											/>
-										</span>
-									</button>
-									<div
-										id="conversation-context-popover"
-										className={`pointer-events-none absolute bottom-full right-0 z-20 mb-2 min-w-[220px] rounded-xl border border-white/15 bg-slate-950/95 p-3 text-[11px] text-slate-300 shadow-xl backdrop-blur transition ${
-											contextMeterPopoverOpen
-												? "translate-y-0 opacity-100"
-												: "translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"
-										}`}
-									>
-										<div className="uppercase tracking-[0.14em] text-slate-400">
-											Context window
+												data-testid="conversation-context-meter"
+												className="relative inline-flex h-7 w-7 items-center justify-center rounded-full p-[2px]"
+												style={contextMeterRing || undefined}
+											>
+												<span
+													aria-hidden="true"
+													className="inline-flex h-full w-full items-center justify-center rounded-full bg-slate-900/95"
+												/>
+											</span>
+										</button>
+										<div
+											id="conversation-context-popover"
+											className={`pointer-events-none absolute bottom-full right-0 z-20 mb-2 min-w-[220px] rounded-xl border border-white/15 bg-slate-950/95 p-3 text-[11px] text-slate-300 shadow-xl backdrop-blur transition ${
+												contextMeterPopoverOpen
+													? "translate-y-0 opacity-100"
+													: "translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"
+											}`}
+										>
+											<div className="uppercase tracking-[0.14em] text-slate-400">
+												Context window
+											</div>
+											<div className="mt-2 text-slate-200">
+												{conversationContextMeter.summarizationEnabled &&
+												conversationContextMeter.thresholdValue !== null
+													? `Context ${formatTokenCount(conversationContextMeter.displayTokens)} / ${formatTokenCount(conversationContextMeter.thresholdValue)} (${conversationContextMeter.contextPercent}%)`
+													: `Context ${formatTokenCount(conversationContextMeter.displayTokens)}`}
+											</div>
+											{typeof conversationContextMeter.estimatedInputTokens ===
+												"number" &&
+											conversationContextMeter.estimatedInputTokens > 0 &&
+											typeof conversationContextMeter.providerInputTokens ===
+												"number" &&
+											conversationContextMeter.providerInputTokens >
+												conversationContextMeter.estimatedInputTokens ? (
+												<div className="mt-1 text-slate-300">
+													Provider prompt{" "}
+													{formatTokenCount(
+														conversationContextMeter.providerInputTokens,
+													)}
+												</div>
+											) : null}
+											{conversationContextMeter.outputTokens > 0 ? (
+												<div className="mt-1 text-slate-300">
+													Output{" "}
+													{formatTokenCount(
+														conversationContextMeter.outputTokens,
+													)}
+												</div>
+											) : null}
+											{!conversationContextMeter.summarizationEnabled ? (
+												<div className="mt-1 text-slate-300">
+													Summarization off
+												</div>
+											) : null}
+											{conversationContextMeter.summarized ? (
+												<div className="mt-1 text-emerald-200">
+													Context summarized
+												</div>
+											) : null}
 										</div>
-										<div className="mt-2 text-slate-200">
-											{conversationContextMeter.summarizationEnabled &&
-											conversationContextMeter.thresholdValue !== null
-												? `Context ${formatTokenCount(conversationContextMeter.displayTokens)} / ${formatTokenCount(conversationContextMeter.thresholdValue)} (${conversationContextMeter.contextPercent}%)`
-												: `Context ${formatTokenCount(conversationContextMeter.displayTokens)}`}
-										</div>
-										{typeof conversationContextMeter.estimatedInputTokens ===
-											"number" &&
-										conversationContextMeter.estimatedInputTokens > 0 &&
-										typeof conversationContextMeter.providerInputTokens ===
-											"number" &&
-										conversationContextMeter.providerInputTokens >
-											conversationContextMeter.estimatedInputTokens ? (
-											<div className="mt-1 text-slate-300">
-												Provider prompt{" "}
-												{formatTokenCount(
-													conversationContextMeter.providerInputTokens,
-												)}
-											</div>
-										) : null}
-										{conversationContextMeter.outputTokens > 0 ? (
-											<div className="mt-1 text-slate-300">
-												Output{" "}
-												{formatTokenCount(
-													conversationContextMeter.outputTokens,
-												)}
-											</div>
-										) : null}
-										{!conversationContextMeter.summarizationEnabled ? (
-											<div className="mt-1 text-slate-300">
-												Summarization off
-											</div>
-										) : null}
-										{conversationContextMeter.summarized ? (
-											<div className="mt-1 text-emerald-200">
-												Context summarized
-											</div>
-										) : null}
 									</div>
-								</div>
-							) : null}
+								) : null}
+								<button
+									className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
+										canStop
+											? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
+											: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
+									}`}
+									onClick={canStop ? onStopPrompt : onSendPrompt}
+									type="button"
+									aria-label={canStop ? "Stop response" : "Send prompt"}
+									title={canStop ? "Stop response" : "Send prompt"}
+									disabled={canStop ? false : !canSend}
+								>
+									{canStop ? (
+										<FiStopCircle className="h-5 w-5" />
+									) : (
+										<FiSend className="h-4 w-4" />
+									)}
+								</button>
+							</div>
 						</div>
-					</div>
-					<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 pl-2 pr-1.5">
-						<textarea
-							ref={composerTextareaRef}
-							id="prompt-textarea"
-							className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
-							rows={1}
-							value={prompt}
-							onChange={(event) => onPromptChange(event.target.value)}
-							onKeyDown={handleKeyDown}
-							onPaste={handlePaste}
-							placeholder="Ask Wingman to do something..."
-							style={{ overflowY: "hidden" }}
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept={fileAccept}
+							multiple
+							className="hidden"
+							onChange={handleFileChange}
 						/>
-						<button
-							className={`my-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
-								canStop
-									? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
-									: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
-							}`}
-							onClick={canStop ? onStopPrompt : onSendPrompt}
-							type="button"
-							aria-label={canStop ? "Stop response" : "Send prompt"}
-							title={canStop ? "Stop response" : "Send prompt"}
-							disabled={canStop ? false : !canSend}
-						>
-							{canStop ? (
-								<FiStopCircle className="h-5 w-5" />
-							) : (
-								<FiSend className="h-4 w-4" />
-							)}
-						</button>
 					</div>
-					<input
-						ref={fileInputRef}
-						type="file"
-						accept={fileAccept}
-						multiple
-						className="hidden"
-						onChange={handleFileChange}
-					/>
 				</div>
 			</>
 			{previewAttachment

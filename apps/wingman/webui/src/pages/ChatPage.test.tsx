@@ -42,6 +42,29 @@ const baseProps: React.ComponentProps<typeof ChatPage> = {
 };
 
 describe("ChatPage agent details panel", () => {
+	it("renders the details drawer above chat and keeps it collapsed by default", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPage, {
+				...baseProps,
+			}),
+		);
+
+		expect(html).toContain('data-testid="chat-side-panel"');
+		expect(html).toContain("Thread Details");
+		expect(html.indexOf('data-testid="chat-side-panel"')).toBeLessThan(
+			html.indexOf("Mission Stream"),
+		);
+		const drawerTag = html.match(
+			/<details[^>]*data-testid="chat-side-panel"[^>]*>/,
+		)?.[0];
+		expect(drawerTag).toBeDefined();
+		expect(drawerTag).not.toContain("open");
+		expect(
+			(html.match(/group-open:rotate-180/g) || []).length,
+		).toBe(1);
+		expect(html).not.toContain("group-open:hidden");
+	});
+
 	it("renders model, tools, and MCP server details for the active agent", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPage, {

@@ -173,11 +173,13 @@ import {
 	computeComposerTextareaLayout,
 	shouldRefocusComposer,
 } from "./composer.js";
+import { TodoProgressPanel } from "./components/TodoProgressPanel.js";
 import { ToolEventPanel } from "./components/ToolEventPanel.js";
 import {
 	resolveLastAssistantMessageId,
 	shouldShowAssistantTypingIndicator,
 } from "./chatStreamingIndicators.js";
+import { extractLatestTodoSnapshotFromMessages } from "../../../shared/chat/todos";
 
 type NativeState = {
 	connected?: boolean;
@@ -4162,6 +4164,10 @@ function ChatScreen({
 		() => resolveLastAssistantMessageId(activeThread?.messages),
 		[activeThread?.messages],
 	);
+	const todoSnapshot = useMemo(
+		() => extractLatestTodoSnapshotFromMessages(activeThread?.messages),
+		[activeThread?.messages],
+	);
 	const showStreamingGlow = workspace.isStreaming;
 
 	const handleTalkButtonClick = useCallback(async () => {
@@ -4451,120 +4457,137 @@ function ChatScreen({
 					<label htmlFor="prompt-textarea" className="sr-only">
 						Message
 					</label>
-					<div className="rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)]">
-						<div className="flex items-center justify-between gap-2 px-1 pb-2">
-							<div className="flex items-center gap-2">
-								<button
-									type="button"
-									className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-									onClick={handlePickFiles}
-									aria-label="Add files"
-								>
-									<AttachmentIcon />
-									<span className="hidden sm:inline">Files</span>
-								</button>
-								<button
-									type="button"
-									aria-pressed={runtimeState.recording}
-									aria-label={
-										runtimeState.recording ? "Stop recording" : "Record audio"
-									}
-									className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
-										runtimeState.recording
-											? "border-rose-400/60 bg-rose-500/20 text-rose-100"
-											: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
-									}`}
-									onClick={() => void handleTalkButtonClick()}
-									disabled={workspace.isStreaming}
-								>
-									<MicIcon />
-									{runtimeState.recording ? (
-										<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
-									) : null}
-								</button>
-								<button
-									type="button"
-									aria-pressed={voiceAutoEnabled}
-									aria-label={
-										voiceAutoEnabled
-											? "Disable auto voice playback"
-											: "Enable auto voice playback"
-									}
-									className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs transition ${
-										voiceAutoEnabled
-											? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-											: "border-white/10 bg-slate-900/70 text-slate-200 hover:border-sky-400/50 hover:text-sky-100"
-									}`}
-									onClick={onToggleVoiceAuto}
-								>
-									<SpeakerIcon />
-									<span className="hidden md:inline">
-										{voiceAutoEnabled ? "Voice Auto" : "Voice Off"}
-									</span>
-								</button>
-							</div>
-							<div className="flex items-center gap-2 px-1">
-								{workspace.isStreaming ? (
-									<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
-										<span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
-										Live
-									</span>
-								) : null}
-								<span className="text-[11px] text-slate-400">
-									{composerStatusHint}
-								</span>
-							</div>
-						</div>
-						<div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/55 px-2">
-							<textarea
-								ref={composerTextareaRef}
-								id="prompt-textarea"
-								className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
-								rows={1}
-								value={workspace.prompt}
-								onChange={(event) =>
-									workspaceActions.updatePrompt(event.target.value)
-								}
-								onPaste={handlePaste}
-								onKeyDown={(event) => {
-									if (event.key === "Enter" && !event.shiftKey) {
-										event.preventDefault();
-										void workspaceActions.sendPrompt();
-									}
-								}}
-								placeholder="Ask Wingman to do something..."
-								style={{ overflowY: "hidden" }}
+					<div className="mt-2">
+						{todoSnapshot ? (
+							<TodoProgressPanel
+								key={`${activeThread?.id ?? "thread"}:${todoSnapshot.sourceEventId ?? "todos"}`}
+								snapshot={todoSnapshot}
+								attached
 							/>
-							<button
-								className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white transition hover:from-cyan-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
-								onClick={() => void workspaceActions.sendPrompt()}
-								type="button"
-								aria-label="Send prompt"
-								title="Send prompt"
-								disabled={!canSendPrompt}
-							>
-								<SendIcon />
-							</button>
-						</div>
-						{voicePlayback.status !== "idle" ? (
-							<div className="mt-2 flex justify-end">
+						) : null}
+						<div
+							className={`border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] ${
+								todoSnapshot
+									? "-mt-px rounded-b-2xl rounded-t-xl"
+									: "rounded-2xl"
+							}`}
+						>
+							<div className="flex items-center justify-end gap-2 px-1 pb-2">
+								<div className="flex items-center gap-2 px-1">
+									{workspace.isStreaming ? (
+										<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
+											<span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
+											Live
+										</span>
+									) : null}
+									<span className="text-[11px] text-slate-400">
+										{composerStatusHint}
+									</span>
+								</div>
+							</div>
+							<div className="rounded-xl border border-white/10 bg-slate-900/55 px-2">
+								<textarea
+									ref={composerTextareaRef}
+									id="prompt-textarea"
+									className="min-h-[44px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
+									rows={1}
+									value={workspace.prompt}
+									onChange={(event) =>
+										workspaceActions.updatePrompt(event.target.value)
+									}
+									onPaste={handlePaste}
+									onKeyDown={(event) => {
+										if (event.key === "Enter" && !event.shiftKey) {
+											event.preventDefault();
+											void workspaceActions.sendPrompt();
+										}
+									}}
+									placeholder="Ask Wingman to do something..."
+									style={{ overflowY: "hidden" }}
+								/>
+							</div>
+							<div className="mt-2 flex items-center justify-between gap-2 px-1">
+								<div className="flex items-center gap-2">
+									<button
+										type="button"
+										className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+										onClick={handlePickFiles}
+										aria-label="Add files"
+									>
+										<AttachmentIcon />
+										<span className="hidden sm:inline">Files</span>
+									</button>
+									<button
+										type="button"
+										aria-pressed={runtimeState.recording}
+										aria-label={
+											runtimeState.recording ? "Stop recording" : "Record audio"
+										}
+										className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+											runtimeState.recording
+												? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+												: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
+										}`}
+										onClick={() => void handleTalkButtonClick()}
+										disabled={workspace.isStreaming}
+									>
+										<MicIcon />
+										{runtimeState.recording ? (
+											<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
+										) : null}
+									</button>
+									<button
+										type="button"
+										aria-pressed={voiceAutoEnabled}
+										aria-label={
+											voiceAutoEnabled
+												? "Disable auto voice playback"
+												: "Enable auto voice playback"
+										}
+										className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs transition ${
+											voiceAutoEnabled
+												? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+												: "border-white/10 bg-slate-900/70 text-slate-200 hover:border-sky-400/50 hover:text-sky-100"
+										}`}
+										onClick={onToggleVoiceAuto}
+									>
+										<SpeakerIcon />
+										<span className="hidden md:inline">
+											{voiceAutoEnabled ? "Voice Auto" : "Voice Off"}
+										</span>
+									</button>
+								</div>
 								<button
+									className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white transition hover:from-cyan-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
+									onClick={() => void workspaceActions.sendPrompt()}
 									type="button"
-									className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
-									onClick={onStopVoice}
+									aria-label="Send prompt"
+									title="Send prompt"
+									disabled={!canSendPrompt}
 								>
-									Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
+									<SendIcon />
 								</button>
 							</div>
-						) : null}
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept={FILE_INPUT_ACCEPT}
-							className="hidden"
-							multiple
-							onChange={handleFileChange}
-						/>
+							{voicePlayback.status !== "idle" ? (
+								<div className="mt-2 flex justify-end">
+									<button
+										type="button"
+										className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
+										onClick={onStopVoice}
+									>
+										Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
+									</button>
+								</div>
+							) : null}
+							<input
+								ref={fileInputRef}
+								type="file"
+								accept={FILE_INPUT_ACCEPT}
+								className="hidden"
+								multiple
+								onChange={handleFileChange}
+							/>
+						</div>
 					</div>
 				</div>
 			</div>
