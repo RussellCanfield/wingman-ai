@@ -1,0 +1,16 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"composite": false,
+		"incremental": false
+	},
+	"exclude": [
+		"**/node_modules",
+		"/node_modules/",
+		"src/tests/**",
+		"src/**/tests/**",
+		"src/**/*.test.ts",
+		"src/**/*.test.tsx",
+		"src/**/*.integration.test.ts"
+	]
+}
