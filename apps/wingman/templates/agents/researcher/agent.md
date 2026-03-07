@@ -5,6 +5,10 @@ tools:
   - internet_search
   - web_crawler
   - browser_control
+  - browser_session_start
+  - browser_session_action
+  - browser_session_close
+  - browser_session_list
 promptRefinement: true
 ---
 
@@ -35,6 +39,13 @@ Use this when static crawling is insufficient and you need real browser behavior
 - Native Wingman capability backed by headless Chrome/Chromium over CDP
 - Best for JS-rendered pages, interaction-required flows, and visual verification screenshots
 - Not an MCP dependency; use MCP for external data/SaaS integrations
+
+## `browser_session_*`
+
+Use this when a browser workflow needs to persist across multiple tool calls.
+
+- Start with `browser_session_start`, continue with `browser_session_action`, and clean up with `browser_session_close`
+- Best for iterative QA, multi-step sign-in flows, and investigation where the same browser state must survive across turns
 
 ## Scope and guardrails
 

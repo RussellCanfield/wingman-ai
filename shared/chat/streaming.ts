@@ -40,6 +40,7 @@ export type ParsedUsageEvent = {
 	outputTokens: number;
 	totalTokens: number;
 	estimatedContextTokens?: number;
+	thresholdTokens?: number;
 	messageId?: string;
 	node?: string;
 	timestamp: number;
@@ -85,31 +86,39 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 	const usageEvents: ParsedUsageEvent[] = [];
 	const toolEvents: ParsedStreamEvent["toolEvents"] = [];
 	const estimatedContextTokens = extractEstimatedContextTokens(chunk);
+	const thresholdTokens = extractThresholdTokens(chunk);
 	if (!chunk || typeof chunk !== "object") {
-		return withEstimatedContextTokens(
+		return withUsageMetadata(
 			{ textEvents, attachmentEvents, usageEvents, toolEvents },
 			estimatedContextTokens,
+			thresholdTokens,
 		);
 	}
 
 	const unwrappedChunk = unwrapAgentStreamChunk(chunk);
 	if (unwrappedChunk) {
 		const nestedParsed = parseStreamEvents(unwrappedChunk);
-		return withEstimatedContextTokens(
+		return withUsageMetadata(
 			nestedParsed,
 			estimatedContextTokens ?? extractEstimatedContextTokens(unwrappedChunk),
+			thresholdTokens ?? extractThresholdTokens(unwrappedChunk),
 		);
 	}
 
 	if (typeof chunk.event === "string") {
 		const eventParsed = parseStreamEventChunk(chunk);
 		if (eventParsed) {
-			return withEstimatedContextTokens(eventParsed, estimatedContextTokens);
+			return withUsageMetadata(
+				eventParsed,
+				estimatedContextTokens,
+				thresholdTokens,
+			);
 		}
 		// Ignore unsupported LangGraph lifecycle events.
-		return withEstimatedContextTokens(
+		return withUsageMetadata(
 			{ textEvents, attachmentEvents, usageEvents, toolEvents },
 			estimatedContextTokens,
+			thresholdTokens,
 		);
 	}
 
@@ -270,9 +279,10 @@ export function parseStreamEvents(chunk: any): ParsedStreamEvent {
 		});
 	}
 
-	return withEstimatedContextTokens(
+	return withUsageMetadata(
 		{ textEvents, attachmentEvents, usageEvents, toolEvents },
 		estimatedContextTokens,
+		thresholdTokens,
 	);
 }
 
@@ -613,19 +623,29 @@ function collectTokenUsageFromPayload(
 	}
 }
 
-function withEstimatedContextTokens(
+function withUsageMetadata(
 	parsed: ParsedStreamEvent,
 	estimatedContextTokens: number | undefined,
+	thresholdTokens: number | undefined,
 ): ParsedStreamEvent {
-	if (
-		typeof estimatedContextTokens !== "number" ||
-		!Number.isFinite(estimatedContextTokens) ||
-		estimatedContextTokens <= 0
-	) {
+	const hasEstimatedContextTokens =
+		typeof estimatedContextTokens === "number" &&
+		Number.isFinite(estimatedContextTokens) &&
+		estimatedContextTokens > 0;
+	const hasThresholdTokens =
+		typeof thresholdTokens === "number" &&
+		Number.isFinite(thresholdTokens) &&
+		thresholdTokens > 0;
+	if (!hasEstimatedContextTokens && !hasThresholdTokens) {
 		return parsed;
 	}
 
-	const normalizedEstimate = Math.round(estimatedContextTokens);
+	const normalizedEstimate = hasEstimatedContextTokens
+		? Math.round(estimatedContextTokens)
+		: undefined;
+	const normalizedThreshold = hasThresholdTokens
+		? Math.round(thresholdTokens)
+		: undefined;
 	if (parsed.usageEvents.length === 0) {
 		return {
 			...parsed,
@@ -634,7 +654,12 @@ function withEstimatedContextTokens(
 					inputTokens: 0,
 					outputTokens: 0,
 					totalTokens: 0,
-					estimatedContextTokens: normalizedEstimate,
+					...(typeof normalizedEstimate === "number"
+						? { estimatedContextTokens: normalizedEstimate }
+						: {}),
+					...(typeof normalizedThreshold === "number"
+						? { thresholdTokens: normalizedThreshold }
+						: {}),
 					timestamp: Date.now(),
 				},
 			],
@@ -645,11 +670,24 @@ function withEstimatedContextTokens(
 		...parsed,
 		usageEvents: parsed.usageEvents.map((event) => ({
 			...event,
-			estimatedContextTokens:
-				typeof event.estimatedContextTokens === "number" &&
-				event.estimatedContextTokens > normalizedEstimate
-					? event.estimatedContextTokens
-					: normalizedEstimate,
+			...(typeof normalizedEstimate === "number"
+				? {
+						estimatedContextTokens:
+							typeof event.estimatedContextTokens === "number" &&
+							event.estimatedContextTokens > normalizedEstimate
+								? event.estimatedContextTokens
+								: normalizedEstimate,
+					}
+				: {}),
+			...(typeof normalizedThreshold === "number"
+				? {
+						thresholdTokens:
+							typeof event.thresholdTokens === "number" &&
+							event.thresholdTokens > normalizedThreshold
+								? event.thresholdTokens
+								: normalizedThreshold,
+					}
+				: {}),
 		})),
 	};
 }
@@ -657,6 +695,11 @@ function withEstimatedContextTokens(
 function extractEstimatedContextTokens(payload: unknown): number | undefined {
 	const visited = new WeakSet<object>();
 	return collectEstimatedContextTokens(payload, visited, 0);
+}
+
+function extractThresholdTokens(payload: unknown): number | undefined {
+	const visited = new WeakSet<object>();
+	return collectThresholdTokens(payload, visited, 0);
 }
 
 function collectEstimatedContextTokens(
@@ -711,6 +754,58 @@ function collectEstimatedContextTokens(
 			visited,
 			depth + 1,
 		);
+		if (typeof nested === "number" && nested > bestNested) {
+			bestNested = nested;
+		}
+	}
+
+	const best = Math.max(bestDirect, bestNested);
+	return best > 0 ? best : undefined;
+}
+
+function collectThresholdTokens(
+	payload: unknown,
+	visited: WeakSet<object>,
+	depth: number,
+): number | undefined {
+	if (depth > 8 || !payload || typeof payload !== "object") return undefined;
+	if (visited.has(payload as object)) return undefined;
+	visited.add(payload as object);
+
+	if (Array.isArray(payload)) {
+		let best: number | undefined;
+		for (const item of payload) {
+			const nested = collectThresholdTokens(item, visited, depth + 1);
+			if (typeof nested === "number" && (best === undefined || nested > best)) {
+				best = nested;
+			}
+		}
+		return best;
+	}
+
+	const record = payload as Record<string, unknown>;
+	const directCandidates = [record.thresholdTokens, record.threshold_tokens];
+	let bestDirect = 0;
+	for (const candidate of directCandidates) {
+		const value = getFiniteNumber(candidate);
+		if (value > bestDirect) {
+			bestDirect = value;
+		}
+	}
+
+	const nestedCandidates = [
+		record.chunk,
+		record.data,
+		record.output,
+		record.message,
+		record.metadata,
+		record.additional_kwargs,
+		record.additionalKwargs,
+		record.tokenUsage,
+	];
+	let bestNested = 0;
+	for (const nestedCandidate of nestedCandidates) {
+		const nested = collectThresholdTokens(nestedCandidate, visited, depth + 1);
 		if (typeof nested === "number" && nested > bestNested) {
 			bestNested = nested;
 		}

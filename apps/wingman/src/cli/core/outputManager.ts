@@ -81,6 +81,7 @@ export class OutputManager extends EventEmitter {
 			totalTokens: number;
 		},
 		estimatedContextTokens?: number,
+		thresholdTokens?: number,
 	): void {
 		this.emitEvent({
 			type: "agent-stream",
@@ -90,6 +91,11 @@ export class OutputManager extends EventEmitter {
 			Number.isFinite(estimatedContextTokens) &&
 			estimatedContextTokens > 0
 				? { estimatedContextTokens: Math.round(estimatedContextTokens) }
+				: {}),
+			...(typeof thresholdTokens === "number" &&
+			Number.isFinite(thresholdTokens) &&
+			thresholdTokens > 0
+				? { thresholdTokens: Math.round(thresholdTokens) }
 				: {}),
 			timestamp: new Date().toISOString(),
 		});
@@ -111,13 +117,15 @@ export class OutputManager extends EventEmitter {
 	emitContextSummarized(payload: {
 		inputTokens: number;
 		peakInputTokens: number;
-		thresholdTokens: number;
+		thresholdTokens?: number;
 	}): void {
 		this.emitEvent({
 			type: "context-summarized",
 			inputTokens: payload.inputTokens,
 			peakInputTokens: payload.peakInputTokens,
-			thresholdTokens: payload.thresholdTokens,
+			...(typeof payload.thresholdTokens === "number"
+				? { thresholdTokens: payload.thresholdTokens }
+				: {}),
 			timestamp: new Date().toISOString(),
 		});
 	}

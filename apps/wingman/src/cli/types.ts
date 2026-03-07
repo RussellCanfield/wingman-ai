@@ -149,6 +149,7 @@ export interface AgentStreamEvent {
 		totalTokens: number;
 	};
 	estimatedContextTokens?: number;
+	thresholdTokens?: number;
 	timestamp: string;
 }
 
@@ -161,7 +162,7 @@ export interface AgentContextSummarizedEvent {
 	type: "context-summarized";
 	inputTokens: number;
 	peakInputTokens: number;
-	thresholdTokens: number;
+	thresholdTokens?: number;
 	timestamp: string;
 }
 

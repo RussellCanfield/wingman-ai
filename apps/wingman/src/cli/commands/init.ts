@@ -52,12 +52,17 @@ const DEFAULT_AGENT_PROMPT = [
 	"Be direct and concise. Ask clarifying questions when requirements are unclear.",
 	"Prefer minimal diffs and safe changes. Avoid destructive actions unless asked.",
 	"Use tools to inspect the codebase before editing.",
+	"Use browser_session_start/browser_session_action/browser_session_close for iterative browser debugging across turns, and browser_control for one-shot browser tasks.",
 ].join("\n");
 const DEFAULT_TOOLS = [
 	"code_search",
 	"git_status",
 	"command_execute",
 	"browser_control",
+	"browser_session_start",
+	"browser_session_action",
+	"browser_session_close",
+	"browser_session_list",
 	"internet_search",
 	"think",
 ];

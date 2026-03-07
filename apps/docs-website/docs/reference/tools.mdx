@@ -40,6 +40,8 @@ See [wingman.config.json](/configuration/wingman-config#human-in-the-loop-settin
 - **browser_control**: native browser automation with Chrome/Chromium runtime control (CDP with automatic persistent-context fallback when needed) for interactive flows, JS-rendered pages, and screenshots.
 - **think**: private reasoning step (no external side effects).
 
+Large tool results are automatically offloaded to `/large_tool_results/...` in the agent filesystem once they exceed the safe inline threshold. The agent can inspect them with `read_file` using pagination instead of sending the entire payload back through model context.
+
 ## UI tools
 
 - **ui_registry_list**: list available UI components in the registry.

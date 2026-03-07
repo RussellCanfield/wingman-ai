@@ -1,4 +1,4 @@
-import { createDeepAgent } from "deepagents";
+import { FilesystemBackend } from "deepagents";
 import { describe, expect, it, vi } from "vitest";
 import { validateConfig } from "../cli/config/schema.js";
 import {
@@ -14,6 +14,7 @@ import {
 	isRootLangGraphTerminalEvent,
 	recompileDeepAgentWithMiddlewareOverrides,
 	resolveHumanInTheLoopSettings,
+	resolveEffectiveSummarizationThresholdTokens,
 	resolveModelRetryMiddlewareSettings,
 	resolveSummarizationMiddlewareSettings,
 	resolveToolRetryMiddlewareSettings,
@@ -29,12 +30,17 @@ const parseConfig = (input: unknown) => {
 	return result.data;
 };
 
+const createBackendFactory = () => () =>
+	new FilesystemBackend({
+		rootDir: process.cwd(),
+		virtualMode: true,
+	});
+
 describe("resolveSummarizationMiddlewareSettings", () => {
-	it("returns default summarization settings from config defaults", () => {
+	it("preserves DeepAgents default summarization when config is omitted", () => {
 		const config = parseConfig({});
 		expect(resolveSummarizationMiddlewareSettings(config)).toEqual({
-			maxTokensBeforeSummary: 12000,
-			messagesToKeep: 8,
+			mode: "default",
 		});
 	});
 
@@ -47,6 +53,17 @@ describe("resolveSummarizationMiddlewareSettings", () => {
 		expect(resolveSummarizationMiddlewareSettings(config)).toBeNull();
 	});
 
+	it("preserves DeepAgents defaults when only the enabled flag is set", () => {
+		const config = parseConfig({
+			summarization: {
+				enabled: true,
+			},
+		});
+		expect(resolveSummarizationMiddlewareSettings(config)).toEqual({
+			mode: "default",
+		});
+	});
+
 	it("returns custom summarization settings when configured", () => {
 		const config = parseConfig({
 			summarization: {
@@ -56,13 +73,84 @@ describe("resolveSummarizationMiddlewareSettings", () => {
 			},
 		});
 		expect(resolveSummarizationMiddlewareSettings(config)).toEqual({
+			mode: "custom",
 			maxTokensBeforeSummary: 20000,
 			messagesToKeep: 10,
 		});
 	});
+
+	it("supports partial custom summarization overrides", () => {
+		const config = parseConfig({
+			summarization: {
+				maxTokensBeforeSummary: 20000,
+			},
+		});
+		expect(resolveSummarizationMiddlewareSettings(config)).toEqual({
+			mode: "custom",
+			maxTokensBeforeSummary: 20000,
+		});
+	});
+});
+
+describe("resolveEffectiveSummarizationThresholdTokens", () => {
+	it("returns the explicit custom threshold when configured", async () => {
+		await expect(
+			resolveEffectiveSummarizationThresholdTokens(
+				{ mode: "custom", maxTokensBeforeSummary: 20000 },
+				{ profile: { maxInputTokens: 128000 } },
+			),
+		).resolves.toBe(20000);
+	});
+
+	it("computes the DeepAgents default trigger from model profile limits", async () => {
+		await expect(
+			resolveEffectiveSummarizationThresholdTokens(
+				{ mode: "default" },
+				{ profile: { maxInputTokens: 128000 } },
+			),
+		).resolves.toBe(108800);
+	});
+
+	it("uses DeepAgents fallback trigger when no model profile is available", async () => {
+		await expect(
+			resolveEffectiveSummarizationThresholdTokens({ mode: "default" }, {}),
+		).resolves.toBe(170000);
+	});
+
+	it("still computes the DeepAgents default trigger when only keep is customized", async () => {
+		await expect(
+			resolveEffectiveSummarizationThresholdTokens(
+				{ mode: "custom", messagesToKeep: 5 },
+				{ profile: { maxInputTokens: 200000 } },
+			),
+		).resolves.toBe(170000);
+	});
 });
 
 describe("configureDeepAgentSummarizationMiddleware", () => {
+	it("preserves built-in summarization middleware when using DeepAgents defaults", () => {
+		const agent = {
+			options: {
+				middleware: [
+					{ name: "todoListMiddleware" },
+					{ name: "SummarizationMiddleware", marker: "old" },
+				],
+			},
+		};
+
+		configureDeepAgentSummarizationMiddleware(
+			agent,
+			{ mode: "default" },
+			"openai:gpt-4o-mini",
+			createBackendFactory(),
+		);
+
+		expect(agent.options.middleware[1]).toMatchObject({
+			name: "SummarizationMiddleware",
+			marker: "old",
+		});
+	});
+
 	it("replaces built-in summarization middleware with configured settings", () => {
 		const agent = {
 			options: {
@@ -75,8 +163,9 @@ describe("configureDeepAgentSummarizationMiddleware", () => {
 
 		configureDeepAgentSummarizationMiddleware(
 			agent,
-			{ maxTokensBeforeSummary: 9000, messagesToKeep: 5 },
+			{ mode: "custom", maxTokensBeforeSummary: 9000, messagesToKeep: 5 },
 			"openai:gpt-4o-mini",
+			createBackendFactory(),
 		);
 
 		expect(agent.options.middleware).toHaveLength(2);
@@ -102,27 +191,14 @@ describe("configureDeepAgentSummarizationMiddleware", () => {
 		).toEqual(["todoListMiddleware", "patchToolCallsMiddleware"]);
 	});
 
-	it("requires recompilation for runtime middleware overrides to take effect", () => {
-		const deepAgent = createDeepAgent({
-			model: "claude-sonnet-4-5-20250929",
-			tools: [],
-			systemPrompt: "test",
-		}) as any;
+	it("recompiles agents by delegating to withConfig", () => {
+		const rebuilt = { rebuilt: true };
+		const deepAgent = {
+			withConfig: vi.fn(() => rebuilt),
+		};
 
-		configureDeepAgentSummarizationMiddleware(
-			deepAgent,
-			{ maxTokensBeforeSummary: 9000, messagesToKeep: 5 },
-			"claude-sonnet-4-5-20250929",
-		);
-
-		expect(Object.keys(deepAgent.graph?.nodes || {})).not.toContain(
-			"SummarizationMiddleware.before_model",
-		);
-
-		const rebuilt = recompileDeepAgentWithMiddlewareOverrides(deepAgent);
-		expect(Object.keys((rebuilt as any).graph?.nodes || {})).toContain(
-			"SummarizationMiddleware.before_model",
-		);
+		expect(recompileDeepAgentWithMiddlewareOverrides(deepAgent)).toBe(rebuilt);
+		expect(deepAgent.withConfig).toHaveBeenCalledWith({});
 	});
 });
 

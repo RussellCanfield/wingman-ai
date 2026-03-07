@@ -47,15 +47,21 @@ describe("ChatPanel prompt composer", () => {
 			React.createElement(ChatPanel, baseProps),
 		);
 
-		expect(html).toContain("panel-card animate-rise flex h-full min-h-0");
+		expect(html).toContain(
+			"panel-card animate-rise grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2.5 overflow-hidden p-2.5",
+		);
 		expect(html).not.toContain("min-h-[1200px]");
 	});
 
-	it("removes quick prompts and renders a single-bar composer with icon controls", () => {
+	it("renders a slim chat header and a single-bar composer with compact controls", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, baseProps),
 		);
 
+		expect(html).toContain(">Chat<");
+		expect(html).toContain('aria-pressed="false"');
+		expect(html).not.toContain("Mission Stream");
+		expect(html).not.toContain("Thread:");
 		expect(html).toContain('id="prompt-textarea"');
 		expect(html).toContain(
 			"border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] rounded-2xl",
@@ -63,11 +69,9 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain(
 			"rounded-xl border border-white/10 bg-slate-900/55 px-2",
 		);
+		expect(html).toContain("mt-2 flex items-center justify-between gap-2 px-1");
 		expect(html).toContain(
-			"mt-2 flex items-center justify-between gap-2 px-1",
-		);
-		expect(html).toContain(
-			"flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition",
+			"flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition",
 		);
 		expect(html).toContain('aria-label="Send prompt"');
 		expect(html).toContain('aria-label="Add files"');
@@ -181,7 +185,9 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain(">1/2<");
 		expect(html).toContain('aria-expanded="false"');
 		expect(html).toContain(">Show<");
-		expect(html).toContain("mx-3 rounded-t-2xl rounded-b-none border-b-0 sm:mx-4");
+		expect(html).toContain(
+			"mx-3 rounded-t-2xl rounded-b-none border-b-0 sm:mx-4",
+		);
 		expect(html).toContain("-mt-px rounded-b-2xl rounded-t-xl");
 		expect(html.indexOf('data-testid="todo-progress-panel"')).toBeLessThan(
 			html.indexOf('aria-label="Add files"'),
@@ -197,7 +203,8 @@ describe("ChatPanel prompt composer", () => {
 			}),
 		);
 
-		expect(html).toContain(">Voice: Auto<");
+		expect(html).toContain(">Voice<");
+		expect(html).toContain('aria-pressed="true"');
 	});
 
 	it("shows in-message streaming dots while the active assistant stream is running", () => {
@@ -232,6 +239,30 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain('data-testid="message-streaming-indicator"');
 		expect(html).toContain("Partial response text");
 		expect(html).toContain("edit_file");
+	});
+
+	it("left-aligns assistant message metadata controls", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-meta",
+							role: "assistant",
+							content: "Reply with audio available",
+							createdAt: 1,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("mb-1 justify-start");
+		expect(html).toContain('aria-label="Play assistant response"');
 	});
 
 	it("hides in-message streaming dots when stream is idle", () => {
@@ -962,6 +993,37 @@ describe("ChatPanel prompt composer", () => {
 		expect(html.indexOf('id="prompt-textarea"')).toBeLessThan(
 			html.indexOf('data-testid="conversation-context-meter"'),
 		);
+	});
+
+	it("renders a context total from message metadata when summarization config is omitted", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-context-default-threshold",
+							role: "assistant",
+							content: "Working...",
+							createdAt: 1,
+							contextUsage: {
+								inputTokens: 8420,
+								outputTokens: 512,
+								totalTokens: 8932,
+								thresholdTokens: 108800,
+								updatedAt: 2,
+							},
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("Context 8,420 / 108,800 (8%)");
+		expect(html).toContain("Output 512");
 	});
 
 	it("shows summarization disabled state in context meter", () => {

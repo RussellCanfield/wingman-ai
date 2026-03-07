@@ -96,7 +96,7 @@ describe("gateway HTTP security", () => {
 		expect(authenticated.status).toBe(200);
 	});
 
-	it("returns summarization settings from /api/config without auth", async () => {
+	it("omits summarization settings from /api/config when not explicitly configured", async () => {
 		const server = createGateway({
 			host: "127.0.0.1",
 			port: 18789,
@@ -116,11 +116,7 @@ describe("gateway HTTP security", () => {
 				messagesToKeep?: number;
 			};
 		};
-		expect(payload.summarization).toMatchObject({
-			enabled: true,
-			maxTokensBeforeSummary: 12000,
-			messagesToKeep: 8,
-		});
+		expect(payload.summarization).toBeUndefined();
 	});
 
 	it("rejects disallowed origins and allows loopback development preflight", async () => {

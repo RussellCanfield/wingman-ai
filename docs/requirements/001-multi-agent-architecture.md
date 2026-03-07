@@ -1,7 +1,7 @@
 # PRD-001: Multi-Agent Architecture
 
 **Version:** 1.2.13
-**Last Updated:** 2026-02-27
+**Last Updated:** 2026-03-06
 
 ## Overview
 Wingman implements a hierarchical multi-agent system using LangChain's deepagents framework. The system consists of a root orchestrator agent that coordinates specialized subagents, each optimized for specific task domains.
@@ -356,17 +356,24 @@ beforeAgent: (input) => {
 ```json
 {
   "summarization": {
-    "enabled": true,
-    "maxTokensBeforeSummary": 12000,
-    "messagesToKeep": 8
+    "enabled": true
   }
 }
 ```
 
 **Behavior**:
-- When enabled, Wingman configures DeepAgent's built-in summarization middleware to summarize older turns once the configured token threshold is crossed.
-- The most recent `messagesToKeep` turns remain verbatim.
+- If the `summarization` block is omitted, Wingman leaves DeepAgents' built-in summarization middleware at its out-of-the-box defaults.
+- Setting `summarization.enabled` to `false` disables the middleware entirely.
+- Optional overrides such as `maxTokensBeforeSummary` and `messagesToKeep` replace the corresponding DeepAgents defaults when explicitly configured.
 - Summarization runs with the active agent model and complements session checkpointing.
+
+### Large Tool Result Offloading
+**Purpose**: Prevent oversized tool payloads from exceeding provider request limits while keeping the full output available to the agent.
+
+**Behavior**:
+- Tool results that exceed the safe inline threshold are written to `/large_tool_results/...` in the agent filesystem.
+- The in-context tool message is replaced with a short preview plus instructions to reopen the saved output via `read_file` pagination.
+- Built-in filesystem tools keep their existing pagination/truncation behavior and are excluded from this offloading layer.
 
 ### Retry Middleware
 **Purpose**: Improve resilience for transient model/tool failures.

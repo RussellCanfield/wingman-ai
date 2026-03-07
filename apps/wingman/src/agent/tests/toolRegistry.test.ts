@@ -32,6 +32,26 @@ describe("Tool Registry", () => {
 			expect(tool?.name).toBe("browser_control");
 		});
 
+		it("should create browser session tools", () => {
+			const startTool = createTool("browser_session_start", {
+				browserSessionOwnerId: "owner-1",
+			});
+			const actionTool = createTool("browser_session_action", {
+				browserSessionOwnerId: "owner-1",
+			});
+			const closeTool = createTool("browser_session_close", {
+				browserSessionOwnerId: "owner-1",
+			});
+			const listTool = createTool("browser_session_list", {
+				browserSessionOwnerId: "owner-1",
+			});
+
+			expect(startTool?.name).toBe("browser_session_start");
+			expect(actionTool?.name).toBe("browser_session_action");
+			expect(closeTool?.name).toBe("browser_session_close");
+			expect(listTool?.name).toBe("browser_session_list");
+		});
+
 		it("should create command_execute tool with default options", () => {
 			const tool = createTool("command_execute");
 
@@ -155,6 +175,10 @@ describe("Tool Registry", () => {
 				"internet_search",
 				"web_crawler",
 				"browser_control",
+				"browser_session_start",
+				"browser_session_action",
+				"browser_session_close",
+				"browser_session_list",
 				"command_execute",
 				"background_terminal",
 				"node_notify",

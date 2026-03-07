@@ -320,7 +320,9 @@ describe("browser_control tool", () => {
 						) => {
 							capturedCdpTimeoutMs = options?.timeout ?? 0;
 							return {
-								contexts: () => [{ pages: () => [page], newPage: async () => page }],
+								contexts: () => [
+									{ pages: () => [page], newPage: async () => page },
+								],
 								close: async () => {},
 							};
 						},
@@ -373,7 +375,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -389,7 +393,9 @@ describe("browser_control tool", () => {
 		);
 
 		const result = await tool.invoke({
-			actions: [{ type: "extract_text", selector: "body", maxChars: 1_000_000 }],
+			actions: [
+				{ type: "extract_text", selector: "body", maxChars: 1_000_000 },
+			],
 			timeoutMs: 60_000,
 		});
 
@@ -598,7 +604,9 @@ describe("browser_control tool", () => {
 							capturedWsEndpoint = wsEndpoint;
 							capturedRelayTimeout = options?.timeout ?? 0;
 							return {
-								contexts: () => [{ pages: () => [page], newPage: async () => page }],
+								contexts: () => [
+									{ pages: () => [page], newPage: async () => page },
+								],
 								close: async () => {},
 							};
 						},
@@ -641,11 +649,83 @@ describe("browser_control tool", () => {
 		expect((capturedRelayConfig as { host?: string } | null)?.host).toBe(
 			"127.0.0.1",
 		);
-		expect((capturedRelayConfig as { port?: number } | null)?.port).toBe(
-			18792,
-		);
+		expect((capturedRelayConfig as { port?: number } | null)?.port).toBe(18792);
 		expect(capturedRelayTimeout).toBe(45_000);
 		expect(capturedWsEndpoint).toContain("/cdp");
+	});
+
+	it("allows per-call transport overrides on browser_control", async () => {
+		const workspace = mkdtempSync(join(tmpdir(), "wingman-browser-workspace-"));
+		const tempDir = mkdtempSync(join(tmpdir(), "wingman-browser-temp-"));
+		workspaces.push(workspace, tempDir);
+
+		let relayResolveCalled = false;
+		let currentUrl = "about:blank";
+
+		const page = {
+			goto: async (url: string) => {
+				currentUrl = url;
+			},
+			click: async () => {},
+			fill: async () => {},
+			keyboard: { press: async () => {} },
+			waitForTimeout: async () => {},
+			textContent: async () => "",
+			evaluate: async () => "ok",
+			screenshot: async () => {},
+			title: async () => "Relay Override",
+			url: () => currentUrl,
+		};
+
+		const tool = createBrowserControlTool(
+			{
+				workspace,
+				browserTransport: "playwright",
+				relayConfig: {
+					enabled: true,
+					host: "127.0.0.1",
+					port: 18792,
+					requireAuth: false,
+				},
+			},
+			{
+				importPlaywright: async () => ({
+					chromium: {
+						connectOverCDP: async (wsEndpoint: string) => {
+							expect(wsEndpoint).toContain("18792");
+							return {
+								contexts: () => [
+									{ pages: () => [page], newPage: async () => page },
+								],
+								close: async () => {},
+							};
+						},
+					},
+				}),
+				startChrome: async () => {
+					throw new Error("startChrome should not run for relay override");
+				},
+				resolveRelayWsEndpoint: async () => {
+					relayResolveCalled = true;
+					return "ws://127.0.0.1:18792/cdp";
+				},
+				mkTempDir: () => tempDir,
+				removeDir: () => {},
+				now: () => 1700000000000,
+			},
+		);
+
+		const result = await tool.invoke({
+			url: "https://example.com/relay-override",
+			transport: "relay",
+		});
+
+		const parsed = JSON.parse(String(result));
+		expect(relayResolveCalled).toBe(true);
+		expect(parsed.transportRequested).toBe("relay");
+		expect(parsed.transport).toBe("relay-cdp");
+		expect(parsed.browser).toBe("chrome-relay");
+		expect(parsed.finalUrl).toBe("https://example.com/relay-override");
 	});
 
 	it("falls back to relay in auto mode when playwright startup fails", async () => {
@@ -689,7 +769,9 @@ describe("browser_control tool", () => {
 						connectOverCDP: async (wsEndpoint: string) => {
 							if (wsEndpoint.includes("18792")) {
 								return {
-									contexts: () => [{ pages: () => [page], newPage: async () => page }],
+									contexts: () => [
+										{ pages: () => [page], newPage: async () => page },
+									],
 									close: async () => {},
 								};
 							}
@@ -798,7 +880,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -862,7 +946,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -877,32 +963,32 @@ describe("browser_control tool", () => {
 			},
 		);
 
-			const result = await tool.invoke({
-				url: "https://robinhood.com/?classic=1",
-				actions: [
-					{ type: "url", url: "https://robinhood.com/?classic=1" },
-					{ type: "ms", ms: 4000 },
-					{ type: "selector", selector: "body", maxChars: 4000 },
-					{ type: "expression", expression: "document.title" },
-					{ type: "path", path: "robinhood.png", fullPage: true },
-				],
-				headless: true,
+		const result = await tool.invoke({
+			url: "https://robinhood.com/?classic=1",
+			actions: [
+				{ type: "url", url: "https://robinhood.com/?classic=1" },
+				{ type: "ms", ms: 4000 },
+				{ type: "selector", selector: "body", maxChars: 4000 },
+				{ type: "expression", expression: "document.title" },
+				{ type: "path", path: "robinhood.png", fullPage: true },
+			],
+			headless: true,
 			timeoutMs: 60000,
 		});
 
-			const parsed = JSON.parse(String(result));
-			expect(parsed.finalUrl).toBe("https://robinhood.com/?classic=1");
-			expect(parsed.actionResults[0].type).toBe("navigate");
-			expect(parsed.actionResults[1].type).toBe("wait");
-			expect(parsed.actionResults[2].type).toBe("extract_text");
-			expect(parsed.actionResults[3].type).toBe("evaluate");
-			expect(parsed.actionResults[4].type).toBe("screenshot");
-			expect(parsed.actionResults[4].path).toBe("robinhood.png");
-			expect(actionCalls).toContain("goto:https://robinhood.com/?classic=1");
-			expect(actionCalls).toContain("wait:4000");
-			expect(actionCalls).toContain("text:body");
-			expect(actionCalls).toContain("eval:document.title");
-		});
+		const parsed = JSON.parse(String(result));
+		expect(parsed.finalUrl).toBe("https://robinhood.com/?classic=1");
+		expect(parsed.actionResults[0].type).toBe("navigate");
+		expect(parsed.actionResults[1].type).toBe("wait");
+		expect(parsed.actionResults[2].type).toBe("extract_text");
+		expect(parsed.actionResults[3].type).toBe("evaluate");
+		expect(parsed.actionResults[4].type).toBe("screenshot");
+		expect(parsed.actionResults[4].path).toBe("robinhood.png");
+		expect(actionCalls).toContain("goto:https://robinhood.com/?classic=1");
+		expect(actionCalls).toContain("wait:4000");
+		expect(actionCalls).toContain("text:body");
+		expect(actionCalls).toContain("eval:document.title");
+	});
 
 	it("supports snapshot alias for screenshot actions", async () => {
 		const workspace = mkdtempSync(join(tmpdir(), "wingman-browser-workspace-"));
@@ -937,7 +1023,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1008,7 +1096,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1081,7 +1171,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1152,7 +1244,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1222,7 +1316,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1294,7 +1390,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1362,7 +1460,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1418,7 +1518,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1508,7 +1610,9 @@ describe("browser_control tool", () => {
 				importPlaywright: async () => ({
 					chromium: {
 						connectOverCDP: async () => ({
-							contexts: () => [{ pages: () => [page], newPage: async () => page }],
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
 							close: async () => {},
 						}),
 					},
@@ -1532,9 +1636,9 @@ describe("browser_control tool", () => {
 
 		const parsed = JSON.parse(String(result));
 		expect(parsed.extensions).toContain("relay");
-		expect(
-			capturedChromeArgs.some((arg) => arg.includes(extensionDir)),
-		).toBe(true);
+		expect(capturedChromeArgs.some((arg) => arg.includes(extensionDir))).toBe(
+			true,
+		);
 	});
 
 	it("uses persistent named browser profile when configured", async () => {
@@ -1573,7 +1677,8 @@ describe("browser_control tool", () => {
 						launchPersistentContext: async (userDataDir, launchOptions) => {
 							capturedUserDataDir = userDataDir;
 							capturedHeadless = launchOptions?.headless ?? null;
-							capturedIgnoreDefaultArgs = launchOptions?.ignoreDefaultArgs || [];
+							capturedIgnoreDefaultArgs =
+								launchOptions?.ignoreDefaultArgs || [];
 							return {
 								pages: () => [page],
 								newPage: async () => page,
@@ -1699,7 +1804,9 @@ describe("browser_control tool", () => {
 								throw new Error("overCDP: WebSocket error: ECONNREFUSED");
 							}
 							return {
-								contexts: () => [{ pages: () => [page], newPage: async () => page }],
+								contexts: () => [
+									{ pages: () => [page], newPage: async () => page },
+								],
 								close: async () => {},
 							};
 						},
@@ -1866,12 +1973,7 @@ describe("browser_control tool", () => {
 		expect(existsSync(capturedUserDataDir)).toBe(true);
 		expect(
 			existsSync(
-				join(
-					executionWorkspace,
-					".wingman",
-					"browser-profiles",
-					"trading",
-				),
+				join(executionWorkspace, ".wingman", "browser-profiles", "trading"),
 			),
 		).toBe(false);
 	});
@@ -1881,7 +1983,12 @@ describe("browser_control tool", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "wingman-browser-temp-"));
 		workspaces.push(workspace, tempDir);
 
-		const profileDir = join(workspace, ".wingman", "browser-profiles", "trading");
+		const profileDir = join(
+			workspace,
+			".wingman",
+			"browser-profiles",
+			"trading",
+		);
 		mkdirSync(profileDir, { recursive: true });
 		const blocker = spawn("sleep", ["30"], { stdio: "ignore" });
 		try {
@@ -1938,7 +2045,12 @@ describe("browser_control tool", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "wingman-browser-temp-"));
 		workspaces.push(workspace, tempDir);
 
-		const profileDir = join(workspace, ".wingman", "browser-profiles", "trading");
+		const profileDir = join(
+			workspace,
+			".wingman",
+			"browser-profiles",
+			"trading",
+		);
 		mkdirSync(profileDir, { recursive: true });
 		writeFileSync(
 			join(profileDir, ".wingman-browser.lock"),

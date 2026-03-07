@@ -50,7 +50,7 @@ Each agent configuration file follows this schema:
 ### Optional Fields
 
 - **tools**: Array of tool names the agent can use
-  - Available tools: `internet_search`, `web_crawler`, `browser_control`, `command_execute`, `background_terminal`, `think`, `code_search`, `git_status`, `ui_registry_list`, `ui_registry_get`, `ui_present`
+  - Available tools: `internet_search`, `web_crawler`, `browser_control`, `browser_session_start`, `browser_session_action`, `browser_session_close`, `browser_session_list`, `command_execute`, `background_terminal`, `think`, `code_search`, `git_status`, `ui_registry_list`, `ui_registry_get`, `ui_present`
 - **model**: Override the default model (format: `provider:model-name`)
   - Anthropic: `anthropic:claude-opus-4-5`, `anthropic:claude-sonnet-4-5-20250929`
   - OpenAI: `openai:gpt-4o`, `openai:gpt-4-turbo`
@@ -59,6 +59,7 @@ Each agent configuration file follows this schema:
   - If the selected model does not support effort controls, Wingman logs a warning and continues
   - `thinkingEffort` is accepted as a legacy alias
 - **browserProfile**: Optional named persistent browser profile for `browser_control` (configured in `wingman.config.json` under `browser`; initialize with `wingman browser profile init <id>`)
+- **browserTransport**: Optional default transport for `browser_control` and `browser_session_*` (`auto`, `playwright`, or `relay`)
 - **promptRefinement**: Allow the agent to maintain a durable prompt overlay under `/memories/`
   - `enabled`: Set true to allow updates from explicit user feedback
   - `instructionsPath`: Optional override for the overlay file location (virtual path)

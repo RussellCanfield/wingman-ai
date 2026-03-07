@@ -94,11 +94,6 @@ export class WingmanConfigLoader {
 		return {
 			logLevel: "info",
 			recursionLimit: 5000,
-			summarization: {
-				enabled: true,
-				maxTokensBeforeSummary: 12000,
-				messagesToKeep: 8,
-			},
 			modelRetry: {
 				enabled: true,
 				maxRetries: 2,

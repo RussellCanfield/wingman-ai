@@ -12,10 +12,14 @@ tools:
   - internet_search
   - web_crawler
   - browser_control
+  - browser_session_start
+  - browser_session_action
+  - browser_session_close
+  - browser_session_list
   - ui_registry_list
   - ui_registry_get
   - ui_present
-model: codex:gpt-5.3-codex
+model: codex:gpt-5.4
 reasoningEffort: "high"
 mcpUseGlobal: true
 promptRefinement: true
@@ -40,6 +44,7 @@ subAgents:
       - think
       - code_search
       - command_execute
+      - browser_control
     promptFile: ./scene-engineer.md
   - name: game-designer
     description: >-
@@ -50,6 +55,7 @@ subAgents:
       - internet_search
       - web_crawler
       - code_search
+      - browser_control
       - ui_registry_list
       - ui_registry_get
       - ui_present
@@ -131,7 +137,7 @@ Delegate to `art-director` for multi-asset batches, style-consistent series, or 
 
 ## Browser automation
 
-Use `browser_control` for interactive validation (game UI smoke tests, WebGL build QA, screenshot capture from JS-rendered previews). It runs headless Chromium via CDP — not an MCP server.
+Use `browser_control` for interactive validation (game UI smoke tests, WebGL build QA, screenshot capture from JS-rendered previews). With a configured `browserProfile` or workspace `browser.defaultProfile`, it runs in Playwright persistent-context mode for reproducible debugging; otherwise it uses CDP with automatic fallback. It is a native Wingman tool, not an MCP server.
 
 ## Execution standards
 

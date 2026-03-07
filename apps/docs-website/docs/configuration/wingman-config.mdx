@@ -23,11 +23,6 @@ Add this to your config file for editor validation/autocomplete:
   "logLevel": "info",
   "defaultAgent": "wingman",
   "recursionLimit": 5000,
-  "summarization": {
-    "enabled": true,
-    "maxTokensBeforeSummary": 12000,
-    "messagesToKeep": 8
-  },
   "modelRetry": {
     "enabled": true,
     "maxRetries": 2,
@@ -234,11 +229,12 @@ For full setup steps, login bootstrap, command examples, and troubleshooting, se
 
 ## Summarization settings
 
-Wingman configures DeepAgent's built-in conversation summarization middleware so long-running threads are compressed instead of continuously expanding context.
+Wingman uses DeepAgents' built-in conversation summarization middleware so long-running threads are compressed instead of continuously expanding context.
 
-- `summarization.enabled` (default `true`): turn conversation compression on/off.
-- `summarization.maxTokensBeforeSummary` (default `12000`): approximate token threshold before summarization runs.
-- `summarization.messagesToKeep` (default `8`): number of most recent messages to keep verbatim after summarization.
+- Omit `summarization` entirely to use DeepAgents' out-of-the-box defaults.
+- `summarization.enabled`: explicitly turn conversation compression on/off.
+- `summarization.maxTokensBeforeSummary`: optional Wingman override for the summarization trigger threshold.
+- `summarization.messagesToKeep`: optional Wingman override for how many recent messages stay verbatim after summarization.
 
 ## Retry middleware settings
 

@@ -36,11 +36,6 @@ describe("CLI Config Loader", () => {
 			expect(config).toEqual({
 				logLevel: "info",
 				recursionLimit: 5000,
-				summarization: {
-					enabled: true,
-					maxTokensBeforeSummary: 12000,
-					messagesToKeep: 8,
-				},
 				modelRetry: {
 					enabled: true,
 					maxRetries: 2,
@@ -283,8 +278,6 @@ describe("CLI Config Loader", () => {
 
 			expect(config.summarization).toEqual({
 				enabled: false,
-				maxTokensBeforeSummary: 12000,
-				messagesToKeep: 8,
 			});
 		});
 

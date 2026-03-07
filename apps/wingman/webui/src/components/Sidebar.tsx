@@ -1,9 +1,15 @@
-import React from "react";
+import type React from "react";
+import {
+	FiEdit2,
+	FiMessageSquare,
+	FiPlus,
+	FiTrash2,
+	FiUser,
+} from "react-icons/fi";
 import { NavLink } from "react-router-dom";
-import { FiEdit2, FiMessageSquare, FiPlus, FiTrash2, FiUser } from "react-icons/fi";
-import type { ControlUiAgent, Thread } from "../types";
 import wingmanIcon from "../assets/wingman_icon.webp";
 import wingmanLogo from "../assets/wingman_logo.webp";
+import type { ControlUiAgent, Thread } from "../types";
 
 type SidebarProps = {
 	variant?: "default" | "mobile-drawer";
@@ -15,7 +21,10 @@ type SidebarProps = {
 	loadingThreads: boolean;
 	onSelectAgent: (agentId: string) => void;
 	onSelectThread: (threadId: string) => void;
-	onCreateThread: (agentId: string, name?: string) => Promise<Thread | null> | void;
+	onCreateThread: (
+		agentId: string,
+		name?: string,
+	) => Promise<Thread | null> | undefined;
 	onDeleteThread: (threadId: string) => void;
 	onRenameThread: (threadId: string) => void;
 	hostLabel: string;
@@ -40,10 +49,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 	deviceId,
 	getAgentLabel,
 }) => {
+	const agentSelectId =
+		variant === "mobile-drawer"
+			? "sidebar-agent-select-mobile"
+			: "sidebar-agent-select";
 	const navClass = (active: boolean) =>
-		`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold transition ${active
-			? "border-sky-500/50 bg-sky-500/15 text-sky-300"
-			: "border-white/10 bg-slate-950/50 text-slate-300 hover:border-sky-400/50"
+		`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+			active
+				? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+				: "border-white/10 bg-slate-950/50 text-slate-300 hover:border-sky-400/50"
 		}`;
 
 	const showThreads = currentRoute === "/chat";
@@ -60,7 +74,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 							className="h-14 rounded-2xl border border-white/10 bg-slate-950/60 p-1.5"
 						/>
 						<div>
-							<p className="text-xs uppercase tracking-[0.3em] text-slate-400">Navigation</p>
+							<p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+								Navigation
+							</p>
 							<h2 className="mt-1 text-lg font-semibold">Wingman</h2>
 						</div>
 					</div>
@@ -78,10 +94,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 				<NavLink to="/agents" className={({ isActive }) => navClass(isActive)}>
 					<span>Agents</span>
 				</NavLink>
-				<NavLink to="/webhooks" className={({ isActive }) => navClass(isActive)}>
+				<NavLink
+					to="/webhooks"
+					className={({ isActive }) => navClass(isActive)}
+				>
 					<span>Webhooks</span>
 				</NavLink>
-				<NavLink to="/routines" className={({ isActive }) => navClass(isActive)}>
+				<NavLink
+					to="/routines"
+					className={({ isActive }) => navClass(isActive)}
+				>
 					<span>Routines</span>
 				</NavLink>
 				<a
@@ -97,11 +119,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
 			{/* Threads Section - conditional on /chat route */}
 			{showThreads && (
 				<div className="space-y-3">
-					<p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Threads</p>
+					<p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+						Threads
+					</p>
 					<div className="flex items-end gap-2">
 						<div className="flex w-full flex-col gap-1">
-							<label className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Agent</label>
+							<label
+								htmlFor={agentSelectId}
+								className="text-[10px] uppercase tracking-[0.2em] text-slate-400"
+							>
+								Agent
+							</label>
 							<select
+								id={agentSelectId}
 								className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-xs font-semibold text-slate-200"
 								value={selectedAgentId}
 								onChange={(event) => onSelectAgent(event.target.value)}
@@ -136,10 +166,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 							threads.map((thread) => (
 								<div
 									key={thread.id}
-									className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${thread.id === activeThreadId
-										? "border-sky-500/50 bg-sky-500/12 text-sky-300"
-										: "border-white/10 bg-slate-950/50 text-slate-300 hover:border-sky-400/50"
-										}`}
+									className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+										thread.id === activeThreadId
+											? "border-sky-500/50 bg-sky-500/12 text-sky-300"
+											: "border-white/10 bg-slate-950/50 text-slate-300 hover:border-sky-400/50"
+									}`}
 								>
 									<div className="flex items-start justify-between gap-2">
 										<button
@@ -210,7 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 	}
 
 	return (
-		<nav className="panel-card animate-rise flex h-full flex-col gap-6 p-5">
+		<nav className="panel-card animate-rise flex h-full min-h-0 min-w-0 flex-col gap-6 overflow-y-auto overflow-x-hidden p-5">
 			{content}
 		</nav>
 	);

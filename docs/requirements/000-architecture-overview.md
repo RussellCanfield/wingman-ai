@@ -2,7 +2,7 @@
 
 **Version:** 1.3
 **Status:** Active
-**Last Updated:** 2026-02-27
+**Last Updated:** 2026-03-06
 
 ---
 
@@ -111,7 +111,7 @@ for re-copying bundled templates without config/provider onboarding:
 `wingman init --mode sync --only agents`.
 
 Bundled templates include specialist options such as `coding-v2`, `game-dev`, and `image-generator`.
-The `image-generator` template uses `xai:grok-imagine-image` for native prompt-to-image output in chat. The `game-dev` template includes sub-agents for art generation, asset refinement, planning, and UI, with explicit UV/geometry-aware texture guidance in its art flow.
+The `image-generator` template uses `xai:grok-imagine-image` for native prompt-to-image output in chat. The `game-dev` template includes sub-agents for art generation, scene engineering, gameplay/UI design, and browser-assisted WebGL/UI QA, with explicit UV/geometry-aware texture guidance in its art flow.
 
 When run interactively, the init wizard lets users pick a default agent and choose
 which bundled agents to copy.

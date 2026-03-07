@@ -1,4 +1,7 @@
-import { createDeepAgent } from "deepagents";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createDeepAgent, FilesystemBackend } from "deepagents";
 import { describe, expect, it } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -93,66 +96,84 @@ const isSummarizationMessage = (message: Record<string, unknown>): boolean => {
 describeE2E("Summarization E2E Integration (manual-only)", () => {
 	it("summarizes thread history when low token threshold is exceeded", async () => {
 		const model = new LocalEchoChatModel();
+		const backendRoot = mkdtempSync(
+			join(tmpdir(), "wingman-summarization-e2e-"),
+		);
+		const backendFactory = () =>
+			new FilesystemBackend({
+				rootDir: backendRoot,
+				virtualMode: true,
+			});
 		let agent = createDeepAgent({
 			model,
 			tools: [],
 			systemPrompt: "You are a test agent.",
+			backend: backendFactory,
 			checkpointer: new MemorySaver(),
 		}) as any;
 
-		configureDeepAgentSummarizationMiddleware(
-			agent,
-			{ maxTokensBeforeSummary: 30, messagesToKeep: 1 },
-			model,
-		);
-		agent = recompileDeepAgentWithMiddlewareOverrides(agent);
+		try {
+			configureDeepAgentSummarizationMiddleware(
+				agent,
+				{
+					mode: "custom",
+					maxTokensBeforeSummary: 30,
+					messagesToKeep: 1,
+				},
+				model,
+				backendFactory,
+			);
+			agent = recompileDeepAgentWithMiddlewareOverrides(agent);
 
-		const invocationConfig = {
-			configurable: { thread_id: THREAD_ID },
-		};
+			const invocationConfig = {
+				configurable: { thread_id: THREAD_ID },
+			};
 
-		await agent.invoke(
-			{
-				messages: [
-					{
-						role: "user",
-						content:
-							"Turn one: collect and retain these details for later synthesis.",
-					},
-				],
-			},
-			invocationConfig,
-		);
-		await agent.invoke(
-			{
-				messages: [
-					{
-						role: "user",
-						content:
-							"Turn two: include additional context and constraints for the prior request.",
-					},
-				],
-			},
-			invocationConfig,
-		);
-		await agent.invoke(
-			{
-				messages: [
-					{
-						role: "user",
-						content:
-							"Turn three: force context growth so the summarization middleware must compress history.",
-					},
-				],
-			},
-			invocationConfig,
-		);
+			await agent.invoke(
+				{
+					messages: [
+						{
+							role: "user",
+							content:
+								"Turn one: collect and retain these details for later synthesis.",
+						},
+					],
+				},
+				invocationConfig,
+			);
+			await agent.invoke(
+				{
+					messages: [
+						{
+							role: "user",
+							content:
+								"Turn two: include additional context and constraints for the prior request.",
+						},
+					],
+				},
+				invocationConfig,
+			);
+			await agent.invoke(
+				{
+					messages: [
+						{
+							role: "user",
+							content:
+								"Turn three: force context growth so the summarization middleware must compress history.",
+						},
+					],
+				},
+				invocationConfig,
+			);
 
-		const state = await agent.getState(invocationConfig);
-		const stateMessages = extractStateMessages(state);
-		const summaryMessages = stateMessages.filter(isSummarizationMessage);
+			const state = await agent.getState(invocationConfig);
+			const stateMessages = extractStateMessages(state);
+			const summaryMessages = stateMessages.filter(isSummarizationMessage);
 
-		expect(summaryMessages.length).toBeGreaterThan(0);
-		expect(stateMessages.length).toBeLessThan(6);
+			expect(summaryMessages.length).toBeGreaterThan(0);
+			expect(stateMessages.length).toBeLessThan(6);
+		} finally {
+			rmSync(backendRoot, { recursive: true, force: true });
+		}
 	});
 });

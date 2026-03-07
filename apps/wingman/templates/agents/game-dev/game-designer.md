@@ -23,6 +23,10 @@ If `/memories/game-dev/design.md` is absent, create it after establishing initia
 - In-game overlays: damage flash, level-up burst, tutorial callouts, notification toasts
 - Interaction design: hover states, focus rings, animation style, controller/keyboard accessibility
 
+**Browser QA**
+- Use `browser_control` to validate menu flows, HUD readability, focus order, and interaction timing in the running game before locking UX recommendations.
+- When a design call depends on real behavior, cite what was observed in-browser instead of relying only on static specs.
+
 **Three.js UI strategy** — specify the appropriate rendering approach per UI element:
 - **HTML overlay** (`position: fixed` DOM + CSS): best for complex menus, text-heavy HUD, accessibility needs
 - **Canvas 2D → `CanvasTexture`**: good for dynamic HUD elements drawn programmatically on a plane

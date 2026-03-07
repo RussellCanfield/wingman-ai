@@ -249,14 +249,12 @@ export const SummarizationConfigSchema = z.object({
 		.min(1000)
 		.max(1000000)
 		.optional()
-		.default(12000)
 		.describe("Token threshold before summarizing conversation history"),
 	messagesToKeep: z
 		.number()
 		.min(2)
 		.max(100)
 		.optional()
-		.default(8)
 		.describe("How many most recent messages to keep after summarization"),
 });
 
@@ -594,11 +592,7 @@ export const WingmanConfigSchema = z.object({
 		.default("info"),
 	defaultAgent: z.string().optional(),
 	recursionLimit: z.number().min(1).max(1000000).optional().default(5000),
-	summarization: SummarizationConfigSchema.optional().default({
-		enabled: true,
-		maxTokensBeforeSummary: 12000,
-		messagesToKeep: 8,
-	}),
+	summarization: SummarizationConfigSchema.optional(),
 	modelRetry: ModelRetryConfigSchema.optional().default({
 		enabled: true,
 		maxRetries: 2,

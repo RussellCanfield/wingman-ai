@@ -117,6 +117,7 @@ function createMarkdownComponents(options: {
 			if (renderAudioLinks && isLikelyAudioUrl(href)) {
 				return (
 					<span className="my-2 block w-full min-w-0 max-w-[420px]">
+						{/* biome-ignore lint/a11y/useMediaCaption: linked audio is user-provided and does not have caption tracks */}
 						<audio
 							controls
 							preload="metadata"
@@ -281,10 +282,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const canSend = connected && !recording && hasDraft;
 	const canStop = isStreaming && !recording && !hasDraft;
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset auto-scroll when the active thread changes
 	useEffect(() => {
 		autoScrollRef.current = true;
 	}, [activeThread?.id]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-run scrolling when transcript content changes
 	useLayoutEffect(() => {
 		const el = scrollRef.current;
 		if (!el || !autoScrollRef.current) return;
@@ -305,6 +308,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		loading,
 	]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: recompute textarea height when the prompt text changes
 	useLayoutEffect(() => {
 		const textarea = composerTextareaRef.current;
 		if (!textarea) return;
@@ -349,6 +353,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [previewAttachment]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup only needs to run on unmount
 	useEffect(() => {
 		return () => {
 			recordingCancelledRef.current = true;
@@ -405,7 +410,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		analyserRafRef.current = window.requestAnimationFrame(tick);
 	};
 
-	const stopAudioMeter = () => {
+	function stopAudioMeter() {
 		if (analyserRafRef.current !== null) {
 			window.cancelAnimationFrame(analyserRafRef.current);
 			analyserRafRef.current = null;
@@ -417,7 +422,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		analyserRef.current = null;
 		analyserDataRef.current = null;
 		setInputLevel(0);
-	};
+	}
 
 	const startRecording = async () => {
 		if (recording || isStreaming) return;
@@ -479,7 +484,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			recordTimerRef.current = window.setInterval(() => {
 				setRecordingDuration(Date.now() - recordStartRef.current);
 			}, 250);
-		} catch (error) {
+		} catch (_error) {
 			setRecordingError("Microphone access was denied.");
 			cleanupRecording();
 		}
@@ -666,6 +671,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					? `${queuedPromptCount} queued`
 					: null
 			: null;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: close the context popover when switching threads
 	useEffect(() => {
 		setContextMeterPopoverOpen(false);
 	}, [activeThread?.id]);
@@ -750,9 +756,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				timelineBlocks.length > 0
 					? toolEvents.filter((event) => !timelineToolEventIds.has(event.id))
 					: toolEvents;
-			const hasAnyActivity =
-				msg.role === "assistant" &&
-				(toolEvents.length > 0 || thinkingEvents.length > 0);
 			const hasPanelActivity =
 				msg.role === "assistant" &&
 				(panelToolEvents.length > 0 || thinkingEvents.length > 0);
@@ -802,7 +805,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						{showMetaRow ? (
 							<div
 								className={`flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] text-slate-400 ${
-									isUserMessage ? "justify-between" : "mb-1 justify-end"
+									isUserMessage ? "justify-between" : "mb-1 justify-start"
 								}`}
 							>
 								{isUserMessage ? <span>You</span> : null}
@@ -886,10 +889,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										</span>
 									</summary>
 									<div className="mt-2 space-y-2">
-										{thinkBlocks.map((block, i) => (
-											// biome-ignore lint/suspicious/noArrayIndexKey: stable list
+										{thinkBlocks.map((block) => (
 											<div
-												key={i}
+												key={`${msg.id}-think-${block}`}
 												className="whitespace-pre-wrap text-xs text-slate-400"
 											>
 												{block}
@@ -962,7 +964,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						{msg.role === "assistant" && isActiveMessage ? (
 							<div
 								data-testid="message-streaming-indicator"
-								className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400"
+								className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400 p-2"
 							>
 								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
 								<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
@@ -976,6 +978,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										key={preview.src}
 										className="w-full min-w-0 max-w-[420px] rounded-xl border border-white/10 bg-slate-950/40 p-3"
 									>
+										{/* biome-ignore lint/a11y/useMediaCaption: generated audio previews do not ship caption tracks */}
 										<audio
 											controls
 											preload="metadata"
@@ -1019,6 +1022,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 											{isAudio ? (
 												<div className="p-4">
 													{audioAvailability?.playable ? (
+														/* biome-ignore lint/a11y/useMediaCaption: uploaded audio attachments do not provide caption tracks */
 														<audio
 															controls
 															src={attachment.dataUrl}
@@ -1108,6 +1112,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		});
 	}, [
 		activeThread,
+		defaultOutputDir,
 		dynamicUiEnabled,
 		isStreaming,
 		lastAssistantId,
@@ -1121,28 +1126,27 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	]);
 
 	return (
-		<section className="panel-card animate-rise flex h-full min-h-0 flex-col gap-4 p-4 sm:gap-4 sm:p-4">
-			<header className="flex flex-wrap items-center justify-between gap-4">
-				<div>
-					<h2 className="text-lg font-semibold">Mission Stream</h2>
-					<p className="mt-1 text-sm text-slate-400">
-						Thread:{" "}
-						<span className="font-semibold text-slate-200">
-							{activeThread?.name || "--"}
-						</span>
-					</p>
-				</div>
+		<section className="panel-card animate-rise grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2.5 overflow-hidden p-2.5 sm:gap-2.5 sm:p-2.5">
+			<header className="flex flex-wrap items-center justify-between gap-1.5">
+				<h2 className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+					Chat
+				</h2>
 				<div className="flex flex-wrap items-center gap-2">
 					<button
-						className={`button-secondary ${voiceAutoEnabled ? "border-sky-400/60 text-sky-200" : ""}`}
+						className={`button-secondary px-2.5 py-1 text-[10px] ${
+							voiceAutoEnabled
+								? "border-sky-400/60 text-sky-200"
+								: "text-slate-300"
+						}`}
 						onClick={onToggleVoiceAuto}
 						type="button"
 						disabled={!canToggleVoice}
+						aria-pressed={voiceAutoEnabled}
 					>
-						{voiceAutoEnabled ? "Voice: Auto" : "Voice: Off"}
+						Voice
 					</button>
 					<button
-						className="button-secondary"
+						className="button-secondary px-2.5 py-1 text-[10px] text-slate-300"
 						onClick={onClearChat}
 						type="button"
 					>
@@ -1154,14 +1158,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			<div
 				ref={scrollRef}
 				onScroll={handleScroll}
-				className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80"
+				className="relative min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80"
 			>
-				<div className="min-h-full p-3 sm:p-4">{transcriptContent}</div>
+				<div className="min-h-full p-2.5">{transcriptContent}</div>
 			</div>
 
-			<>
+			<div className="flex min-h-0 flex-col gap-2">
 				{!connected ? (
-					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
+					<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
 						<div>
 							<span className="font-semibold">Gateway not connected.</span> Open
 							the Command Deck to connect before sending prompts.
@@ -1176,7 +1180,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					</div>
 				) : null}
 				{attachments.length > 0 ? (
-					<div className="mt-3 flex flex-wrap gap-2">
+					<div className="flex flex-wrap gap-2">
 						{attachments.map((attachment) => {
 							const isAudio = isAudioAttachment(attachment);
 							const isFile = isFileAttachment(attachment);
@@ -1191,6 +1195,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									{isAudio ? (
 										<div className="flex items-center gap-2 px-2 py-1">
 											{audioAvailability?.playable ? (
+												/* biome-ignore lint/a11y/useMediaCaption: uploaded audio attachments do not provide caption tracks */
 												<audio
 													controls
 													src={attachment.dataUrl}
@@ -1244,15 +1249,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					</div>
 				) : null}
 				{attachmentError ? (
-					<div className="mt-2 text-xs text-rose-500">{attachmentError}</div>
+					<div className="text-xs text-rose-500">{attachmentError}</div>
 				) : null}
 				{recordingError ? (
-					<div className="mt-2 text-xs text-rose-500">{recordingError}</div>
+					<div className="text-xs text-rose-500">{recordingError}</div>
 				) : null}
 				<label htmlFor="prompt-textarea" className="sr-only">
 					Message
 				</label>
-				<div className="mt-2">
+				<div>
 					{todoSnapshot ? (
 						<TodoProgressPanel
 							key={`${activeThread?.id ?? "thread"}:${todoSnapshot.sourceEventId ?? "todos"}`}
@@ -1262,13 +1267,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					) : null}
 					<div
 						className={`border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] ${
-							todoSnapshot
-								? "-mt-px rounded-b-2xl rounded-t-xl"
-								: "rounded-2xl"
+							todoSnapshot ? "-mt-px rounded-b-2xl rounded-t-xl" : "rounded-2xl"
 						}`}
 					>
 						{composerActivityLabel ? (
-							<div className="px-2 pb-2 text-[11px] text-slate-400">
+							<div className="px-2 pb-1.5 text-[11px] text-slate-400">
 								{composerActivityLabel}
 							</div>
 						) : null}
@@ -1276,7 +1279,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							<textarea
 								ref={composerTextareaRef}
 								id="prompt-textarea"
-								className="min-h-[44px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
+								className="min-h-[40px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
 								rows={1}
 								value={prompt}
 								onChange={(event) => onPromptChange(event.target.value)}
@@ -1290,7 +1293,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							<div className="flex items-center gap-2">
 								<button
 									type="button"
-									className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+									className="inline-flex h-8 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
 									onClick={handlePickFiles}
 									aria-label="Add files"
 								>
@@ -1301,7 +1304,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									type="button"
 									aria-pressed={recording}
 									aria-label={recording ? "Stop recording" : "Record audio"}
-									className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+									className={`relative flex h-8 w-8 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
 										recording
 											? "border-rose-400/60 bg-rose-500/20 text-rose-100"
 											: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
@@ -1331,7 +1334,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 										>
 											<span
 												data-testid="conversation-context-meter"
-												className="relative inline-flex h-7 w-7 items-center justify-center rounded-full p-[2px]"
+												className="relative inline-flex h-5 w-5 items-center justify-center rounded-full p-[2px]"
 												style={contextMeterRing || undefined}
 											>
 												<span
@@ -1393,7 +1396,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									</div>
 								) : null}
 								<button
-									className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
+									className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-40 ${
 										canStop
 											? "border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300/80"
 											: "border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white hover:from-cyan-300 hover:to-blue-400"
@@ -1422,7 +1425,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						/>
 					</div>
 				</div>
-			</>
+			</div>
 			{previewAttachment
 				? (() => {
 						const previewModal = (

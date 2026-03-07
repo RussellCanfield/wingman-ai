@@ -11,7 +11,7 @@ import {
 } from "react-router-dom";
 import wingmanIcon from "./assets/wingman_icon.webp";
 import wingmanLogo from "./assets/wingman_logo.webp";
-import { HeroPanel } from "./components/HeroPanel";
+import { GatewayStatusIndicator } from "./components/GatewayStatusIndicator";
 import { Sidebar } from "./components/Sidebar";
 import { AgentsPage } from "./pages/AgentsPage";
 import { ChatPage } from "./pages/ChatPage";
@@ -34,7 +34,6 @@ import type {
 	ProviderStatusResponse,
 	ReasoningEffort,
 	Routine,
-	SummarizationConfig,
 	ThinkingEvent,
 	Thread,
 	ToolEvent,
@@ -86,7 +85,11 @@ import {
 } from "./utils/gatewayError";
 import { sanitizeAssistantDisplayText } from "./utils/internalToolEnvelope";
 import { createGatewayLangGraphTransport } from "./utils/langgraphTransport";
-import { getWorkspaceShellClass } from "./utils/layoutShell";
+import {
+	getWorkspaceContentClass,
+	getWorkspaceGridClass,
+	getWorkspaceShellClass,
+} from "./utils/layoutShell";
 import { readStoredBoolean, readStoredString } from "./utils/persistedStorage";
 import { randomUuid } from "./utils/randomUuid";
 import { shouldMarkRequestActive } from "./utils/requestLifecycle";
@@ -102,10 +105,11 @@ import { isAssistantTextStreamChunk } from "./utils/streamChunkKind";
 import { parseStreamEvents } from "./utils/streaming";
 import {
 	clearStreamMessageTargets,
+	getRequestMessageTargetIds,
+	type RequestStreamMessageMap,
 	resolveTextMessageTargetId,
 	resolveToolMessageTargetId,
 } from "./utils/streamMessageRouter";
-import { resolveActiveStreamMessageId } from "./utils/streamRetry";
 import {
 	upsertTimelineTextBlock,
 	upsertTimelineToolBlock,
@@ -126,19 +130,12 @@ const DEFAULT_VOICE_CONFIG: VoiceConfig = {
 	elevenlabs: {},
 };
 
-const DEFAULT_SUMMARIZATION_CONFIG: SummarizationConfig = {
-	enabled: true,
-	maxTokensBeforeSummary: 12000,
-	messagesToKeep: 8,
-};
-
 const DEFAULT_CONFIG: ControlUiConfig = {
 	gatewayHost: "127.0.0.1",
 	gatewayPort: 18789,
 	requireAuth: false,
 	outputRoot: "",
 	dynamicUiEnabled: true,
-	summarization: DEFAULT_SUMMARIZATION_CONFIG,
 	voice: DEFAULT_VOICE_CONFIG,
 	agents: [],
 };
@@ -232,10 +229,7 @@ export const App: React.FC = () => {
 	>(new Set());
 	const connectRequestIdRef = useRef<string | null>(null);
 	const buffersRef = useRef<Map<string, string>>(new Map());
-	const activeTextStreamMessageRef = useRef<Map<string, string>>(new Map());
-	const requestStreamMessageRef = useRef<Map<string, Map<string, string>>>(
-		new Map(),
-	);
+	const requestStreamMessageRef = useRef<RequestStreamMessageMap>(new Map());
 	const requestStreamOrderRef = useRef<Map<string, number>>(new Map());
 	const timelineActiveTextBlockRef = useRef<Map<string, string>>(new Map());
 	const timelineActiveTextOrderRef = useRef<Map<string, number>>(new Map());
@@ -403,7 +397,7 @@ export const App: React.FC = () => {
 	const resetPendingRequests = useCallback(() => {
 		pendingRequestIdsRef.current.clear();
 		activeRequestIdRef.current = null;
-		activeTextStreamMessageRef.current.clear();
+		requestStreamMessageRef.current.clear();
 		requestContextPeakRef.current.clear();
 		requestSummarizingRef.current.clear();
 		requestSummarizedRef.current.clear();
@@ -438,17 +432,6 @@ export const App: React.FC = () => {
 		},
 		[],
 	);
-
-	const formatDuration = (ms?: number) => {
-		if (!ms && ms !== 0) return "--";
-		const totalSeconds = Math.floor(ms / 1000);
-		const hours = Math.floor(totalSeconds / 3600);
-		const minutes = Math.floor((totalSeconds % 3600) / 60);
-		const seconds = totalSeconds % 60;
-		if (hours > 0) return `${hours}h ${minutes}m`;
-		if (minutes > 0) return `${minutes}m ${seconds}s`;
-		return `${seconds}s`;
-	};
 
 	const refreshStats = useCallback(async () => {
 		try {
@@ -911,29 +894,16 @@ export const App: React.FC = () => {
 	}, [stopVoicePlayback]);
 
 	const getRequestMessageIds = useCallback((requestId: string): string[] => {
-		const ids = new Set<string>([requestId]);
-		const requestTargets = requestStreamMessageRef.current.get(requestId);
-		if (requestTargets) {
-			for (const targetId of requestTargets.values()) {
-				ids.add(targetId);
-			}
-		}
-		return [...ids];
+		return getRequestMessageTargetIds(
+			requestStreamMessageRef.current,
+			requestId,
+			requestId,
+		);
 	}, []);
 
 	const resolveRequestMessageId = useCallback(
 		(requestId: string): string => {
 			const candidates = getRequestMessageIds(requestId);
-			for (let index = candidates.length - 1; index >= 0; index -= 1) {
-				const candidate = candidates[index];
-				if (
-					(buffersRef.current.get(candidate) || "").trim().length > 0 ||
-					uiFallbackRef.current.has(candidate) ||
-					uiOnlyRequestsRef.current.has(candidate)
-				) {
-					return candidate;
-				}
-			}
 			return candidates[candidates.length - 1] || requestId;
 		},
 		[getRequestMessageIds],
@@ -1043,9 +1013,6 @@ export const App: React.FC = () => {
 			if (!text) return;
 			const threadId = requestThreadRef.current.get(requestId);
 			if (!threadId) return;
-			if (uiOnlyRequestsRef.current.has(messageId)) {
-				return;
-			}
 			const existingRaw = buffersRef.current.get(messageId) ?? "";
 			const mergedRaw = mergeAssistantStreamText(existingRaw, text);
 			buffersRef.current.set(messageId, mergedRaw);
@@ -1100,47 +1067,6 @@ export const App: React.FC = () => {
 		},
 		[nextStreamOrder, scheduleQueuedAssistantUpdateFlush],
 	);
-
-	const abandonBufferedAssistantText = useCallback((requestId: string) => {
-		buffersRef.current.delete(requestId);
-		uiFallbackRef.current.delete(requestId);
-		timelineActiveTextBlockRef.current.delete(requestId);
-		timelineActiveTextOrderRef.current.delete(requestId);
-		timelineLastKindRef.current.delete(requestId);
-		for (const [key, update] of queuedAssistantUpdatesRef.current) {
-			if (update.requestId !== requestId || update.messageId !== requestId) {
-				continue;
-			}
-			queuedAssistantUpdatesRef.current.delete(key);
-		}
-		const threadId = requestThreadRef.current.get(requestId);
-		if (!threadId) return;
-		setThreads((prev) =>
-			prev.map((thread) => {
-				if (thread.id !== threadId) return thread;
-				return upsertAssistantMessage(
-					thread,
-					requestId,
-					(message) => {
-						if (
-							message.content.length === 0 &&
-							(message.inlineThinkBlocks?.length || 0) === 0 &&
-							(message.activityTimeline?.length || 0) === 0
-						) {
-							return message;
-						}
-						return {
-							...message,
-							content: "",
-							inlineThinkBlocks: undefined,
-							activityTimeline: undefined,
-						};
-					},
-					requestId,
-				);
-			}),
-		);
-	}, []);
 
 	useEffect(() => {
 		return () => {
@@ -1408,6 +1334,7 @@ export const App: React.FC = () => {
 				outputTokens: number;
 				totalTokens: number;
 				estimatedContextTokens?: number;
+				thresholdTokens?: number;
 				messageId?: string;
 				node?: string;
 				timestamp: number;
@@ -1422,6 +1349,7 @@ export const App: React.FC = () => {
 				{
 					inputTokens: number;
 					estimatedContextTokens?: number;
+					thresholdTokens?: number;
 					outputTokens: number;
 					totalTokens: number;
 					timestamp: number;
@@ -1432,6 +1360,7 @@ export const App: React.FC = () => {
 				usageByMessageId.set(targetMessageId, {
 					inputTokens: event.inputTokens,
 					estimatedContextTokens: event.estimatedContextTokens,
+					thresholdTokens: event.thresholdTokens,
 					outputTokens: event.outputTokens,
 					totalTokens: event.totalTokens,
 					timestamp: event.timestamp,
@@ -1504,11 +1433,18 @@ export const App: React.FC = () => {
 									0;
 								const nextPeak = Math.max(previousPeak, nextDisplayInput);
 								requestContextPeakRef.current.set(requestId, nextPeak);
+								const thresholdValueFromEvent =
+									typeof event.thresholdTokens === "number" &&
+									event.thresholdTokens > 0
+										? event.thresholdTokens
+										: null;
+								const resolvedThresholdValue =
+									thresholdValue ?? thresholdValueFromEvent;
 								const shouldMarkSummarized =
-									thresholdValue !== null &&
-									nextPeak >= thresholdValue * 0.9 &&
+									resolvedThresholdValue !== null &&
+									nextPeak >= resolvedThresholdValue * 0.9 &&
 									nextDisplayInput > 0 &&
-									nextDisplayInput <= thresholdValue * 0.65 &&
+									nextDisplayInput <= resolvedThresholdValue * 0.65 &&
 									nextDisplayInput <= nextPeak * 0.75;
 
 								return {
@@ -1519,10 +1455,12 @@ export const App: React.FC = () => {
 											nextEstimatedInput > 0 ? nextEstimatedInput : undefined,
 										outputTokens: nextOutput,
 										totalTokens: nextTotal,
-										thresholdTokens: thresholdValue ?? undefined,
+										thresholdTokens: resolvedThresholdValue ?? undefined,
 										percentOfThreshold:
-											thresholdValue !== null && nextDisplayInput > 0
-												? Math.round((nextDisplayInput / thresholdValue) * 100)
+											resolvedThresholdValue !== null && nextDisplayInput > 0
+												? Math.round(
+														(nextDisplayInput / resolvedThresholdValue) * 100,
+													)
 												: undefined,
 										summarized:
 											previous?.summarized ||
@@ -1563,7 +1501,6 @@ export const App: React.FC = () => {
 			requestContextPeakRef.current.delete(requestId);
 			requestSummarizingRef.current.delete(requestId);
 			requestSummarizedRef.current.delete(requestId);
-			activeTextStreamMessageRef.current.delete(requestId);
 			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
 			requestStreamOrderRef.current.delete(requestId);
 			taskDelegationRef.current.delete(requestId);
@@ -1885,32 +1822,40 @@ export const App: React.FC = () => {
 					payload.estimatedContextTokens > 0
 						? payload.estimatedContextTokens
 						: undefined;
+				const payloadThresholdTokens =
+					typeof payload.thresholdTokens === "number" &&
+					Number.isFinite(payload.thresholdTokens) &&
+					payload.thresholdTokens > 0
+						? payload.thresholdTokens
+						: undefined;
 				const payloadTokenUsage =
 					payload.tokenUsage &&
 					typeof payload.tokenUsage === "object" &&
 					!Array.isArray(payload.tokenUsage)
 						? (payload.tokenUsage as Record<string, unknown>)
 						: null;
-				const streamChunkForParsing =
-					rawStreamChunk &&
-					(payloadTokenUsage || payloadEstimatedContextTokens !== undefined)
+				const payloadMetadata =
+					payloadTokenUsage ||
+					payloadEstimatedContextTokens !== undefined ||
+					payloadThresholdTokens !== undefined
 						? {
-								...rawStreamChunk,
 								...(payloadTokenUsage ? { tokenUsage: payloadTokenUsage } : {}),
 								...(payloadEstimatedContextTokens !== undefined
 									? { estimatedContextTokens: payloadEstimatedContextTokens }
 									: {}),
+								...(payloadThresholdTokens !== undefined
+									? { thresholdTokens: payloadThresholdTokens }
+									: {}),
 							}
-						: rawStreamChunk ||
-							(payloadTokenUsage
-								? { tokenUsage: payloadTokenUsage }
-								: payloadEstimatedContextTokens !== undefined
-									? { estimatedContextTokens: payloadEstimatedContextTokens }
-									: payload.chunk);
+						: null;
+				const normalizedStreamChunkForParsing =
+					rawStreamChunk && payloadMetadata
+						? { ...rawStreamChunk, ...payloadMetadata }
+						: rawStreamChunk || payloadMetadata || payload.chunk;
 				const { textEvents, attachmentEvents, usageEvents, toolEvents } =
-					parseStreamEvents(streamChunkForParsing);
+					parseStreamEvents(normalizedStreamChunkForParsing);
 				const shouldHandleDeltaTextStream = isAssistantTextStreamChunk(
-					streamChunkForParsing,
+					normalizedStreamChunkForParsing,
 				);
 				const agentForRequest = requestAgentRef.current.get(requestId);
 				const subagents = agentForRequest
@@ -1951,23 +1896,14 @@ export const App: React.FC = () => {
 							updatedAt: Date.now(),
 						});
 					} else {
-						const streamMessageTransition = resolveActiveStreamMessageId({
-							currentActiveMessageId:
-								activeTextStreamMessageRef.current.get(requestId),
-							incomingMessageId: event.messageId,
+						const targetMessageId = resolveTextMessageTargetId({
+							state: requestStreamMessageRef.current,
+							requestId,
+							fallbackMessageId: requestId,
 						});
-						if (streamMessageTransition.shouldResetBufferedText) {
-							abandonBufferedAssistantText(requestId);
-						}
-						if (streamMessageTransition.nextActiveMessageId) {
-							activeTextStreamMessageRef.current.set(
-								requestId,
-								streamMessageTransition.nextActiveMessageId,
-							);
-						}
 						queueAssistantUpdate({
 							requestId,
-							messageId: requestId,
+							messageId: targetMessageId,
 							text: event.text,
 						});
 					}
@@ -1992,8 +1928,6 @@ export const App: React.FC = () => {
 							state: requestStreamMessageRef.current,
 							requestId,
 							fallbackMessageId: requestId,
-							streamMessageId: event.messageId,
-							isDelta: event.isDelta,
 						});
 						const bucket =
 							attachmentEventsByMessageId.get(targetMessageId) || [];
@@ -2013,6 +1947,7 @@ export const App: React.FC = () => {
 				}
 
 				if (toolEvents.length > 0) {
+					flushQueuedAssistantUpdates();
 					const taskMap = taskDelegationRef.current.get(requestId) || new Map();
 					const enrichedToolEvents = toolEvents.map((event) => {
 						const runId = event.runId || event.id;
@@ -2147,7 +2082,6 @@ export const App: React.FC = () => {
 		},
 		[
 			agentId,
-			abandonBufferedAssistantText,
 			finalizeAssistant,
 			flushQueuedAssistantUpdates,
 			logEvent,
@@ -2739,10 +2673,6 @@ export const App: React.FC = () => {
 			const data = (await res.json()) as ControlUiConfig;
 			setConfig({
 				...data,
-				summarization: {
-					...DEFAULT_SUMMARIZATION_CONFIG,
-					...(data.summarization || {}),
-				},
 				voice: data.voice || DEFAULT_VOICE_CONFIG,
 			});
 		} catch {
@@ -3023,6 +2953,7 @@ export const App: React.FC = () => {
 		: "Auth is not required for this gateway.";
 	const hostLabel = `${config.gatewayHost}:${config.gatewayPort}`;
 	const isChatRoute = location.pathname === "/chat";
+	const showCompactGatewayIndicator = location.pathname !== "/command";
 
 	const createAgent = useCallback(
 		async (payload: {
@@ -3338,14 +3269,13 @@ export const App: React.FC = () => {
 				<div className="gridlines" />
 			</div>
 			<div className="noise z-[1]" />
+			{showCompactGatewayIndicator ? (
+				<GatewayStatusIndicator connected={connected} connecting={connecting} />
+			) : null}
 			<main className={getWorkspaceShellClass(isChatRoute)}>
-				<div
-					className={`grid gap-6 lg:grid-cols-[280px_1fr] ${
-						isChatRoute ? "lg:h-full lg:min-h-0" : ""
-					}`}
-				>
+				<div className={getWorkspaceGridClass(isChatRoute)}>
 					{/* Desktop Sidebar - Hidden on mobile */}
-					<div className="hidden lg:block">
+					<div className="hidden min-h-0 lg:block">
 						<Sidebar
 							variant="default"
 							currentRoute={location.pathname}
@@ -3465,20 +3395,7 @@ export const App: React.FC = () => {
 						</>
 					)}
 
-					<section
-						className={
-							isChatRoute ? "flex min-h-0 flex-col gap-6" : "space-y-6"
-						}
-					>
-						<HeroPanel
-							agentId={currentAgentId}
-							activeThreadName={activeThread?.name}
-							statusLabel={statusLabel}
-							connected={connected}
-							health={health}
-							stats={stats}
-							formatDuration={formatDuration}
-						/>
+					<section className={getWorkspaceContentClass(isChatRoute)}>
 						<Routes>
 							<Route path="/" element={<Navigate to="/chat" replace />} />
 							<Route
@@ -3522,11 +3439,16 @@ export const App: React.FC = () => {
 								path="/command"
 								element={
 									<CommandDeckPage
+										agentId={currentAgentId}
+										activeThreadName={activeThread?.name}
 										wsUrl={wsUrl}
 										token={token}
 										password={password}
 										connecting={connecting}
 										connected={connected}
+										statusLabel={statusLabel}
+										health={health}
+										stats={stats}
 										authHint={authHint}
 										autoConnectStatus={autoConnectStatus}
 										deviceId={deviceId}

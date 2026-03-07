@@ -1,178 +1,193 @@
 import { describe, expect, it } from "vitest";
 import {
 	clearStreamMessageTargets,
+	getRequestMessageTargetIds,
 	resolveTextMessageTargetId,
 	resolveToolMessageTargetId,
 } from "./streamMessageRouter";
 
 describe("streamMessageRouter", () => {
-	it("uses fallback message id when text event has no stream id", () => {
-		const state = new Map<string, Map<string, string>>();
-		const messageId = resolveTextMessageTargetId({
+	it("keeps text on the current assistant message", () => {
+		const state = new Map();
+
+		const first = resolveTextMessageTargetId({
 			state,
 			requestId: "req-1",
 			fallbackMessageId: "assistant-1",
 		});
-		expect(messageId).toBe("assistant-1");
-	});
-
-	it("keeps delta text without ids on fallback message", () => {
-		const state = new Map<string, Map<string, string>>();
-		const messageId = resolveTextMessageTargetId({
+		const second = resolveTextMessageTargetId({
 			state,
-			requestId: "req-1a",
-			fallbackMessageId: "assistant-1a",
-			isDelta: true,
+			requestId: "req-1",
+			fallbackMessageId: "assistant-1",
 		});
-		expect(messageId).toBe("assistant-1a");
+
+		expect(first).toBe("assistant-1");
+		expect(second).toBe("assistant-1");
+		expect(getRequestMessageTargetIds(state, "req-1", "assistant-1")).toEqual([
+			"assistant-1",
+		]);
 	});
 
-	it("keeps text chunks from same run on one message id", () => {
-		const state = new Map<string, Map<string, string>>();
-		const first = resolveTextMessageTargetId({
+	it("starts a new assistant message when a new tool phase begins after text", () => {
+		const state = new Map();
+
+		resolveTextMessageTargetId({
 			state,
 			requestId: "req-2",
 			fallbackMessageId: "assistant-2",
-			streamMessageId: "run-A",
 		});
-		const second = resolveTextMessageTargetId({
-			state,
-			requestId: "req-2",
-			fallbackMessageId: "assistant-2",
-			streamMessageId: "run-A",
-		});
-
-		expect(first).toBe(second);
-		expect(first).not.toBe("assistant-2");
-	});
-
-	it("routes different runs to different derived message ids", () => {
-		const state = new Map<string, Map<string, string>>();
-		const first = resolveTextMessageTargetId({
-			state,
-			requestId: "req-3",
-			fallbackMessageId: "assistant-3",
-			streamMessageId: "run-A",
-		});
-		const second = resolveTextMessageTargetId({
-			state,
-			requestId: "req-3",
-			fallbackMessageId: "assistant-3",
-			streamMessageId: "run-B",
-		});
-
-		expect(first).not.toBe(second);
-	});
-
-	it("routes non-delta no-id events to unique derived messages", () => {
-		const state = new Map<string, Map<string, string>>();
-		const first = resolveTextMessageTargetId({
-			state,
-			requestId: "req-3a",
-			fallbackMessageId: "assistant-3a",
-			isDelta: false,
-			eventKey: "evt-1",
-		});
-		const second = resolveTextMessageTargetId({
-			state,
-			requestId: "req-3a",
-			fallbackMessageId: "assistant-3a",
-			isDelta: false,
-			eventKey: "evt-2",
-		});
-		const firstAgain = resolveTextMessageTargetId({
-			state,
-			requestId: "req-3a",
-			fallbackMessageId: "assistant-3a",
-			isDelta: false,
-			eventKey: "evt-1",
-		});
-
-		expect(first).not.toBe("assistant-3a");
-		expect(second).not.toBe("assistant-3a");
-		expect(first).not.toBe(second);
-		expect(firstAgain).toBe(first);
-	});
-
-	it("prefers event keys for non-delta routing even when run id is present", () => {
-		const state = new Map<string, Map<string, string>>();
-		const first = resolveTextMessageTargetId({
-			state,
-			requestId: "req-3b",
-			fallbackMessageId: "assistant-3b",
-			streamMessageId: "run-shared",
-			isDelta: false,
-			eventKey: "evt-a",
-		});
-		const second = resolveTextMessageTargetId({
-			state,
-			requestId: "req-3b",
-			fallbackMessageId: "assistant-3b",
-			streamMessageId: "run-shared",
-			isDelta: false,
-			eventKey: "evt-b",
-		});
-
-		expect(first).not.toBe(second);
-	});
-
-	it("routes tool events to parent run message when available", () => {
-		const state = new Map<string, Map<string, string>>();
-		const textMessageId = resolveTextMessageTargetId({
-			state,
-			requestId: "req-4",
-			fallbackMessageId: "assistant-4",
-			streamMessageId: "parent-run",
-		});
-
 		const toolMessageId = resolveToolMessageTargetId({
 			state,
+			requestId: "req-2",
+			fallbackMessageId: "assistant-2",
+			runId: "tool-run-1",
+		});
+		const textAfterToolMessageId = resolveTextMessageTargetId({
+			state,
+			requestId: "req-2",
+			fallbackMessageId: "assistant-2",
+		});
+
+		expect(toolMessageId).not.toBe("assistant-2");
+		expect(textAfterToolMessageId).toBe(toolMessageId);
+		expect(getRequestMessageTargetIds(state, "req-2", "assistant-2")).toEqual([
+			"assistant-2",
+			toolMessageId,
+		]);
+	});
+
+	it("keeps multiple tools in the same tool phase on one message", () => {
+		const state = new Map();
+
+		resolveTextMessageTargetId({
+			state,
+			requestId: "req-3",
+			fallbackMessageId: "assistant-3",
+		});
+		const firstToolMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-3",
+			fallbackMessageId: "assistant-3",
+			runId: "tool-run-1",
+		});
+		const secondToolMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-3",
+			fallbackMessageId: "assistant-3",
+			runId: "tool-run-2",
+		});
+
+		expect(secondToolMessageId).toBe(firstToolMessageId);
+	});
+
+	it("starts another assistant message when a later tool phase begins", () => {
+		const state = new Map();
+
+		resolveTextMessageTargetId({
+			state,
 			requestId: "req-4",
 			fallbackMessageId: "assistant-4",
-			runId: "tool-run",
-			parentRunIds: ["parent-run"],
+		});
+		const firstToolMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-4",
+			fallbackMessageId: "assistant-4",
+			runId: "tool-run-1",
+		});
+		resolveTextMessageTargetId({
+			state,
+			requestId: "req-4",
+			fallbackMessageId: "assistant-4",
+		});
+		const secondToolMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-4",
+			fallbackMessageId: "assistant-4",
+			runId: "tool-run-2",
 		});
 
-		expect(toolMessageId).toBe(textMessageId);
+		expect(secondToolMessageId).not.toBe(firstToolMessageId);
+		expect(getRequestMessageTargetIds(state, "req-4", "assistant-4")).toEqual([
+			"assistant-4",
+			firstToolMessageId,
+			secondToolMessageId,
+		]);
 	});
 
-	it("aliases tool run ids when parent mapping is used", () => {
-		const state = new Map<string, Map<string, string>>();
-		const textMessageId = resolveTextMessageTargetId({
-			state,
-			requestId: "req-4a",
-			fallbackMessageId: "assistant-4a",
-			streamMessageId: "parent-run",
-		});
+	it("keeps tool updates on the message where the run started", () => {
+		const state = new Map();
 
-		const startMessageId = resolveToolMessageTargetId({
-			state,
-			requestId: "req-4a",
-			fallbackMessageId: "assistant-4a",
-			runId: "tool-run",
-			parentRunIds: ["parent-run"],
-		});
-		const endMessageId = resolveToolMessageTargetId({
-			state,
-			requestId: "req-4a",
-			fallbackMessageId: "assistant-4a",
-			runId: "tool-run",
-		});
-
-		expect(startMessageId).toBe(textMessageId);
-		expect(endMessageId).toBe(textMessageId);
-	});
-
-	it("clears per-request mappings after completion", () => {
-		const state = new Map<string, Map<string, string>>();
 		resolveTextMessageTargetId({
 			state,
 			requestId: "req-5",
 			fallbackMessageId: "assistant-5",
-			streamMessageId: "run-A",
 		});
-		expect(state.has("req-5")).toBe(true);
-		clearStreamMessageTargets(state, "req-5");
-		expect(state.has("req-5")).toBe(false);
+		const firstToolMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-5",
+			fallbackMessageId: "assistant-5",
+			runId: "tool-run-1",
+		});
+		resolveTextMessageTargetId({
+			state,
+			requestId: "req-5",
+			fallbackMessageId: "assistant-5",
+		});
+		resolveToolMessageTargetId({
+			state,
+			requestId: "req-5",
+			fallbackMessageId: "assistant-5",
+			runId: "tool-run-2",
+		});
+		const toolUpdateMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-5",
+			fallbackMessageId: "assistant-5",
+			runId: "tool-run-1",
+		});
+
+		expect(toolUpdateMessageId).toBe(firstToolMessageId);
+	});
+
+	it("inherits a parent tool message for nested tool runs", () => {
+		const state = new Map();
+
+		resolveTextMessageTargetId({
+			state,
+			requestId: "req-6",
+			fallbackMessageId: "assistant-6",
+		});
+		const parentToolMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-6",
+			fallbackMessageId: "assistant-6",
+			runId: "tool-run-parent",
+		});
+		const childToolMessageId = resolveToolMessageTargetId({
+			state,
+			requestId: "req-6",
+			fallbackMessageId: "assistant-6",
+			runId: "tool-run-child",
+			parentRunIds: ["tool-run-parent"],
+		});
+
+		expect(childToolMessageId).toBe(parentToolMessageId);
+	});
+
+	it("clears per-request state after completion", () => {
+		const state = new Map();
+
+		resolveTextMessageTargetId({
+			state,
+			requestId: "req-7",
+			fallbackMessageId: "assistant-7",
+		});
+
+		expect(state.has("req-7")).toBe(true);
+		clearStreamMessageTargets(state, "req-7");
+		expect(state.has("req-7")).toBe(false);
+		expect(getRequestMessageTargetIds(state, "req-7", "assistant-7")).toEqual([
+			"assistant-7",
+		]);
 	});
 });

@@ -5,6 +5,10 @@ tools:
   - think
   - web_crawler
   - browser_control
+  - browser_session_start
+  - browser_session_action
+  - browser_session_close
+  - browser_session_list
 model: xai:grok-4-1-fast-reasoning
 mcpUseGlobal: true
 promptRefinement: true

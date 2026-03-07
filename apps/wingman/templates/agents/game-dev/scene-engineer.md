@@ -38,6 +38,10 @@ If `/memories/game-dev/threejs.md` is absent, create it after establishing the f
 - Asset manager / loading queue with progress events; `LoadingManager` for loading screens
 - Dispose unused assets on scene transitions
 
+**Browser QA**
+- Use `browser_control` to validate live WebGL builds in-browser: wait for canvas/UI readiness, capture screenshots, and evaluate runtime state when a rendering bug only reproduces after load or interaction.
+- Prefer browser-backed repro for issues tied to resize, async asset loading, post-processing, or device-pixel-ratio changes.
+
 **React Three Fiber (R3F)**
 - `useFrame`, `useThree`, `useLoader` — prefer hooks over imperative refs where natural
 - Keep imperative Three.js isolated to refs; avoid fighting R3F's reconciler

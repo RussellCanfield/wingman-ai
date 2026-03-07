@@ -4,6 +4,16 @@ import type { SearchConfig } from "../../cli/config/schema.js";
 import { createLogger } from "../../logger.js";
 import { createBackgroundTerminalTool } from "../tools/background_terminal.js";
 import { createBrowserControlTool } from "../tools/browser_control.js";
+import {
+	createBrowserSessionActionTool,
+	createBrowserSessionCloseTool,
+	createBrowserSessionListTool,
+	createBrowserSessionStartTool,
+} from "../tools/browser_session.js";
+import {
+	type BrowserSessionManager,
+	getSharedBrowserSessionManager,
+} from "../tools/browser_session_manager.js";
 import { createCodeSearchTool } from "../tools/code_search.js";
 import { createCommandExecuteTool } from "../tools/command_execute.js";
 import { createGitStatusTool } from "../tools/git_status.js";
@@ -53,6 +63,8 @@ export interface ToolOptions {
 	};
 	terminalOwnerId?: string;
 	terminalSessionManager?: TerminalSessionManager;
+	browserSessionOwnerId?: string;
+	browserSessionManager?: BrowserSessionManager;
 	searchConfig?: SearchConfig;
 	mcpConfigs?: MCPServersConfig[];
 	skillsDirectory?: string;
@@ -67,10 +79,7 @@ export const UI_TOOL_NAMES: AvailableToolName[] = [
 	"ui_present",
 ];
 
-export const NODE_TOOL_NAMES: AvailableToolName[] = [
-	"node_notify",
-	"node_run",
-];
+export const NODE_TOOL_NAMES: AvailableToolName[] = ["node_notify", "node_run"];
 
 /**
  * Create a tool by name with optional configuration
@@ -87,6 +96,8 @@ export function createTool(
 		timeout = 300000,
 		terminalOwnerId = "default",
 		terminalSessionManager = getSharedTerminalSessionManager(),
+		browserSessionOwnerId = "default",
+		browserSessionManager = getSharedBrowserSessionManager(),
 		searchConfig = { provider: "duckduckgo", maxResults: 5 },
 		skillsDirectory = "skills",
 		dynamicUiEnabled = true,
@@ -143,6 +154,78 @@ export function createTool(
 				blockedCommands,
 				allowScriptExecution,
 				commandTimeout: timeout,
+			});
+
+		case "browser_session_start":
+			return createBrowserSessionStartTool({
+				workspace: runtimeWorkspace,
+				configWorkspace: workspace,
+				launchTimeoutMs: timeout,
+				browserProfile: options.browserProfile,
+				browserTransport: options.browserTransport,
+				profilesRootDir: options.browserProfilesDirectory,
+				profilePaths: options.browserProfiles,
+				browserExtensions: options.browserExtensions,
+				extensionsRootDir: options.browserExtensionsDirectory,
+				extensionPaths: options.browserExtensionsById,
+				defaultExtensions: options.browserDefaultExtensions,
+				relayConfig: options.browserRelay,
+				ownerId: browserSessionOwnerId,
+				sessionManager: browserSessionManager,
+			});
+
+		case "browser_session_action":
+			return createBrowserSessionActionTool({
+				workspace: runtimeWorkspace,
+				configWorkspace: workspace,
+				launchTimeoutMs: timeout,
+				browserProfile: options.browserProfile,
+				browserTransport: options.browserTransport,
+				profilesRootDir: options.browserProfilesDirectory,
+				profilePaths: options.browserProfiles,
+				browserExtensions: options.browserExtensions,
+				extensionsRootDir: options.browserExtensionsDirectory,
+				extensionPaths: options.browserExtensionsById,
+				defaultExtensions: options.browserDefaultExtensions,
+				relayConfig: options.browserRelay,
+				ownerId: browserSessionOwnerId,
+				sessionManager: browserSessionManager,
+			});
+
+		case "browser_session_close":
+			return createBrowserSessionCloseTool({
+				workspace: runtimeWorkspace,
+				configWorkspace: workspace,
+				launchTimeoutMs: timeout,
+				browserProfile: options.browserProfile,
+				browserTransport: options.browserTransport,
+				profilesRootDir: options.browserProfilesDirectory,
+				profilePaths: options.browserProfiles,
+				browserExtensions: options.browserExtensions,
+				extensionsRootDir: options.browserExtensionsDirectory,
+				extensionPaths: options.browserExtensionsById,
+				defaultExtensions: options.browserDefaultExtensions,
+				relayConfig: options.browserRelay,
+				ownerId: browserSessionOwnerId,
+				sessionManager: browserSessionManager,
+			});
+
+		case "browser_session_list":
+			return createBrowserSessionListTool({
+				workspace: runtimeWorkspace,
+				configWorkspace: workspace,
+				launchTimeoutMs: timeout,
+				browserProfile: options.browserProfile,
+				browserTransport: options.browserTransport,
+				profilesRootDir: options.browserProfilesDirectory,
+				profilePaths: options.browserProfiles,
+				browserExtensions: options.browserExtensions,
+				extensionsRootDir: options.browserExtensionsDirectory,
+				extensionPaths: options.browserExtensionsById,
+				defaultExtensions: options.browserDefaultExtensions,
+				relayConfig: options.browserRelay,
+				ownerId: browserSessionOwnerId,
+				sessionManager: browserSessionManager,
 			});
 
 		case "node_notify":
@@ -240,6 +323,10 @@ export function getAvailableTools(): AvailableToolName[] {
 		"internet_search",
 		"web_crawler",
 		"browser_control",
+		"browser_session_start",
+		"browser_session_action",
+		"browser_session_close",
+		"browser_session_list",
 		"command_execute",
 		"background_terminal",
 		...NODE_TOOL_NAMES,

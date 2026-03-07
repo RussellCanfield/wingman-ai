@@ -236,6 +236,27 @@ describe("parseStreamEvents", () => {
 		});
 	});
 
+	it("attaches threshold tokens to extracted usage events", () => {
+		const chunk = {
+			tokenUsage: {
+				inputTokens: 9300,
+				outputTokens: 712,
+				totalTokens: 10012,
+			},
+			thresholdTokens: 108800,
+		};
+
+		const result = parseStreamEvents(chunk);
+
+		expect(result.usageEvents).toHaveLength(1);
+		expect(result.usageEvents[0]).toMatchObject({
+			inputTokens: 9300,
+			outputTokens: 712,
+			totalTokens: 10012,
+			thresholdTokens: 108800,
+		});
+	});
+
 	it("creates a synthetic usage event when only estimated context tokens are present", () => {
 		const chunk = {
 			estimatedContextTokens: 7777,

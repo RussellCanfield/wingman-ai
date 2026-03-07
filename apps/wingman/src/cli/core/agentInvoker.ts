@@ -2,12 +2,14 @@ import { existsSync } from "node:fs";
 import { isAbsolute, join, normalize, sep } from "node:path";
 import {
 	CompositeBackend,
+	computeSummarizationDefaults,
 	createDeepAgent,
+	createSummarizationMiddleware,
 	FilesystemBackend,
 } from "deepagents";
 import {
+	initChatModel,
 	modelRetryMiddleware,
-	summarizationMiddleware,
 	toolRetryMiddleware,
 } from "langchain";
 import { v4 as uuidv4 } from "uuid";
@@ -22,7 +24,12 @@ import {
 } from "@/agent/middleware/additional-messages.js";
 import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
+import { createLargeToolResultsMiddleware } from "@/agent/middleware/large-tool-results.js";
 import { mediaCompatibilityMiddleware } from "@/agent/middleware/media-compat.js";
+import {
+	type BrowserSessionManager,
+	getSharedBrowserSessionManager,
+} from "@/agent/tools/browser_session_manager.js";
 import { createMCPResourceTools } from "@/agent/tools/mcp_resources.js";
 import type {
 	NodeInvokeRequest,
@@ -54,6 +61,7 @@ export interface AgentInvokerOptions {
 	logger: Logger;
 	sessionManager?: SessionManager;
 	terminalSessionManager?: TerminalSessionManager;
+	browserSessionManager?: BrowserSessionManager;
 	workdir?: string | null;
 	defaultOutputDir?: string | null;
 	mcpProxyConfig?: MCPProxyConfig;
@@ -133,10 +141,15 @@ export type ExternalOutputMount = {
 	absolutePath: string | null;
 };
 
-export type SummarizationMiddlewareSettings = {
-	maxTokensBeforeSummary: number;
-	messagesToKeep: number;
-};
+export type SummarizationMiddlewareSettings =
+	| {
+			mode: "default";
+	  }
+	| {
+			mode: "custom";
+			maxTokensBeforeSummary?: number;
+			messagesToKeep?: number;
+	  };
 
 export type ModelRetryMiddlewareSettings = {
 	maxRetries: number;
@@ -247,12 +260,31 @@ export const resolveExternalOutputMount = (
 export const resolveSummarizationMiddlewareSettings = (
 	config: WingmanConfigType,
 ): SummarizationMiddlewareSettings | null => {
-	if (!config.summarization?.enabled) {
+	if (config.summarization?.enabled === false) {
 		return null;
 	}
+	const summarization = config.summarization;
+	if (!summarization) {
+		return { mode: "default" };
+	}
+	const hasCustomThreshold =
+		typeof summarization.maxTokensBeforeSummary === "number";
+	const hasCustomKeep = typeof summarization.messagesToKeep === "number";
+	if (!hasCustomThreshold && !hasCustomKeep) {
+		return { mode: "default" };
+	}
 	return {
-		maxTokensBeforeSummary: config.summarization.maxTokensBeforeSummary,
-		messagesToKeep: config.summarization.messagesToKeep,
+		mode: "custom",
+		...(hasCustomThreshold
+			? {
+					maxTokensBeforeSummary: summarization.maxTokensBeforeSummary,
+				}
+			: {}),
+		...(hasCustomKeep
+			? {
+					messagesToKeep: summarization.messagesToKeep,
+				}
+			: {}),
 	};
 };
 
@@ -310,6 +342,7 @@ export const configureDeepAgentSummarizationMiddleware = (
 	agent: any,
 	settings: SummarizationMiddlewareSettings | null,
 	model?: any,
+	backend?: any,
 ): void => {
 	const middleware = agent?.options?.middleware;
 	if (!Array.isArray(middleware)) {
@@ -327,11 +360,79 @@ export const configureDeepAgentSummarizationMiddleware = (
 		return;
 	}
 
-	middleware[index] = summarizationMiddleware({
+	if (settings.mode === "default") {
+		return;
+	}
+	if (!backend) {
+		return;
+	}
+
+	middleware[index] = createSummarizationMiddleware({
 		model: model || DEFAULT_DEEPAGENT_MODEL,
-		trigger: { tokens: settings.maxTokensBeforeSummary },
-		keep: { messages: settings.messagesToKeep },
+		backend,
+		...(typeof settings.maxTokensBeforeSummary === "number"
+			? {
+					trigger: {
+						type: "tokens" as const,
+						value: settings.maxTokensBeforeSummary,
+					},
+				}
+			: {}),
+		...(typeof settings.messagesToKeep === "number"
+			? {
+					keep: {
+						type: "messages" as const,
+						value: settings.messagesToKeep,
+					},
+				}
+			: {}),
 	});
+};
+
+export const resolveEffectiveSummarizationThresholdTokens = async (
+	settings: SummarizationMiddlewareSettings | null,
+	model?: unknown,
+): Promise<number | undefined> => {
+	if (!settings) {
+		return undefined;
+	}
+	if (
+		settings.mode === "custom" &&
+		typeof settings.maxTokensBeforeSummary === "number" &&
+		Number.isFinite(settings.maxTokensBeforeSummary) &&
+		settings.maxTokensBeforeSummary > 0
+	) {
+		return settings.maxTokensBeforeSummary;
+	}
+
+	let resolvedModel = model;
+	if (typeof resolvedModel === "string") {
+		resolvedModel = await initChatModel(resolvedModel);
+	}
+	const defaults = computeSummarizationDefaults(resolvedModel as any);
+	const trigger = Array.isArray(defaults.trigger)
+		? defaults.trigger[0]
+		: defaults.trigger;
+	if (!trigger) {
+		return undefined;
+	}
+	if (trigger.type === "tokens") {
+		return trigger.value;
+	}
+	if (trigger.type !== "fraction") {
+		return undefined;
+	}
+
+	const maxInputTokens =
+		typeof (resolvedModel as { profile?: { maxInputTokens?: unknown } })
+			?.profile?.maxInputTokens === "number"
+			? (resolvedModel as { profile: { maxInputTokens: number } }).profile
+					.maxInputTokens
+			: undefined;
+	if (!maxInputTokens || maxInputTokens <= 0) {
+		return undefined;
+	}
+	return Math.floor(maxInputTokens * trigger.value);
 };
 
 export const recompileDeepAgentWithMiddlewareOverrides = <T>(agent: T): T => {
@@ -1172,6 +1273,7 @@ export class AgentInvoker {
 	private mcpManager: MCPClientManager | null = null;
 	private sessionManager: SessionManager | null = null;
 	private terminalSessionManager: TerminalSessionManager;
+	private browserSessionManager: BrowserSessionManager;
 	private workdir: string | null = null;
 	private defaultOutputDir: string | null = null;
 	private mcpProxyConfig: MCPProxyConfig | undefined;
@@ -1194,6 +1296,8 @@ export class AgentInvoker {
 		this.sessionManager = options.sessionManager || null;
 		this.terminalSessionManager =
 			options.terminalSessionManager || getSharedTerminalSessionManager();
+		this.browserSessionManager =
+			options.browserSessionManager || getSharedBrowserSessionManager();
 		this.workdir = options.workdir || null;
 		this.defaultOutputDir = options.defaultOutputDir || null;
 		this.mcpProxyConfig = options.mcpProxyConfig;
@@ -1216,6 +1320,8 @@ export class AgentInvoker {
 			{
 				terminalOwnerId: "default",
 				terminalSessionManager: this.terminalSessionManager,
+				browserSessionOwnerId: "default",
+				browserSessionManager: this.browserSessionManager,
 				nodeInvoker: this.nodeInvoker,
 				nodeDefaultTargetClientId: this.nodeDefaultTargetClientId,
 			},
@@ -1266,6 +1372,8 @@ export class AgentInvoker {
 				{
 					terminalOwnerId: `${agentName}:${hookSessionId}`,
 					terminalSessionManager: this.terminalSessionManager,
+					browserSessionOwnerId: `${agentName}:${hookSessionId}`,
+					browserSessionManager: this.browserSessionManager,
 					nodeInvoker: this.nodeInvoker,
 					nodeDefaultTargetClientId: this.nodeDefaultTargetClientId,
 				},
@@ -1520,18 +1628,26 @@ export class AgentInvoker {
 				});
 			}
 
+			const backendFactory = () =>
+				new CompositeBackend(
+					new FilesystemBackend({
+						rootDir: executionWorkspace,
+						virtualMode: true,
+					}),
+					backendOverrides,
+				);
+
+			middleware.push(
+				createLargeToolResultsMiddleware({
+					backend: backendFactory,
+				}),
+			);
+
 			let standaloneAgent = createDeepAgent({
 				systemPrompt: targetAgent.systemPrompt,
 				tools: targetAgent.tools as any,
 				model: targetAgent.model as any,
-				backend: () =>
-					new CompositeBackend(
-						new FilesystemBackend({
-							rootDir: executionWorkspace,
-							virtualMode: true,
-						}),
-						backendOverrides,
-					),
+				backend: backendFactory,
 				middleware: middleware as any,
 				interruptOn: hitlSettings?.interruptOn,
 				skills: skillsSources,
@@ -1543,6 +1659,7 @@ export class AgentInvoker {
 				standaloneAgent,
 				summarizationSettings,
 				targetAgent.model as any,
+				backendFactory,
 			);
 			standaloneAgent =
 				recompileDeepAgentWithMiddlewareOverrides(standaloneAgent);
@@ -1562,6 +1679,11 @@ export class AgentInvoker {
 				let streamEstimatedContextTokens = 0;
 				let contextSummarizationStarted = false;
 				let contextSummarizationEmitted = false;
+				const summarizationThresholdTokens =
+					await resolveEffectiveSummarizationThresholdTokens(
+						summarizationSettings,
+						targetAgent.model,
+					);
 
 				// Stream the agent response
 				const stream = await (standaloneAgent as any).streamEvents(
@@ -1634,6 +1756,7 @@ export class AgentInvoker {
 							streamEstimatedContextTokens > 0
 								? streamEstimatedContextTokens
 								: undefined,
+							summarizationThresholdTokens,
 						);
 					}
 					if (
@@ -1650,7 +1773,7 @@ export class AgentInvoker {
 						this.outputManager.emitContextSummarized({
 							inputTokens: observedInputTokens,
 							peakInputTokens: observedInputTokens,
-							thresholdTokens: summarizationSettings.maxTokensBeforeSummary,
+							thresholdTokens: summarizationThresholdTokens,
 						});
 					}
 					if (isRootLangGraphTerminalEvent(chunk, rootLangGraphRunId)) {
@@ -1672,8 +1795,16 @@ export class AgentInvoker {
 					? {
 							streaming: true,
 							tokenUsage: streamTokenUsage,
+							...(typeof summarizationThresholdTokens === "number"
+								? { thresholdTokens: summarizationThresholdTokens }
+								: {}),
 						}
-					: { streaming: true };
+					: {
+							streaming: true,
+							...(typeof summarizationThresholdTokens === "number"
+								? { thresholdTokens: summarizationThresholdTokens }
+								: {}),
+						};
 				emitCompletionAndContinuePostProcessing({
 					outputManager: this.outputManager,
 					result: completionPayload,
@@ -1691,6 +1822,11 @@ export class AgentInvoker {
 					return { cancelled: true };
 				}
 
+				const summarizationThresholdTokens =
+					await resolveEffectiveSummarizationThresholdTokens(
+						summarizationSettings,
+						targetAgent.model,
+					);
 				const result = await (standaloneAgent as any).invoke(
 					{
 						messages: [
@@ -1713,14 +1849,24 @@ export class AgentInvoker {
 				}
 
 				this.logger.info("Agent completed successfully");
+				const resultWithThreshold =
+					typeof summarizationThresholdTokens === "number" &&
+					result &&
+					typeof result === "object" &&
+					!Array.isArray(result)
+						? {
+								...(result as Record<string, unknown>),
+								thresholdTokens: summarizationThresholdTokens,
+							}
+						: result;
 				emitCompletionAndContinuePostProcessing({
 					outputManager: this.outputManager,
-					result,
+					result: resultWithThreshold,
 					postProcess: () => this.materializeSessionImages(sessionId),
 					logger: this.logger,
 				});
 
-				return result;
+				return resultWithThreshold;
 			}
 		} catch (error) {
 			const abortError =

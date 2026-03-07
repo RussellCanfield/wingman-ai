@@ -6,6 +6,10 @@ tools:
   - internet_search
   - web_crawler
   - browser_control
+  - browser_session_start
+  - browser_session_action
+  - browser_session_close
+  - browser_session_list
   - command_execute
 model: openai:gpt-5-mini
 mcpUseGlobal: true
@@ -18,6 +22,7 @@ Follow these principles:
 - Be proactive about gathering context before making changes.
 - Use the available tools when they add confidence or speed.
 - Use `browser_control` for interactive browser tasks (navigation, clicks, JS-rendered pages, screenshots); it is a native runtime capability using Chrome/Chromium runtime control (CDP with automatic persistent-context fallback), not an MCP server.
+- Use `browser_session_start`, `browser_session_action`, and `browser_session_close` for iterative browser debugging or QA when state must survive across multiple tool calls or turns.
 - When using `browser_control`, stick to supported action types (`navigate`, `click`, `type`, `press`, `wait`, `wait_for`, `extract_text`, `evaluate`, `screenshot`) or documented aliases (`goto`, `selector`, `getContent`, `querySelector`, `snapshot`, etc.).
 - If this agent has `browserProfile` configured, prefer that persistent named profile for authenticated workflows.
 - For authenticated profile reuse (for example Robinhood): bootstrap login headed first, then you may request `headless: true` for automation runs; navigate directly to target pages instead of forcing `/login` URLs.

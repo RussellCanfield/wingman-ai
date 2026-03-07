@@ -11,7 +11,16 @@ import type {
 	VoiceProvider,
 } from "../types";
 import { agentSyncNotice } from "../utils/agentSyncNotice";
+import {
+	BROWSER_SESSION_TOOL_ALIAS,
+	BROWSER_SESSION_TOOL_MEMBERS,
+	buildAgentToolOptions,
+	collapseAgentToolsForDisplay,
+	expandAgentToolsForSave,
+	getAgentToolHoverText,
+} from "../utils/agentTools";
 import { buildAgentTopologyGraph } from "../utils/agentTopology";
+import { randomUuid } from "../utils/randomUuid";
 import { buildSubAgentTemplateOptions } from "../utils/subAgentTemplates";
 
 type AgentFormSubAgentPayload = {
@@ -37,6 +46,7 @@ type AgentPagePayload = {
 };
 
 type AgentSubAgentDraft = {
+	uiKey: string;
 	id: string;
 	description: string;
 	model: string;
@@ -161,6 +171,10 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		() => buildSubAgentTemplateOptions({ agents, editingAgentId }),
 		[agents, editingAgentId],
 	);
+	const toolOptions = useMemo(
+		() => buildAgentToolOptions(availableTools, selectedTools),
+		[availableTools, selectedTools],
+	);
 	const subAgentTemplateIds = useMemo(
 		() => new Set(subAgentTemplateOptions.map((option) => option.id)),
 		[subAgentTemplateOptions],
@@ -210,6 +224,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	};
 
 	const createEmptySubAgent = (): AgentSubAgentDraft => ({
+		uiKey: randomUuid(),
 		id: "",
 		description: "",
 		model: "",
@@ -324,9 +339,22 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	};
 
 	const toggleTool = (tool: string) => {
-		setSelectedTools((prev) =>
-			prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool],
-		);
+		setSelectedTools((prev) => {
+			if (tool === BROWSER_SESSION_TOOL_ALIAS) {
+				if (prev.includes(tool)) {
+					return prev.filter((entry) => entry !== tool);
+				}
+				return [
+					...prev.filter(
+						(entry) => !BROWSER_SESSION_TOOL_MEMBERS.includes(entry as never),
+					),
+					tool,
+				];
+			}
+			return prev.includes(tool)
+				? prev.filter((entry) => entry !== tool)
+				: [...prev, tool];
+		});
 	};
 
 	const updateSubAgent = (
@@ -343,9 +371,20 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 	const toggleSubAgentTool = (index: number, tool: string) => {
 		updateSubAgent(index, (current) => ({
 			...current,
-			tools: current.tools.includes(tool)
-				? current.tools.filter((t) => t !== tool)
-				: [...current.tools, tool],
+			tools:
+				tool === BROWSER_SESSION_TOOL_ALIAS
+					? current.tools.includes(tool)
+						? current.tools.filter((entry) => entry !== tool)
+						: [
+								...current.tools.filter(
+									(entry) =>
+										!BROWSER_SESSION_TOOL_MEMBERS.includes(entry as never),
+								),
+								tool,
+							]
+					: current.tools.includes(tool)
+						? current.tools.filter((entry) => entry !== tool)
+						: [...current.tools, tool],
 		}));
 	};
 
@@ -376,7 +415,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			model: detail.model || "",
 			reasoningEffort: detail.reasoningEffort || "",
 			prompt: detail.prompt || "",
-			tools: detail.tools || [],
+			tools: collapseAgentToolsForDisplay(detail.tools || []),
 			promptTrainingEnabled: templatePromptTraining.enabled,
 			promptTrainingPath: templatePromptTraining.instructionsPath,
 		}));
@@ -433,7 +472,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 				description: subDescription,
 				model: sub.model.trim() || undefined,
 				reasoningEffort: sub.reasoningEffort || undefined,
-				tools: sub.tools,
+				tools: expandAgentToolsForSave(sub.tools),
 				prompt: subPrompt,
 				promptTraining: buildPromptTrainingPayload(
 					sub.promptTrainingEnabled,
@@ -449,7 +488,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 			description: description.trim() || undefined,
 			model: model.trim() || undefined,
 			reasoningEffort: reasoningEffort || undefined,
-			tools: selectedTools,
+			tools: expandAgentToolsForSave(selectedTools),
 			prompt: prompt.trim() || undefined,
 			voice: voicePayload,
 			promptTraining: buildPromptTrainingPayload(
@@ -502,19 +541,20 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 		);
 		setPromptTrainingEnabled(promptTraining.enabled);
 		setPromptTrainingPath(promptTraining.instructionsPath);
-		setSelectedTools(detail.tools || []);
+		setSelectedTools(collapseAgentToolsForDisplay(detail.tools || []));
 		setSubAgents(
 			(detail.subAgents || []).map((sub) => {
 				const subPromptTraining = parsePromptTraining(
 					sub.promptTraining ?? sub.promptRefinement,
 				);
 				return {
+					uiKey: randomUuid(),
 					id: sub.id || "",
 					description: sub.description || "",
 					model: sub.model || "",
 					reasoningEffort: sub.reasoningEffort || "",
 					prompt: sub.prompt || "",
-					tools: sub.tools || [],
+					tools: collapseAgentToolsForDisplay(sub.tools || []),
 					promptTrainingEnabled: subPromptTraining.enabled,
 					promptTrainingPath: subPromptTraining.instructionsPath,
 				};
@@ -633,10 +673,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 
 					<form className="space-y-4" onSubmit={handleSubmit}>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+							<label
+								htmlFor="agent-id"
+								className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+							>
 								Agent ID
 							</label>
 							<input
+								id="agent-id"
 								className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 								value={id}
 								onChange={(event) => setId(event.target.value)}
@@ -654,10 +698,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 						</div>
 						<div className="space-y-4">
 							<div className="space-y-2">
-								<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+								<label
+									htmlFor="agent-display-name"
+									className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+								>
 									Display Name
 								</label>
 								<input
+									id="agent-display-name"
 									className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 									value={displayName}
 									onChange={(event) => setDisplayName(event.target.value)}
@@ -665,20 +713,28 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 								/>
 							</div>
 							<div className="space-y-2">
-								<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+								<label
+									htmlFor="agent-model"
+									className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+								>
 									Model
 								</label>
 								<input
+									id="agent-model"
 									className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 									value={model}
 									onChange={(event) => setModel(event.target.value)}
 									placeholder="(Example) provider:model-name"
 								/>
 								<div className="space-y-2">
-									<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+									<label
+										htmlFor="agent-reasoning-effort"
+										className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+									>
 										Reasoning/Thinking Effort
 									</label>
 									<select
+										id="agent-reasoning-effort"
 										className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 										value={reasoningEffort}
 										onChange={(event) =>
@@ -766,10 +822,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							</div>
 						</div>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+							<label
+								htmlFor="agent-description"
+								className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+							>
 								Description
 							</label>
 							<textarea
+								id="agent-description"
 								className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 								rows={2}
 								value={description}
@@ -778,10 +838,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							/>
 						</div>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+							<label
+								htmlFor="agent-system-prompt"
+								className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+							>
 								System Prompt
 							</label>
 							<textarea
+								id="agent-system-prompt"
 								className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 								rows={4}
 								value={prompt}
@@ -819,14 +883,15 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							</p>
 						</div>
 						<div className="space-y-2">
-							<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+							<div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
 								Tools
-							</label>
+							</div>
 							<div className="flex flex-wrap gap-2">
-								{availableTools.map((tool) => (
+								{toolOptions.map((tool) => (
 									<button
 										key={tool}
 										type="button"
+										title={getAgentToolHoverText(tool)}
 										className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
 											selectedTools.includes(tool)
 												? "border-sky-500/50 bg-sky-500/15 text-sky-300"
@@ -838,6 +903,10 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 									</button>
 								))}
 							</div>
+							<p className="text-xs text-slate-400">
+								<code>{BROWSER_SESSION_TOOL_ALIAS}</code> expands to the managed
+								browser session tools automatically when the agent is saved.
+							</p>
 						</div>
 						<div className="space-y-3 rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-3">
 							<div className="flex items-center justify-between gap-3">
@@ -863,7 +932,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							<div className="space-y-3">
 								{subAgents.map((subAgent, subIndex) => (
 									<div
-										key={`subagent-${subIndex}`}
+										key={subAgent.uiKey}
 										className="space-y-3 rounded-xl border border-white/10 bg-slate-900/60 p-3"
 									>
 										<div className="flex items-center justify-between gap-3">
@@ -980,10 +1049,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 												Subagent Tools
 											</div>
 											<div className="flex flex-wrap gap-2">
-												{availableTools.map((tool) => (
+												{buildAgentToolOptions(
+													availableTools,
+													subAgent.tools,
+												).map((tool) => (
 													<button
 														key={`${subIndex}-${tool}`}
 														type="button"
+														title={getAgentToolHoverText(tool)}
 														className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
 															subAgent.tools.includes(tool)
 																? "border-sky-500/50 bg-sky-500/15 text-sky-300"
@@ -1034,10 +1107,14 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 							</summary>
 							<div className="mt-4 space-y-3 text-xs text-slate-300">
 								<div className="space-y-2">
-									<label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+									<label
+										htmlFor="agent-voice-provider"
+										className="text-[11px] uppercase tracking-[0.2em] text-slate-400"
+									>
 										Voice Provider
 									</label>
 									<select
+										id="agent-voice-provider"
 										className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
 										value={voiceProvider}
 										onChange={(event) =>
@@ -1231,11 +1308,17 @@ export const AgentsPage: React.FC<AgentsPageProps> = ({
 										</div>
 									) : null}
 									<div className="flex flex-wrap gap-2">
-										{selectedAgent.tools.map((tool) => (
-											<span key={tool} className="pill">
-												{tool}
-											</span>
-										))}
+										{collapseAgentToolsForDisplay(selectedAgent.tools).map(
+											(tool) => (
+												<span
+													key={tool}
+													className="pill"
+													title={getAgentToolHoverText(tool)}
+												>
+													{tool}
+												</span>
+											),
+										)}
 									</div>
 									{selectedAgent.parentId ? (
 										<div className="text-xs text-slate-400">

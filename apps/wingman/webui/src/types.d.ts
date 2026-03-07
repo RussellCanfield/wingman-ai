@@ -30,9 +30,9 @@ export type VoiceConfig = {
 	elevenlabs?: ElevenLabsOptions;
 };
 export type SummarizationConfig = {
-	enabled: boolean;
-	maxTokensBeforeSummary: number;
-	messagesToKeep: number;
+	enabled?: boolean;
+	maxTokensBeforeSummary?: number;
+	messagesToKeep?: number;
 };
 export type AgentVoiceConfig = {
 	provider?: VoiceProvider;

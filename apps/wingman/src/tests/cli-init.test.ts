@@ -76,6 +76,10 @@ describe("CLI init", () => {
 		const agent = JSON.parse(readFileSync(agentPath, "utf-8"));
 		expect(agent.name).toBe("wingman");
 		expect(agent.tools).toContain("browser_control");
+		expect(agent.tools).toContain("browser_session_start");
+		expect(agent.tools).toContain("browser_session_action");
+		expect(agent.tools).toContain("browser_session_close");
+		expect(agent.tools).toContain("browser_session_list");
 
 		const codingAgentPath = join(
 			workspace,
@@ -164,6 +168,8 @@ describe("CLI init", () => {
 		expect(gameDevPrompt).toContain("Delegation routing");
 		expect(gameDevPrompt).toContain("MeshStandardMaterial");
 		expect(gameDevPrompt).toContain("three-mesh-bvh");
+		expect((gameDevPrompt.match(/- browser_control/g) || []).length).toBe(4);
+		expect(gameDevPrompt).toContain("Playwright persistent-context");
 
 		const gameDevArtDirectorPath = join(
 			workspace,
@@ -210,12 +216,18 @@ describe("CLI init", () => {
 		expect(gameDevSceneEngineerPrompt).toContain(
 			"Prefer `postprocessing` over Three.js built-in `EffectComposer`",
 		);
+		expect(gameDevSceneEngineerPrompt).toContain(
+			"Use `browser_control` to validate live WebGL builds in-browser",
+		);
 		const gameDevDesignerPrompt = readFileSync(gameDevDesignerPath, "utf-8");
 		expect(gameDevDesignerPrompt).toContain("You are `game-designer`");
 		expect(gameDevDesignerPrompt).toContain(
 			"Always present 2-3 mechanic variants with tradeoffs",
 		);
 		expect(gameDevDesignerPrompt).toContain("UI Conventions");
+		expect(gameDevDesignerPrompt).toContain(
+			"Use `browser_control` to validate menu flows",
+		);
 
 		const mainAgentTemplatePath = join(
 			workspace,

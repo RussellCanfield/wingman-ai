@@ -40,4 +40,25 @@ describe("OutputManager context summarized events", () => {
 		});
 		expect(typeof events[0]?.timestamp).toBe("string");
 	});
+
+	it("omits threshold metadata when the runtime is using DeepAgents defaults", () => {
+		const outputManager = new OutputManager("interactive");
+		const events: Array<Record<string, unknown>> = [];
+		outputManager.on("output-event", (event) => {
+			events.push(event as unknown as Record<string, unknown>);
+		});
+
+		outputManager.emitContextSummarized({
+			inputTokens: 5400,
+			peakInputTokens: 11200,
+		});
+
+		expect(events).toHaveLength(1);
+		expect(events[0]).toMatchObject({
+			type: "context-summarized",
+			inputTokens: 5400,
+			peakInputTokens: 11200,
+		});
+		expect(events[0]).not.toHaveProperty("thresholdTokens");
+	});
 });

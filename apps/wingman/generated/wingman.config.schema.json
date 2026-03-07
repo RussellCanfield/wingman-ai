@@ -26,11 +26,6 @@
       "maximum": 1000000
     },
     "summarization": {
-      "default": {
-        "enabled": true,
-        "maxTokensBeforeSummary": 12000,
-        "messagesToKeep": 8
-      },
       "type": "object",
       "properties": {
         "enabled": {
@@ -39,14 +34,12 @@
           "type": "boolean"
         },
         "maxTokensBeforeSummary": {
-          "default": 12000,
           "description": "Token threshold before summarizing conversation history",
           "type": "number",
           "minimum": 1000,
           "maximum": 1000000
         },
         "messagesToKeep": {
-          "default": 8,
           "description": "How many most recent messages to keep after summarization",
           "type": "number",
           "minimum": 2,
@@ -54,9 +47,7 @@
         }
       },
       "required": [
-        "enabled",
-        "maxTokensBeforeSummary",
-        "messagesToKeep"
+        "enabled"
       ],
       "additionalProperties": false
     },
@@ -1590,7 +1581,6 @@
   "required": [
     "logLevel",
     "recursionLimit",
-    "summarization",
     "modelRetry",
     "toolRetry",
     "humanInTheLoop",

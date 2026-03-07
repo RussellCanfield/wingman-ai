@@ -19,6 +19,7 @@ const baseProps: React.ComponentProps<typeof ChatPage> = {
 	fileAccept: "*/*",
 	attachmentError: "",
 	isStreaming: false,
+	isContextSummarizing: false,
 	queuedPromptCount: 0,
 	connected: true,
 	loadingThread: false,
@@ -42,7 +43,25 @@ const baseProps: React.ComponentProps<typeof ChatPage> = {
 };
 
 describe("ChatPage agent details panel", () => {
-	it("renders the details drawer above chat and keeps it collapsed by default", () => {
+	it("keeps the chat route scrollable while allowing content to shrink", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPage, {
+				...baseProps,
+			}),
+		);
+
+		expect(html).toContain(
+			"grid h-full min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden",
+		);
+		expect(html).toContain('data-testid="chat-side-panel"');
+		expect(html).toContain(
+			'class="panel-card animate-rise shrink-0 overflow-hidden px-4 py-2 group"',
+		);
+		expect(html).toContain("max-h-[28vh] gap-3 overflow-y-auto pr-1");
+		expect(html).toContain('<div class="min-h-0 overflow-hidden">');
+	});
+
+	it("renders the details drawer above chat and keeps it compact by default", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPage, {
 				...baseProps,
@@ -51,21 +70,21 @@ describe("ChatPage agent details panel", () => {
 
 		expect(html).toContain('data-testid="chat-side-panel"');
 		expect(html).toContain("Thread Details");
+		expect(html).toContain(">Chat<");
 		expect(html.indexOf('data-testid="chat-side-panel"')).toBeLessThan(
-			html.indexOf("Mission Stream"),
+			html.indexOf(">Chat<"),
 		);
 		const drawerTag = html.match(
 			/<details[^>]*data-testid="chat-side-panel"[^>]*>/,
 		)?.[0];
 		expect(drawerTag).toBeDefined();
 		expect(drawerTag).not.toContain("open");
-		expect(
-			(html.match(/group-open:rotate-180/g) || []).length,
-		).toBe(1);
-		expect(html).not.toContain("group-open:hidden");
+		expect((html.match(/group-open:rotate-180/g) || []).length).toBe(1);
+		expect(html).not.toContain("Session Snapshot");
+		expect(html).not.toContain("Guidance");
 	});
 
-	it("renders model, tools, and MCP server details for the active agent", () => {
+	it("renders a compact agent setup summary for the active agent", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPage, {
 				...baseProps,
@@ -80,17 +99,14 @@ describe("ChatPage agent details panel", () => {
 			}),
 		);
 
-		expect(html).toContain("Agent Details");
+		expect(html).toContain("Agent Setup");
 		expect(html).toContain("Main Agent");
 		expect(html).toContain("codex:codex-mini-latest");
-		expect(html).toContain("think");
-		expect(html).toContain("command_execute");
-		expect(html).toContain("finance");
-		expect(html).toContain("fal-ai");
-		expect(html).toContain("Global enabled");
+		expect(html).toContain("think, command_execute");
+		expect(html).toContain("finance, fal-ai + global");
 	});
 
-	it("shows default values when agent model, tools, and MCP are unset", () => {
+	it("shows compact defaults when agent model, tools, and MCP are unset", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPage, {
 				...baseProps,
@@ -102,10 +118,8 @@ describe("ChatPage agent details panel", () => {
 			}),
 		);
 
-		expect(html).toContain("Agent Details");
+		expect(html).toContain("Agent Setup");
 		expect(html).toContain("Default");
-		expect(html).toContain("No custom tools configured.");
-		expect(html).toContain("No MCP servers configured.");
-		expect(html).not.toContain("Global enabled");
+		expect(html).toContain("None configured");
 	});
 });

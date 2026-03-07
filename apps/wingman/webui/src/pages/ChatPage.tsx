@@ -1,5 +1,5 @@
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { FiChevronDown } from "react-icons/fi";
 import { ChatPanel } from "../components/ChatPanel";
 import { WorkdirModal } from "../components/WorkdirModal";
@@ -77,15 +77,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	onSetWorkdir,
 }) => {
 	const [workdirOpen, setWorkdirOpen] = useState(false);
-	const sessionKey = useMemo(() => {
-		if (!activeThread) return "--";
-		return activeThread.id;
-	}, [activeThread]);
-
-	const createdAt = activeThread?.createdAt
-		? new Date(activeThread.createdAt).toLocaleString()
-		: "--";
-
 	const messageCount =
 		activeThread?.messageCount ?? activeThread?.messages.length ?? 0;
 	const baseOutputRoot = outputRoot ? outputRoot.replace(/\/+$/, "") : "";
@@ -98,6 +89,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	const tools = activeAgent?.tools || [];
 	const mcpServers = activeAgent?.mcpServers || [];
 	const mcpUsesGlobal = Boolean(activeAgent?.mcpUseGlobal);
+	const agentLabel = activeAgent?.displayName || agentId;
+	const toolSummary = summarizeCompactList(tools, "None configured");
+	const mcpSummaryBase = summarizeCompactList(
+		mcpServers,
+		mcpUsesGlobal ? "Global only" : "None configured",
+	);
+	const mcpSummary =
+		mcpUsesGlobal && mcpServers.length > 0
+			? `${mcpSummaryBase} + global`
+			: mcpSummaryBase;
+	const messageCountLabel = `${messageCount} ${messageCount === 1 ? "msg" : "msgs"}`;
 
 	const handleSaveWorkdir = async (path: string | null) => {
 		if (!activeThread) return false;
@@ -109,32 +111,35 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	};
 
 	const sidebarCardClass =
-		"rounded-2xl border border-sky-500/20 bg-gradient-to-br from-slate-900/85 via-[#081329]/85 to-slate-950/90 p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.12),0_14px_28px_rgba(2,12,30,0.35)]";
+		"rounded-2xl border border-sky-500/20 bg-gradient-to-br from-slate-900/85 via-[#081329]/85 to-slate-950/90 p-3 shadow-[inset_0_1px_0_rgba(148,163,184,0.12),0_14px_28px_rgba(2,12,30,0.35)]";
 	const drawerSummaryClass =
-		"flex cursor-pointer list-none items-center justify-between gap-3";
-	const sidebarSummaryClass = "cursor-pointer list-none";
+		"flex cursor-pointer list-none items-center justify-between gap-2";
 	const sidebarLabelClass =
 		"text-[10px] uppercase tracking-[0.2em] text-slate-400";
-	const sidebarTagClass =
-		"rounded-full border border-sky-500/30 bg-slate-950/75 px-3 py-1 font-mono text-[11px] text-slate-200";
-	const sidebarValueClass =
-		"rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2 font-mono text-[11px] text-slate-200";
-	const sidebarEmptyStateClass =
-		"mt-2 rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2 text-[11px] text-slate-400";
+	const sidebarMetaClass =
+		"rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2";
+	const summaryChipClass =
+		"inline-flex max-w-full items-center rounded-full border border-slate-700/70 bg-slate-950/75 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-slate-300";
 	const drawerShellClass =
-		"panel-card animate-rise overflow-hidden border border-sky-500/20 bg-gradient-to-b from-[#071127]/95 via-[#050f24]/95 to-[#030919]/95 p-4";
+		"panel-card animate-rise shrink-0 overflow-hidden px-4 py-2";
 
 	return (
-		<section className="flex min-h-0 flex-1 flex-col gap-4">
-			<details data-testid="chat-side-panel" className={`${drawerShellClass} group`}>
+		<section className="grid h-full min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden">
+			<details
+				data-testid="chat-side-panel"
+				className={`${drawerShellClass} group`}
+			>
 				<summary className={drawerSummaryClass}>
-					<div>
-						<p className="text-sm font-semibold text-slate-100">
-							Thread Details
-						</p>
-						<p className="mt-1 text-[11px] text-slate-400">
-							Working folder, agent settings, and session metadata
-						</p>
+					<div className="min-w-0">
+						<div className="flex flex-wrap items-center gap-2">
+							<p className="text-sm font-semibold text-slate-100">
+								Thread Details
+							</p>
+							<span className={summaryChipClass}>{messageCountLabel}</span>
+							<span className={`${summaryChipClass} max-w-[220px] truncate`}>
+								{agentLabel}
+							</span>
+						</div>
 					</div>
 					<span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-600/70 bg-slate-900/70 text-slate-300 transition group-open:border-sky-400/40 group-open:bg-sky-500/15 group-open:text-sky-100">
 						<FiChevronDown
@@ -143,7 +148,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 						/>
 					</span>
 				</summary>
-				<div className="mt-4 grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
+				<div className="mt-2 grid max-h-[28vh] gap-3 overflow-y-auto pr-1">
 					<div className={sidebarCardClass}>
 						<div className="flex items-center justify-between gap-3">
 							<div>
@@ -151,7 +156,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 									Working Folder
 								</p>
 								<p className="mt-1 text-[11px] text-slate-400">
-									Output path for this thread
+									Where this thread writes files
 								</p>
 							</div>
 							<button
@@ -163,175 +168,76 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 								{activeThread?.workdir ? "Change" : "Set"}
 							</button>
 						</div>
-						<div className="mt-3 rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-3 text-[11px] text-slate-300">
-							{activeThread?.workdir ? (
-								<div className="break-all font-mono text-slate-200">
-									{activeThread.workdir}
-								</div>
-							) : (
-								<div>
-									<span className={sidebarLabelClass}>Default</span>
-									<div className="mt-2 break-all font-mono text-slate-200">
-										{defaultOutputDir}
-									</div>
-								</div>
-							)}
+						<div
+							className={`${sidebarMetaClass} mt-3 text-[11px] text-slate-300`}
+						>
+							<span className={sidebarLabelClass}>
+								{activeThread?.workdir ? "Current" : "Default"}
+							</span>
+							<div className="mt-2 break-all font-mono text-slate-200">
+								{activeThread?.workdir || defaultOutputDir}
+							</div>
 						</div>
 					</div>
 
-					<details className={`${sidebarCardClass} group`} open>
-						<summary className={sidebarSummaryClass}>
+					<div className={`${sidebarCardClass} flex flex-col gap-3`}>
+						<div className="flex items-start justify-between gap-3">
 							<div>
 								<p className="text-sm font-semibold text-slate-100">
-									Agent Details
+									Agent Setup
 								</p>
 								<p className="mt-1 text-[11px] text-slate-400">
-									Model, tools, and MCP routing
+									Only the config that affects this thread
 								</p>
 							</div>
-						</summary>
-						<div className="mt-4 space-y-3 text-xs text-slate-300">
-							<div className="flex items-center justify-between gap-3">
-								<span className={sidebarLabelClass}>Agent</span>
-								<span className={sidebarTagClass}>
-									{activeAgent?.displayName || agentId}
-								</span>
+							<button
+								type="button"
+								className="rounded-full border border-rose-400/40 bg-rose-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:border-rose-300/70 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+								onClick={() => activeThread && onDeleteThread(activeThread.id)}
+								disabled={!activeThread}
+							>
+								Delete Thread
+							</button>
+						</div>
+						<dl className="grid gap-2 sm:grid-cols-2">
+							<div className={sidebarMetaClass}>
+								<dt className={sidebarLabelClass}>Agent</dt>
+								<dd className="mt-1 truncate text-[12px] text-slate-200">
+									{agentLabel}
+								</dd>
 							</div>
-							<div className="space-y-2">
-								<span className={sidebarLabelClass}>Model</span>
-								<div className={`${sidebarValueClass} break-all`}>
+							<div className={sidebarMetaClass}>
+								<dt className={sidebarLabelClass}>Model</dt>
+								<dd className="mt-1 break-all font-mono text-[11px] text-slate-200">
 									{modelLabel}
-								</div>
+								</dd>
 							</div>
 							{activeAgent?.reasoningEffort ? (
-								<div className="flex items-center justify-between gap-3">
-									<span className={sidebarLabelClass}>Reasoning</span>
-									<span className={sidebarTagClass}>
+								<div className={sidebarMetaClass}>
+									<dt className={sidebarLabelClass}>Reasoning</dt>
+									<dd className="mt-1 text-[12px] text-slate-200">
 										{activeAgent.reasoningEffort}
-									</span>
+									</dd>
 								</div>
 							) : null}
-							<div>
-								<span className={sidebarLabelClass}>Tools</span>
-								{tools.length > 0 ? (
-									<div className="mt-2 flex flex-wrap gap-2">
-										{tools.map((tool) => (
-											<span key={tool} className={sidebarTagClass}>
-												{tool}
-											</span>
-										))}
-									</div>
-								) : (
-									<div className={sidebarEmptyStateClass}>
-										No custom tools configured.
-									</div>
-								)}
+							<div className={sidebarMetaClass}>
+								<dt className={sidebarLabelClass}>Tools</dt>
+								<dd className="mt-1 break-words text-[12px] text-slate-200">
+									{toolSummary}
+								</dd>
 							</div>
-							<div>
-								<div className="flex items-center justify-between gap-2">
-									<span className={sidebarLabelClass}>MCP Servers</span>
-									{mcpUsesGlobal ? (
-										<span className={sidebarTagClass}>Global enabled</span>
-									) : null}
-								</div>
-								{mcpServers.length > 0 ? (
-									<div className="mt-2 flex flex-wrap gap-2">
-										{mcpServers.map((server) => (
-											<span key={server} className={sidebarTagClass}>
-												{server}
-											</span>
-										))}
-									</div>
-								) : (
-									<div className={sidebarEmptyStateClass}>
-										No MCP servers configured.
-									</div>
-								)}
+							<div className={sidebarMetaClass}>
+								<dt className={sidebarLabelClass}>MCP</dt>
+								<dd className="mt-1 break-words text-[12px] text-slate-200">
+									{mcpSummary}
+								</dd>
 							</div>
-						</div>
-					</details>
-
-					<details className={`${sidebarCardClass} group`} open>
-						<summary className={sidebarSummaryClass}>
-							<div>
-								<p className="text-sm font-semibold text-slate-100">
-									Session Snapshot
-								</p>
-								<p className="mt-1 text-[11px] text-slate-400">
-									Thread metadata and diagnostics
-								</p>
-							</div>
-						</summary>
-						<div className="mt-4 space-y-3 text-xs text-slate-300">
-							<div className="grid grid-cols-2 gap-2">
-								<div className="rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2">
-									<span className={sidebarLabelClass}>Agent</span>
-									<div className="mt-1 truncate font-mono text-[11px] text-slate-200">
-										{agentId}
-									</div>
-								</div>
-								<div className="rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2">
-									<span className={sidebarLabelClass}>Messages</span>
-									<div className="mt-1 font-mono text-[11px] text-slate-200">
-										{messageCount}
-									</div>
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2">
-								<span className={sidebarLabelClass}>Thread</span>
-								<div className="mt-1 break-all font-mono text-[11px] text-slate-200">
-									{activeThread?.name || "--"}
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2">
-								<span className={sidebarLabelClass}>Created</span>
-								<div className="mt-1 text-[11px] text-slate-200">
-									{createdAt}
-								</div>
-							</div>
-							<div>
-								<span className={sidebarLabelClass}>Session Key</span>
-								<div className="mt-2 break-all rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2 font-mono text-[11px] text-slate-300">
-									{sessionKey}
-								</div>
-							</div>
-						</div>
-					</details>
-
-					<details className={`${sidebarCardClass} group`}>
-						<summary className={sidebarSummaryClass}>
-							<div>
-								<p className="text-sm font-semibold text-slate-100">Guidance</p>
-								<p className="mt-1 text-[11px] text-slate-400">
-									Recommended workflow habits
-								</p>
-							</div>
-						</summary>
-						<ul className="mt-4 space-y-2 text-xs text-slate-300">
-							<li className="rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2">
-								Use the command deck to refresh stats or rotate credentials.
-							</li>
-							<li className="rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2">
-								Create separate threads for each mission to keep context clean.
-							</li>
-							<li className="rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2">
-								Shift + Enter inserts a new line in prompts.
-							</li>
-						</ul>
-					</details>
-
-					<button
-						type="button"
-						className="rounded-full border border-rose-400/45 bg-gradient-to-r from-rose-500/20 to-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-100 transition hover:border-rose-300/70 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-2 2xl:col-span-4"
-						onClick={() => activeThread && onDeleteThread(activeThread.id)}
-						disabled={!activeThread}
-					>
-						Delete Thread
-					</button>
+						</dl>
+					</div>
 				</div>
 			</details>
 
-			<div className="min-h-0 flex-1">
+			<div className="min-h-0 overflow-hidden">
 				<ChatPanel
 					activeThread={activeThread}
 					defaultOutputDir={resolvedDefaultOutputDir}
@@ -365,10 +271,20 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 			<WorkdirModal
 				open={workdirOpen}
 				currentWorkdir={activeThread?.workdir || null}
-				outputRoot={baseOutputRoot || undefined}
+				defaultWorkdir={resolvedDefaultOutputDir || undefined}
 				onClose={() => setWorkdirOpen(false)}
 				onSave={handleSaveWorkdir}
 			/>
 		</section>
 	);
 };
+
+function summarizeCompactList(items: string[], emptyLabel: string) {
+	if (items.length === 0) {
+		return emptyLabel;
+	}
+	if (items.length <= 2) {
+		return items.join(", ");
+	}
+	return `${items[0]}, ${items[1]} +${items.length - 2}`;
+}

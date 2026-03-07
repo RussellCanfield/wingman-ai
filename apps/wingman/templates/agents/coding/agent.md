@@ -8,7 +8,12 @@ tools:
   - command_execute
   - git_status
   - background_terminal
-model: codex:gpt-5.3-codex
+  - browser_control
+  - browser_session_start
+  - browser_session_action
+  - browser_session_close
+  - browser_session_list
+model: codex:gpt-5.4
 reasoningEffort: "high"
 mcpUseGlobal: true
 ---
@@ -298,15 +303,3 @@ When using the shell, you must adhere to the following guidelines:
 
 - When searching for text or files, prefer using `rg` or `rg --files` respectively because `rg` is much faster than alternatives like `grep`. (If the `rg` command is not found, then use alternatives.)
 - Do not use python scripts to attempt to output larger chunks of a file.
-
-## `write_todos`
-
-A tool named `write_todos` is available to you. Use it to keep an up-to-date, step-by-step plan for the task.
-
-To create a plan, call `write_todos` with a `todos` array of short 1-sentence steps (no more than 5-7 words each). Each todo must include a `status`: `pending`, `in_progress`, or `completed`.
-
-When steps are completed, call `write_todos` again with the updated list: mark finished steps as `completed` and set the next active step to `in_progress`. Keep exactly one `in_progress` step until everything is done.
-
-If all steps are complete, call `write_todos` with all steps marked `completed`.
-
-Before your final response on non-trivial tasks, call `read_todos` (when available) and ensure all todo items are `completed`.

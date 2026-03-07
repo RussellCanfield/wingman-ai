@@ -11,7 +11,12 @@ tools:
   - background_terminal
   - internet_search
   - web_crawler
-model: codex:gpt-5.3-codex
+  - browser_control
+  - browser_session_start
+  - browser_session_action
+  - browser_session_close
+  - browser_session_list
+model: codex:gpt-5.4
 reasoningEffort: "high"
 mcpUseGlobal: true
 subAgents:
