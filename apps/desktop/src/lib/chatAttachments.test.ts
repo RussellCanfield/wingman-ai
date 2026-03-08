@@ -8,6 +8,7 @@ import {
 	isPdfAttachment,
 	isVideoAttachment,
 	readFileAsDataUrl,
+	resolveGatewayMediaUrl,
 } from "./chatAttachments.js";
 
 describe("chatAttachments", () => {
@@ -110,5 +111,20 @@ describe("chatAttachments", () => {
 		const dataUrl = await readFileAsDataUrl(file);
 		expect(dataUrl.startsWith("data:text/plain")).toBe(true);
 		expect(dataUrl.includes(";base64,")).toBe(true);
+	});
+
+	test("resolves gateway-relative media urls against the gateway base", () => {
+		expect(
+			resolveGatewayMediaUrl(
+				"/api/fs/file?path=%2Ftmp%2Fshot.png",
+				"http://127.0.0.1:18789/",
+			),
+		).toBe("http://127.0.0.1:18789/api/fs/file?path=%2Ftmp%2Fshot.png");
+		expect(
+			resolveGatewayMediaUrl(
+				"data:image/png;base64,abc",
+				"http://127.0.0.1:18789/",
+			),
+		).toBe("data:image/png;base64,abc");
 	});
 });

@@ -10,7 +10,9 @@ import {
 
 describe("ToolEventPanel helpers", () => {
 	it("stringifies objects", () => {
-		const result = stringifyToolEventValue({ q: "wingman", limit: 3 });
+		const result = stringifyToolEventValue({
+			input: '{"q":"wingman","limit":3}',
+		});
 
 		expect(result).toContain('"q": "wingman"');
 		expect(result).toContain('"limit": 3');
@@ -89,6 +91,24 @@ describe("ToolEventPanel helpers", () => {
 		expect(html).toContain("whitespace-pre-wrap");
 		expect(html).toContain("overflow-x-hidden");
 		expect(html).toContain("[overflow-wrap:anywhere]");
+	});
+
+	it("renders humanized tool names for namespaced tools", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-humanized",
+						name: "functions.read_file",
+						status: "completed",
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Read File");
+		expect(html).not.toContain("functions.read_file");
 	});
 
 	it("hides completed badge text and uses chevron detail affordance", () => {

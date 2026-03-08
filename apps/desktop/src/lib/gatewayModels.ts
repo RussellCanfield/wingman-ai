@@ -83,17 +83,55 @@ export type ChatAttachment = {
 	size?: number;
 };
 
+export type AssistantTimelineTextBlock = {
+	id: string;
+	kind: "text";
+	order: number;
+	text: string;
+};
+
+export type AssistantTimelineToolBlock = {
+	id: string;
+	kind: "tool";
+	order: number;
+	toolEventId: string;
+};
+
+export type AssistantTimelineBlock =
+	| AssistantTimelineTextBlock
+	| AssistantTimelineToolBlock;
+
+export type ContextWindowUsage = {
+	inputTokens: number;
+	estimatedInputTokens?: number;
+	outputTokens: number;
+	totalTokens: number;
+	thresholdTokens?: number;
+	percentOfThreshold?: number;
+	summarized?: boolean;
+	updatedAt: number;
+};
+
 export type ToolEvent = {
 	id: string;
 	name: string;
+	node?: string;
+	actor?: string;
+	runId?: string;
+	parentRunIds?: string[];
+	delegatedByTaskId?: string;
+	delegatedSubagentType?: string;
 	status: "running" | "completed" | "error";
-	args?: Record<string, unknown>;
-	output?: unknown;
+	args?: Record<string, any>;
+	output?: any;
 	error?: string;
-	timestamp: number;
+	timestamp?: number;
 	ui?: UiRenderSpec;
 	uiOnly?: boolean;
 	textFallback?: string;
+	startedAt?: number;
+	completedAt?: number;
+	streamOrder?: number;
 };
 
 export type UiLayoutSpec = {
@@ -126,9 +164,10 @@ export type ChatMessage = {
 	role: "user" | "assistant";
 	content: string;
 	attachments?: ChatAttachment[];
-	createdAt: number;
 	toolEvents?: ToolEvent[];
 	thinkingEvents?: ThinkingEvent[];
+	inlineThinkBlocks?: string[];
+	activityTimeline?: AssistantTimelineBlock[];
 	uiBlocks?: Array<{
 		id: string;
 		spec: UiRenderSpec;
@@ -136,6 +175,8 @@ export type ChatMessage = {
 		textFallback?: string;
 	}>;
 	uiTextFallback?: string;
+	contextUsage?: ContextWindowUsage;
+	createdAt: number;
 };
 
 export type SessionThread = {

@@ -160,6 +160,20 @@ export function DocsIcon({ className = "h-4 w-4" }: IconProps): React.JSX.Elemen
 	);
 }
 
+export function ToolIcon({
+	className = "h-4 w-4",
+}: IconProps): React.JSX.Element {
+	return createStrokeIcon(
+		<>
+			<path d="M15 5.5a3.5 3.5 0 1 0-4.7 3.3L4.5 14.6a2 2 0 1 0 2.8 2.8l5.8-5.8A3.5 3.5 0 0 0 15 5.5Z" />
+			<path d="m14 10 4.5 4.5" />
+			<path d="m16.5 12.5 2-2" />
+		</>
+		,
+		className,
+	);
+}
+
 export function TrashIcon({
 	className = "h-4 w-4",
 }: IconProps): React.JSX.Element {

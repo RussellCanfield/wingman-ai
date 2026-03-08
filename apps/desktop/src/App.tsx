@@ -28,6 +28,7 @@ import {
 	fetchSessionMessages,
 	fetchSessions,
 	fetchVoiceConfig,
+	getGatewayHttpBase,
 	mapSessionToThread,
 	renameSession,
 	setNodeEnabled,
@@ -107,7 +108,9 @@ import {
 	isPdfAttachment,
 	isVideoAttachment,
 	readFileAsDataUrl,
+	resolveGatewayMediaUrl,
 } from "./lib/chatAttachments.js";
+import { mergeUniqueAttachments } from "./lib/attachmentDedupe.js";
 import { buildAgentCompletionNotice } from "./lib/notifications.js";
 import {
 	loadDesktopPreferences,
@@ -168,6 +171,7 @@ import {
 	resolveTextMessageTargetId,
 	resolveToolMessageTargetId,
 } from "./streamMessageRouter.js";
+import { mergeAssistantStreamText } from "./lib/assistantStream.js";
 import {
 	collectWorkspaceLoadingTasks,
 	formatSlowLoadEvent,
@@ -180,7 +184,7 @@ import {
 } from "./composer.js";
 import { DesktopBrandBadge } from "./components/DesktopBrandBadge.js";
 import { TodoProgressPanel } from "./components/TodoProgressPanel.js";
-import { ToolEventPanel } from "./components/ToolEventPanel.js";
+import { ToolActivityRollup } from "./components/ToolActivityRollup.js";
 import {
 	AgentsIcon,
 	AttachmentIcon,
@@ -204,6 +208,18 @@ import {
 	shouldShowAssistantTypingIndicator,
 } from "./chatStreamingIndicators.js";
 import { extractLatestTodoSnapshotFromMessages } from "../../../shared/chat/todos";
+import {
+	groupTimelineBlocksForDisplay,
+	groupToolEventsForDisplay,
+} from "./lib/toolActivityRollup.js";
+import {
+	upsertTimelineTextBlock,
+	upsertTimelineToolBlock,
+} from "./lib/streamTimeline.js";
+import {
+	collapseToolOnlyAssistantMessages,
+	type RenderableChatMessage,
+} from "./lib/transcriptMessages.js";
 
 type NativeState = {
 	connected?: boolean;
@@ -525,26 +541,60 @@ function mergeToolEvents(
 	existing: ToolEvent[] | undefined,
 	next: ToolEvent[],
 ): ToolEvent[] {
-	type SortableToolEvent = ToolEvent & {
-		startedAt?: number;
-		completedAt?: number;
-		timestamp?: number;
-	};
 	const byId = new Map<string, ToolEvent>();
 	for (const item of existing || []) {
 		byId.set(item.id, item);
 	}
 	for (const item of next) {
 		const current = byId.get(item.id);
-		byId.set(item.id, current ? { ...current, ...item } : item);
+		if (!current) {
+			byId.set(item.id, {
+				...item,
+				startedAt: item.startedAt ?? item.timestamp,
+				completedAt:
+					item.completedAt ??
+					(item.status === "completed" || item.status === "error"
+						? item.timestamp
+						: undefined),
+			});
+			continue;
+		}
+		byId.set(item.id, {
+			...current,
+			...item,
+			name:
+				item.name && item.name !== "tool"
+					? item.name
+					: current.name || item.name,
+			node: item.node || current.node,
+			actor: item.actor || current.actor,
+			runId: item.runId || current.runId,
+			parentRunIds: item.parentRunIds || current.parentRunIds,
+			delegatedByTaskId: item.delegatedByTaskId || current.delegatedByTaskId,
+			delegatedSubagentType:
+				item.delegatedSubagentType || current.delegatedSubagentType,
+			args: item.args ?? current.args,
+			output: item.output ?? current.output,
+			ui: item.ui ?? current.ui,
+			uiOnly: item.uiOnly ?? current.uiOnly,
+			textFallback: item.textFallback ?? current.textFallback,
+			error: item.error ?? current.error,
+			timestamp: item.timestamp ?? current.timestamp,
+			startedAt:
+				current.startedAt ?? item.startedAt ?? item.timestamp ?? current.timestamp,
+			completedAt:
+				item.completedAt ??
+				(item.status === "completed" || item.status === "error"
+					? (item.timestamp ?? current.completedAt)
+					: current.completedAt),
+			streamOrder: current.streamOrder ?? item.streamOrder,
+		});
 	}
 	return [...byId.values()].sort((a, b) => {
-		const sortableA = a as SortableToolEvent;
-		const sortableB = b as SortableToolEvent;
 		const aTime =
-			sortableA.startedAt ?? sortableA.timestamp ?? sortableA.completedAt ?? 0;
+			a.streamOrder ?? a.startedAt ?? a.timestamp ?? a.completedAt ?? 0;
 		const bTime =
-			sortableB.startedAt ?? sortableB.timestamp ?? sortableB.completedAt ?? 0;
+			b.streamOrder ?? b.startedAt ?? b.timestamp ?? b.completedAt ?? 0;
 		return aTime - bTime;
 	});
 }
@@ -595,29 +645,19 @@ function updateAssistantMessage(
 	};
 }
 
-function mergeAssistantStreamText(
-	existing: string,
-	incoming: string,
-	isDelta?: boolean,
-): string {
-	if (!incoming) return existing;
-	if (isDelta) {
-		if (incoming.startsWith(existing)) return incoming;
-		return existing + incoming;
-	}
-	if (!existing.trim()) return incoming;
-	return `${existing}\n${incoming}`;
-}
-
 function normalizeStreamAttachment(
 	raw: ParsedStreamAttachmentEvent,
+	gatewayBase: string,
 ): ChatAttachment | null {
 	const kind =
 		typeof raw.kind === "string" &&
-		(raw.kind === "image" || raw.kind === "audio" || raw.kind === "file")
+			(raw.kind === "image" || raw.kind === "audio" || raw.kind === "file")
 			? raw.kind
 			: null;
-	const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl.trim() : "";
+	const dataUrl =
+		typeof raw.dataUrl === "string"
+			? resolveGatewayMediaUrl(raw.dataUrl, gatewayBase)
+			: "";
 	if (!kind || !dataUrl) return null;
 
 	const textContent =
@@ -642,30 +682,12 @@ function normalizeStreamAttachment(
 	};
 }
 
-function attachmentSignature(attachment: ChatAttachment): string {
-	return [
-		attachment.kind,
-		attachment.dataUrl,
-		attachment.textContent || "",
-		attachment.name || "",
-		attachment.mimeType || "",
-		typeof attachment.size === "number" ? String(attachment.size) : "",
-	].join("|");
-}
-
 function mergeStreamAttachments(
 	existing: ChatAttachment[] | undefined,
 	incoming: ChatAttachment[],
 ): ChatAttachment[] | undefined {
 	if (incoming.length === 0) return existing;
-	const merged = [...(existing || [])];
-	const seen = new Set(merged.map((attachment) => attachmentSignature(attachment)));
-	for (const attachment of incoming) {
-		const signature = attachmentSignature(attachment);
-		if (seen.has(signature)) continue;
-		seen.add(signature);
-		merged.push(attachment);
-	}
+	const merged = mergeUniqueAttachments(existing || [], incoming);
 	return merged.length > 0 ? merged : undefined;
 }
 
@@ -1310,6 +1332,7 @@ function useGatewayWorkspace(
 	nodeName: string,
 	setGlobalStatus: (message: string, isError?: boolean) => void,
 ) {
+	const gatewayHttpBase = getGatewayHttpBase(settings);
 	const [workspace, setWorkspace] = useState<WorkspaceState>({
 		connectionStatus: "disconnected",
 		connectionMessage: "Not connected to gateway",
@@ -1358,6 +1381,10 @@ function useGatewayWorkspace(
 	const requestStreamMessageRef = useRef<Map<string, Map<string, string>>>(
 		new Map(),
 	);
+	const requestStreamOrderRef = useRef<Map<string, number>>(new Map());
+	const timelineActiveTextBlockRef = useRef<Map<string, string>>(new Map());
+	const timelineActiveTextOrderRef = useRef<Map<string, number>>(new Map());
+	const timelineLastKindRef = useRef<Map<string, "text" | "tool">>(new Map());
 	const completionNonceRef = useRef(0);
 	const subscribedRef = useRef<Set<string>>(new Set());
 	const loadingMessagesRef = useRef<Set<string>>(new Set());
@@ -1388,6 +1415,36 @@ function useGatewayWorkspace(
 		}));
 	}, []);
 
+	const getRequestMessageIds = useCallback((requestId: string): string[] => {
+		const ids = new Set<string>();
+		const baseMessageId = requestMessageRef.current.get(requestId) || requestId;
+		ids.add(baseMessageId);
+		const requestTargets = requestStreamMessageRef.current.get(requestId);
+		for (const messageId of requestTargets?.values() || []) {
+			ids.add(messageId);
+		}
+		return [...ids];
+	}, []);
+
+	const nextStreamOrder = useCallback((requestId: string): number => {
+		const current = requestStreamOrderRef.current.get(requestId) || 0;
+		const next = current + 1;
+		requestStreamOrderRef.current.set(requestId, next);
+		return next;
+	}, []);
+
+	const clearRequestTimelineState = useCallback(
+		(requestId: string) => {
+			for (const messageId of getRequestMessageIds(requestId)) {
+				timelineActiveTextBlockRef.current.delete(messageId);
+				timelineActiveTextOrderRef.current.delete(messageId);
+				timelineLastKindRef.current.delete(messageId);
+			}
+			requestStreamOrderRef.current.delete(requestId);
+		},
+		[getRequestMessageIds],
+	);
+
 	const registerPendingRequest = useCallback(
 		(requestId: string) => {
 			pendingRequestIdsRef.current.add(requestId);
@@ -1412,21 +1469,25 @@ function useGatewayWorkspace(
 	const finalizePendingRequest = useCallback(
 		(requestId: string) => {
 			pendingRequestIdsRef.current.delete(requestId);
+			clearRequestTimelineState(requestId);
 			clearStreamMessageTargets(requestStreamMessageRef.current, requestId);
 			if (activeGatewayRequestIdRef.current === requestId) {
 				activeGatewayRequestIdRef.current = null;
 			}
 			syncRequestStreamingState();
 		},
-		[syncRequestStreamingState],
+		[clearRequestTimelineState, syncRequestStreamingState],
 	);
 
 	const resetPendingRequests = useCallback(() => {
+		for (const requestId of pendingRequestIdsRef.current) {
+			clearRequestTimelineState(requestId);
+		}
 		pendingRequestIdsRef.current.clear();
 		activeGatewayRequestIdRef.current = null;
 		requestStreamMessageRef.current.clear();
 		syncRequestStreamingState();
-	}, [syncRequestStreamingState]);
+	}, [clearRequestTimelineState, syncRequestStreamingState]);
 
 	const resolveTrackedGatewayRequestId = useCallback(
 		(requestId: string | null | undefined): string | null => {
@@ -1770,7 +1831,10 @@ function useGatewayWorkspace(
 							ChatAttachment[]
 						>();
 						for (const attachmentEvent of parsedAttachmentEvents) {
-							const nextAttachment = normalizeStreamAttachment(attachmentEvent);
+							const nextAttachment = normalizeStreamAttachment(
+								attachmentEvent,
+								gatewayHttpBase,
+							);
 							if (!nextAttachment) continue;
 							const targetMessageId = resolveTextMessageTargetId({
 								state: requestStreamMessageRef.current,
@@ -1821,14 +1885,53 @@ function useGatewayWorkspace(
 						nextThread = updateAssistantMessage(
 							nextThread,
 							targetMessageId,
-							(message) => ({
-								...message,
-								content: mergeAssistantStreamText(
-									message.content,
-									textEvent.text,
-									textEvent.isDelta,
-								),
-							}),
+							(message) => {
+								let activityTimeline = message.activityTimeline;
+								let timelineTextBlockId: string | undefined;
+								let timelineTextOrder: number | undefined;
+								if (textEvent.text) {
+									timelineTextBlockId =
+										timelineActiveTextBlockRef.current.get(targetMessageId);
+									const previousKind =
+										timelineLastKindRef.current.get(targetMessageId);
+									if (!timelineTextBlockId || previousKind !== "text") {
+										timelineTextOrder = nextStreamOrder(requestId);
+										timelineTextBlockId = `tl-text-${targetMessageId}-${timelineTextOrder}`;
+										timelineActiveTextBlockRef.current.set(
+											targetMessageId,
+											timelineTextBlockId,
+										);
+										timelineActiveTextOrderRef.current.set(
+											targetMessageId,
+											timelineTextOrder,
+										);
+									} else {
+										timelineTextOrder =
+											timelineActiveTextOrderRef.current.get(targetMessageId) ??
+											nextStreamOrder(requestId);
+									}
+									timelineLastKindRef.current.set(targetMessageId, "text");
+									if (timelineTextBlockId) {
+										activityTimeline = upsertTimelineTextBlock(
+											message.activityTimeline,
+											{
+												blockId: timelineTextBlockId,
+												order: timelineTextOrder ?? nextStreamOrder(requestId),
+												textDelta: textEvent.text,
+											},
+										);
+									}
+								}
+								return {
+									...message,
+									content: mergeAssistantStreamText(
+										message.content,
+										textEvent.text,
+										textEvent.isDelta,
+									),
+									activityTimeline,
+								};
+							},
 						);
 					}
 
@@ -1837,7 +1940,11 @@ function useGatewayWorkspace(
 							string,
 							ParsedToolStreamEvent[]
 						>();
-						for (const toolEvent of parsedToolEvents) {
+						const orderedToolEvents = parsedToolEvents.map((toolEvent) => ({
+							...toolEvent,
+							streamOrder: nextStreamOrder(requestId),
+						}));
+						for (const toolEvent of orderedToolEvents) {
 							const targetMessageId = resolveToolMessageTargetId({
 								state: requestStreamMessageRef.current,
 								requestId,
@@ -1859,9 +1966,31 @@ function useGatewayWorkspace(
 										message.toolEvents,
 										toolEvents,
 									);
+									let activityTimeline = message.activityTimeline;
+									for (const toolEvent of toolEvents) {
+										activityTimeline = upsertTimelineToolBlock(
+											activityTimeline,
+											{
+												blockId: `tl-tool-${toolEvent.id}`,
+												order:
+													toolEvent.streamOrder ||
+													toolEvent.startedAt ||
+													toolEvent.timestamp ||
+													Date.now(),
+												toolEventId: toolEvent.id,
+											},
+										);
+									}
+									timelineActiveTextBlockRef.current.delete(toolMessageId);
+									timelineActiveTextOrderRef.current.delete(toolMessageId);
+									timelineLastKindRef.current.set(toolMessageId, "tool");
 									return {
 										...message,
 										toolEvents: mergedToolEvents,
+										activityTimeline:
+											activityTimeline && activityTimeline.length > 0
+												? activityTimeline
+												: undefined,
 										uiBlocks: deriveUiBlocks(mergedToolEvents),
 									};
 								},
@@ -1935,8 +2064,10 @@ function useGatewayWorkspace(
 		[
 			applyGatewayRequestFailure,
 			finalizePendingRequest,
+			gatewayHttpBase,
 			logEvent,
 			markRequestActive,
+			nextStreamOrder,
 			refreshSessionsData,
 			registerPendingRequest,
 		],
@@ -4148,10 +4279,16 @@ function ChatScreen({
 		() => resolveLastAssistantMessageId(activeThread?.messages),
 		[activeThread?.messages],
 	);
+	const displayMessages = useMemo(
+		() => collapseToolOnlyAssistantMessages(activeThread?.messages),
+		[activeThread?.messages],
+	);
 	const todoSnapshot = useMemo(
 		() => extractLatestTodoSnapshotFromMessages(activeThread?.messages),
 		[activeThread?.messages],
 	);
+	const visibleTodoSnapshot =
+		todoSnapshot && !todoSnapshot.allCompleted ? todoSnapshot : null;
 	const showStreamingGlow = workspace.isStreaming;
 
 	const handleTalkButtonClick = useCallback(async () => {
@@ -4303,8 +4440,8 @@ function ChatScreen({
 						<div className="rounded-2xl border border-white/10 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
 							Loading chat history...
 						</div>
-					) : activeThread?.messages.length ? (
-						activeThread.messages.map((message) => (
+					) : displayMessages.length > 0 ? (
+						displayMessages.map((message) => (
 							<MessageCard
 								key={message.id}
 								message={message}
@@ -4407,16 +4544,18 @@ function ChatScreen({
 					Message
 				</label>
 				<div>
-					{todoSnapshot ? (
+					{visibleTodoSnapshot ? (
 						<TodoProgressPanel
-							key={`${activeThread?.id ?? "thread"}:${todoSnapshot.sourceEventId ?? "todos"}`}
-							snapshot={todoSnapshot}
+							key={`${activeThread?.id ?? "thread"}:${visibleTodoSnapshot.sourceEventId ?? "todos"}`}
+							snapshot={visibleTodoSnapshot}
 							attached
 						/>
 					) : null}
 					<div
 						className={`border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] ${
-							todoSnapshot ? "-mt-px rounded-b-2xl rounded-t-xl" : "rounded-2xl"
+							visibleTodoSnapshot
+								? "-mt-px rounded-b-2xl rounded-t-xl"
+								: "rounded-2xl"
 						}`}
 					>
 						<div className="flex items-center justify-end gap-2 px-1 pb-2">
@@ -6024,7 +6163,7 @@ function MainView({
 	);
 }
 type MessageCardProps = {
-	message: ChatMessage;
+	message: RenderableChatMessage;
 	isStreaming: boolean;
 	activeAssistantMessageId?: string;
 	voicePlayback: { status: VoicePlaybackStatus; messageId?: string };
@@ -6054,6 +6193,42 @@ function MessageCard({
 		isStreaming,
 		activeAssistantMessageId,
 	});
+	const activityItems = useMemo(() => {
+		if (message.activityTimeline?.length) {
+			return groupTimelineBlocksForDisplay({
+				blocks: message.activityTimeline,
+				toolEventsById: new Map(
+					(message.toolEvents || []).map((event) => [event.id, event]),
+				),
+			});
+		}
+
+		const nextItems: Array<
+			| { id: string; kind: "text"; text: string }
+			| { id: string; kind: "tool-rollup"; toolEvents: ToolEvent[] }
+		> = [];
+		if (displayText) {
+			nextItems.push({
+				id: `${message.id}-text`,
+				kind: "text",
+				text: displayText,
+			});
+		}
+		if (message.toolEvents?.length) {
+			nextItems.push(
+				...groupToolEventsForDisplay({
+					toolEvents: message.toolEvents,
+				}),
+			);
+		}
+		return nextItems;
+	}, [
+		displayText,
+		message.activityTimeline,
+		message.id,
+		message.toolEvents,
+	]);
+
 	return (
 		<div
 			className={`rounded-2xl border p-3 ${
@@ -6096,9 +6271,23 @@ function MessageCard({
 					<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:150ms]" />
 					<span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:300ms]" />
 				</div>
-			) : displayText ? (
-				<div className="whitespace-pre-wrap text-sm text-slate-100">
-					{displayText}
+			) : activityItems.length > 0 ? (
+				<div className="space-y-3">
+					{activityItems.map((item) =>
+						item.kind === "text" ? (
+							<div
+								key={item.id}
+								className="whitespace-pre-wrap text-sm text-slate-100"
+							>
+								{item.text}
+							</div>
+						) : (
+							<ToolActivityRollup
+								key={item.id}
+								toolEvents={item.toolEvents}
+							/>
+						),
+					)}
 				</div>
 			) : null}
 
@@ -6162,12 +6351,6 @@ function MessageCard({
 							</div>
 						);
 					})}
-				</div>
-			) : null}
-
-			{message.toolEvents?.length ? (
-				<div className="mt-3">
-					<ToolEventPanel toolEvents={message.toolEvents} variant="inline" />
 				</div>
 			) : null}
 

@@ -20,6 +20,7 @@ import type {
 	SubAgentPayload,
 	VoiceConfig,
 } from "./gatewayModels.js";
+import { resolveGatewayMediaUrl } from "./chatAttachments.js";
 
 const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -328,7 +329,8 @@ export async function fetchSessionMessages(
 		`${base}/api/sessions/${encodeURIComponent(args.sessionId)}/messages?${search.toString()}`,
 		withGatewayAuth(settings),
 	);
-	return parseJsonOrThrow<ChatMessage[]>(response);
+	const messages = await parseJsonOrThrow<ChatMessage[]>(response);
+	return messages.map((message) => normalizeChatMessageMediaSources(message, base));
 }
 
 export async function clearSessionMessages(
@@ -534,5 +536,30 @@ export function mapSessionToThread(session: GatewaySession): SessionThread {
 		lastMessagePreview: session.lastMessagePreview,
 		messagesLoaded: false,
 		workdir: session.workdir ?? null,
+	};
+}
+
+function normalizeChatMessageMediaSources(
+	message: ChatMessage,
+	gatewayBase: string,
+): ChatMessage {
+	if (!message.attachments?.length) {
+		return message;
+	}
+
+	const attachments = message.attachments.map((attachment) => {
+		const nextDataUrl = resolveGatewayMediaUrl(attachment.dataUrl, gatewayBase);
+		if (nextDataUrl === attachment.dataUrl) {
+			return attachment;
+		}
+		return {
+			...attachment,
+			dataUrl: nextDataUrl,
+		};
+	});
+
+	return {
+		...message,
+		attachments,
 	};
 }

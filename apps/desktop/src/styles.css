@@ -58,6 +58,22 @@
 		animation-duration: 4s;
 		animation-delay: -1.4s;
 	}
+
+	.tool-rollup-line {
+		background-image: linear-gradient(
+			90deg,
+			rgba(186, 230, 253, 0.86) 0%,
+			rgba(125, 211, 252, 0.94) 18%,
+			rgba(255, 255, 255, 0.98) 50%,
+			rgba(125, 211, 252, 0.94) 82%,
+			rgba(186, 230, 253, 0.86) 100%
+		);
+		background-size: 220% auto;
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+		animation: tool-rollup-gradient 2.8s linear infinite;
+	}
 }
 
 @keyframes fire-rise {
@@ -72,5 +88,14 @@
 	100% {
 		transform: translateY(18%) scaleY(0.96);
 		opacity: 0.6;
+	}
+}
+
+@keyframes tool-rollup-gradient {
+	0% {
+		background-position: 0% center;
+	}
+	100% {
+		background-position: 200% center;
 	}
 }

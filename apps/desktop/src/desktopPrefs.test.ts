@@ -43,11 +43,11 @@ describe("desktopPrefs", () => {
 	it("persists node mode preference", () => {
 		const storage = new MemoryStorage();
 		saveDesktopPreferences(
-			{
+			normalizeDesktopPreferences({
 				autoConnectOnLaunch: true,
 				notifyOnAgentFinish: true,
 				enableNodeMode: true,
-			},
+			}),
 			storage,
 		);
 		const loaded = loadDesktopPreferences(storage);

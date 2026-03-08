@@ -3,14 +3,14 @@ import { runWithInFlightGuard } from "./inFlight";
 
 describe("runWithInFlightGuard", () => {
 	it("returns the same pending promise for concurrent calls", async () => {
-		let resolver: ((value: string) => void) | null = null;
+		let resolvePending!: (value: string) => void;
 		const inFlight = { current: null as Promise<string> | null };
 		let calls = 0;
 
 		const task = () => {
 			calls += 1;
 			return new Promise<string>((resolve) => {
-				resolver = resolve;
+				resolvePending = resolve;
 			});
 		};
 
@@ -18,7 +18,7 @@ describe("runWithInFlightGuard", () => {
 		const second = runWithInFlightGuard(inFlight, task);
 		expect(first).toBe(second);
 		expect(calls).toBe(1);
-		resolver?.("ok");
+		resolvePending("ok");
 		await expect(first).resolves.toBe("ok");
 	});
 

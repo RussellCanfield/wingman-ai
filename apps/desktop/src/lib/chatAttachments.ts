@@ -87,6 +87,34 @@ export function buildAttachmentPreviewText(attachments: ChatAttachment[]): strin
 	return count > 1 ? "Image attachments" : "Image attachment";
 }
 
+export function resolveGatewayMediaUrl(
+	value: string,
+	gatewayBase: string,
+): string {
+	const trimmed = value.trim();
+	if (!trimmed) return "";
+	if (
+		trimmed.startsWith("http://") ||
+		trimmed.startsWith("https://") ||
+		trimmed.startsWith("data:") ||
+		trimmed.startsWith("blob:")
+	) {
+		return trimmed;
+	}
+
+	const normalizedBase = gatewayBase.trim().replace(/\/+$/, "");
+	if (!normalizedBase) {
+		return trimmed;
+	}
+	if (trimmed.startsWith("/")) {
+		return `${normalizedBase}${trimmed}`;
+	}
+	if (trimmed.startsWith("api/")) {
+		return `${normalizedBase}/${trimmed}`;
+	}
+	return trimmed;
+}
+
 export function formatAttachmentMeta(attachment: ChatAttachment): string {
 	const parts: string[] = [];
 	if (attachment.mimeType) parts.push(attachment.mimeType);

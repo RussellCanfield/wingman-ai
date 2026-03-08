@@ -3,6 +3,7 @@ import {
 	checkGatewayConnection,
 	clearProviderToken,
 	clearSessionMessages,
+	fetchSessionMessages,
 	fetchNodes,
 	fetchProviders,
 	fetchVoiceConfig,
@@ -158,6 +159,51 @@ describe("clearSessionMessages", () => {
 				"/api/sessions/session-1/messages?agentId=main",
 			);
 			expect(result.messageCount).toBe(0);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+});
+
+describe("fetchSessionMessages", () => {
+	test("normalizes relative attachment media urls against the gateway base", async () => {
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => {
+			return new Response(
+				JSON.stringify([
+					{
+						id: "assistant-1",
+						role: "assistant",
+						content: "",
+						attachments: [
+							{
+								id: "attachment-1",
+								kind: "image",
+								dataUrl: "/api/fs/file?path=%2Ftmp%2Fscreenshot.png",
+								name: "screenshot.png",
+							},
+						],
+						createdAt: 1,
+					},
+				]),
+				{
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				},
+			);
+		}) as unknown as typeof fetch;
+
+		try {
+			const settings = normalizeGatewaySettings({
+				url: "ws://127.0.0.1:18789/ws",
+			});
+			const messages = await fetchSessionMessages(settings, {
+				sessionId: "session-1",
+				agentId: "main",
+			});
+			expect(messages[0]?.attachments?.[0]?.dataUrl).toBe(
+				"http://127.0.0.1:18789/api/fs/file?path=%2Ftmp%2Fscreenshot.png",
+			);
 		} finally {
 			globalThis.fetch = originalFetch;
 		}

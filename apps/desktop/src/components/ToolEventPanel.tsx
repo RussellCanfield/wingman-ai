@@ -1,4 +1,11 @@
 import type { ToolEvent } from "../lib/gatewayModels.js";
+import {
+	findToolBooleanArg,
+	findToolTextArg,
+	formatToolDisplayName,
+	normalizeToolName,
+	normalizeToolPayloadValue,
+} from "../lib/toolDisplay.js";
 
 type ToolEventPanelProps = {
 	toolEvents: ToolEvent[];
@@ -144,7 +151,7 @@ function ToolEventCard({ event }: { event: RichToolEvent }) {
 					<div className="min-w-0">
 						<div className="flex flex-wrap items-center gap-2">
 							<div className="truncate text-sm font-semibold text-slate-100">
-								{event.name}
+								{formatToolDisplayName(event.name)}
 							</div>
 							{taskTarget ? (
 								<span className="rounded-full border border-violet-400/35 bg-violet-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200">
@@ -275,15 +282,13 @@ type EditFileDiffPreviewModel = {
 };
 
 function resolveTaskTarget(event: RichToolEvent): string | null {
-	if (!event?.args || typeof event.args !== "object") return null;
-	const direct =
-		event.args.subagent_type ??
-		event.args.subagentType ??
-		event.args.subagent ??
-		event.args.subAgent ??
-		event.args.agent;
-	if (typeof direct !== "string" || !direct.trim()) return null;
-	return direct.trim();
+	return findToolTextArg(event.args, [
+		"subagent_type",
+		"subagentType",
+		"subagent",
+		"subAgent",
+		"agent",
+	]);
 }
 
 function resolveDelegatedLabel(event: RichToolEvent): string | null {
@@ -296,17 +301,9 @@ function buildEditFileDiffPreview(
 	event: RichToolEvent,
 ): EditFileDiffPreviewModel | null {
 	if (getNormalizedToolName(event) !== "edit_file") return null;
-	const args = event.args;
-	if (!args || typeof args !== "object") return null;
-
-	const filePath =
-		typeof args.file_path === "string" && args.file_path.trim()
-			? args.file_path.trim()
-			: null;
-	const oldString =
-		typeof args.old_string === "string" ? args.old_string : null;
-	const newString =
-		typeof args.new_string === "string" ? args.new_string : null;
+	const filePath = findToolTextArg(event.args, ["file_path"]);
+	const oldString = findToolTextArg(event.args, ["old_string"]);
+	const newString = findToolTextArg(event.args, ["new_string"]);
 	if (!filePath || oldString === null || newString === null) return null;
 
 	if (
@@ -330,7 +327,7 @@ function buildEditFileDiffPreview(
 
 	return {
 		filePath,
-		replaceAll: args.replace_all === true,
+		replaceAll: findToolBooleanArg(event.args, ["replace_all"]) === true,
 		diffText,
 	};
 }
@@ -346,8 +343,7 @@ function clipDiffLines(value: string, prefix: "-" | "+"): string[] {
 }
 
 function getNormalizedToolName(event: RichToolEvent): string {
-	if (typeof event?.name !== "string") return "";
-	return event.name.trim().toLowerCase();
+	return normalizeToolName(event?.name);
 }
 
 function EditFileDiffPreview({ preview }: { preview: EditFileDiffPreviewModel }) {
@@ -482,14 +478,15 @@ export function stringifyToolEventValue(
 	maxLength = 1200,
 ): string | null {
 	if (value === null || value === undefined) return null;
+	const normalizedValue = normalizeToolPayloadValue(value);
 	let text: string;
-	if (typeof value === "string") {
-		text = value;
+	if (typeof normalizedValue === "string") {
+		text = normalizedValue;
 	} else {
 		try {
-			text = JSON.stringify(value, null, 2);
+			text = JSON.stringify(normalizedValue, null, 2);
 		} catch {
-			text = String(value);
+			text = String(normalizedValue);
 		}
 	}
 	if (text.length > maxLength) {
