@@ -22,6 +22,7 @@ import {
 	additionalMessageMiddleware,
 	type ConnectedNodeTarget,
 } from "@/agent/middleware/additional-messages.js";
+import { createFilteredBackend } from "@/agent/backend/filtered-backend.js";
 import { mergeHooks } from "@/agent/middleware/hooks/merger.js";
 import { createHooksMiddleware } from "@/agent/middleware/hooks.js";
 import { createLargeToolResultsMiddleware } from "@/agent/middleware/large-tool-results.js";
@@ -1628,7 +1629,7 @@ export class AgentInvoker {
 				});
 			}
 
-			const backendFactory = () =>
+			const rawBackendFactory = () =>
 				new CompositeBackend(
 					new FilesystemBackend({
 						rootDir: executionWorkspace,
@@ -1636,6 +1637,7 @@ export class AgentInvoker {
 					}),
 					backendOverrides,
 				);
+			const backendFactory = () => createFilteredBackend(rawBackendFactory());
 
 			middleware.push(
 				createLargeToolResultsMiddleware({
@@ -1659,7 +1661,7 @@ export class AgentInvoker {
 				standaloneAgent,
 				summarizationSettings,
 				targetAgent.model as any,
-				backendFactory,
+				rawBackendFactory,
 			);
 			standaloneAgent =
 				recompileDeepAgentWithMiddlewareOverrides(standaloneAgent);

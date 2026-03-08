@@ -34,18 +34,18 @@ Use this to crawl and extract detailed content from specific URLs.
 
 ## `browser_control`
 
-Use this when static crawling is insufficient and you need real browser behavior.
+Reserve this for explicit requests to use or take over the user's existing browser or live tab.
 
-- Native Wingman capability backed by headless Chrome/Chromium over CDP
-- Best for JS-rendered pages, interaction-required flows, and visual verification screenshots
+- Native Wingman capability backed by Chrome/Chromium runtime control
+- Best when the user says things like "use my browser" or "take control of my browser"
 - Not an MCP dependency; use MCP for external data/SaaS integrations
 
 ## `browser_session_*`
 
-Use this when a browser workflow needs to persist across multiple tool calls.
+Use this as the default browser workflow whenever static crawling is insufficient.
 
 - Start with `browser_session_start`, continue with `browser_session_action`, and clean up with `browser_session_close`
-- Best for iterative QA, multi-step sign-in flows, and investigation where the same browser state must survive across turns
+- Best for JS-rendered pages, interaction-required flows, screenshots, multi-step sign-in flows, and investigation where the same browser state must survive across turns
 
 ## Scope and guardrails
 

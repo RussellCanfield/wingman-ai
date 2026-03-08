@@ -60,6 +60,7 @@ Each agent configuration file follows this schema:
   - `thinkingEffort` is accepted as a legacy alias
 - **browserProfile**: Optional named persistent browser profile for `browser_control` (configured in `wingman.config.json` under `browser`; initialize with `wingman browser profile init <id>`)
 - **browserTransport**: Optional default transport for `browser_control` and `browser_session_*` (`auto`, `playwright`, or `relay`)
+- **Browser tool split**: Prefer `browser_session_*` for normal browser automation. Reserve `browser_control` for agents that should only act when the user explicitly wants Wingman to use an existing browser or live tab.
 - **promptRefinement**: Allow the agent to maintain a durable prompt overlay under `/memories/`
   - `enabled`: Set true to allow updates from explicit user feedback
   - `instructionsPath`: Optional override for the overlay file location (virtual path)

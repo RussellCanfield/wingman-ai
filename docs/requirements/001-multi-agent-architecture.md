@@ -63,6 +63,8 @@ Modern AI assistants face several challenges:
 - `browser_control`: Native Chrome/Chromium automation via CDP and Playwright persistent-context (first-class runtime tool, not MCP)
   - Supports optional persistent named profiles configured in `wingman.config.json` and selected per agent via `browserProfile`
   - Supports optional extension mappings (`browser.extensions`) and agent-level extension selection (`browserExtensions`)
+  - Companion managed-session tools (`browser_session_start`, `browser_session_action`, `browser_session_close`, `browser_session_list`) are the default browser automation path, keep browser state across turns, and can return saved screenshot/video artifacts to chat
+  - `browser_control` should be reserved for explicit "use my browser"/live-tab takeover workflows so it does not compete with the default managed-session flow
   - `wingman init` scaffolds a browser-ready baseline (`browser.defaultProfile`, default profile mapping, bundled `wingman` extension mapping/files, and `browser.defaultExtensions`)
   - CLI includes `wingman browser profile init <profile-id>` and `wingman browser profile open [profile-id] --url <url>` for profile provisioning and interactive login bootstrap
   - CLI includes `wingman browser extension install --default` to install Wingman's bundled first-party extension
@@ -510,6 +512,8 @@ Notes:
   - Supports optional persistent named profiles with lock protection to avoid concurrent profile corruption
   - Supports optional extension loading from host config mappings and per-agent overrides
   - Supports optional secure local relay mode (loopback-only, token-authenticated) for extension-mediated browser control workflows
+  - Companion managed-session tools are the default browser path; they preserve browser state across turns and emit saved screenshot/video artifacts as chat-renderable media links
+  - `browser_control` is reserved for explicit live-browser takeover requests so models are not forced to choose between overlapping browser entrypoints
 - `command_execute`: Shell command execution
 - `background_terminal`: Start a background terminal session, then write/poll by `session_id`
 - `node_notify`: Invoke node `system.notify` on an approved connected device

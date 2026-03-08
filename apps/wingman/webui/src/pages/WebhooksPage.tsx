@@ -156,7 +156,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({
 	}, []);
 
 	return (
-		<section className="grid gap-6 xl:grid-cols-[minmax(420px,1fr)_minmax(360px,1fr)]">
+		<section className="space-y-6">
 			<aside className="panel-card animate-rise space-y-6 p-5">
 				<div className="flex items-center justify-between gap-3">
 					<div>

@@ -152,3 +152,4 @@ Use `browser_control` for interactive validation (game UI smoke tests, WebGL bui
 - Update statuses as work progresses.
 - Call `read_todos` before finalizing to verify no `pending` items remain.
 - Do not end on promise-only language without executing that next step in the same turn.
+- Always work all tasks to completion

@@ -24,7 +24,7 @@ describe("CLI init", () => {
 		}
 	});
 
-	it("creates config and agent with defaults", async () => {
+	it("creates config and bundled agents with an explicit default agent", async () => {
 		await executeInitCommand(
 			{
 				subcommand: "",
@@ -32,7 +32,7 @@ describe("CLI init", () => {
 				verbosity: "silent",
 				outputMode: "json",
 				options: { yes: true, only: "config,agents" },
-				agent: "wingman",
+				agent: "main",
 			},
 			{ workspace },
 		);
@@ -40,7 +40,7 @@ describe("CLI init", () => {
 		const configPath = join(workspace, ".wingman", "wingman.config.json");
 		expect(existsSync(configPath)).toBe(true);
 		const config = JSON.parse(readFileSync(configPath, "utf-8"));
-		expect(config.defaultAgent).toBe("wingman");
+		expect(config.defaultAgent).toBe("main");
 		expect(config.gateway.fsRoots).toContain(".");
 		expect(config.browser?.defaultProfile).toBe("default");
 		expect(config.browser?.profiles?.default).toBe(
@@ -65,21 +65,22 @@ describe("CLI init", () => {
 			),
 		).toBe(true);
 
-		const agentPath = join(
+		const mainAgentPath = join(
 			workspace,
 			".wingman",
 			"agents",
-			"wingman",
-			"agent.json",
+			"main",
+			"agent.md",
 		);
-		expect(existsSync(agentPath)).toBe(true);
-		const agent = JSON.parse(readFileSync(agentPath, "utf-8"));
-		expect(agent.name).toBe("wingman");
-		expect(agent.tools).toContain("browser_control");
-		expect(agent.tools).toContain("browser_session_start");
-		expect(agent.tools).toContain("browser_session_action");
-		expect(agent.tools).toContain("browser_session_close");
-		expect(agent.tools).toContain("browser_session_list");
+		expect(existsSync(mainAgentPath)).toBe(true);
+		const mainAgent = readFileSync(mainAgentPath, "utf-8");
+		expect(mainAgent).toContain("name: main");
+		expect(mainAgent).toContain("- browser_control");
+		expect(
+			existsSync(
+				join(workspace, ".wingman", "agents", "main", "agent.json"),
+			),
+		).toBe(false);
 
 		const codingAgentPath = join(
 			workspace,
@@ -269,14 +270,14 @@ describe("CLI init", () => {
 				verbosity: "silent",
 				outputMode: "json",
 				options: { merge: true, only: "config" },
-				agent: "wingman",
+				agent: "main",
 			},
 			{ workspace },
 		);
 
 		const updated = JSON.parse(readFileSync(configPath, "utf-8"));
 		expect(updated.logLevel).toBe("debug");
-		expect(updated.defaultAgent).toBe("wingman");
+		expect(updated.defaultAgent).toBe("main");
 		expect(updated.gateway.fsRoots).toEqual(
 			expect.arrayContaining(["./existing", "."]),
 		);
@@ -322,7 +323,7 @@ describe("CLI init", () => {
 				verbosity: "silent",
 				outputMode: "json",
 				options: { merge: true, only: "config" },
-				agent: "wingman",
+				agent: "main",
 			},
 			{ workspace },
 		);
@@ -351,7 +352,7 @@ describe("CLI init", () => {
 				verbosity: "silent",
 				outputMode: "json",
 				options: { mode: "sync", only: "agents", force: true },
-				agent: "wingman",
+				agent: "main",
 			},
 			{ workspace },
 		);
@@ -372,9 +373,39 @@ describe("CLI init", () => {
 			workspace,
 			".wingman",
 			"agents",
-			"wingman",
+			"main",
 			"agent.json",
 		);
 		expect(existsSync(starterAgentPath)).toBe(false);
+	});
+
+	it("applies explicit model overrides to bundled markdown agents", async () => {
+		await executeInitCommand(
+			{
+				subcommand: "",
+				args: [],
+				verbosity: "silent",
+				outputMode: "json",
+				options: {
+					yes: true,
+					only: "agents",
+					model: "openai:gpt-4o",
+					force: true,
+				},
+				agent: "main",
+			},
+			{ workspace },
+		);
+
+		const mainAgentPath = join(
+			workspace,
+			".wingman",
+			"agents",
+			"main",
+			"agent.md",
+		);
+		const mainAgent = readFileSync(mainAgentPath, "utf-8");
+		expect(mainAgent).toContain("model: openai:gpt-4o");
+		expect((mainAgent.match(/model:/g) || []).length).toBe(1);
 	});
 });

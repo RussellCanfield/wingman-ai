@@ -53,21 +53,26 @@
     @apply bg-gradient-to-r from-sky-300 via-sky-400 to-blue-500 bg-clip-text text-transparent;
   }
 
+  .tool-rollup-line {
+    @apply bg-gradient-to-r from-slate-100 via-sky-200 to-blue-300 bg-[length:220%_100%] bg-clip-text text-transparent;
+    animation: toolRollupGradient 5.5s linear infinite;
+  }
+
   .pill {
     @apply rounded-full border border-dashed border-white/20 bg-slate-900/60 px-3 py-1 text-xs font-medium text-slate-300;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
 
   .button-primary {
-    @apply rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(37,99,235,0.35)] transition;
+    @apply rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(37,99,235,0.35)] transition duration-150 ease-out hover:-translate-y-px hover:from-sky-400 hover:to-blue-500 hover:shadow-[0_18px_34px_rgba(56,189,248,0.42)] active:translate-y-0 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .button-secondary {
-    @apply rounded-full border border-white/10 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-100 shadow-none transition;
+    @apply rounded-full border border-white/10 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-100 shadow-none transition duration-150 ease-out hover:-translate-y-px hover:border-sky-400/45 hover:bg-slate-800/90 hover:text-sky-100 hover:shadow-[0_14px_28px_rgba(8,47,73,0.32)] active:translate-y-0 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .button-ghost {
-    @apply rounded-full border border-dashed border-white/20 bg-transparent px-4 py-2 text-sm font-semibold text-slate-400 shadow-none transition;
+    @apply rounded-full border border-dashed border-white/20 bg-transparent px-4 py-2 text-sm font-semibold text-slate-400 shadow-none transition duration-150 ease-out hover:-translate-y-px hover:border-slate-300/35 hover:bg-white/5 hover:text-slate-100 active:translate-y-0 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .markdown-content {
@@ -184,4 +189,9 @@
 @keyframes auroraShift {
   0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
   50% { transform: translate3d(40px, -30px, 0) rotate(30deg); }
+}
+
+@keyframes toolRollupGradient {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
 }

@@ -23,6 +23,7 @@ import {
 	text,
 } from "@clack/prompts";
 import chalk from "chalk";
+import * as yaml from "js-yaml";
 import { ModelFactory } from "@/agent/config/modelFactory.js";
 import { createLogger, getLogFilePath } from "@/logger.js";
 import {
@@ -44,42 +45,12 @@ export interface InitCommandOptions {
 	configDir?: string;
 }
 
-const DEFAULT_AGENT_ID = "wingman";
-const DEFAULT_AGENT_DESCRIPTION =
-	"General-purpose coding assistant for this workspace.";
-const DEFAULT_AGENT_PROMPT = [
-	"You are Wingman, a coding assistant for this repository.",
-	"Be direct and concise. Ask clarifying questions when requirements are unclear.",
-	"Prefer minimal diffs and safe changes. Avoid destructive actions unless asked.",
-	"Use tools to inspect the codebase before editing.",
-	"Use browser_session_start/browser_session_action/browser_session_close for iterative browser debugging across turns, and browser_control for one-shot browser tasks.",
-].join("\n");
-const DEFAULT_TOOLS = [
-	"code_search",
-	"git_status",
-	"command_execute",
-	"browser_control",
-	"browser_session_start",
-	"browser_session_action",
-	"browser_session_close",
-	"browser_session_list",
-	"internet_search",
-	"think",
-];
 const DEFAULT_FS_ROOT = ".";
 const DEFAULT_BROWSER_PROFILE_ID = "default";
 const DEFAULT_BROWSER_PROFILES_DIR = ".wingman/browser-profiles";
 const DEFAULT_BROWSER_EXTENSIONS_DIR = ".wingman/browser-extensions";
 const DEFAULT_BUNDLED_EXTENSION_ID = "wingman";
 const DEFAULT_BROWSER_TRANSPORT = "auto";
-const DEFAULT_MODELS: Record<string, string> = {
-	anthropic: "anthropic:claude-sonnet-4-5",
-	openai: "openai:gpt-4o",
-	codex: "codex:codex-mini-latest",
-	openrouter: "openrouter:openai/gpt-4o",
-	copilot: "copilot:gpt-4o",
-	xai: "xai:grok-beta",
-};
 type InitMode = "onboard" | "sync";
 type InitComponent = "config" | "agents" | "provider";
 
@@ -149,13 +120,26 @@ export async function executeInitCommand(
 			? listBundledAgents(bundledAgentsPath)
 			: [];
 
-		const explicitAgent =
-			Boolean(args.agent?.trim()) ||
-			(Boolean(args.subcommand) &&
-				!isHelpCommand(args.subcommand) &&
-				!args.subcommand.startsWith("-"));
-
-		const defaultAgentId = resolveAgentId(args);
+		const requestedAgentId = resolveRequestedAgentId(args);
+		const explicitAgent = Boolean(requestedAgentId);
+		const resolvedAgentId = resolveDefaultAgentId({
+			requestedAgentId,
+			bundledAgents,
+			configPath,
+		});
+		if (!resolvedAgentId && (runConfig || runAgents)) {
+			throw new Error(
+				"No explicit agents are available. Add an agent under .wingman/agents or pass --agent with an existing bundled agent.",
+			);
+		}
+		const defaultAgentId = resolvedAgentId || "main";
+		if (runConfig || runAgents) {
+			assertAgentIsExplicit({
+				agentId: defaultAgentId,
+				bundledAgents,
+				configRoot,
+			});
+		}
 		const agentPlan =
 			runConfig || runAgents
 				? syncAgentsOnly
@@ -189,7 +173,6 @@ export async function executeInitCommand(
 			? await resolveModelSelection({
 					nonInteractive,
 					optionMap,
-					providerName,
 					outputManager,
 				})
 			: undefined;
@@ -221,7 +204,6 @@ export async function executeInitCommand(
 					agentId: agentPlan.defaultAgentId,
 					model,
 					force,
-					nonInteractive,
 					outputManager,
 					bundledAgentsPath,
 					copyAgents: agentPlan.copyAgents,
@@ -346,18 +328,86 @@ function isHelpCommand(subcommand: string): boolean {
 	return ["help", "--help", "-h"].includes(subcommand);
 }
 
-function resolveAgentId(args: InitCommandArgs): string {
+function resolveRequestedAgentId(args: InitCommandArgs): string | undefined {
 	if (args.agent?.trim()) {
-		return args.agent.trim();
+		return sanitizeAgentId(args.agent.trim());
 	}
 	if (
 		args.subcommand &&
 		!isHelpCommand(args.subcommand) &&
 		!args.subcommand.startsWith("-")
 	) {
-		return args.subcommand.trim();
+		return sanitizeAgentId(args.subcommand.trim());
 	}
-	return DEFAULT_AGENT_ID;
+	return undefined;
+}
+
+function resolveDefaultAgentId(input: {
+	requestedAgentId?: string;
+	bundledAgents: string[];
+	configPath: string;
+}): string | undefined {
+	const { requestedAgentId, bundledAgents, configPath } = input;
+	if (requestedAgentId) {
+		return requestedAgentId;
+	}
+
+	const existingDefaultAgent = readConfiguredDefaultAgent(configPath);
+	if (existingDefaultAgent) {
+		return existingDefaultAgent;
+	}
+
+	const preferredBundledAgent = resolvePreferredBundledAgentId(bundledAgents);
+	if (preferredBundledAgent) {
+		return preferredBundledAgent;
+	}
+	return undefined;
+}
+
+function readConfiguredDefaultAgent(configPath: string): string | undefined {
+	if (!existsSync(configPath)) {
+		return undefined;
+	}
+
+	try {
+		const raw = readFileSync(configPath, "utf-8");
+		const parsed = JSON.parse(raw) as Record<string, unknown>;
+		if (typeof parsed.defaultAgent === "string" && parsed.defaultAgent.trim()) {
+			return sanitizeAgentId(parsed.defaultAgent.trim());
+		}
+	} catch {
+		return undefined;
+	}
+
+	return undefined;
+}
+
+function resolvePreferredBundledAgentId(
+	bundledAgents: string[],
+): string | undefined {
+	if (bundledAgents.includes("main")) {
+		return "main";
+	}
+	return bundledAgents[0];
+}
+
+function assertAgentIsExplicit(input: {
+	agentId: string;
+	bundledAgents: string[];
+	configRoot: string;
+}): void {
+	const { agentId, bundledAgents, configRoot } = input;
+	if (bundledAgents.includes(agentId)) {
+		return;
+	}
+	if (findAgentConfigPath(configRoot, agentId)) {
+		return;
+	}
+	throw new Error(
+		`Agent "${agentId}" is not defined. Choose one of the bundled agents (${bundledAgents.join(
+			", ",
+		)}) or create .wingman/agents/${agentId}/agent.md explicitly.`,
+	);
 }
 
 async function resolveAgentPlan(input: {
@@ -845,7 +895,6 @@ async function handleAgentSetup(input: {
 	agentId: string;
 	model?: string;
 	force: boolean;
-	nonInteractive: boolean;
 	outputManager: OutputManager;
 	bundledAgentsPath: string | null;
 	copyAgents?: string[];
@@ -856,7 +905,6 @@ async function handleAgentSetup(input: {
 		agentId,
 		model,
 		force,
-		nonInteractive,
 		outputManager,
 		bundledAgentsPath,
 		copyAgents,
@@ -887,20 +935,11 @@ async function handleAgentSetup(input: {
 		return;
 	}
 
-	const expectedAgentDir = join(configRoot, "agents", agentId);
-	const expectedAgentPath = join(expectedAgentDir, "agent.json");
-	const expectedAgentExists = existsSync(expectedAgentPath);
-
-	if (!expectedAgentExists) {
-		await createFallbackAgent({
-			configRoot,
-			agentId,
-			model,
-			force,
-			nonInteractive,
-			outputManager,
-		});
-		return;
+	const expectedAgentPath = findAgentConfigPath(configRoot, agentId);
+	if (!expectedAgentPath) {
+		throw new Error(
+			`Agent "${agentId}" was not found after init. Create .wingman/agents/${agentId}/agent.md explicitly or choose a bundled agent.`,
+		);
 	}
 
 	if (model) {
@@ -990,54 +1029,22 @@ function copyDirectory(source: string, target: string): void {
 	}
 }
 
-async function createFallbackAgent(input: {
-	configRoot: string;
-	agentId: string;
-	model?: string;
-	force: boolean;
-	nonInteractive: boolean;
-	outputManager: OutputManager;
-}): Promise<void> {
-	const { configRoot, agentId, model, force, nonInteractive, outputManager } =
-		input;
-
+function findAgentConfigPath(
+	configRoot: string,
+	agentId: string,
+): string | null {
 	const agentDir = join(configRoot, "agents", agentId);
-	const agentPath = join(agentDir, "agent.json");
-	const agentExists = existsSync(agentPath);
-
-	if (agentExists && !force) {
-		if (nonInteractive) {
-			writeLine(
-				outputManager,
-				`Agent "${agentId}" already exists. Use --force to overwrite.`,
-			);
-			return;
-		}
-
-		const shouldOverwrite = await promptConfirm(
-			`Agent "${agentId}" exists. Overwrite? (y/N): `,
-			false,
-		);
-		if (!shouldOverwrite) {
-			writeLine(outputManager, `Keeping existing agent "${agentId}".`);
-			return;
-		}
+	const jsonPath = join(agentDir, "agent.json");
+	if (existsSync(jsonPath)) {
+		return jsonPath;
 	}
 
-	mkdirSync(agentDir, { recursive: true });
-	const agentConfig: Record<string, unknown> = {
-		name: agentId,
-		description: DEFAULT_AGENT_DESCRIPTION,
-		systemPrompt: DEFAULT_AGENT_PROMPT,
-		tools: DEFAULT_TOOLS,
-	};
-
-	if (model) {
-		agentConfig.model = model;
+	const markdownPath = join(agentDir, "agent.md");
+	if (existsSync(markdownPath)) {
+		return markdownPath;
 	}
 
-	writeFileSync(agentPath, JSON.stringify(agentConfig, null, 2));
-	writeLine(outputManager, `Created starter agent at ${agentPath}`);
+	return null;
 }
 
 function applyModelToAgent(
@@ -1046,10 +1053,29 @@ function applyModelToAgent(
 	outputManager: OutputManager,
 ): void {
 	try {
-		const raw = readFileSync(agentPath, "utf-8");
-		const parsed = JSON.parse(raw) as Record<string, unknown>;
-		parsed.model = model;
-		writeFileSync(agentPath, JSON.stringify(parsed, null, 2));
+		if (agentPath.endsWith(".json")) {
+			const raw = readFileSync(agentPath, "utf-8");
+			const parsed = JSON.parse(raw) as Record<string, unknown>;
+			parsed.model = model;
+			writeFileSync(agentPath, JSON.stringify(parsed, null, 2));
+		} else if (agentPath.endsWith(".md")) {
+			const raw = readFileSync(agentPath, "utf-8");
+			const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
+			const match = raw.match(frontmatterRegex);
+			if (!match) {
+				throw new Error("Invalid agent.md format: missing frontmatter");
+			}
+			const [, rawFrontmatter, prompt] = match;
+			const metadata = (yaml.load(rawFrontmatter) as Record<string, unknown>) || {};
+			metadata.model = model;
+			const serializedFrontmatter = yaml.dump(metadata, { lineWidth: 120 });
+			writeFileSync(
+				agentPath,
+				`---\n${serializedFrontmatter}---\n\n${prompt?.trim() || ""}\n`,
+			);
+		} else {
+			throw new Error("Unsupported agent config format");
+		}
 		writeLine(outputManager, `Updated ${agentPath} with model ${model}`);
 	} catch {
 		writeLine(
@@ -1113,36 +1139,22 @@ async function resolveProviderSelection(input: {
 async function resolveModelSelection(input: {
 	nonInteractive: boolean;
 	optionMap: Record<string, unknown>;
-	providerName?: string;
 	outputManager: OutputManager;
 }): Promise<string | undefined> {
-	const { nonInteractive, optionMap, providerName, outputManager } = input;
+	const { nonInteractive, optionMap, outputManager } = input;
 	const explicitModel = getStringOption(optionMap, ["model"]);
 	if (explicitModel) {
 		validateModel(explicitModel);
 		return explicitModel;
 	}
 
-	const providers = listProviderSpecs("model");
-	const configuredProvider = providers.find(
-		(provider) => resolveProviderToken(provider.name).source !== "missing",
-	);
-	const suggestedProvider = providerName || configuredProvider?.name;
-	const suggestedModel = suggestedProvider
-		? DEFAULT_MODELS[suggestedProvider]
-		: undefined;
-
 	if (nonInteractive) {
-		if (suggestedModel) {
-			return suggestedModel;
-		}
 		return undefined;
 	}
 
 	const inputValue = await text({
 		message: "Model string (provider:model)",
-		placeholder: suggestedModel ? undefined : "anthropic:claude-sonnet-4-5",
-		defaultValue: suggestedModel,
+		placeholder: "anthropic:claude-sonnet-4-5",
 	});
 
 	if (isCancel(inputValue)) {
@@ -1150,10 +1162,6 @@ async function resolveModelSelection(input: {
 	}
 
 	const trimmed = String(inputValue ?? "").trim();
-
-	if (!trimmed && suggestedModel) {
-		return suggestedModel;
-	}
 
 	if (!trimmed) {
 		writeLine(outputManager, "Skipping model selection.");
@@ -1365,30 +1373,12 @@ async function promptForDefaultAgent(
 
 	const selection = await select({
 		message: "Pick a default agent",
-		options: [
-			...choices.map((agent) => ({ value: agent, label: agent })),
-			{ value: "__custom__", label: "Custom agent name" },
-		],
+		options: choices.map((agent) => ({ value: agent, label: agent })),
 		initialValue: defaultValue,
 	});
 
 	if (isCancel(selection)) {
 		abortSetup();
-	}
-
-	if (selection === "__custom__") {
-		const input = await text({
-			message: "Default agent name",
-			placeholder: defaultValue,
-		});
-		if (isCancel(input)) {
-			abortSetup();
-		}
-		const trimmed = String(input ?? "").trim();
-		if (!trimmed) {
-			return defaultValue;
-		}
-		return sanitizeAgentId(trimmed);
 	}
 
 	return sanitizeAgentId(String(selection));
@@ -1500,12 +1490,12 @@ Usage:
   wingman init <agent-name>
 
 Options:
-  --agent <name>         Agent name (default: wingman)
+  --agent <name>         Bundled or existing explicit agent name
   --mode <name>          Init mode (onboard|sync). Default: onboard
   --only <targets>       Run only selected setup targets (config,agents,provider)
   --agents <list>        Copy only these bundled agents (comma-separated)
   --model <provider:model>
-                         Set model for the starter agent
+                         Set model for the selected explicit agent
   --provider <name>      Provider to configure (anthropic|openai|codex|openrouter|copilot|xai)
   --token <token>        Save provider token (non-interactive)
   --api-key <key>        Alias for --token

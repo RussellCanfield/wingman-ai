@@ -40,7 +40,7 @@ type ChatPageProps = {
 	onClearAttachments: () => void;
 	onClearChat: () => void;
 	onDeleteThread: (threadId: string) => void;
-	onOpenCommandDeck: () => void;
+	onOpenSettings: () => void;
 	onSetWorkdir: (threadId: string, workdir: string | null) => Promise<boolean>;
 };
 
@@ -73,7 +73,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 	onClearAttachments,
 	onClearChat,
 	onDeleteThread,
-	onOpenCommandDeck,
+	onOpenSettings,
 	onSetWorkdir,
 }) => {
 	const [workdirOpen, setWorkdirOpen] = useState(false);
@@ -99,7 +99,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 		mcpUsesGlobal && mcpServers.length > 0
 			? `${mcpSummaryBase} + global`
 			: mcpSummaryBase;
-	const messageCountLabel = `${messageCount} ${messageCount === 1 ? "msg" : "msgs"}`;
+	const chatThreadMeta = activeThread
+		? `${agentLabel} · ${activeThread.id}`
+		: "Create or select a conversation from the sidebar to begin.";
 
 	const handleSaveWorkdir = async (path: string | null) => {
 		if (!activeThread) return false;
@@ -118,8 +120,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 		"text-[10px] uppercase tracking-[0.2em] text-slate-400";
 	const sidebarMetaClass =
 		"rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2";
-	const summaryChipClass =
-		"inline-flex max-w-full items-center rounded-full border border-slate-700/70 bg-slate-950/75 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-slate-300";
 	const drawerShellClass =
 		"panel-card animate-rise shrink-0 overflow-hidden px-4 py-2";
 
@@ -135,10 +135,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 							<p className="text-sm font-semibold text-slate-100">
 								Thread Details
 							</p>
-							<span className={summaryChipClass}>{messageCountLabel}</span>
-							<span className={`${summaryChipClass} max-w-[220px] truncate`}>
-								{agentLabel}
-							</span>
 						</div>
 					</div>
 					<span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-600/70 bg-slate-900/70 text-slate-300 transition group-open:border-sky-400/40 group-open:bg-sky-500/15 group-open:text-sky-100">
@@ -240,6 +236,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 			<div className="min-h-0 overflow-hidden">
 				<ChatPanel
 					activeThread={activeThread}
+					threadMeta={chatThreadMeta}
 					defaultOutputDir={resolvedDefaultOutputDir}
 					prompt={prompt}
 					attachments={attachments}
@@ -264,7 +261,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 					onRemoveAttachment={onRemoveAttachment}
 					onClearAttachments={onClearAttachments}
 					onClearChat={onClearChat}
-					onOpenCommandDeck={onOpenCommandDeck}
+					onOpenSettings={onOpenSettings}
 				/>
 			</div>
 

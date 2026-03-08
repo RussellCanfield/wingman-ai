@@ -1,4 +1,5 @@
 import type React from "react";
+import { Link } from "react-router-dom";
 import { CommandDeckPanel } from "../components/CommandDeckPanel";
 import { EventLogPanel } from "../components/EventLogPanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
@@ -107,11 +108,16 @@ export const CommandDeckPage: React.FC<CommandDeckPageProps> = ({
 							context.
 						</p>
 					</div>
-					<div
-						className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${runtimeIndicatorClass}`}
-					>
-						<span className={`h-2 w-2 rounded-full ${runtimeDotClass}`} />
-						{statusLabel}
+					<div className="flex flex-wrap items-center gap-2">
+						<Link to="/agents" className="button-secondary px-3 py-2 text-xs">
+							Manage Agents
+						</Link>
+						<div
+							className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${runtimeIndicatorClass}`}
+						>
+							<span className={`h-2 w-2 rounded-full ${runtimeDotClass}`} />
+							{statusLabel}
+						</div>
 					</div>
 				</div>
 

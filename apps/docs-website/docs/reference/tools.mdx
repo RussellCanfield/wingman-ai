@@ -37,7 +37,11 @@ See [wingman.config.json](/configuration/wingman-config#human-in-the-loop-settin
 - **node_run**: execute commands on an approved connected node device (`system.run`).
 - **internet_search**: web search (DuckDuckGo or Perplexity).
 - **web_crawler**: fetch and parse web pages.
-- **browser_control**: native browser automation with Chrome/Chromium runtime control (CDP with automatic persistent-context fallback when needed) for interactive flows, JS-rendered pages, and screenshots.
+- **browser_control**: use or take over the user's existing browser or live tab when they explicitly ask for that workflow.
+- **browser_session_start**: default browser automation entrypoint for screenshots, extraction, and managed multi-step browser tasks; supports optional Playwright video recording.
+- **browser_session_action**: continue an existing managed browser session with more browser actions.
+- **browser_session_close**: close a managed browser session and surface finalized screenshot/video artifacts back to chat.
+- **browser_session_list**: list active managed browser sessions for the current run.
 - **think**: private reasoning step (no external side effects).
 
 Large tool results are automatically offloaded to `/large_tool_results/...` in the agent filesystem once they exceed the safe inline threshold. The agent can inspect them with `read_file` using pagination instead of sending the entire payload back through model context.

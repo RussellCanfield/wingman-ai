@@ -29,3 +29,28 @@ export function shouldRefocusComposer({
 }): boolean {
 	return wasStreaming && !isStreaming;
 }
+
+export function resolveComposerStatusHint({
+	recording,
+	isStreaming,
+	queuedPromptCount,
+	loadingThreadMessages,
+}: {
+	recording: boolean;
+	isStreaming: boolean;
+	queuedPromptCount: number;
+	loadingThreadMessages: boolean;
+}): string | null {
+	if (recording) {
+		return "Recording...";
+	}
+	if (isStreaming) {
+		return queuedPromptCount > 0
+			? `Streaming response... ${queuedPromptCount} queued`
+			: "Streaming response...";
+	}
+	if (loadingThreadMessages) {
+		return "Syncing session history...";
+	}
+	return null;
+}

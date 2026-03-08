@@ -249,6 +249,12 @@ function isAudioAttachment(attachment: ChatAttachment): boolean {
 	return false;
 }
 
+function isVideoAttachment(attachment: ChatAttachment): boolean {
+	if (attachment.mimeType?.startsWith("video/")) return true;
+	if (attachment.dataUrl?.startsWith("data:video/")) return true;
+	return false;
+}
+
 function isFileAttachment(attachment: ChatAttachment): boolean {
 	if (attachment.kind === "file") return true;
 	return typeof attachment.textContent === "string";
@@ -261,7 +267,12 @@ export function buildAttachmentPreviewText(
 	let hasFile = false;
 	let hasAudio = false;
 	let hasImage = false;
+	let hasVideo = false;
 	for (const attachment of attachments) {
+		if (isVideoAttachment(attachment)) {
+			hasVideo = true;
+			continue;
+		}
 		if (isFileAttachment(attachment)) {
 			hasFile = true;
 			continue;
@@ -273,7 +284,7 @@ export function buildAttachmentPreviewText(
 		}
 	}
 	const count = attachments.length;
-	if (hasFile && (hasAudio || hasImage)) {
+	if (hasFile && (hasAudio || hasImage || hasVideo)) {
 		return count > 1
 			? "File and media attachments"
 			: "File and media attachment";
@@ -281,11 +292,17 @@ export function buildAttachmentPreviewText(
 	if (hasFile) {
 		return count > 1 ? "File attachments" : "File attachment";
 	}
-	if (hasAudio && hasImage) {
+	if ((hasAudio || hasVideo) && hasImage) {
+		return count > 1 ? "Media attachments" : "Media attachment";
+	}
+	if (hasAudio && hasVideo) {
 		return count > 1 ? "Media attachments" : "Media attachment";
 	}
 	if (hasAudio) {
 		return count > 1 ? "Audio attachments" : "Audio attachment";
+	}
+	if (hasVideo) {
+		return count > 1 ? "Video attachments" : "Video attachment";
 	}
 	return count > 1 ? "Image attachments" : "Image attachment";
 }

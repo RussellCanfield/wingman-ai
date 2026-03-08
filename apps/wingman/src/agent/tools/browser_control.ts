@@ -42,7 +42,7 @@ export const createBrowserControlTool = (
 		{
 			name: "browser_control",
 			description:
-				'Native browser automation for Wingman using Chrome/Chromium runtime control. Transport is selected by config or the optional input override ("auto", "playwright", or "relay"): Playwright persistent-context is preferred for persistent profiles, CDP is used for standard runs with persistent-context fallback, and relay can bridge a live extension-attached tab. This is a first-class runtime capability, not an MCP server. Use it for JavaScript-rendered pages, interactions, screenshots, and structured extraction.',
+				'Use this only when the user explicitly wants you to use or take over their existing browser, live tab, or extension-attached session (for example: "use my browser" or "take control of my browser"). Transport is selected by config or the optional input override ("auto", "playwright", or "relay"): Playwright persistent-context is preferred for persistent profiles, CDP is used for standard runs with persistent-context fallback, and relay can bridge a live extension-attached tab. For normal browser automation, screenshots, and QA, prefer browser_session_start/browser_session_action/browser_session_close.',
 			schema: BrowserControlInputSchema,
 		},
 	);

@@ -1,10 +1,6 @@
 import { isAbsolute, relative } from "node:path";
-import {
-	HumanMessage,
-	MIDDLEWARE_BRAND,
-	type AgentMiddleware,
-	type BaseMessage,
-} from "langchain";
+import { HumanMessage, type BaseMessage } from "@langchain/core/messages";
+import { MIDDLEWARE_BRAND, type AgentMiddleware } from "langchain";
 import { getConfidentialityNotice } from "../utils";
 import {
 	loadUiRegistry,
@@ -28,7 +24,8 @@ type AdditionalMessageContext = {
 	skillsDirectory?: string;
 	nodeConnectedIdsProvider?: () => string[] | Promise<string[]>;
 	nodeConnectedTargetsProvider?: () =>
-		ConnectedNodeTarget[] | Promise<ConnectedNodeTarget[]>;
+		| ConnectedNodeTarget[]
+		| Promise<ConnectedNodeTarget[]>;
 	defaultNodeTargetClientId?: string;
 };
 const INJECTION_SOURCE = "additional-message-middleware";
@@ -63,7 +60,7 @@ const buildOutputLocationMessage = (
 		? `- Use the ${locationLabel}: ${safePath}`
 		: virtualPath
 			? `- Use the ${locationLabel}: ${virtualPath}`
-		: `- Use the ${locationLabel} (path hidden).`;
+			: `- Use the ${locationLabel} (path hidden).`;
 
 	return [
 		"** Output Location **",
@@ -83,6 +80,14 @@ const buildWorkingDirectoryMessage = (
 		"- Use relative paths such as `./test.md`; do not prepend the working directory absolute path.",
 	].join("\n");
 };
+
+const buildSessionArtifactsMessage = (): string =>
+	[
+		"** Session Artifacts **",
+		"- Treat /conversation_history as an internal summarization archive, not working context.",
+		"- Do not inspect conversation history files through file tools or shell commands during normal task work.",
+		"- Prefer the current thread state and /memories/ for durable context.",
+	].join("\n");
 
 const resolveConnectedNodeIds = async (
 	context: AdditionalMessageContext,
@@ -261,6 +266,7 @@ export const additionalMessageMiddleware = (
 			if (workingDirectory) {
 				lines.push(workingDirectory);
 			}
+			lines.push(buildSessionArtifactsMessage());
 			const nodeTargets = await buildNodeTargetsMessage(context);
 			if (nodeTargets) {
 				lines.push(nodeTargets);

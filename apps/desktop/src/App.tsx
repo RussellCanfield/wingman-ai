@@ -9,7 +9,6 @@ import {
 	type ClipboardEvent,
 } from "react";
 import {
-	NavLink,
 	Navigate,
 	Route,
 	Routes,
@@ -78,8 +77,12 @@ import { isTauriRuntime, invokeTauri } from "./lib/tauriBridge.js";
 import { mergeGatewaySettingsFromNative } from "./lib/runtimeSettings.js";
 import { summarizeGatewayConnectionFailure } from "./lib/connectionStatus.js";
 import { shouldRouteToGatewayOnFailure } from "./lib/connectionRouting.js";
-import { shouldShowThreadRail } from "./lib/chatLayout.js";
 import { findThreadNeedingHydration } from "./lib/threadHydration.js";
+import {
+	buildDesktopChatRoute,
+	getDisplayedThreadId,
+	resolveRouteThreadSelection,
+} from "./lib/threadRoute.js";
 import { resolveTalkStopTranscript } from "./lib/talkToChat.js";
 import {
 	FILE_INPUT_ACCEPT,
@@ -102,6 +105,7 @@ import {
 	isAudioAttachment,
 	isFileAttachment,
 	isPdfAttachment,
+	isVideoAttachment,
 	readFileAsDataUrl,
 } from "./lib/chatAttachments.js";
 import { buildAgentCompletionNotice } from "./lib/notifications.js";
@@ -171,10 +175,30 @@ import {
 import { runWithInFlightGuard } from "./inFlight.js";
 import {
 	computeComposerTextareaLayout,
+	resolveComposerStatusHint,
 	shouldRefocusComposer,
 } from "./composer.js";
+import { DesktopBrandBadge } from "./components/DesktopBrandBadge.js";
 import { TodoProgressPanel } from "./components/TodoProgressPanel.js";
 import { ToolEventPanel } from "./components/ToolEventPanel.js";
+import {
+	AgentsIcon,
+	AttachmentIcon,
+	ChevronDownIcon,
+	DocsIcon,
+	EventsIcon,
+	MicIcon,
+	RuntimeIcon,
+	SendIcon,
+	SettingsIcon,
+	SpeakerIcon,
+	TrashIcon,
+} from "./components/DesktopIcons.js";
+import { DesktopShell } from "./components/DesktopShell.js";
+import {
+	type DesktopUtilityItem,
+	DesktopSidebar,
+} from "./components/DesktopSidebar.js";
 import {
 	resolveLastAssistantMessageId,
 	shouldShowAssistantTypingIndicator,
@@ -1498,11 +1522,11 @@ function useGatewayWorkspace(
 								messagesLoaded: true,
 							};
 						});
-						const activeThreadId = next.find(
-							(item) => item.id === prev.activeThreadId,
-						)
-							? prev.activeThreadId
-							: next[0]?.id || "";
+						const activeThreadId = prev.activeThreadId
+							? next.find((item) => item.id === prev.activeThreadId)
+								? prev.activeThreadId
+								: ""
+							: "";
 						return {
 							...prev,
 							threads: next,
@@ -3757,8 +3781,8 @@ export function App({ overlayMode }: AppProps) {
 					`Sending transcript to a new session for agent "${gateway.workspace.selectedAgentId || "main"}".`,
 				);
 			}
-			if (!window.location.hash.startsWith("#/chat")) {
-				window.location.hash = "#/chat";
+			if (!window.location.hash.startsWith("#/")) {
+				window.location.hash = "#/";
 			}
 			const sent = await gateway.actions.sendPromptText(transcript);
 			if (sent) {
@@ -3888,7 +3912,6 @@ export function App({ overlayMode }: AppProps) {
 			runtimeState={runtime.state}
 			runtimeActions={runtime.actions}
 			workspace={gateway.workspace}
-			activeThread={gateway.activeThread}
 			workspaceActions={gateway.actions}
 			smsBridgeHealth={smsBridgeHealth}
 			onRunSmsBridgeTest={runSmsBridgeSelfTest}
@@ -3909,7 +3932,6 @@ type MainViewProps = {
 	runtimeState: RuntimeState;
 	runtimeActions: ReturnType<typeof useRuntimeController>["actions"];
 	workspace: WorkspaceState;
-	activeThread?: SessionThread;
 	workspaceActions: ReturnType<typeof useGatewayWorkspace>["actions"];
 	smsBridgeHealth: SmsBridgeHealth;
 	onRunSmsBridgeTest: () => Promise<{ ok: boolean; message: string }>;
@@ -3920,43 +3942,8 @@ type MainViewProps = {
 	onStopVoice: () => void;
 };
 
-type MainNavItem = {
-	path: "/gateway" | "/chat" | "/agents" | "/runtime" | "/events";
-	label: string;
-	description: string;
-};
-
 type WorkspaceActions = ReturnType<typeof useGatewayWorkspace>["actions"];
 type RuntimeActions = ReturnType<typeof useRuntimeController>["actions"];
-
-type SidebarNavProps = {
-	items: MainNavItem[];
-	onNavigate?: () => void;
-};
-
-function MainSidebarNav({ items, onNavigate }: SidebarNavProps) {
-	return (
-		<nav className="mt-3 space-y-2">
-			{items.map((item) => (
-				<NavLink
-					key={item.path}
-					to={item.path}
-					onClick={onNavigate}
-					className={({ isActive }) =>
-						`block w-full rounded-xl border px-3 py-2 text-left transition ${
-							isActive
-								? "border-cyan-400/60 bg-cyan-500/15"
-								: "border-white/10 bg-slate-950/50 hover:border-cyan-400/40"
-						}`
-					}
-				>
-					<p className="text-sm font-semibold">{item.label}</p>
-					<p className="mt-1 text-[11px] text-slate-300">{item.description}</p>
-				</NavLink>
-			))}
-		</nav>
-	);
-}
 
 type GatewayScreenProps = {
 	runtimeState: RuntimeState;
@@ -3975,7 +3962,7 @@ function GatewayScreen({
 }: GatewayScreenProps) {
 	return (
 		<section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 backdrop-blur">
-			<h2 className="text-lg font-semibold">Gateway</h2>
+			<h2 className="text-lg font-semibold">Settings</h2>
 			<p className="mt-1 text-xs text-slate-300">
 				{workspace.connectionStatus === "connected"
 					? "Connected"
@@ -4151,15 +4138,12 @@ function ChatScreen({
 			!activeThread.messagesLoaded &&
 			workspace.loadingMessagesThreadId === activeThread.id,
 	);
-	const composerStatusHint = runtimeState.recording
-		? "Recording..."
-		: workspace.isStreaming
-			? workspace.queuedPromptCount > 0
-				? `Streaming response... ${workspace.queuedPromptCount} queued`
-				: "Streaming response..."
-			: activeThreadMessagesLoading
-				? "Syncing session history..."
-				: "Enter to send, Shift+Enter for newline";
+	const composerStatusHint = resolveComposerStatusHint({
+		recording: runtimeState.recording,
+		isStreaming: workspace.isStreaming,
+		queuedPromptCount: workspace.queuedPromptCount,
+		loadingThreadMessages: activeThreadMessagesLoading,
+	});
 	const lastAssistantMessageId = useMemo(
 		() => resolveLastAssistantMessageId(activeThread?.messages),
 		[activeThread?.messages],
@@ -4258,541 +4242,305 @@ function ChatScreen({
 	}, [workspace.isStreaming]);
 
 	return (
-		<section className="space-y-4">
-			<div className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900/85 to-slate-900/65 p-4 backdrop-blur">
-				<div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-					<label className="grid gap-1 text-xs text-slate-300">
-						<span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
-							Active Agent
-						</span>
-						<div className="relative">
-							<select
-								className="h-10 w-full appearance-none rounded-xl border border-white/20 bg-slate-950/55 px-3 pr-9 text-sm text-slate-100 outline-none ring-cyan-300/40 transition focus:ring"
-								value={workspace.selectedAgentId}
-								onChange={(event) =>
-									workspaceActions.updateSelectedAgent(event.target.value)
-								}
-							>
-								{workspace.agentCatalog.map((agent) => (
-									<option key={agent.id} value={agent.id}>
-										{agent.displayName}
-									</option>
-								))}
-							</select>
-							<div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-								<ChevronDownIcon />
-							</div>
-						</div>
-					</label>
+		<section className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2.5 overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/78 p-2.5 shadow-[0_24px_80px_rgba(2,12,27,0.52)] backdrop-blur-2xl">
+			<header className="flex flex-wrap items-start justify-between gap-3 px-2.5">
+				<div className="min-w-0">
+					<h2 className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+						Chat
+					</h2>
+					<p className="mt-1 truncate text-sm font-semibold text-slate-100">
+						{activeThread?.name || "No conversation selected"}
+					</p>
+					<p className="mt-0.5 truncate text-[11px] text-slate-400">
+						{activeThread
+							? `${activeThread.agentId} · ${activeThread.id}`
+							: "Create or select a conversation from the sidebar to begin."}
+					</p>
+				</div>
+				<div className="flex flex-wrap items-center gap-2">
 					<button
 						type="button"
-						className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-cyan-300 px-4 text-xs font-semibold text-slate-950 shadow-[0_0_0_1px_rgba(56,189,248,0.2)]"
-						onClick={() => void workspaceActions.createNewChat()}
+						className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-slate-950/55 px-3 py-1.5 text-[11px] text-slate-200 transition hover:-translate-y-px hover:border-sky-400/40 hover:bg-slate-800/90 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+						onClick={() =>
+							activeThread &&
+							workspaceActions.renameThreadByPrompt(activeThread)
+						}
+						disabled={!activeThread}
 					>
-						<PlusIcon />
-						New Session
+						<span>Rename</span>
 					</button>
 					<button
 						type="button"
-						className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-white/20 bg-slate-950/45 px-4 text-xs text-slate-100 transition hover:border-cyan-300/45"
-						onClick={() => void workspaceActions.refreshSessionsData()}
-						disabled={workspace.sessionsLoading}
+						className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/35 bg-amber-500/12 px-3 py-1.5 text-[11px] text-amber-100 transition hover:-translate-y-px hover:border-amber-300/50 hover:bg-amber-500/18 disabled:cursor-not-allowed disabled:opacity-50"
+						onClick={() =>
+							activeThread &&
+							void workspaceActions.clearThreadMessages(activeThread)
+						}
+						disabled={!activeThread || workspace.isStreaming}
 					>
-						<RefreshIcon />
-						{workspace.sessionsLoading ? "Refreshing..." : "Refresh"}
+						<TrashIcon className="h-3.5 w-3.5 shrink-0" />
+						<span>Clear</span>
+					</button>
+					<button
+						type="button"
+						className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/35 bg-rose-500/12 px-3 py-1.5 text-[11px] text-rose-100 transition hover:-translate-y-px hover:border-rose-300/55 hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-50"
+						onClick={() =>
+							activeThread && workspaceActions.removeThread(activeThread)
+						}
+						disabled={!activeThread}
+					>
+						<span>Delete</span>
 					</button>
 				</div>
+			</header>
+
+			<div
+				ref={messageViewportRef}
+				className="relative min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/80"
+			>
+				<div className="min-h-full space-y-3 p-2.5">
+					{activeThreadMessagesLoading ? (
+						<div className="rounded-2xl border border-white/10 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+							Loading chat history...
+						</div>
+					) : activeThread?.messages.length ? (
+						activeThread.messages.map((message) => (
+							<MessageCard
+								key={message.id}
+								message={message}
+								isStreaming={workspace.isStreaming}
+								activeAssistantMessageId={lastAssistantMessageId}
+								voicePlayback={voicePlayback}
+								onSpeak={(messageId, text) =>
+									onSpeakVoice(messageId, text, activeThread?.agentId)
+								}
+								onStop={onStopVoice}
+							/>
+						))
+					) : workspace.sessionsLoading ? (
+						<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+							Loading sessions...
+						</div>
+					) : (
+						<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
+							{activeThread
+								? "No chat messages yet. Send a prompt to begin."
+								: "Choose or create a conversation from the sidebar to start chatting."}
+						</div>
+					)}
+				</div>
+				{showStreamingGlow ? (
+					<div
+						aria-hidden="true"
+						className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center"
+					>
+						<div
+							data-testid="streaming-indicator"
+							className="flex h-6 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-slate-950/80 px-2.5 shadow-[0_0_18px_rgba(56,189,248,0.2)] backdrop-blur-sm"
+						>
+							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
+							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:160ms]" />
+							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:320ms]" />
+						</div>
+					</div>
+				) : null}
 			</div>
 
-			<div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 backdrop-blur">
-				<div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
-					<div>
-						<h2 className="text-xl font-semibold">
-							{activeThread?.name || "No session selected"}
-						</h2>
-						<p className="mt-1 text-xs text-slate-300">
-							{activeThread
-								? `${activeThread.agentId} · ${activeThread.id}`
-								: "Create or select a session to start chatting."}
-						</p>
-					</div>
+			<div className="flex min-h-0 flex-col gap-2">
+				{workspace.attachments.length > 0 ? (
 					<div className="flex flex-wrap gap-2">
-						<button
-							type="button"
-							className="rounded-full border border-white/20 px-3 py-1 text-xs"
-							onClick={() =>
-								activeThread &&
-								workspaceActions.renameThreadByPrompt(activeThread)
-							}
-							disabled={!activeThread}
-						>
-							Rename
-						</button>
-						<button
-							type="button"
-							className="rounded-full border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs text-amber-100"
-							onClick={() =>
-								activeThread &&
-								void workspaceActions.clearThreadMessages(activeThread)
-							}
-							disabled={!activeThread || workspace.isStreaming}
-						>
-							Clear Chat
-						</button>
-						<button
-							type="button"
-							className="rounded-full border border-rose-400/40 bg-rose-500/15 px-3 py-1 text-xs text-rose-200"
-							onClick={() =>
-								activeThread && workspaceActions.removeThread(activeThread)
-							}
-							disabled={!activeThread}
-						>
-							Delete
-						</button>
-					</div>
-				</div>
-
-				<div className="relative mt-4">
-					<div
-						ref={messageViewportRef}
-						className="h-[clamp(260px,46vh,540px)] space-y-3 overflow-auto pr-1"
-					>
-						{activeThreadMessagesLoading ? (
-							<div className="rounded-2xl border border-white/10 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
-								Loading chat history...
-							</div>
-						) : activeThread?.messages.length ? (
-							activeThread.messages.map((message) => (
-								<MessageCard
-									key={message.id}
-									message={message}
-									isStreaming={workspace.isStreaming}
-									activeAssistantMessageId={lastAssistantMessageId}
-									voicePlayback={voicePlayback}
-									onSpeak={(messageId, text) =>
-										onSpeakVoice(messageId, text, activeThread?.agentId)
-									}
-									onStop={onStopVoice}
-								/>
-							))
-						) : workspace.sessionsLoading ? (
-							<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
-								Loading sessions...
-							</div>
-						) : (
-							<div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-6 text-center text-sm text-slate-300">
-								No chat messages yet. Send a prompt to begin.
-							</div>
-						)}
-					</div>
-					{showStreamingGlow ? (
-						<div
-							aria-hidden="true"
-							className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center"
-						>
-							<div
-								data-testid="streaming-indicator"
-								className="flex h-6 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-slate-950/80 px-2.5 shadow-[0_0_18px_rgba(56,189,248,0.2)] backdrop-blur-sm"
-							>
-								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
-								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:160ms]" />
-								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300 [animation-delay:320ms]" />
-							</div>
-						</div>
-					) : null}
-				</div>
-
-				<div className="mt-4">
-					{workspace.attachments.length > 0 ? (
-						<div className="mb-2 flex flex-wrap gap-2">
-							{workspace.attachments.map((attachment) => {
-								const isFile = isFileAttachment(attachment);
-								const isAudio = isAudioAttachment(attachment);
-								return (
-									<div
-										key={attachment.id}
-										className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
+						{workspace.attachments.map((attachment) => {
+							const isFile = isFileAttachment(attachment);
+							const isAudio = isAudioAttachment(attachment);
+							const isVideo = isVideoAttachment(attachment);
+							return (
+								<div
+									key={attachment.id}
+									className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 pr-2 text-xs"
+								>
+									{!isFile && !isAudio && !isVideo && attachment.dataUrl ? (
+										<img
+											src={attachment.dataUrl}
+											alt={attachment.name || "Attachment"}
+											className="h-10 w-10 object-cover"
+										/>
+									) : (
+										<div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-800/80 text-[10px] font-semibold text-sky-200">
+											{isAudio ? "AUDIO" : isVideo ? "VIDEO" : "FILE"}
+										</div>
+									)}
+									<span className="max-w-[180px] truncate text-slate-300">
+										{attachment.name ||
+											(isAudio
+												? "Audio"
+												: isVideo
+													? "Video"
+													: isFile
+														? "File"
+														: "Image")}
+									</span>
+									<button
+										type="button"
+										className="text-slate-400 transition hover:text-rose-400"
+										onClick={() =>
+											workspaceActions.removeAttachment(attachment.id)
+										}
 									>
-										{!isFile && !isAudio && attachment.dataUrl ? (
-											<img
-												src={attachment.dataUrl}
-												alt={attachment.name || "Attachment"}
-												className="h-10 w-10 object-cover"
-											/>
-										) : (
-											<div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-800/80 text-[10px] font-semibold text-sky-200">
-												{isAudio ? "AUDIO" : "FILE"}
-											</div>
-										)}
-										<span className="max-w-[180px] truncate text-slate-300">
-											{attachment.name ||
-												(isAudio ? "Audio" : isFile ? "File" : "Image")}
-										</span>
-										<button
-											type="button"
-											className="text-slate-400 transition hover:text-rose-400"
-											onClick={() =>
-												workspaceActions.removeAttachment(attachment.id)
-											}
-										>
-											×
-										</button>
-									</div>
-								);
-							})}
-							<button
-								type="button"
-								className="text-xs text-slate-400 underline decoration-slate-300 underline-offset-4"
-								onClick={workspaceActions.clearAttachments}
-							>
-								Clear all
-							</button>
-						</div>
-					) : null}
-					{workspace.attachmentError ? (
-						<p className="mb-2 text-xs text-rose-300">
-							{workspace.attachmentError}
-						</p>
-					) : null}
-					<label htmlFor="prompt-textarea" className="sr-only">
-						Message
-					</label>
-					<div className="mt-2">
-						{todoSnapshot ? (
-							<TodoProgressPanel
-								key={`${activeThread?.id ?? "thread"}:${todoSnapshot.sourceEventId ?? "todos"}`}
-								snapshot={todoSnapshot}
-								attached
-							/>
-						) : null}
-						<div
-							className={`border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] ${
-								todoSnapshot
-									? "-mt-px rounded-b-2xl rounded-t-xl"
-									: "rounded-2xl"
-							}`}
+										×
+									</button>
+								</div>
+							);
+						})}
+						<button
+							type="button"
+							className="text-xs text-slate-400 underline decoration-slate-300 underline-offset-4"
+							onClick={workspaceActions.clearAttachments}
 						>
-							<div className="flex items-center justify-end gap-2 px-1 pb-2">
-								<div className="flex items-center gap-2 px-1">
-									{workspace.isStreaming ? (
-										<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
-											<span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
-											Live
-										</span>
-									) : null}
+							Clear all
+						</button>
+					</div>
+				) : null}
+				{workspace.attachmentError ? (
+					<p className="text-xs text-rose-300">{workspace.attachmentError}</p>
+				) : null}
+				<label htmlFor="prompt-textarea" className="sr-only">
+					Message
+				</label>
+				<div>
+					{todoSnapshot ? (
+						<TodoProgressPanel
+							key={`${activeThread?.id ?? "thread"}:${todoSnapshot.sourceEventId ?? "todos"}`}
+							snapshot={todoSnapshot}
+							attached
+						/>
+					) : null}
+					<div
+						className={`border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] ${
+							todoSnapshot ? "-mt-px rounded-b-2xl rounded-t-xl" : "rounded-2xl"
+						}`}
+					>
+						<div className="flex items-center justify-end gap-2 px-1 pb-2">
+							<div className="flex items-center gap-2 px-1">
+								{workspace.isStreaming ? (
+									<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
+										<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" />
+										Live
+									</span>
+								) : null}
+								{composerStatusHint ? (
 									<span className="text-[11px] text-slate-400">
 										{composerStatusHint}
 									</span>
-								</div>
+								) : null}
 							</div>
-							<div className="rounded-xl border border-white/10 bg-slate-900/55 px-2">
-								<textarea
-									ref={composerTextareaRef}
-									id="prompt-textarea"
-									className="min-h-[44px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
-									rows={1}
-									value={workspace.prompt}
-									onChange={(event) =>
-										workspaceActions.updatePrompt(event.target.value)
+						</div>
+						<div className="rounded-xl border border-white/10 bg-slate-900/55 px-2">
+							<textarea
+								ref={composerTextareaRef}
+								id="prompt-textarea"
+								className="min-h-[44px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-[10px] text-sm leading-6 text-slate-100 placeholder:text-slate-400 focus:outline-none"
+								rows={1}
+								value={workspace.prompt}
+								onChange={(event) =>
+									workspaceActions.updatePrompt(event.target.value)
+								}
+								onPaste={handlePaste}
+								onKeyDown={(event) => {
+									if (event.key === "Enter" && !event.shiftKey) {
+										event.preventDefault();
+										void workspaceActions.sendPrompt();
 									}
-									onPaste={handlePaste}
-									onKeyDown={(event) => {
-										if (event.key === "Enter" && !event.shiftKey) {
-											event.preventDefault();
-											void workspaceActions.sendPrompt();
-										}
-									}}
-									placeholder="Ask Wingman to do something..."
-									style={{ overflowY: "hidden" }}
-								/>
-							</div>
-							<div className="mt-2 flex items-center justify-between gap-2 px-1">
-								<div className="flex items-center gap-2">
-									<button
-										type="button"
-										className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-										onClick={handlePickFiles}
-										aria-label="Add files"
-									>
-										<AttachmentIcon />
-										<span className="hidden sm:inline">Files</span>
-									</button>
-									<button
-										type="button"
-										aria-pressed={runtimeState.recording}
-										aria-label={
-											runtimeState.recording ? "Stop recording" : "Record audio"
-										}
-										className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
-											runtimeState.recording
-												? "border-rose-400/60 bg-rose-500/20 text-rose-100"
-												: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
-										}`}
-										onClick={() => void handleTalkButtonClick()}
-										disabled={workspace.isStreaming}
-									>
-										<MicIcon />
-										{runtimeState.recording ? (
-											<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
-										) : null}
-									</button>
-									<button
-										type="button"
-										aria-pressed={voiceAutoEnabled}
-										aria-label={
-											voiceAutoEnabled
-												? "Disable auto voice playback"
-												: "Enable auto voice playback"
-										}
-										className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs transition ${
-											voiceAutoEnabled
-												? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-												: "border-white/10 bg-slate-900/70 text-slate-200 hover:border-sky-400/50 hover:text-sky-100"
-										}`}
-										onClick={onToggleVoiceAuto}
-									>
-										<SpeakerIcon />
-										<span className="hidden md:inline">
-											{voiceAutoEnabled ? "Voice Auto" : "Voice Off"}
-										</span>
-									</button>
-								</div>
-								<button
-									className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white transition hover:from-cyan-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
-									onClick={() => void workspaceActions.sendPrompt()}
-									type="button"
-									aria-label="Send prompt"
-									title="Send prompt"
-									disabled={!canSendPrompt}
-								>
-									<SendIcon />
-								</button>
-							</div>
-							{voicePlayback.status !== "idle" ? (
-								<div className="mt-2 flex justify-end">
-									<button
-										type="button"
-										className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
-										onClick={onStopVoice}
-									>
-										Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
-									</button>
-								</div>
-							) : null}
-							<input
-								ref={fileInputRef}
-								type="file"
-								accept={FILE_INPUT_ACCEPT}
-								className="hidden"
-								multiple
-								onChange={handleFileChange}
+								}}
+								placeholder="Ask Wingman to do something..."
+								style={{ overflowY: "hidden" }}
 							/>
 						</div>
+						<div className="mt-2 flex items-center justify-between gap-2 px-1">
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-xs text-slate-200 transition hover:border-sky-400/50 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+									onClick={handlePickFiles}
+									aria-label="Add files"
+								>
+									<AttachmentIcon />
+									<span className="hidden sm:inline">Files</span>
+								</button>
+								<button
+									type="button"
+									aria-pressed={runtimeState.recording}
+									aria-label={
+										runtimeState.recording ? "Stop recording" : "Record audio"
+									}
+									className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+										runtimeState.recording
+											? "border-rose-400/60 bg-rose-500/20 text-rose-100"
+											: "border-white/10 bg-slate-900/70 text-slate-100 hover:border-sky-400/50 hover:text-sky-100"
+									}`}
+									onClick={() => void handleTalkButtonClick()}
+									disabled={workspace.isStreaming}
+								>
+									<MicIcon />
+									{runtimeState.recording ? (
+										<span className="pointer-events-none absolute inset-0 rounded-xl border border-rose-400/40 animate-ping" />
+									) : null}
+								</button>
+								<button
+									type="button"
+									aria-pressed={voiceAutoEnabled}
+									aria-label={
+										voiceAutoEnabled
+											? "Disable auto voice playback"
+											: "Enable auto voice playback"
+									}
+									className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs transition ${
+										voiceAutoEnabled
+											? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+											: "border-white/10 bg-slate-900/70 text-slate-200 hover:border-sky-400/50 hover:text-sky-100"
+									}`}
+									onClick={onToggleVoiceAuto}
+									disabled={!activeThread}
+								>
+									<SpeakerIcon />
+									<span className="hidden md:inline">
+										{voiceAutoEnabled ? "Voice Auto" : "Voice Off"}
+									</span>
+								</button>
+							</div>
+							<button
+								className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/60 bg-gradient-to-br from-cyan-400 to-blue-500 text-white transition hover:from-cyan-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
+								onClick={() => void workspaceActions.sendPrompt()}
+								type="button"
+								aria-label="Send prompt"
+								title="Send prompt"
+								disabled={!canSendPrompt}
+							>
+								<SendIcon />
+							</button>
+						</div>
+						{voicePlayback.status !== "idle" ? (
+							<div className="mt-2 flex justify-end">
+								<button
+									type="button"
+									className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200"
+									onClick={onStopVoice}
+								>
+									Stop Voice ({getVoicePlaybackLabel(voicePlayback.status)})
+								</button>
+							</div>
+						) : null}
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept={FILE_INPUT_ACCEPT}
+							className="hidden"
+							multiple
+							onChange={handleFileChange}
+						/>
 					</div>
 				</div>
 			</div>
 		</section>
-	);
-}
-
-type ChatThreadsRailProps = {
-	workspace: WorkspaceState;
-	workspaceActions: WorkspaceActions;
-	onSelectThread?: () => void;
-};
-
-function ChatThreadsRail({
-	workspace,
-	workspaceActions,
-	onSelectThread,
-}: ChatThreadsRailProps) {
-	return (
-		<div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3">
-			<div className="flex items-center justify-between">
-				<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
-					Conversations
-				</p>
-				<span className="text-[11px] text-slate-400">
-					{workspace.threads.length}
-				</span>
-			</div>
-			<div className="mt-2 flex gap-2">
-				<button
-					type="button"
-					className="flex-1 rounded-full bg-cyan-300 px-3 py-1.5 text-[11px] font-semibold text-slate-950"
-					onClick={() => void workspaceActions.createNewChat()}
-				>
-					New
-				</button>
-				<button
-					type="button"
-					className="flex-1 rounded-full border border-white/20 px-3 py-1.5 text-[11px]"
-					onClick={() => void workspaceActions.refreshSessionsData()}
-					disabled={workspace.sessionsLoading}
-				>
-					{workspace.sessionsLoading ? "Refreshing..." : "Refresh"}
-				</button>
-			</div>
-			<div className="mt-3 max-h-[52vh] space-y-2 overflow-auto pr-1">
-				{workspace.sessionsLoading ? (
-					<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
-						Loading sessions...
-					</div>
-				) : workspace.threads.length === 0 ? (
-					<div className="rounded-xl border border-dashed border-white/15 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
-						No sessions yet.
-					</div>
-				) : (
-					workspace.threads.map((thread) => (
-						<button
-							key={thread.id}
-							type="button"
-							onClick={() => {
-								workspaceActions.selectThread(thread.id);
-								onSelectThread?.();
-							}}
-							className={`w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
-								thread.id === workspace.activeThreadId
-									? "border-cyan-400/50 bg-cyan-500/10"
-									: "border-white/10 bg-slate-950/50 hover:border-cyan-400/40"
-							}`}
-						>
-							<div className="truncate font-semibold">{thread.name}</div>
-							<div className="mt-1 flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-slate-400">
-								<span>{thread.agentId}</span>
-								<span>{thread.messageCount ?? thread.messages.length}</span>
-							</div>
-						</button>
-					))
-				)}
-			</div>
-		</div>
-	);
-}
-
-function MicIcon() {
-	return (
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 24 24"
-			className="h-3.5 w-3.5"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-		>
-			<rect x="9" y="3" width="6" height="11" rx="3" />
-			<path d="M5 11a7 7 0 0 0 14 0" />
-			<path d="M12 18v3" />
-			<path d="M8 21h8" />
-		</svg>
-	);
-}
-
-function SpeakerIcon() {
-	return (
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 24 24"
-			className="h-3.5 w-3.5"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-		>
-			<path d="M11 5 6 9H3v6h3l5 4V5Z" />
-			<path d="M15 9a4 4 0 0 1 0 6" />
-			<path d="M18 7a7 7 0 0 1 0 10" />
-		</svg>
-	);
-}
-
-function AttachmentIcon() {
-	return (
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 24 24"
-			className="h-3.5 w-3.5"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-		>
-			<path d="M21.44 11.05 12.25 20.24a6 6 0 1 1-8.49-8.49L12.95 2.56a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 1 1-2.82-2.82l8.48-8.48" />
-		</svg>
-	);
-}
-
-function SendIcon() {
-	return (
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 24 24"
-			className="h-4 w-4"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-		>
-			<path d="m22 2-7 20-4-9-9-4 20-7Z" />
-			<path d="M22 2 11 13" />
-		</svg>
-	);
-}
-
-function PlusIcon() {
-	return (
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 24 24"
-			className="h-3.5 w-3.5"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-		>
-			<path d="M12 5v14" />
-			<path d="M5 12h14" />
-		</svg>
-	);
-}
-
-function RefreshIcon() {
-	return (
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 24 24"
-			className="h-3.5 w-3.5"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-		>
-			<path d="M20 12a8 8 0 1 1-2.34-5.66" />
-			<path d="M20 4v6h-6" />
-		</svg>
-	);
-}
-
-function ChevronDownIcon() {
-	return (
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 24 24"
-			className="h-4 w-4"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-		>
-			<path d="m6 9 6 6 6-6" />
-		</svg>
 	);
 }
 
@@ -6015,7 +5763,6 @@ function MainView({
 	runtimeState,
 	runtimeActions,
 	workspace,
-	activeThread,
 	workspaceActions,
 	smsBridgeHealth,
 	onRunSmsBridgeTest,
@@ -6033,21 +5780,108 @@ function MainView({
 	const navigate = useNavigate();
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const lastFailureRedirectRef = useRef<string | null>(null);
-	const navItems: MainNavItem[] = [
+	const utilityItems: DesktopUtilityItem[] = [
 		{
-			path: "/gateway",
-			label: "Gateway",
-			description: "Connection + settings",
+			type: "route",
+			path: "/settings",
+			label: "Settings",
+			icon: SettingsIcon,
 		},
-		{ path: "/chat", label: "Chat", description: "Sessions and messages" },
-		{ path: "/agents", label: "Agents", description: "Create and inspect" },
 		{
+			type: "route",
+			path: "/agents",
+			label: "Agents",
+			icon: AgentsIcon,
+		},
+		{
+			type: "route",
 			path: "/runtime",
 			label: "Runtime",
-			description: "Overlay + hotkeys settings",
+			icon: RuntimeIcon,
 		},
-		{ path: "/events", label: "Events", description: "Activity feed" },
+		{
+			type: "route",
+			path: "/events",
+			label: "Events",
+			icon: EventsIcon,
+		},
+		{
+			type: "link",
+			href: "https://docs.getwingmanai.com",
+			label: "Docs",
+			icon: DocsIcon,
+		},
 	];
+	const displayedThreadId = getDisplayedThreadId({
+		pathname: location.pathname,
+		search: location.search,
+	});
+	const displayedActiveThread = useMemo(
+		() =>
+			displayedThreadId
+				? workspace.threads.find((thread) => thread.id === displayedThreadId)
+				: undefined,
+		[displayedThreadId, workspace.threads],
+	);
+	const routeThreadSelection = useMemo(
+		() =>
+			resolveRouteThreadSelection({
+				pathname: location.pathname,
+				search: location.search,
+				activeThreadId: workspace.activeThreadId,
+				threadIds: workspace.threads.map((thread) => thread.id),
+				sessionsLoading: workspace.sessionsLoading,
+			}),
+		[
+			location.pathname,
+			location.search,
+			workspace.activeThreadId,
+			workspace.sessionsLoading,
+			workspace.threads,
+		],
+	);
+	const workspaceLoadingTasks = collectWorkspaceLoadingTasks({
+		checkingConnection: workspace.checkingConnection,
+		sessionsLoading: workspace.sessionsLoading,
+		agentsLoading: workspace.agentsLoading,
+		providersLoading: workspace.providersLoading,
+		voiceConfigLoading: workspace.voiceConfigLoading,
+	});
+	const statusBadge = (
+		<div className="space-y-2">
+			<ConnectionBadge
+				status={workspace.connectionStatus}
+				detail={workspace.connectionMessage}
+				runtimeDetail={runtimeState.statusMessage}
+			/>
+			{workspaceLoadingTasks.length > 0 ? (
+				<div className="flex flex-wrap gap-1.5">
+					{workspaceLoadingTasks.map((task) => (
+						<span
+							key={task}
+							className="rounded-full border border-white/20 bg-slate-950/55 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-300"
+						>
+							{task}
+						</span>
+					))}
+				</div>
+			) : null}
+		</div>
+	);
+	const handleCreateNewChat = useCallback(async () => {
+		const created = await workspaceActions.createNewChat();
+		if (created) {
+			navigate(buildDesktopChatRoute(created.id));
+		}
+		return created;
+	}, [navigate, workspaceActions]);
+	const handleSelectThread = useCallback(
+		(threadId: string) => {
+			workspaceActions.selectThread(threadId);
+			navigate(buildDesktopChatRoute(threadId));
+		},
+		[navigate, workspaceActions],
+	);
 
 	useEffect(() => {
 		setMobileMenuOpen(false);
@@ -6076,8 +5910,8 @@ function MainView({
 		const failureKey = `${workspace.connectionStatus}:${workspace.connectionMessage}`;
 		if (lastFailureRedirectRef.current === failureKey) return;
 		lastFailureRedirectRef.current = failureKey;
-		if (location.pathname !== "/gateway") {
-			navigate("/gateway");
+		if (location.pathname !== "/settings") {
+			navigate("/settings");
 		}
 	}, [
 		location.pathname,
@@ -6086,179 +5920,107 @@ function MainView({
 		workspace.connectionStatus,
 	]);
 
-	const showThreadRail = shouldShowThreadRail(location.pathname);
-	const workspaceLoadingTasks = collectWorkspaceLoadingTasks({
-		checkingConnection: workspace.checkingConnection,
-		sessionsLoading: workspace.sessionsLoading,
-		agentsLoading: workspace.agentsLoading,
-		providersLoading: workspace.providersLoading,
-		voiceConfigLoading: workspace.voiceConfigLoading,
-	});
+	useEffect(() => {
+		if (routeThreadSelection === undefined) return;
+		workspaceActions.selectThread(routeThreadSelection ?? "");
+	}, [routeThreadSelection, workspaceActions]);
+
+	useEffect(() => {
+		if (location.pathname !== "/") return;
+		if (location.search) return;
+		if (!workspace.activeThreadId) return;
+		navigate(buildDesktopChatRoute(workspace.activeThreadId), { replace: true });
+	}, [location.pathname, location.search, navigate, workspace.activeThreadId]);
 
 	return (
-		<div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-			<div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_6%,rgba(56,189,248,0.18),transparent_34%),radial-gradient(circle_at_92%_94%,rgba(14,165,233,0.18),transparent_36%)]" />
-			<div className="mx-auto w-full max-w-[1500px] px-5 py-6">
-				<header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-					<div>
-						<p className="font-mono text-xs uppercase tracking-[0.28em] text-slate-400">
-							Wingman Desktop Companion
-						</p>
-						<h1 className="text-3xl font-semibold">Gateway Workspace</h1>
-						<p className="mt-2 text-sm text-slate-300">
-							Focused desktop experience for sessions, agent chats, and local
-							voice capture.
-						</p>
-						{workspaceLoadingTasks.length > 0 ? (
-							<div className="mt-3 flex flex-wrap items-center gap-2">
-								<span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/35 bg-cyan-500/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-cyan-100">
-									<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" />
-									Syncing
-								</span>
-								{workspaceLoadingTasks.map((task) => (
-									<span
-										key={task}
-										className="rounded-full border border-white/20 bg-slate-950/55 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-300"
-									>
-										{task}
-									</span>
-								))}
-							</div>
-						) : null}
-					</div>
-					<div className="flex items-center gap-2">
-						<button
-							type="button"
-							className="rounded-full border border-white/20 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-200 lg:hidden"
-							onClick={() => setMobileMenuOpen((prev) => !prev)}
-						>
-							Menu
-						</button>
-						<ConnectionBadge
-							status={workspace.connectionStatus}
-							detail={workspace.connectionMessage}
-							runtimeDetail={runtimeState.statusMessage}
+		<DesktopShell
+			sidebar={
+				<DesktopSidebar
+					agents={workspace.agentCatalog}
+					selectedAgentId={workspace.selectedAgentId}
+					threads={workspace.threads}
+					selectedThreadId={location.pathname === "/" ? displayedThreadId : null}
+					sessionsLoading={workspace.sessionsLoading}
+					utilityItems={utilityItems}
+					onSelectAgent={workspaceActions.updateSelectedAgent}
+					onSelectThread={handleSelectThread}
+					onCreateThread={handleCreateNewChat}
+					onRefreshThreads={workspaceActions.refreshSessionsData}
+					onNavigate={() => setMobileMenuOpen(false)}
+					statusBadge={statusBadge}
+				/>
+			}
+			mobileMenuOpen={mobileMenuOpen}
+			onToggleMobileMenu={() => setMobileMenuOpen((prev) => !prev)}
+			onCloseMobileMenu={() => setMobileMenuOpen(false)}
+			statusBadge={statusBadge}
+		>
+			<Routes>
+				<Route
+					path="/"
+					element={
+						<ChatScreen
+							workspace={workspace}
+							activeThread={displayedActiveThread}
+							workspaceActions={workspaceActions}
+							runtimeState={runtimeState}
+							runtimeActions={runtimeActions}
+							voiceAutoEnabled={voiceAutoEnabled}
+							voicePlayback={voicePlayback}
+							onToggleVoiceAuto={onToggleVoiceAuto}
+							onSpeakVoice={onSpeakVoice}
+							onStopVoice={onStopVoice}
 						/>
-					</div>
-				</header>
-
-				<div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-					<aside className="hidden lg:block">
-						<section className="sticky top-6 rounded-2xl border border-white/10 bg-slate-900/70 p-4 backdrop-blur">
-							<h2 className="text-lg font-semibold">Sections</h2>
-							<p className="mt-1 text-xs text-slate-300">
-								Two-column desktop layout.
-							</p>
-							<MainSidebarNav items={navItems} />
-							{showThreadRail ? (
-								<ChatThreadsRail
-									workspace={workspace}
-									workspaceActions={workspaceActions}
-								/>
-							) : null}
-						</section>
-					</aside>
-					<main className="space-y-4">
-						<Routes>
-							<Route path="/" element={<Navigate to="/chat" replace />} />
-							<Route
-								path="/gateway"
-								element={
-									<GatewayScreen
-										runtimeState={runtimeState}
-										runtimeActions={runtimeActions}
-										workspace={workspace}
-										workspaceActions={workspaceActions}
-										resolvedUi={resolvedUi}
-									/>
-								}
-							/>
-							<Route
-								path="/chat"
-								element={
-									<ChatScreen
-										workspace={workspace}
-										activeThread={activeThread}
-										workspaceActions={workspaceActions}
-										runtimeState={runtimeState}
-										runtimeActions={runtimeActions}
-										voiceAutoEnabled={voiceAutoEnabled}
-										voicePlayback={voicePlayback}
-										onToggleVoiceAuto={onToggleVoiceAuto}
-										onSpeakVoice={onSpeakVoice}
-										onStopVoice={onStopVoice}
-									/>
-								}
-							/>
-							<Route
-								path="/agents"
-								element={
-									<AgentsScreen
-										workspace={workspace}
-										workspaceActions={workspaceActions}
-									/>
-								}
-							/>
-							<Route
-								path="/runtime"
-								element={
-									<RuntimeScreen
-										runtimeState={runtimeState}
-										runtimeActions={runtimeActions}
-										workspace={workspace}
-										workspaceActions={workspaceActions}
-										smsBridgeHealth={smsBridgeHealth}
-										onRunSmsBridgeTest={onRunSmsBridgeTest}
-									/>
-								}
-							/>
-							<Route
-								path="/events"
-								element={<EventsScreen workspace={workspace} />}
-							/>
-							<Route path="*" element={<Navigate to="/chat" replace />} />
-						</Routes>
-					</main>
-				</div>
-
-				{mobileMenuOpen ? (
-					<div className="fixed inset-0 z-40 lg:hidden">
-						<button
-							type="button"
-							className="absolute inset-0 bg-black/55"
-							aria-label="Close menu"
-							onClick={() => setMobileMenuOpen(false)}
+					}
+				/>
+				<Route
+					path="/chat"
+					element={
+						<Navigate
+							to={{ pathname: "/", search: location.search }}
+							replace
 						/>
-						<div className="absolute left-0 top-0 h-full w-[82vw] max-w-[320px] border-r border-white/10 bg-slate-950/95 p-4 backdrop-blur">
-							<div className="mb-3 flex items-center justify-between">
-								<h2 className="text-lg font-semibold">Sections</h2>
-								<button
-									type="button"
-									className="rounded-full border border-white/20 px-3 py-1 text-xs"
-									onClick={() => setMobileMenuOpen(false)}
-								>
-									Close
-								</button>
-							</div>
-							<p className="text-xs text-slate-300">
-								Navigation for smaller screens.
-							</p>
-							<MainSidebarNav
-								items={navItems}
-								onNavigate={() => setMobileMenuOpen(false)}
-							/>
-							{showThreadRail ? (
-								<ChatThreadsRail
-									workspace={workspace}
-									workspaceActions={workspaceActions}
-									onSelectThread={() => setMobileMenuOpen(false)}
-								/>
-							) : null}
-						</div>
-					</div>
-				) : null}
-			</div>
-		</div>
+					}
+				/>
+				<Route path="/gateway" element={<Navigate to="/settings" replace />} />
+				<Route
+					path="/settings"
+					element={
+						<GatewayScreen
+							runtimeState={runtimeState}
+							runtimeActions={runtimeActions}
+							workspace={workspace}
+							workspaceActions={workspaceActions}
+							resolvedUi={resolvedUi}
+						/>
+					}
+				/>
+				<Route
+					path="/agents"
+					element={
+						<AgentsScreen
+							workspace={workspace}
+							workspaceActions={workspaceActions}
+						/>
+					}
+				/>
+				<Route
+					path="/runtime"
+					element={
+						<RuntimeScreen
+							runtimeState={runtimeState}
+							runtimeActions={runtimeActions}
+							workspace={workspace}
+							workspaceActions={workspaceActions}
+							smsBridgeHealth={smsBridgeHealth}
+							onRunSmsBridgeTest={onRunSmsBridgeTest}
+						/>
+					}
+				/>
+				<Route path="/events" element={<EventsScreen workspace={workspace} />} />
+				<Route path="*" element={<Navigate to="/" replace />} />
+			</Routes>
+		</DesktopShell>
 	);
 }
 type MessageCardProps = {
@@ -6345,6 +6107,7 @@ function MessageCard({
 					{message.attachments.map((attachment) => {
 						const isFile = isFileAttachment(attachment);
 						const isAudio = isAudioAttachment(attachment);
+						const isVideo = isVideoAttachment(attachment);
 						const meta = formatAttachmentMeta(attachment);
 						return (
 							<div
@@ -6355,6 +6118,8 @@ function MessageCard({
 									{attachment.name ||
 										(isAudio
 											? "Audio attachment"
+											: isVideo
+												? "Video attachment"
 											: isFile
 												? "File attachment"
 												: "Image attachment")}
@@ -6362,7 +6127,7 @@ function MessageCard({
 								{meta ? (
 									<p className="mt-0.5 text-[11px] text-slate-400">{meta}</p>
 								) : null}
-								{!isFile && !isAudio && attachment.dataUrl ? (
+								{!isFile && !isAudio && !isVideo && attachment.dataUrl ? (
 									<img
 										src={attachment.dataUrl}
 										alt={attachment.name || "Image attachment"}
@@ -6377,6 +6142,15 @@ function MessageCard({
 									>
 										<track kind="captions" />
 									</audio>
+								) : null}
+								{isVideo && attachment.dataUrl ? (
+									/* biome-ignore lint/a11y/useMediaCaption: generated browser videos do not provide caption tracks */
+									<video
+										className="mt-2 max-h-64 w-full rounded-md bg-slate-950"
+										controls
+										preload="metadata"
+										src={attachment.dataUrl}
+									/>
 								) : null}
 								{isFile &&
 								!isPdfAttachment(attachment) &&
@@ -6449,9 +6223,7 @@ function OverlayView({
 				<div className="absolute inset-0 bg-black/55" />
 				<div className="relative z-10 w-full max-w-2xl rounded-3xl border border-white/20 bg-slate-900/85 p-6 backdrop-blur">
 					<div className="mb-3 flex items-center justify-between">
-						<span className="rounded-full border border-white/25 px-3 py-1 text-xs">
-							Wingman AI
-						</span>
+						<DesktopBrandBadge />
 						<span className="rounded-full border border-white/25 px-3 py-1 text-xs">
 							Idle
 						</span>
@@ -6480,9 +6252,7 @@ function OverlayView({
 			<div className="absolute inset-0 bg-black/55" />
 			<div className="relative z-10 w-full max-w-4xl rounded-3xl border border-white/20 bg-slate-900/85 p-6 backdrop-blur">
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-					<span className="rounded-full border border-white/25 px-3 py-1 text-xs">
-						Wingman AI
-					</span>
+					<DesktopBrandBadge />
 					<span
 						className={`rounded-full border px-3 py-1 text-xs ${state.recording ? "border-emerald-400/50 text-emerald-300" : "border-white/25 text-slate-200"}`}
 					>

@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	createBrowserSessionActionTool,
@@ -184,6 +184,129 @@ describe("browser_session tools", () => {
 		expect(chromeClosed).toBe(true);
 	});
 
+	it("reuses the previously active page across session actions", async () => {
+		const workspace = mkdtempSync(join(tmpdir(), "wingman-browser-session-"));
+		const tempDir = mkdtempSync(join(tmpdir(), "wingman-browser-session-tmp-"));
+		tempDirs.push(workspace, tempDir);
+
+		const manager = new BrowserSessionManager();
+		managers.push(manager);
+
+		let activeUrl = "about:blank";
+		const activePageCalls: string[] = [];
+		const blankPageCalls: string[] = [];
+
+		const activePage = {
+			goto: async (url: string) => {
+				activeUrl = url;
+				activePageCalls.push(`goto:${url}`);
+			},
+			bringToFront: async () => {
+				activePageCalls.push("bringToFront");
+			},
+			click: async () => {},
+			fill: async () => {},
+			keyboard: { press: async () => {} },
+			waitForTimeout: async () => {},
+			textContent: async () => "",
+			evaluate: async () => "ok",
+			screenshot: async ({ path }: { path: string }) => {
+				activePageCalls.push(`screenshot:${path}`);
+				writeFileSync(path, "shot");
+			},
+			title: async () => "Active Session",
+			url: () => activeUrl,
+		};
+
+		const blankPage = {
+			goto: async (url: string) => {
+				blankPageCalls.push(`goto:${url}`);
+			},
+			bringToFront: async () => {
+				blankPageCalls.push("bringToFront");
+			},
+			click: async () => {},
+			fill: async () => {},
+			keyboard: { press: async () => {} },
+			waitForTimeout: async () => {},
+			textContent: async () => "",
+			evaluate: async () => "ok",
+			screenshot: async ({ path }: { path: string }) => {
+				blankPageCalls.push(`screenshot:${path}`);
+				writeFileSync(path, "blank-shot");
+			},
+			title: async () => "Blank Session",
+			url: () => "about:blank",
+		};
+		let pages = [activePage];
+
+		const context = {
+			pages: () => pages,
+			newPage: async () => activePage,
+		};
+
+		const startTool = createBrowserSessionStartTool(
+			{
+				workspace,
+				ownerId: "agent-active-page",
+				sessionManager: manager,
+			},
+			{
+				importPlaywright: async () => ({
+					chromium: {
+						connectOverCDP: async () => ({
+							contexts: () => [context],
+							close: async () => {},
+						}),
+					},
+				}),
+				startChrome: async () => ({
+					wsEndpoint: "ws://127.0.0.1:9222/devtools/browser/test",
+					close: async () => {},
+				}),
+				mkTempDir: () => tempDir,
+				removeDir: () => {},
+				now: () => 1700000000000,
+			},
+		);
+		const actionTool = createBrowserSessionActionTool({
+			workspace,
+			ownerId: "agent-active-page",
+			sessionManager: manager,
+		});
+
+		const startResult = (await startTool.invoke({
+			url: "https://example.com/dashboard",
+		})) as {
+			ok: boolean;
+			session_id: string;
+			final_url: string;
+		};
+
+		expect(startResult.ok).toBe(true);
+		expect(startResult.final_url).toBe("https://example.com/dashboard");
+		pages = [activePage, blankPage];
+
+		const actionResult = (await actionTool.invoke({
+			session_id: startResult.session_id,
+			actions: [{ type: "screenshot", path: "artifacts/reused-page.png" }],
+		})) as {
+			ok: boolean;
+			final_url: string;
+		};
+
+		expect(actionResult.ok).toBe(true);
+		expect(actionResult.final_url).toBe("https://example.com/dashboard");
+		expect(activePageCalls).toContain("goto:https://example.com/dashboard");
+		expect(activePageCalls).toContain(
+			`screenshot:${join(workspace, "artifacts/reused-page.png")}`,
+		);
+		expect(blankPageCalls).not.toContain("bringToFront");
+		expect(blankPageCalls).not.toContain(
+			`screenshot:${join(workspace, "artifacts/reused-page.png")}`,
+		);
+	});
+
 	it("honors per-session transport override when starting a managed session", async () => {
 		const workspace = mkdtempSync(join(tmpdir(), "wingman-browser-session-"));
 		const tempDir = mkdtempSync(join(tmpdir(), "wingman-browser-session-tmp-"));
@@ -267,5 +390,270 @@ describe("browser_session tools", () => {
 		expect(result.transport_used).toBe("relay-cdp");
 		expect(result.browser).toBe("chrome-relay");
 		expect(result.final_url).toBe("https://example.com/relay");
+	});
+
+	it("surfaces screenshot artifacts in browser session responses", async () => {
+		const workspace = mkdtempSync(join(tmpdir(), "wingman-browser-session-"));
+		const tempDir = mkdtempSync(join(tmpdir(), "wingman-browser-session-tmp-"));
+		tempDirs.push(workspace, tempDir);
+
+		const manager = new BrowserSessionManager();
+		managers.push(manager);
+
+		let currentUrl = "about:blank";
+
+		const page = {
+			goto: async (url: string) => {
+				currentUrl = url;
+			},
+			click: async () => {},
+			fill: async () => {},
+			keyboard: { press: async () => {} },
+			waitForTimeout: async () => {},
+			textContent: async () => "",
+			evaluate: async () => "ok",
+			screenshot: async ({ path }: { path: string }) => {
+				writeFileSync(path, "shot");
+			},
+			title: async () => "Screenshot Session",
+			url: () => currentUrl,
+		};
+
+		const actionTool = createBrowserSessionActionTool({
+			workspace,
+			ownerId: "agent-shot",
+			sessionManager: manager,
+		});
+		const startTool = createBrowserSessionStartTool(
+			{
+				workspace,
+				ownerId: "agent-shot",
+				sessionManager: manager,
+			},
+			{
+				importPlaywright: async () => ({
+					chromium: {
+						connectOverCDP: async () => ({
+							contexts: () => [
+								{ pages: () => [page], newPage: async () => page },
+							],
+							close: async () => {},
+						}),
+					},
+				}),
+				startChrome: async () => ({
+					wsEndpoint: "ws://127.0.0.1:9222/devtools/browser/test",
+					close: async () => {},
+				}),
+				mkTempDir: () => tempDir,
+				removeDir: () => {},
+				now: () => 1700000000000,
+			},
+		);
+
+		const startResult = (await startTool.invoke({
+			url: "https://example.com/shot",
+		})) as {
+			session_id: string;
+		};
+		const actionResult = (await actionTool.invoke({
+			session_id: startResult.session_id,
+			actions: [{ type: "screenshot", path: "artifacts/shot.png", fullPage: false }],
+		})) as {
+			ok: boolean;
+			action_results: Array<{
+				type: string;
+				path: string;
+				absolutePath: string;
+				uri: string;
+			}>;
+			media: Array<{
+				path: string;
+				relativePath: string;
+				uri: string;
+				url: string;
+				mimeType: string;
+				name: string;
+			}>;
+			content: Array<Record<string, unknown>>;
+		};
+
+		expect(actionResult.ok).toBe(true);
+		expect(actionResult.action_results).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					type: "screenshot",
+					path: "artifacts/shot.png",
+					absolutePath: join(workspace, "artifacts/shot.png"),
+					uri: `/api/fs/file?path=${encodeURIComponent(join(workspace, "artifacts/shot.png"))}`,
+				}),
+			]),
+		);
+		expect(actionResult.media).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					path: join(workspace, "artifacts/shot.png"),
+					relativePath: "artifacts/shot.png",
+					uri: `/api/fs/file?path=${encodeURIComponent(join(workspace, "artifacts/shot.png"))}`,
+					url: `/api/fs/file?path=${encodeURIComponent(join(workspace, "artifacts/shot.png"))}`,
+					mimeType: "image/png",
+					name: "shot.png",
+				}),
+			]),
+		);
+		expect(actionResult.content).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					type: "resource_link",
+					uri: `/api/fs/file?path=${encodeURIComponent(join(workspace, "artifacts/shot.png"))}`,
+					mimeType: "image/png",
+				}),
+			]),
+		);
+	});
+
+	it("finalizes Playwright video recordings when the session closes", async () => {
+		const workspace = mkdtempSync(join(tmpdir(), "wingman-browser-session-"));
+		const tempDir = mkdtempSync(join(tmpdir(), "wingman-browser-session-tmp-"));
+		tempDirs.push(workspace, tempDir);
+
+		const manager = new BrowserSessionManager();
+		managers.push(manager);
+
+		const fakeChromePath = join(tempDir, "chrome-bin");
+		writeFileSync(fakeChromePath, "fake chrome binary");
+
+		let currentUrl = "about:blank";
+		let closeCalled = false;
+		const videoPath = join(
+			workspace,
+			".wingman/browser/videos/recording-1700000000000/session.webm",
+		);
+		const videoHandle = {
+			path: async () => videoPath,
+		};
+
+		const page = {
+			goto: async (url: string) => {
+				currentUrl = url;
+			},
+			click: async () => {},
+			fill: async () => {},
+			keyboard: { press: async () => {} },
+			waitForTimeout: async () => {},
+			textContent: async () => "",
+			evaluate: async () => "ok",
+			screenshot: async () => {},
+			video: () => videoHandle,
+			title: async () => "Video Session",
+			url: () => currentUrl,
+		};
+
+		const startTool = createBrowserSessionStartTool(
+			{
+				workspace,
+				ownerId: "agent-video",
+				sessionManager: manager,
+				defaultExecutablePath: fakeChromePath,
+			},
+			{
+				importPlaywright: async () => ({
+					chromium: {
+						connectOverCDP: async () => {
+							throw new Error("connectOverCDP should not be used");
+						},
+						launchPersistentContext: async (_userDataDir, options) => {
+							expect(options?.recordVideo?.dir).toBe(
+								join(
+									workspace,
+									".wingman/browser/videos/recording-1700000000000",
+								),
+							);
+							return {
+								pages: () => [page],
+								newPage: async () => page,
+								close: async () => {
+									closeCalled = true;
+									mkdirSync(dirname(videoPath), { recursive: true });
+									writeFileSync(videoPath, "video");
+								},
+							};
+						},
+					},
+				}),
+				mkTempDir: () => tempDir,
+				removeDir: () => {},
+				now: () => 1700000000000,
+			},
+		);
+		const closeTool = createBrowserSessionCloseTool({
+			workspace,
+			ownerId: "agent-video",
+			sessionManager: manager,
+		});
+
+		const startResult = (await startTool.invoke({
+			url: "https://example.com/video",
+			recordVideo: true,
+		})) as {
+			ok: boolean;
+			session_id: string;
+			video_recording: { enabled: boolean; state: string; dir: string };
+		};
+
+		expect(startResult.ok).toBe(true);
+		expect(startResult.video_recording).toMatchObject({
+			enabled: true,
+			state: "recording",
+			dir: ".wingman/browser/videos/recording-1700000000000",
+		});
+
+		const closeResult = (await closeTool.invoke({
+			session_id: startResult.session_id,
+		})) as {
+			ok: boolean;
+			closed: boolean;
+			media: Array<{
+				path: string;
+				relativePath: string;
+				uri: string;
+				url: string;
+				mimeType: string;
+				name: string;
+			}>;
+			video_recording: { enabled: boolean; state: string; videoCount: number } | null;
+			content: Array<Record<string, unknown>>;
+		};
+
+		expect(closeCalled).toBe(true);
+		expect(closeResult.ok).toBe(true);
+		expect(closeResult.closed).toBe(true);
+		expect(closeResult.video_recording).toMatchObject({
+			enabled: true,
+			state: "saved",
+			videoCount: 1,
+		});
+		expect(closeResult.media).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					path: videoPath,
+					relativePath:
+						".wingman/browser/videos/recording-1700000000000/session.webm",
+					uri: `/api/fs/file?path=${encodeURIComponent(videoPath)}`,
+					url: `/api/fs/file?path=${encodeURIComponent(videoPath)}`,
+					mimeType: "video/webm",
+					name: "session.webm",
+				}),
+			]),
+		);
+		expect(closeResult.content).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					type: "resource_link",
+					uri: `/api/fs/file?path=${encodeURIComponent(videoPath)}`,
+					mimeType: "video/webm",
+				}),
+			]),
+		);
 	});
 });

@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { GatewayServer } from "@/gateway/server.js";
 
 type GatewayInternals = {
@@ -36,6 +36,9 @@ function createGateway(
 		join(tmpdir(), "wingman-gateway-http-security-"),
 	);
 	tempWorkspaces.push(workspace);
+	mkdirSync(join(workspace, ".wingman-http-security-config"), {
+		recursive: true,
+	});
 	return new GatewayServer({
 		logLevel: "silent",
 		workspace,
@@ -71,6 +74,11 @@ afterAll(() => {
 	}
 });
 
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+});
+
 describe("gateway HTTP security", () => {
 	it("requires auth for /api routes when token auth is enabled", async () => {
 		const server = createGateway({
@@ -97,6 +105,15 @@ describe("gateway HTTP security", () => {
 	});
 
 	it("omits summarization settings from /api/config when not explicitly configured", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValue(
+					new Response(JSON.stringify({ version: "0.6.0" }), { status: 200 }),
+				),
+		);
+
 		const server = createGateway({
 			host: "127.0.0.1",
 			port: 18789,
@@ -115,8 +132,51 @@ describe("gateway HTTP security", () => {
 				maxTokensBeforeSummary?: number;
 				messagesToKeep?: number;
 			};
+			updateNotice?: {
+				latestVersion: string;
+			};
 		};
 		expect(payload.summarization).toBeUndefined();
+		expect(payload.updateNotice).toBeUndefined();
+	});
+
+	it("includes update notice metadata in /api/config when a newer package exists", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValue(
+					new Response(JSON.stringify({ version: "0.6.2" }), { status: 200 }),
+				),
+		);
+
+		const server = createGateway({
+			host: "127.0.0.1",
+			port: 18789,
+			auth: { mode: "none" },
+			requireAuth: false,
+		});
+		const internals = getGatewayInternals(server);
+
+		const response = await internals.handleUiRequest(
+			new Request("http://127.0.0.1:18789/api/config"),
+		);
+		expect(response.status).toBe(200);
+
+		const payload = (await response.json()) as {
+			updateNotice?: {
+				packageName: string;
+				currentVersion: string;
+				latestVersion: string;
+				command: string;
+			};
+		};
+		expect(payload.updateNotice).toEqual({
+			packageName: "@wingman-ai/gateway",
+			currentVersion: "0.6.0",
+			latestVersion: "0.6.2",
+			command: "npm install -g @wingman-ai/gateway@latest",
+		});
 	});
 
 	it("rejects disallowed origins and allows loopback development preflight", async () => {

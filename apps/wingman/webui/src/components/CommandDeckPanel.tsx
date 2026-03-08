@@ -44,7 +44,7 @@ export const CommandDeckPanel: React.FC<CommandDeckPanelProps> = ({
 	return (
 		<aside className="panel-card animate-rise space-y-6 p-5">
 			<div className="space-y-2">
-				<h2 className="text-lg font-semibold">Command Deck</h2>
+				<h2 className="text-lg font-semibold">Settings</h2>
 				<p className="text-xs uppercase tracking-[0.2em] text-slate-400">Connection + identity</p>
 				<div className="flex items-center gap-2 text-xs text-slate-400">
 					<span className="pill">status: {statusLabel}</span>

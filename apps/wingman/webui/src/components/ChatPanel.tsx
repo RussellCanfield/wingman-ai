@@ -16,6 +16,7 @@ import {
 	FiPaperclip,
 	FiSend,
 	FiStopCircle,
+	FiTrash2,
 	FiVolume2,
 } from "react-icons/fi";
 import ReactMarkdown from "react-markdown";
@@ -37,12 +38,20 @@ import {
 import { getAudioAvailability } from "../utils/media";
 import { shouldAutoScroll } from "../utils/scroll";
 import {
+	groupTimelineBlocksForDisplay,
+	groupToolEventsForDisplay,
+} from "../utils/toolActivityRollup";
+import {
+	collapseToolOnlyAssistantMessages,
+	messageIncludesSourceId,
+} from "../utils/transcriptMessages";
+import {
 	getVoicePlaybackLabel,
 	type VoicePlaybackStatus,
 } from "../utils/voicePlayback";
 import { ThinkingPanel } from "./ThinkingPanel";
+import { ToolActivityRollup } from "./ToolActivityRollup";
 import { TodoProgressPanel } from "./TodoProgressPanel";
-import { ToolEventPanel } from "./ToolEventPanel";
 
 const COMPOSER_MAX_LINES = 4;
 const RETURN_SYMBOL_LINE_BREAK_PATTERN =
@@ -185,6 +194,8 @@ const ASSISTANT_MARKDOWN_COMPONENTS = createMarkdownComponents({
 
 type ChatPanelProps = {
 	activeThread?: Thread;
+	threadTitle?: string;
+	threadMeta?: string;
 	defaultOutputDir?: string | null;
 	prompt: string;
 	attachments: ChatAttachment[];
@@ -210,11 +221,13 @@ type ChatPanelProps = {
 	onRemoveAttachment: (id: string) => void;
 	onClearAttachments: () => void;
 	onClearChat: () => void;
-	onOpenCommandDeck: () => void;
+	onOpenSettings: () => void;
 };
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
 	activeThread,
+	threadTitle,
+	threadMeta,
 	defaultOutputDir,
 	prompt,
 	attachments,
@@ -240,7 +253,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	onRemoveAttachment,
 	onClearAttachments,
 	onClearChat,
-	onOpenCommandDeck,
+	onOpenSettings,
 }) => {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -266,10 +279,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	const [contextMeterPopoverOpen, setContextMeterPopoverOpen] = useState(false);
 	const lastVoiceMessageIdRef = useRef<string | null>(null);
 	const messageCount = activeThread?.messages.length ?? 0;
+	const displayMessages = useMemo(
+		() => collapseToolOnlyAssistantMessages(activeThread?.messages),
+		[activeThread?.messages],
+	);
 	const lastMessage =
 		messageCount > 0 && activeThread
 			? activeThread.messages[messageCount - 1]
 			: undefined;
+	const resolvedThreadTitle =
+		threadTitle || activeThread?.name || "No conversation selected";
+	const resolvedThreadMeta = activeThread
+		? threadMeta || `${activeThread.agentId} · ${activeThread.id}`
+		: "Create or select a conversation from the sidebar to begin.";
 
 	useEffect(() => {
 		if (voicePlayback.status === "idle") {
@@ -662,6 +684,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			),
 		[activeThread],
 	);
+	const visibleTodoSnapshot =
+		todoSnapshot && !todoSnapshot.allCompleted ? todoSnapshot : null;
 	const composerActivityLabel = recording
 		? `Recording ${formatDuration(recordingDuration)}`
 		: isStreaming
@@ -682,7 +706,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 		}
 	}, [conversationContextMeter]);
 	const transcriptContent = useMemo(() => {
-		const isEmptyThread = !activeThread || activeThread.messages.length === 0;
+		const isEmptyThread = !activeThread || displayMessages.length === 0;
 		if (loading && isEmptyThread) {
 			return (
 				<div className="grid h-full place-items-center text-sm text-slate-400">
@@ -705,13 +729,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 			);
 		}
 		let hasSpeakableAssistantInTurn = false;
-		return activeThread.messages.map((msg, index) => {
+		return displayMessages.map((msg, index) => {
 			const isUserMessage = msg.role === "user";
 			if (msg.role !== "assistant") {
 				hasSpeakableAssistantInTurn = false;
 			}
-			const previousMessage =
-				index > 0 ? activeThread.messages[index - 1] : null;
+			const previousMessage = index > 0 ? displayMessages[index - 1] : null;
 			const previousRole = previousMessage?.role;
 			const messageSpacingClass =
 				index === 0
@@ -724,7 +747,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				(!previousMessage || previousMessage.role !== "assistant");
 			const showTimestamp = isUserMessage || isAssistantTurnStart;
 			const hasLegacyEvents =
-				msg.id === lastAssistantId &&
+				messageIncludesSourceId(msg, lastAssistantId) &&
 				(legacyToolEvents.length > 0 || legacyThinkingEvents.length > 0);
 			const toolEvents =
 				msg.toolEvents && msg.toolEvents.length > 0
@@ -752,15 +775,29 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 				timelineBlocks.length > 0
 					? new Map(toolEvents.map((event) => [event.id, event]))
 					: null;
+			const timelineDisplayItems =
+				timelineBlocks.length > 0
+					? groupTimelineBlocksForDisplay({
+							blocks: timelineBlocks,
+							toolEventsById: timelineToolEventsById,
+						})
+					: [];
 			const panelToolEvents =
 				timelineBlocks.length > 0
 					? toolEvents.filter((event) => !timelineToolEventIds.has(event.id))
 					: toolEvents;
+			const standaloneToolDisplayItems =
+				timelineBlocks.length === 0
+					? groupToolEventsForDisplay({
+							toolEvents: panelToolEvents,
+						})
+					: [];
 			const hasPanelActivity =
-				msg.role === "assistant" &&
-				(panelToolEvents.length > 0 || thinkingEvents.length > 0);
+				msg.role === "assistant" && thinkingEvents.length > 0;
 			const isActiveMessage =
-				msg.role === "assistant" && isStreaming && msg.id === lastAssistantId;
+				msg.role === "assistant" &&
+				isStreaming &&
+				messageIncludesSourceId(msg, lastAssistantId);
 			const uiBlocks = dynamicUiEnabled ? msg.uiBlocks : undefined;
 			const normalizedText = normalizeMessageLineBreaks(
 				msg.content || (!dynamicUiEnabled ? msg.uiTextFallback || "" : ""),
@@ -902,46 +939,74 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							</div>
 						) : null}
 						{(() => {
-							if (timelineBlocks.length > 0) {
+							const renderActivityItem = (
+								item:
+									| ReturnType<typeof groupTimelineBlocksForDisplay>[number]
+									| ReturnType<typeof groupToolEventsForDisplay>[number],
+							) => {
+								if (item.kind === "text") {
+									const normalizedBlockText = normalizeMessageLineBreaks(
+										item.text || "",
+									);
+									const blockDisplayText =
+										parseThinkingContent(normalizedBlockText).cleanText;
+									if (!blockDisplayText.trim()) return null;
+									return (
+										<ReactMarkdown
+											key={item.id}
+											remarkPlugins={[remarkGfm]}
+											rehypePlugins={[
+												[
+													rehypeHighlight,
+													{ detect: true, ignoreMissing: true },
+												],
+											]}
+											className="markdown-content text-sm leading-relaxed"
+											components={markdownComponents}
+										>
+											{blockDisplayText}
+										</ReactMarkdown>
+									);
+								}
+								return (
+									<ToolActivityRollup
+										key={item.id}
+										toolEvents={item.toolEvents}
+									/>
+								);
+							};
+
+							if (timelineDisplayItems.length > 0) {
 								return (
 									<div className="mt-2 space-y-3">
-										{timelineBlocks.map((block) => {
-											if (block.kind === "text") {
-												const normalizedBlockText = normalizeMessageLineBreaks(
-													block.text || "",
-												);
-												const blockDisplayText =
-													parseThinkingContent(normalizedBlockText).cleanText;
-												if (!blockDisplayText.trim()) return null;
-												return (
-													<ReactMarkdown
-														key={block.id}
-														remarkPlugins={[remarkGfm]}
-														rehypePlugins={[
-															[
-																rehypeHighlight,
-																{ detect: true, ignoreMissing: true },
-															],
-														]}
-														className="markdown-content text-sm leading-relaxed"
-														components={markdownComponents}
-													>
-														{blockDisplayText}
-													</ReactMarkdown>
-												);
-											}
-											const event = timelineToolEventsById?.get(
-												block.toolEventId,
-											);
-											if (!event) return null;
-											return (
-												<ToolEventPanel
-													key={block.id}
-													variant="inline"
-													toolEvents={[event]}
-												/>
-											);
-										})}
+										{timelineDisplayItems.map((item) =>
+											renderActivityItem(item),
+										)}
+									</div>
+								);
+							}
+
+							if (standaloneToolDisplayItems.length > 0) {
+								return (
+									<div className="mt-2 space-y-3">
+										{displayText.trim() ? (
+											<ReactMarkdown
+												remarkPlugins={[remarkGfm]}
+												rehypePlugins={[
+													[
+														rehypeHighlight,
+														{ detect: true, ignoreMissing: true },
+													],
+												]}
+												className="markdown-content text-sm leading-relaxed"
+												components={markdownComponents}
+											>
+												{displayText}
+											</ReactMarkdown>
+										) : null}
+										{standaloneToolDisplayItems.map((item) =>
+											renderActivityItem(item),
+										)}
 									</div>
 								);
 							}
@@ -1010,6 +1075,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							<div className="mt-3 grid gap-2 sm:grid-cols-2">
 								{msg.attachments.map((attachment) => {
 									const isAudio = isAudioAttachment(attachment);
+									const isVideo = isVideoAttachment(attachment);
 									const isFile = isFileAttachment(attachment);
 									const audioAvailability = isAudio
 										? getAudioAvailability(attachment)
@@ -1047,6 +1113,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 															{attachment.name}
 														</div>
 													) : null}
+												</div>
+											) : isVideo ? (
+												<div className="p-3">
+													{/* biome-ignore lint/a11y/useMediaCaption: generated browser videos do not provide caption tracks */}
+													<video
+														controls
+														preload="metadata"
+														src={attachment.dataUrl}
+														className="max-h-80 w-full rounded-lg bg-slate-950"
+													/>
+													<div className="mt-2 text-[11px] text-slate-400">
+														{attachment.name || "Video attachment"}
+													</div>
 												</div>
 											) : isFile ? (
 												<div className="p-4">
@@ -1101,7 +1180,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 							<div className="mt-3">
 								<ThinkingPanel
 									thinkingEvents={thinkingEvents}
-									toolEvents={panelToolEvents}
 									isStreaming={isActiveMessage}
 								/>
 							</div>
@@ -1113,6 +1191,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 	}, [
 		activeThread,
 		defaultOutputDir,
+		displayMessages,
 		dynamicUiEnabled,
 		isStreaming,
 		lastAssistantId,
@@ -1127,13 +1206,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
 	return (
 		<section className="panel-card animate-rise grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2.5 overflow-hidden p-2.5 sm:gap-2.5 sm:p-2.5">
-			<header className="flex flex-wrap items-center justify-between gap-1.5">
-				<h2 className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
-					Chat
-				</h2>
+			<header className="flex flex-wrap items-start justify-between gap-3 px-2.5">
+				<div className="min-w-0">
+					<h2 className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+						Chat
+					</h2>
+					<p className="mt-1 truncate text-sm font-semibold text-slate-100">
+						{resolvedThreadTitle}
+					</p>
+					<p className="mt-0.5 truncate text-[11px] text-slate-400">
+						{resolvedThreadMeta}
+					</p>
+				</div>
 				<div className="flex flex-wrap items-center gap-2">
 					<button
-						className={`button-secondary px-2.5 py-1 text-[10px] ${
+						className={`button-secondary inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] ${
 							voiceAutoEnabled
 								? "border-sky-400/60 text-sky-200"
 								: "text-slate-300"
@@ -1143,14 +1230,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 						disabled={!canToggleVoice}
 						aria-pressed={voiceAutoEnabled}
 					>
-						Voice
+						<FiVolume2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+						<span>Voice</span>
 					</button>
 					<button
-						className="button-secondary px-2.5 py-1 text-[10px] text-slate-300"
+						className="button-secondary inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] text-slate-300"
 						onClick={onClearChat}
 						type="button"
 					>
-						Clear
+						<FiTrash2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+						<span>Clear</span>
 					</button>
 				</div>
 			</header>
@@ -1168,14 +1257,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
 						<div>
 							<span className="font-semibold">Gateway not connected.</span> Open
-							the Command Deck to connect before sending prompts.
+							Settings to connect before sending prompts.
 						</div>
 						<button
 							className="button-secondary px-3 py-1 text-xs"
 							type="button"
-							onClick={onOpenCommandDeck}
+							onClick={onOpenSettings}
 						>
-							Open Command Deck
+							Open Settings
 						</button>
 					</div>
 				) : null}
@@ -1183,6 +1272,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					<div className="flex flex-wrap gap-2">
 						{attachments.map((attachment) => {
 							const isAudio = isAudioAttachment(attachment);
+							const isVideo = isVideoAttachment(attachment);
 							const isFile = isFileAttachment(attachment);
 							const audioAvailability = isAudio
 								? getAudioAvailability(attachment)
@@ -1208,6 +1298,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 												</div>
 											)}
 										</div>
+									) : isVideo ? (
+										<div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-800/80 text-sky-200">
+											<span className="text-[10px] font-semibold">VIDEO</span>
+										</div>
 									) : isFile ? (
 										<div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-800/80 text-sky-200">
 											<FiFileText className="h-5 w-5" />
@@ -1227,7 +1321,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 									)}
 									<span className="max-w-[160px] truncate text-slate-300">
 										{attachment.name ||
-											(isAudio ? "Audio" : isFile ? "File" : "Image")}
+											(isAudio
+												? "Audio"
+												: isVideo
+													? "Video"
+													: isFile
+														? "File"
+														: "Image")}
 									</span>
 									<button
 										type="button"
@@ -1258,16 +1358,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 					Message
 				</label>
 				<div>
-					{todoSnapshot ? (
+					{visibleTodoSnapshot ? (
 						<TodoProgressPanel
-							key={`${activeThread?.id ?? "thread"}:${todoSnapshot.sourceEventId ?? "todos"}`}
-							snapshot={todoSnapshot}
+							key={`${activeThread?.id ?? "thread"}:${visibleTodoSnapshot.sourceEventId ?? "todos"}`}
+							snapshot={visibleTodoSnapshot}
 							attached
 						/>
 					) : null}
 					<div
 						className={`border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] ${
-							todoSnapshot ? "-mt-px rounded-b-2xl rounded-t-xl" : "rounded-2xl"
+							visibleTodoSnapshot
+								? "-mt-px rounded-b-2xl rounded-t-xl"
+								: "rounded-2xl"
 						}`}
 					>
 						{composerActivityLabel ? (
@@ -1636,6 +1738,12 @@ function isAudioAttachment(attachment: ChatAttachment): boolean {
 	if (attachment.kind === "audio") return true;
 	if (attachment.mimeType?.startsWith("audio/")) return true;
 	if (attachment.dataUrl?.startsWith("data:audio/")) return true;
+	return false;
+}
+
+function isVideoAttachment(attachment: ChatAttachment): boolean {
+	if (attachment.mimeType?.startsWith("video/")) return true;
+	if (attachment.dataUrl?.startsWith("data:video/")) return true;
 	return false;
 }
 

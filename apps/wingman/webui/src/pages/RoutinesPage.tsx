@@ -69,7 +69,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({
 	}, [threads]);
 
 	return (
-		<section className="grid gap-6 lg:grid-cols-[360px_1fr]">
+		<section className="space-y-6">
 			<aside className="panel-card animate-rise space-y-6 p-5">
 				<div>
 					<h2 className="text-lg font-semibold">Routines</h2>

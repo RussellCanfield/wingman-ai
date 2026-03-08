@@ -38,7 +38,7 @@ const baseProps: React.ComponentProps<typeof ChatPage> = {
 	onClearAttachments: () => {},
 	onClearChat: () => {},
 	onDeleteThread: () => {},
-	onOpenCommandDeck: () => {},
+	onOpenSettings: () => {},
 	onSetWorkdir: async () => true,
 };
 
@@ -80,6 +80,9 @@ describe("ChatPage agent details panel", () => {
 		expect(drawerTag).toBeDefined();
 		expect(drawerTag).not.toContain("open");
 		expect((html.match(/group-open:rotate-180/g) || []).length).toBe(1);
+		expect(html).not.toContain(
+			"inline-flex max-w-full items-center rounded-full border border-slate-700/70 bg-slate-950/75 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-slate-300",
+		);
 		expect(html).not.toContain("Session Snapshot");
 		expect(html).not.toContain("Guidance");
 	});
@@ -101,6 +104,8 @@ describe("ChatPage agent details panel", () => {
 
 		expect(html).toContain("Agent Setup");
 		expect(html).toContain("Main Agent");
+		expect(html).toContain("Thread 1");
+		expect(html).toContain("Main Agent · thread-1");
 		expect(html).toContain("codex:codex-mini-latest");
 		expect(html).toContain("think, command_execute");
 		expect(html).toContain("finance, fal-ai + global");

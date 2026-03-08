@@ -4,6 +4,8 @@ import {
 	type BrowserControlInput,
 	type BrowserControlToolOptions,
 	type BrowserExecutionSummary,
+	type BrowserGeneratedMedia,
+	type BrowserVideoRecordingSummary,
 	type BrowserRuntimeTransport,
 	type BrowserSessionRuntime,
 	type BrowserTransportPreference,
@@ -168,11 +170,20 @@ export class BrowserSessionManager {
 
 	async closeSession(
 		input: CloseBrowserSessionInput,
-	): Promise<BrowserSessionSnapshot> {
+	): Promise<{
+		snapshot: BrowserSessionSnapshot;
+		closeSummary: {
+			media: BrowserGeneratedMedia[];
+			videoRecording: BrowserVideoRecordingSummary | null;
+		};
+	}> {
 		const record = this.getOwnedRecord(input.ownerId, input.sessionId);
 		const snapshot = this.toSnapshot(record);
-		await this.closeAndDelete(record);
-		return snapshot;
+		const closeSummary = await this.closeAndDelete(record);
+		return {
+			snapshot,
+			closeSummary,
+		};
 	}
 
 	listSessions(ownerId: string): BrowserSessionSnapshot[] {
@@ -200,13 +211,29 @@ export class BrowserSessionManager {
 		);
 	}
 
-	private async closeAndDelete(record: BrowserSessionRecord): Promise<void> {
+	private async closeAndDelete(record: BrowserSessionRecord): Promise<{
+		media: BrowserGeneratedMedia[];
+		videoRecording: BrowserVideoRecordingSummary | null;
+	}> {
 		if (record.closing) {
-			return;
+			return {
+				media: [],
+				videoRecording: null,
+			};
 		}
 		record.closing = true;
+		let closeSummary: {
+			media: BrowserGeneratedMedia[];
+			videoRecording: BrowserVideoRecordingSummary | null;
+		} = {
+			media: [],
+			videoRecording: null,
+		};
 		try {
-			await closeBrowserSessionRuntime(record.runtime, record.dependencies);
+			closeSummary = await closeBrowserSessionRuntime(
+				record.runtime,
+				record.dependencies,
+			);
 		} finally {
 			this.sessions.delete(record.sessionId);
 			const ownerSessions = this.ownerIndex.get(record.ownerId);
@@ -217,6 +244,7 @@ export class BrowserSessionManager {
 				}
 			}
 		}
+		return closeSummary;
 	}
 
 	private getOwnedRecord(

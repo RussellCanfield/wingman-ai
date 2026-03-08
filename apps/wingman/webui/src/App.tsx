@@ -9,10 +9,9 @@ import {
 	useLocation,
 	useNavigate,
 } from "react-router-dom";
-import wingmanIcon from "./assets/wingman_icon.webp";
-import wingmanLogo from "./assets/wingman_logo.webp";
 import { GatewayStatusIndicator } from "./components/GatewayStatusIndicator";
 import { Sidebar } from "./components/Sidebar";
+import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner";
 import { AgentsPage } from "./pages/AgentsPage";
 import { ChatPage } from "./pages/ChatPage";
 import { CommandDeckPage } from "./pages/CommandDeckPage";
@@ -89,6 +88,7 @@ import {
 	getWorkspaceContentClass,
 	getWorkspaceGridClass,
 	getWorkspaceShellClass,
+	getWorkspaceViewportClass,
 } from "./utils/layoutShell";
 import { readStoredBoolean, readStoredString } from "./utils/persistedStorage";
 import { randomUuid } from "./utils/randomUuid";
@@ -114,6 +114,11 @@ import {
 	upsertTimelineTextBlock,
 	upsertTimelineToolBlock,
 } from "./utils/streamTimeline";
+import {
+	buildHomeChatLocation,
+	getSelectedThreadIdFromLocation,
+	isHomeChatRoute,
+} from "./utils/threadRoute";
 import { appendLocalPromptMessagesToThread } from "./utils/threadState";
 import {
 	resolveSpeechVoice,
@@ -303,6 +308,12 @@ export const App: React.FC = () => {
 	const activeThread = useMemo(() => {
 		return threads.find((thread) => thread.id === activeThreadId) || threads[0];
 	}, [activeThreadId, threads]);
+	const isChatHomeRoute = isHomeChatRoute(location.pathname);
+	const selectedThreadIdFromLocation = getSelectedThreadIdFromLocation(
+		location.pathname,
+		location.search,
+	);
+	const displayActiveThread = isChatHomeRoute ? activeThread : undefined;
 
 	const currentAgentId = activeThread?.agentId || agentId;
 	const activeAgentSummary = useMemo(
@@ -2641,7 +2652,7 @@ export const App: React.FC = () => {
 			if (thread) {
 				setAgentId(thread.agentId);
 			}
-			navigate("/chat");
+			navigate(buildHomeChatLocation(threadId));
 		},
 		[loadThreadMessages, navigate, threads],
 	);
@@ -2650,7 +2661,7 @@ export const App: React.FC = () => {
 		async (targetAgentId: string, name?: string) => {
 			const thread = await createThread(targetAgentId, name);
 			if (thread) {
-				navigate("/chat");
+				navigate(buildHomeChatLocation(thread.id));
 			}
 			return thread;
 		},
@@ -2896,15 +2907,54 @@ export const App: React.FC = () => {
 	}, [activeThreadId, threads]);
 
 	useEffect(() => {
+		if (!isChatHomeRoute) return;
+		if (!selectedThreadIdFromLocation) return;
+		if (
+			threads.length > 0 &&
+			!threads.some((thread) => thread.id === selectedThreadIdFromLocation)
+		) {
+			return;
+		}
+		if (activeThreadId === selectedThreadIdFromLocation) return;
+		setActiveThreadId(selectedThreadIdFromLocation);
+	}, [activeThreadId, isChatHomeRoute, selectedThreadIdFromLocation, threads]);
+
+	useEffect(() => {
+		if (!isChatHomeRoute) return;
+		if (!activeThreadId) return;
+		if (
+			threads.length > 0 &&
+			!threads.some((thread) => thread.id === activeThreadId)
+		) {
+			return;
+		}
+		const nextLocation = buildHomeChatLocation(activeThreadId);
+		const currentLocation = `${location.pathname}${location.search}`;
+		if (nextLocation === currentLocation) return;
+		navigate(nextLocation, { replace: true });
+	}, [
+		activeThreadId,
+		isChatHomeRoute,
+		location.pathname,
+		location.search,
+		navigate,
+		threads,
+	]);
+
+	useEffect(() => {
 		if (!activeThread) return;
 		if (activeThread.messagesLoaded) return;
 		void loadThreadMessages(activeThread);
 	}, [activeThread, loadThreadMessages]);
 
+	const routeKey = `${location.pathname}?${location.search}`;
+
 	// Auto-close mobile drawer on route change
 	useEffect(() => {
-		setMobileMenuOpen(false);
-	}, []);
+		if (routeKey) {
+			setMobileMenuOpen(false);
+		}
+	}, [routeKey]);
 
 	// Lock body scroll when drawer open
 	useEffect(() => {
@@ -2951,9 +3001,8 @@ export const App: React.FC = () => {
 	const authHint = config.requireAuth
 		? "Auth required by gateway. Provide a token or password."
 		: "Auth is not required for this gateway.";
-	const hostLabel = `${config.gatewayHost}:${config.gatewayPort}`;
-	const isChatRoute = location.pathname === "/chat";
-	const showCompactGatewayIndicator = location.pathname !== "/command";
+	const showCompactGatewayIndicator =
+		location.pathname !== "/settings" && location.pathname !== "/command";
 
 	const createAgent = useCallback(
 		async (payload: {
@@ -3272,25 +3321,28 @@ export const App: React.FC = () => {
 			{showCompactGatewayIndicator ? (
 				<GatewayStatusIndicator connected={connected} connecting={connecting} />
 			) : null}
-			<main className={getWorkspaceShellClass(isChatRoute)}>
-				<div className={getWorkspaceGridClass(isChatRoute)}>
+			{config.updateNotice ? (
+				<UpdateAvailableBanner
+					notice={config.updateNotice}
+					offsetClass={showCompactGatewayIndicator ? "top-12" : "top-0"}
+				/>
+			) : null}
+			<main className={getWorkspaceShellClass()}>
+				<div className={getWorkspaceGridClass()}>
 					{/* Desktop Sidebar - Hidden on mobile */}
 					<div className="hidden min-h-0 lg:block">
 						<Sidebar
 							variant="default"
-							currentRoute={location.pathname}
 							activeAgents={agentOptions}
 							selectedAgentId={agentId}
 							threads={threads}
-							activeThreadId={activeThread?.id || ""}
+							activeThreadId={displayActiveThread?.id || ""}
 							loadingThreads={loadingThreads}
 							onSelectAgent={setAgentId}
 							onSelectThread={handleSelectThread}
 							onCreateThread={handleCreateThread}
 							onDeleteThread={deleteThread}
 							onRenameThread={renameThread}
-							hostLabel={hostLabel}
-							deviceId={deviceId}
 							getAgentLabel={(id) =>
 								agentOptions.find((agent) => agent.id === id)?.name || id
 							}
@@ -3320,29 +3372,13 @@ export const App: React.FC = () => {
 
 							{/* Drawer Panel */}
 							<aside
-								className="fixed inset-y-0 left-0 z-[70] w-[280px] overflow-y-auto border-r border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-[0_25px_80px_rgba(10,25,60,0.5)] animate-slideInFromLeft lg:hidden"
+								className="fixed inset-y-0 left-0 z-[70] flex w-[300px] flex-col border-r border-white/10 bg-slate-900/95 shadow-[0_25px_80px_rgba(10,25,60,0.5)] backdrop-blur-2xl animate-slideInFromLeft lg:hidden"
 								role="dialog"
 								aria-modal="true"
 								aria-label="Navigation menu"
 							>
-								{/* Header with Logo and Close Button */}
-								<div className="sticky top-0 z-10 border-b border-white/10 bg-slate-900/95 px-5 py-4 backdrop-blur-xl">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-3">
-											<img
-												src={wingmanIcon}
-												alt="Wingman"
-												className="h-12 rounded-xl border border-white/10 bg-slate-950/60 p-1.5"
-											/>
-											<div>
-												<p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-													Menu
-												</p>
-												<h2 className="text-base font-semibold text-slate-100">
-													Navigation
-												</h2>
-											</div>
-										</div>
+								<div className="border-b border-white/10 px-5 py-4">
+									<div className="flex justify-end">
 										<button
 											type="button"
 											onClick={() => setMobileMenuOpen(false)}
@@ -3354,177 +3390,165 @@ export const App: React.FC = () => {
 									</div>
 								</div>
 
-								{/* Sidebar Content */}
-								<div className="p-5">
+								<div className="flex min-h-0 flex-1 p-5">
 									<Sidebar
 										variant="mobile-drawer"
-										currentRoute={location.pathname}
 										activeAgents={agentOptions}
 										selectedAgentId={agentId}
 										threads={threads}
-										activeThreadId={activeThread?.id || ""}
+										activeThreadId={displayActiveThread?.id || ""}
 										loadingThreads={loadingThreads}
 										onSelectAgent={setAgentId}
 										onSelectThread={handleSelectThread}
 										onCreateThread={handleCreateThread}
 										onDeleteThread={deleteThread}
 										onRenameThread={renameThread}
-										hostLabel={hostLabel}
-										deviceId={deviceId}
+										onNavigate={() => setMobileMenuOpen(false)}
 										getAgentLabel={(id) =>
 											agentOptions.find((agent) => agent.id === id)?.name || id
 										}
 									/>
 								</div>
-
-								{/* Footer */}
-								<div className="sticky bottom-0 border-t border-white/10 bg-slate-900/95 px-5 py-4 backdrop-blur-xl">
-									<div className="space-y-2 text-xs text-slate-400">
-										<div className="pill">host: {hostLabel}</div>
-										<div className="pill">device: {deviceId || "--"}</div>
-									</div>
-									<div className="mt-3 flex items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-										<img
-											src={wingmanLogo}
-											alt="Wingman logo"
-											className="h-16 w-auto opacity-95"
-										/>
-									</div>
-								</div>
 							</aside>
 						</>
 					)}
 
-					<section className={getWorkspaceContentClass(isChatRoute)}>
-						<Routes>
-							<Route path="/" element={<Navigate to="/chat" replace />} />
-							<Route
-								path="/chat"
-								element={
-									<ChatPage
-										agentId={currentAgentId}
-										activeAgent={activeAgentSummary}
-										activeThread={activeThread}
-										prompt={prompt}
-										attachments={attachments}
-										fileAccept={FILE_INPUT_ACCEPT}
-										attachmentError={attachmentError}
-										isStreaming={uiStreaming}
-										isContextSummarizing={isContextSummarizing}
-										queuedPromptCount={queuedPromptCount}
-										connected={connected}
-										loadingThread={loadingThreadId === activeThread?.id}
-										outputRoot={config.outputRoot}
-										voiceAutoEnabled={activeVoiceAutoEnabled}
-										voicePlayback={voicePlayback}
-										dynamicUiEnabled={dynamicUiEnabled}
-										summarizationConfig={config.summarization}
-										onToggleVoiceAuto={handleToggleVoiceAuto}
-										onSpeakVoice={handleSpeakVoice}
-										onStopVoice={handleStopVoice}
-										onPromptChange={setPrompt}
-										onSendPrompt={sendPrompt}
-										onStopPrompt={stopPrompt}
-										onAddAttachments={addAttachments}
-										onRemoveAttachment={removeAttachment}
-										onClearAttachments={clearAttachments}
-										onClearChat={clearChat}
-										onDeleteThread={deleteThread}
-										onOpenCommandDeck={() => navigate("/command")}
-										onSetWorkdir={setThreadWorkdir}
-									/>
-								}
-							/>
-							<Route
-								path="/command"
-								element={
-									<CommandDeckPage
-										agentId={currentAgentId}
-										activeThreadName={activeThread?.name}
-										wsUrl={wsUrl}
-										token={token}
-										password={password}
-										connecting={connecting}
-										connected={connected}
-										statusLabel={statusLabel}
-										health={health}
-										stats={stats}
-										authHint={authHint}
-										autoConnectStatus={autoConnectStatus}
-										deviceId={deviceId}
-										eventLog={eventLog}
-										providers={providers}
-										providersLoading={providersLoading}
-										providersUpdatedAt={providersUpdatedAt}
-										credentialsPath={credentialsPath}
-										voiceConfig={config.voice}
-										autoConnect={autoConnect}
-										onAutoConnectChange={setAutoConnect}
-										onWsUrlChange={setWsUrl}
-										onTokenChange={setToken}
-										onPasswordChange={setPassword}
-										onConnect={connect}
-										onDisconnect={disconnect}
-										onRefresh={() => {
-											refreshStats();
-											fetchThreads();
-											refreshProviders();
-										}}
-										onResetDevice={resetDevice}
-										onRefreshProviders={refreshProviders}
-										onSaveProviderToken={saveProviderToken}
-										onClearProviderToken={clearProviderToken}
-										onSaveVoiceConfig={updateVoiceConfig}
-									/>
-								}
-							/>
-							<Route
-								path="/agents"
-								element={
-									<AgentsPage
-										agents={agentCatalog}
-										availableTools={availableTools}
-										builtInTools={builtInTools}
-										providers={providers}
-										loading={agentsLoading}
-										onCreateAgent={createAgent}
-										onUpdateAgent={updateAgent}
-										onLoadAgent={loadAgentDetail}
-										onRefresh={refreshAgents}
-									/>
-								}
-							/>
-							<Route
-								path="/routines"
-								element={
-									<RoutinesPage
-										agents={agentOptions}
-										routines={routines}
-										threads={threads}
-										loading={routinesLoading}
-										onCreateRoutine={createRoutine}
-										onDeleteRoutine={deleteRoutine}
-									/>
-								}
-							/>
-							<Route
-								path="/webhooks"
-								element={
-									<WebhooksPage
-										agents={agentOptions}
-										webhooks={webhooks}
-										threads={threads}
-										loading={webhooksLoading}
-										baseUrl={window.location.origin}
-										onCreateWebhook={createWebhook}
-										onUpdateWebhook={updateWebhook}
-										onDeleteWebhook={deleteWebhook}
-										onTestWebhook={testWebhook}
-										onRefresh={refreshWebhooks}
-									/>
-								}
-							/>
-						</Routes>
+					<section className={getWorkspaceContentClass()}>
+						<div className={getWorkspaceViewportClass()}>
+							<Routes>
+								<Route
+									path="/"
+									element={
+										<ChatPage
+											agentId={currentAgentId}
+											activeAgent={activeAgentSummary}
+											activeThread={activeThread}
+											prompt={prompt}
+											attachments={attachments}
+											fileAccept={FILE_INPUT_ACCEPT}
+											attachmentError={attachmentError}
+											isStreaming={uiStreaming}
+											isContextSummarizing={isContextSummarizing}
+											queuedPromptCount={queuedPromptCount}
+											connected={connected}
+											loadingThread={loadingThreadId === activeThread?.id}
+											outputRoot={config.outputRoot}
+											voiceAutoEnabled={activeVoiceAutoEnabled}
+											voicePlayback={voicePlayback}
+											dynamicUiEnabled={dynamicUiEnabled}
+											summarizationConfig={config.summarization}
+											onToggleVoiceAuto={handleToggleVoiceAuto}
+											onSpeakVoice={handleSpeakVoice}
+											onStopVoice={handleStopVoice}
+											onPromptChange={setPrompt}
+											onSendPrompt={sendPrompt}
+											onStopPrompt={stopPrompt}
+											onAddAttachments={addAttachments}
+											onRemoveAttachment={removeAttachment}
+											onClearAttachments={clearAttachments}
+											onClearChat={clearChat}
+											onDeleteThread={deleteThread}
+											onOpenSettings={() => navigate("/settings")}
+											onSetWorkdir={setThreadWorkdir}
+										/>
+									}
+								/>
+								<Route path="/chat" element={<Navigate to="/" replace />} />
+								<Route
+									path="/settings"
+									element={
+										<CommandDeckPage
+											agentId={currentAgentId}
+											activeThreadName={displayActiveThread?.name}
+											wsUrl={wsUrl}
+											token={token}
+											password={password}
+											connecting={connecting}
+											connected={connected}
+											statusLabel={statusLabel}
+											health={health}
+											stats={stats}
+											authHint={authHint}
+											autoConnectStatus={autoConnectStatus}
+											deviceId={deviceId}
+											eventLog={eventLog}
+											providers={providers}
+											providersLoading={providersLoading}
+											providersUpdatedAt={providersUpdatedAt}
+											credentialsPath={credentialsPath}
+											voiceConfig={config.voice}
+											autoConnect={autoConnect}
+											onAutoConnectChange={setAutoConnect}
+											onWsUrlChange={setWsUrl}
+											onTokenChange={setToken}
+											onPasswordChange={setPassword}
+											onConnect={connect}
+											onDisconnect={disconnect}
+											onRefresh={() => {
+												refreshStats();
+												fetchThreads();
+												refreshProviders();
+											}}
+											onResetDevice={resetDevice}
+											onRefreshProviders={refreshProviders}
+											onSaveProviderToken={saveProviderToken}
+											onClearProviderToken={clearProviderToken}
+											onSaveVoiceConfig={updateVoiceConfig}
+										/>
+									}
+								/>
+								<Route
+									path="/command"
+									element={<Navigate to="/settings" replace />}
+								/>
+								<Route
+									path="/agents"
+									element={
+										<AgentsPage
+											agents={agentCatalog}
+											availableTools={availableTools}
+											builtInTools={builtInTools}
+											providers={providers}
+											loading={agentsLoading}
+											onCreateAgent={createAgent}
+											onUpdateAgent={updateAgent}
+											onLoadAgent={loadAgentDetail}
+											onRefresh={refreshAgents}
+										/>
+									}
+								/>
+								<Route
+									path="/routines"
+									element={
+										<RoutinesPage
+											agents={agentOptions}
+											routines={routines}
+											threads={threads}
+											loading={routinesLoading}
+											onCreateRoutine={createRoutine}
+											onDeleteRoutine={deleteRoutine}
+										/>
+									}
+								/>
+								<Route
+									path="/webhooks"
+									element={
+										<WebhooksPage
+											agents={agentOptions}
+											webhooks={webhooks}
+											threads={threads}
+											loading={webhooksLoading}
+											baseUrl={window.location.origin}
+											onCreateWebhook={createWebhook}
+											onUpdateWebhook={updateWebhook}
+											onDeleteWebhook={deleteWebhook}
+											onTestWebhook={testWebhook}
+											onRefresh={refreshWebhooks}
+										/>
+									}
+								/>
+							</Routes>
+						</div>
 					</section>
 				</div>
 			</main>

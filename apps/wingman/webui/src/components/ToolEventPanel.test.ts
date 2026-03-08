@@ -2,13 +2,16 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
-	extractToolAudioPreviews,
-	extractToolImagePreviews,
 	formatToolEventDuration,
 	stringifyToolEventValue,
 	summarizeToolEventValue,
 	ToolEventPanel,
 } from "./ToolEventPanel";
+import {
+	extractToolAudioPreviews,
+	extractToolImagePreviews,
+	extractToolVideoPreviews,
+} from "../utils/toolMedia";
 
 describe("ToolEventPanel helpers", () => {
 	it("stringifies objects", () => {
@@ -101,6 +104,31 @@ describe("ToolEventPanel helpers", () => {
 		expect(html).toContain("[overflow-wrap:anywhere]");
 		expect(html).toContain(
 			"inline-block max-w-full truncate align-bottom sm:max-w-[420px]",
+		);
+	});
+
+	it("renders human-friendly tool display names and parsed summaries", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-4c",
+						name: "functions.read_file",
+						status: "completed",
+						args: {
+							input:
+								'{"file_path":"/memories/hotlist.json","offset":0,"limit":200}',
+						},
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Read File");
+		expect(html).not.toContain("functions.read_file");
+		expect(html).toContain(
+			"&quot;file_path&quot;: &quot;/memories/hotlist.json&quot;",
 		);
 	});
 
@@ -297,6 +325,40 @@ describe("ToolEventPanel helpers", () => {
 		]);
 	});
 
+	it("normalizes filesystem image resource links into gateway previews", () => {
+		const previews = extractToolImagePreviews({
+			content: [
+				{
+					type: "resource_link",
+					uri: "file:///tmp/generated.png",
+					mimeType: "image/png",
+					name: "generated.png",
+				},
+			],
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated.png",
+				label: "generated.png",
+			},
+		]);
+	});
+
+	it("does not treat video resource links as image previews", () => {
+		const previews = extractToolImagePreviews({
+			content: [
+				{
+					type: "resource_link",
+					uri: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+					mimeType: "video/webm",
+				},
+			],
+		});
+
+		expect(previews).toEqual([]);
+	});
+
 	it("extracts image previews from artifact image blocks", () => {
 		const previews = extractToolImagePreviews({
 			artifact: [
@@ -347,6 +409,27 @@ describe("ToolEventPanel helpers", () => {
 		]);
 	});
 
+	it("prefers absolute media paths when browser artifacts include them", () => {
+		const previews = extractToolImagePreviews({
+			structuredContent: {
+				images: [
+					{
+						path: "artifacts/shot.png",
+						absolutePath: "/tmp/generated-from-browser.png",
+						name: "generated-from-browser.png",
+					},
+				],
+			},
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Fgenerated-from-browser.png",
+				label: "generated-from-browser.png",
+			},
+		]);
+	});
+
 	it("extracts audio previews from resource_link content", () => {
 		const previews = extractToolAudioPreviews({
 			content: [
@@ -364,6 +447,27 @@ describe("ToolEventPanel helpers", () => {
 			{
 				src: "/api/fs/file?path=%2Ftmp%2Fgenerated.mp3",
 				label: "generated.mp3",
+			},
+		]);
+	});
+
+	it("extracts video previews from resource_link content", () => {
+		const previews = extractToolVideoPreviews({
+			content: [
+				{ type: "text", text: "Saved recording." },
+				{
+					type: "resource_link",
+					uri: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+					mimeType: "video/webm",
+					name: "recording.webm",
+				},
+			],
+		});
+
+		expect(previews).toEqual([
+			{
+				src: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+				label: "recording.webm",
 			},
 		]);
 	});
@@ -419,7 +523,40 @@ describe("ToolEventPanel helpers", () => {
 
 		expect(html).toContain("Audio");
 		expect(html).toContain("<audio");
-		expect(html).toContain('src="/api/fs/file?path=%2Ftmp%2Fgenerated-sfx.wav"');
+		expect(html).toContain(
+			'src="/api/fs/file?path=%2Ftmp%2Fgenerated-sfx.wav"',
+		);
 		expect(html).toContain("impact.wav");
+	});
+
+	it("renders video previews in tool details", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ToolEventPanel, {
+				variant: "inline",
+				toolEvents: [
+					{
+						id: "tool-video-1",
+						name: "browser_session_close",
+						status: "completed",
+						output: {
+							content: [
+								{ type: "text", text: "Saved browser recording." },
+								{
+									type: "resource_link",
+									uri: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+									mimeType: "video/webm",
+									name: "recording.webm",
+								},
+							],
+						},
+					},
+				],
+			}),
+		);
+
+		expect(html).toContain("Videos");
+		expect(html).toContain("<video");
+		expect(html).toContain('src="/api/fs/file?path=%2Ftmp%2Frecording.webm"');
+		expect(html).toContain("recording.webm");
 	});
 });

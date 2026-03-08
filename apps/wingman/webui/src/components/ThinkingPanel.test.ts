@@ -47,22 +47,22 @@ describe("ThinkingPanel", () => {
 		).toBe("2 subagents • 3 tools");
 	});
 
-	it("renders tool rows without execution trace wrapper", () => {
+	it("renders subagent notes without tool activity content", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ThinkingPanel, {
 				isStreaming: true,
-				thinkingEvents: [],
-				toolEvents: [
+				thinkingEvents: [
 					{
-						id: "tool-1",
-						name: "edit_file",
-						status: "running",
+						id: "think-1",
+						content: "Investigating the next step",
+						updatedAt: 1,
 					},
 				],
 			}),
 		);
 
-		expect(html).toContain("edit_file");
+		expect(html).toContain("Subagent notes");
+		expect(html).toContain("Investigating the next step");
 		expect(html).not.toContain("Execution Trace");
 	});
 });

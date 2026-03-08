@@ -1,12 +1,14 @@
 # Browser Control
 
-`browser_control` is Wingman's native browser automation tool.
+`browser_control` and `browser_session_*` are Wingman's native browser automation tools.
 
 - Native runtime capability, not an MCP server.
 - Supports persistent named profiles (`browserProfile`) for reusable login state.
 - Supports config-driven transport selection: `auto`, `playwright`, or `relay`.
 - Persistent profiles launch with Playwright persistent-context by default for reliability.
 - Non-persistent sessions use CDP first, with automatic persistent-context fallback if CDP fails.
+- `browser_session_*` is the default browser automation path for screenshots, extraction, and QA.
+- Reserve `browser_control` for explicit requests to use or take over an existing browser or live tab.
 - Supports loading unpacked extensions from host config mappings.
 - Includes a bundled first-party extension install flow via `wingman browser extension install --default`.
 
@@ -33,6 +35,37 @@ For setup, see:
 - `headless`: defaults to `true` for non-persistent runs. Persistent `browserProfile` runs default to headed for session reliability unless `headless: true` is explicitly requested.
 - `timeoutMs`: per-action timeout (ms)
 - `executablePath`: optional Chrome/Chromium path override
+
+## Managed sessions
+
+Use the managed-session tools by default whenever browser state may need to survive across turns, or when you simply need the most reliable automation path.
+
+- `browser_session_start`: opens a reusable browser session and returns `session_id`
+- `browser_session_action`: runs more actions against an existing `session_id`
+- `browser_session_close`: closes the session and finalizes any saved video recordings
+- `browser_session_list`: lists active managed sessions for the current run
+
+Start a managed session with video recording:
+
+```json
+{
+  "url": "https://example.com",
+  "transport": "playwright",
+  "recordVideo": {
+    "dir": "artifacts/browser-videos",
+    "size": { "width": 1280, "height": 720 }
+  }
+}
+```
+
+- `recordVideo: true` uses a default workspace-relative directory under `.wingman/browser/videos/`.
+- Video recording is supported only for Playwright persistent launches and is finalized on `browser_session_close`.
+
+Use `browser_control` only when the user explicitly wants you to work inside their browser or live tab, for example:
+
+- "use my browser"
+- "take control of my browser"
+- "work in the tab I already opened"
 
 ## Action types
 
@@ -124,6 +157,12 @@ Returns structured JSON including:
 - `finalUrl`
 - `title`
 - `actionResults`
+
+Managed-session responses also include:
+
+- `media`: saved screenshots and finalized video recordings with local `path`, preview `url`, `mimeType`, and display `name`
+- `video_recording`: recording status, output directory, configured size, and saved video count
+- `content`: chat-renderable `resource_link` blocks for each saved media artifact
 
 ## Troubleshooting
 

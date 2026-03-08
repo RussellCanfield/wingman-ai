@@ -196,6 +196,8 @@ Gateway runtime exposes `browser_control` as a first-class built-in tool for bro
 - Non-persistent runs should prefer CDP and automatically fall back to persistent-context launch when CDP attach fails.
 - Persistent named profile runs should launch via persistent-context by default; headed is the default mode, with optional explicit headless mode for automation.
 - Intended for JS-rendered pages, interaction-required flows, and screenshots.
+- Managed-session companion tools should be the default browser automation path, support multi-turn browser state reuse, and emit saved screenshots/finalized recordings as local media attachments the chat can preview.
+- `browser_control` should be positioned as an explicit live-browser takeover tool so models do not need to choose between overlapping browser entrypoints during normal automation.
 - This capability is native to Wingman runtime and is not modeled as an MCP server.
 - Supports optional persistent named profiles configured by host settings and selected per agent.
 - Profile runs must use lock protection so concurrent executions do not share the same profile simultaneously.
@@ -773,13 +775,13 @@ wingman agent --local --agent <id> "prompt"
 
 #### Onboarding (CLI)
 ```bash
-# Bootstrap workspace config + starter agent
+# Bootstrap workspace config + bundled explicit agents
 wingman init [options]
-  --agent <name>          Agent name (default: wingman)
+  --agent <name>          Bundled or existing explicit agent name
   --mode <name>           Init mode (onboard|sync). Default: onboard
   --only <targets>        Run only selected setup targets (config,agents,provider)
   --agents <list>         Copy only bundled agents (comma-separated)
-  --model <provider:model>  Set model for the starter agent
+  --model <provider:model>  Set model for the selected explicit agent
   --provider <name>       Configure provider credentials
   --token <string>        Provider token (non-interactive)
 

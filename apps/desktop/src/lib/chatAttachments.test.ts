@@ -6,6 +6,7 @@ import {
 	isAudioAttachment,
 	isFileAttachment,
 	isPdfAttachment,
+	isVideoAttachment,
 	readFileAsDataUrl,
 } from "./chatAttachments.js";
 
@@ -22,6 +23,16 @@ describe("chatAttachments", () => {
 				{ id: "2", kind: "file", dataUrl: "", textContent: "abc" },
 			]),
 		).toBe("File and media attachments");
+		expect(
+			buildAttachmentPreviewText([
+				{
+					id: "3",
+					kind: "file",
+					dataUrl: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+					mimeType: "video/webm",
+				},
+			]),
+		).toBe("Video attachment");
 	});
 
 	test("detects audio and file attachments", () => {
@@ -38,6 +49,14 @@ describe("chatAttachments", () => {
 				kind: "image",
 				dataUrl: "",
 				textContent: "from file",
+			}),
+		).toBe(true);
+		expect(
+			isVideoAttachment({
+				id: "v",
+				kind: "file",
+				dataUrl: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+				mimeType: "video/webm",
 			}),
 		).toBe(true);
 	});

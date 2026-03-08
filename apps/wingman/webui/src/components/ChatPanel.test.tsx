@@ -38,7 +38,7 @@ const baseProps: React.ComponentProps<typeof ChatPanel> = {
 	onRemoveAttachment: () => {},
 	onClearAttachments: () => {},
 	onClearChat: () => {},
-	onOpenCommandDeck: () => {},
+	onOpenSettings: () => {},
 };
 
 describe("ChatPanel prompt composer", () => {
@@ -59,7 +59,15 @@ describe("ChatPanel prompt composer", () => {
 		);
 
 		expect(html).toContain(">Chat<");
+		expect(html).toContain("Thread 1");
+		expect(html).toContain("main · thread-1");
+		expect(html).toContain(
+			'class="flex flex-wrap items-start justify-between gap-3 px-2.5"',
+		);
 		expect(html).toContain('aria-pressed="false"');
+		expect(html).toContain(">Voice</span>");
+		expect(html).toContain(">Clear</span>");
+		expect(html.match(/h-3\.5 w-3\.5 shrink-0/g)?.length).toBe(2);
 		expect(html).not.toContain("Mission Stream");
 		expect(html).not.toContain("Thread:");
 		expect(html).toContain('id="prompt-textarea"');
@@ -194,6 +202,53 @@ describe("ChatPanel prompt composer", () => {
 		);
 	});
 
+	it("hides the todo progress panel when every task is completed", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-1",
+							role: "assistant",
+							content: "",
+							createdAt: 1,
+							toolEvents: [
+								{
+									id: "todo-1",
+									name: "write_todos",
+									status: "completed",
+									args: {
+										todos: [
+											{
+												content: "Inspect the todo payload",
+												status: "completed",
+											},
+											{
+												content: "Render task progress",
+												status: "completed",
+											},
+										],
+									},
+									timestamp: 1,
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).not.toContain('data-testid="todo-progress-panel"');
+		expect(html).toContain(
+			"border border-white/10 bg-slate-950/70 p-2 shadow-[0_12px_26px_rgba(3,9,28,0.35)] rounded-2xl",
+		);
+		expect(html).not.toContain("-mt-px rounded-b-2xl rounded-t-xl");
+	});
+
 	it("keeps voice toggle visible while streaming", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(ChatPanel, {
@@ -238,7 +293,7 @@ describe("ChatPanel prompt composer", () => {
 
 		expect(html).toContain('data-testid="message-streaming-indicator"');
 		expect(html).toContain("Partial response text");
-		expect(html).toContain("edit_file");
+		expect(html).toContain("Edit File");
 	});
 
 	it("left-aligns assistant message metadata controls", () => {
@@ -447,6 +502,40 @@ describe("ChatPanel prompt composer", () => {
 		expect(html).toContain("block w-full min-w-0 max-w-[360px]");
 		expect(html).not.toContain("min-w-[200px]");
 		expect(html).not.toContain("sm:min-w-[240px]");
+	});
+
+	it("renders assistant video attachments with a video element", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-video-attachment",
+							role: "assistant",
+							content: "Attached recording",
+							createdAt: 1,
+							attachments: [
+								{
+									id: "video-1",
+									kind: "file",
+									dataUrl: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+									name: "recording.webm",
+									mimeType: "video/webm",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		expect(html).toContain("<video");
+		expect(html).toContain('src="/api/fs/file?path=%2Ftmp%2Frecording.webm"');
+		expect(html).toContain("recording.webm");
 	});
 
 	it("resolves assistant inline audio paths against thread workdir", () => {
@@ -659,9 +748,94 @@ describe("ChatPanel prompt composer", () => {
 			}),
 		);
 
-		expect(html).toContain("edit_file");
+		expect(html).toContain("Edit File");
 		expect(html).not.toContain("Execution Trace");
 		expect(html).not.toContain("animate-pulse rounded-full bg-sky-400");
+	});
+
+	it("collapses hydrated tool-only messages into one rollup", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(ChatPanel, {
+				...baseProps,
+				activeThread: {
+					...(baseProps.activeThread as NonNullable<
+						typeof baseProps.activeThread
+					>),
+					messages: [
+						{
+							id: "assistant-before",
+							role: "assistant",
+							content: "Before tool",
+							createdAt: 1,
+						},
+						{
+							id: "assistant-tool-read",
+							role: "assistant",
+							content: "",
+							createdAt: 2,
+							toolEvents: [
+								{
+									id: "tool-read",
+									name: "read_file",
+									status: "completed",
+									timestamp: 2,
+								},
+							],
+						},
+						{
+							id: "assistant-tool-media",
+							role: "assistant",
+							content: "",
+							createdAt: 3,
+							toolEvents: [
+								{
+									id: "tool-media",
+									name: "browser_session_action",
+									status: "completed",
+									timestamp: 3,
+									output: {
+										media: [
+											{
+												kind: "image",
+												mimeType: "image/png",
+												url: "/api/fs/file?path=%2Ftmp%2Fscreenshot.png",
+											},
+										],
+									},
+								},
+							],
+						},
+						{
+							id: "assistant-tool-edit",
+							role: "assistant",
+							content: "",
+							createdAt: 4,
+							toolEvents: [
+								{
+									id: "tool-edit",
+									name: "edit_file",
+									status: "completed",
+									timestamp: 4,
+								},
+							],
+						},
+						{
+							id: "assistant-after",
+							role: "assistant",
+							content: "After tool",
+							createdAt: 5,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(
+			(html.match(/data-testid="tool-activity-rollup"/g) || []).length,
+		).toBe(1);
+		expect(html).toContain("Browser Session Action");
+		expect(html).toContain("Before tool");
+		expect(html).toContain("After tool");
 	});
 
 	it("renders assistant timeline blocks in stream order with tools interleaved", () => {
@@ -685,6 +859,12 @@ describe("ChatPanel prompt composer", () => {
 									status: "completed",
 									timestamp: 2,
 								},
+								{
+									id: "tool-ordered-2",
+									name: "read_file",
+									status: "running",
+									timestamp: 3,
+								},
 							],
 							activityTimeline: [
 								{
@@ -700,9 +880,15 @@ describe("ChatPanel prompt composer", () => {
 									toolEventId: "tool-ordered-1",
 								},
 								{
+									id: "timeline-tool-2",
+									kind: "tool",
+									order: 3,
+									toolEventId: "tool-ordered-2",
+								},
+								{
 									id: "timeline-text-2",
 									kind: "text",
-									order: 3,
+									order: 4,
 									text: "After tool",
 								},
 							],
@@ -713,14 +899,18 @@ describe("ChatPanel prompt composer", () => {
 		);
 
 		const beforeIndex = html.indexOf("Before tool");
-		const toolIndex = html.indexOf("edit_file");
+		const toolIndex = html.indexOf("Edit File");
 		const afterIndex = html.indexOf("After tool");
 		expect(beforeIndex).toBeGreaterThan(-1);
 		expect(toolIndex).toBeGreaterThan(-1);
 		expect(afterIndex).toBeGreaterThan(-1);
 		expect(beforeIndex).toBeLessThan(toolIndex);
 		expect(toolIndex).toBeLessThan(afterIndex);
-		expect(html.match(/edit_file/g)?.length ?? 0).toBe(1);
+		expect(html).toContain('data-testid="tool-activity-rollup"');
+		expect(html).toContain("Read File");
+		expect(
+			(html.match(/data-testid="tool-activity-rollup"/g) || []).length,
+		).toBe(1);
 	});
 
 	it("renders unsorted assistant timeline blocks in order", () => {
@@ -772,7 +962,7 @@ describe("ChatPanel prompt composer", () => {
 		);
 
 		const beforeIndex = html.indexOf("Before tool");
-		const toolIndex = html.indexOf("edit_file");
+		const toolIndex = html.indexOf("Edit File");
 		const afterIndex = html.indexOf("After tool");
 		expect(beforeIndex).toBeGreaterThan(-1);
 		expect(toolIndex).toBeGreaterThan(-1);

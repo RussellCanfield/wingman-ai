@@ -1,5 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { StaticRouter } from "react-router-dom/server";
 import { describe, expect, it } from "vitest";
 import { CommandDeckPage } from "./CommandDeckPage";
 
@@ -52,9 +53,11 @@ const baseProps: React.ComponentProps<typeof CommandDeckPage> = {
 };
 
 describe("CommandDeckPage", () => {
-	it("renders the gateway runtime summary above the command deck", () => {
+	it("renders the gateway runtime summary above settings", () => {
 		const html = renderToStaticMarkup(
-			React.createElement(CommandDeckPage, baseProps),
+			<StaticRouter location="/settings">
+				<CommandDeckPage {...baseProps} />
+			</StaticRouter>,
 		);
 
 		expect(html).toContain("Gateway Runtime");
@@ -65,8 +68,9 @@ describe("CommandDeckPage", () => {
 		expect(html).toContain(">2<");
 		expect(html).toContain("agent: main");
 		expect(html).toContain("thread: Thread 1");
+		expect(html).toContain("Manage Agents");
 		expect(html.indexOf("Status Overview")).toBeLessThan(
-			html.indexOf("Command Deck"),
+			html.indexOf("Settings"),
 		);
 	});
 });

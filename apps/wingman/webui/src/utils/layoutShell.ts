@@ -1,20 +1,22 @@
 const SHELL_BASE_CLASS =
-	"relative z-10 mx-auto max-w-screen-2xl box-border px-6";
-const GRID_BASE_CLASS = "grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]";
-const CONTENT_BASE_CLASS = "min-w-0";
+	"relative z-10 mx-auto h-dvh max-w-screen-2xl box-border overflow-hidden px-6 pb-12 pt-8";
+const GRID_BASE_CLASS =
+	"grid h-full min-h-0 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]";
+const CONTENT_BASE_CLASS = "min-w-0 flex h-full min-h-0 flex-col overflow-hidden";
+const VIEWPORT_BASE_CLASS = "min-h-0 flex-1 overflow-y-auto overflow-x-hidden";
 
-export function getWorkspaceShellClass(isChatRoute: boolean): string {
-	return isChatRoute
-		? `${SHELL_BASE_CLASS} h-dvh overflow-hidden pb-12 pt-8`
-		: `${SHELL_BASE_CLASS} pb-16 pt-8`;
+export function getWorkspaceShellClass(): string {
+	return SHELL_BASE_CLASS;
 }
 
-export function getWorkspaceGridClass(isChatRoute: boolean): string {
-	return isChatRoute ? `${GRID_BASE_CLASS} h-full min-h-0` : GRID_BASE_CLASS;
+export function getWorkspaceGridClass(): string {
+	return GRID_BASE_CLASS;
 }
 
-export function getWorkspaceContentClass(isChatRoute: boolean): string {
-	return isChatRoute
-		? `${CONTENT_BASE_CLASS} flex h-full min-h-0 flex-col overflow-hidden`
-		: `${CONTENT_BASE_CLASS} space-y-6`;
+export function getWorkspaceContentClass(): string {
+	return CONTENT_BASE_CLASS;
+}
+
+export function getWorkspaceViewportClass(): string {
+	return VIEWPORT_BASE_CLASS;
 }

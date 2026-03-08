@@ -9,6 +9,7 @@ import type { WingmanConfigType } from "@/cli/config/schema.js";
 import { AgentInvoker } from "@/cli/core/agentInvoker.js";
 import { OutputManager } from "@/cli/core/outputManager.js";
 import { SessionManager } from "@/cli/core/sessionManager.js";
+import { checkForCliUpdate } from "@/cli/services/updateCheck.js";
 import { createLogger, type Logger, type LogLevel } from "@/logger.js";
 import { ensureUvAvailableForFeature } from "@/utils/uv.js";
 import { DiscordGatewayAdapter } from "./adapters/discord.js";
@@ -2892,6 +2893,11 @@ export class GatewayServer {
 					})) || [];
 
 				const defaultAgentId = this.router.selectAgent();
+				const updateNotice = await checkForCliUpdate({
+					workspace: this.workspace,
+					configDir: this.configDir,
+					logger: this.logger,
+				});
 
 				return this.withApiCors(
 					req,
@@ -2908,6 +2914,7 @@ export class GatewayServer {
 									this.wingmanConfig.gateway?.dynamicUiEnabled !== false,
 								summarization: this.wingmanConfig.summarization,
 								voice: this.wingmanConfig.voice,
+								updateNotice: updateNotice || undefined,
 								agents,
 							},
 							null,

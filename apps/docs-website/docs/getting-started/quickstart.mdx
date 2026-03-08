@@ -1,6 +1,6 @@
 # Quickstart
 
-This guide gets you from zero to a running Wingman setup with a gateway, configured provider, and a starter agent.
+This guide gets you from zero to a running Wingman setup with a gateway, configured provider, and bundled agents.
 
 ## 0) Install Wingman
 
@@ -26,7 +26,7 @@ From the root of your project:
 wingman init
 ```
 
-This creates `.wingman/wingman.config.json` and installs a starter agent in `.wingman/agents/`.
+This creates `.wingman/wingman.config.json` and installs bundled agents in `.wingman/agents/`.
 
 You can choose bundled agents during setup:
 
@@ -62,13 +62,13 @@ Defaults:
 ## 4) Invoke an agent
 
 ```bash
-wingman agent --agent wingman "Summarize the repo architecture."
+wingman agent --agent main "Summarize the repo architecture."
 ```
 
 Use `--local` to bypass the gateway and run locally:
 
 ```bash
-wingman agent --agent wingman --local "Refactor the config loader."
+wingman agent --agent main --local "Refactor the config loader."
 ```
 
 ## Next steps

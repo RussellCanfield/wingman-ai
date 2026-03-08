@@ -10,7 +10,15 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import {
+	basename,
+	dirname,
+	extname,
+	isAbsolute,
+	join,
+	relative,
+	resolve,
+} from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import * as z from "zod";
@@ -30,6 +38,7 @@ const MAX_EXTRACT_CHARS = 1_000_000;
 const MAX_ACTIONS = 25;
 const DEFAULT_PROFILES_ROOT = ".wingman/browser-profiles";
 const DEFAULT_EXTENSIONS_ROOT = ".wingman/browser-extensions";
+const DEFAULT_BROWSER_VIDEO_ROOT = ".wingman/browser/videos";
 const DEFAULT_BUNDLED_EXTENSION_ID = "wingman";
 const BUNDLED_EXTENSION_RELATIVE_PATH =
 	"../../../extensions/wingman-browser-extension";
@@ -55,6 +64,35 @@ export const BrowserTransportPreferenceSchema = z.enum([
 	"auto",
 	"playwright",
 	"relay",
+]);
+
+const BrowserVideoSizeSchema = z.object({
+	width: z
+		.number()
+		.int()
+		.min(1)
+		.max(3840)
+		.describe("Video width in pixels"),
+	height: z
+		.number()
+		.int()
+		.min(1)
+		.max(3840)
+		.describe("Video height in pixels"),
+});
+
+export const BrowserSessionVideoRecordingSchema = z.union([
+	z.boolean(),
+	z.object({
+		dir: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("Relative output directory within the workspace for videos"),
+		size: BrowserVideoSizeSchema.optional().describe(
+			"Optional recorded video dimensions",
+		),
+	}),
 ]);
 
 const NavigateActionSchema = z.object({
@@ -499,10 +537,13 @@ export const BrowserSessionActionInputSchema = z.object({
 		.max(MAX_ACTION_TIMEOUT_MS)
 		.optional()
 		.default(DEFAULT_ACTION_TIMEOUT_MS)
-		.describe("Per-action timeout in milliseconds"),
+	.describe("Per-action timeout in milliseconds"),
 });
 
 export type BrowserControlInput = z.infer<typeof BrowserControlInputSchema>;
+export type BrowserSessionVideoRecordingInput = z.infer<
+	typeof BrowserSessionVideoRecordingSchema
+>;
 export type BrowserSessionActionInput = z.infer<
 	typeof BrowserSessionActionInputSchema
 >;
@@ -510,6 +551,11 @@ export type BrowserAction = z.infer<typeof BrowserActionSchema>;
 export type BrowserTransportPreference = z.infer<
 	typeof BrowserTransportPreferenceSchema
 >;
+export type BrowserVideoSize = z.infer<typeof BrowserVideoSizeSchema>;
+
+type BrowserVideoLike = {
+	path: () => Promise<string>;
+};
 
 export type BrowserPageLike = {
 	goto: (
@@ -559,6 +605,7 @@ export type BrowserPageLike = {
 		path: string;
 		fullPage?: boolean;
 	}) => Promise<unknown>;
+	video?: () => BrowserVideoLike | null;
 	title: () => Promise<string>;
 	url: () => string;
 };
@@ -580,6 +627,10 @@ type LaunchPersistentContextOptions = {
 	timeout?: number;
 	args?: string[];
 	ignoreDefaultArgs?: string[];
+	recordVideo?: {
+		dir: string;
+		size?: BrowserVideoSize;
+	};
 };
 
 type PlaywrightLike = {
@@ -664,12 +715,44 @@ export type BrowserUserDataDirSelection = {
 	releaseLock?: () => void;
 };
 
+type BrowserVideoRecordingSelection = {
+	dirAbsolute: string;
+	dirRelative: string;
+	size?: BrowserVideoSize;
+};
+
+type BrowserVideoRecordingRuntime = BrowserVideoRecordingSelection & {
+	handles: Set<BrowserVideoLike>;
+};
+
+export interface BrowserGeneratedMedia {
+	kind: "image" | "video";
+	source: "screenshot" | "video-recording";
+	path: string;
+	relativePath: string;
+	uri: string;
+	url: string;
+	mimeType: string;
+	name: string;
+	fullPage?: boolean;
+	actionIndex?: number | null;
+}
+
+export interface BrowserVideoRecordingSummary {
+	enabled: boolean;
+	state: "inactive" | "recording" | "saved";
+	dir: string | null;
+	size: BrowserVideoSize | null;
+	videoCount: number;
+}
+
 export interface BrowserSessionRuntime {
 	workspace: string;
 	configWorkspace: string;
 	now: () => number;
 	headless: boolean;
 	context: BrowserContextLike;
+	activePage: BrowserPageLike | null;
 	userDataDirSelection: BrowserUserDataDirSelection;
 	browserTransport: BrowserRuntimeTransport;
 	transportRequested: BrowserTransportPreference;
@@ -679,6 +762,7 @@ export interface BrowserSessionRuntime {
 	launchedContext: BrowserContextLike | null;
 	browser: BrowserLike | null;
 	chromeSession: StartedChromeSession | null;
+	videoRecording: BrowserVideoRecordingRuntime | null;
 	closed: boolean;
 }
 
@@ -699,6 +783,8 @@ export interface BrowserExecutionSummary {
 	finalUrl: string;
 	title: string;
 	actionResults: Record<string, unknown>[];
+	media: BrowserGeneratedMedia[];
+	videoRecording: BrowserVideoRecordingSummary | null;
 }
 
 type BrowserSessionOpenInput = Partial<
@@ -706,7 +792,9 @@ type BrowserSessionOpenInput = Partial<
 		BrowserControlInput,
 		"headless" | "timeoutMs" | "executablePath" | "transport"
 	>
->;
+> & {
+	recordVideo?: BrowserSessionVideoRecordingInput;
+};
 
 type BrowserSessionExecutionInput = Partial<
 	Pick<BrowserControlInput, "url" | "actions" | "timeoutMs">
@@ -1132,6 +1220,7 @@ async function launchPersistentContext(
 	headless: boolean,
 	startupTimeoutMs: number,
 	chromeArgs: string[],
+	videoRecording?: BrowserVideoRecordingSelection | null,
 ): Promise<BrowserContextLike> {
 	if (typeof playwright.chromium.launchPersistentContext !== "function") {
 		throw new Error(
@@ -1145,6 +1234,14 @@ async function launchPersistentContext(
 		timeout: startupTimeoutMs,
 		args: chromeArgs,
 		ignoreDefaultArgs: PERSISTENT_PROFILE_IGNORE_DEFAULT_ARGS,
+		...(videoRecording
+			? {
+					recordVideo: {
+						dir: videoRecording.dirAbsolute,
+						...(videoRecording.size ? { size: videoRecording.size } : {}),
+					},
+				}
+			: {}),
 	});
 }
 
@@ -1461,6 +1558,175 @@ function resolveScreenshotPath(
 	};
 }
 
+function toGatewayFileUrl(absolutePath: string): string {
+	return `/api/fs/file?path=${encodeURIComponent(absolutePath)}`;
+}
+
+function resolveVideoOutputDir(
+	workspace: string,
+	requested:
+		| BrowserSessionVideoRecordingInput
+		| undefined,
+	now: () => number,
+): BrowserVideoRecordingSelection | null {
+	if (!requested) {
+		return null;
+	}
+
+	const dir =
+		typeof requested === "object" && requested.dir?.trim()
+			? requested.dir.trim()
+			: join(DEFAULT_BROWSER_VIDEO_ROOT, `recording-${now()}`);
+	if (isAbsolute(dir)) {
+		throw new Error("Video recording directory must be relative to the workspace.");
+	}
+
+	const dirAbsolute = resolveWorkspaceRelativePath(workspace, dir);
+	mkdirSync(dirAbsolute, { recursive: true });
+
+	return {
+		dirAbsolute,
+		dirRelative: relative(workspace, dirAbsolute).split("\\").join("/"),
+		...(typeof requested === "object" && requested.size
+			? { size: requested.size }
+			: {}),
+	};
+}
+
+function resolveVideoMimeType(pathname: string): string {
+	const extension = extname(pathname).trim().toLowerCase();
+	switch (extension) {
+		case ".mp4":
+			return "video/mp4";
+		case ".mov":
+			return "video/quicktime";
+		case ".webm":
+		default:
+			return "video/webm";
+	}
+}
+
+function buildScreenshotMedia(
+	workspace: string,
+	actionResults: Record<string, unknown>[],
+): BrowserGeneratedMedia[] {
+	return actionResults.flatMap((result, index) => {
+		if (
+			result.type !== "screenshot" ||
+			typeof result.path !== "string" ||
+			!result.path.trim()
+		) {
+			return [];
+		}
+
+		const relativePath = result.path.trim();
+		const absolutePath =
+			typeof result.absolutePath === "string" && result.absolutePath.trim()
+				? result.absolutePath.trim()
+				: resolveWorkspaceRelativePath(workspace, relativePath);
+		const uri =
+			typeof result.uri === "string" && result.uri.trim()
+				? result.uri.trim()
+				: toGatewayFileUrl(absolutePath);
+		return [
+			{
+				kind: "image" as const,
+				source: "screenshot" as const,
+				path: absolutePath,
+				relativePath,
+				uri,
+				url: uri,
+				mimeType: "image/png",
+				name: basename(absolutePath),
+				...(typeof result.fullPage === "boolean"
+					? { fullPage: result.fullPage }
+					: {}),
+				actionIndex: index,
+			},
+		];
+	});
+}
+
+function summarizeVideoRecording(
+	recording: BrowserVideoRecordingRuntime | null,
+	state: BrowserVideoRecordingSummary["state"],
+	videoCount = 0,
+): BrowserVideoRecordingSummary | null {
+	if (!recording) {
+		return null;
+	}
+
+	return {
+		enabled: true,
+		state,
+		dir: recording.dirRelative,
+		size: recording.size || null,
+		videoCount,
+	};
+}
+
+async function registerPageVideoHandle(
+	runtime: BrowserSessionRuntime,
+	page: BrowserPageLike,
+): Promise<void> {
+	if (!runtime.videoRecording || typeof page.video !== "function") {
+		return;
+	}
+	try {
+		const video = page.video();
+		if (video) {
+			runtime.videoRecording.handles.add(video);
+		}
+	} catch {
+		// Ignore video handle discovery failures.
+	}
+}
+
+async function finalizeRecordedVideos(
+	runtime: BrowserSessionRuntime,
+): Promise<BrowserGeneratedMedia[]> {
+	if (!runtime.videoRecording || runtime.videoRecording.handles.size === 0) {
+		return [];
+	}
+
+	const seen = new Set<string>();
+	const media: BrowserGeneratedMedia[] = [];
+
+	for (const handle of runtime.videoRecording.handles) {
+		try {
+			const absolutePath = (await handle.path()).trim();
+			if (!absolutePath) continue;
+			const relativePath = relative(runtime.workspace, absolutePath)
+				.split("\\")
+				.join("/");
+			if (
+				!relativePath ||
+				relativePath.startsWith("..") ||
+				isAbsolute(relativePath) ||
+				seen.has(relativePath)
+			) {
+				continue;
+			}
+			seen.add(relativePath);
+			const uri = toGatewayFileUrl(absolutePath);
+			media.push({
+				kind: "video",
+				source: "video-recording",
+				path: absolutePath,
+				relativePath,
+				uri,
+				url: uri,
+				mimeType: resolveVideoMimeType(absolutePath),
+				name: basename(absolutePath),
+			});
+		} catch {
+			// Ignore stale or unsaved video handles.
+		}
+	}
+
+	return media;
+}
+
 function serializeEvaluation(value: unknown): unknown {
 	if (
 		typeof value === "string" ||
@@ -1703,6 +1969,8 @@ export async function runBrowserAction(
 			return {
 				type: "screenshot",
 				path: screenshotPath.relative,
+				absolutePath: screenshotPath.absolute,
+				uri: toGatewayFileUrl(screenshotPath.absolute),
 				fullPage: Boolean(action.fullPage),
 			};
 		}
@@ -1761,6 +2029,7 @@ export async function openBrowserSessionRuntime(
 	let transportFallbackReason: string | null = null;
 	let reusedExistingCdpSession = false;
 	let context: BrowserContextLike | null = null;
+	let videoRecording: BrowserVideoRecordingRuntime | null = null;
 
 	try {
 		userDataDirSelection = resolveUserDataDir(
@@ -1787,13 +2056,31 @@ export async function openBrowserSessionRuntime(
 			resolvedOptions,
 		);
 		const chromeArgs = buildChromeArgs(extensionDirs);
+		const requestedVideoRecording = resolveVideoOutputDir(
+			workspace,
+			input.recordVideo,
+			deps.now,
+		);
 		const usePersistentLaunch = preferPersistentLaunch(
 			resolvedOptions,
 			selectedUserDataDir.persistentProfile,
 		);
+		const effectivePersistentLaunch =
+			usePersistentLaunch || Boolean(requestedVideoRecording);
 		const transportRequested = resolveBrowserTransportPreference(
 			input.transport || resolvedOptions.browserTransport,
 		);
+		if (requestedVideoRecording && transportRequested === "relay") {
+			throw new Error(
+				"Video recording is only supported with Playwright persistent launch sessions.",
+			);
+		}
+		if (requestedVideoRecording) {
+			videoRecording = {
+				...requestedVideoRecording,
+				handles: new Set<BrowserVideoLike>(),
+			};
+		}
 
 		const closeTransientSessions = async () => {
 			if (launchedContext?.close) {
@@ -1845,7 +2132,7 @@ export async function openBrowserSessionRuntime(
 		};
 
 		const initializeViaPlaywright = async () => {
-			if (usePersistentLaunch) {
+			if (effectivePersistentLaunch) {
 				launchedContext = await launchPersistentContext(
 					playwright,
 					selectedUserDataDir.userDataDir,
@@ -1853,6 +2140,7 @@ export async function openBrowserSessionRuntime(
 					headless,
 					startupTimeoutMs,
 					chromeArgs,
+					videoRecording,
 				);
 				context = launchedContext;
 				browserTransport = "persistent-context";
@@ -1983,6 +2271,7 @@ export async function openBrowserSessionRuntime(
 								headless,
 								startupTimeoutMs,
 								chromeArgs,
+								videoRecording,
 							);
 							context = launchedContext;
 							browserTransport = "persistent-context";
@@ -2003,6 +2292,7 @@ export async function openBrowserSessionRuntime(
 							headless,
 							startupTimeoutMs,
 							chromeArgs,
+							videoRecording,
 						);
 						context = launchedContext;
 						browserTransport = "persistent-context";
@@ -2017,7 +2307,11 @@ export async function openBrowserSessionRuntime(
 			try {
 				await initializeViaPlaywright();
 			} catch (playwrightError) {
-				if (transportRequested !== "auto" || !relayConfig) {
+				if (
+					transportRequested !== "auto" ||
+					!relayConfig ||
+					requestedVideoRecording
+				) {
 					throw playwrightError;
 				}
 				await closeTransientSessions();
@@ -2048,6 +2342,7 @@ export async function openBrowserSessionRuntime(
 			now: deps.now,
 			headless,
 			context: resolvedContext,
+			activePage: null,
 			userDataDirSelection: selectedUserDataDir,
 			browserTransport,
 			transportRequested,
@@ -2057,6 +2352,7 @@ export async function openBrowserSessionRuntime(
 			launchedContext,
 			browser,
 			chromeSession,
+			videoRecording,
 			closed: false,
 		};
 	} catch (error) {
@@ -2075,13 +2371,60 @@ export async function openBrowserSessionRuntime(
 	}
 }
 
-async function selectActivePage(
-	context: BrowserContextLike,
-): Promise<BrowserPageLike> {
-	let page = context.pages().at(-1);
-	if (!page) {
-		page = await context.newPage();
+function getPageUrl(page: BrowserPageLike): string {
+	try {
+		return page.url().trim();
+	} catch {
+		return "";
 	}
+}
+
+function isBrowserInternalPageUrl(url: string): boolean {
+	const normalized = url.trim().toLowerCase();
+	if (!normalized) return true;
+	return (
+		normalized.startsWith("about:blank") ||
+		normalized.startsWith("chrome://") ||
+		normalized.startsWith("chrome-extension://") ||
+		normalized.startsWith("devtools://") ||
+		normalized.startsWith("edge://") ||
+		normalized.startsWith("extension://") ||
+		normalized.startsWith("moz-extension://")
+	);
+}
+
+function selectPreferredPage(
+	pages: BrowserPageLike[],
+): BrowserPageLike | null {
+	for (let index = pages.length - 1; index >= 0; index -= 1) {
+		const candidate = pages[index];
+		if (!candidate) continue;
+		if (!isBrowserInternalPageUrl(getPageUrl(candidate))) {
+			return candidate;
+		}
+	}
+	return pages.at(-1) || null;
+}
+
+async function selectActivePage(
+	runtime: BrowserSessionRuntime,
+): Promise<BrowserPageLike> {
+	const pages = runtime.context.pages();
+	const preferredPage = selectPreferredPage(pages);
+	let page =
+		runtime.activePage && pages.includes(runtime.activePage)
+			? runtime.activePage
+			: null;
+	if (
+		preferredPage &&
+		(!page || isBrowserInternalPageUrl(getPageUrl(page)))
+	) {
+		page = preferredPage;
+	}
+	if (!page) {
+		page = await runtime.context.newPage();
+	}
+	runtime.activePage = page;
 	if (typeof page.bringToFront === "function") {
 		await page.bringToFront();
 	}
@@ -2097,7 +2440,8 @@ export async function executeBrowserSessionRuntime(
 	}
 
 	const timeoutMs = input.timeoutMs ?? DEFAULT_ACTION_TIMEOUT_MS;
-	const page = await selectActivePage(runtime.context);
+	const page = await selectActivePage(runtime);
+	await registerPageVideoHandle(runtime, page);
 	if (input.url) {
 		await page.goto(input.url, {
 			waitUntil: "domcontentloaded",
@@ -2117,6 +2461,8 @@ export async function executeBrowserSessionRuntime(
 		);
 		actionResults.push(result);
 	}
+
+	const media = buildScreenshotMedia(runtime.workspace, actionResults);
 
 	return {
 		browser:
@@ -2142,19 +2488,33 @@ export async function executeBrowserSessionRuntime(
 		finalUrl: page.url(),
 		title: await page.title(),
 		actionResults,
+		media,
+		videoRecording: summarizeVideoRecording(
+			runtime.videoRecording,
+			runtime.videoRecording ? "recording" : "inactive",
+			0,
+		),
 	};
 }
 
 export async function closeBrowserSessionRuntime(
 	runtime: BrowserSessionRuntime,
 	dependencies: Partial<BrowserControlDependencies> = {},
-): Promise<void> {
+): Promise<{
+	media: BrowserGeneratedMedia[];
+	videoRecording: BrowserVideoRecordingSummary | null;
+}> {
 	if (runtime.closed) {
-		return;
+		return {
+			media: [],
+			videoRecording: summarizeVideoRecording(runtime.videoRecording, "inactive", 0),
+		};
 	}
 	runtime.closed = true;
 	const deps = createBrowserDependencies(dependencies);
+	const recording = runtime.videoRecording;
 	await closeOptionalHandle(runtime.launchedContext);
+	const media = await finalizeRecordedVideos(runtime);
 	if (runtime.browser && !runtime.reusedExistingCdpSession) {
 		await closeHandle(runtime.browser);
 	}
@@ -2165,4 +2525,12 @@ export async function closeBrowserSessionRuntime(
 	if (!runtime.userDataDirSelection.persistentProfile) {
 		deps.removeDir(runtime.userDataDirSelection.userDataDir);
 	}
+	return {
+		media,
+		videoRecording: summarizeVideoRecording(
+			recording,
+			recording ? "saved" : "inactive",
+			media.length,
+		),
+	};
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeComposerTextareaLayout, shouldRefocusComposer } from "./composer";
+import {
+	computeComposerTextareaLayout,
+	resolveComposerStatusHint,
+	shouldRefocusComposer,
+} from "./composer";
 
 describe("computeComposerTextareaLayout", () => {
 	it("caps height at max lines and enables overflow", () => {
@@ -56,5 +60,40 @@ describe("shouldRefocusComposer", () => {
 				isStreaming: true,
 			}),
 		).toBe(false);
+	});
+});
+
+describe("resolveComposerStatusHint", () => {
+	it("returns streaming detail before any idle hint", () => {
+		expect(
+			resolveComposerStatusHint({
+				recording: false,
+				isStreaming: true,
+				queuedPromptCount: 2,
+				loadingThreadMessages: false,
+			}),
+		).toBe("Streaming response... 2 queued");
+	});
+
+	it("returns the sync status while thread history is loading", () => {
+		expect(
+			resolveComposerStatusHint({
+				recording: false,
+				isStreaming: false,
+				queuedPromptCount: 0,
+				loadingThreadMessages: true,
+			}),
+		).toBe("Syncing session history...");
+	});
+
+	it("omits the idle keyboard hint", () => {
+		expect(
+			resolveComposerStatusHint({
+				recording: false,
+				isStreaming: false,
+				queuedPromptCount: 0,
+				loadingThreadMessages: false,
+			}),
+		).toBeNull();
 	});
 });

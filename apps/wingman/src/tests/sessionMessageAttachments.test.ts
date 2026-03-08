@@ -60,6 +60,22 @@ describe("extractImageAttachments", () => {
 			},
 		]);
 	});
+
+	it("normalizes filesystem image resource links", () => {
+		const blocks = [
+			{
+				type: "resource_link",
+				uri: "file:///tmp/generated.png",
+				mimeType: "image/png",
+			},
+		];
+		expect(extractImageAttachments(blocks)).toEqual([
+			{
+				kind: "image",
+				dataUrl: "/api/fs/file?path=%2Ftmp%2Fgenerated.png",
+			},
+		]);
+	});
 });
 
 describe("extractAttachments", () => {
@@ -146,6 +162,44 @@ describe("extractAttachments", () => {
 				dataUrl: "data:application/pdf;base64,JVBERi0xLjQK",
 				name: "scan.pdf",
 				mimeType: "application/pdf",
+			},
+		]);
+	});
+
+	it("extracts resource_link video blocks as file attachments", () => {
+		const blocks = [
+			{
+				type: "resource_link",
+				uri: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+				mimeType: "video/webm",
+				name: "recording.webm",
+			},
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{
+				kind: "file",
+				dataUrl: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+				name: "recording.webm",
+				mimeType: "video/webm",
+			},
+		]);
+	});
+
+	it("normalizes filesystem file resource links", () => {
+		const blocks = [
+			{
+				type: "resource_link",
+				uri: "file:///tmp/recording.webm",
+				mimeType: "video/webm",
+				name: "recording.webm",
+			},
+		];
+		expect(extractAttachments(blocks)).toEqual([
+			{
+				kind: "file",
+				dataUrl: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+				name: "recording.webm",
+				mimeType: "video/webm",
 			},
 		]);
 	});

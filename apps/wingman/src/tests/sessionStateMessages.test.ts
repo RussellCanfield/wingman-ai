@@ -42,8 +42,24 @@ describe("extractMessagesFromState", () => {
 
 		const result = extractMessagesFromState(state);
 		expect(result).not.toBeNull();
-		expect(result).toHaveLength(1);
-		expect(result?.[0]).toMatchObject({ role: "assistant", content: "keep" });
+		expect(result).toHaveLength(2);
+		expect(result?.[0]).toMatchObject({
+			role: "assistant",
+			content: "",
+			toolEvents: [
+				{
+					name: "tool",
+					status: "completed",
+					output: "skip",
+				},
+			],
+			activityTimeline: [
+				{
+					kind: "tool",
+				},
+			],
+		});
+		expect(result?.[1]).toMatchObject({ role: "assistant", content: "keep" });
 	});
 
 	it("extracts content from responses-style text blocks", () => {
@@ -104,11 +120,17 @@ describe("extractMessagesFromState", () => {
 		expect(result).toHaveLength(2);
 		expect(result?.[1]).toMatchObject({
 			role: "assistant",
-			content: "Generated image.",
+			content: "",
 			attachments: [
 				{
 					kind: "image",
 					dataUrl: "/api/fs/file?path=%2Ftmp%2Fpuppy.png",
+				},
+			],
+			toolEvents: [
+				{
+					name: "tool",
+					status: "completed",
 				},
 			],
 		});
@@ -147,11 +169,17 @@ describe("extractMessagesFromState", () => {
 		expect(result).toHaveLength(2);
 		expect(result?.[1]).toMatchObject({
 			role: "assistant",
-			content: "Image ready.",
+			content: "",
 			attachments: [
 				{
 					kind: "image",
 					dataUrl: "/api/fs/file?path=%2Ftmp%2Flandscape.png",
+				},
+			],
+			toolEvents: [
+				{
+					name: "tool",
+					status: "completed",
 				},
 			],
 		});
@@ -183,11 +211,122 @@ describe("extractMessagesFromState", () => {
 		expect(result).toHaveLength(2);
 		expect(result?.[1]).toMatchObject({
 			role: "assistant",
-			content: "Generated image.",
+			content: "",
 			attachments: [
 				{
 					kind: "image",
 					dataUrl: "data:image/png;base64,abc123",
+				},
+			],
+			toolEvents: [
+				{
+					name: "tool",
+					status: "completed",
+				},
+			],
+		});
+	});
+
+	it("promotes tool video resource links into assistant file attachments", () => {
+		const state = {
+			createdAt: 6000,
+			values: {
+				messages: [
+					{ role: "user", content: "Record the browser session." },
+					{
+						role: "tool",
+						content: JSON.stringify({
+							content: [
+								{ type: "text", text: "Saved browser recording." },
+								{
+									type: "resource_link",
+									uri: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+									mimeType: "video/webm",
+									name: "recording.webm",
+								},
+							],
+						}),
+					},
+				],
+			},
+		};
+
+		const result = extractMessagesFromState(state);
+		expect(result).not.toBeNull();
+		expect(result).toHaveLength(2);
+		expect(result?.[1]).toMatchObject({
+			role: "assistant",
+			content: "",
+			attachments: [
+				{
+					kind: "file",
+					dataUrl: "/api/fs/file?path=%2Ftmp%2Frecording.webm",
+					mimeType: "video/webm",
+					name: "recording.webm",
+				},
+			],
+			toolEvents: [
+				{
+					name: "tool",
+					status: "completed",
+				},
+			],
+		});
+	});
+
+	it("hydrates raw persisted tool payloads into structured tool events", () => {
+		const state = {
+			createdAt: 7000,
+			values: {
+				messages: [
+					{ role: "user", content: "Open the local build in a browser." },
+					{
+						role: "tool",
+						name: "browser_session_action",
+						tool_call_id: "tool-browser-1",
+						content: JSON.stringify({
+							ok: true,
+							session_id: "session-1",
+							status: "running",
+							final_url: "http://127.0.0.1:4174/",
+							action_results: [{ type: "wait", ms: 3000 }],
+							media: [
+								{
+									kind: "image",
+									url: "/api/fs/file?path=%2Ftmp%2Fscreenshot.png",
+									mimeType: "image/png",
+									name: "screenshot.png",
+								},
+							],
+						}),
+					},
+				],
+			},
+		};
+
+		const result = extractMessagesFromState(state);
+		expect(result).not.toBeNull();
+		expect(result).toHaveLength(2);
+		expect(result?.[1]).toMatchObject({
+			role: "assistant",
+			content: "",
+			toolEvents: [
+				{
+					id: "tool-browser-1",
+					name: "browser_session_action",
+					status: "completed",
+					output: {
+						ok: true,
+						session_id: "session-1",
+						status: "running",
+						final_url: "http://127.0.0.1:4174/",
+					},
+				},
+			],
+			activityTimeline: [
+				{
+					kind: "tool",
+					toolEventId: "tool-browser-1",
 				},
 			],
 		});

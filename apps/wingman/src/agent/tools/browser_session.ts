@@ -4,6 +4,7 @@ import {
 	type BrowserControlDependencies,
 	type BrowserControlInput,
 	BrowserControlInputSchema,
+	BrowserSessionVideoRecordingSchema,
 	type BrowserControlToolOptions,
 	type BrowserExecutionSummary,
 	type BrowserSessionActionInput,
@@ -28,7 +29,53 @@ const CloseBrowserSessionInputSchema = z.object({
 
 const BrowserSessionListInputSchema = z.object({});
 
-const buildResponse = (payload: Record<string, unknown>) => payload;
+const BrowserSessionStartInputSchema = BrowserControlInputSchema.extend({
+	recordVideo: BrowserSessionVideoRecordingSchema.optional().describe(
+		"Enable Playwright video recording for this managed session. Videos are finalized and returned when the session closes.",
+	),
+});
+
+type BrowserSessionStartInput = BrowserControlInput & {
+	recordVideo?: z.infer<typeof BrowserSessionVideoRecordingSchema>;
+};
+
+const buildMediaBlocks = (media: unknown[]) =>
+	media
+		.map((entry) => {
+			if (!entry || typeof entry !== "object") return null;
+			const record = entry as Record<string, unknown>;
+			const uri =
+				typeof record.url === "string" && record.url.trim()
+					? record.url.trim()
+					: typeof record.uri === "string" && record.uri.trim()
+						? record.uri.trim()
+						: "";
+			if (!uri) return null;
+			return {
+				type: "resource_link" as const,
+				uri,
+				...(typeof record.mimeType === "string"
+					? { mimeType: record.mimeType }
+					: {}),
+				...(typeof record.name === "string" ? { name: record.name } : {}),
+			};
+		})
+		.filter(Boolean);
+
+const buildResponse = (payload: Record<string, unknown>) => {
+	const media = Array.isArray(payload.media) ? payload.media : [];
+	return {
+		...payload,
+		content: [
+			{
+				type: "text" as const,
+				text: JSON.stringify(payload, null, 2),
+			},
+			...buildMediaBlocks(media),
+		],
+		structuredContent: payload,
+	};
+};
 
 const summarizeResult = (
 	snapshot: BrowserSessionSnapshot,
@@ -53,6 +100,8 @@ const summarizeResult = (
 		fallback_reason: summary?.fallbackReason || null,
 		extensions: summary?.extensions || [],
 		action_results: summary?.actionResults || [],
+		media: summary?.media || [],
+		video_recording: summary?.videoRecording || null,
 		browser: summary?.browser || null,
 		transport: summary?.transport || snapshot.transportUsed,
 	};
@@ -63,7 +112,7 @@ export const createBrowserSessionStartTool = (
 	dependencies: Partial<BrowserControlDependencies> = {},
 ) => {
 	return tool(
-		async (input: BrowserControlInput) => {
+		async (input: BrowserSessionStartInput) => {
 			try {
 				const { snapshot, summary } = await options.sessionManager.startSession(
 					{
@@ -87,8 +136,8 @@ export const createBrowserSessionStartTool = (
 		{
 			name: "browser_session_start",
 			description:
-				'Start a managed browser session that persists across multiple tool calls. Use this for iterative QA/debugging where the same browser state should survive across turns. Transport can be selected per session with "auto", "playwright", or "relay".',
-			schema: BrowserControlInputSchema,
+				'Default browser automation entrypoint. Start a managed browser session for screenshots, extraction, QA, and multi-step automation; you can use it for one-shot tasks or continue the same browser state across multiple tool calls. Use browser_session_action to continue and browser_session_close when finished. Transport can be selected per session with "auto", "playwright", or "relay".',
+			schema: BrowserSessionStartInputSchema,
 		},
 	);
 };
@@ -119,7 +168,7 @@ export const createBrowserSessionActionTool = (
 		{
 			name: "browser_session_action",
 			description:
-				"Run browser actions inside an existing managed browser session. Use the session_id returned by browser_session_start to continue the same tab/profile state across multiple calls.",
+				"Continue the default managed browser workflow by running more actions inside an existing browser session. Use the session_id returned by browser_session_start to keep the same tab/profile state across multiple calls.",
 			schema: BrowserSessionActionInputSchema,
 		},
 	);
@@ -131,14 +180,18 @@ export const createBrowserSessionCloseTool = (
 	return tool(
 		async ({ session_id }: { session_id: string }) => {
 			try {
-				const snapshot = await options.sessionManager.closeSession({
+				const { snapshot, closeSummary } = await options.sessionManager.closeSession(
+					{
 					ownerId: options.ownerId,
 					sessionId: session_id,
-				});
+					},
+				);
 				return buildResponse({
 					ok: true,
 					closed: true,
 					...summarizeResult(snapshot, null),
+					media: closeSummary.media,
+					video_recording: closeSummary.videoRecording,
 				});
 			} catch (error) {
 				return buildResponse({
@@ -150,7 +203,7 @@ export const createBrowserSessionCloseTool = (
 		{
 			name: "browser_session_close",
 			description:
-				"Close a managed browser session and release any temporary browser resources or profile locks owned by that session.",
+				"Finish the managed browser workflow by closing a session and releasing any temporary browser resources or profile locks owned by it. Finalized video recordings are returned here.",
 			schema: CloseBrowserSessionInputSchema,
 		},
 	);
@@ -170,7 +223,7 @@ export const createBrowserSessionListTool = (
 		{
 			name: "browser_session_list",
 			description:
-				"List the managed browser sessions currently owned by this agent run. Use this to recover a session_id before continuing or closing a session.",
+				"List the managed browser sessions currently owned by this agent run. Use this to recover a session_id before continuing or closing the default browser workflow.",
 			schema: BrowserSessionListInputSchema,
 		},
 	);

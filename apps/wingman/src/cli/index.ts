@@ -12,6 +12,7 @@ import { executeSkillCommand } from "./commands/skill.js";
 import { WingmanConfigLoader } from "./config/loader.js";
 import { OutputManager } from "./core/outputManager.js";
 import { resolveWorkspaceRoot } from "./core/workspace.js";
+import { checkForCliUpdate } from "./services/updateCheck.js";
 import type { BrowserCommandArgs } from "./types/browser.js";
 import type { InitCommandArgs } from "./types/init.js";
 import type { ProviderCommandArgs } from "./types/provider.js";
@@ -210,6 +211,18 @@ For gateway help:
   `);
 }
 
+function showCliUpdateNotice(notice: {
+	currentVersion: string;
+	latestVersion: string;
+	command: string;
+}): void {
+	console.warn(
+		`Update available for Wingman: ${notice.currentVersion} -> ${notice.latestVersion}`,
+	);
+	console.warn(`Upgrade with: ${notice.command}`);
+	console.warn("");
+}
+
 /**
  * Main CLI entry point
  */
@@ -249,6 +262,18 @@ async function main() {
 
 		// Determine verbosity
 		const verbosity = determineVerbosity(parsed.verbosity, config.logLevel);
+		const logger = createLogger(verbosity);
+
+		if (outputMode === "interactive" && !process.env.CI) {
+			const updateNotice = await checkForCliUpdate({
+				workspace,
+				configDir,
+				logger,
+			});
+			if (updateNotice) {
+				showCliUpdateNotice(updateNotice);
+			}
+		}
 
 		// Route to command handler
 		if (parsed.command === "agent") {
@@ -332,7 +357,7 @@ async function main() {
 			await executeInitCommand(commandArgs, { workspace, configDir });
 		} else {
 			const logFile = getLogFilePath();
-			createLogger(verbosity).error(`Unknown command: ${parsed.command}`);
+			logger.error(`Unknown command: ${parsed.command}`);
 			console.error(`Unknown command: ${parsed.command}`);
 			console.error('Run "wingman --help" for usage information');
 			console.error(`Logs: ${logFile}`);

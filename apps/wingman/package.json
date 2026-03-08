@@ -1,8 +1,8 @@
 {
 	"name": "@wingman-ai/gateway",
-	"displayName": "Wingman Agent",
-	"description": "Wingman-AI agentic coding assistant that works with Anthropic, OpenAI, Google, xAI and LMStudio.",
-	"version": "0.5.4",
+	"displayName": "Wingman Gateway",
+	"description": "Wingman is a stateful, multi-agent runtime with a local CLI control plane and a gateway for routing, sessions, and collaboration.",
+	"version": "0.6.0",
 	"main": "index.js",
 	"bin": {
 		"wingman": "./bin/wingman"

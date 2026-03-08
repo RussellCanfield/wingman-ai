@@ -102,6 +102,13 @@ export type AgentsResponse = {
 	builtInTools?: string[];
 };
 
+export type AppUpdateNotice = {
+	packageName: string;
+	currentVersion: string;
+	latestVersion: string;
+	command: string;
+};
+
 export type ControlUiConfig = {
 	gatewayHost: string;
 	gatewayPort: number;
@@ -111,6 +118,7 @@ export type ControlUiConfig = {
 	dynamicUiEnabled?: boolean;
 	summarization?: SummarizationConfig;
 	voice?: VoiceConfig;
+	updateNotice?: AppUpdateNotice;
 	agents: ControlUiAgent[];
 };
 

@@ -1,6 +1,6 @@
 import path from "node:path";
+import { HumanMessage } from "@langchain/core/messages";
 import { describe, expect, it } from "vitest";
-import { HumanMessage } from "langchain";
 import { additionalMessageMiddleware } from "../agent/middleware/additional-messages.js";
 
 describe("additionalMessageMiddleware", () => {
@@ -61,6 +61,9 @@ describe("additionalMessageMiddleware", () => {
 		expect(content).toContain("Working Directory");
 		expect(content).toContain("current working directory");
 		expect(content).toContain("Use relative paths");
+		expect(content).toContain("Session Artifacts");
+		expect(content).toContain("/conversation_history");
+		expect(content).toContain("internal summarization archive");
 		expect(content).not.toContain("Operating System:");
 		expect(content).not.toContain("Architecture:");
 		expect(content).not.toContain("Default Shell:");
@@ -172,12 +175,7 @@ describe("additionalMessageMiddleware", () => {
 
 	it("injects connected node IDs for node tool targeting when provided", async () => {
 		const middleware = additionalMessageMiddleware({
-			nodeConnectedIdsProvider: () => [
-				"node-b",
-				"node-a",
-				"",
-				"node-b",
-			],
+			nodeConnectedIdsProvider: () => ["node-b", "node-a", "", "node-b"],
 		});
 		const input = { messages: [new HumanMessage("Hello")] };
 		const beforeAgent =
@@ -249,7 +247,9 @@ describe("additionalMessageMiddleware", () => {
 		const content = result.messages[0]?.content ?? "";
 
 		expect(content).toContain("Connected node metadata:");
-		expect(content).toContain("node-a (clientId: desktop-a; name: Russell MacBook;");
+		expect(content).toContain(
+			"node-a (clientId: desktop-a; name: Russell MacBook;",
+		);
 		expect(content).toContain("capabilities: system.notify, system.run");
 	});
 });

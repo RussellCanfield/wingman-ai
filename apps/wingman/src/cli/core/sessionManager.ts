@@ -44,11 +44,31 @@ export interface SessionMessage {
 	attachments?: SessionAttachment[];
 	createdAt: number;
 	uiBlocks?: Array<{
+		id?: string;
 		spec: unknown;
 		uiOnly?: boolean;
 		textFallback?: string;
 	}>;
 	uiTextFallback?: string;
+	toolEvents?: Array<{
+		id: string;
+		name: string;
+		status: "running" | "completed" | "error";
+		output?: unknown;
+		ui?: unknown;
+		uiOnly?: boolean;
+		textFallback?: string;
+		error?: string;
+		timestamp?: number;
+		startedAt?: number;
+		completedAt?: number;
+	}>;
+	activityTimeline?: Array<{
+		id: string;
+		kind: "tool";
+		order: number;
+		toolEventId: string;
+	}>;
 }
 
 export interface SessionAttachment {
@@ -451,7 +471,8 @@ export class SessionManager {
 		}
 
 		const attachments =
-			Array.isArray(input.message.attachments) && input.message.attachments.length > 0
+			Array.isArray(input.message.attachments) &&
+			input.message.attachments.length > 0
 				? JSON.stringify(input.message.attachments)
 				: null;
 		const stmt = this.db.prepare(`
@@ -768,13 +789,16 @@ function isLikelyDuplicateMessage(
 ): boolean {
 	if (left.id && right.id && left.id === right.id) return true;
 	if (left.role !== right.role) return false;
-	if ((left.content || "").trim() !== (right.content || "").trim()) return false;
+	if ((left.content || "").trim() !== (right.content || "").trim())
+		return false;
 
 	const leftAttachments = left.attachments || [];
 	const rightAttachments = right.attachments || [];
 	if (leftAttachments.length !== rightAttachments.length) return false;
 	for (let index = 0; index < leftAttachments.length; index += 1) {
-		if (!isAttachmentEquivalent(leftAttachments[index], rightAttachments[index])) {
+		if (
+			!isAttachmentEquivalent(leftAttachments[index], rightAttachments[index])
+		) {
 			return false;
 		}
 	}
@@ -847,31 +871,61 @@ function toSessionMessage(
 	if (role !== "user" && role !== "assistant") {
 		if (isToolMessage(entry)) {
 			const blocks = extractContentBlocks(entry);
-			const toolContent = extractMessageContent(entry, blocks);
-			const ui = extractUiFromPayload(toolContent);
-			const attachments = extractAttachments(blocks);
-			if (ui?.spec || attachments.length > 0) {
-				const content = toolContent || ui?.textFallback || "";
-				return {
-					id: `msg-${index}`,
-					role: "assistant",
-					content,
-					attachments: attachments.length > 0 ? attachments : undefined,
-					createdAt: baseTime + index,
-					...(ui?.spec
-						? {
-								uiBlocks: [
-									{
-										spec: ui.spec,
-										uiOnly: ui.uiOnly,
-										textFallback: ui.textFallback,
-									},
-								],
-								uiTextFallback: ui.textFallback,
-							}
-						: {}),
-				};
+			const toolResult = extractPersistedToolResult(entry, index);
+			if (!toolResult) {
+				return null;
 			}
+			const {
+				ui,
+				uiOnly,
+				textFallback,
+				data: toolOutput,
+			} = splitPersistedToolPayload(toolResult.output);
+			const attachments = extractAttachments(blocks);
+			const eventTimestamp = baseTime + index;
+			return {
+				id: `msg-${index}`,
+				role: "assistant",
+				content: "",
+				attachments: attachments.length > 0 ? attachments : undefined,
+				toolEvents: [
+					{
+						id: toolResult.id,
+						name: toolResult.name || "tool",
+						status: toolResult.error ? "error" : "completed",
+						output: toolOutput,
+						ui,
+						uiOnly,
+						textFallback,
+						error: toolResult.error,
+						timestamp: eventTimestamp,
+						startedAt: eventTimestamp,
+						completedAt: eventTimestamp,
+					},
+				],
+				activityTimeline: [
+					{
+						id: `tl-tool-${toolResult.id}`,
+						kind: "tool",
+						order: eventTimestamp,
+						toolEventId: toolResult.id,
+					},
+				],
+				createdAt: eventTimestamp,
+				...(ui
+					? {
+							uiBlocks: [
+								{
+									id: toolResult.id,
+									spec: ui,
+									uiOnly,
+									textFallback,
+								},
+							],
+							uiTextFallback: textFallback,
+						}
+					: {}),
+			};
 		}
 		return null;
 	}
@@ -1122,6 +1176,85 @@ function isTextLikeContentType(type: unknown): boolean {
 	);
 }
 
+function extractPersistedToolResult(
+	entry: any,
+	index: number,
+): {
+	id: string;
+	name?: string;
+	output: unknown;
+	error?: string;
+} | null {
+	const toolCallId =
+		entry?.tool_call_id ??
+		entry?.kwargs?.tool_call_id ??
+		entry?.additional_kwargs?.tool_call_id ??
+		(typeof entry?.id === "string" ? entry.id : null) ??
+		(typeof entry?.kwargs?.id === "string" ? entry.kwargs.id : null) ??
+		(typeof entry?.additional_kwargs?.id === "string"
+			? entry.additional_kwargs.id
+			: null) ??
+		`tool-${index}`;
+	if (!toolCallId) return null;
+
+	return {
+		id: String(toolCallId),
+		name: entry?.name ?? entry?.kwargs?.name ?? entry?.additional_kwargs?.name,
+		output: entry?.content ?? entry?.kwargs?.content ?? "",
+		error: entry?.kwargs?.error ?? entry?.additional_kwargs?.error,
+	};
+}
+
+function splitPersistedToolPayload(payload: any): {
+	ui?: unknown;
+	uiOnly?: boolean;
+	textFallback?: string;
+	data: unknown;
+} {
+	if (typeof payload === "string") {
+		try {
+			const parsed = JSON.parse(payload);
+			if (parsed && typeof parsed === "object") {
+				return splitPersistedToolPayload(parsed);
+			}
+		} catch {
+			return { data: payload };
+		}
+	}
+	if (!payload || typeof payload !== "object") {
+		return { data: payload };
+	}
+	if (!("ui" in payload)) {
+		const content =
+			typeof (payload as any).content === "string"
+				? (payload as any).content
+				: typeof (payload as any)?.kwargs?.content === "string"
+					? (payload as any).kwargs.content
+					: null;
+		if (content) {
+			return splitPersistedToolPayload(content);
+		}
+		return { data: payload };
+	}
+	const { ui, uiOnly, textFallback, ...rest } = payload as {
+		ui?: unknown;
+		uiOnly?: boolean;
+		textFallback?: string;
+	} & Record<string, unknown>;
+	const validUi =
+		ui &&
+		typeof ui === "object" &&
+		Array.isArray((ui as { components?: unknown }).components)
+			? ui
+			: undefined;
+	return {
+		ui: validUi,
+		uiOnly: typeof uiOnly === "boolean" ? uiOnly : undefined,
+		textFallback: typeof textFallback === "string" ? textFallback : undefined,
+		data: validUi ? rest : payload,
+	};
+}
+
 function extractUiMetaFromPayload(payload: unknown): {
 	uiOnly?: boolean;
 	textFallback?: string;
@@ -1179,9 +1312,7 @@ function filterUiOnlyAssistantMessages(messages: any[]): any[] {
 			if (ui?.uiOnly && ui?.textFallback) {
 				pendingFallback = ui.textFallback.trim();
 			}
-			if (ui?.spec || attachments.length > 0) {
-				filtered.push(entry);
-			}
+			filtered.push(entry);
 			continue;
 		}
 
@@ -1317,7 +1448,9 @@ export function extractImageUrl(block: any): string | null {
 			typeof block.mimeType === "string"
 				? block.mimeType.trim().toLowerCase()
 				: "";
-		const uri = typeof block.uri === "string" ? block.uri.trim() : "";
+		const uri = normalizeLocalAttachmentUrl(
+			typeof block.uri === "string" ? block.uri.trim() : "",
+		);
 		if (uri && (!mimeType || mimeType.startsWith("image/"))) {
 			return uri;
 		}
@@ -1332,8 +1465,11 @@ export function extractImageUrl(block: any): string | null {
 		if (typeof resource.blob === "string" && resource.blob.trim()) {
 			return `data:${mimeType};base64,${resource.blob.trim()}`;
 		}
-		if (typeof resource.uri === "string" && resource.uri.trim()) {
-			return resource.uri.trim();
+		const normalizedUri = normalizeLocalAttachmentUrl(
+			typeof resource.uri === "string" ? resource.uri.trim() : "",
+		);
+		if (normalizedUri) {
+			return normalizedUri;
 		}
 	}
 	return null;
@@ -1398,8 +1534,156 @@ function extractString(...values: unknown[]): string | undefined {
 	return undefined;
 }
 
+function normalizeLocalAttachmentUrl(
+	value: string | undefined,
+): string | undefined {
+	const trimmed = extractString(value);
+	if (!trimmed) return undefined;
+	if (
+		trimmed.startsWith("http://") ||
+		trimmed.startsWith("https://") ||
+		trimmed.startsWith("data:") ||
+		trimmed.startsWith("blob:") ||
+		trimmed.startsWith("/api/fs/file?")
+	) {
+		return trimmed;
+	}
+
+	const filesystemPath = extractLocalFilesystemPath(trimmed);
+	if (!filesystemPath) {
+		return trimmed;
+	}
+	return `/api/fs/file?path=${encodeURIComponent(filesystemPath)}`;
+}
+
+function extractLocalFilesystemPath(value: string): string | null {
+	if (value.startsWith("file://")) {
+		try {
+			const parsed = new URL(value);
+			let pathname = decodeURIComponent(parsed.pathname || "");
+			if (!pathname) return null;
+			if (/^\/[A-Za-z]:[\\/]/.test(pathname)) {
+				pathname = pathname.slice(1);
+			}
+			if (parsed.host && !/^[A-Za-z]:[\\/]/.test(pathname)) {
+				return `//${parsed.host}${pathname}`;
+			}
+			return pathname;
+		} catch {
+			return null;
+		}
+	}
+	if (/^[A-Za-z]:[\\/]/.test(value)) {
+		return value;
+	}
+	if (
+		value.startsWith("/") &&
+		!value.startsWith("//") &&
+		!value.startsWith("/api/")
+	) {
+		return value;
+	}
+	return null;
+}
+
 function extractFileAttachment(block: any): SessionAttachment | null {
 	if (!block || typeof block !== "object") return null;
+
+	if (block.type === "resource_link") {
+		const uri = normalizeLocalAttachmentUrl(extractString(block.uri));
+		if (!uri) return null;
+		return {
+			kind: "file",
+			dataUrl: uri,
+			name: extractString(block.name),
+			mimeType: extractString(block.mimeType),
+		};
+	}
+
+	if (block.type === "resource" && block.resource) {
+		const resource =
+			typeof block.resource === "object"
+				? (block.resource as Record<string, unknown>)
+				: null;
+		if (!resource) return null;
+		const mimeType = extractString(resource.mimeType);
+		const blob = extractString(resource.blob);
+		const uri = extractString(resource.uri);
+		const name = extractString(resource.name, block.name);
+		if (blob && mimeType) {
+			return {
+				kind: "file",
+				dataUrl: `data:${mimeType};base64,${blob}`,
+				name,
+				mimeType,
+			};
+		}
+		const normalizedUri = normalizeLocalAttachmentUrl(uri);
+		if (normalizedUri) {
+			return {
+				kind: "file",
+				dataUrl: normalizedUri,
+				name,
+				mimeType,
+			};
+		}
+	}
+
+	if (block.type === "video") {
+		const sourceType = block.source_type || block.sourceType;
+		const mimeType =
+			extractString(
+				block.mime_type,
+				block.mimeType,
+				block.media_type,
+				block.mediaType,
+			) || "video/webm";
+		const name = extractString(block.name, block.filename);
+		if (sourceType === "base64" && typeof block.data === "string") {
+			return {
+				kind: "file",
+				dataUrl: `data:${mimeType};base64,${block.data}`,
+				name,
+				mimeType,
+			};
+		}
+		if (sourceType === "url" && typeof block.url === "string") {
+			const normalizedUrl = normalizeLocalAttachmentUrl(block.url);
+			if (!normalizedUrl) return null;
+			return {
+				kind: "file",
+				dataUrl: normalizedUrl,
+				name,
+				mimeType,
+			};
+		}
+		if (block.source && typeof block.source === "object") {
+			const source = block.source as Record<string, unknown>;
+			const sourceMimeType = extractString(
+				source.media_type,
+				source.mediaType,
+				mimeType,
+			);
+			if (typeof source.data === "string" && sourceMimeType) {
+				return {
+					kind: "file",
+					dataUrl: `data:${sourceMimeType};base64,${source.data}`,
+					name,
+					mimeType: sourceMimeType,
+				};
+			}
+			if (typeof source.url === "string") {
+				const normalizedUrl = normalizeLocalAttachmentUrl(source.url);
+				if (!normalizedUrl) return null;
+				return {
+					kind: "file",
+					dataUrl: normalizedUrl,
+					name,
+					mimeType: sourceMimeType,
+				};
+			}
+		}
+	}
 
 	if (block.type === "file") {
 		const sourceType = block.source_type || block.sourceType;
@@ -1429,10 +1713,12 @@ function extractFileAttachment(block: any): SessionAttachment | null {
 			};
 		}
 		if (sourceType === "url" && typeof block.url === "string") {
-			const mimeType = declaredMime || parseDataUrlMime(block.url);
+			const normalizedUrl = normalizeLocalAttachmentUrl(block.url);
+			if (!normalizedUrl) return null;
+			const mimeType = declaredMime || parseDataUrlMime(normalizedUrl);
 			return {
 				kind: "file",
-				dataUrl: block.url,
+				dataUrl: normalizedUrl,
 				name,
 				mimeType,
 			};
@@ -1451,11 +1737,13 @@ function extractFileAttachment(block: any): SessionAttachment | null {
 				};
 			}
 			if (fileUrl) {
+				const normalizedUrl = normalizeLocalAttachmentUrl(fileUrl);
+				if (!normalizedUrl) return null;
 				return {
 					kind: "file",
-					dataUrl: fileUrl,
+					dataUrl: normalizedUrl,
 					name: fileName,
-					mimeType: parseDataUrlMime(fileUrl),
+					mimeType: parseDataUrlMime(normalizedUrl),
 				};
 			}
 		}
@@ -1490,11 +1778,13 @@ function extractFileAttachment(block: any): SessionAttachment | null {
 			};
 		}
 		if (sourceType === "url" && typeof source.url === "string") {
+			const normalizedUrl = normalizeLocalAttachmentUrl(source.url);
+			if (!normalizedUrl) return null;
 			return {
 				kind: "file",
-				dataUrl: source.url,
+				dataUrl: normalizedUrl,
 				name,
-				mimeType: parseDataUrlMime(source.url),
+				mimeType: parseDataUrlMime(normalizedUrl),
 			};
 		}
 	}
@@ -1599,8 +1889,9 @@ function filterEmptyAssistantMessages(
 			message.role !== "assistant" ||
 			message.content.trim().length > 0 ||
 			(message.attachments?.length ?? 0) > 0 ||
-			(Array.isArray((message as any).uiBlocks) &&
-				(message as any).uiBlocks.length > 0),
+			(message.uiBlocks?.length ?? 0) > 0 ||
+			(message.toolEvents?.length ?? 0) > 0 ||
+			(message.activityTimeline?.length ?? 0) > 0,
 	);
 	return filtered.length > 0 ? filtered : messages;
 }

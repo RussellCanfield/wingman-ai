@@ -49,7 +49,7 @@ Bundled templates currently include:
 
 Edit these in-place to customize prompts, tools, or sub-agents. Treat them as templates—clone and rename as needed for each project.
 
-`wingman init` also creates a default `wingman` starter agent in your workspace if one is not already present.
+`wingman init` installs the bundled agents into your workspace and lets you choose which explicit agent should be the default.
 
 ## Agent overview (including MCP dependency)
 
@@ -276,6 +276,10 @@ Agents can only use the tools listed in the `tools` array. Available tool names:
 - `internet_search`
 - `web_crawler`
 - `browser_control`
+- `browser_session_start`
+- `browser_session_action`
+- `browser_session_close`
+- `browser_session_list`
 - `command_execute`
 - `background_terminal`
 - `node_notify`
@@ -302,7 +306,7 @@ Agents can only use the tools listed in the `tools` array. Available tool names:
 ## Browser, MCP, and voice overrides
 
 - `browserProfile`: named persistent `browser_control` profile ID (for example `trading`). Initialize one with `wingman browser profile init trading`.
-- `browserTransport`: optional transport preference override (`auto`, `playwright`, `relay`) for `browser_control`
+- `browserTransport`: optional transport preference override (`auto`, `playwright`, `relay`) for `browser_control` or `browser_session_*`
 - `browserExtensions`: optional extension IDs loaded for this agent (mapped from `browser.extensions` in `wingman.config.json`)
 - `mcp`: agent-specific MCP servers
 - `mcpUseGlobal`: include global MCP servers from `wingman.config.json`
@@ -310,6 +314,8 @@ Agents can only use the tools listed in the `tools` array. Available tool names:
 - `promptRefinement`: enable/disable prompt refinement and set the overlay path
 
 ### Browser profile setup patterns
+
+Prefer `browser_session_*` for normal browser automation. Reserve `browser_control` for agents that should only act when the user explicitly wants Wingman to use their existing browser or live tab.
 
 - Shared default profile across browser-enabled agents:
   - Run `wingman browser profile init trading --default`
