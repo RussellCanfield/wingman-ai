@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 TAURI_DIR="$DESKTOP_DIR/src-tauri"
-BUNDLE_DIR="$TAURI_DIR/target/release/bundle"
+BUNDLE_DIR="${BUNDLE_DIR:-$TAURI_DIR/target/release/bundle}"
 
 APP_NAME="${APP_NAME:-Wingman Companion}"
 APP_PATH="${APP_PATH:-$BUNDLE_DIR/macos/$APP_NAME.app}"
@@ -35,14 +35,14 @@ Options:
   --identity <value>         Developer ID Application identity
   --notary-profile <value>   notarytool keychain profile (default: wingman-notary)
   --app <path>               App bundle path (default: $APP_PATH)
-  --dmg <path>               DMG path (default: auto-detect under bundle/dmg)
+  --dmg <path>               DMG path (default: auto-detect under bundle/dmg; sign creates one if missing)
   --stage-dir <path>         Temporary folder for DMG repackaging (default: $STAGE_DIR)
   --skip-web-build           Skip "bun run --cwd apps/desktop build:web"
   --dry-run                  Print commands without executing
   --help                     Show this message
 
 Environment variables:
-  IDENTITY, MACOS_SIGN_IDENTITY, NOTARY_PROFILE, APP_PATH, DMG_PATH, STAGE_DIR, APP_NAME
+  IDENTITY, MACOS_SIGN_IDENTITY, NOTARY_PROFILE, APP_PATH, DMG_PATH, STAGE_DIR, APP_NAME, BUNDLE_DIR
 EOF
 }
 
@@ -66,8 +66,32 @@ require_cmd() {
 	command -v "$1" >/dev/null 2>&1 || fail "Missing command: $1"
 }
 
+default_dmg_path() {
+	local app_dir
+	local app_bundle_name
+	local app_name
+
+	app_dir="$(cd -- "$(dirname -- "$APP_PATH")" && pwd)"
+	app_bundle_name="$(basename -- "$APP_PATH")"
+	app_name="${app_bundle_name%.app}"
+	if [[ -z "$app_name" || "$app_name" == "$app_bundle_name" ]]; then
+		app_name="$APP_NAME"
+	fi
+
+	if [[ "$(basename -- "$app_dir")" == "macos" ]]; then
+		printf '%s/dmg/%s.dmg\n' "$(cd -- "$app_dir/.." && pwd)" "$app_name"
+		return
+	fi
+
+	printf '%s/%s.dmg\n' "$app_dir" "$app_name"
+}
+
 resolve_dmg_path() {
+	local allow_missing="${1:-0}"
 	if [[ -n "$DMG_PATH" ]]; then
+		if [[ "$allow_missing" -eq 1 ]]; then
+			return
+		fi
 		[[ -f "$DMG_PATH" ]] || fail "DMG not found: $DMG_PATH"
 		return
 	fi
@@ -79,7 +103,13 @@ resolve_dmg_path() {
 	fi
 	shopt -u nullglob
 
-	[[ ${#candidates[@]} -gt 0 ]] || fail "No DMG found under $BUNDLE_DIR/dmg"
+	if [[ ${#candidates[@]} -eq 0 ]]; then
+		if [[ "$allow_missing" -eq 1 ]]; then
+			DMG_PATH="$(default_dmg_path)"
+			return
+		fi
+		fail "No DMG found under $BUNDLE_DIR/dmg"
+	fi
 
 	if [[ ${#candidates[@]} -eq 1 ]]; then
 		DMG_PATH="${candidates[0]}"
@@ -134,18 +164,53 @@ resolve_signing_identity() {
 sign_artifacts() {
 	require_cmd codesign
 	require_cmd hdiutil
+	require_cmd ditto
+	require_cmd xattr
 	resolve_signing_identity
 	[[ -d "$APP_PATH" ]] || fail "App bundle not found: $APP_PATH"
-	resolve_dmg_path
+	resolve_dmg_path 1
+
+	local app_bundle_name
+	local app_stage_path
+	local temp_rw_dmg
+	local mount_dir
+	local size_kb
+	local size_mb
+	local temp_root
+	local detached=0
+
+	app_bundle_name="$(basename -- "$APP_PATH")"
+	app_stage_path="$STAGE_DIR/$app_bundle_name"
+	temp_root="${TMPDIR:-/tmp}"
+	temp_rw_dmg="$(mktemp -u "$temp_root/wingman-dmg-rw.XXXXXX.dmg")"
+	mount_dir="$(mktemp -d "$temp_root/wingman-dmg-mount.XXXXXX")"
+	size_kb="$(du -sk "$APP_PATH" | awk '{print $1}')"
+	size_mb="$(( ((size_kb + 1023) / 1024) + 128 ))"
 
 	run codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" "$APP_PATH"
 	run codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 	run rm -rf "$STAGE_DIR"
 	run mkdir -p "$STAGE_DIR"
-	run cp -R "$APP_PATH" "$STAGE_DIR/"
-	run hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE_DIR" -ov -format UDZO "$DMG_PATH"
+	run mkdir -p "$(dirname -- "$DMG_PATH")"
+	run rm -f "$temp_rw_dmg"
+	run ditto "$APP_PATH" "$app_stage_path"
+	run xattr -cr "$app_stage_path"
+	run hdiutil create -size "${size_mb}m" -fs HFS+ -volname "$APP_NAME" -ov "$temp_rw_dmg"
+	if [[ "$DRY_RUN" -eq 0 ]]; then
+		trap 'if [[ $detached -eq 0 ]]; then hdiutil detach "$mount_dir" >/dev/null 2>&1 || true; fi; rm -f "$temp_rw_dmg"; rm -rf "$mount_dir"' RETURN
+	fi
+	run hdiutil attach "$temp_rw_dmg" -mountpoint "$mount_dir" -nobrowse -noverify
+	run ditto "$app_stage_path" "$mount_dir/$app_bundle_name"
+	run hdiutil detach "$mount_dir"
+	detached=1
+	run hdiutil convert "$temp_rw_dmg" -ov -format UDZO -o "$DMG_PATH"
 	run codesign --force --timestamp --sign "$IDENTITY" "$DMG_PATH"
+	if [[ "$DRY_RUN" -eq 0 ]]; then
+		trap - RETURN
+	fi
+	run rm -f "$temp_rw_dmg"
+	run rm -rf "$mount_dir"
 }
 
 notarize_artifacts() {

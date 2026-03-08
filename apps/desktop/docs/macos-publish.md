@@ -18,6 +18,11 @@ available in Keychain. If multiple are installed, pass `--identity` (or set
 The publish script is at `apps/desktop/scripts/macos-publish.sh` and supports:
 `build`, `sign`, `notarize`, `verify`, and `all`.
 
+By default the desktop Tauri build produces the `.app` bundle. During `sign`,
+the publish script will create a DMG under
+`apps/desktop/src-tauri/target/release/bundle/dmg/` if one is not already
+present.
+
 ## 1. Prerequisites
 
 - Apple Developer account + Team ID.
@@ -44,6 +49,8 @@ bash apps/desktop/scripts/macos-publish.sh build
 ```
 
 Expected output is under `apps/desktop/src-tauri/target/release/bundle/macos/`.
+The notarized DMG ends up under
+`apps/desktop/src-tauri/target/release/bundle/dmg/`.
 
 ## 5. Notarize + Staple
 

@@ -23,30 +23,41 @@ function writeExecutable(path: string, content: string): void {
 	});
 }
 
-function setupFixture(securityOutput: string): {
+function setupFixture(
+	securityOutput: string,
+	options?: { createDmg?: boolean },
+): {
 	appPath: string;
 	binDir: string;
+	bundleDir: string;
 	dmgPath: string;
 } {
 	const root = mkdtempSync(resolve(tmpdir(), "wingman-macos-publish-"));
 	tempDirs.push(root);
 
-	const appPath = resolve(root, "Wingman Companion.app");
-	const dmgPath = resolve(root, "Wingman Companion.dmg");
+	const bundleDir = resolve(root, "bundle");
+	const appPath = resolve(bundleDir, "macos", "Wingman Companion.app");
+	const dmgPath = resolve(bundleDir, "dmg", "Wingman Companion.dmg");
 	const binDir = resolve(root, "bin");
 
 	mkdirSync(appPath, { recursive: true });
-	writeFileSync(dmgPath, "");
 	mkdirSync(binDir, { recursive: true });
+	mkdirSync(dirname(dmgPath), { recursive: true });
+
+	if (options?.createDmg !== false) {
+		writeFileSync(dmgPath, "");
+	}
 
 	writeExecutable(resolve(binDir, "codesign"), ":");
+	writeExecutable(resolve(binDir, "ditto"), ":");
 	writeExecutable(resolve(binDir, "hdiutil"), ":");
 	writeExecutable(
 		resolve(binDir, "security"),
 		`cat <<'SECURITY_OUTPUT'\n${securityOutput}\nSECURITY_OUTPUT`,
 	);
+	writeExecutable(resolve(binDir, "xattr"), ":");
 
-	return { appPath, binDir, dmgPath };
+	return { appPath, binDir, bundleDir, dmgPath };
 }
 
 afterEach(() => {
@@ -145,5 +156,33 @@ describe("macOS publish script", () => {
 		expect(result.stderr).toContain(
 			"Error: Multiple signing identities found. Pass --identity to choose one.",
 		);
+	});
+
+	test("sign creates a default dmg path when tauri only built the app bundle", () => {
+		if (process.platform === "win32" || !hasBash()) {
+			return;
+		}
+
+		const identity = "Developer ID Application: Wingman AI (ABCD123456)";
+		const fixture = setupFixture(
+			`  1) 1234567890ABCDEF "${identity}"\n     1 valid identities found`,
+			{ createDmg: false },
+		);
+
+		const result = spawnSync("bash", [SCRIPT_PATH, "sign", "--dry-run"], {
+			encoding: "utf8",
+			env: {
+				...process.env,
+				IDENTITY: "",
+				MACOS_SIGN_IDENTITY: "",
+				BUNDLE_DIR: fixture.bundleDir,
+				PATH: `${fixture.binDir}${delimiter}${process.env.PATH ?? ""}`,
+			},
+		});
+
+		expect(result.status).toBe(0);
+		expect(result.stdout).toContain(`mkdir -p ${dirname(fixture.dmgPath)}`);
+		expect(result.stdout).toContain(fixture.dmgPath);
+		expect(result.stderr).not.toContain("No DMG found");
 	});
 });
